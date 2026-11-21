@@ -1,0 +1,841 @@
+{
+ "judge": "review-premise",
+ "model": "claude-opus-5-5",
+ "premises": [
+  {
+   "finding_id": "review-architecture-w4#ARCH-001",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "intent_signals": [
+    {
+     "ref": "src/flow/review-gate.ts:609",
+     "says": "HUMAN_DECISION_PATTERN: the gate already makes dismissed-wont-fix/out-of-scope/deprioritised terminal on self-asserted evidence text such as `owner: x`, with no verifier verdict and no card"
+    },
+    {
+     "ref": "src/review/managed.ts:1555",
+     "says": "ingest copies an input finding's `disposition` (and `verification`, :1562) verbatim into findings.json, the same channel the premise.operator path uses"
+    },
+    {
+     "ref": "src/review/operator-decisions.ts:1",
+     "says": "flow 457 header: the trust model is writer-side (only the two writers produce a decision); valid() at :85 checks confirmedVia, a self-asserted string an agent writing the file could also supply"
+    }
+   ],
+   "reasoning": "The gap is real: validPremise leaves confirmedVia optional and stores no quote, unlike valid(). But the claim that the gate's authority is looser here than anywhere else in the file does not hold. The pre-existing human-decision dismissals are terminal on self-asserted text that the same agent can write through ingest. Requiring confirmedVia and a quote is a consistency fix, not a new trust boundary."
+  },
+  {
+   "finding_id": "review-architecture-w4#ARCH-002",
+   "verdict": "upheld",
+   "reasoning": "No intent signal. premiseGateState re-derives the hold with a different state set and its own precedence. The hold-state readers have already diverged (see the findHeldFinding findings), so the drift risk is concrete."
+  },
+  {
+   "finding_id": "review-architecture-w5#ARCH-001",
+   "verdict": "upheld",
+   "reasoning": "The held-finding filter exists only as prose in each fix-loop caller. Nothing marks that as a deliberate choice, and the receiving contract cannot refuse a held item."
+  },
+  {
+   "finding_id": "review-architecture-w5#ARCH-002",
+   "verdict": "upheld",
+   "reasoning": "The schema states that premise.severity equals the finding's severity. It does not say how premise.operator relates to disposition, and the writers do not keep the two in step (see the prior-round findings), so a statement of precedence is warranted."
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-1",
+   "verdict": "upheld",
+   "reasoning": "The comment at premise-question.ts:27-28 shows the fallback was a choice. Its stated reason, that \"the verdict applies the file the same way\", is wrong: the verdict re-validates through mergePremises (verdict.ts:209-226). And managed.ts:499-503 stores rejected claims verbatim, so the fallback fires on rejected claims."
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-2",
+   "verdict": "upheld",
+   "reasoning": "No intent signal for several independent hold resolvers. The divergence in findHeldFinding shows the cost."
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-3",
+   "verdict": "upheld",
+   "reasoning": "The header at operator-decisions.ts:1-8 still describes only the gate-relaxing decisions, and OPERATOR_DECISION_KINDS now carries a kind that valid() has to exclude. The finding stands as reported."
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-4",
+   "verdict": "upheld",
+   "reasoning": "The order and length guarantee is documented (premise.ts:110) but has no type behind it. Partitioning by `source` is a sound, cheap fix, and no signal argues for the positional split."
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-5",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/review/verification.ts:173-354,523",
+     "says": "the sibling verifier module keeps claim parsing, the delete-only merge and the scope.md renderer (renderStageCountsMarkdown) in one 636-line module"
+    },
+    {
+     "ref": "src/review/premise.ts:20",
+     "says": "header: \"As in the verifier merge\", so the module is modelled on verification.ts on purpose"
+    },
+    {
+     "ref": "src/review/managed.ts:1897-1904",
+     "says": "parseEmbeddedPremises sits next to its sibling parseEmbeddedFindings in managed.ts, which is where the embedded-fence parsers live"
+    }
+   ],
+   "reasoning": "Parse + merge + render in one module, with the fence parser in managed.ts, mirrors the sibling verifier module exactly. Splitting premise.ts alone would make it the odd one out. The hold-state and decision-application section has no counterpart in the sibling, so that half is a judgement call.",
+   "question": "premise.ts follows verification.ts's layout (parse, merge, render in one file; the fence parser in managed.ts). Keep it that way, or split out hold-state and rendering anyway?",
+   "options": [
+    "dismiss \u2014 keep the layout parallel to verification.ts",
+    "uphold \u2014 split premise-hold.ts and the renderer out of premise.ts"
+   ]
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-6",
+   "verdict": "upheld",
+   "reasoning": "PremiseSource is used (types.ts:699), so that half of the evidence is off. PremiseOperatorAnswer and PremiseQuestionDecision still duplicate the answer fields, and applyPremiseDecision copies them by hand. That part stands as a minor."
+  },
+  {
+   "finding_id": "review-architecture-w8#ARCH-7",
+   "verdict": "upheld",
+   "reasoning": "The signature was already long, but nothing marks positional growth as intended. Appending the block at the call site, as renderDuplicatesMarkdown already is, is consistent with the sibling."
+  },
+  {
+   "finding_id": "review-clean-code-w5#F-002",
+   "verdict": "upheld",
+   "reasoning": "The sibling blocks in the same schema use if/then (lines 75-113 and 194-201), so the suggested fix brings the premise block in line with them."
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-1",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/review/verification.ts:173-354",
+     "says": "mergeVerifications, the sibling delete-only merge, is one ~180-line function with the same resolve-validate loop of reject-and-continue branches, then conflict resolution and finish"
+    },
+    {
+     "ref": "src/review/premise.ts:20",
+     "says": "header: the premise merge is built \"As in the verifier merge\""
+    }
+   ],
+   "reasoning": "The shape is deliberate: it reproduces the verifier merge, where each rejection reason sits next to its check in one pass so that a discarded claim leaves its finding untouched. Splitting only mergePremises would make the two delete-only merges read differently. The finding cites the length rule alone and no defect it causes.",
+   "question": "mergePremises has the same single-loop shape as mergeVerifications on purpose. Keep the two merges parallel, or split mergePremises into helpers?",
+   "options": [
+    "dismiss \u2014 keep the shape parallel to mergeVerifications",
+    "uphold \u2014 split mergePremises (and consider mergeVerifications too)"
+   ]
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-2",
+   "verdict": "upheld",
+   "reasoning": "Same as ARCH-7: no intent signal, and a sound fix."
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-3",
+   "verdict": "upheld",
+   "reasoning": "Same as ARCH-4: the positional split depends on a guarantee that is only documented, and partitioning by source is sound."
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-4",
+   "verdict": "upheld",
+   "reasoning": "The sentinel turns a malformed entry into an `unknown-property` rejection whose message names `__invalid`. That is misleading diagnostic text, with no sign it was intended."
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-5",
+   "verdict": "upheld",
+   "reasoning": "The suggested for loop keeps one row per claim, as the counts invariant needs. The comment really does claim an order-independence the code does not have: a package decision wins over premise.operator."
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-6",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/lib/json.ts",
+     "says": "the shared json lib exports file readers only; no isRecord/nonEmptyString helper exists to import"
+    },
+    {
+     "ref": "src/review/readiness.ts:88",
+     "says": "sibling module defines its own `record` guard, the same one-liner"
+    },
+    {
+     "ref": "src/review/coverage-complete.ts:49",
+     "says": "sibling module defines its own `record` guard"
+    },
+    {
+     "ref": "src/review/round-record.ts:77",
+     "says": "sibling module defines its own `record` guard"
+    },
+    {
+     "ref": "src/flow/review-gate.ts:322",
+     "says": "readRecord, another module-local guard; about 26 modules across src define their own"
+    }
+   ],
+   "reasoning": "Module-local narrowing guards are the codebase's convention: about 26 modules define their own, and there is no shared export. Importing a new shared helper in only the two new files would make them differ from every sibling. Doing it properly would be a project-wide refactor, not a defect in this diff.",
+   "question": "Each module in src defines its own isRecord/record guard; the two new files follow that. Keep the local guards, or start a shared helper in this PR?",
+   "options": [
+    "dismiss \u2014 keep module-local guards, as the codebase does",
+    "uphold \u2014 add a shared isRecord/nonEmptyString export and use it here"
+   ]
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-7",
+   "verdict": "upheld",
+   "reasoning": "The comment at operator-decisions.ts:151 explains why the whole file is written back, not why the sequence is duplicated. A shared append helper is sound."
+  },
+  {
+   "finding_id": "review-clean-code-w8#CC-8",
+   "verdict": "upheld",
+   "reasoning": "The reviewer already calls this a deliberate extension of the verified branch and keeps it minor. Nothing shrinks it further."
+  },
+  {
+   "finding_id": "review-clean-code-w9#CC-001",
+   "verdict": "upheld",
+   "reasoning": "A test-readability minor. No signal against it."
+  },
+  {
+   "finding_id": "review-clean-code-w9#CC-002",
+   "verdict": "upheld",
+   "reasoning": "A fixture duplicated across three test files. No signal against it."
+  },
+  {
+   "finding_id": "review-clean-code-w9#CC-003",
+   "verdict": "upheld",
+   "reasoning": "The parameter shadows the module-level factory. No signal against it."
+  },
+  {
+   "finding_id": "review-core-boundaries-w1#F-001",
+   "verdict": "upheld",
+   "reasoning": "The schema's sibling blocks encode their conditional rules with if/then, so the premise block lags them. Its severity enum also admits `info`, which the merge refuses."
+  },
+  {
+   "finding_id": "review-highload-w4#F-001",
+   "verdict": "upheld",
+   "reasoning": "The lost update is real, and minor matches its operator-paced rate."
+  },
+  {
+   "finding_id": "review-highload-w8#F-001",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "intent_signals": [
+    {
+     "ref": "src/review/operator-decisions.ts:149-157",
+     "says": "recordOperatorDecision has used the same unlocked read-append-writeFileAtomic since flow 457 (commit 0caa41315, before this PR's base): the single-writer store is an established pattern this PR extends"
+    },
+    {
+     "ref": "src/review/premise.ts:436",
+     "says": "premiseHoldState defaults to `awaiting`: a lost answer leaves the finding held and readiness item 11 failing, so a lost write fails closed rather than clearing a hold"
+    }
+   ],
+   "reasoning": "A real lost-update race, but on the pre-existing single-writer pattern, triggered by operator-paced writes, and failing closed. Same defect as review-highload-w4#F-001 and review-highload-w9#HL-001, which were both reported as minor."
+  },
+  {
+   "finding_id": "review-highload-w8#F-002",
+   "verdict": "upheld",
+   "reasoning": "premises.json is written only when `--premises` is passed (managed.ts:499), and premiseDecisionFor matches by id alone. Nothing marks a stale file surviving a re-ingest as intended."
+  },
+  {
+   "finding_id": "review-highload-w9#HL-001",
+   "verdict": "upheld",
+   "reasoning": "Same race as review-highload-w4#F-001, reported as minor. It stands."
+  },
+  {
+   "finding_id": "review-logic-w4#F-001",
+   "verdict": "upheld",
+   "reasoning": "Same defect as ARCH-1 (w8): the stated reason for the fallback is wrong, because the verdict validates through mergePremises."
+  },
+  {
+   "finding_id": "review-logic-w4#F-003",
+   "verdict": "upheld",
+   "reasoning": "The wording defect is real, but in the `violated` branch, where an awaiting held finding below the floor is listed as \"at or above the floor\". The `pass` branch the finding describes cannot hold such a finding: an awaiting one makes the condition violated, and an answered one is not in `blocking`. The suggested rewording fixes both branches."
+  },
+  {
+   "finding_id": "review-logic-w8#LG8-001",
+   "verdict": "upheld",
+   "reasoning": "Same as ARCH-1 (w8), plus the stale-file path. The fallback's stated reason does not hold."
+  },
+  {
+   "finding_id": "review-logic-w8#LG8-002",
+   "verdict": "upheld",
+   "reasoning": "managed.ts:359-361 intends claims to name the surviving canonical record. The orchestrator, though, dispatches the judge (Step 10b) before ingest has produced canonical ids, so the intent and the flow conflict. That is the defect."
+  },
+  {
+   "finding_id": "review-logic-w8#LG8-003",
+   "verdict": "upheld",
+   "reasoning": "mergeable() excludes only held verdicts, and mergeCluster builds the record from the canonical alone, so an upheld premise on an absorbed member is lost. Nothing indicates that was intended."
+  },
+  {
+   "finding_id": "review-logic-w8#LG8-004",
+   "verdict": "upheld",
+   "reasoning": "applyPremiseDecision deliberately leaves an existing disposition alone (premise.ts:461-462). That makes held findings with a terminal disposition an expected case, and readiness and the gate still read them as awaiting."
+  },
+  {
+   "finding_id": "review-logic-w8#LG8-005",
+   "verdict": "upheld",
+   "reasoning": "managed.ts:360 deliberately runs the merge before the cap so the cap sees the downgraded severity. The finding shows that this choice lets a downgraded blocker lose its cap exemption, which breaks the module's own invariant: a judgement may cost a verdict, never a finding."
+  },
+  {
+   "finding_id": "review-logic-w9#F-001",
+   "verdict": "upheld",
+   "reasoning": "Same as ARCH-1 (w8): the fallback's stated reason does not hold."
+  },
+  {
+   "finding_id": "review-logic-w9#F-002",
+   "verdict": "upheld",
+   "reasoning": "Readiness and the verdict disagree about the same package on the raw path. No signal against it."
+  },
+  {
+   "finding_id": "review-logic-w9#F-003",
+   "verdict": "upheld",
+   "reasoning": "applyVerifierClaims (verdict.ts:184-202) has the same counting shape, so a fix should cover both. The misleading premise count is still a defect on its own."
+  },
+  {
+   "finding_id": "review-logic-w9#F-004",
+   "verdict": "upheld",
+   "reasoning": "Same as LG8-003. It stands."
+  },
+  {
+   "finding_id": "review-performance-w4#F-001",
+   "verdict": "upheld",
+   "reasoning": "Reported as minor, and the reviewer already noted it is not a hot path. It stays as reported."
+  },
+  {
+   "finding_id": "review-regression-w4#F-001",
+   "verdict": "upheld",
+   "reasoning": "premise.ts:445 says \"the CLI command and the card write the result\", so the design intended the writers to apply the answer to findings.json. They do not (review-operator.ts:150 only records the decision), so findingStatus reads the finding as `open`."
+  },
+  {
+   "finding_id": "review-regression-w8#RG8-001",
+   "verdict": "upheld",
+   "reasoning": "Same as review-regression-w4#F-001. The intent stated at premise.ts:445 supports the finding."
+  },
+  {
+   "finding_id": "review-regression-w8#RG8-002",
+   "verdict": "owner-decision",
+   "intent_signals": [
+    {
+     "ref": "src/review/readiness.ts:440-449",
+     "says": "waiveReadiness accepts every READINESS_ITEMS id the same way, in the operator's own words: no item is non-waivable"
+    },
+    {
+     "ref": "src/review/readiness.ts:315",
+     "says": "a sibling item's repair text itself offers the readiness waiver as the operator's decision"
+    },
+    {
+     "ref": "src/review/readiness.ts:188-192",
+     "says": "premiseDecisionsCheck doc: \"The repair is the answer, not a waiver of the question\""
+    }
+   ],
+   "reasoning": "The code and its comment disagree. Every readiness item is uniformly waivable, and the waiver is itself an operator act in the operator's own words, so a waived item 11 is still the operator deciding. The check's doc comment says otherwise. Refusing the waiver for item 11 alone would make it the only non-waivable item. Which one is intended is a product choice.",
+   "question": "Should the operator be able to waive readiness item 11 (premise-decisions) like every other item, or must a held finding always be answered with decide-premise?",
+   "options": [
+    "keep it waivable like every other item and fix the doc comment",
+    "refuse `premise-decisions` in waiveReadiness and point to decide-premise"
+   ]
+  },
+  {
+   "finding_id": "review-security-code-w4#F-001",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "intent_signals": [
+    {
+     "ref": "src/flow/review-gate.ts:609",
+     "says": "HUMAN_DECISION_PATTERN: the gate already makes dismissed-wont-fix/out-of-scope/deprioritised terminal on self-asserted evidence text such as `owner: x`, with no verifier verdict and no card"
+    },
+    {
+     "ref": "src/review/managed.ts:1555",
+     "says": "ingest copies an input finding's `disposition` (and `verification`, :1562) verbatim into findings.json, the same channel the premise.operator path uses"
+    },
+    {
+     "ref": "src/review/operator-decisions.ts:1",
+     "says": "flow 457 header: the trust model is writer-side (only the two writers produce a decision); valid() at :85 checks confirmedVia, a self-asserted string an agent writing the file could also supply"
+    }
+   ],
+   "reasoning": "Same defect as ARCH-001 (w4). The finding says the change adds a new way to remove a finding without a verifier verdict. dismissed-wont-fix/out-of-scope with `owner: x` evidence, carried through ingest or written into findings.json, already does that under the existing trust model. Requiring confirmedVia and reading the answer only from operator-decisions.json stays worth doing, but it shrinks the attack surface by little."
+  },
+  {
+   "finding_id": "review-security-code-w8#SEC-001",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "intent_signals": [
+    {
+     "ref": "src/flow/review-gate.ts:609",
+     "says": "HUMAN_DECISION_PATTERN: the gate already makes dismissed-wont-fix/out-of-scope/deprioritised terminal on self-asserted evidence text such as `owner: x`, with no verifier verdict and no card"
+    },
+    {
+     "ref": "src/review/managed.ts:1555",
+     "says": "ingest copies an input finding's `disposition` (and `verification`, :1562) verbatim into findings.json, the same channel the premise.operator path uses"
+    },
+    {
+     "ref": "src/review/operator-decisions.ts:1",
+     "says": "flow 457 header: the trust model is writer-side (only the two writers produce a decision); valid() at :85 checks confirmedVia, a self-asserted string an agent writing the file could also supply"
+    }
+   ],
+   "reasoning": "The fact holds: a premise.operator answer carried in through `--findings` is kept verbatim and the gate takes it as a dismissal. The same ingest channel already accepts a verbatim disposition dismissed-wont-fix with `decided-by: owner` evidence, which the gate also makes terminal without a card, a TTY or a verifier. So this does not lower the existing bar. Stripping `operator` from carried premises is still sound hardening."
+  },
+  {
+   "finding_id": "review-security-code-w8#SEC-002",
+   "verdict": "upheld",
+   "reasoning": "No signal against requiring that cited evidence predates the branch. The concern is reasonable for security findings."
+  },
+  {
+   "finding_id": "review-security-code-w8#SEC-003",
+   "verdict": "upheld",
+   "reasoning": "The card sanitises the same fields; the terminal prompt does not. Making the terminal sanitise too brings it in line with the card."
+  },
+  {
+   "finding_id": "review-security-code-w8#SEC-004",
+   "verdict": "upheld",
+   "reasoning": "Requiring confirmedVia and binding the decision to a subject matches valid() and decisionCovers in the same file."
+  },
+  {
+   "finding_id": "review-security-code-w9#SEC-001",
+   "verdict": "upheld",
+   "reasoning": "Making confirmedVia required matches valid(), and both writers already pass it (review-operator.ts:150). The reviewer already rated it minor."
+  },
+  {
+   "finding_id": "review-style-w4#STY-002",
+   "verdict": "upheld",
+   "reasoning": "PremiseQuestionDecision is already exported from the same module. Naming it is the plain fix."
+  },
+  {
+   "finding_id": "review-style-w5#STYLE-003",
+   "verdict": "upheld",
+   "reasoning": "There is no import sorter and no enforced order. A minor nit, with nothing against it."
+  },
+  {
+   "finding_id": "review-style-w8#F-001",
+   "verdict": "upheld",
+   "reasoning": "Same as CC-8. It stays as reported."
+  },
+  {
+   "finding_id": "review-style-w8#F-002",
+   "verdict": "upheld",
+   "reasoning": "Duplicated append, and `valid` is now misleadingly named beside validPremise. It stands."
+  },
+  {
+   "finding_id": "review-style-w8#F-003",
+   "verdict": "upheld",
+   "reasoning": "The comment claims an order-independence that the code does not have. It stands."
+  },
+  {
+   "finding_id": "review-style-w8#F-004",
+   "verdict": "upheld",
+   "reasoning": "Same as CC-4. It stands."
+  },
+  {
+   "finding_id": "review-style-w8#F-005",
+   "verdict": "upheld",
+   "reasoning": "The two fence parsers duplicate each other, with no signal that the duplication is intended."
+  },
+  {
+   "finding_id": "review-style-w8#F-006",
+   "verdict": "upheld",
+   "reasoning": "applyPremiseClaims is a copy of applyVerifierClaims. A shared subjects helper is sound."
+  },
+  {
+   "finding_id": "review-style-w8#F-007",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/lib/json.ts",
+     "says": "the shared json lib exports file readers only; no isRecord/nonEmptyString helper exists to import"
+    },
+    {
+     "ref": "src/review/readiness.ts:88",
+     "says": "sibling module defines its own `record` guard, the same one-liner"
+    },
+    {
+     "ref": "src/review/coverage-complete.ts:49",
+     "says": "sibling module defines its own `record` guard"
+    },
+    {
+     "ref": "src/review/round-record.ts:77",
+     "says": "sibling module defines its own `record` guard"
+    },
+    {
+     "ref": "src/flow/review-gate.ts:322",
+     "says": "readRecord, another module-local guard; about 26 modules across src define their own"
+    }
+   ],
+   "reasoning": "Same convention as CC-6: local record/string guards are the norm across about 26 modules, and there is no shared helper to import. A one-off consolidation in the new files makes them less consistent with their siblings.",
+   "question": "The local obj/str guards follow the per-module convention used across src. Keep them, or consolidate here?",
+   "options": [
+    "dismiss \u2014 keep module-local guards",
+    "uphold \u2014 export one guard pair and import it"
+   ]
+  },
+  {
+   "finding_id": "review-style-w8#F-008",
+   "verdict": "upheld",
+   "reasoning": "Same as ARCH-7 / CC-2 / ARCH-4. It stands."
+  },
+  {
+   "finding_id": "review-style-w8#F-009",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/review/premise.ts:95-97",
+     "says": "PremiseCounts doc: `claims = applied + rejected`"
+    },
+    {
+     "ref": "src/review/premise.ts:384",
+     "says": "rejected is rejections.length, so a conflict among N claims must push N rejection rows for the arithmetic to hold"
+    }
+   ],
+   "reasoning": "The N identical rows the finding calls a likely loop bug are deliberate: the counts invariant needs one rejection per discarded claim. The finding's \"push once with the count\" option would break claims = applied + rejected. What remains is a forEach whose argument goes unused, a readability nit that CC-5 already covers with a sound fix.",
+   "question": "One duplicate-claim row per discarded claim keeps claims = applied + rejected. Keep the N rows (perhaps written as a for loop), or push one row with a count?",
+   "options": [
+    "dismiss \u2014 N rows are intended; CC-5 covers the loop form",
+    "uphold \u2014 push a single row and change the counting"
+   ]
+  },
+  {
+   "finding_id": "review-style-w8#F-010",
+   "verdict": "upheld",
+   "reasoning": "A magic-number minor. No signal against it."
+  },
+  {
+   "finding_id": "review-style-w9#ST-001",
+   "verdict": "upheld",
+   "reasoning": "Same as CC-003. It stands."
+  },
+  {
+   "finding_id": "review-style-w9#ST-002",
+   "verdict": "upheld",
+   "reasoning": "Repeated inline casts. It stands."
+  },
+  {
+   "finding_id": "review-style-w9#ST-003",
+   "verdict": "upheld",
+   "reasoning": "A repeated fixture id. It stands."
+  },
+  {
+   "finding_id": "review-architecture-w4#ARCH-003",
+   "verdict": "upheld",
+   "reasoning": "Both writers of the premise-question record exist as described (review-operator.ts:150 uses process.env USER, operator-confirm-review.ts:622 hard-codes \"operator\"), and neither records the operator's words although the terminal prompt asks for them (review-operator.ts:145). No intent signal for the split: the flow spec says the card works 'like review_override_reviewers' (flow 459 context.md:103), and that sibling persists quote (operator-confirm-review.ts:433, review-operator.ts:165). The fix moves the decision toward its siblings."
+  },
+  {
+   "finding_id": "review-clean-code-w5#F-001",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/gdskills/contracts/review-finding.schema.json:120",
+     "says": "premise schema description: 'The judge is delete-only: it never adds a finding, never raises a severity and never edits the finding's text; downgraded carries a strictly lower severity' \u2014 delete-only is defined to include lowering"
+    },
+    {
+     "ref": "src/review/premise.ts:4",
+     "says": "module header 'Why a second delete-only judge' for the premise merge, which downgrades and holds"
+    },
+    {
+     "ref": "src/commands/review.ts:5291-5293",
+     "says": "--premises help: 'The merge is DELETE-ONLY too: it holds a challenged finding ... and can only lower a severity'"
+    },
+    {
+     "ref": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1128",
+     "says": "'The merge is delete-only: upheld changes nothing, downgraded lowers the severity'"
+    },
+    {
+     "ref": "src/gdskills/catalog.ts:288",
+     "says": "sibling review-verifier catalog entry ends with the same '; delete-only.' summary"
+    },
+    {
+     "ref": "ee32a9f2d",
+     "says": "flow 459 T5 commit title 'premise claims, delete-only merge, held findings'"
+    }
+   ],
+   "reasoning": "'Delete-only' is the project's established term of art for a judge that can never add, raise or edit (it already covers the verifier and is defined for the premise judge to include downgrading and holding). 'Can only lower, hold or leave' is the expanded form of the same concept, used in the EXEMPT reasons and in the catalog comment at catalog.ts:297 directly above the entry. Replacing the term at the two sites would make the catalog entry differ from the verifier's sibling entry and from the schema, premise.ts, the CLI help and the orchestrator, i.e. less consistent.",
+   "question": "'Delete-only' is the project's defined term for the premise judge (schema, premise.ts, CLI help, orchestrator) and matches the verifier's catalog entry. Keep it, or replace it at these two sites anyway?",
+   "options": [
+    "dismiss \u2014 keep 'delete-only', the project's defined term",
+    "uphold \u2014 replace it at catalog.ts and bundled-eval.test.ts"
+   ]
+  },
+  {
+   "finding_id": "review-logic-w4#F-002",
+   "verdict": "upheld",
+   "reasoning": "The terminal path collects 'your own words' (review-operator.ts:145) and uses them only for the decline test; the card apply ignores confirmation.quote (operator-confirm-review.ts:622); PremiseQuestionDecision has no quote field (operator-decisions.ts:49-57). Every sibling operator decision and the plan confirmation persist the quote. No comment, commit or spec says the premise record omits it on purpose."
+  },
+  {
+   "finding_id": "review-security-code-w4#F-002",
+   "verdict": "upheld",
+   "reasoning": "The terminal prompt interpolates finding.problem and the judge's question raw (review-operator.ts:144) while the card for the same decision wraps every field in cardSafe (operator-confirm-review.ts:599-606). The project's own rule is that model-supplied text must never be able to draw a fake line of what the operator is shown (cardSafe doc, trigger/schedules.ts:405-409, flow 295 F7), and terminal escape injection is a recognised class (CWE-150). No intent signal for leaving the terminal path unsanitised; the fix makes the two surfaces consistent. Severity is the reviewer's, already reasoned on the attack precondition."
+  },
+  {
+   "finding_id": "review-security-code-w4#F-003",
+   "verdict": "upheld",
+   "reasoning": "The premise decision stores neither quote nor subject (operator-decisions.ts:49-57), while the sibling decisions bind to the head and items shown (operator-decisions.ts:26-32, 'security review M4', commit 086805c8f). No signal that the premise kind was meant to be exempt from that binding; the flow spec models the card on review_override_reviewers."
+  },
+  {
+   "finding_id": "review-security-code-w4#F-004",
+   "verdict": "upheld",
+   "reasoning": "The apply re-check compares only severity and verdict (operator-confirm-review.ts:620-621), while sibling cards compare everything they showed (planKeyOf at :553, the full subject JSON at :430). No intent signal; the finding is already scoped as hardening at minor."
+  },
+  {
+   "finding_id": "review-style-w4#STY-001",
+   "verdict": "upheld",
+   "reasoning": "Two actor conventions for one record kind (review-operator.ts:150 vs operator-confirm-review.ts:622); process.env USER is used nowhere else in src, and applyPremiseDecision writes the actor into the dismissal evidence (premise.ts:466), so the difference is visible. No intent signal."
+  },
+  {
+   "finding_id": "review-style-w4#STY-003",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/commands/review.ts:3612-3615",
+     "says": "readPremises doc: 'The shape is checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge' \u2014 the discarded call is documented as a deliberate pre-check"
+    },
+    {
+     "ref": "src/review/types.ts:694-698",
+     "says": "ManagedReviewInput.premises is 'Typed loosely for the verifier's reason: the merge is delete-only and must be able to receive, and visibly reject, a claim'"
+    },
+    {
+     "ref": "src/review/managed.ts:265-266",
+     "says": "the merge re-parses the raw input itself ('Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated')"
+    }
+   ],
+   "reasoning": "The call is not apparently unused: its doc comment names it a shape check. The first suggested fix is unsound: parsePremiseClaims returns ParsedPremiseClaims ({judge, model, claims}), not the PremiseSource ({judge, model, premises}) the managed input takes, and the merge parses the raw value on purpose. The sibling readVerifications returns parsed claims because its input type is the claims list; the shapes differ. What remains is a naming nicety the comment already covers.",
+   "question": "readPremises discards the parse result on purpose (documented pre-check; the merge re-parses the raw object). Keep it as is, or rename/restructure the check anyway?",
+   "options": [
+    "dismiss \u2014 keep the documented pre-check",
+    "uphold \u2014 name the check explicitly (e.g. assertPremiseShape)"
+   ]
+  },
+  {
+   "finding_id": "review-style-w5#STYLE-001",
+   "verdict": "upheld",
+   "reasoning": "The assignTier doc block (model-tier.ts:1388) lists two floors; the code under '3 - floors' adds floor:premise-judge (model-tier.ts:1427). No signal the omission is deliberate; the comment states the rule order as the contract."
+  },
+  {
+   "finding_id": "review-style-w5#STYLE-002",
+   "verdict": "upheld",
+   "reasoning": "Commit d9fa525b5 renamed the describe/test titles from three to four laws and removed the 'three things AC3 named' test, but the header (lines 6, 12, 25) and the inline comment at line 288 still say three. No signal that 'three' is meant historically; line 25 refers to a test that no longer exists."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-001",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: review-orchestrator/SKILL.md:110 says reviewers run no command and lists only orchestrator, verifier and one testing reviewer; review-premise Iron Laws (SKILL.md:112) permit git log/blame/show with no matching dispatch grant or allowed_tools value. No intent signal reconciles them."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-002",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: Wave D (review-orchestrator/SKILL.md:1127) and the premise Input Contract never require global_id, unlike Wave C (:1103); premise.ts:234-240 rejects a claim matching two findings as ambiguous-finding."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-003",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: premise.ts:269-270 rejects external-downgrade; the skill's Verdicts table and Iron Laws never say externals cannot be downgraded."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-004",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: review-pr-feedback rule 7 (SKILL.md:368) defines only the upheld path; no verdict or reply is named for an operator-dismissed comment."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-005",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: Step 6a and Slices item 0 (review-orchestrator/SKILL.md:105,120) publish step-0..step-14 and complete steps 8-10 on ingest; Step 10b (:88) has no plan id."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-006",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: flow-orchestrator/SKILL.md:277 and feature-dev/SKILL.md:42 dispatch review-premise with no package, no source and no validation path; only 'journal the answer'."
+  },
+  {
+   "finding_id": "review-architecture-skills#F-007",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: job-orchestrator/SKILL.md:1279 carries the held rule as a trailing comment and job-orchestrator/feature-dev give no unattended branch, while flow-orchestrator:440 does."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-001",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: review-operator.ts:9-10 and requireTerminal refuse non-TTY for decide-premise; review-orchestrator/SKILL.md:47 lists it as an operator terminal command ('never write an operator quote yourself'), yet Wave D (:1129) tells the agent to record the answer itself."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-002",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: the Step 8 ingest block (job-orchestrator/SKILL.md:1150-1156) has no --premises and Step 7 (:1141) names no Wave D; only the loop ingest (:1308) carries --premises."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-003",
+   "verdict": "upheld",
+   "reasoning": "Same contradiction as review-architecture-skills#F-001, confirmed at review-clean-code/SKILL.md:74 vs :89 and review-orchestrator/SKILL.md:110; no intent signal reconciles them."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-004",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: Control 'Waves' (:132) still says A/B/C, Early verdict (:134) runs before Wave D, plan ids stop at step-14 (:105,:120)."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-005",
+   "verdict": "upheld",
+   "reasoning": "Core claim confirmed (external downgrade allowed by the table, rejected by premise.ts:269-270; pr-feedback rule 3 vs rule 7). Its last sentence on self-raised findings overreaches (see review-style-skills#F-006), but the main defect stands."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-006",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: the paragraph at flow-orchestrator/SKILL.md:277 sits under '### A verification step in the plan is a task' (:257) and names no input shape or sink."
+  },
+  {
+   "finding_id": "review-clean-code-skills#CC-007",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: the held-finding instruction recurs at five sites with differing wording; no intent signal for the duplication."
+  },
+  {
+   "finding_id": "review-core-boundaries-w1#F-002",
+   "verdict": "upheld",
+   "reasoning": "Confirmed at eval/inputs/validate.ts:4 (finding says line 8): absolute import into one local worktree, added in f41a21612. A one-off eval script, but committed and non-reproducible; no signal of intent."
+  },
+  {
+   "finding_id": "review-core-boundaries-w1#F-003",
+   "verdict": "owner-decision",
+   "intent_signals": [
+    {
+     "ref": "f41a21612",
+     "says": "commit 'a premise downgrade needs intent or practice evidence; no rubric re-grades (flow 459 eval)' tightened the skill as the finding's suggested fix asks"
+    },
+    {
+     "ref": ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md:29",
+     "says": "rerun on #992 after the fix is recorded: F-011 now upheld, F-009 downgraded with cited evidence, F-012 held"
+    },
+    {
+     "ref": ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md:37",
+     "says": "strict AC7 not met for F-012; 'whether this hold is a defect or the intended behaviour is the owner's judgement (AC7 is judged)'"
+    }
+   ],
+   "reasoning": "The finding says the three misses were not fixed, followed up or recorded; the README shows the fix commit and a rerun, and leaves the one residual (F-012 held) explicitly to the owner. What remains is premise-eval.json still carrying the pre-rerun summary and T8 being closed without that owner call recorded, which only the owner can settle.",
+   "question": "The eval misses were fixed by f41a21612 and rerun; F-012 is now held, and the README leaves strict AC7 to you. Accept T8 as done on that record, or require premise-eval.json to be refreshed and the AC7 deviation recorded on T8?",
+   "options": [
+    "dismiss: accept T8 as done; the README rerun is the record",
+    "uphold: refresh premise-eval.json with the rerun and record the AC7 decision on T8"
+   ]
+  },
+  {
+   "finding_id": "review-logic-skills#LG-001",
+   "verdict": "upheld",
+   "reasoning": "Same defect as review-clean-code-skills#CC-001, confirmed in review-operator.ts (TTY refusal) and the Hosts table."
+  },
+  {
+   "finding_id": "review-logic-skills#LG-002",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: NEEDS_FIX (job-orchestrator/SKILL.md:1177, recomputed at :1309) counts raw blocker/major and flow-orchestrator Phase 4 (:534) exits only at zero findings; only UNRESOLVED_FINDINGS is narrowed for held findings."
+  },
+  {
+   "finding_id": "review-logic-skills#LG-003",
+   "verdict": "upheld",
+   "reasoning": "Same contradiction as review-architecture-skills#F-001; confirmed in review-orchestrator/SKILL.md:110 and law 4."
+  },
+  {
+   "finding_id": "review-logic-skills#LG-004",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: premise.ts:249 (below-minor) and :269-270 (external-downgrade); the skill does not state either for externals, and rule 7 passes comments regardless of severity."
+  },
+  {
+   "finding_id": "review-logic-skills#LG-005",
+   "verdict": "upheld",
+   "reasoning": "Same gap as review-architecture-skills#F-006; the Input Contract needs ids and severity that an issue does not carry."
+  },
+  {
+   "finding_id": "review-logic-skills#LG-006",
+   "verdict": "upheld",
+   "reasoning": "Same gap as review-clean-code-skills#CC-004; Early verdict (:134) precedes Wave D."
+  },
+  {
+   "finding_id": "review-logic-skills#LG-007",
+   "verdict": "upheld",
+   "reasoning": "review-layout/SKILL.md:122-125 lists 'timelines' categorically with media controls; the cited platform guidance concerns media playback progress, and the 'unless the product decides otherwise' clause does not tell a reviewer how to tell the cases apart. No practice source supports mirroring-exempt non-media timelines."
+  },
+  {
+   "finding_id": "review-regression-skills#RG-001",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: findHeldFinding (premise-question.ts) reads <package>/findings.json, and review-pr-feedback has only the pr-comments durable record (SKILL.md:160), not a review package."
+  },
+  {
+   "finding_id": "review-regression-skills#RG-002",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: Wave D (:1128-1129) never orders ingest --premises before the early verdict or before decide-premise, which needs findings.json."
+  },
+  {
+   "finding_id": "review-regression-skills#RG-003",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:40",
+     "says": "the motivating case counts 'a sibling media control forcing the same direction' as a signal, a sibling with no stated reason"
+    },
+    {
+     "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:176",
+     "says": "Red Flags: 'A sibling doing the same is a signal of intent, against the premise'"
+    },
+    {
+     "ref": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1317",
+     "says": "law 4 requires only that the reviewer can 'show that reason wrong'; a copied null path is shown wrong by its trigger, so law 4 does not stop it being reported"
+    }
+   ],
+   "reasoning": "Treating a sibling as a decision signal is deliberate and is the core of the case this PR exists for. The suggested fix (a sibling counts only with a stated reason) would have discarded the sibling signal in that case. A replicated real defect is still reportable under law 4, because its reason is trivially shown wrong.",
+   "question": "Law 4 treats a sibling doing the same as a decision to be shown wrong, as the motivating RTL case needs. Keep it, or count a sibling only when a comment/commit/test states a reason?",
+   "options": [
+    "dismiss: keep law 4; a sibling is a signal, and a replicated defect is still shown wrong by its trigger",
+    "uphold: narrow law 4 so a reasonless sibling is a pattern, not a decision"
+   ]
+  },
+  {
+   "finding_id": "review-regression-skills#RG-004",
+   "verdict": "upheld",
+   "reasoning": "Same contradiction as review-architecture-skills#F-001; allowed_tools has only read-only and run-tests."
+  },
+  {
+   "finding_id": "review-regression-skills#RG-005",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: external-downgrade rejection (premise.ts:269-270) not stated in the skill, and `source` is a single top-level input while Wave D mixes round and external findings."
+  },
+  {
+   "finding_id": "review-regression-w8#RG8-003",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: readiness.ts:37 adds item 11 premise-decisions; docs/docs/cli-reference.md:4857 says ten-item and SKILL.detail.md:654 says ten items."
+  },
+  {
+   "finding_id": "review-style-skills#F-001",
+   "verdict": "upheld",
+   "reasoning": "Same defect as review-clean-code-skills#CC-002, confirmed at job-orchestrator/SKILL.md:1150."
+  },
+  {
+   "finding_id": "review-style-skills#F-002",
+   "verdict": "upheld",
+   "reasoning": "Same duplication as review-clean-code-skills#CC-007; confirmed."
+  },
+  {
+   "finding_id": "review-style-skills#F-003",
+   "verdict": "upheld",
+   "reasoning": "Same gap as review-architecture-skills#F-006; confirmed."
+  },
+  {
+   "finding_id": "review-style-skills#F-004",
+   "verdict": "upheld",
+   "reasoning": "Same gap as review-architecture-skills#F-005; confirmed."
+  },
+  {
+   "finding_id": "review-style-skills#F-005",
+   "verdict": "upheld",
+   "reasoning": "Confirmed: Iron Laws (review-premise/SKILL.md:111) imply a minor may be shrunk, while the Verdicts table and premise.ts:288 forbid a downgrade below minor."
+  },
+  {
+   "finding_id": "review-style-skills#F-006",
+   "verdict": "challenged",
+   "intent_signals": [
+    {
+     "ref": "src/review/premise.ts:257-259",
+     "says": "self-judgement rejects a claim when the judge name equals the finding's reviewer or any reported_by entry, so the case is coded on purpose"
+    },
+    {
+     "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:66",
+     "says": "`judge` is 'Your own name', any dispatched agent, which can coincide with a reviewer (e.g. a host running the judge as an agent that also reviewed)"
+    },
+    {
+     "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:108",
+     "says": "Iron Law already states it: 'The merge rejects a judge equal to the reporter'"
+    }
+   ],
+   "reasoning": "The finding's premise, that 'findings you raised yourself' cannot exist, is contradicted by the merge: a judge whose name equals a reporter is a real case and is guarded deliberately. The Iron Law row already gives the wording the suggested fix asks for.",
+   "question": "Step 1's 'findings you raised yourself' covers a judge whose name matches a reporter, which the merge guards (self-judgement). Keep the wording, or reword Step 1 anyway?",
+   "options": [
+    "dismiss: keep it; the case exists and the Iron Law already explains it",
+    "uphold: reword Step 1 to 'a finding whose reviewer is your own name'"
+   ]
+  },
+  {
+   "finding_id": "review-style-skills#F-007",
+   "verdict": "upheld",
+   "reasoning": "Same as review-architecture-skills#F-007 plus a step-7 disposition gap for held findings; confirmed at job-orchestrator/SKILL.md:1279."
+  }
+ ]
+}

@@ -1,0 +1,67 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-02 is mostly docs, schema descriptions and tests. One stale doc contradicting the new substring step, one sibling schema description left behind, two small test smells.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "CC-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops",
+      "problem": "The diff adds a third matching step (a one-line quote as an exact substring of exactly one line, method `substring`) to review-finding.schema.json, locate.ts and the schema's `quote` description. The prose in the same cli-reference section still says matching stops after the whitespace-collapsed step and is 'nothing fuzzy'. The doc describes the rule the change replaced (Part C1a, first shape).",
+      "impact": "A reader of the CLI reference believes a partial-line quote is unlocatable, when ingest now anchors it to the single line containing it; the `substring` locator method is never mentioned.",
+      "suggested_fix": "Rewrite the sentence: exact first, then whitespace collapsed, then (a one-line quote only) as an exact substring of exactly one line, then it stops; list `substring` as a `method` value.",
+      "evidence": "diff of .metaproject/core/gdskills/contracts/review-finding.schema.json (quote description and locator.method enum gain substring); src/review/locate.ts:17 and :67 carry the substring method; docs/docs/cli-reference.md:6674 unchanged.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "quote": "it is matched against the file at the round's head, exactly first and then",
+      "problem": "The reviewer-side `quote` description is documented as 'kept identical' to the canonical schema, whose `quote` description this diff changes to add the substring step. This copy (and the bundled copy at src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json:85) still describes only exact and whitespace-collapsed matching. Two files now document one field differently.",
+      "impact": "Reviewers are told to quote enough to be unambiguous but not that a one-line fragment now places by substring; the two schemas drift on the same field.",
+      "suggested_fix": "Update both reviewer-finding.schema.json copies' `quote` description to name the one-line substring step, as the canonical schema now does.",
+      "evidence": "grep for 'exactly first' finds both reviewer-finding.schema.json copies at line 85, neither updated by this slice.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-003",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.test.ts",
+      "quote": "await expect(build(pkg)).rejects.toThrow('a display id holds no \"#\"');",
+      "problem": "The test runs `build(pkg)` twice, once per message assertion, so the refusal path and its side effects execute twice for one behaviour.",
+      "impact": "Slower and noisier test; a build that changed state on first refusal could make the second assertion pass or fail for the wrong reason.",
+      "suggested_fix": "Capture the rejection once (`const error = await build(pkg).then(() => null, (e) => e)`) and assert both substrings on its message.",
+      "evidence": "review-ledger.test.ts new test 'canonical findings whose display id holds #': two consecutive `expect(build(pkg)).rejects` calls.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-004",
+      "severity": "minor",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "quote": "expect(second.dispatches).toBeLessThanOrEqual(40);",
+      "problem": "40 is the default `reviewPlan.maxDispatches` threshold, repeated as a bare literal in the assertion; the test does not say that, and it breaks silently if the default moves. The same file repeats 60_000 timeouts and, in both tests, the same report/research.json/ingest preamble (two sites, below the DRY threshold, noted only).",
+      "impact": "A change of the default threshold fails or weakens this assertion with no link back to the setting.",
+      "suggested_fix": "Name the constant (import the default or declare one with a comment citing routing.config.json), or assert overThreshold is false instead.",
+      "evidence": "reviewPlan.maxDispatches default 40 per the cli-reference estimate row in this diff.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 0 }
+}
+```
+
+## Clean Code Review
+
+Slice-02 holds docs, schema descriptions, flow bookkeeping and tests; no production function bodies, so Functions, Error Handling and SOLID have nothing to review. Findings are documentation drift around the new `substring` locator method (CC-001, CC-002) and two test smells (CC-003, CC-004).
+
+Stats: blocker 0 | major 0 | minor 4 | info 0

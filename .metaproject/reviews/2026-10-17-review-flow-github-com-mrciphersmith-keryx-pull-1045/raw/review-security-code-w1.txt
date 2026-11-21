@@ -1,0 +1,111 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "slice-01 (PR #1045, head dff7a38a1): the security-relevant changes are the shell review-gate nudge now scanning review roots named anywhere in the session history (src/commands/agent.ts -> src/review/completion-gate.ts sessionReviewRoots/findReviewGateState) and the new KERYX_USAGE token-spend channel (src/commands/review-ledger.ts, src/review/dispatch-usage.ts). One major: untrusted tool-result text can choose which on-disk review package drives a harness-provenance nudge and can make the gate accept early. One minor: a reviewer can self-report its token usage in the same channel the code treats as host-measured. Two info observations. Flow JSON/journal/CHANGELOG/docs/skill-text hunks carry no executable surface; no injection, secrets, crypto, path-traversal or auth issues in them.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "major",
+      "file": "src/commands/agent.ts",
+      "line": null,
+      "quote": "? await findReviewGateState(process.cwd(), sessionStartedAt(history), sessionReviewRoots(history, process.cwd())).catch(() => null)",
+      "symbol": "holdReviewGate / sessionReviewRoots / findReviewGateState",
+      "problem": "The review-gate now derives extra project roots from every string in the session history, including role:\"tool\" messages whose content is raw tool output (file reads, diffs, fetched pages, child replies; agent.ts pushes `content: withBudgetWarning(result.output)` / `scrubControlNonce(output, nonce)` into history). sessionReviewRoots matches any `<prefix>.metaproject/reviews/<x>` substring with REVIEW_PACKAGE_PATH and resolves the prefix against cwd with no containment check. findReviewGateState then (a) honours an active-review pointer found under any of those roots (resolveActiveReview only checks the pointer's dir is inside that same root, and `startedAt` is a self-declared string compared with `since`), (b) otherwise takes the newest open manifest across all roots, and (c) returns null (gate accepts the stop) when any root holds a `status: closed` review manifest with mtime >= session start newer than the chosen package. The chosen manifest's `reviewId` is interpolated into the nudge, which is pushed as a `role: \"user\"`, `provenance: \"harness\"` message.",
+      "impact": "Attack vector: the shell reviews an untrusted PR (or reads any untrusted file/page). The PR adds e.g. `fixtures/x/.metaproject/reviews/r1/manifest.json` with `mode: review-flow` and either (1) `status: closed` — once checked out during the session its mtime is >= since, so when the model's tool output mentions that path the gate returns null and the model may stop with the real review incomplete (completion-gate bypass), or (2) open with `reviewId` set to instruction text plus `fixtures/x/.metaproject/data/review-active/active-review.json` with a future `startedAt` — when cwd has no pointer (the subdirectory-package case this flow targets), that pointer wins and the attacker string is delivered to the model inside a harness-provenance nudge, i.e. untrusted content is promoted to the harness's trusted channel. Preconditions not established by the diff: the PR must carry the crafted files, the path must surface in a tool result, and (for 2) cwd must lack its own live pointer — hence major, not blocker. Before this change only cwd was scanned.",
+      "suggested_fix": "Derive extra roots only from trusted sources: the stdout of keryx's own `review start`/`review plan` tool calls (or the arguments of `keryx review` commands the model issued), not from arbitrary tool-result or user content; require each root to be inside the repository/cwd tree and to hold a package whose manifest was written by this process (e.g. match the caller token `review start` recorded in the pointer against the session's token). Do not let an extra root's closed manifest short-circuit the gate (`closedAt` only from cwd or from the package this session started), and render `reviewId` through a strict id pattern (e.g. /^[A-Za-z0-9._-]{1,120}$/, else the directory name) before it enters a harness nudge.",
+      "evidence": "src/review/completion-gate.ts:43 REVIEW_PACKAGE_PATH; :55-63 scan of `message.content` and `call.arguments` for every history message; :58 `roots.add(path.resolve(cwd, prefix === \"\" ? \".\" : prefix));` (no containment); :124-131 first root with a pointer wins; :136 `if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;`; :225 `The managed review ${open.reviewId} is not finished` in the continue message; src/commands/agent.ts:3487 call site and the nudge push with `provenance: \"harness\"`; tool outputs enter history at agent.ts:4453, 4470, 5259. git log: introduced in f4412b2d8 (flow 460 L2); main's findReviewGateState scanned cwd only.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/agent.ts:3487",
+          "src/review/completion-gate.ts:58",
+          "src/review/completion-gate.ts:124",
+          "src/review/completion-gate.ts:136",
+          "src/review/completion-gate.ts:225"
+        ],
+        "enumeration_method": "keryx ctx rg for sessionReviewRoots|findReviewGateState callers (one caller, agent.ts holdReviewGate) and for every use of `roots`/`extraRoots`/`closedAt`/`reviewId` inside completion-gate.ts; the nudge text is built only in decideReviewGate (continue) and its stop report."
+      }
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "line": null,
+      "quote": "const { usage } = splitUsage(body);",
+      "symbol": "readRaws / splitUsage",
+      "problem": "The usage channel trusts any `KERYX_USAGE {...}` line in the raw result file. dispatch-usage.ts states the line wins over a result's `usage` \"because the host measured it and the reviewer cannot\", but on Claude Code and Codex the reviewer writes `<package>/raw/<reviewer>.txt` itself (review-orchestrator SKILL.md Hosts table) and the orchestrator only appends a line when its spawn tool reported tokens. A reviewer (or a diff that prompt-injects it) can emit its own KERYX_USAGE line; with no host line appended after it, that value is recorded as measured. Counts are also unbounded (any finite non-negative number is accepted).",
+      "impact": "Attack vector: injected text in a reviewed diff makes a reviewer end its reply with `KERYX_USAGE {\"tokens_in\":0,\"tokens_out\":0}` (or 1e15); ledger build records it per run and research.json/report.md state a falsified token spend that looks host-measured. Integrity of a reporting metric only; no gate decision reads it.",
+      "suggested_fix": "Record provenance with the usage (e.g. `source: host|reviewer`) and accept the line as host-measured only when keryx shell's spawn_subagent wrote it (e.g. a host-only marker or a separate `raw/<reviewer>.usage.json` written by the host, never inside the reviewer-authored body); cap counts at a sane maximum; correct the comment's claim that the reviewer cannot write the line.",
+      "evidence": "src/review/dispatch-usage.ts:7-10 comment and USAGE_LINE regex (last match wins); src/commands/review-ledger.ts:113-114 reads usage from the whole raw body; .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md Hosts table: Claude Code result file is written by the reviewer itself.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const working = await dirSignature(path.join(workingRoot, \".metaproject\", \"data\", \"review\"));",
+      "symbol": "findReviewGateState / dirSignature",
+      "problem": "dirSignature recursively reads and SHA-256-hashes every file under `<root>/.metaproject/data/review`, with no size or depth bound, on every held stop. workingRoot can now be a root named by history text (SEC-001) rather than cwd only.",
+      "impact": "No attack vector established beyond SEC-001's precondition; a large tree under a history-named root would make each stop attempt slow (local resource use, not a confidentiality issue — symlinks are skipped). Settled by bounding entries/bytes or by fixing SEC-001's root selection.",
+      "suggested_fix": "Bound the walk (entry count and total bytes, or hash name+size+mtime instead of contents) and only walk roots this session started.",
+      "evidence": "src/review/completion-gate.ts:23-39 dirSignature, :137-138 workingRoot = best?.root ?? cwd.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"reason\": { \"type\": \"string\", \"enum\": [\"absent\", \"ambiguous\"] },",
+      "symbol": "quote_unlocated",
+      "problem": "Ingest no longer refuses a finding whose quote is not at its path; it is kept unanchored and flagged. This removes a fabrication check from the ingest step, but readiness item 12 `quotes-located` still blocks `review complete` until each such finding has a disposition or an operator waiver, so no unreviewed fabricated finding reaches completion silently.",
+      "impact": "No attack vector: the control moved from ingest to readiness rather than disappearing. Noted so the readiness item is not later made waivable by the model itself.",
+      "suggested_fix": "None required; keep `quotes-located` operator-waivable only (card / terminal), as the SKILL.detail.md text states.",
+      "evidence": "slice-01 schema hunk adding quote_unlocated; SKILL.detail.md readiness item 12; SKILL.md ingest paragraph change.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 2 }
+}
+```
+
+## Security Review
+
+### Scope
+- PR: MrCipherSmith/keryx #1045, head `dff7a38a1`
+- Slice: `slice-01` (33 hunks: flow 458/459/460 metadata, gdgraph artifacts, review-orchestrator skill text, CHANGELOG, docs, `src/commands/agent.ts`, `src/commands/review-ledger.ts`)
+- Context read at head: `src/review/completion-gate.ts`, `src/review/active-review.ts`, `src/review/dispatch-usage.ts`, `src/review/ledger.ts` (isEmptyOutput/parseReviewResult strip usage lines first)
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 1
+- Info: 2
+
+### Findings
+- **[SEC-001] major** `src/commands/agent.ts:3487` — the review-gate's extra roots come from all session history text, tool output included. A crafted `.metaproject/reviews/*/manifest.json` (closed) in an untrusted PR can make the gate accept a stop early, and a crafted open manifest + pointer can put attacker text (`reviewId`) into a harness-provenance nudge. Fix: take roots only from keryx's own `review start`/`plan` output, contain them in the repo, ignore extra-root `closedAt`, sanitize `reviewId`.
+- **[SEC-002] minor** `src/commands/review-ledger.ts:113` — `KERYX_USAGE` is trusted as host-measured, but on Claude Code/Codex the reviewer writes the raw file and can emit the line itself; counts are unbounded. It only affects the reported spend.
+- **[SEC-003] info** — unbounded recursive content hashing of `<root>/.metaproject/data/review` for roots named in history.
+- **[SEC-004] info** — the quote check moved from ingest (refuse) to readiness item 12 (operator disposition/waiver). That is a relocated control, not a removed one.
+
+### Clean Areas
+Checked with nothing found: injection (no shell/SQL/template construction in the changed code), secrets (none in the flow JSON, docs or CHANGELOG), crypto (sha256 only for signatures), path traversal in ledger raw reads (fixed `raw/` dir, `.txt` filter), auth/CSRF/redirect (not applicable). `--skip/--reason` parsing still refuses a skip without a reason.

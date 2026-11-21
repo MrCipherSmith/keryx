@@ -1,0 +1,78 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Slice 08 is a CLI-side review pipeline with no request hot path; the load-relevant risks are the unlocked read-modify-write of the shared operator-decisions.json and operator answers keyed by positional ids that outlive the ingest they were made against. The premise merge itself is pure, bounded and fail-safe.",
+  "slices": ["slice-08"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "repo": null,
+      "file": "src/review/operator-decisions.ts",
+      "line": null,
+      "quote": "const entries = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry));",
+      "problem": "recordPremiseDecision (new) and recordOperatorDecision read the whole operator-decisions.json, append one entry, and rewrite the file, with no lock or compare-and-swap. writeFileAtomic makes the write torn-free, not the read-modify-write atomic.",
+      "impact": "Two answers recorded in overlapping windows (a tui card and its remote mirror, the CLI and a card, or two held findings answered back-to-back by parallel tool calls) both read the same prior list; the second write silently drops the first. Both callers return success, so the operator believes the answer is on record. A lost dismiss re-holds the finding and the premise-decisions readiness check fails again; a lost uphold or mutation waiver likewise. The PR widens the exposure: the file now holds one answer per held finding, so several writes per package are the normal case, not a rare waiver.",
+      "suggested_fix": "Serialize the read-modify-write per package: take an exclusive lockfile (open with 'wx', bounded retry with short backoff, release in finally) around read+append+write in one shared helper used by both record functions; or store each decision as its own append-only file and have readEntries merge them. After writing, re-read and verify the new entry is present, failing loudly if not.",
+      "evidence": "recordPremiseDecision and recordOperatorDecision both `await readEntries(...)` then `writeFileAtomic(..., [...entries, kept])` across an await boundary; nothing excludes another writer, and the doc comments name separate callers (CLI command vs shell card, tui vs remote).",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": ["src/review/operator-decisions.ts: recordPremiseDecision", "src/review/operator-decisions.ts: recordOperatorDecision"],
+        "enumeration_method": "keryx ctx rg for writers of OPERATOR_DECISIONS_FILE in src/review: two, both read-then-append. The other files this slice writes (premises.json, scope.md, findings.json) are whole-file overwrites by a single ingest, not read-modify-write."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "repo": null,
+      "file": "src/review/verdict.ts",
+      "line": null,
+      "quote": "const premiseClaims = await applyPremiseClaims(packageDir, loose);",
+      "problem": "Premise claims (research-evidence/premises.json) and premise-question decisions are keyed by the positional finding id (reviewer#n / global_id) and are not bound to the head or the finding's content, unlike gate decisions whose subject binds head and shown items. premises.json is only rewritten when an ingest passes --premises, so a stale file survives a re-ingest that omits it.",
+      "impact": "After a re-ingest into the same package that reorders or replaces findings, computeVerdict re-applies the old claims to whatever finding now holds that id: it can lower a severity (fewer open majors in the verdict) or hold an unrelated finding, and an old dismiss decision dismisses a different held finding with the earlier operator's reason as evidence. Needs a re-ingest into an existing package, and applyPremiseDecision only acts on findings that carry a held premise, so it is narrow.",
+      "suggested_fix": "Record the head and a content hash (problem+file+line) in each premise-question decision and in premises.json and ignore entries whose subject no longer matches; or remove premises.json on an ingest that does not supply --premises.",
+      "evidence": "managed.ts writes PREMISES_FILE only `if (input.premises !== undefined)`; verdict.ts applyPremiseClaims reads it unconditionally and applies it to every record without a premise; premiseDecisionFor matches by id only.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "repo": null,
+      "file": "src/review/verdict.ts",
+      "line": null,
+      "quote": "} catch {\n    return undefined;\n  }",
+      "problem": "applyPremiseClaims swallows any parse error of premises.json and reports no claims, with no line in the verdict saying so.",
+      "impact": "A corrupt or hand-edited premises.json makes held findings revert to ordinary open findings in the interim verdict with no visible cause. It fails toward more findings, not fewer, so nothing is lost; only the reason is hidden. A 'premise results unreadable' line would settle it.",
+      "suggested_fix": "Return a distinguishable unreadable state and print it beside `premise results applied`.",
+      "evidence": "verdict.ts applyPremiseClaims: try/catch around parsePremiseClaims returning undefined.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+## High-Load Review
+
+### Review Scope
+- Slice: slice-08 (src/review: coverage, dedupe, managed, operator-decisions, premise-question, premise, readiness, types, verdict, verification)
+- Load profile: not provided; a local CLI review pipeline, so load means concurrent writers on a package directory.
+
+### Summary
+The premise merge is pure and bounded (O(claims x findings), findings capped per reviewer), mutates nothing in place and fails safe on every rejection path. The one real concern is the unlocked read-modify-write of operator-decisions.json, which now carries one answer per held finding. Stale id-keyed claims and decisions are a lower-confidence minor.
+
+### Stats
+- blocker: 0 | major: 1 | minor: 1 | info: 1
+
+### Clean Areas
+Module-level shared mutable state (none added), unbounded queues or collections, connection and file-handle management, caching, DB access, retries and timeouts, idempotency of the merge itself (re-running the verdict is deterministic).

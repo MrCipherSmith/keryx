@@ -1,0 +1,34 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "info",
+      "file": "src/review/operator-decisions.ts",
+      "line": 118,
+      "title": "recordPremiseDecision is an unlocked read-modify-write of operator-decisions.json",
+      "pattern": "Concurrency A1 - Shared Mutable State",
+      "failure_mode": "Two simultaneous `keryx review decide-premise` runs against one package each read the entries, append, and atomically write; the later write drops the earlier decision. Needs two operators answering the same package within milliseconds; a single interactive operator CLI, not a load path.",
+      "message": "writeFileAtomic prevents torn files but not lost updates. Outside slice-05 (seen only for context) and the same shape as the existing operator-decision writer; reported as an observation, with no reproducible load path.",
+      "suggested_fix": "If concurrent answering is ever supported, serialize with a lock file around read+write. Nothing to change today."
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+## High-Load Review
+
+### Summary
+Slice-05 is tests, a JSON schema addition, catalog text, a pure tier-signal floor and line-count ceilings. None of it runs on a request path, and it holds no pools, caches, queues, retries or shared mutable state. No concurrency or load concern was found in the slice. One info observation on a neighbouring function.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Clean Areas
+Concurrency/races, resource management, caching, database under load, queues, retry/timeout, idempotency: reviewed, none detected. The `assignTier` premise floor is pure and deterministic.

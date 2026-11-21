@@ -1,0 +1,87 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-08 (review-ledger wiring of usage, screened findings and the mutation record; spawn_subagent empty-reply handling and KERYX_USAGE writing; schema and skill text). One major: the new scope-B screen closure in buildLedger matches a raw finding by reviewer + display id alone, so a different wave's finding with the same display id is closed out-of-scope with another finding's screen reason. Two minors on the token-usage channel (a child-forged usage line survives in keryx shell; an empty dispatch's recorded usage is overwritten or diverted on the advised re-dispatch) and one info.",
+  "slices": ["slice-08"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "location_class": "in-diff",
+      "file": "src/review/ledger.ts",
+      "line": 613,
+      "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+      "problem": "screenedAs (new in flow 460, fed by review-ledger.ts `const screened = ingestScreenedOf(...)`) closes a raw finding out-of-scope when ANY screened entry has the same reviewer and the same display id (`entry.reviewer === reviewer && entry.id === fid`). Display ids restart per dispatch (a reviewer run in waves w1/w2/w3, or a retry, emits F-001 again for a different finding), and managed.ts screenedRecord writes the finding's display id. So once ingest screens review-logic-w1:F-001, every other review-logic raw finding with id F-001 that is absent from findings.json is also closed out-of-scope with w1's screen rule and detail. global_id, which would disambiguate, is recorded in the screened entry but never compared.",
+      "impact": "The obligation check exists to catch a raw finding the orchestrator left out of findings.json. With this loose match, a dropped finding from another wave of the same reviewer is recorded as screened by scope-B with a reason that belongs to a different finding; the ledger reports READY and review complete accepts it, so a real (possibly blocker) finding leaves the round with a false audit trail. Trigger: multi-wave dispatch of one reviewer (routine; this round dispatches waves w1..w10) plus one scope-B screen and one omitted finding.",
+      "suggested_fix": "Match only on the obligation id (`entry.id === oid`) or on global_id: have screenedRecord write the raw stem form (`<raw stem>:<id>`) or the global_id so the match is exact, and drop the reviewer + display-id fallback (or allow it only when that reviewer has exactly one raw file).",
+      "evidence": "src/review/ledger.ts:612-613 screenedAs; src/review/managed.ts:686-691 screenedRecord writes `id: finding.id` (the display id) with reviewer; ledger.ts:620 builds the obligation id as `<raw stem>:<fid>`, so the reviewer+fid fallback is what matches a display-id record, for every wave of that reviewer; multi-wave raw stems such as review-security-code-w3 in this package's drivers/.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": [
+          "src/review/ledger.ts:613 (new: screened closure by reviewer + display id)",
+          "src/review/ledger.ts:600 (pre-existing sibling: canonicalByReviewer matches reviewer + display id; guarded by length === 1 but still links a later wave's same-id finding to an earlier wave's canonical finding)"
+        ],
+        "enumeration_method": "grep -n \"reviewer === reviewer && \\|f.reviewer === reviewer\" src/review/ledger.ts: the places a raw finding is resolved by reviewer + display id; 2 hits"
+      }
+    },
+    {
+      "id": "SEC-002",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "location_class": "in-diff",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 1908,
+      "quote": "const usageSuffix = (options: { partial?: boolean } = {}): string =>",
+      "problem": "In keryx shell the harness appends its KERYX_USAGE line only when the provider reported usage (`childUsage.known`). The child's own text is saved verbatim (`${raw}${usageSuffix()}`), so a child whose output ends with `KERYX_USAGE {\"tokens_in\":0,\"tokens_out\":0}` (its own choice, or induced by instruction-shaped text in the reviewed diff) has that line accepted by splitUsage as the measured spend when the provider reports none; in the timeout path it can likewise state a non-partial count. dispatch-usage.ts names the forgery risk only for hosts where the reviewer writes its own file, and the spawn tool comment says \"Unknown (no line) when nothing reported\", which is not what gets saved.",
+      "impact": "Attack vector: prompt-injected diff content or a misbehaving child emits a usage line; entry point: the text saved via save_result_to; impact: the round's stated token spend (research.json usage, report Token spend) is wrong and can read as complete. No gate reads usage, so this is the integrity of a reported figure only.",
+      "suggested_fix": "Save `splitUsage(raw).body` (and the stripped partial text in the timeout path) before appending the harness's own line, so in keryx shell only the harness can state usage and an unreported dispatch stays unknown.",
+      "evidence": "spawn-subagent-tool.ts:1908-1909 usageSuffix returns \"\" when !childUsage.known; :2369 saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`) with raw = child text; src/review/dispatch-usage.ts splitUsage takes the last well-formed KERYX_USAGE line anywhere in the file.",
+      "confidence": "high"
+    },
+    {
+      "id": "SEC-003",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "location_class": "in-diff",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 2328,
+      "quote": "const emptySaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(",
+      "problem": "The empty-reply path records the paid dispatch (placeholder + usage line) in save_result_to and advises a read-only parent to re-dispatch once. The re-dispatch to the same save_result_to then either overwrites it (a completing child goes through saveChildResult, which writes unconditionally) or, if it ends empty again, is diverted to `<target>.partial`, because saveTimedOutPartial treats the earlier placeholder file as a complete result (its content is non-empty). Either way one of the two dispatches and its tokens vanish from what the ledger reads.",
+      "impact": "Criterion H (every dispatch's token use lands in the package; a dispatch without usage is counted unknown, never 0) under-counts exactly in the case the new advice creates. No gate effect; reported spend and dispatch count come out low.",
+      "suggested_fix": "Treat a file whose body is empty output (isEmptyOutput) as replaceable but carry its usage forward (keep its KERYX_USAGE line or sum it into the new one), or record each dispatch's usage in a per-dispatch sidecar the ledger sums.",
+      "evidence": "spawn-subagent-tool.ts:329-334 saveTimedOutPartial (non-empty existing file -> .partial); :314-322 saveChildResult overwrites; :2328 empty-reply save; the read_only advice 're-dispatch it once'.",
+      "confidence": "high"
+    },
+    {
+      "id": "SEC-004",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "location_class": "in-diff",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 1927,
+      "quote": "childUsage.tokens_in += tokensIn ?? 0;",
+      "problem": "onUsage accepts any finite number, negative included (finiteNumber); a provider reporting a negative delta makes the summed line fail toTokenCount on read, so the whole dispatch reads unknown instead of keeping the valid part. No attacker path identified; settled by rejecting negative deltas at accumulation.",
+      "impact": "At worst a dispatch's usage reads unknown.",
+      "suggested_fix": "Ignore values below 0 in onUsage.",
+      "evidence": "spawn-subagent-tool.ts:311 finiteNumber; src/review/dispatch-usage.ts toTokenCount rejects values < 0 and > MAX_DISPATCH_TOKENS.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 1 }
+}
+```
+
+## Summary
+
+Slice-08 second look (security + logic).
+
+- Major SEC-001: buildLedger's new scope-B closure matches by reviewer + display id, so per-wave id reuse lets an omitted finding close out-of-scope under another finding's screen reason, and the gate passes.
+- Minor SEC-002: in keryx shell, a child-written KERYX_USAGE line survives when the provider reports no usage, and is read as measured spend.
+- Minor SEC-003: the empty-reply usage record is overwritten or diverted to `.partial` on the re-dispatch the new advice recommends.
+- Info SEC-004: negative usage deltas are accepted at accumulation.
+
+Clean areas checked: no injection or eval; save_result_to path confinement is unchanged; no secrets and no crypto in the slice. ledgerBlockers now reads its coverage options from the package (ledger.ts:803-806), so dropping changedLines/blastRadius/pendingMutants from the call does not weaken the gate.

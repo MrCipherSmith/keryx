@@ -1,0 +1,64 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "slices": ["slice-09"],
+  "summary": "Second look at slice-09 (test files only: active-review, complete-coverage-gate, complete-head-gate, completion-gate, coverage, evidence-level, ingest-locator-sha, ledger, locate, managed, readiness, research tests). No exploitable vulnerability. The tests pin the gate's trust boundary (session roots only from keryx review commands and their own output lines), nudge sanitisation, and linear-time parsing of hostile input; one gap in that trust boundary is not pinned and the source accepts it.",
+  "findings": [
+    {
+      "id": "SC-001",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 106,
+      "quote": "const KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/;",
+      "problem": "The completion gate trusts the `path:` and `# managed review:` lines of a tool result whenever the tool call's arguments contain `keryx review` anywhere. A compound command (`keryx review status x; cat notes.md`, or `cat notes.md # keryx review`) makes the output of the other command trusted as keryx's own output. The test 'session roots come only from this session's keryx review commands and keryx's own output lines' (src/review/completion-gate.test.ts) only covers a `cat` call with no `keryx review` in it, so the compound case is unpinned.",
+      "impact": "Attack vector: text the agent reads (a PR file, a report, a fetched page) carries `# managed review: <id>` and `path: sub/.metaproject/reviews/z` lines. If the agent runs it through a command that also mentions `keryx review`, the gate adds `sub` as a session root and the id as session-named. With no open package chosen (best === null), findReviewGateState takes closedAt as the max over all roots (completion-gate.ts:324), so a closed review-flow manifest under that root written during the session releases the gate; otherwise the nudge can be pointed at a planted package. Bounded: roots must be inside cwd, ids pass SAFE_REVIEW_ID, and the gate is a completion nudge, not an access-control boundary, so this is defence in depth.",
+      "suggested_fix": "Trust output lines only when the command is a single `keryx review <start|attach|ingest>` invocation (anchor the pattern at the command start and refuse `;`, `&&`, `|`, newlines), and add a test with a compound command whose second half prints forged lines.",
+      "evidence": "Read src/review/completion-gate.ts:106-183 (scan(): KERYX_REVIEW_COMMAND.test(call.arguments) gates pendingCalls, then OWN_OUTPUT_LINE lines of the matching tool result feed namePaths/reviewIds) and :308-325 (closedAt over all roots when best is null). Slice test at completion-gate.test.ts 'session roots come only from...' uses only a plain `cat` call for the forged case.",
+      "confidence": "high"
+    },
+    {
+      "id": "SC-002",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 118,
+      "quote": "return rel === \"\" || (rel.split(/[\\\\/]/)[0] !== \"..\" && !path.isAbsolute(rel));",
+      "problem": "inside() is lexical: a session root under cwd that is a symlink to a directory outside cwd passes, so scanRoot reads manifests outside the working directory. The test 'a root outside the working directory ... is never taken' pins only the lexical cases (/elsewhere, ../sibling).",
+      "impact": "No attack vector established: reading needs a symlink already inside cwd, and only manifest status/reviewId and mtimes are read into a nudge. Recorded so the 'never outside cwd' claim is not over-read.",
+      "suggested_fix": "If the claim is meant literally, realpath the root before the inside() check and add a symlink case to the test.",
+      "evidence": "Read src/review/completion-gate.ts:116-119 and :175-183; slice test 'a root outside the working directory, or the flag text of --package=<dir>, is never taken'.",
+      "confidence": "medium"
+    },
+    {
+      "id": "SC-003",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/review/dispatch-usage.ts",
+      "line": 82,
+      "quote": "usage = usageOfLine(match[1]!) ?? usage;",
+      "problem": "The header says a host line appended after the reply overrides any line inside it, but a malformed last line keeps an earlier well-formed one, so a reviewer-written KERYX_USAGE line survives a malformed host line. Host lines come from formatUsageLine and are well-formed, so this is not reachable today; the module also documents that a reviewer can forge usage on hosts where it writes its own raw file and that no gate reads usage.",
+      "impact": "No attack vector: usage is stated spend only, read by no gate decision (deliberate, documented at dispatch-usage.ts:12-14).",
+      "suggested_fix": "Either make the last usage line authoritative even when malformed (reset to undefined), or reword the header to 'the last well-formed line wins'.",
+      "evidence": "Read src/review/dispatch-usage.ts:1-87; slice ledger.test.ts 'ledger build reads the KERYX_USAGE line from raw/' covers a single malformed line only.",
+      "confidence": "high"
+    }
+  ],
+  "needs_context": []
+}
+```
+
+## Summary
+
+Slice-09 is test code only. A second read for logic and security defects found no exploitable vulnerability. The tests do pin these defences: forged output from a non-review command is ignored, hostile review ids and control characters in blockers are kept out of the nudge, package-path and usage-line parsing run in linear time on hostile input, and absurd token counts are rejected.
+
+- SC-001 (minor): the gate trusts the output lines of any tool call whose arguments mention `keryx review`. That includes compound commands. Text the agent reads could then add a session root or a review id, and so misdirect or release the gate. No test covers this case.
+- SC-002 (info): the "inside cwd" check compares path text only, so a symlinked root under cwd can lead outside it.
+- SC-003 (info): a malformed last KERYX_USAGE line does not override an earlier well-formed one, which goes against the header comment. Today this cannot be reached, and no gate reads usage anyway.
+
+Clean areas checked: injection (git fixtures use argument arrays and Bun `$` with interpolation escaping), secrets (none), path traversal in research locators (`../research.json` is refused, as the test shows), ReDoS (linear-time tests on both parsers).
+
+Counts: blocker 0, major 0, minor 1, info 2.

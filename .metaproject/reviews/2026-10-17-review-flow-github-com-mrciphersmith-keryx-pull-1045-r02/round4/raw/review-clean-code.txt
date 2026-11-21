@@ -1,0 +1,291 @@
+REVIEW_RESULT
+```json keryx:findings
+{
+ "reviewer": "review-clean-code",
+ "status": "DONE",
+ "summary": "Round-3 fixes verified for clean code: 41 round-3 findings and 3 prior records checked; delta introduces 3 minor and 3 info defects.",
+ "prior_dispositions": [
+  {
+   "id": "r3-review-architecture-code:R3-ARCH-001",
+   "disposition": "closed",
+   "evidence": "deltaRoundCut and its helpers moved to src/review/round-cut.ts:43; src/commands/review-slice.ts:26 only imports deltaRoundCut/firstRoundCut/SecondLookSource."
+  },
+  {
+   "id": "r3-review-architecture-code:R3-ARCH-002",
+   "disposition": "open",
+   "evidence": "src/review/coverage.ts:~1087 processCache key is still JSON.stringify([packageDir, root, target]); the resolved base sha is not in it (target now also carries prBase)."
+  },
+  {
+   "id": "r3-review-clean-code-code:CC-R3-001",
+   "disposition": "closed",
+   "evidence": "src/review/managed.ts:1336-1345 attributionReviewers has its own doc; the stub-report doc now sits at 1368-1374 directly above refuseStubReport (1375)."
+  },
+  {
+   "id": "r3-review-clean-code-code:CC-R3-002",
+   "disposition": "closed",
+   "evidence": "round-cut.ts:43-60 deltaRoundCut is ~15 lines over routeAsDelta, cutRegions (:30) and secondLookCut (:62); the `look!` assertion is gone."
+  },
+  {
+   "id": "r3-review-clean-code-code:CC-R3-003",
+   "disposition": "open",
+   "evidence": "src/review/ledger.ts:29 unreadableInputClaim still takes Pick<ParsedResult, inputs_unreadable|status|summary> and reads only inputs_unreadable (hunks of the delta do not touch it)."
+  },
+  {
+   "id": "r3-review-clean-code-code:CC-R3-004",
+   "disposition": "open",
+   "evidence": "src/review/readiness.ts:26-29 still imports COVERAGE_MD_MARK and re-exports it (`export { COVERAGE_MD_MARK }`); delta only changed the asRecord import."
+  },
+  {
+   "id": "r3-review-clean-code-code:CC-R3-005",
+   "disposition": "closed",
+   "evidence": "src/review/slice.ts ledgerOmissions now iterates regionsByFile(regions) (pushes in place); buildSlices uses the same helper."
+  },
+  {
+   "id": "r3-review-clean-code-code:CC-R3-006",
+   "disposition": "open",
+   "evidence": "src/review/git-base.ts:53 resolveBase still types target as {kind?, ref?, base?} and reads only base; coverage.ts:~1064 still spreads `{ ...target, head: target.head }`."
+  },
+  {
+   "id": "r3-review-core-boundaries-code:CB3-001",
+   "disposition": "closed",
+   "evidence": "Same fix as CC-R3-001: managed.ts:1336-1345 and 1368-1375 each function carries exactly its own doc."
+  },
+  {
+   "id": "r3-review-highload-code:HL-R3-001",
+   "disposition": "closed",
+   "evidence": "dispatch-usage.ts USAGE_LINE is now /^[ \\t]*KERYX_USAGE(_OTHER)?[ \\t]+(.*?)\\r?$/ with a doc naming CRLF; a trailing \\r no longer keeps the line in the body."
+  },
+  {
+   "id": "r3-review-highload-code:HL-R3-002",
+   "disposition": "closed",
+   "evidence": "package-location.ts readStandalonePackages (bounded by mapBounded, 16) read once in governance/aggregate.ts:~47 and passed through readFlowReviewManifests -> flowPackageDirs(standalone)."
+  },
+  {
+   "id": "r3-review-highload-code:HL-R3-003",
+   "disposition": "closed",
+   "evidence": "spawn-subagent-tool.ts:355-366 saveDispatchRecord chains saves per absolute path (recordSaves map); read-modify-write is serialised in-process (cross-process not covered, acceptable)."
+  },
+  {
+   "id": "r3-review-highload-code:HL-R3-004",
+   "disposition": "partial",
+   "evidence": "completion-gate.ts:35-60 fileHash caches hashes per stat key (bounded 4096, racy window 2s) and scanRoot reads manifests via mapBounded; dirSignature still stats every file each stop."
+  },
+  {
+   "id": "r3-review-logic-code:LG-001",
+   "disposition": "closed",
+   "evidence": "saveDispatchRecordNow reads `incomplete` from the prior record's own usage line (dispatch-usage splitUsage) and replaces a partial with a later partial that has text; a complete prior is kept."
+  },
+  {
+   "id": "r3-review-logic-code:LG-002",
+   "disposition": "closed",
+   "evidence": "completion-gate.ts:173-251 shellCommands drops redirections (`2>&1`, `>&2`, `&>`) with their target; keryxReviewInvocations roots come from invocation.cwd (tracker update, `remember(this.roots, invocation.cwd ...)`)."
+  },
+  {
+   "id": "r3-review-logic-code:LG-003",
+   "disposition": "closed",
+   "evidence": "coverage.ts widestDiff takes the union of files and the max changedLines per dimension, used by diffOfTarget."
+  },
+  {
+   "id": "r3-review-logic-code:LG-004",
+   "disposition": "closed",
+   "evidence": "CHANGELOG.md and the SKILL/SKILL.detail rosters now name the roles a fix slice's own lines route (docs delta)."
+  },
+  {
+   "id": "r3-review-logic-code:LG-005",
+   "disposition": "open",
+   "evidence": "src/review/locate.ts unchanged by the delta; a short quote present in one line is still reported kind 'absent' (info)."
+  },
+  {
+   "id": "r3-review-performance-code:PERF-R3-001",
+   "disposition": "closed",
+   "evidence": "Same fix as HL-R3-002 (readStandalonePackages once per governance pass)."
+  },
+  {
+   "id": "r3-review-performance-code:PERF-R3-002",
+   "disposition": "closed",
+   "evidence": "Same fix as CC-R3-005 (regionsByFile)."
+  },
+  {
+   "id": "r3-review-performance-code:PERF-R3-003",
+   "disposition": "open",
+   "evidence": "coverage.ts diffOfTarget still awaits gitDiffAt per base in a sequential for loop (now up to three bases: recorded, prBase, default)."
+  },
+  {
+   "id": "r3-review-regression-code:RG3-001",
+   "disposition": "closed",
+   "evidence": "Same fix as LG-001."
+  },
+  {
+   "id": "r3-review-regression-code:RG3-002",
+   "disposition": "closed",
+   "evidence": "Same fix as LG-002."
+  },
+  {
+   "id": "r3-review-regression-code:RG3-003",
+   "disposition": "closed",
+   "evidence": "MIN_SUBSTRING_QUOTE_CHARS now stated in src/gdskills/contracts/review-finding.schema.json, the bundled reviewer-finding.schema.json and docs/docs/cli-reference.md (docs delta)."
+  },
+  {
+   "id": "r3-review-regression-code:RG3-004",
+   "disposition": "partial",
+   "evidence": "A PR started without --base now records origin/<baseRefName> (review.ts ghPrBase); but resolveDiffBases still also diffs the default base and widestDiff keeps the larger, so a stacked PR still cannot pass the light gate by its own base alone."
+  },
+  {
+   "id": "r3-review-security-code-code:SEC-R3-001",
+   "disposition": "closed",
+   "evidence": "round-split.ts manifestRosterRoles adds ALWAYS_DISPATCHED_ROUTED_ROLES (review-security-code); used by wave-drivers.ts, estimate.ts, review.ts runRequired and review-ledger.ts."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-001",
+   "disposition": "closed",
+   "evidence": "Same fix as CC-R3-001."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-002",
+   "disposition": "closed",
+   "evidence": "coverage.ts PackageTarget is now {recordedBase, prBase, head}; nominalBase, kind and ref are gone."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-003",
+   "disposition": "closed",
+   "evidence": "loop.ts:489 and flow/review-gate.ts:463 use `const name = path.basename(packageDir)`."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-005",
+   "disposition": "closed",
+   "evidence": "src/lib/shell-tool-names.ts SHELL_TOOL_NAMES is the single set, imported by approval-cause.ts and completion-gate.ts."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-006",
+   "disposition": "closed",
+   "evidence": "round-cut.ts cutRegions centralises `{ ...sizes, keepLedgers: true }` and withoutOmitted the omitted-path filter."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-007",
+   "disposition": "open",
+   "evidence": "completion-gate.ts shellCommands grew from ~40 to 79 lines (:173-251); see new finding CC-R4-001."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-008",
+   "disposition": "open",
+   "evidence": "Same as CC-R3-003; ledger.ts:29 not touched."
+  },
+  {
+   "id": "r3-review-style-code:STY-R3-009",
+   "disposition": "open",
+   "evidence": "wave-drivers.ts:8 still `import { type SliceManifest } from \"./slice\";`."
+  },
+  {
+   "id": "r3-review-style-docs:r3-review-style-docs:DS-001",
+   "disposition": "closed",
+   "evidence": "SKILL.detail.md delta row now lists review-security-code and the fix lines' own roles (docs delta)."
+  },
+  {
+   "id": "r3-review-style-docs:r3-review-style-docs:DS-002",
+   "disposition": "open",
+   "evidence": "No hunk touches the BLOCKED bullet at review-orchestrator/SKILL.md:1226 (info)."
+  },
+  {
+   "id": "r3-review-style-docs:r3-review-style-docs:DS-003",
+   "disposition": "open",
+   "evidence": "docs/docs/guides/review-with-a-record.md is not in the docs delta (info)."
+  },
+  {
+   "id": "r3-review-testing-practices-code:NTP-001",
+   "disposition": "closed",
+   "evidence": "ledger.test.ts:1183-1188 whitespace-run test asserts the body only; no wall-clock bound remains next to it (remaining bounds are 2000 ms at :144, :274, :437)."
+  },
+  {
+   "id": "r2-review-clean-code-w3:CC-002",
+   "disposition": "closed",
+   "evidence": "review.ts readPremiseFile now ends in `results.filter(isPremiseSource)` with a type guard; the `parsed as PremiseSource` cast is gone."
+  },
+  {
+   "id": "r2-review-clean-code-w5:CC-003",
+   "disposition": "closed",
+   "evidence": "src/review/record.ts asRecord is the one narrowing; imported by research, readiness, round-record, coverage, coverage-complete, compare-reference; no `as Record<string, unknown>` casts remain in coverage.ts, round-record.ts, coverage-complete.ts."
+  },
+  {
+   "id": "review-clean-code-w3:CC-13",
+   "disposition": "closed",
+   "evidence": "managed.ts normalizeCoverage(coverage, reviewers, runs: readonly DispatchRun[]) and coverageFromResearch take the typed runs; the single caller passes dispatchRuns(input.research)."
+  }
+ ],
+ "findings": [
+  {
+   "id": "CC-R4-001",
+   "severity": "minor",
+   "file": "src/review/completion-gate.ts",
+   "line": 173,
+   "quote": "export function shellCommands(line: string): ShellCommand[] {",
+   "problem": "shellCommands is now a 79-line character state machine (173-251) with six mutable locals (words, word, inWord, quotedWord, quote, piped, dropNext), three closures and about fifteen branches, mixing quoting, redirection and separator rules in one loop. It lives in the completion gate beside the package tracker and the file hash cache.",
+   "impact": "Each new shell rule (the 2>&1 fix added redirections) makes the loop harder to extend safely; STY-R3-007 raised the size and the delta doubled it.",
+   "suggested_fix": "Split the redirection rule and the separator rule into helpers returning the new index, or move the lexer (shellCommands, keryxArgs, isPipeFilter) to src/review/shell-line.ts.",
+   "evidence": "completion-gate.ts:173-251 (function body), :149-158 constants, :261 keryxArgs; the delta added the redirection and pipe branches to the same loop.",
+   "confidence": "high"
+  },
+  {
+   "id": "CC-R4-002",
+   "severity": "minor",
+   "file": "src/review/completion-gate.ts",
+   "line": 149,
+   "quote": "const VALUELESS_FLAGS: ReadonlySet<string> = new Set([\"--json\", \"--yes\", \"--dry-run\", \"--force\", \"--partial\", \"--waive-coverage\", \"--help\"]);",
+   "problem": "explicitReviewIds treats every `--flag` without `=` that is not in this closed list as taking the next word. `--unattended` (review.ts:359, :1055) and `--automatic` take none, so in `keryx review attach --unattended <id>` the id is swallowed as the flag's value and never recorded.",
+   "impact": "A session that names its package after a boolean flag is not recognised as having named it, so namedBySession (path or id) fails for that package and the gate may not tie the session to it.",
+   "suggested_fix": "Derive the valueless set from the review CLI's flag table (one list the parser and the gate share), or take the positional as the first word that matches SAFE_REVIEW_ID and names an existing package.",
+   "evidence": "completion-gate.ts:149 list; :350-366 explicitReviewIds `if (arg.startsWith(\"--\") && !arg.includes(\"=\") && !VALUELESS_FLAGS.has(arg)) at += 1`; review.ts:1055 `args.includes(\"--unattended\")` is a no-value flag of start/attach.",
+   "confidence": "high"
+  },
+  {
+   "id": "CC-R4-003",
+   "severity": "minor",
+   "file": "src/review/round-cut.ts",
+   "line": 62,
+   "quote": "function secondLookCut(look: SecondLookSource, delta: RoundRecord, sizes: SliceSizes, routing: RoutingOptions, routeAsDelta: (slices: BuiltSlice[]) => BuiltSlice[])",
+   "problem": "secondLookCut takes five positional parameters, and routeAsDelta already closes over `delta` and `routing`, so the same inputs reach the function twice (delta only for `delta.round - 1`, routing only for `routing.head`).",
+   "impact": "Argument count above three and a redundant channel make call sites easy to get wrong (a routeAsDelta built from other delta/routing than the ones passed would silently disagree).",
+   "suggested_fix": "Pass one options object, or pass `round` and `head` instead of the whole delta and routing, and keep routeAsDelta as the only routing hook.",
+   "evidence": "round-cut.ts:62 signature; :52-53 deltaRoundCut builds routeAsDelta from delta and routing and passes all three.",
+   "confidence": "high"
+  },
+  {
+   "id": "CC-R4-004",
+   "severity": "info",
+   "file": "src/review/completion-gate.ts",
+   "line": 286,
+   "quote": "return scriptName === \"cli.ts\" || scriptName === \"cli.js\" || (name === \"bun\" && run && script === \"keryx\") ? rest.slice(at + 1) : undefined;",
+   "problem": "keryxArgs accepts any `node`/`bun` script named cli.js or cli.ts, in any directory, as keryx; `node tools/cli.js review ...` of an unrelated tool is read as `keryx review`.",
+   "impact": "A foreign tool with a `review` subcommand marks the session as running a review (runSeen) and can add roots; the effect is a spurious gate, not a bypass.",
+   "suggested_fix": "Match the checkout's own entry (src/cli.ts relative to a root that holds package.json named keryx) or require the second word `review` to be followed by a known subcommand.",
+   "evidence": "completion-gate.ts:258-259 doc and :286 condition.",
+   "confidence": "high"
+  },
+  {
+   "id": "CC-R4-005",
+   "severity": "info",
+   "file": "src/review/dispatch-usage.ts",
+   "line": 25,
+   "quote": "// stated spend, nothing more. Counts above",
+   "problem": "The header comment reflow left a ragged line: `Counts above` ends a line alone and the sentence continues on the next one.",
+   "impact": "Cosmetic; the header is the format's documentation.",
+   "suggested_fix": "Re-wrap the paragraph at the file's usual width.",
+   "evidence": "dispatch-usage.ts:21-27.",
+   "confidence": "high"
+  },
+  {
+   "id": "CC-R4-006",
+   "severity": "info",
+   "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+   "line": 333,
+   "quote": "export type DispatchRecordSave = { kept?: \"complete\" | \"partial\"; replaced?: \"partial\" } | { error: string };",
+   "problem": "The success arm has two independent optional fields, so {kept, replaced} together is representable, and a plain save is the empty object `{}` (saveDispatchRecordNow returns `{}`).",
+   "impact": "The meaning of `{}` is only in recordSaveNote's fall-through; a reader cannot tell a missing result from a plain save.",
+   "suggested_fix": "A tagged union: { outcome: \"saved\" | \"kept-complete\" | \"kept-partial\" | \"replaced-partial\" } | { error: string }.",
+   "evidence": "spawn-subagent-tool.ts:331-333 type, :401 `return priorHasReply && !priorComplete ? { replaced: \"partial\" } : {}`, recordSaveNote branches.",
+   "confidence": "high"
+  }
+ ]
+}
+```
+
+Summary: Of 41 round-3 findings (STY-R3-004 skipped as dismissed) and the 3 clean-code prior records, {'closed': 28, 'open': 11, 'partial': 2}. The delta is a good net clean-up (round-cut extraction, shared asRecord, shared shell tool names, serialised saves). New defects: the shell lexer in completion-gate.ts grew to 79 lines (minor), a closed boolean-flag list that swallows ids after --unattended/--automatic (minor), a five-parameter secondLookCut with a redundant closure channel (minor), plus three info notes (cli.js matching, ragged comment, DispatchRecordSave shape).

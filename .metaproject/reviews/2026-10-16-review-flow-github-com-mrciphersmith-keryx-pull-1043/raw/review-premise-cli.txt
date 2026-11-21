@@ -1,0 +1,97 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "review-architecture-w4#ARCH-003",
+      "verdict": "upheld",
+      "reasoning": "Both writers of the premise-question record exist as described (review-operator.ts:150 uses process.env USER, operator-confirm-review.ts:622 hard-codes \"operator\"), and neither records the operator's words although the terminal prompt asks for them (review-operator.ts:145). No intent signal for the split: the flow spec says the card works 'like review_override_reviewers' (flow 459 context.md:103), and that sibling persists quote (operator-confirm-review.ts:433, review-operator.ts:165). The fix moves the decision toward its siblings."
+    },
+    {
+      "finding_id": "review-clean-code-w5#F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/gdskills/contracts/review-finding.schema.json:120", "says": "premise schema description: 'The judge is delete-only: it never adds a finding, never raises a severity and never edits the finding's text; downgraded carries a strictly lower severity' — delete-only is defined to include lowering" },
+        { "ref": "src/review/premise.ts:4", "says": "module header 'Why a second delete-only judge' for the premise merge, which downgrades and holds" },
+        { "ref": "src/commands/review.ts:5291-5293", "says": "--premises help: 'The merge is DELETE-ONLY too: it holds a challenged finding ... and can only lower a severity'" },
+        { "ref": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1128", "says": "'The merge is delete-only: upheld changes nothing, downgraded lowers the severity'" },
+        { "ref": "src/gdskills/catalog.ts:288", "says": "sibling review-verifier catalog entry ends with the same '; delete-only.' summary" },
+        { "ref": "ee32a9f2d", "says": "flow 459 T5 commit title 'premise claims, delete-only merge, held findings'" }
+      ],
+      "reasoning": "'Delete-only' is the project's established term of art for a judge that can never add, raise or edit (it already covers the verifier and is defined for the premise judge to include downgrading and holding). 'Can only lower, hold or leave' is the expanded form of the same concept, used in the EXEMPT reasons and in the catalog comment at catalog.ts:297 directly above the entry. Replacing the term at the two sites would make the catalog entry differ from the verifier's sibling entry and from the schema, premise.ts, the CLI help and the orchestrator, i.e. less consistent.",
+      "question": "'Delete-only' is the project's defined term for the premise judge (schema, premise.ts, CLI help, orchestrator) and matches the verifier's catalog entry. Keep it, or replace it at these two sites anyway?",
+      "options": ["dismiss — keep 'delete-only', the project's defined term", "uphold — replace it at catalog.ts and bundled-eval.test.ts"]
+    },
+    {
+      "finding_id": "review-logic-w4#F-002",
+      "verdict": "upheld",
+      "reasoning": "The terminal path collects 'your own words' (review-operator.ts:145) and uses them only for the decline test; the card apply ignores confirmation.quote (operator-confirm-review.ts:622); PremiseQuestionDecision has no quote field (operator-decisions.ts:49-57). Every sibling operator decision and the plan confirmation persist the quote. No comment, commit or spec says the premise record omits it on purpose."
+    },
+    {
+      "finding_id": "review-security-code-w4#F-002",
+      "verdict": "upheld",
+      "reasoning": "The terminal prompt interpolates finding.problem and the judge's question raw (review-operator.ts:144) while the card for the same decision wraps every field in cardSafe (operator-confirm-review.ts:599-606). The project's own rule is that model-supplied text must never be able to draw a fake line of what the operator is shown (cardSafe doc, trigger/schedules.ts:405-409, flow 295 F7), and terminal escape injection is a recognised class (CWE-150). No intent signal for leaving the terminal path unsanitised; the fix makes the two surfaces consistent. Severity is the reviewer's, already reasoned on the attack precondition."
+    },
+    {
+      "finding_id": "review-security-code-w4#F-003",
+      "verdict": "upheld",
+      "reasoning": "The premise decision stores neither quote nor subject (operator-decisions.ts:49-57), while the sibling decisions bind to the head and items shown (operator-decisions.ts:26-32, 'security review M4', commit 086805c8f). No signal that the premise kind was meant to be exempt from that binding; the flow spec models the card on review_override_reviewers."
+    },
+    {
+      "finding_id": "review-security-code-w4#F-004",
+      "verdict": "upheld",
+      "reasoning": "The apply re-check compares only severity and verdict (operator-confirm-review.ts:620-621), while sibling cards compare everything they showed (planKeyOf at :553, the full subject JSON at :430). No intent signal; the finding is already scoped as hardening at minor."
+    },
+    {
+      "finding_id": "review-style-w4#STY-001",
+      "verdict": "upheld",
+      "reasoning": "Two actor conventions for one record kind (review-operator.ts:150 vs operator-confirm-review.ts:622); process.env USER is used nowhere else in src, and applyPremiseDecision writes the actor into the dismissal evidence (premise.ts:466), so the difference is visible. No intent signal."
+    },
+    {
+      "finding_id": "review-style-w4#STY-003",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/commands/review.ts:3612-3615", "says": "readPremises doc: 'The shape is checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge' — the discarded call is documented as a deliberate pre-check" },
+        { "ref": "src/review/types.ts:694-698", "says": "ManagedReviewInput.premises is 'Typed loosely for the verifier's reason: the merge is delete-only and must be able to receive, and visibly reject, a claim'" },
+        { "ref": "src/review/managed.ts:265-266", "says": "the merge re-parses the raw input itself ('Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated')" }
+      ],
+      "reasoning": "The call is not apparently unused: its doc comment names it a shape check. The first suggested fix is unsound: parsePremiseClaims returns ParsedPremiseClaims ({judge, model, claims}), not the PremiseSource ({judge, model, premises}) the managed input takes, and the merge parses the raw value on purpose. The sibling readVerifications returns parsed claims because its input type is the claims list; the shapes differ. What remains is a naming nicety the comment already covers.",
+      "question": "readPremises discards the parse result on purpose (documented pre-check; the merge re-parses the raw object). Keep it as is, or rename/restructure the check anyway?",
+      "options": ["dismiss — keep the documented pre-check", "uphold — name the check explicitly (e.g. assertPremiseShape)"]
+    },
+    {
+      "finding_id": "review-style-w5#STYLE-001",
+      "verdict": "upheld",
+      "reasoning": "The assignTier doc block (model-tier.ts:1388) lists two floors; the code under '3 - floors' adds floor:premise-judge (model-tier.ts:1427). No signal the omission is deliberate; the comment states the rule order as the contract."
+    },
+    {
+      "finding_id": "review-style-w5#STYLE-002",
+      "verdict": "upheld",
+      "reasoning": "Commit d9fa525b5 renamed the describe/test titles from three to four laws and removed the 'three things AC3 named' test, but the header (lines 6, 12, 25) and the inline comment at line 288 still say three. No signal that 'three' is meant historically; line 25 refers to a test that no longer exists."
+    }
+  ]
+}
+```
+
+## Summary
+
+Judged 10 findings (none raised by this judge, none below minor).
+
+| Verdict | Count |
+|---|---|
+| upheld | 8 |
+| downgraded | 0 |
+| challenged | 2 |
+| owner-decision | 0 |
+
+### Held for the operator
+
+- **review-clean-code-w5#F-001** (challenged). Question: 'Delete-only' is the project's defined term for the premise judge and matches the verifier's catalog entry. Keep it, or replace it at these two sites anyway?
+  Signals: review-finding.schema.json:120 defines "delete-only" for the premise judge as including downgrade; premise.ts:4 "a second delete-only judge"; review.ts:5291-5293 CLI help "DELETE-ONLY too ... can only lower"; review-orchestrator SKILL.md:1128; sibling catalog.ts:288 (review-verifier) uses the same term; commit ee32a9f2d "delete-only merge".
+- **review-style-w4#STY-003** (challenged). Question: readPremises discards the parse result on purpose (documented pre-check; the merge re-parses the raw object). Keep it as is, or rename/restructure the check anyway?
+  Signals: review.ts:3612-3615 doc comment names the call a shape pre-check; types.ts:694-698 input typed loosely on purpose; managed.ts:265-266 merge parses the raw input itself. The suggested "return the parsed claims" fix is a type mismatch (ParsedPremiseClaims vs PremiseSource).
+
+Note: ARCH-003, review-logic-w4#F-002, review-security-code-w4#F-003 and STY-001 overlap (missing quote / actor convention on PremiseQuestionDecision); each was upheld on its own, and deduplication is left to the merge.

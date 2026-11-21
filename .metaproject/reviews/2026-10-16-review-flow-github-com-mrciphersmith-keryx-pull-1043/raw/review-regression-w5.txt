@@ -1,0 +1,13 @@
+```json keryx:findings
+{"reviewer":"review-regression","status":"DONE","findings":[]}
+```
+
+## Summary (review-regression, wave 5, slice-05)
+
+No findings. Slice-05 is tests, bundled-skill catalog/manifest entries, a schema addition and the `premiseJudge` tier floor.
+
+- Skill length ceilings in `skill-length-ceilings.ts` (all lowered entries, plus new `review-premise` 180) match the actual SKILL.md line counts on disk (checked every review/* plus flow-orchestrator and task-implementer); the bundled-eval equality ratchet holds.
+- `bundled-eval.test.ts` expected skill count 80 and `review-clean-code` 538 are consistent with the ceilings.
+- `premiseJudge` tier floor is additive and ordered before the fix-attempt raise; existing floor tests are unaffected. It is wired via `--premise` in src/commands/review.ts:1649.
+- Iron-laws test: the new fourth-law concept requires a distinct matching law; the "exactly three" assertions were updated to four; EXEMPT entries for `review-premise` are added in both the class-scope and iron-laws tests.
+- Radius: this slice is mostly test and non-code config, so the code-graph radius cannot fully answer the question for the JSON/skill-doc parts (unresolved, not clean). I did not see the blast-radius cap record.

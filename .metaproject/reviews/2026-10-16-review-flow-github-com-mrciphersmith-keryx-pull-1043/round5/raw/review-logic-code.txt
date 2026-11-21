@@ -1,0 +1,66 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "scope": "round 5 fix delta (round5/delta-code.diff) at HEAD b50655d51",
+  "summary": "Both round-4 review-logic findings are closed. The carry is now keyed on what the previous ingest held, and a look-alike decisions store becomes a named per-package problem. The normaliseCarriedPremise refactor is equivalent to the old code. Two new minors and one info.",
+  "prior_dispositions": [
+    {
+      "id": "r4-review-logic-code#LG4-001",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:747 returns undefined unless the previous findings.json has a held record, so a first ingest without --premises holds nothing. premise.ts:774-777 (appliedClaimNames) checks only held-verdict claims that name a key of a record the previous ingest held, so a claim the merge rejected (unknown-finding, challenged-without-evidence) no longer causes a refusal. Tests: premise.test.ts 'a first ingest ... holds nothing', review-premises-cli.test.ts RG4-001."
+    },
+    {
+      "id": "r4-review-logic-code#LG4-002",
+      "disposition": "closed",
+      "evidence": "src/flow/review-gate.ts:505 calls findingsWithHolds (:529-536), which catches the readPremiseDecisions refusal and pushes 'operator decisions cannot be read: ...' onto problems, so ingested=false (:509) and the gate's ingested-round condition names the look-alike. src/review/prior-round.ts:893-898 reports a failed read as not-consulted with its message instead of reading it as []. :903 names packages that were not ingested beside the flow rounds that were kept."
+    }
+  ],
+  "findings": [
+    {
+      "id": "LG5-001",
+      "severity": "minor",
+      "file": "src/review/prior-round.ts",
+      "line": 901,
+      "quote": "const skipped = read.rounds.filter((round) => !round.ingested);",
+      "problem": "The new 'skipped, not ingested' list does not apply the `exclude` filter (deps.excludeReviewId) that the candidates go through (:847, :900). Take `review start --mode attach-review` on a flow. packagePath puts that package under the flow's reviews root (managed.ts:1118-1119). It is written with research.json = PENDING_RESEARCH (managed.ts:508) and artifacts.research declared (managed.ts:497). findPreviousRound runs for it (review.ts:1095-1101, mode !== ingest). readReviewRounds records it with problems 'research scope census is incomplete; raw observations are not reconciled' (research.ts:13-14), so it is not ingested. The flow source line then says 'skipped, not ingested: <this very package> (research scope census is incomplete; ...)'. The same happens for any open round in the flow that has not finished, which is not the 'unreadable package' this text was written to surface.",
+      "impact": "Trigger: every attach-review start on a flow. The flow source line in round.json and on the console names the round being started as a skipped, broken earlier round. It sits beside the real reason a look-alike package was skipped, which makes LG4-002's remedy text harder to find. Nothing is lost: candidates are unaffected.",
+      "suggested_fix": "Filter `skipped` by `round.reviewId !== deps.excludeReviewId`, for example `read.rounds.filter((round) => !round.ingested && round.reviewId !== deps.excludeReviewId)`. You could also list only rounds whose problems are read failures, not open research.",
+      "evidence": "src/review/prior-round.ts:847, :893-903; src/review/managed.ts:497, :508, :1118-1119; src/review/research.ts:13-14; src/commands/review.ts:1084-1101.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG5-002",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": 3616,
+      "quote": "const packageDir = reviewId === undefined || !/^[\\w.-]+$/.test(reviewId) ? undefined : path.join(reviewsRoot(resolveProjectRoot(process.cwd())), reviewId);",
+      "problem": "The delta routes this line through reviewsRoot, and the new package-location.ts header (:1-6) lists '`review` commands that open a package by id' as taking the layout from there. This site still knows only the standalone root. A flow-matched ingest writes its package under flowReviewsRoot (managed.ts:1118-1119), and `keryx review verify-run --package <that dir>` writes its records under <flow>/reviews/<id>/research-evidence (verify-run.ts:109-125). promoteParentExecutions then looks under .metaproject/reviews/<id>, finds nothing (existsSync false, verify-run.ts:152-153), and leaves the claim unpromoted. The behaviour predates the delta, but the delta touched this exact line to route it, and its header now records it as routed.",
+      "impact": "Trigger: a flow-bound ingest with --verifications whose claim cites a verify-run record of its own finding. The claim keeps its declared method instead of `execution`, so verification stats under-count parent executions with no warning.",
+      "suggested_fix": "Resolve the package by id across both roots, as resolveReviewPackagePath already does (managed.ts:2792-2807). Or pass the allocated package path from the ingest, and let promoteParentExecutions run after allocation.",
+      "evidence": "src/commands/review.ts:1055, :3614-3617; src/review/package-location.ts:1-6; src/review/managed.ts:1118-1119, :2792-2807; src/review/verify-run.ts:146-158.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG5-003",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 749,
+      "quote": "if (!parsed.ok) return refuseInheritance(parsed.why);",
+      "problem": "The rewritten docstring says the carry is 'keyed on what the previous ingest applied'. But heldRecords (:756-759) also counts a hold that no stored claim applied: a finding carried from an earlier round keeps its premise (managed.ts:363). When such a package has no premises.json, a re-ingest without --premises is refused with 'premises.json is gone', although the trial merge with no claims would hold that finding again (normaliseCarriedPremise). This predates the delta, which kept the order, and it fails safe. To settle it: is a carried held finding in premiseSet ever re-ingested without --premises in practice? If so, treat a missing file as zero claims and let heldFindingsChanged decide.",
+      "evidence": "src/review/premise.ts:745-770; src/review/managed.ts:363-374, :515-519.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1, "prior_closed": 2, "prior_open": 0, "prior_partial": 0, "prior_regressed": 0 }
+}
+```
+
+## Logic Review: round 5 (fix delta)
+
+- Scope: round5/delta-code.diff at HEAD b50655d51. Spec gate skipped: no issue or task was provided. I ran no tests.
+- Priors: both are closed. LG4-001: the carry now starts from the previous ingest's held records, so a first ingest holds nothing and rejected claims no longer cause a refusal. LG4-002: a look-alike decisions file is now a named problem of its package (ingested=false), and prior-round reports a failed read instead of reading it as no rounds.
+- Checked and found sound: the normaliseCarriedPremise refactor gives the same result as the old severityAgrees in both branches. The reviewsRoot/flowReviewsRoot substitutions produce the same paths as before. isReviewPackageDir accepts flow packages.
+- New: LG5-001 (minor). The 'skipped, not ingested' detail does not drop excludeReviewId, so an attach-review start names itself and every open round as skipped. LG5-002 (minor). readVerifications was routed through reviewsRoot, but it still ignores flow-root packages, so parent executions are not promoted for flow-bound ingests. This predates the delta, and the new header calls the line routed. LG5-003 (info). A hold carried from an earlier round with no premises.json is still refused as 'premises.json is gone'. This also predates the delta and fails safe.
+- Stats: blocker 0 | major 0 | minor 2 | info 1.
+- Routing audit: graph_used: no (the payload diff was enough; per memory, gdgraph is unreliable on this repo). wiki_used: not-relevant. ctx_used: yes (keryx ctx rg). raw_rg_used: no.

@@ -1,0 +1,127 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 2 is mostly tests and docs plus two small production changes (empty-reply error exit, usage line). No blocker or major; minors are a stale count in the docs, a triple-used placeholder string, a repeated failure epilogue, cast noise and a misleading test variable name.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "problem": "The readiness section still says the command prints eleven items, but this diff adds item 12 (`quotes-located`) to the list directly below it.",
+      "impact": "The next reader or agent trusts a count that disagrees with the enumerated list.",
+      "suggested_fix": "Change 'eleven items' to 'twelve items'.",
+      "evidence": "The list now runs 1-12; the sentence above it was not touched.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "The placeholder string '(subagent produced no text)' is now a sentinel compared at three sites (the fallback assignment, `hadText`, and this new empty-reply guard). The guard decides error vs success by string equality with a fallback literal.",
+      "impact": "Rewording the placeholder at one site silently disables the empty-reply check or the rate-limit `hadText` logic.",
+      "suggested_fix": "Extract a named constant, or keep a `hasText` boolean computed before the fallback, and use it at all three sites.",
+      "evidence": "grep: the literal appears at three lines of the file at head.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "detail: \"empty-reply\",",
+      "problem": "The new empty-reply exit repeats the failure epilogue (fleet upsert status failed, foldChildSlateAndCleanup(\"incomplete\"), fireSubagentStop(\"Error\")) that the timeout and rate-limit exits already carry, inside an already very long invoke function.",
+      "impact": "Each added exit lengthens the function, and a change to the epilogue must be made once per exit.",
+      "suggested_fix": "Extract a helper for the shared failure epilogue and call it from the exits.",
+      "evidence": "Compare the timeout branch with this block.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "const tokensIn = Number.isFinite(usage.inputTokens) ? (usage.inputTokens as number) : undefined;",
+      "problem": "Two parallel `Number.isFinite(...) ? (x as number) : undefined` lines, each with a type assertion; a typeof narrowing needs no cast.",
+      "impact": "Cast noise in a callback whose job is a small sum.",
+      "suggested_fix": "Use a small helper (typeof n === 'number' && Number.isFinite(n)) and drop the casts.",
+      "evidence": "onUsage in the io literal.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/commands/review-plan.test.ts",
+      "line": null,
+      "quote": "const latest = (await readdir(path.join(repo, \".metaproject\", \"reviews\"))).filter(",
+      "problem": "`latest` holds every package that has a plan file, not the latest; the real latest is picked two lines later by sorting on round.number.",
+      "impact": "The name says the opposite of what it holds; the reader must read down to learn the selection rule.",
+      "suggested_fix": "Rename to `packagesWithPlan` and select by round.number in one step.",
+      "evidence": "Helper `plan` in the new describe block.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "childUsage.tokens_in += tokensIn ?? 0;",
+      "problem": "onUsage is summed over every `usage_update` the child's provider emits. If an adapter emits a cumulative update more than once per request, the sum counts that request twice. The adapters were not read in this slice.",
+      "impact": "Would overstate the round's spend in the ledger; unproven here.",
+      "suggested_fix": "Check how adapters emit usage_update (one per request means the sum is right; otherwise keep the last per attempt).",
+      "evidence": "Adapter semantics not checked.",
+      "confidence": "low",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "\"treat the task as not done and re-dispatch it.\"",
+      "problem": "The empty-reply return (and the rate-limit one) writes no `save_result_to` file, so no KERYX_USAGE line exists for tokens the child spent; the ledger counts that dispatch unknown. Nothing next to the guard says that is intended.",
+      "impact": "Spend of failed dispatches is invisible in the round's token figure.",
+      "suggested_fix": "State in a comment that failed exits leave usage unknown by design, or write the usage line on them.",
+      "evidence": "The usage suffix is appended only on the Completed save and the timeout partial.",
+      "confidence": "low",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 5,
+    "info": 2
+  },
+  "slices": [
+    {
+      "id": "slice-02",
+      "status": "DONE"
+    }
+  ]
+}
+```
+
+## Clean Code Review (slice-02)
+
+Slice 2 is mostly tests and docs plus two small production changes (empty-reply error exit, usage line). No blocker or major; minors are a stale count in the docs, a triple-used placeholder string, a repeated failure epilogue, cast noise and a misleading test variable name.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 5 | info: 2
+
+- [F-001] minor src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md: The readiness section still says the command prints eleven items, but this diff adds item 12 (`quotes-located`) to the list directly below it.
+- [F-002] minor src/harness/tool/builtin/spawn-subagent-tool.ts: The placeholder string '(subagent produced no text)' is now a sentinel compared at three sites (the fallback assignment, `hadText`, and this new empty-reply guard). The guard decides error vs success by string equality with a fallback literal.
+- [F-003] minor src/harness/tool/builtin/spawn-subagent-tool.ts: The new empty-reply exit repeats the failure epilogue (fleet upsert status failed, foldChildSlateAndCleanup("incomplete"), fireSubagentStop("Error")) that the timeout and rate-limit exits already carry, inside an already very long invoke function.
+- [F-004] minor src/harness/tool/builtin/spawn-subagent-tool.ts: Two parallel `Number.isFinite(...) ? (x as number) : undefined` lines, each with a type assertion; a typeof narrowing needs no cast.
+- [F-005] minor src/commands/review-plan.test.ts: `latest` holds every package that has a plan file, not the latest; the real latest is picked two lines later by sorting on round.number.
+- [F-006] info src/harness/tool/builtin/spawn-subagent-tool.ts: onUsage is summed over every `usage_update` the child's provider emits. If an adapter emits a cumulative update more than once per request, the sum counts that request twice. The adapters were not read in this slice.
+- [F-007] info src/harness/tool/builtin/spawn-subagent-tool.ts: The empty-reply return (and the rate-limit one) writes no `save_result_to` file, so no KERYX_USAGE line exists for tokens the child spent; the ledger counts that dispatch unknown. Nothing next to the guard says that is intended.

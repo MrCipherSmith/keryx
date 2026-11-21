@@ -1,0 +1,102 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-10 (completion-gate, coverage light recheck, dispatch-usage, ledger, locate, managed ingest, mutate). Two majors: the narrowed flow 460 D unreadable-input matcher still reads ordinary 'found nothing' summaries such as 'Did not find any schema issues.' as an input-read failure, and the session-review tracker resolves every path against the shell's cwd, so a review run with `cd <sub> && keryx review start` (the subdirectory layout flow 460 C describes) is never found by the gate. Three lower findings on tracker scope, stale token spend on re-ingest, and the substring locator pass.",
+  "slices": ["slice-10"],
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "line": 34,
+      "quote": "new RegExp(`${OWN_STATEMENT}${CANNOT}\\\\s+(?:read|open|load|access|find|parse)\\\\s+${INPUT_NAMED}\\\\b`, \"im\"),",
+      "problem": "The first UNREADABLE_INPUT pattern accepts the verb `find` with the determiner `any`/`the` before a MANDATORY_INPUT word, anchored only to a sentence start. A DONE summary that reports a clean result therefore matches: \"No blockers. Did not find any schema regressions.\" matches `[.]\\s+` + `did not` + `find` + `any ` + `schema` + `\\b`. Phrasings like \"Could not find any payload validation gaps\" and \"I did not find the schema drift the PR describes\" match too. The second pattern similarly matches a bug description that is not about the reviewer's reading, for example \"Run with --x. The payload was not found, so ingest throws.\"",
+      "impact": "A reviewer that finished its slice and found nothing in a schema- or payload-related area is recorded `incomplete` with the gap 'the reply states a mandatory input could not be read'. scopeReviewed goes false, so `review complete` refuses. retry-eval.ts:74 drops the same reply as a late result. The only repair is another dispatch, which can produce the same sentence again. This is the flow 460 D false-negative that rounds 1 and 2 reported. The narrowing removed the 80-character gap but kept `find` plus a free determiner.",
+      "suggested_fix": "Drop `find` from the reading verbs. If it must stay, require a definite file-like object right after it (`the|my|its` + input name + optional `file`, followed by a sentence end or `at|in <path>`) and reject `any`. Rule out a following noun: require `\\b(?!\\s+[a-z]+(?:s|ions?)\\b)`, or require the input name to be followed by `[.;:,]|$|\\s+(?:file|at|in)\\b`. For the second pattern, require a first-person subject or an explicit `I|we` within the same sentence. Add negative tests for \"Did not find any schema regressions.\" and \"The payload was not found, so ingest throws.\"",
+      "evidence": "Hand trace against the pattern at ledger.ts:34. OWN_STATEMENT `(?:^|[.;:!?]\\s+|...)` matches \". \". CANNOT has `did\\s+not` (flag i). Then `\\s+find\\s+`. INPUT_NAMED `(?:the\\s+|my\\s+|its\\s+|this\\s+|any\\s+)?...(?:review(?:er)?[_ -])?schema` matches \"any schema\". `\\b` holds before the following space. Consumers: ledger.ts:528 (`const unreadable = unreadableInputClaim(result);` sets finished=false) and retry-eval.ts:74.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:34", "src/review/ledger.ts:36", "src/review/ledger.ts:528", "src/review/retry-eval.ts:74"],
+        "enumeration_method": "keryx ctx rg -n --all \"unreadableInputClaim\" src --glob '!*.test.ts': defined once (ledger.ts:42) over the two UNREADABLE_INPUT patterns (ledger.ts:34, :36), read by buildLedger (ledger.ts:528) and collectLateResults (retry-eval.ts:74); no other reader"
+      }
+    },
+    {
+      "id": "LG-002",
+      "severity": "major",
+      "file": "src/review/completion-gate.ts",
+      "line": 178,
+      "quote": "const root = path.resolve(cwd, prefix === \"\" ? \".\" : prefix);",
+      "problem": "SessionReviewTracker resolves every path it learns against the session cwd (the shell's root): the paths in `keryx review` call arguments, and the `path:` line keryx prints. shell_exec always runs `sh -c` at that root (shell-exec-tool.ts:248), so a package under a subdirectory's `.metaproject` (the flow 460 C/A layout `output/review-pr-7975/.metaproject/reviews/...`) can only be opened by a command such as `cd output/review-pr-7975 && keryx review start ...`. keryx then prints `path: .metaproject/reviews/<id>` relative to ITS cwd (managed.ts:588 `path.relative(input.cwd, packageDir)`), and the tracker records `<session cwd>/.metaproject/reviews/<id>` with no new root. The subdirectory is never added to `roots`, so neither its packages nor its active-review pointer are scanned. The review id is recorded, but namedBySession only applies to candidates found under the scanned roots.",
+      "impact": "In the layout the flow was written for, findReviewGateState returns the NO_PACKAGE_BLOCKER placeholder while the session's own package is open, and nudges the model with 'no review package this session opened or named'. After a successful `review complete` in the subdirectory it never sees the closed package (closedAt is read only under the scanned roots). It keeps nudging until the stall cap, then stops with a report claiming the review is not complete. The PR's outcome criterion (nudges about this session's own PR) is not met for a review started by `cd <sub> && keryx review ...`.",
+      "suggested_fix": "Have `keryx review start|attach|ingest|status` print the absolute package path (or an extra `package: <absolute dir>` line) and parse that in OWN_OUTPUT_LINE. Alternatively, resolve the paths of one call, and of its output, against a leading `cd <dir> &&|;` in that call's command before falling back to the session cwd. Add a test where the start command is `cd sub && keryx review start` and the output is `path: .metaproject/reviews/<id>`.",
+      "evidence": "completion-gate.ts:160-173: the tracker reads only call.arguments and the `path:`/`# managed review:` lines. namePaths (completion-gate.ts:176-183) resolves `prefix` against `this.cwd`. review.ts:1082 prints `path: ${result.path}` and managed.ts:588 makes it relative to keryx's own cwd. shell-exec-tool.ts:248 runs every command at `cwd: root`. findReviewGateState (completion-gate.ts:316) scans only cwd plus named.roots.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/completion-gate.ts:178", "src/review/completion-gate.ts:170"],
+        "enumeration_method": "Every input to SessionReviewTracker.namePaths: call.arguments (completion-gate.ts:163) and the OWN_OUTPUT_LINE `path:` capture (completion-gate.ts:170). Both reach the single path.resolve(cwd, prefix) at :178. No other code adds to `roots` or `packageDirs`."
+      }
+    },
+    {
+      "id": "LG-003",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 160,
+      "quote": "if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;",
+      "problem": "The tracker treats any tool call whose JSON arguments contain the words `keryx review` as one of this session's `keryx review` commands, whatever the tool is: write_file or apply_patch writing a report, a doc or a note that mentions `keryx review status <id>` or `.metaproject/reviews/<id>`, for example. The doc comment says the gate looks only at the session's own `keryx review` commands. HistoryMessage drops the tool name, so nothing can check it.",
+      "impact": "An older open package whose real id or path the session merely wrote into a file counts as named. scanRoot then keeps it as a candidate despite predating the session. If it is the newest open candidate and no fresh pointer exists, the nudge names that package: the flow 460 C misdirection by a different route. Trigger: write a report that cites a previous round's package path. Outcome: the gate nudges about that round.",
+      "suggested_fix": "Carry `name` in HistoryMessage.toolCalls and accept only the shell tool, plus the keryx self-command tool if any. Or match `keryx review` only at a command position in the parsed `command` argument, not anywhere in the JSON.",
+      "evidence": "completion-gate.ts:101-106 (HistoryMessage has no tool name), :160-165 (every call whose arguments match is remembered and its paths named), :265 scanRoot keeps a pre-session package when namedBySession is true.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-004",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 551,
+      "quote": "renderReport(report, input.mode) + renderSpendMarkdown(input.research, report)",
+      "problem": "renderSpendMarkdown returns nothing when the source report already contains `\\n## Token spend\\n`. On a re-ingest whose `--report` is the package's own report.md (which the previous ingest wrote with a spend section), the old figure is kept and the totals of the current research.json are dropped. This happens, for example, when the ledger is rebuilt after more waves or a retry dispatch.",
+      "impact": "report.md states a stale spend (fewer dispatches, fewer tokens) after a re-ingest, while research.json carries the new totals. Flow 460 H is about stating the review's spend, and that number is now wrong without any warning.",
+      "suggested_fix": "Replace an existing `## Token spend` section, from the heading to the next `## ` or end of file, with the freshly rendered one instead of skipping. Or skip only when the existing section's line equals the new one.",
+      "evidence": "dispatch-usage.ts:133 `if (report !== undefined && report.includes(`\\n${SPEND_HEADING}\\n`)) return \"\";`. managed.ts:551 passes the input report text, which readReport reads from --report verbatim.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-005",
+      "severity": "info",
+      "file": "src/review/locate.ts",
+      "line": 237,
+      "quote": "const within = findSubstring(haystack, part);",
+      "problem": "The new substring pass places a one-line quote of any length that occurs in exactly one line. A very short fragment, such as a single identifier or `await` in a small file, is placed on the only line that contains it, even when the reviewer meant a line where the full quote was misremembered.",
+      "impact": "No reproduced misplacement. Short quotes are usually ambiguous and come back `ambiguous`. A minimum length, or a minimum share of the line, would keep the pass to what its comment describes: the middle of a long line.",
+      "suggested_fix": "Require `part.length >= 12` (or at least half the matched line's trimmed length) before accepting a substring placement. Otherwise return `absent`.",
+      "evidence": "locate.ts:234-243: only `part === \"\"` is rejected (findSubstring) before the single-hit placement.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 2, "info": 1 }
+}
+```
+
+## Logic Review (slice-10, second look)
+
+Scope: slice-10 of PR #1045 round 2. Spec gate: flow 460 description.md read. History layer: not consulted beyond source reads.
+
+The ledger D narrowing still has a false-positive path: `find` with `any`/`the` before a mandatory-input word (LG-001, major). The completion gate learns roots only from paths spelled relative to the shell's cwd, so a review run with `cd <sub> && keryx review ...` (flow 460 C's own layout) is invisible to the gate (LG-002, major). Lower findings:
+- any tool's arguments that contain `keryx review` count as a session command (LG-003)
+- a re-ingest keeps a stale `## Token spend` section (LG-004)
+- the new substring locate pass has no minimum quote length (LG-005, info)
+
+Checked with no new defect: the override-decision path (overrideRecorded and decisionCovers), the empty-range refusal and per-process caches in the coverage light recheck, the dispatch-usage parser and totals, ledger closeWith default linking and the screened closure, stub-report refusal, quote_unlocated flagging and refuseUnresolvedLocators, and mutation record naming.
+
+Stats: blocker 0 | major 2 | minor 2 | info 1

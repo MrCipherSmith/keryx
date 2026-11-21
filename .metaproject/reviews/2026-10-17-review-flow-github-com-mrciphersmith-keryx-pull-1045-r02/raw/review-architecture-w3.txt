@@ -1,0 +1,51 @@
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "AR-001",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const NO_TEXT_PLACEHOLDER = \"(subagent produced no text)\";",
+      "problem": "The harness writes the empty-reply placeholder into save_result_to and the review layer recognises it by a second, independent copy of the literal (isEmptyOutput in src/review/ledger.ts matches /^\\(subagent produced no text\\)$/). The new doc comment says the placeholder is 'never compared to decide an outcome', which is true only inside the harness; the review reader compares it. The producer (harness) and consumer (review) are coupled by a string held in two places with no shared constant.",
+      "impact": "Changing the wording on either side silently makes an empty dispatch look like a real reply to the ledger (the empty-output coverage rules stop applying), with no compile or test failure unless a test pins both.",
+      "suggested_fix": "Export the placeholder from one module the harness already imports from the review layer (e.g. review/dispatch-usage or ledger) and use it in both the writer and isEmptyOutput; correct the comment.",
+      "evidence": "spawn-subagent-tool.ts:308 defines the literal; ledger.ts:428 re-spells it in a regex; saveTimedOutPartial writes it at 2260 and 2328."
+    },
+    {
+      "id": "AR-002",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+      "problem": "readPremises returns a polymorphic value: one --premises file yields the bare premises object, several yield an array of PremiseSource, so ManagedReviewInput[\"premises\"] has to admit both. The ingest merge must branch on the shape, and the multi-file branch needs an `as PremiseSource` cast because readPremiseFile is typed with the wider union.",
+      "impact": "Two shapes for one input is a standing source of drift in the merge (every consumer must normalise); the cast hides a mismatch the compiler would otherwise catch.",
+      "suggested_fix": "Normalise at the boundary: readPremises always returns PremiseSource[] (one element for a single file), readPremiseFile returns PremiseSource, ManagedReviewInput.premises narrows to the array form; drop the cast.",
+      "evidence": "readPremises (review.ts, diff lines 670-689) returns readPremiseFile(sources[0]) for one file and a PremiseSource[] otherwise."
+    },
+    {
+      "id": "AR-003",
+      "severity": "minor",
+      "file": "src/commands/review-slice.ts",
+      "quote": "const fixBuilt = parts === undefined || parts.fix.length === 0 ? undefined : buildSlices({ ...source, regions: parts.fix, drops: [] }, { maxBytes, waveBytes });",
+      "problem": "The slice command now runs three build/route/classify pipelines (new, fix, second-look) inline in one function, each with its own conditional and omission merge, then renumbers across them. The partition lives in round-split, but the orchestration of the three cuts, the manual `drops: []` that avoids double-counting, and the omissions de-duplication are all inlined in the command body.",
+      "impact": "Each new slice kind adds another branch to an already long command function and another place that must remember to suppress duplicated drops/omissions; a missed `drops: []` double-counts omitted files in totals.",
+      "suggested_fix": "Move the delta cut (partition, three builds, routing, classification, omission merge) behind one function in src/review/round-split.ts or slice.ts returning {slices, omissions}; the command only calls it.",
+      "evidence": "review-slice.ts diff lines 463-493: fixBuilt, secondBuilt, fixSlices, second and the omissions filter are all assembled in the command."
+    },
+    {
+      "id": "AR-004",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "emitFleetEvent({ kind: \"upsert\", id: workerId, label, status: \"failed\", detail: \"setup-error\", task });",
+      "problem": "failChild consolidates four failure exits (timeout, rate-limited, empty-reply, error) but the setup-error exit still repeats the fleet event inline. It correctly omits slate fold and the stop hook, which are not opened at that point; the helper's doc ('every exit that does not complete') overstates its coverage.",
+      "impact": "None today; a reader may expect the helper to cover all failed exits.",
+      "suggested_fix": "Narrow the doc comment to 'every exit after the child started', or leave as is.",
+      "evidence": "diff lines 1260-1269 versus 1466-1467."
+    }
+  ]
+}
+```
+
+Architecture review, slice-03: no layer violation, dependency inversion or blocking structural problem found. The bundled skill docs are byte-identical to their .metaproject copies. The harness importing from review/ has precedent (six existing imports in the same file), so it is not reported. Counts: blocker 0, major 0, minor 3, info 1.

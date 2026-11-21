@@ -1,0 +1,65 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "prior_dispositions": [
+    {"id": "r2-review-clean-code-skills#CC2-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.detail.md:666 'Not waivable' and :668 'any item but premise-decisions'; SKILL.md:136 'each failing item but premise-decisions'; docs/docs/cli-reference.md:4857 lists premise-decisions last, 'not waivable', waiver sentence 'any item but premise-decisions'"},
+    {"id": "r2-review-clean-code-skills#CC2-002", "disposition": "closed", "evidence": "session-plan-bridge.mdc:39 (both trees) names step-10b; session-plan-bridge-contract.test.ts:106-109 now expects it"},
+    {"id": "r2-review-clean-code-skills#CC2-003", "disposition": "open", "evidence": "flow-orchestrator/SKILL.md:277 turned the heading into a bold lead-in, so 'Then freeze and start' (:279-284) is now the tail of '### A verification step in the plan is a task, not a sentence' (:257) and its tasks-gate text, still not a heading of its own"},
+    {"id": "r2-review-clean-code-code#CC2-2", "disposition": "closed", "evidence": "premise field rule stated once at task-implementer/SKILL.md:101; feature-dev:116, flow-orchestrator:440, job-orchestrator:1189, review-pr-feedback:366 point to it"},
+    {"id": "r2-review-clean-code-code#CC2-3", "disposition": "closed", "evidence": "same as CC2-002: session-plan-bridge.mdc:39 lists step-10b, test :109"},
+    {"id": "review-clean-code-skills#CC-005", "disposition": "closed", "evidence": "'Never with findings it raised' removed from review-orchestrator/SKILL.md Wave D and from review-premise Step 1 and Output Contract; the real case stays in the review-premise source row (:66; self-judgement in src/review/premise.ts:74)"},
+    {"id": "R2-002 job-orchestrator reference moved to SKILL.detail.md (owner-decided, b8ed54038)", "disposition": "closed", "evidence": "job-orchestrator/SKILL.detail.md holds the dry-run, post-mortem and metrics blocks; SKILL.md:1951-1953, :2153, :2193 link each by section name; .metaproject/skills mirror is byte-identical to the bundled copy"}
+  ],
+  "findings": [
+    {
+      "id": "CC3-001", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md", "line": 277,
+      "quote": "**A flow sourced from a finding: check its premise before freeze.**",
+      "problem": "The CC2-003 fix went the other way: it removed the heading instead of giving the freeze block one. 'Then freeze and start' with `flow freeze --yes` / `flow start` (:279-284) now belongs to the tasks-gate section (:257-275). The mandatory freeze of every flow reads as the tail of a verification-task section.",
+      "impact": "An agent skimming by heading finds no freeze step; feature-dev:42 also cites the paragraph by its former heading title.",
+      "suggested_fix": "Keep a heading for the finding-sourced paragraph and add '### Freeze and start' before :279.",
+      "confidence": "high"
+    },
+    {
+      "id": "CC3-002", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md", "line": 42,
+      "quote": "its claims object goes into the Implementation Spec under **Premise**",
+      "problem": "The Implementation Spec template (:45-50) has no Premise field: What, Why, Scope, Acceptance criteria, Approach, Test strategy. The instruction names a slot nothing defines, and .feature-spec.md (:51) is saved from that template.",
+      "impact": "The recorded claims have no defined place; a resumed run cannot find the operator's answer.",
+      "suggested_fix": "Add '**Premise**: claims object and the operator's answer, when the input was a finding' to the template list at :45-50.",
+      "confidence": "high"
+    },
+    {
+      "id": "CC3-003", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md", "line": 73,
+      "quote": "comment or commit message giving a reason (`git log -L <start>,<end>:<file>`,",
+      "problem": "The delta made git conditional on the host (Read-only row, source row :66), but question 1's signal-gathering text (:73-76) still names git log -L, git blame and git show as the method, with no keryx shell fallback.",
+      "impact": "A judge on keryx shell reads question 1 as an instruction to run commands it does not have; two statements of the same capability disagree inside one page.",
+      "suggested_fix": "Add 'or the excerpts in context_files where you have no git' at :73-74.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC3-004", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-style/SKILL.md", "line": 28,
+      "quote": "except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).",
+      "problem": "The same host-git caveat is pasted twice (Purpose sentence and 'Supplied text first') into about 14 reviewer skills, plus the input schema and the orchestrator. The delta lengthened both copies, so the next host-fact edit is 30+ edits across two trees; the law is already named 'law 4'.",
+      "impact": "Drift risk: round 2 already had to correct this wording everywhere.",
+      "suggested_fix": "State it once in the shared reviewer laws and keep a one-clause pointer in each skill.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC3-005", "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md", "line": 639,
+      "quote": "\"scope: the plan items only. A finding outside them is recorded as follow-up, not fixed in this flow.\", \"premise: every plan item's comment",
+      "problem": "The new constraint is appended on the same line as the scope string, while every other element of the constraints array sits on its own line.",
+      "impact": "Cosmetic; the next edit to either string produces a noisy diff.",
+      "suggested_fix": "Put the premise constraint on its own line.",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+Summary: CC2-001, CC2-002, CC2-2, CC2-3, CC-005 and the owner-decided R2-002 detail move are closed. CC2-003 is still open (the fix removed the heading rather than giving the freeze block its own). The delta adds 4 minor and 1 info findings.

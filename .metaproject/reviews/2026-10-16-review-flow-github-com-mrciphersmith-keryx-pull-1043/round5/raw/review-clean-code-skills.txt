@@ -1,0 +1,40 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r4-review-clean-code-skills#CC4-001", "disposition": "open", "evidence": "src/gdskills/bundled/skills/review/review-premise/SKILL.md source row untouched by the round-5 delta (delta covers only job-orchestrator, review-orchestrator, review-pr-feedback); owner-dismissed, not re-raised."},
+    {"id": "r4-review-clean-code-skills#CC4-002", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:813 Stats is counts only ('premise: upheld N, held N (each answer is on its Step 7 **Premise** entry)'); the answer lives once, on the Step 7 entry (:388) and rule 7 (:364)."},
+    {"id": "r4-review-clean-code-skills#CC4-003", "disposition": "closed", "evidence": "job-orchestrator/SKILL.md:1165 now states the contrast ('A first ingest without `--premises` holds nothing; a re-ingest carries earlier holds.') in ~88 cols; the arXiv paragraph (:1273-1279) no longer appears in git diff origin/main, so the whitespace rewrap is gone."},
+    {"id": "r4-review-clean-code-skills#CC4-004", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1126-1128 split into three bullets: dispatch inputs, 'Before dispatch, renumber any display id that another finding, carried or new, already has', and the claims/save/merge rule; the stray 'included' clause is gone."}
+  ],
+  "findings": [
+    {
+      "id": "r5-review-clean-code-skills#CC5-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": 363,
+      "principle": "Clean Code - Comments/Consistency C1",
+      "problem": "The delta joins rule 6 (praise) into one ~230-column line with no content change (delta-skills.diff @@ -360,10 +360,8). Rules 2, 4 and 5 of the same list stay hard-wrapped at ~85 columns, while rules 1, 3, 6 and 7 are single long lines.",
+      "impact": "Whitespace-only churn in blame and the next diff, and a list that mixes two wrapping styles; the same noise CC4-003 asked to be reverted in job-orchestrator.",
+      "suggested_fix": "Restore the three-line wrap of rule 6 (and of rules 1 and 3 against origin/main) so the only changes in this list are rule 7 and the Premise bullet.",
+      "confidence": "medium"
+    },
+    {
+      "id": "r5-review-clean-code-skills#CC5-002",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 1127,
+      "principle": "Clean Code - Meaningful Names A3 (antecedent)",
+      "problem": "After the split, the bullet 'Its claims name the `id`...' follows the renumber bullet, so 'Its' no longer points at the judge named in the dispatch bullet two lines up; it reads as the renumbering's.",
+      "impact": "Cosmetic; a reader re-resolves the pronoun. Settled by writing 'The judge's claims'.",
+      "suggested_fix": "Replace 'Its claims name' with 'The judge's claims name'.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+Summary: all four prior review-clean-code skills findings are addressed (CC4-001 untouched but owner-dismissed; CC4-002/003/004 closed with evidence). The delta introduces no blocker or major defect; one minor whitespace-only rewrap of rule 6 in review-pr-feedback and one info-level pronoun antecedent in review-orchestrator.

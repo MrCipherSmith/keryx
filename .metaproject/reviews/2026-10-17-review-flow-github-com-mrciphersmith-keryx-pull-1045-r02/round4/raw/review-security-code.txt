@@ -1,0 +1,98 @@
+```json keryx:findings
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "summary": "Round 4 verification of the round-3 fix (delta-code.diff + delta-docs.diff). Of the 41 round-3 findings checked, 27 are closed and 1 partial. 13 are open, all of them info or minor maintainability items that the delta did not touch. Of the 7 security priors, 4 are closed (SEC-R2-001, SEC-R2-002, SEC-002, SEC-005) and 3 are partial (SEC-001, SEC-003, highload F-003). The delta adds 2 security findings: 1 minor and 1 info. Both come from the completion gate's widened trust in tool output.",
+  "findings": [
+    {
+      "id": "SEC-R4-001",
+      "severity": "minor",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "file": "src/review/completion-gate.ts",
+      "line": 296,
+      "quote": "  if (program === \"grep\") return operands.length <= 1;",
+      "problem": "isPipeFilter accepts tee, head, tail, less and more in any form, and grep with up to one operand, as stages that only pass the keryx command's output on. The doc above PIPE_FILTERS says a stage that prints a file of its own must not count. Only cat (no operand) and grep (one operand at most) follow that rule. `keryx review start --pr 7 | head -40 notes.md`, `| tail -n 20 notes.md`, `| less notes.md` and `| grep -rh path:` (one operand, which reads the whole tree) all print file content instead of keryx's output. keryxReviewInvocations still marks such a line as `alone`, so the tracker queues the call and trusts every `# managed review: <id>` / `path: <dir>` line of the tool result.",
+      "impact": "A file the pull request commits (notes, a fixture, a committed manifest dump) can put forged `path:` / `# managed review:` lines into the session's names. Since this round, ids are matched by directory name, so a forged id or path names a committed package directory as the session's own. A closed one whose checkout mtime falls inside the session then releases the review gate. This is the SEC-R2-002 effect, reached through output trust instead of the manifest's reviewId. Trigger: the agent runs keryx piped into one of these stages with a file operand. That is unusual but plausible as a 'show me the log' habit. The gate is a nudge, not an authorization boundary, so minor.",
+      "suggested_fix": "Apply the cat rule to every reader of a file: head, tail, less and more count as filters only when they name no file operand (skip option values such as `-n 40`). Count grep only with exactly one operand and no -r/-R/--include/-f. Add tests for `| head notes.md` and `| grep -rh x` that expect alone=false.",
+      "evidence": "src/review/completion-gate.ts:158 (PIPE_FILTERS incl. head/tail/less/more), :290-296 (isPipeFilter: cat needs 0 operands, grep <=1, everything else `return true`), :443-452 (output lines of a pending call: `path:` -> namePaths, `# managed review:` -> reviewIds), :490-494 (namedBySession by basename). completion-gate.test.ts covers only `| tee start.log`, `| head -40`, `| cat - notes.md`.",
+      "attack_vector": "PR commits notes.md with lines `# managed review: <predictable-id>` and `path: .metaproject/reviews/<committed-closed-dir>`. The agent runs `keryx review start --pr N 2>&1 | head -60 notes.md` (or `| less notes.md`). The tracker names the committed closed package and the gate releases early.",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-R4-002",
+      "severity": "info",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "file": "src/review/completion-gate.ts",
+      "line": 286,
+      "quote": "return scriptName === \"cli.ts\" || scriptName === \"cli.js\" || (name === \"bun\" && run && script === \"keryx\") ? rest.slice(at + 1) : undefined;",
+      "problem": "keryxArgs treats any `bun`/`node` run of a script named cli.ts or cli.js as keryx, whatever the project. `node other-tool/dist/cli.js review start ...` counts as `keryx review start`, and when it ran alone its output lines are trusted as keryx's own.",
+      "impact": "Another program's output can name review ids and package paths in the session tracker. This takes an unrelated CLI with a `review start|attach|ingest` subcommand that prints `path:` lines, so it is improbable. It widens the same trust as SEC-R4-001.",
+      "suggested_fix": "Accept a cli.ts/cli.js only when its path resolves inside the keryx checkout or package (for example a `src/cli.ts` whose sibling package.json names keryx), or limit it to `bun src/cli.ts` relative to a keryx repo. Otherwise document the over-match.",
+      "evidence": "src/review/completion-gate.ts:261-287 (keryxArgs), :435-452 (alone + opening subcommand -> output lines trusted). Test completion-gate.test.ts accepts `node dist/cli.js review` with no check that the script is keryx.",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r3-review-architecture-code:R3-ARCH-001", "disposition": "closed", "evidence": "deltaRoundCut, firstRoundCut, renumberSlices and SecondLookSource moved to src/review/round-cut.ts:43 (library); review-slice.ts imports them."},
+    {"id": "r3-review-architecture-code:R3-ARCH-002", "disposition": "open", "evidence": "src/review/coverage.ts:567 cache key is still JSON.stringify([packageDir, root, target]) (target now recordedBase/prBase/head); no resolved base sha in the key. Info."},
+    {"id": "r3-review-clean-code-code:CC-R3-001", "disposition": "closed", "evidence": "src/review/managed.ts:1341 attributionReviewers carries one doc; the stub doc now sits directly above refuseStubReport at :1371."},
+    {"id": "r3-review-clean-code-code:CC-R3-002", "disposition": "closed", "evidence": "src/review/round-cut.ts:43-73: cutRegions/withoutOmitted/secondLookCut helpers, routeAsDelta closure; the `look!` assertion is gone."},
+    {"id": "r3-review-clean-code-code:CC-R3-003", "disposition": "open", "evidence": "src/review/ledger.ts:29 still Pick<ParsedResult, \"inputs_unreadable\" | \"status\" | \"summary\">; body reads only inputs_unreadable."},
+    {"id": "r3-review-clean-code-code:CC-R3-004", "disposition": "open", "evidence": "src/review/readiness.ts:29 still `export { COVERAGE_MD_MARK };` (imported at :26 from ./coverage-md)."},
+    {"id": "r3-review-clean-code-code:CC-R3-005", "disposition": "closed", "evidence": "src/review/slice.ts:427 regionsByFile pushes in place; ledgerOmissions and buildSlices both use it."},
+    {"id": "r3-review-clean-code-code:CC-R3-006", "disposition": "open", "evidence": "src/review/git-base.ts:53 resolveBase still typed { kind?; ref?; base? } and reads only base; coverage.ts packageDiffStats still passes `{ ...target, head: target.head }` (delta context line)."},
+    {"id": "r3-review-core-boundaries-code:CB3-001", "disposition": "closed", "evidence": "Same as CC-R3-001: managed.ts:1341 / :1371 each carry their own doc."},
+    {"id": "r3-review-highload-code:HL-R3-001", "disposition": "closed", "evidence": "src/review/dispatch-usage.ts:64 USAGE_LINE `(.*?)\\r?$`; blank `\\r` lines pass the trailing check (line.trim()); CRLF test in ledger.test.ts ('a file saved with CRLF line endings')."},
+    {"id": "r3-review-highload-code:HL-R3-002", "disposition": "closed", "evidence": "src/governance/aggregate.ts:48 reads readStandalonePackages once and passes it into readFlowReviewManifests -> flowPackageDirs(cwd, dir, standalone) (package-location.ts:73, heads via mapBounded 16)."},
+    {"id": "r3-review-highload-code:HL-R3-003", "disposition": "closed", "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:338 recordSaves Map + :355 per-path promise chain; harness-robustness.test.ts 'saves to one path run one after the other'. Keyed by the resolved abs string (symlinked spellings not unified), acceptable."},
+    {"id": "r3-review-highload-code:HL-R3-004", "disposition": "partial", "evidence": "src/review/completion-gate.ts:37 fileHash caches content hashes by size/mtime/ctime/ino (racy window 2s), so dirSignature no longer re-reads unchanged files; scanRoot (:509) still reads every manifest head per stop (now 16-way concurrent), uncached. Info."},
+    {"id": "r3-review-logic-code:LG-001", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:374 priorComplete = reply && !incomplete; a non-final save marks its line incomplete (dispatch-usage.ts formatRecordLine); later partial with text replaces (`replaced: \"partial\"`), note text per case; test 'a later partial replaces an earlier partial'."},
+    {"id": "r3-review-logic-code:LG-002", "disposition": "closed", "evidence": "completion-gate.ts shellCommands drops redirections (`2>&1`, `&>`, `>|`, fd numbers) instead of splitting; :432 adds invocation.cwd as a root; tests for `cd sub && keryx review start --pr 7975 2>&1`."},
+    {"id": "r3-review-logic-code:LG-003", "disposition": "closed", "evidence": "src/review/coverage.ts:595 widestDiff takes the union of files and max changedLines; diffOfTarget returns widestDiff(diffs); unit test with 10/900 vs 11/100."},
+    {"id": "r3-review-logic-code:LG-004", "disposition": "closed", "evidence": "CHANGELOG.md fix-slice entry now names 'the roles its own changed lines route by content'; cli-reference plan row, review-orchestrator SKILL.md:685 / SKILL.detail.md:699 (both copies) and flow-orchestrator SKILL.md:529 updated."},
+    {"id": "r3-review-logic-code:LG-005", "disposition": "open", "evidence": "src/review/locate.ts:250 the too-short single-line substring still returns kind \"absent\". Info."},
+    {"id": "r3-review-performance-code:PERF-R3-001", "disposition": "closed", "evidence": "Same as HL-R3-002: aggregate.ts:48 + package-location.ts:73."},
+    {"id": "r3-review-performance-code:PERF-R3-002", "disposition": "closed", "evidence": "src/review/slice.ts:427 regionsByFile (linear)."},
+    {"id": "r3-review-performance-code:PERF-R3-003", "disposition": "open", "evidence": "src/review/coverage.ts:610 `for (const base of resolved.bases) await gitDiffAt(...)` still serial (now up to 3 bases). Info."},
+    {"id": "r3-review-regression-code:RG3-001", "disposition": "closed", "evidence": "As LG-001: spawn-subagent-tool.ts:374, recordSaveNote distinguishes kept complete/partial and replaced partial; partial-over-partial test added."},
+    {"id": "r3-review-regression-code:RG3-002", "disposition": "closed", "evidence": "As LG-002; tests 'a redirection is neither a command separator nor a word' and the cd sub 2>&1 case."},
+    {"id": "r3-review-regression-code:RG3-003", "disposition": "closed", "evidence": "The 12-character floor is stated in src/gdskills/contracts/review-finding.schema.json quote, bundled and .metaproject reviewer-finding.schema.json:85, and docs/docs/cli-reference.md (matching paragraph)."},
+    {"id": "r3-review-regression-code:RG3-004", "disposition": "open", "evidence": "coverage.ts resolveDiffBases (:578-590) still adds the default base as a wider base, so a stacked PR still measures against origin/main. Recording the PR's own base does not change that. This is an observation, info."},
+    {"id": "r3-review-security-code-code:SEC-R3-001", "disposition": "closed", "evidence": "src/review/round-split.ts:360 ALWAYS_DISPATCHED_ROUTED_ROLES + manifestRosterRoles; used by wave-drivers.ts:34 (drivers), estimate.ts:302 (plan.json), review-ledger.ts:298 (selected), review.ts:3369 (review required). A light round whose slice routes to review-security-code now gets that driver and the ledger requires it; test in round-split.test.ts:241."},
+    {"id": "r3-review-style-code:STY-R3-001", "disposition": "closed", "evidence": "managed.ts:1341/:1371 docs separated."},
+    {"id": "r3-review-style-code:STY-R3-002", "disposition": "closed", "evidence": "coverage.ts PackageTarget is now { recordedBase, prBase, head }; nominalBase, kind and ref removed; refusals use recordedBase."},
+    {"id": "r3-review-style-code:STY-R3-003", "disposition": "closed", "evidence": "src/review/loop.ts:489 and src/flow/review-gate.ts:463 use `const name = path.basename(packageDir)`."},
+    {"id": "r3-review-style-code:STY-R3-005", "disposition": "closed", "evidence": "src/lib/shell-tool-names.ts SHELL_TOOL_NAMES shared by approval-cause.ts and completion-gate.ts. 'bash' was dropped from the gate set; the only harness shell tool is shell_exec (shell-exec-tool.ts:429), so no history is lost."},
+    {"id": "r3-review-style-code:STY-R3-006", "disposition": "closed", "evidence": "round-cut.ts cutRegions/withoutOmitted replace the four repeated option spreads."},
+    {"id": "r3-review-style-code:STY-R3-007", "disposition": "open", "evidence": "completion-gate.ts shellCommands has grown, with redirection and pipe branches and a dropNext/quotedWord state. Its doc lists the operators it reads but still does not say what it leaves out (subshells, $(...), heredoc bodies). Info."},
+    {"id": "r3-review-style-code:STY-R3-008", "disposition": "open", "evidence": "src/review/ledger.ts:29 unchanged (same as CC-R3-003)."},
+    {"id": "r3-review-style-code:STY-R3-009", "disposition": "open", "evidence": "src/review/wave-drivers.ts:8 still `import { type SliceManifest } from \"./slice\";`."},
+    {"id": "r3-review-style-docs:r3-review-style-docs:DS-001", "disposition": "closed", "evidence": "SKILL.detail.md:699 (bundled and .metaproject copies) now lists review-security-code for a security finding and the content roles of the fix lines."},
+    {"id": "r3-review-style-docs:r3-review-style-docs:DS-002", "disposition": "open", "evidence": "review-orchestrator SKILL.md BLOCKED bullet (around :1226) is not in delta-docs.diff; the remedy for inputs_unreadable is still 'larger budget'."},
+    {"id": "r3-review-style-docs:r3-review-style-docs:DS-003", "disposition": "open", "evidence": "docs/docs/guides/review-with-a-record.md:656/:965 not in delta-docs.diff; wrapping unchanged."},
+    {"id": "r3-review-testing-practices-code:NTP-001", "disposition": "closed", "evidence": "src/review/ledger.test.ts:1119 and :1186 replace the 500 ms wall-clock bounds with spyOn(JSON.parse)/spyOn(RegExp.prototype.exec) call assertions."},
+    {"id": "r2-review-security-code-w1:SEC-R2-001", "disposition": "closed", "evidence": "completion-gate.ts:490-494 namedBySession matches only path.basename(dir) (never manifest reviewId); scanRoot open id = directory name; pickPackage pointer id = basename. explicitReviewIds skips a non-valueless --flag's value (VALUELESS_FLAGS :149), so `readiness --flow 460 <id>` names <id>. Test 'a manifest that claims the session's review id from another directory'. Residual output-trust path: new SEC-R4-001."},
+    {"id": "r2-review-security-code-w1:SEC-R2-002", "disposition": "closed", "evidence": "ClosedPackage carries no ids; closed entries are named only by dir/basename (findReviewGateState `namedBySession(named, closed.dir)`); committed closed manifest with a claimed reviewId no longer releases the gate (same test)."},
+    {"id": "review-security-code-w3:SEC-002", "disposition": "closed", "evidence": "As SEC-R2-002."},
+    {"id": "r2-review-security-code-w9:SEC-001", "disposition": "partial", "evidence": "review.ts:654 ghPrBase reads baseRefName (validated: [A-Za-z0-9._/-], no leading '-', no '..'; argv spawn, stdin ignored, 15s SIGKILL timeout) and :1071 keeps it as target.prBase beside a differing --base; coverage.ts:578-590 measures recorded, prBase and default bases exactly and keeps the widest. Remaining gap: when gh is missing, signed out or offline at start in a repo with no main/master ref, prBase is absent and a narrow --base alone is still measured."},
+    {"id": "review-security-code-w3:SEC-003", "disposition": "partial", "evidence": "dispatch-usage.ts:94 usage without `\"by\":\"host\"` is `reported`. Totals and the spend line count those dispatches ('stated by the reviewer, not measured'), and hostLineJson never adds the mark to reported counts. A reviewer that writes its own line with the mark is still read as measured. This is documented and accepted because no gate reads usage."},
+    {"id": "review-highload-w1:F-003", "disposition": "partial", "evidence": "Same mechanism as SEC-003: dispatch-usage.ts:94 + header comment; a self-marked reviewer line is not distinguishable."},
+    {"id": "review-security-code-w3:SEC-005", "disposition": "closed", "evidence": "src/review/coverage-md.ts:17 oneLine strips C0/C1/U+2028/2029, oneWord for reviewer/status; :14 COVERAGE_ENTRY anchored with ^...m, so a value cannot start an entry; coverage-md.test.ts forging case."}
+  ],
+  "needs_context": []
+}
+```
+
+Summary: Round 4 checks the round-3 fix as a security code review.
+
+- **Round-3 findings (41 checked, STY-R3-004 skipped as owner-dismissed):** 27 closed, 1 partial (HL-R3-004), 13 open. All 13 open items are info or minor maintainability items that the delta did not touch: R3-ARCH-002, CC-R3-003/004/006, LG-005, PERF-R3-003, RG3-004, STY-R3-007/008/009, DS-002/003. SEC-R3-001 (light round dropping the content-routed security reviewer) is closed: manifestRosterRoles now feeds the drivers, plan.json, `review required` and `ledger build`.
+- **Security priors (7):**
+  - Closed: SEC-R2-001, SEC-R2-002 and SEC-002. Packages are now named only by directory name, never by the reviewId a manifest claims, and a flag's value is no longer taken for the positional id. SEC-005 is also closed: coverage.md fields are written on one line.
+  - Partial: SEC-001. The PR's own base now widens the measured diff, but if gh was unavailable at start in a repo with no main/master ref, a narrow --base is still measured alone.
+  - Partial: SEC-003 and highload F-003. A host line is marked `"by":"host"`, but a reviewer can still copy that mark. This is documented and no gate reads usage.
+- **New findings:** 1 minor and 1 info, both from the completion gate's widened trust in tool output. SEC-R4-001 (minor): the gate counts head, tail, less and more as pipe filters even when they name a file, and grep -r with one operand too. A file the PR commits can then supply forged `path:` / `# managed review:` lines. SEC-R4-002 (info): any `bun`/`node` run of a `cli.ts` or `cli.js` is taken for keryx.
+- **Checked with no defect:** ghPrBase (argv spawn, no `-` refs, validated output), the per-path save chain, the `incomplete` mark (a child's own usage lines are stripped, so it cannot forge one) and the fileHash cache (ctime-keyed with a racy window).
+
+Routing audit: graph_used: no (not-relevant: verification over a given delta); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no (one raw sed with a keryx:raw marker for line evidence).

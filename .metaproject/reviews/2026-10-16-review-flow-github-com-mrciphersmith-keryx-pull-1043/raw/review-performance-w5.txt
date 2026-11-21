@@ -1,0 +1,25 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-05 (review-gate tests, skill-count/ceiling constants, install manifest, catalog entry, review-finding schema premise block, model-tier premiseJudge floor) contains no code on a request, render or loop path; no performance findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Performance Review
+
+Scope: slice-05 diff, PR #1043 at c144874f. Files: review-gate.test.ts, bundled-eval.test.ts, model-tier.test.ts, review-skills-class-scope.test.ts, review-skills-iron-laws.test.ts, install-manifest.json, task-implementer input-contract schema, catalog.ts, review-finding.schema.json, model-tier.ts, skill-length-ceilings.ts.
+
+### Summary
+- Blockers: 0, Major: 0, Minor: 0, Info: 0
+
+### Clean Areas
+- Runtime code: the only executable change is a constant-time boolean branch in `assignTier` (model-tier.ts), O(1), one call per dispatch.
+- The deep-tier floor for the premise judge is a deliberate cost choice (stated in the doc comment and tests), not an accidental one; the run frequency is one judge dispatch per review round.
+- Tests: each new test creates one small package and runs one gate evaluation; no loops over unbounded data.
+- Schema/manifest/catalog/ceilings: static data, no hot path.
+- N+1, re-renders, leaks, bundle imports, blocking IO, pagination, redundant calls, MobX: not applicable to this slice.

@@ -1,0 +1,2442 @@
+--- src/review/coverage.ts
+@@ 56,96 @@
+ };
+ 
+ /**
+  * Why a project overlay may not remove another reviewer this round, or undefined: the round changes the overlay itself
+  * (a file of its directory is in scope A), so a branch could add a reviewer that "supersedes" the security reviewer of
+  * its own review; or the changed files are not recorded, so that cannot be ruled out.
+  */
+ function overlayChangedByRound(reviewer: { name: string; source: string; path?: string }, context: SupersedeContext): string | undefined {
+   if (reviewer.source !== "project-skill" || reviewer.path === undefined) return undefined;
+   if (context.files === undefined) return `${reviewer.name} is a project overlay and the round's changed files are not recorded, so it cannot be ruled out that this branch wrote it`;
+   const absolute = path.isAbsolute(reviewer.path) ? reviewer.path : path.resolve(context.root ?? process.cwd(), reviewer.path);
+   const dir = path.relative(context.root ?? process.cwd(), path.dirname(absolute)).split(path.sep).join("/");
+   const changed = context.files.find((file) => file === dir || file.startsWith(`${dir}/`));
+   return changed === undefined ? undefined : `${reviewer.name} is a project overlay this round changes (${changed})`;
+ }
+ 
+ /** Reviewers that are not part of a round's fan-out: they route, verify, or are opt-in. */
+ const NOT_ROSTER = new Set([
+   "review-orchestrator",
+   "review-verifier",
++  "review-premise",
+   "review-regression",
+   "review-pr-contract",
+   "review-pr-feedback",
+   "review-greptile",
+   "review-strict",
+ ]);
+ 
+ const FRONTEND_EXT = /\.(tsx|jsx|css|scss|html)$/;
+ const TEST_FILE = /(\.test\.|\.spec\.)|(^|\/)(src\/test|test|e2e)\//;
+ const BACKEND_DIR = /(^|\/)src\/(api|services|controllers|modules)\//;
+ const DATA_FILE = /(\.sql$|(^|\/)prisma\/schema\.prisma$|(^|\/)migrations?\/)/;
+ const CODE_FILE = /\.(ts|js|tsx|jsx)$/;
+ 
+ /** Path gates the orchestrator names for the generic convention reviewers. Anything not listed here is not path-gated. */
+ export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
+   "review-core-boundaries": (f) => /(^|\/)(src\/)?(core|shared|foundation)\//.test(f),
+   "review-flow-graph": (f) => /(^|\/)(src\/core\/flow|src\/graph|src\/shared\/flow)\//.test(f),
+   "review-testing-practices": (f) => TEST_FILE.test(f) || /\.msw\.ts$/.test(f),
+   "review-frontend-conventions": (f) => FRONTEND_EXT.test(f) || /\.stories\.tsx$/.test(f) || CODE_FILE.test(f),
+   "review-layout": (f) => /\.(tsx|jsx|css|scss)$/.test(f),
+
+--- src/review/dedupe.ts
+@@ 13,84 @@
+  * Conservative on purpose: a wrong merge hides a real finding, a missed merge
+  * only costs a second reply. Two findings are duplicates when ALL of:
+  *
+  * 1. **Different reviewers.** A reviewer that reports two findings at one site
+  *    meant two findings.
+  * 2. **The same file**, after normalising separators. Never across files, even
+  *    when everything else matches — "the same mistake in two files" is two sites.
+  * 3. **The same place**: both located lines within {@link LINE_WINDOW}, or the
+  *    same quote after collapsing whitespace.
+  * 4. **The same mechanism**: an equal `dedupe_key` when both carry one (a
+  *    differing pair vetoes the merge), no differing `symbol` or `related_skill`,
+  *    and — when no shared key decides it — problem statements whose content
+  *    words overlap by at least {@link PROBLEM_SIMILARITY} (Jaccard).
+  *
+  * Clusters are complete-linkage: a finding joins a cluster only when it is a
+  * duplicate of EVERY member, so a chain A~B~C cannot merge A with a C it does not
+  * resemble.
+  *
+  * Never merged: external findings (each one owes its own reply), findings that
+  * already carry a disposition (a carried or dismissed record is not this round's
+- * report), and findings a verifier refuted (the refutation is a measurement).
++ * report), findings a verifier refuted (the refutation is a measurement), and
++ * findings held by a premise judgement (the operator's question stays visible).
+  *
+  * ## Severity
+  *
+  * The highest of the merged findings — unless a verifier confirmed any of them,
+  * in which case the highest CONFIRMED severity is canonical: the verifier ran
+  * something against that claim at that severity, and the unconfirmed
+- * re-statements do not outrank it.
++ * re-statements do not outrank it. A premise judge's downgrade outranks both: the
++ * downgraded severity is the finding's severity, and a re-statement at the
++ * original one does not raise it again.
+  */
+ 
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
++import { isHeldVerdict } from "./premise";
+ import { REVIEW_FINDING_SEVERITIES, type ReviewFindingSeverity, type StructuredReviewFinding } from "./types";
+ 
+ /** Located lines this far apart (inclusive) are the same place. */
+ export const LINE_WINDOW = 3;
+ /** Minimum content-word Jaccard overlap of two problem statements. */
+ export const PROBLEM_SIMILARITY = 0.5;
+ 
+ export type DuplicateMerge = {
+   /** The record that survived: its `global_id`, or `id`. */
+   kept: string;
+   /** The records folded into it. */
+   absorbed: string[];
+   reportedBy: string[];
+   severity: ReviewFindingSeverity;
+-  /** `max` over all reporters, or `verified` when a confirmed verdict decided it. */
+-  severityRule: "max" | "verified";
++  /** `max` over all reporters, `verified` when a confirmed verdict decided it, or `premise` when a judge's downgrade did. */
++  severityRule: "max" | "verified" | "premise";
+   /** Severities the reporters gave, in reporter order, so drift stays visible. */
+   reportedSeverities: ReviewFindingSeverity[];
+   /**
+    * When a verifier-confirmed severity was kept over a HIGHER one nobody confirmed: that higher severity and who reported
+    * it, so the report says the lower severity won on evidence, not by accident.
+    */
+   outranked?: { severity: ReviewFindingSeverity; reviewer: string; id: string } | undefined;
+ };
+ 
+ export type MergeDuplicatesResult<T> = {
+   findings: T[];
+   merges: DuplicateMerge[];
+ };
+ 
+ /** What a later wave is told about findings an earlier wave already reported. */
+ export type KnownFinding = {
+   id: string;
+   global_id?: string | null;
+   reviewer?: string;
+   severity?: ReviewFindingSeverity;
+
+--- src/review/dedupe.ts
+@@ 139,181 @@
+   }
+   let shared = 0;
+   for (const word of left) {
+     if (right.has(word)) {
+       shared += 1;
+     }
+   }
+   return shared / (left.size + right.size - shared);
+ }
+ 
+ function present(value: string | null | undefined): string | null {
+   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+ }
+ 
+ /** Whether a finding takes part in the merge at all. */
+ function mergeable(finding: StructuredReviewFinding): boolean {
+   return (
+     finding.source !== "external" &&
+     finding.disposition === undefined &&
+     finding.verification?.verdict !== "refuted" &&
++    // Flow 459: a finding held for the operator stays its own record. Folding it into a non-held duplicate would
++    // either hide the question or carry a hold onto a finding nobody asked about, silently.
++    !isHeldVerdict(finding.premise?.verdict) &&
+     normalisePath(finding.file) !== null
+   );
+ }
+ 
+ /** The pairwise rule. Exported so the rule itself is testable without a pipeline. */
+ export function isDuplicate(a: StructuredReviewFinding, b: StructuredReviewFinding): boolean {
+   if (a.reviewer.trim().toLowerCase() === b.reviewer.trim().toLowerCase()) {
+     return false;
+   }
+   const fileA = normalisePath(a.file);
+   if (fileA === null || fileA !== normalisePath(b.file)) {
+     return false;
+   }
+ 
+   const quoteA = normaliseQuote(a.quote);
+   const sameQuote = quoteA !== null && quoteA === normaliseQuote(b.quote);
+   const near =
+     typeof a.line === "number" && typeof b.line === "number" && Math.abs(a.line - b.line) <= LINE_WINDOW;
+   if (!sameQuote && !near) {
+     return false;
+
+--- src/review/dedupe.ts
+@@ 262,306 @@
+       continue;
+     }
+     const merged = mergeCluster(members);
+     out.push(merged.finding);
+     merges.push(merged.record);
+   }
+   return { findings: out, merges };
+ }
+ 
+ function bestOf<T extends StructuredReviewFinding>(candidates: readonly T[]): T {
+   const confidenceRank = { high: 3, medium: 2, low: 1 } as const;
+   return [...candidates].sort(
+     (a, b) =>
+       rank(b.severity) - rank(a.severity) ||
+       (confidenceRank[b.confidence] ?? 0) - (confidenceRank[a.confidence] ?? 0),
+   )[0] as T;
+ }
+ 
+ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]): { finding: T; record: DuplicateMerge } {
+   const confirmed = members.filter((member) => member.verification?.verdict === "confirmed");
+-  const severityRule: DuplicateMerge["severityRule"] = confirmed.length > 0 ? "verified" : "max";
+-  const canonical = bestOf(confirmed.length > 0 ? confirmed : members);
++  // Flow 459: a premise judge's downgrade is the severity the finding has, not one more report to take the maximum of.
++  // Without this a re-statement of the same defect at its original severity would raise it again.
++  const downgraded = members.filter((member) => member.premise?.verdict === "downgraded");
++  const severityRule: DuplicateMerge["severityRule"] = downgraded.length > 0 ? "premise" : confirmed.length > 0 ? "verified" : "max";
++  const canonical = bestOf(downgraded.length > 0 ? downgraded : confirmed.length > 0 ? confirmed : members);
+   const others = members.filter((member) => member !== canonical);
+ 
+   const reportedBy: string[] = [];
+   for (const member of [canonical, ...others]) {
+     for (const reviewer of [member.reviewer, ...(member.reported_by ?? [])]) {
+       if (!reportedBy.includes(reviewer)) {
+         reportedBy.push(reviewer);
+       }
+     }
+   }
+ 
+   const evidence = [
+     canonical.evidence,
+     ...others
+       .filter((member) => present(member.evidence) !== null && member.evidence.trim() !== canonical.evidence.trim())
+       .map((member) => `Also reported by ${member.reviewer} (${keyOf(member)}, ${member.severity}): ${member.evidence.trim()}`),
+   ].join("\n\n");
+ 
+   const mergedFrom = [...(canonical.merged_from ?? [])];
+   for (const member of others) {
+
+--- src/review/dedupe.ts
+@@ 326,371 @@
+     evidence,
+     reported_by: reportedBy,
+     merged_from: mergedFrom,
+     ...(mergedProblems.length === 0 ? {} : { merged_problems: mergedProblems }),
+   };
+   if (members.some((member) => member.blocking_merge === true)) {
+     finding.blocking_merge = true;
+   }
+   if (members.some((member) => member.learning_candidate === true)) {
+     finding.learning_candidate = true;
+   }
+   const scoped = members.filter((member) => member.class_scope !== undefined);
+   if (scoped.length > 0) {
+     const base = canonical.class_scope ?? scoped[0]?.class_scope;
+     if (base !== undefined) {
+       const sites = [...new Set(scoped.flatMap((member) => member.class_scope?.sites ?? []))];
+       finding.class_scope = { ...base, sites };
+     }
+   }
+ 
+-  const higher = severityRule === "verified" ? others.filter((member) => member.verification?.verdict !== "confirmed" && rank(member.severity) > rank(canonical.severity)) : [];
++  const higher =
++    severityRule === "verified"
++      ? others.filter((member) => member.verification?.verdict !== "confirmed" && rank(member.severity) > rank(canonical.severity))
++      : severityRule === "premise"
++        ? others.filter((member) => member.premise?.verdict !== "downgraded" && rank(member.severity) > rank(canonical.severity))
++        : [];
+   const top = higher.length === 0 ? undefined : bestOf(higher);
+   return {
+     finding,
+     record: {
+       kept: keyOf(canonical),
+       absorbed: others.map(keyOf),
+       reportedBy,
+       severity: canonical.severity,
+       severityRule,
+       reportedSeverities: [canonical, ...others].map((member) => member.severity),
+       ...(top === undefined ? {} : { outranked: { severity: top.severity, reviewer: top.reviewer, id: keyOf(top) } }),
+     },
+   };
+ }
+ 
+ /** The anchors a later wave needs: one entry per live finding of this round. */
+ export function knownFindingsFrom(findings: readonly StructuredReviewFinding[]): KnownFinding[] {
+   return findings
+     .filter((finding) => finding.source !== "external" && finding.disposition === undefined)
+     .map((finding) => {
+
+--- src/review/dedupe.ts
+@@ 394,423 @@
+   let text: string;
+   try {
+     text = await readFile(path.join(packageDir, "findings.json"), "utf8");
+   } catch {
+     return [];
+   }
+   const parsed: unknown = JSON.parse(text);
+   if (!Array.isArray(parsed)) {
+     throw new Error(`${path.join(packageDir, "findings.json")} is not an array of findings.`);
+   }
+   return knownFindingsFrom(parsed as StructuredReviewFinding[]);
+ }
+ 
+ /** The `## Duplicates merged` block for scope.md; empty when nothing merged. */
+ export function renderDuplicatesMarkdown(merges: readonly DuplicateMerge[]): string {
+   if (merges.length === 0) {
+     return "";
+   }
+   const rows = merges.map(
+     (merge) =>
+-      `- ${merge.kept} kept (${merge.severity}, ${merge.severityRule === "verified" ? "verifier-confirmed severity" : "highest reported severity"}); absorbed ${merge.absorbed.join(", ")}; reported by ${merge.reportedBy.join(", ")}; reported severities ${merge.reportedSeverities.join("/")}${
+-        merge.outranked === undefined ? "" : `; the confirmed ${merge.severity} outranks the unconfirmed ${merge.outranked.severity} of ${merge.outranked.reviewer} (${merge.outranked.id})`
++      `- ${merge.kept} kept (${merge.severity}, ${merge.severityRule === "verified" ? "verifier-confirmed severity" : merge.severityRule === "premise" ? "severity downgraded by the premise judge" : "highest reported severity"}); absorbed ${merge.absorbed.join(", ")}; reported by ${merge.reportedBy.join(", ")}; reported severities ${merge.reportedSeverities.join("/")}${
++        merge.outranked === undefined
++          ? ""
++          : merge.severityRule === "premise"
++            ? `; the judge's ${merge.severity} outranks the ${merge.outranked.severity} of ${merge.outranked.reviewer} (${merge.outranked.id})`
++            : `; the confirmed ${merge.severity} outranks the unconfirmed ${merge.outranked.severity} of ${merge.outranked.reviewer} (${merge.outranked.id})`
+       }`,
+   );
+   return `\n## Duplicates merged\n\n${rows.join("\n")}\n`;
+ }
+
+--- src/review/managed.ts
+@@ 34,74 @@
+   renderBlastRadiusScreenMarkdown,
+   screenBlastRadiusFindings,
+   type BlastRadiusScreenInput,
+   type BlastRadiusScreenResult,
+ } from "./blast-radius";
+ import {
+   applyFindingsCap,
+   evaluateSpendCap,
+   planReviewerWaves,
+   renderCapsMarkdown,
+   type ConcurrencyPlan,
+   type ReviewCapsRecord,
+ } from "./caps";
+ import {
+   buildFilterStats,
+   renderFilterStatsMarkdown,
+   type ReviewFilterStats,
+ } from "./filter-stats";
+ import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+ import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
++import { PREMISES_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
+ import { repairMechanicalOmissions, type FindingRepair } from "./repair";
+ import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
+ import {
+   DEFAULT_VERIFICATION_MODE,
+   FINDING_DISMISSAL_STATES,
+   MANAGED_REVIEW_MODES,
+   REVIEW_COVERAGE_STATUSES,
+   REVIEW_FINDING_CONFIDENCES,
+   REVIEW_PACKAGE_STATUSES,
+   REVIEW_TARGET_KINDS,
+   type FindingClassification,
+   type FindingDispositionState,
+   type FlowMatchResult,
+   type ManagedReviewInput,
+   type ManagedReviewManifest,
+   type ManagedReviewMode,
+   type ManagedReviewPackageResult,
+   type ManagedReviewValidationResult,
+   type NormalizedReviewFinding,
+   type ReviewCoverageEntry,
+
+--- src/review/managed.ts
+@@ 245,286 @@
+    *
+    * - `input` — the caller passed it (`--blast-radius <file>`).
+    * - `handoff` — read from the reviews root, the between-commands channel.
+    * - `package` — read from this package's own copy, which a previous ingest of
+    *   the same `--review-id` wrote there. This is the retry path.
+    * - `none` — no screen ran.
+    */
+   source: "input" | "handoff" | "package" | "none";
+   /** Findings attributed to a scope-B reviewer, before the screen. */
+   scopeBFindings: number;
+   screen?: BlastRadiusScreenResult<NormalizedReviewFinding> | undefined;
+ };
+ 
+ /** The file name every copy of the blast-radius record is read from and written to. */
+ const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
+ 
+ export async function createManagedReviewPackage(
+   input: ManagedReviewIngestInput,
+ ): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
+   const at = (input.now ?? new Date()).toISOString();
++  // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
++  const premiseClaims = parsePremiseClaims(input.premises);
+   const flowMatch = await resolvePackageFlow(input);
+   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
+   const coverage = normalizeCoverage(input.coverage, input.reviewers);
+   const report = await readReport(input);
+   const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+   const reported = await normalizeFindings({
+     report,
+     reportLabel: reportLabel(input),
+     mode: input.mode,
+     attachedToFlow: flowMatch !== null,
+     source: input.findings,
+     reviewers,
+   });
+   // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
+   // because a finding with no `id` mints the key `<reviewId>#undefined` and five
+   // of them then collide on it — which is how a round was lost to a field the
+   // report's own ordering already contained.
+   const repairs = repairMechanicalOmissions(reported);
+ 
+   // Resolved HERE rather than beside `buildManifest`, because the locator needs
+
+--- src/review/managed.ts
+@@ 339,399 @@
+   // `max_replies_total`, which reports its backlog out loud and still answers it.
+   const scoped = partitionExternalFindings(verification.retained);
+ 
+   // AC3, enforced here rather than asked for in `review-regression/SKILL.md`.
+   // The skill has said "this is enforced, not requested" since the day the
+   // screen was written, and nothing called it: a scope-B `major` about the style
+   // of an untouched hop-2 file was ingested unscreened and then blocked
+   // completion at the review gate — the opposite of the promise. It runs BEFORE
+   // the findings cap so a rejected finding cannot spend a reviewer's reading
+   // budget on its way out.
+   const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
+ 
+   // Flow 458 AC5. One defect reported by several reviewers becomes ONE finding
+   // with the highest severity (the verifier's, when it confirmed one) and every
+   // reporter in `reported_by`. After the verifier so each claim still resolved
+   // against the id it named, after the scope-B screen so a scope-B claim cannot
+   // escape it by merging into a scope-A one, and before the cap so a duplicate
+   // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
+   const deduped = mergeDuplicates(scopeB.retained);
+ 
+-  const findingsCap = applyFindingsCap(deduped.findings, {
++  // Flow 459. The premise judge, which can only hold or lower. It runs over the CANONICAL findings, after the
++  // duplicate merge (so a claim names the one record that survives) and before the cap (so a downgraded severity
++  // is the one the cap and every later reader sees). External findings are in the set: they may be challenged,
++  // which makes them a question for the operator and never a dismissal. A carried finding keeps its premise.
++  const premised = mergePremises([...deduped.findings, ...scoped.external], premiseClaims);
++  const premisedInternal = premised.findings.slice(0, deduped.findings.length);
++  const premisedExternal = premised.findings.slice(deduped.findings.length);
++
++  const findingsCap = applyFindingsCap(premisedInternal, {
+     limit: input.maxFindingsPerReviewer,
+   });
+ 
+   // What the round reported, then what the verifier removed, then what the round
+   // itself refuted — one array, one file, one gate. A separate `refuted.json`
+   // would be a second thing every consumer has to remember to read, and the
+   // consumer that forgets keeps counting zero wrong findings, which is the state
+   // this exists to leave.
+   const roundDismissed = fromRefutedSource(input.refuted, reviewers, flowMatch !== null);
+   const findings = [
+     ...findingsCap.retained,
+-    ...scoped.external,
++    ...premisedExternal,
+     ...fromVerifierRefutations(verification.refuted),
+     ...roundDismissed,
+   ];
+   assignGlobalIds(findings, reviewId);
+ 
+   // A rebuttal that cites a rule or document gets that citation looked up. A missing one
+   // is said on the finding; the finding itself is never removed.
+   await flagMissingCitations(findings, (cited) => citationExists(input.cwd, head, cited));
+ 
+   // Read BEFORE the write, because the write is what used to destroy it. The
+   // orchestrator is told to run `keryx review scope --append <package>/scope.md`
+   // at Step 3 and `review ingest` after Step 12; ingest rewrote scope.md
+   // unconditionally, and what replaced the drop table was not a blank — it was
+   // "no pre-filter scope was supplied to this package", a false statement of the
+   // same class as `dismissed-out-of-scope: 0`. When this ingest was handed its
+   // own scope the carried block is superseded and dropped; when it was not, the
+   // block is the only record of the drops and is carried forward verbatim.
+   const carried = input.scope === undefined ? await readPreFilterScopeBlock(packageDir) : undefined;
+ 
+   // AC10. Every cap that ran is on the record with a count, and every cap that
+
+--- src/review/managed.ts
+@@ 479,571 @@
+   // applied the SAME WAY whichever source produced it. It used to live inside
+   // `fromStructuredSource`, which meant the legacy parser wrote unvalidated
+   // records: `class_scope_present` was a shape check over prose while
+   // `class_scope` came from a separate extraction, so a `major` whose block
+   // named class_scope in sentences passed the guard and was persisted without
+   // the property the schema requires — and the round-2 input built from it was
+   // rejected by the same schema. One gate, one place, both paths.
+   Object.assign(manifest.artifacts, { research: "research.json", reviewerDispatch: "research.json" });
+   const contractErrors = await schemaErrors(findings);
+   if (contractErrors.length > 0) {
+     throw new Error(
+       `Refusing to record findings that do not satisfy review-finding.schema.json: ${contractErrors
+         .map((error) => `${error.path} ${error.message}`)
+         .join("; ")}`,
+     );
+   }
+ 
+   await mkdir(packageDir, { recursive: true });
+   await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
+   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
++  if (input.premises !== undefined) {
++    // The claims as received, rejected ones included: the record of what the judge said, which readers of a
++    // package without `findings.json` (the interim verdict) re-apply.
++    await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
++    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
++  }
+   if (input.scope?.files !== undefined) {
+     await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files, ...(typeof input.scope.counts?.changedLinesRetained === "number" ? { changedLines: input.scope.counts.changedLinesRetained } : {}) }, null, 2)}\n`);
+   }
+   await writeFileAtomic(
+     path.join(packageDir, "scope.md"),
+-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings) +
++    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings, renderPremiseMarkdown({ counts: premised.counts, rejections: premised.rejections, findings })) +
+       renderDuplicatesMarkdown(deduped.merges),
+   );
+   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
+   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
+   await writeFileAtomic(
+     path.join(packageDir, "findings.json"),
+     `${JSON.stringify(findings.map(toContractFinding), null, 2)}\n`,
+   );
+   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
+   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
+   // Last, and only once the package is complete. See {@link persistScreenRadius}.
+   await persistScreenRadius(packageDir, scopeB.resolved);
+ 
+   // Flow 207 AC5. The findings this round recorded as `dismissed-incorrect` —
+   // and only those — reach `.metaproject/memory/review-notes/`, the folder the
+   // roadmap records as never having been written to. Written AFTER the package,
+   // so a round refused by any gate above leaves no learning note behind claiming
+   // a model error nobody recorded.
+   //
+   // A `refuted` verdict applied in `filter` mode arrives here already carrying
+   // the verifier's method and evidence, so it is attested. A `--refuted` finding
+   // whose evidence names nobody is NOT, and {@link writeReviewNotes} returns it
+   // in `skipped` rather than writing a note: AC6 stands unchanged, and the
+   // orchestrator does not get to file a finding as its own error unattended.
+   const reviewNotes: ReviewNoteResult = await writeReviewNotes(findings, {
+     cwd: input.cwd,
+     reviewId,
+     head,
+     packagePath: path.relative(input.cwd, packageDir),
+     ...(input.now === undefined ? {} : { now: input.now }),
+   });
+ 
+   return {
+     reviewId,
+     path: path.relative(input.cwd, packageDir),
+     manifest,
+     verification: verification.counts,
+     verificationRejections: verification.rejections,
+     verificationCaps: verification.caps,
++    premise: premised.counts,
++    premiseRejections: premised.rejections,
+     caps,
+     filterStats,
+     reviewNotes,
+     // Returned as well as written into `scope.md`, on the same rule the caps
+     // record follows: a removal an operator has to open a file to discover reads,
+     // on the terminal they were already looking at, as "there was nothing more".
+     scopeBScreen: scopeB.record,
+     duplicates: deduped.merges,
+   };
+ }
+ 
+ /**
+  * Run the AC3 screen over the findings scope B raised, or refuse to record them.
+  *
+  * Three outcomes, and the third is the point:
+  *
+  * 1. **A blast-radius record and scope-B findings** — the screen runs.
+  *    {@link screenBlastRadiusFindings} keeps the regression claims and returns
+  *    the rest with the rule that refused each one; the rejected findings do not
+  *    reach `findings.json`, and every one of them is named in `scope.md`.
+
+--- src/review/managed.ts
+@@ 1545,1589 @@
+   }
+   // Written only when present, on both. `global_id` is absent on nothing the
+   // current pipeline writes but stays optional so a legacy record read back and
+   // rewritten does not acquire an invented key; `disposition` is absent unless
+   // an outcome was actually recorded, because writing `{state: "unknown"}` onto
+   // every finding says nothing while implying somebody decided — the exact
+   // failure `classification: valid_followup` on 82 of 83 records already is.
+   if (finding.global_id !== undefined) {
+     record.global_id = finding.global_id;
+   }
+   if (finding.disposition !== undefined) {
+     record.disposition = finding.disposition;
+   }
+   // Same rule, same reason: written only when an independent check actually
+   // happened. A finding with no `verification` is one nobody checked, which is
+   // every one of the 83 records on disk — and is NOT the same as "unverified and
+   // therefore droppable".
+   if (finding.verification !== undefined) {
+     record.verification = finding.verification;
+   }
++  // Flow 459, same rule: written only when a premise judge actually ruled. A held finding without this field would
++  // read as an ordinary open one, so the projection must not drop it.
++  if (finding.premise !== undefined) {
++    record.premise = finding.premise;
++  }
+   // Same rule again, and this one is not cosmetic: `source` is what makes the
+   // verifier unable to refute a comment (AC10), keeps the findings cap off it
+   // (AC9), and keeps the completion gate closed while it is unanswered (AC5). A
+   // projection that dropped it would leave a finding that looks internal and
+   // silently acquires all three of the behaviours those criteria forbid.
+   if (finding.source !== undefined) {
+     record.source = finding.source;
+   }
+   if (finding.external_ref !== undefined) {
+     record.external_ref = finding.external_ref;
+   }
+   // Written by the duplicate merge only, as a pair.
+   if (finding.reported_by !== undefined && finding.reported_by.length > 1) {
+     record.reported_by = finding.reported_by;
+   }
+   if (finding.merged_from !== undefined && finding.merged_from.length > 0) {
+     record.merged_from = finding.merged_from;
+   }
+   return record;
+ }
+
+--- src/review/managed.ts
+@@ 1877,1942 @@
+     // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
+     throw new Error(
+       `${reportLabel} carries a keryx:findings block that is not valid JSON: ${
+         error instanceof Error ? error.message : String(error)
+       }`,
+     );
+   }
+   if (!Array.isArray(parsed) && !isReviewerResult(parsed)) {
+     // Named for what it is. Passing a non-array through produced a schema
+     // failure about missing `id`/`impact`/`evidence`, which sends the reader
+     // looking for fields in a block that was never a finding.
+     throw new Error(
+       `${reportLabel} carries a keryx:findings block that is ${describeJson(
+         parsed,
+       )}, not an array of findings or a { reviewer, findings } result.`,
+     );
+   }
+   return parsed as ReviewFindingsSource;
+ }
+ 
++const EMBEDDED_PREMISES_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:premises\b[^\n]*$/gm;
++
++/**
++ * `--premises` input (flow 459): the bare `{ judge, model?, premises }` object, or a report / judge reply that carries it
++ * in one fenced `keryx:premises` block (what the review-premise skill prints). Anything else throws, and a block that is
++ * present but not valid JSON is an error, never a silent fall-through. The parsed value is not shape-checked here.
++ */
++export function parseEmbeddedPremises(text: string, label: string): unknown {
++  const fences = [...text.matchAll(EMBEDDED_PREMISES_FENCE)];
++  if (fences.length > 1) {
++    throw new Error(`${label} carries ${fences.length} keryx:premises blocks; exactly one is allowed. Nothing was merged.`);
++  }
++  const fence = fences[0];
++  const body = fence === undefined ? text : embeddedBlockBody(text, fence);
++  try {
++    return JSON.parse(body) as unknown;
++  } catch (error) {
++    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
++    throw new Error(
++      fence === undefined
++        ? `${label} is neither JSON nor a report with a keryx:premises block: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`
++        : `${label} carries a keryx:premises block that is not valid JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
++    );
++  }
++}
++
+ /** The text between an opening fence and its closing fence of the same marker. */
+ function embeddedBlockBody(report: string, fence: RegExpExecArray): string {
+   const marker = fence[1] ?? "```";
+   const char = marker.startsWith("~") ? "~" : "`";
+   const afterOpen = report.slice((fence.index ?? 0) + fence[0].length).replace(/^\r?\n/, "");
+   const closing = afterOpen.match(new RegExp(`^ {0,3}\\${char}{${marker.length},}\\s*$`, "m"));
+   return closing?.index === undefined ? afterOpen : afterOpen.slice(0, closing.index);
+ }
+ 
+ function describeJson(value: unknown): string {
+   if (value === null) {
+     return "JSON null";
+   }
+   return `a JSON ${typeof value}`;
+ }
+ 
+ /**
+  * Flatten whatever the producer handed over into one array of findings.
+  *
+  * Both the normalized array and the reviewer's own `{ reviewer, findings }`
+
+--- src/review/managed.ts
+@@ 2466,2531 @@
+  * 1. `input.scope` — the whole `keryx review scope --json` document, counts and
+  *    per-drop reasons together, rendered by this writer. This is the supported
+  *    path and the only one that can satisfy AC5, because the counts-only form
+  *    carries no reason for any individual drop.
+  * 2. A `## Pre-filter scope` block already in the package's scope.md, carried
+  *    forward verbatim. This exists so the ORDER the orchestrator is told to run
+  *    things in cannot destroy the record: it appends the block at Step 3 and
+  *    ingests after Step 12.
+  */
+ function renderScope(
+   input: ManagedReviewInput,
+   flowMatch: FlowMatchResult | null,
+   at: string,
+   verification: VerificationMergeResult<NormalizedReviewFinding>,
+   carriedPreFilter: string | undefined,
+   caps: ReviewCapsRecord,
+   externalReclaims: readonly ExternalReclaim[] = [],
+   scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
+   filterStats?: ReviewFilterStats | undefined,
+   allFindings: readonly StructuredReviewFinding[] = [],
++  premiseBlock = "",
+ ): string {
+   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
+   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
+   const head = `# Review Scope
+ 
+ target: ${input.target.kind}
+ ref: ${input.target.ref}
+ mode: ${input.mode}
+ flow: ${flowMatch ? `${flowMatch.id} (${flowMatch.reason})` : "none"}
+ created_at: ${at}
+ context_mode: light
+ 
+ ${renderStageCountsMarkdown({
+   preFilter,
+   preFilterDrops: drops,
+   preFilterCarried: carriedPreFilter !== undefined,
+   verification: verification.counts,
+   rejections: verification.rejections,
+   caps: verification.caps,
+ })}
+ 
+ ${renderCapsMarkdown(caps)}
+ ${renderScopeBScreenMarkdown(scopeBScreen)}${
+     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
+-  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
++  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${premiseBlock}`;
+   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
+ }
+ 
+ /**
+  * The AC3 screen, on the record next to the caps that removed findings beside it.
+  *
+  * A screen that drops findings silently is the failure mode this whole programme
+  * exists to end, so the block is written on every ingest — including the one
+  * where the screen did not run, which says so in those words rather than
+  * printing `rejected: 0`.
+  */
+ const BLAST_RADIUS_RECORD_SOURCE: Record<ScopeBScreenRecord["source"], string> = {
+   input: "supplied by the caller (--blast-radius)",
+   handoff: `read from ${BLAST_RADIUS_ARTIFACT} in the reviews root, and consumed`,
+   package: `read from ${BLAST_RADIUS_ARTIFACT} in this package`,
+   none: "none",
+ };
+ 
+ function renderScopeBScreenMarkdown(record: ScopeBScreenRecord): string {
+   const screen = record.screen;
+
+--- src/review/operator-decisions.ts
+@@ 1,167 @@
+ // Operator decisions that relax a review gate (flow 457, T7): `<package>/operator-decisions.json`.
+ //
+ // A mutation waiver ("Not run: mutation pass" on an attended review) and a reviewer-set override (a smaller set than
+ // `keryx review required` names, or mode diff) used to be accepted from any `operatorQuote` in the dispatch JSON —
+ // which the agent writes. On a package stamped by `review start` (./run-profile.ts) the gate now accepts them only
+ // when one of these records exists, and only two writers produce one: the `review_waive_mutation` /
+ // `review_override_reviewers` cards in keryx shell (confirmedVia tui-card|remote-card), and `keryx review
+ // waive-mutation|override-reviewers` at a terminal (confirmedVia terminal).
+ 
+ import path from "node:path";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import type { ConfirmedVia } from "./types";
+ 
+ export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
+ 
+-export const OPERATOR_DECISION_KINDS = ["mutation-waiver", "reviewer-override"] as const;
+-export type OperatorDecisionKind = (typeof OPERATOR_DECISION_KINDS)[number];
++export const OPERATOR_DECISION_KINDS = ["mutation-waiver", "reviewer-override", "premise-question"] as const;
++/** Every kind the file may hold. `premise-question` (flow 459) is a different record: see {@link PremiseQuestionDecision}. */
++export type AnyOperatorDecisionKind = (typeof OPERATOR_DECISION_KINDS)[number];
++/** The kinds that relax a gate and carry the quote/subject shape. */
++export type OperatorDecisionKind = Exclude<AnyOperatorDecisionKind, "premise-question">;
+ 
+ /** How the operator's words reached the package: a shell card, its remote mirror, or a terminal prompt. */
+ export type OperatorDecisionVia = ConfirmedVia | "terminal";
+ const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal"];
+ 
+ /**
+  * What the card or the terminal showed the operator (security review M4): the head the package was at, and the
+  * mutant ids left unrun (mutation waiver) or the required reviewers left out (override). The gate accepts a decision
+  * only for that head and only while what is waived now is a subset of what was shown: a new head, a new mutant or
+  * another dropped reviewer needs the operator again.
+  */
+ export type OperatorDecisionSubject = { head?: string | undefined; items: string[] };
+ 
+ export type OperatorDecision = {
+   kind: OperatorDecisionKind;
+   quote: string;
+   reason: string;
+   confirmedVia: OperatorDecisionVia;
+   at: string;
+   subject?: OperatorDecisionSubject | undefined;
+ };
+ 
+-export type OperatorDecisionsFile = { schemaVersion: 1; decisions: OperatorDecision[] };
++/**
++ * The operator's answer to a held finding (flow 459): `keryx review decide-premise` / the `review_decide_premise` card.
++ * `uphold` returns the finding to kept at its original severity; `dismiss` records `dismissed-incorrect` with `reason`
++ * as the evidence. `finding` is the finding's `global_id` or `id`; `actor` is who answered.
++ */
++export type PremiseQuestionDecision = {
++  kind: "premise-question";
++  finding: string;
++  answer: "uphold" | "dismiss";
++  reason: string;
++  at: string;
++  actor: string;
++  confirmedVia?: OperatorDecisionVia | undefined;
++};
++
++export type OperatorDecisionsFile = { schemaVersion: 1; decisions: Array<OperatorDecision | PremiseQuestionDecision> };
+ 
+ const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+ 
++function validPremise(entry: unknown): entry is PremiseQuestionDecision {
++  if (entry === null || typeof entry !== "object") return false;
++  const d = entry as Record<string, unknown>;
++  return (
++    d.kind === "premise-question" &&
++    text(d.finding) &&
++    (d.answer === "uphold" || d.answer === "dismiss") &&
++    text(d.reason) &&
++    text(d.at) &&
++    text(d.actor) &&
++    (d.confirmedVia === undefined || VIAS.includes(d.confirmedVia as OperatorDecisionVia))
++  );
++}
++
+ function valid(entry: unknown): entry is OperatorDecision {
+   if (entry === null || typeof entry !== "object") return false;
+   const d = entry as Record<string, unknown>;
+   return (
+     (OPERATOR_DECISION_KINDS as readonly unknown[]).includes(d.kind) &&
++    d.kind !== "premise-question" &&
+     text(d.quote) &&
+     text(d.reason) &&
+     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
+     text(d.at) &&
+     (d.subject === undefined || validSubject(d.subject))
+   );
+ }
+ 
+-export async function readOperatorDecisions(packageDir: string): Promise<OperatorDecision[]> {
++async function readEntries(packageDir: string): Promise<unknown[]> {
+   const file = await readJsonFileOr<unknown>(path.join(packageDir, OPERATOR_DECISIONS_FILE), undefined);
+-  const list = file !== null && typeof file === "object" && Array.isArray((file as { decisions?: unknown }).decisions) ? (file as { decisions: unknown[] }).decisions : [];
+-  return list.filter(valid);
++  return file !== null && typeof file === "object" && Array.isArray((file as { decisions?: unknown }).decisions) ? (file as { decisions: unknown[] }).decisions : [];
++}
++
++/** The gate-relaxing decisions (mutation waiver, reviewer override). A `premise-question` record is read by {@link readPremiseDecisions}. */
++export async function readOperatorDecisions(packageDir: string): Promise<OperatorDecision[]> {
++  return (await readEntries(packageDir)).filter(valid);
++}
++
++/** The premise-question decisions the package holds, oldest first. */
++export async function readPremiseDecisions(packageDir: string): Promise<PremiseQuestionDecision[]> {
++  return (await readEntries(packageDir)).filter(validPremise);
++}
++
++/** The latest decision naming `finding` (its `global_id` or `id`), or undefined while the operator has not answered. */
++export function premiseDecisionFor(decisions: readonly PremiseQuestionDecision[], ...findingKeys: ReadonlyArray<string | undefined>): PremiseQuestionDecision | undefined {
++  const keys = new Set(findingKeys.filter((key): key is string => key !== undefined && key !== ""));
++  return decisions.filter((decision) => keys.has(decision.finding)).at(-1);
++}
++
++/** Whether the operator has answered the premise question of `finding`. */
++export async function hasPremiseDecision(packageDir: string, finding: string): Promise<boolean> {
++  return premiseDecisionFor(await readPremiseDecisions(packageDir), finding) !== undefined;
++}
++
++/** Appends a premise-question decision, keeping every other entry the file holds. The CLI command and the card (flow 459 lane L2) call this. */
++export async function recordPremiseDecision(packageDir: string, decision: PremiseQuestionDecision): Promise<PremiseQuestionDecision> {
++  if (!validPremise(decision)) throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the time and who answered");
++  const entries = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry));
++  const kept: PremiseQuestionDecision = { ...decision, finding: decision.finding.trim(), reason: decision.reason.trim() };
++  const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...(entries as Array<OperatorDecision | PremiseQuestionDecision>), kept] };
++  await writeFileAtomic(path.join(packageDir, OPERATOR_DECISIONS_FILE), `${JSON.stringify(body, null, 2)}\n`);
++  return kept;
+ }
+ 
+ function validSubject(value: unknown): value is OperatorDecisionSubject {
+   if (value === null || typeof value !== "object") return false;
+   const subject = value as Record<string, unknown>;
+   return Array.isArray(subject.items) && subject.items.every((item) => typeof item === "string") && (subject.head === undefined || typeof subject.head === "string");
+ }
+ 
+ /** Whether `decision` was shown at least what `now` waives, at the same head. A decision without a subject covers nothing. */
+ export function decisionCovers(decision: OperatorDecision, now: OperatorDecisionSubject): boolean {
+   if (!validSubject(decision.subject)) return false;
+   if ((decision.subject.head ?? "") !== (now.head ?? "")) return false;
+   const shown = new Set(decision.subject.items);
+   return now.items.every((item) => shown.has(item));
+ }
+ 
+ /**
+  * The latest valid decision of `kind`, or undefined. With `now`, only a decision bound to that head whose shown items
+  * include every item waived now (`decisionCovers`).
+  */
+ export async function confirmedDecision(packageDir: string, kind: OperatorDecisionKind, now?: OperatorDecisionSubject): Promise<OperatorDecision | undefined> {
+   return (await readOperatorDecisions(packageDir)).filter((decision) => decision.kind === kind && (now === undefined || decisionCovers(decision, now))).at(-1);
+ }
+ 
+ export async function recordOperatorDecision(packageDir: string, decision: OperatorDecision): Promise<OperatorDecision> {
+   if (!valid(decision)) throw new Error("an operator decision needs a kind, the operator's words, a reason, how it was confirmed and the time");
+-  const decisions = await readOperatorDecisions(packageDir);
++  // The whole valid file, premise answers included: writing back only the gate decisions would drop an operator's answer.
++  const decisions = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry)) as Array<OperatorDecision | PremiseQuestionDecision>;
+   const subject = decision.subject === undefined ? undefined : { ...(decision.subject.head === undefined ? {} : { head: decision.subject.head }), items: [...new Set(decision.subject.items)].sort() };
+   const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...decisions, { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...(subject === undefined ? {} : { subject }) }] };
+   await writeFileAtomic(path.join(packageDir, OPERATOR_DECISIONS_FILE), `${JSON.stringify(body, null, 2)}\n`);
+   return decision;
+ }
+ 
+ /** The card or command that records `kind`, for a refusal to name. */
+-export function decisionWriters(kind: OperatorDecisionKind, packageArg = "<review-dir>"): string {
++export function decisionWriters(kind: AnyOperatorDecisionKind, packageArg = "<review-dir>"): string {
++  if (kind === "premise-question") {
++    return `in keryx shell, call the review_decide_premise tool (the operator answers a card); in a terminal, run \`keryx review decide-premise --package ${packageArg} --finding <id> --answer uphold|dismiss --reason "<why>"\``;
++  }
+   return kind === "mutation-waiver"
+     ? `in keryx shell, call the review_waive_mutation tool (the operator answers a card); in a terminal, run \`keryx review waive-mutation --package ${packageArg} --reason "<why>"\``
+     : `in keryx shell, call the review_override_reviewers tool (the operator answers a card); in a terminal, run \`keryx review override-reviewers --package ${packageArg} --reason "<why>"\``;
+ }
+
+--- src/review/premise-question.ts
+@@ 1,64 @@
++// Looking up the finding an operator answers (flow 459): shared by `keryx review decide-premise` and the
++// `review_decide_premise` card, so both refuse the same things and show the same facts.
++
++import path from "node:path";
++import { readJsonFileOr } from "../lib/json";
++import { premiseDecisionFor, readPremiseDecisions } from "./operator-decisions";
++import { PREMISES_FILE, isHeldVerdict, premiseHoldState } from "./premise";
++
++export type HeldFinding = {
++  /** The key the decision is recorded under: the finding's `global_id`, else its `id`. */
++  key: string;
++  severity: string;
++  problem: string;
++  verdict: string;
++  question: string;
++  /** The operator's earlier answer, when the question was already answered (a later answer replaces it). */
++  answered?: "uphold" | "dismiss" | undefined;
++};
++
++export type HeldFindingLookup = { ok: true; finding: HeldFinding } | { ok: false; refusal: string };
++
++const obj = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
++const str = (value: unknown): string | undefined => (typeof value === "string" && value.trim() !== "" ? value.trim() : undefined);
++
++/**
++ * The held finding `ref` names (its `global_id` or `id`) in the package's findings.json. Refuses an unknown finding, an
++ * ambiguous id and a finding the premise judge did not hold. The judge's claim in research-evidence/premises.json counts
++ * when the finding record carries no premise yet (the verdict applies the file the same way).
++ */
++export async function findHeldFinding(packageDir: string, ref: string): Promise<HeldFindingLookup> {
++  const wanted = ref.trim();
++  if (wanted === "") return { ok: false, refusal: "a finding id is required" };
++  const findings = await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), undefined);
++  const records = Array.isArray(findings) ? findings.map(obj).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [];
++  const named = records.filter((record) => str(record["global_id"]) === wanted || str(record["id"]) === wanted);
++  if (named.length === 0) return { ok: false, refusal: `No finding "${wanted}" in ${path.basename(packageDir)}/findings.json. Name a finding by its global_id or id.` };
++  const keys = new Set(named.map((record) => str(record["global_id"]) ?? str(record["id"]) ?? wanted));
++  if (keys.size > 1) return { ok: false, refusal: `"${wanted}" names ${keys.size} findings (${[...keys].join(", ")}); name one by its global_id.` };
++  const record = named[0] as Record<string, unknown>;
++  const key = [...keys][0] as string;
++  const decisions = await readPremiseDecisions(packageDir);
++  const claims = obj(await readJsonFileOr<unknown>(path.join(packageDir, PREMISES_FILE), undefined));
++  const claim = Array.isArray(claims?.["premises"])
++    ? (claims["premises"] as unknown[]).map(obj).find((entry) => entry !== undefined && [str(record["global_id"]), str(record["id"])].includes(str(entry["finding_id"]))) 
++    : undefined;
++  const premise = obj(record["premise"]) ?? (claim !== undefined && isHeldVerdict(claim["verdict"]) ? claim : undefined);
++  if (premise === undefined || !isHeldVerdict(premise["verdict"])) {
++    return { ok: false, refusal: `Finding ${key} is not held: the premise judge did not challenge it, so there is no premise question to answer.` };
++  }
++  const answered = premiseDecisionFor(decisions, str(record["global_id"]), str(record["id"]))?.answer;
++  // `premiseHoldState` reads the record's own `operator` answer as well; both mean "answered".
++  const state = premiseHoldState({ ...record, premise }, decisions);
++  return {
++    ok: true,
++    finding: {
++      key,
++      severity: str(record["severity"]) ?? "unknown",
++      problem: str(record["problem"]) ?? str(record["summary"]) ?? str(record["title"]) ?? "(no problem statement)",
++      verdict: str(premise["verdict"]) ?? "challenged",
++      question: str(premise["question"]) ?? "(the judge recorded no question)",
++      ...(state === "awaiting" ? {} : { answered: answered ?? (state === "upheld" ? "uphold" : "dismiss") }),
++    },
++  };
++}
+
+--- src/review/premise.ts
+@@ 1,555 @@
++/**
++ * The premise merge: what a premise judgement may do to a finding (flow 459, AC1/AC2).
++ *
++ * ## Why a second delete-only judge
++ *
++ * The verifier asks whether a finding's FACTS hold: it runs something, and "`dir=\"ltr\"` is
++ * hard-coded" always reproduces. It cannot ask whether the finding's REQUEST is right — whether the
++ * hard-coded value is a deliberate choice that accepted platform practice supports (media controls
++ * and timelines do not mirror in RTL). A finding that passed every reviewer law and the verifier was
++ * implemented, reviewed twice for its implementation only, and closed by the owner. `review-premise`
++ * asks the missing question on a clean context, claim first, and answers `upheld`, `downgraded`,
++ * `challenged` or `owner-decision`.
++ *
++ * ## The invariant this module holds
++ *
++ * **Nothing here adds a finding, raises a severity, edits a finding's text, or dismisses a finding.**
++ * The merged record is the ORIGINAL finding plus a `premise` and, for `downgraded` only, a strictly
++ * lower `severity`. `challenged` and `owner-decision` do not remove anything: they HOLD the finding
++ * (see {@link premiseHoldState}) until the operator answers, and only the operator's `dismiss` ends
++ * its life. As in the verifier merge, every rejection path leaves the finding exactly as it was: a
++ * claim can cost a verdict, never a finding.
++ *
++ * The judge is never the reviewer that raised the finding (nor one of the reviewers a duplicate merge
++ * folded into it): the reporter is the one actor whose agreement says nothing about the premise.
++ */
++
++import { actorKey } from "./verification";
++import {
++  HELD_PREMISE_VERDICTS,
++  PREMISE_VERDICTS,
++  REVIEW_FINDING_SEVERITIES,
++  type PremiseClaimInput,
++  type PremiseIntentSignal,
++  type PremisePracticeSource,
++  type PremiseVerdict,
++  type ReviewFindingPremise,
++  type ReviewFindingSeverity,
++  type StructuredReviewFinding,
++} from "./types";
++import type { PremiseQuestionDecision } from "./operator-decisions";
++
++/** The only properties a claim may carry. Anything else is a shape the judge has no authority over. */
++export const PREMISE_CLAIM_PROPERTIES = [
++  "finding_id",
++  "verdict",
++  "severity",
++  "intent_signals",
++  "practice_sources",
++  "reasoning",
++  "question",
++  "options",
++] as const;
++
++/** The properties of the claims file itself. */
++export const PREMISE_FILE_PROPERTIES = ["judge", "model", "premises"] as const;
++
++/** Where the claims are stored, relative to the package directory. */
++export const PREMISES_FILE = "research-evidence/premises.json";
++
++/** Why a claim was discarded. Every one of these leaves the finding as it was. */
++export const PREMISE_REJECTION_REASONS = [
++  "no-judge",
++  "unknown-property",
++  "unknown-finding",
++  "ambiguous-finding",
++  "already-judged",
++  "below-minor",
++  "unknown-verdict",
++  "self-judgement",
++  "external-downgrade",
++  "severity-without-downgrade",
++  "not-a-downgrade",
++  "downgrade-below-threshold",
++  "raise-severity",
++  "malformed-field",
++  "challenged-without-evidence",
++  "downgrade-without-evidence",
++  "held-without-question",
++  "owner-decision-without-options",
++  "duplicate-claim",
++] as const;
++export type PremiseRejectionReason = (typeof PREMISE_REJECTION_REASONS)[number];
++
++export type PremiseRejection = {
++  /** The finding the claim named, verbatim, so an unresolvable one is still legible. */
++  finding: string;
++  reason: PremiseRejectionReason;
++  /** What was wrong, in words, rendered into the review record. */
++  detail: string;
++};
++
++export type PremiseCounts = {
++  judge?: string | undefined;
++  /** Claims received, including the ones discarded. */
++  claims: number;
++  /** Claims whose verdict reached a finding. `claims = applied + rejected`. */
++  applied: number;
++  rejected: number;
++  /** The rest count findings that carry a premise afterwards, carried ones included. */
++  upheld: number;
++  downgraded: number;
++  challenged: number;
++  ownerDecision: number;
++  /** `challenged + ownerDecision`: findings waiting for an operator decision. */
++  held: number;
++  findingsIn: number;
++};
++
++export type PremiseMergeResult<T> = {
++  /** Every input finding, in order: nothing is removed here. */
++  findings: T[];
++  rejections: PremiseRejection[];
++  counts: PremiseCounts;
++};
++
++/** A parsed claims file: the judge named once, the claims flattened. */
++export type ParsedPremiseClaims = {
++  judge?: string | undefined;
++  model?: string | undefined;
++  claims: PremiseClaimInput[];
++};
++
++const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
++const present = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
++
++/**
++ * Read a premise claims file: a bare object `{ judge, model?, premises: [...] }`. A bare array is refused
++ * because it names no judge, and the never-judge-your-own-finding rule cannot be checked against nobody.
++ */
++export function parsePremiseClaims(source: unknown): ParsedPremiseClaims | undefined {
++  if (source === undefined) {
++    return undefined;
++  }
++  if (!isRecord(source)) {
++    throw new Error(
++      "A premise result must be an object `{ judge, model?, premises: [...] }`, not an array or a bare value. Nothing was merged.",
++    );
++  }
++  const extra = Object.keys(source).filter((key) => !(PREMISE_FILE_PROPERTIES as readonly string[]).includes(key));
++  if (extra.length > 0) {
++    throw new Error(
++      `A premise result carries ${extra.sort().join(", ")}, which it may not: only ${PREMISE_FILE_PROPERTIES.join(", ")}. Nothing was merged.`,
++    );
++  }
++  if (!Array.isArray(source.premises)) {
++    throw new Error("A premise result needs `premises: [...]`. Nothing was merged.");
++  }
++  const claims = source.premises.map((claim): PremiseClaimInput => (isRecord(claim) ? { ...claim } : { finding_id: "<not an object>", __invalid: claim }));
++  return {
++    ...(present(source.judge) ? { judge: source.judge.trim() } : {}),
++    ...(present(source.model) ? { model: source.model.trim() } : {}),
++    claims,
++  };
++}
++
++export function isPremiseVerdict(value: unknown): value is PremiseVerdict {
++  return typeof value === "string" && (PREMISE_VERDICTS as readonly string[]).includes(value);
++}
++
++/** Whether a verdict holds the finding for the operator. */
++export function isHeldVerdict(verdict: unknown): boolean {
++  return typeof verdict === "string" && (HELD_PREMISE_VERDICTS as readonly string[]).includes(verdict);
++}
++
++function severityRank(severity: ReviewFindingSeverity): number {
++  // REVIEW_FINDING_SEVERITIES is ordered blocker-first, so a lower index is worse.
++  return REVIEW_FINDING_SEVERITIES.length - REVIEW_FINDING_SEVERITIES.indexOf(severity);
++}
++
++function isSeverity(value: unknown): value is ReviewFindingSeverity {
++  return typeof value === "string" && (REVIEW_FINDING_SEVERITIES as readonly string[]).includes(value);
++}
++
++function claimName(claim: PremiseClaimInput): string {
++  return typeof claim.finding_id === "string" && claim.finding_id !== "" ? claim.finding_id : "<unnamed>";
++}
++
++type Field<V> = { ok: true; value: V | undefined } | { ok: false; detail: string };
++
++function signalList<V extends Record<string, string>>(value: unknown, field: string, keys: readonly [string, string]): Field<V[]> {
++  if (value === undefined) {
++    return { ok: true, value: undefined };
++  }
++  if (!Array.isArray(value)) {
++    return { ok: false, detail: `\`${field}\` must be an array of { ${keys[0]}, ${keys[1]} }.` };
++  }
++  const out: V[] = [];
++  for (const entry of value) {
++    if (!isRecord(entry) || Object.keys(entry).some((key) => !keys.includes(key)) || !present(entry[keys[0]]) || !present(entry[keys[1]])) {
++      return { ok: false, detail: `every \`${field}\` entry needs exactly a non-empty ${keys[0]} and ${keys[1]}.` };
++    }
++    out.push({ [keys[0]]: (entry[keys[0]] as string).trim(), [keys[1]]: (entry[keys[1]] as string).trim() } as V);
++  }
++  return { ok: true, value: out };
++}
++
++type Accepted<T> = { finding: T; premise: ReviewFindingPremise };
++
++/**
++ * Apply premise claims to findings, deleting nothing and adding nothing.
++ *
++ * The findings are not mutated: each returned entry is the original, or a new object built from the
++ * original plus a `premise` (and, for `downgraded`, the lower severity). A finding that already carries
++ * a premise (carried into a delta round) keeps it, and a claim naming it is rejected as `already-judged`.
++ */
++export function mergePremises<T extends StructuredReviewFinding>(
++  findings: readonly T[],
++  parsed: ParsedPremiseClaims | undefined,
++): PremiseMergeResult<T> {
++  const claims = parsed?.claims ?? [];
++  const judge = parsed?.judge;
++  const rejections: PremiseRejection[] = [];
++  const accepted = new Map<string, Array<Accepted<T>>>();
++
++  for (const claim of claims) {
++    const name = claimName(claim);
++    const reject = (reason: PremiseRejectionReason, detail: string): void => {
++      rejections.push({ finding: name, reason, detail });
++    };
++    if (judge === undefined || actorKey(judge) === "") {
++      reject("no-judge", "the premise file names no judge, so the never-judge-your-own-finding rule cannot be checked.");
++      continue;
++    }
++    const extra = Object.keys(claim)
++      .filter((key) => !(PREMISE_CLAIM_PROPERTIES as readonly string[]).includes(key))
++      .sort();
++    if (extra.length > 0) {
++      // Discarded WHOLE: a judge that tried to carry a property it has no authority over has told us what it
++      // believes it may do, and taking the verdict from it anyway would accept the half we happen to allow.
++      reject("unknown-property", `the claim carried ${extra.join(", ")}. A premise judge can only hold or lower; it cannot add a finding, raise a severity, or change a finding's text.`);
++      continue;
++    }
++
++    const matches = findings.filter((finding) => finding.global_id === claim.finding_id || finding.id === claim.finding_id);
++    if (matches.length === 0) {
++      reject("unknown-finding", "this round reported no such finding. A premise judge cannot introduce one.");
++      continue;
++    }
++    if (matches.length > 1) {
++      reject("ambiguous-finding", `names ${matches.length} findings; use the global_id (${matches.map((finding) => finding.global_id ?? finding.id).join(", ")}).`);
++      continue;
++    }
++    const target = matches[0] as T;
++    if (target.premise !== undefined) {
++      reject("already-judged", "this finding already carries a premise (carried from an earlier round); it is kept, not re-judged.");
++      continue;
++    }
++    if (target.severity === "info") {
++      reject("below-minor", "premise judgement covers findings of severity minor and above; an `info` finding asks for nothing to act on.");
++      continue;
++    }
++    if (!isPremiseVerdict(claim.verdict)) {
++      reject("unknown-verdict", `verdict ${JSON.stringify(claim.verdict)} is not one of ${PREMISE_VERDICTS.join(", ")}.`);
++      continue;
++    }
++    const verdict = claim.verdict;
++    const raisedBy = [target.reviewer, ...(target.reported_by ?? [])];
++    if (raisedBy.some((reviewer) => actorKey(reviewer) === actorKey(judge))) {
++      reject("self-judgement", `${judge} raised this finding (recorded as ${raisedBy.join(", ")}) and cannot judge its premise. Dispatch a different judge.`);
++      continue;
++    }
++
++    let severity: ReviewFindingSeverity | undefined;
++    if (claim.severity !== undefined && verdict !== "downgraded") {
++      reject("severity-without-downgrade", `\`severity\` is only meaningful with \`downgraded\`, and this verdict is \`${verdict}\`.`);
++      continue;
++    }
++    if (verdict === "downgraded") {
++      if (target.source === "external") {
++        reject("external-downgrade", "a comment somebody else left on the PR is not re-graded by a machine: challenge it with a question instead.");
++        continue;
++      }
++      if (!isSeverity(claim.severity)) {
++        reject("not-a-downgrade", `\`downgraded\` needs a \`severity\` (one of ${REVIEW_FINDING_SEVERITIES.join(", ")}) strictly lower than ${target.severity}.`);
++        continue;
++      }
++      if (severityRank(claim.severity) > severityRank(target.severity)) {
++        reject("raise-severity", `${claim.severity} is higher than the finding's ${target.severity}. A premise judge can only lower a severity.`);
++        continue;
++      }
++      if (claim.severity === target.severity) {
++        reject("not-a-downgrade", `\`downgraded\` to ${claim.severity} changes nothing: the finding is already ${target.severity}. Use \`upheld\`.`);
++        continue;
++      }
++      // `minor` is the fix-loop threshold (flow-orchestrator Phase 4): a downgrade may shrink a
++      // finding, never take it out of the fix loop. Below it only the operator decides.
++      if (claim.severity === "info") {
++        reject("downgrade-below-threshold", "`downgraded` stops at `minor`, the fix-loop threshold: a premise judge may shrink a finding, never take it out of the fix. Hold it with `challenged` or `owner-decision` instead.");
++        continue;
++      }
++      severity = claim.severity;
++    }
++
++    const signals = signalList<PremiseIntentSignal>(claim.intent_signals, "intent_signals", ["ref", "says"]);
++    if (!signals.ok) {
++      reject("malformed-field", signals.detail);
++      continue;
++    }
++    const sources = signalList<PremisePracticeSource>(claim.practice_sources, "practice_sources", ["name", "says"]);
++    if (!sources.ok) {
++      reject("malformed-field", sources.detail);
++      continue;
++    }
++    if (claim.reasoning !== undefined && typeof claim.reasoning !== "string") {
++      reject("malformed-field", "`reasoning` must be a string.");
++      continue;
++    }
++
++    // A downgrade is a premise judgement too, never a re-grade against the severity rubric: the
++    // reviewer and the verifier already own the rubric. Without a cited intent signal or practice
++    // source, a downgrade is the judge re-scoring a finding it has no new evidence about.
++    if (verdict === "downgraded" && (signals.value?.length ?? 0) + (sources.value?.length ?? 0) === 0) {
++      reject("downgrade-without-evidence", "`downgraded` needs at least one intent signal (a cited ref) or practice source (a named guideline) showing the defect is smaller than reported. Re-grading against the severity rubric is not the premise judge's call: use `upheld`.");
++      continue;
++    }
++
++    let question: string | undefined;
++    let options: string[] | undefined;
++    if (isHeldVerdict(verdict)) {
++      if (verdict === "challenged" && (signals.value?.length ?? 0) + (sources.value?.length ?? 0) === 0) {
++        reject("challenged-without-evidence", "`challenged` needs at least one intent signal (a cited ref) or practice source (a named guideline). A challenge with neither is the reviewer's argument turned around.");
++        continue;
++      }
++      if (!present(claim.question)) {
++        reject("held-without-question", `\`${verdict}\` holds the finding for the operator, who needs a question to answer.`);
++        continue;
++      }
++      question = claim.question.trim();
++      if (verdict === "owner-decision") {
++        const raw = claim.options;
++        if (!Array.isArray(raw) || raw.length < 2 || !raw.every(present)) {
++          reject("owner-decision-without-options", "`owner-decision` needs at least two options, each a non-empty string, so the operator is choosing rather than guessing.");
++          continue;
++        }
++        options = raw.map((option: string) => option.trim());
++      } else if (Array.isArray(claim.options) && claim.options.length >= 2 && claim.options.every(present)) {
++        options = (claim.options as string[]).map((option) => option.trim());
++      }
++    }
++
++    const premise: ReviewFindingPremise = {
++      verdict,
++      judge,
++      ...(parsed?.model === undefined ? {} : { model: parsed.model }),
++      ...(severity === undefined ? {} : { severity, original_severity: target.severity }),
++      ...(signals.value === undefined || signals.value.length === 0 ? {} : { intent_signals: signals.value }),
++      ...(sources.value === undefined || sources.value.length === 0 ? {} : { practice_sources: sources.value }),
++      ...(present(claim.reasoning) ? { reasoning: claim.reasoning.trim() } : {}),
++      ...(question === undefined ? {} : { question }),
++      ...(options === undefined ? {} : { options }),
++    };
++    const key = target.global_id ?? target.id;
++    accepted.set(key, [...(accepted.get(key) ?? []), { finding: target, premise }]);
++  }
++
++  // A finding claimed twice keeps neither claim. Taking the first would let claim order decide whether a
++  // finding is held, and the safe resolution of a conflict is the one that holds nothing.
++  const applied = new Map<string, ReviewFindingPremise>();
++  let appliedClaims = 0;
++  for (const [key, group] of accepted) {
++    if (group.length === 1) {
++      applied.set(key, (group[0] as Accepted<T>).premise);
++      appliedClaims += 1;
++      continue;
++    }
++    group.forEach(() => {
++      rejections.push({ finding: key, reason: "duplicate-claim", detail: `${group.length} claims name this finding. None is applied: claim order must not decide whether it is held.` });
++    });
++  }
++
++  const out = findings.map((finding) => {
++    const premise = applied.get(finding.global_id ?? finding.id);
++    if (premise === undefined) {
++      return finding;
++    }
++    // The ORIGINAL plus a premise and, for `downgraded`, the lower severity. Nothing else from the claim reaches it.
++    return { ...finding, ...(premise.severity === undefined ? {} : { severity: premise.severity }), premise } as T;
++  });
++
++  const counts: PremiseCounts = {
++    ...(judge === undefined ? {} : { judge }),
++    claims: claims.length,
++    applied: appliedClaims,
++    rejected: rejections.length,
++    upheld: 0,
++    downgraded: 0,
++    challenged: 0,
++    ownerDecision: 0,
++    held: 0,
++    findingsIn: findings.length,
++  };
++  for (const finding of out) {
++    const verdict = finding.premise?.verdict;
++    if (verdict === "upheld") counts.upheld += 1;
++    else if (verdict === "downgraded") counts.downgraded += 1;
++    else if (verdict === "challenged") counts.challenged += 1;
++    else if (verdict === "owner-decision") counts.ownerDecision += 1;
++  }
++  counts.held = counts.challenged + counts.ownerDecision;
++  return { findings: out, rejections, counts };
++}
++
++// ---------------------------------------------------------------------------
++// Held findings and the operator's answer
++// ---------------------------------------------------------------------------
++
++type Loose = Record<string, unknown>;
++
++/** The finding keys a decision may name: `global_id` first, then `id`. */
++function keysOf(record: Loose): string[] {
++  return [record.global_id, record.id].filter((key): key is string => typeof key === "string" && key !== "");
++}
++
++export type PremiseHoldState =
++  /** No premise, or one that does not hold the finding. */
++  | "none"
++  /** Held, and the operator has not answered. */
++  | "awaiting"
++  /** Held, and the operator said uphold: the finding is kept at its original severity. */
++  | "upheld"
++  /** Held, and the operator said dismiss. */
++  | "dismissed";
++
++/**
++ * Where a finding stands against its premise judgement. A hold is lifted only by an operator answer, read
++ * from the finding's own `premise.operator` or from the package's decisions (the later of the two does not
++ * matter: they hold the same answer once applied).
++ */
++export function premiseHoldState(record: Loose, decisions: readonly PremiseQuestionDecision[] = []): PremiseHoldState {
++  const premise = isRecord(record.premise) ? record.premise : undefined;
++  if (premise === undefined || !isHeldVerdict(premise.verdict)) {
++    return "none";
++  }
++  const decided = [...decisions].filter((decision) => keysOf(record).includes(decision.finding)).at(-1);
++  const answer = decided?.answer ?? (isRecord(premise.operator) ? premise.operator.answer : undefined);
++  return answer === "uphold" ? "upheld" : answer === "dismiss" ? "dismissed" : "awaiting";
++}
++
++/** Ids (`global_id` when there is one) of the findings that wait for an operator decision. */
++export function awaitingOperator(records: readonly Loose[], decisions: readonly PremiseQuestionDecision[] = []): string[] {
++  return records.filter((record) => premiseHoldState(record, decisions) === "awaiting").map((record) => keysOf(record)[0] ?? "<unnamed>");
++}
++
++/**
++ * Apply the operator's answer to a finding. Pure; the CLI command and the card write the result.
++ *
++ * - `uphold` — the finding is kept at its ORIGINAL severity: a premise that was held by `challenged` carries no
++ *   severity change, and the answer is recorded on `premise.operator`.
++ * - `dismiss` — the finding is recorded `dismissed-incorrect` with the operator's reason as the evidence, unless
++ *   it already carries a disposition (an outcome somebody recorded is not overwritten by an answer).
++ *
++ * A finding that is not held, or is not the one the decision names, is returned unchanged.
++ */
++export function applyPremiseDecision<T extends object>(finding: T, decision: PremiseQuestionDecision): T {
++  const record = finding as unknown as Loose;
++  const premise = isRecord(record.premise) ? record.premise : undefined;
++  if (premise === undefined || !isHeldVerdict(premise.verdict) || !keysOf(record).includes(decision.finding)) {
++    return finding;
++  }
++  const operator = { answer: decision.answer, reason: decision.reason, at: decision.at, actor: decision.actor };
++  const existing = isRecord(record.disposition) ? record.disposition : undefined;
++  const open = existing === undefined || existing.state === undefined || existing.state === "unknown";
++  return {
++    ...record,
++    premise: { ...premise, operator },
++    ...(decision.answer === "dismiss" && open
++      ? { disposition: { state: "dismissed-incorrect", evidence: `operator ${decision.actor} (${decision.at}) on the premise question: ${decision.reason}` } }
++      : {}),
++  } as unknown as T;
++}
++
++/** {@link applyPremiseDecision} over a list, with the LATEST decision per finding. */
++export function applyPremiseDecisions<T extends object>(findings: readonly T[], decisions: readonly PremiseQuestionDecision[]): T[] {
++  return findings.map((finding) => {
++    const keys = keysOf(finding as unknown as Loose);
++    const decision = [...decisions].filter((entry) => keys.includes(entry.finding)).at(-1);
++    return decision === undefined ? finding : applyPremiseDecision(finding, decision);
++  });
++}
++
++// ---------------------------------------------------------------------------
++// scope.md
++// ---------------------------------------------------------------------------
++
++function escapePipes(value: string): string {
++  return value.replace(/\|/g, "\\|");
++}
++
++function oneLine(value: string): string {
++  const first = (value.split(/\r?\n/).find((line) => line.trim() !== "") ?? "").replace(/\s+/g, " ").trim();
++  return first.length > 160 ? `${first.slice(0, 157)}...` : first;
++}
++
++export type PremiseRenderInput = {
++  counts: PremiseCounts;
++  rejections: readonly PremiseRejection[];
++  /** The round's findings, after the merge: the held ones are listed. */
++  findings: readonly StructuredReviewFinding[];
++};
++
++/**
++ * The `## Premise check` block of scope.md. Empty when no premise judge ran and no finding carries one: a
++ * heading that always says `0` is noise, and its absence is the record that the stage did not run.
++ */
++export function renderPremiseMarkdown(input: PremiseRenderInput): string {
++  const { counts, rejections } = input;
++  const judged = counts.upheld + counts.downgraded + counts.held;
++  if (counts.claims === 0 && judged === 0) {
++    return "";
++  }
++  const lines: string[] = ["", "## Premise check", ""];
++  lines.push(`premise_judge: ${counts.judge ?? "not named"}`);
++  lines.push(`premise_claims_received: ${counts.claims}`);
++  lines.push(`premise_claims_applied: ${counts.applied}`);
++  lines.push(`premise_claims_rejected: ${counts.rejected}`);
++  lines.push(`premise_upheld: ${counts.upheld}`);
++  lines.push(`premise_downgraded: ${counts.downgraded}`);
++  lines.push(`premise_challenged: ${counts.challenged}`);
++  lines.push(`premise_owner_decision: ${counts.ownerDecision}`);
++  lines.push(`premise_held: ${counts.held}`);
++  lines.push("");
++  lines.push("### Held for the operator (premise)");
++  lines.push("");
++  const held = input.findings.filter((finding) => isHeldVerdict(finding.premise?.verdict));
++  if (held.length === 0) {
++    lines.push("_none_");
++  } else {
++    lines.push("| finding | severity | verdict | question |");
++    lines.push("|---|---|---|---|");
++    for (const finding of held) {
++      const premise = finding.premise as ReviewFindingPremise;
++      const options = premise.options === undefined ? "" : ` Options: ${premise.options.join(" / ")}`;
++      lines.push(`| ${escapePipes(finding.global_id ?? finding.id)} | ${finding.severity} | ${premise.verdict} | ${escapePipes(`${premise.question ?? oneLine(finding.problem)}${options}`)} |`);
++    }
++    lines.push("");
++    lines.push("A held finding is not an open blocker or major and is not handed to a fixer. It waits for the operator:");
++    lines.push("`keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`.");
++  }
++  lines.push("");
++  lines.push("### Premise claims discarded");
++  lines.push("");
++  if (rejections.length === 0) {
++    lines.push("_none_");
++  } else {
++    lines.push("| finding | reason | why |");
++    lines.push("|---|---|---|");
++    for (const rejection of rejections) {
++      lines.push(`| ${escapePipes(rejection.finding)} | ${rejection.reason} | ${escapePipes(rejection.detail)} |`);
++    }
++    lines.push("");
++    lines.push("Every discarded claim leaves its finding as it was: a claim can cost a verdict, never a finding.");
++  }
++  lines.push("");
++  return lines.join("\n");
++}
+
+--- src/review/readiness.ts
+@@ 1,57 @@
+ // One checklist that a review passes before it may be called completed or reach GitHub. Every item reuses a check that
+ // already exists; this module only puts them in one list, names the repair command of each, and records a waiver in the
+ // operator's own words. Nothing here writes except `waiveReadiness`.
+ 
+ import { readFile, stat } from "node:fs/promises";
+ import path from "node:path";
+ import { shellWord } from "../lib/shell-quote";
+ import { testsNotRunWarning } from "./tests-to-run";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import { isCapDrop, isReasonedDrop } from "./blast-radius";
+ import { computeCoverage } from "./coverage-complete";
+ import { hasChunkPlan } from "./chunks";
+ import { packageScopeFiles } from "./coverage";
+ import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+ import { dispatchErrors } from "./dispatch";
+ import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
+ import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+ import { readRunProfile } from "./run-profile";
++import { readPremiseDecisions, type PremiseQuestionDecision } from "./operator-decisions";
++import { awaitingOperator, premiseHoldState } from "./premise";
+ import { packageParityWarnings } from "./parity";
+ import { researchErrors } from "./research";
+ import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
+ 
+ export const READINESS_ITEMS = [
+   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
+   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
+   { number: 3, id: "reviewers", title: "every planned reviewer was dispatched and its result ingested" },
+   { number: 4, id: "verifier", title: "the verifier checked every finding it should, or the report says how many it did not" },
+   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
+   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
+   { number: 7, id: "head", title: "the report's head matches the PR head" },
+   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
+   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
+   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
++  { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
+ ] as const;
+ 
+ export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
+ export type ReadinessStatus = "pass" | "fail" | "waived";
+ 
+ export type ReadinessItem = {
+   number: number;
+   id: ReadinessItemId;
+   title: string;
+   status: ReadinessStatus;
+   evidence: string;
+   /** The exact command (or edit) that repairs a failing item. Absent when the item passes. */
+   repair?: string;
+   /** The operator's own words, for a waived item. */
+   waiver?: { operatorQuote: string; time: string };
+ };
+ 
+ export type ReadinessReport = {
+   schemaVersion: 1;
+   review: string;
+
+--- src/review/readiness.ts
+@@ 93,134 @@
+   return shellWord(path.relative(process.cwd(), packageDir) || ".");
+ }
+ 
+ export function readinessItemId(selector: string): ReadinessItemId | undefined {
+   const wanted = selector.trim().toLowerCase();
+   const byNumber = /^\d+$/.test(wanted) ? READINESS_ITEMS.find((item) => item.number === Number(wanted)) : undefined;
+   return (byNumber ?? READINESS_ITEMS.find((item) => item.id === wanted))?.id;
+ }
+ 
+ type Verdict = { pass: true; evidence: string } | { pass: false; evidence: string; repair: string };
+ const ok = (evidence: string): Verdict => ({ pass: true, evidence });
+ const bad = (evidence: string, repair: string): Verdict => ({ pass: false, evidence, repair });
+ 
+ type Context = {
+   dir: string;
+   arg: string;
+   manifest: ManagedReviewManifest;
+   report: string;
+   research: Record<string, unknown> | undefined;
+   findings: Array<Record<string, unknown>>;
++  /** The operator's answers to held findings (`premise-question` decisions). */
++  premiseDecisions: PremiseQuestionDecision[];
+   /** True when the package carries the dispatch record (a package cut before it existed is not held to it). */
+   dispatched: boolean;
+ };
+ 
+ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verdict }> {
+   const coverage = await computeCoverage(ctx.dir, ctx.research === undefined ? {} : { research: ctx.research });
+   if (!coverage.tracked) {
+     const note = ok("coverage is not tracked: no slice manifest, no dropped blast-radius files");
+     return { files: note, radius: note };
+   }
+   const blast = await readJson<{ dropped?: Array<{ file?: unknown; reason?: unknown }> }>(path.join(ctx.dir, "blast-radius.json"));
+   const cut = new Set((blast?.dropped ?? []).filter((entry) => text(entry.file) && isCapDrop(entry.reason)).map((entry) => entry.file as string));
+   const uncovered = coverage.files.filter((entry) => entry.status === "uncovered");
+   const uncoveredCut = uncovered.filter((entry) => cut.has(entry.file)).map((entry) => entry.file);
+   const uncoveredRest = uncovered.filter((entry) => !cut.has(entry.file)).map((entry) => entry.file);
+   const counts = `${coverage.counts.covered} of ${coverage.counts.inScope} in-scope files covered, ${coverage.counts.omitted} omitted`;
+   const waived = coverage.waived ? " (the uncovered files are waived by the recorded coverage waiver)" : "";
+   const sliceRepair = `keryx review ledger build <input-dir> --package ${ctx.arg}`;
+   const files: Verdict = uncoveredRest.length === 0 || coverage.waived
+     ? ok(`${counts}${waived}`)
+
+--- src/review/readiness.ts
+@@ 168,223 @@
+   ];
+   return bad(parts.join("; "), `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${ctx.arg}\``);
+ }
+ 
+ const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
+ 
+ const NOT_VERIFIED = /not\s+verified\s*[:=]?\s*(\d+)/i;
+ 
+ function verifierCheck(ctx: Context): Verdict {
+   const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
+   const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
+   if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
+   const stated = NOT_VERIFIED.exec(ctx.report);
+   if (stated !== null && Number(stated[1]) >= unverified.length) return ok(`${unverified.length} of ${heavy.length} blocker/major finding(s) unverified, and the report says so`);
+   return bad(
+     `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification and the report does not state the count`,
+     `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,
+   );
+ }
+ 
++/**
++ * Flow 459. A finding the premise judge held (`challenged` / `owner-decision`) is a question for the operator, and a
++ * review with an unanswered question is not finished: it is neither fixed nor dismissed. The repair is the answer, not a
++ * waiver of the question.
++ */
++function premiseDecisionsCheck(ctx: Context): Verdict {
++  const held = ctx.findings.filter((finding) => premiseHoldState(finding, ctx.premiseDecisions) !== "none");
++  if (held.length === 0) return ok("no finding is held by the premise judge");
++  const awaiting = awaitingOperator(ctx.findings, ctx.premiseDecisions);
++  if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
++  return bad(
++    `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`,
++    `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
++  );
++}
++
+ function ledgerCheck(ctx: Context): Verdict {
+   if (!ctx.dispatched) return ok("this package predates the research ledger");
+   if (ctx.research === undefined) return bad("research.json is missing or unreadable", `keryx review ledger build <input-dir> --package ${ctx.arg}`);
+   const problems = researchErrors(ctx.research, ctx.findings);
+   if (problems.length === 0) return ok(`ledger READY: ${Array.isArray(ctx.research.obligations) ? ctx.research.obligations.length : 0} obligation(s) all closed`);
+   return bad(`${problems.length} ledger problem(s): ${problems.slice(0, 3).join("; ")}${problems.length > 3 ? "; …" : ""}`, `close each obligation with a disposition, then \`keryx review ledger build <input-dir> --package ${ctx.arg} --dispositions <file>\``);
+ }
+ 
+ async function coverageMdCheck(ctx: Context): Promise<Verdict> {
+   const raw = await readFile(path.join(ctx.dir, "coverage.md"), "utf8").catch(() => undefined);
+   const runs = (Array.isArray(record(ctx.research?.dispatch)?.runs) ? (record(ctx.research?.dispatch)!.runs as unknown[]) : []).map(record);
+   const bad2 = new Set(runs.filter((run) => run !== undefined && run.status !== "complete").map((run) => String(run!.reviewer)));
+   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
+   const claimed = [...raw.matchAll(/reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g)].filter((match) => match[2] === "run").map((match) => match[1] as string);
+   const lying = claimed.filter((name) => bad2.has(name));
+   if (lying.length === 0) return ok(`${claimed.length} reviewer(s) listed as run, none contradicted by the dispatch record`);
+   return bad(`coverage.md lists ${some(lying)} as "run", but the dispatch record says they did not finish`, `re-run keryx review ingest <input> for this package: it rewrites coverage.md from the dispatch record`);
+ }
+ 
+ async function headCheck(ctx: Context, options: ReadinessOptions): Promise<Verdict> {
+
+--- src/review/readiness.ts
+@@ 312,367 @@
+   }
+   return bad(
+     `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}${warning}`,
+     `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: in keryx shell call the review_waive_readiness tool with item memory-outside-stage (the operator answers a card); in a terminal run keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
+   );
+ }
+ 
+ /** The checklist, computed from what the package holds. Writes nothing. */
+ export async function computeReadiness(packageDir: string, options: ReadinessOptions = {}): Promise<ReadinessReport> {
+   const manifest = await readJson<ManagedReviewManifest>(path.join(packageDir, "manifest.json"));
+   if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
+   const research = record(await readJson<unknown>(path.join(packageDir, "research.json")));
+   const findingsRaw = await readJson<unknown>(path.join(packageDir, "findings.json"));
+   const ctx: Context = {
+     dir: packageDir,
+     arg: packageArg(packageDir),
+     manifest,
+     report: (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")) as string,
+     research,
+     findings: Array.isArray(findingsRaw) ? findingsRaw.map(record).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [],
++    premiseDecisions: await readPremiseDecisions(packageDir),
+     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
+   };
+   const { files, radius } = await filesChecks(ctx);
+   const verdicts: Record<ReadinessItemId, Verdict> = {
+     "files-covered": files,
+     "blast-radius": radius,
+     reviewers: await reviewersCheck(ctx),
+     verifier: verifierCheck(ctx),
+     ledger: ledgerCheck(ctx),
+     "coverage-md": await coverageMdCheck(ctx),
+     head: await headCheck(ctx, options),
+     "report-names": await reportNamesCheck(ctx),
+     "pr-files": await prFilesCheck(ctx, options),
+     "memory-outside-stage": await memoryStageCheck(ctx),
++    "premise-decisions": premiseDecisionsCheck(ctx),
+   };
+   const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
+   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {
+     const verdict = verdicts[spec.id];
+     const waiver = waivers.get(spec.id);
+     if (verdict.pass) return { ...spec, status: "pass", evidence: verdict.evidence };
+     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
+     return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
+   });
+   const testsNotRun = testsNotRunWarning(packageDir);
+   return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
+ }
+ 
+ export const failingItems = (report: ReadinessReport): ReadinessItem[] => report.items.filter((item) => item.status === "fail");
+ 
+ /** The checklist as the CLI, `review status` and the panel print it. */
+ export function renderReadiness(report: ReadinessReport): string[] {
+   const lines = [`readiness: ${report.verdict} (${report.review})`];
+   for (const item of report.items) {
+     const mark = item.status === "pass" ? "pass  " : item.status === "waived" ? "waived" : "FAIL  ";
+
+--- src/review/types.ts
+@@ 1,27 @@
+ // Type-only, and therefore erased: `review/verification` imports runtime values
+ // from this module, so a value import back would be a real cycle. The merge
+ // result types live there because they describe what the merge does, not what a
+ // finding is.
+ import type { VerificationCap, VerificationCounts, VerificationRejection } from "./verification";
++// Type-only for the same reason as the verification types above.
++import type { PremiseCounts, PremiseRejection } from "./premise";
+ // Type-only for the same reason, in the other direction: `review/caps` imports
+ // `ReviewFindingSeverity` from here as a type, and this imports the caps record
+ // as a type. Both are erased, so neither is a runtime cycle.
+ import type { ReviewCapsRecord } from "./caps";
+ // Type-only for the third time, and for the reason the other two give: the
+ // filter-stats producer imports the pre-filter shapes declared below, so a value
+ // import back would close a runtime cycle. Both directions are erased.
+ import type { ReviewFilterStats } from "./filter-stats";
+ import type { ReviewRoundCost } from "./cost";
+ import type { FindingRepair } from "./repair";
+ import type { ReviewNoteResult } from "./review-notes";
+ // Type-only: the decision is COMPUTED in `lib/provider-config`, which is where
+ // the provider registry has its single reader, and only carried here. A value
+ // import would make the review package depend on provider configuration at
+ // runtime for a record it merely stores.
+ import type { CrossFamilyReviewDecision } from "../lib/provider-config";
+ 
+ export const MANAGED_REVIEW_MODES = ["attach-review", "review-flow", "ingest"] as const;
+ export type ManagedReviewMode = (typeof MANAGED_REVIEW_MODES)[number];
+ 
+
+--- src/review/types.ts
+@@ 363,483 @@
+  * Whether the verifier's verdicts are recorded, or acted on.
+  *
+  * `annotate` is the default and stays the default for one release. The verifier
+  * records `refuted` without removing anything, so the drop rate is a measured
+  * number before it costs a real finding. The risk is named rather than assumed
+  * away: SWE-agent keeps its equivalent opt-in because it sometimes rejects
+  * correct patches, and a filter that silently removes a true blocker is worse
+  * than the noise it removes.
+  *
+  * - `off` — no verification at all. Claims are refused rather than ignored.
+  * - `annotate` — verdicts are recorded on every finding; nothing is removed.
+  * - `filter` — a `refuted` finding is removed from the reported set and recorded
+  *   as `dismissed-incorrect`, with the verification evidence as its evidence.
+  */
+ export const VERIFICATION_MODES = ["off", "annotate", "filter"] as const;
+ export type VerificationMode = (typeof VERIFICATION_MODES)[number];
+ 
+ /** The default, asserted by a test rather than by this comment. */
+ export const DEFAULT_VERIFICATION_MODE: VerificationMode = "annotate";
+ 
++// ---------------------------------------------------------------------------
++// Premise (flow 459)
++// ---------------------------------------------------------------------------
++
++/**
++ * What an independent premise check found when it asked whether the finding's
++ * REQUEST (change this behaviour, restructure that) is right, as opposed to
++ * whether its facts hold, which is the verifier's question.
++ *
++ * - `upheld` — the premise stands; nothing changes.
++ * - `downgraded` — the premise stands at a lower severity; the judge's severity is canonical.
++ * - `challenged` — intent signals or accepted practice argue against the premise.
++ * - `owner-decision` — the premise is a product choice nobody but the operator can make.
++ *
++ * The last two HOLD the finding: it is not counted as an open blocker or major, is not
++ * handed to a fixer, and waits for an operator decision. Nothing here dismisses a
++ * finding; only the operator does.
++ */
++export const PREMISE_VERDICTS = ["upheld", "downgraded", "challenged", "owner-decision"] as const;
++export type PremiseVerdict = (typeof PREMISE_VERDICTS)[number];
++
++/** The verdicts that hold a finding for the operator. */
++export const HELD_PREMISE_VERDICTS = ["challenged", "owner-decision"] as const;
++
++/** A fact in the code or history that says the flagged shape is a deliberate choice. */
++export type PremiseIntentSignal = { ref: string; says: string };
++/** A guideline, idiom or convention the premise runs against. */
++export type PremisePracticeSource = { name: string; says: string };
++
++/** What the operator answered to a held finding (`premise-question` decision). */
++export type PremiseOperatorAnswer = {
++  answer: "uphold" | "dismiss";
++  reason: string;
++  at: string;
++  actor: string;
++};
++
++/**
++ * One premise judgement, as it is recorded on the finding. `severity` is present for
++ * `downgraded` only and is then ALSO the finding's own severity; `original_severity`
++ * keeps what the reviewer reported.
++ */
++export type ReviewFindingPremise = {
++  verdict: PremiseVerdict;
++  judge: string;
++  model?: string | undefined;
++  severity?: ReviewFindingSeverity | undefined;
++  original_severity?: ReviewFindingSeverity | undefined;
++  intent_signals?: PremiseIntentSignal[] | undefined;
++  practice_sources?: PremisePracticeSource[] | undefined;
++  reasoning?: string | undefined;
++  question?: string | undefined;
++  options?: string[] | undefined;
++  /** Written when the operator's answer is applied to the record; the decisions store holds it too. */
++  operator?: PremiseOperatorAnswer | undefined;
++};
++
++/**
++ * A premise claim as it arrives, before anything is checked. The index signature lets a
++ * claim carrying a property the judge has no authority over reach the merge and be
++ * rejected by name.
++ */
++export type PremiseClaimInput = {
++  finding_id?: string | undefined;
++  verdict?: string | undefined;
++  severity?: string | undefined;
++  intent_signals?: unknown;
++  practice_sources?: unknown;
++  reasoning?: unknown;
++  question?: unknown;
++  options?: unknown;
++  [key: string]: unknown;
++};
++
++/** The shape a premise judge returns: a bare object naming the judge. */
++export type PremiseSource = {
++  judge?: string | undefined;
++  model?: string | undefined;
++  premises: readonly PremiseClaimInput[];
++};
++
+ /**
+  * One finding, in exactly the shape `review-finding.schema.json` accepts.
+  *
+  * This type is the persisted record: `findings.json` is an array of these and
+  * nothing else, because the schema is `additionalProperties: false` and a round
+  * that cannot be fed back into `prior_findings[].finding` is a round that ends
+  * the conversation. Every keryx-local judgement about a finding — how it was
+  * classified, how it relates to a flow — lives on {@link NormalizedReviewFinding}
+  * and is rendered into `decisions.md`, NOT smuggled into this object.
+  *
+  * `confidence` is a string enum because that is what the committed schema says
+  * today. The roadmap moves it to a number in [0,1] in a later phase; carrying
+  * the current shape is deliberate so the two changes do not collide.
+  */
+ export type StructuredReviewFinding = {
+   id: string;
+   /**
+    * The join key: `<reviewId>#<id>`, unique across packages and stable across
+    * rounds.
+    *
+
+--- src/review/types.ts
+@@ 543,588 @@
+    * and the reconstruction could not find a single wrong finding because none
+    * was ever written down. A field on the record is the thing that ends that.
+    */
+   disposition?: ReviewFindingDisposition | undefined;
+   /**
+    * What an independent check found. Absent means nobody checked.
+    *
+    * Absent is NOT "unverified and therefore droppable": the 83 pre-contract
+    * findings on disk have none, and neither does any finding produced with
+    * `verification_mode: off`. Only an applied `refuted` verdict removes
+    * anything, and only in `filter` mode.
+    *
+    * Declared here and NOT in the bundled `reviewer-finding.schema.json`, on the
+    * same basis as `disposition` — see that field. A reviewer states what is
+    * wrong; whether someone else could reproduce it is not something the reviewer
+    * knows, and AC9 says the reviewer that raised the finding is precisely the one
+    * that may never answer it. Declaring the property in the shape reviewers emit
+    * would be an invitation to fill in the one field they are forbidden to fill.
+    */
+   verification?: ReviewFindingVerification | undefined;
++  /**
++   * What the premise judge found (flow 459). Absent means nobody judged the premise.
++   * Declared in `review-finding.schema.json` and NOT in the reviewer-side schema, for the
++   * verifier's reason: the reviewer that raised a finding may not judge its own premise.
++   */
++  premise?: ReviewFindingPremise | undefined;
+   /**
+    * Who raised this: one of our reviewers, or somebody on the pull request.
+    *
+    * Absent reads as `internal`, which is what all 83 pre-contract records are and
+    * what every reviewer emits. It is written only for `external`, on the same
+    * rule as `disposition` and `verification`: a property present on every record
+    * says nothing, and a property present on a few says exactly one thing.
+    *
+    * The value is load-bearing rather than descriptive. Three mechanisms read it
+    * and change behaviour: the verifier cannot refute an external finding (AC10),
+    * the per-reviewer findings cap does not truncate one (AC9 — "may never
+    * silently drop it"), and the completion gate refuses while one is unanswered
+    * (AC5). A finding that lost this property would quietly acquire all three of
+    * the behaviours the criteria forbid.
+    */
+   source?: ReviewFindingSource | undefined;
+   /** Required when `source` is `external`, meaningless otherwise. */
+   external_ref?: ExternalCommentRef | undefined;
+ };
+ 
+
+--- src/review/types.ts
+@@ 674,719 @@
+    *
+    * These are normalized, contract-gated and written exactly like reported
+    * findings, into the same `findings.json`, so nothing has to remember to read
+    * a second file. Each one is stamped with a dismissal disposition —
+    * `dismissed-incorrect` unless it names another `dismissed-*` state — and
+    * each one must carry `disposition.evidence`. Refusal becomes a write.
+    */
+   refuted?: ReviewFindingsSource | undefined;
+   /**
+    * What `review-verifier` returned: one claim per finding it checked.
+    *
+    * Typed loosely on purpose. The merge is delete-only and enforces that by
+    * reading ONLY the verdict out of a claim, so it has to be able to receive —
+    * and visibly reject — a claim that tried to carry a severity. A narrow type
+    * here would move that rejection to compile time for callers inside this
+    * repository and leave it absent for every caller outside it.
+    */
+   verifications?: readonly VerificationClaimInput[] | undefined;
+   /** Defaults to {@link DEFAULT_VERIFICATION_MODE}. */
+   verificationMode?: VerificationMode | undefined;
++  /**
++   * What `review-premise` returned (flow 459). Typed loosely for the verifier's reason: the
++   * merge is delete-only and must be able to receive, and visibly reject, a claim that
++   * tried to carry something it may not.
++   */
++  premises?: PremiseSource | undefined;
+   /**
+    * The §5.4 decision this round ran under, from
+    * `keryx providers cross-family --json` (flow 209, AC2).
+    *
+    * Carried, never computed: {@link module:lib/provider-config} keeps the single
+    * reader of the provider registry, and an ingest that assembled its own
+    * decision would be a second one. Absent is recorded as absent — see
+    * {@link ManagedReviewManifest.cross_family_review} for why that is not
+    * `single-family`.
+    */
+   crossFamilyReview?: CrossFamilyReviewDecision | undefined;
+   /**
+    * What the pre-filter removed, from `keryx review scope --json`: the counts
+    * AND the reason for every individual drop.
+    *
+    * This is the supported channel. {@link ManagedReviewInput.scopeCounts} is the
+    * counts-only form kept for callers that hold nothing else; when both are
+    * present this one wins, because it is the only one that satisfies AC5.
+    *
+    * Optional, and its absence is recorded as "not recorded" rather than as
+
+--- src/review/types.ts
+@@ 863,905 @@
+  * transcribing it — transcription being the step that lost the fields.
+  */
+ export type ReviewFindingsSource =
+   | ReadonlyArray<Partial<StructuredReviewFinding>>
+   | ReviewerResultLike
+   | ReadonlyArray<ReviewerResultLike>;
+ 
+ export type ReviewerResultLike = {
+   reviewer?: string | undefined;
+   findings: ReadonlyArray<Partial<StructuredReviewFinding>>;
+ };
+ 
+ export type ManagedReviewPackageResult = {
+   reviewId: string;
+   path: string;
+   manifest: ManagedReviewManifest;
+   /** AC11. Present on every package, whether or not a verifier ran. */
+   verification: VerificationCounts;
+   verificationRejections: readonly VerificationRejection[];
+   verificationCaps: readonly VerificationCap[];
++  /** Flow 459. Present on every package, whether or not a premise judge ran. */
++  premise: PremiseCounts;
++  premiseRejections: readonly PremiseRejection[];
+   /**
+    * What the findings, spend and concurrency caps did (flow 203 AC5–AC7, AC10).
+    *
+    * Returned as well as written into `scope.md` so the CLI can say STOP on a
+    * spend ceiling without re-reading the package it just wrote.
+    */
+   caps: ReviewCapsRecord;
+   /** Flow 207 AC1. The same object the manifest carries; see there for why. */
+   filterStats: ReviewFilterStats;
+   /**
+    * The learning notes this round wrote, and the dismissals it refused to write
+    * one for (flow 207 AC5/AC6).
+    *
+    * Returned so the CLI can print both halves. A dismissal that reached no note
+    * is the interesting half: it means a finding was filed as model error with
+    * nobody standing behind the decision.
+    */
+   reviewNotes: ReviewNoteResult;
+ };
+ 
+
+--- src/review/verdict.ts
+@@ 1,30 @@
+ import { existsSync } from "node:fs";
+ import { readFile, readdir } from "node:fs/promises";
+ import path from "node:path";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readRoundRecord, renderRoundLine } from "./round-record";
+ import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
+ import { dispatchSkips, skipLine } from "./coverage";
+ import { mergeVerifications, verificationClaims } from "./verification";
++import { PREMISES_FILE, applyPremiseDecisions, mergePremises, parsePremiseClaims, premiseHoldState } from "./premise";
++import { readPremiseDecisions } from "./operator-decisions";
+ import { readRunProfile } from "./run-profile";
+ import { testsNotRunWarning } from "./tests-to-run";
+ import { promoteParentExecutions } from "./verify-run";
+ import type { StructuredReviewFinding, VerificationSource } from "./types";
+ 
+ /**
+  * An interim verdict: what a review round says so far, read from whatever the package holds.
+  *
+  * The verdict of a round is ready once the reviewers and the verifier are done, but the managed round only yields it
+  * after ingest, the mutation pass, the ledger and `complete`. This reads the package as it stands at any point of that
+  * sequence and depends on none of those steps having run.
+  */
+ export const VERDICT_FILE = "verdict-interim.md";
+ /** The verifier results a package may hold; applied (annotate mode) before the verdict counts anything. */
+ export const VERIFICATIONS_FILE = path.join("research-evidence", "verifications.json");
+ /** Dispositions that say the finding was fixed: it is no longer an open blocker or major. */
+ const RESOLVED_DISPOSITIONS: ReadonlySet<string> = new Set(["acted-on", "fixed"]);
+ 
+ const SEVERITIES = ["blocker", "major", "minor", "info"] as const;
+ type Severity = (typeof SEVERITIES)[number];
+
+--- src/review/verdict.ts
+@@ 42,88 @@
+ 
+ export type InterimVerdict = {
+   /** `ingested round` reads `findings.json`; `raw reviewer results` reads `raw/`; `none` means the package held neither. */
+   source: "ingested round" | "raw reviewer results" | "none";
+   /** Findings that count: refuted and dismissed ones are already out. */
+   counts: Record<Severity, number>;
+   total: number;
+   verified: number;
+   unverified: number;
+   refuted: number;
+   dismissed: number;
+   /** Findings whose disposition says they were acted on (fixed); not counted as open. */
+   resolved: number;
+   /** Verifier claims read from the package and applied, or `undefined` when it holds none. */
+   verifierClaims: number | undefined;
+   /** Where the raw reviewer results were read from. */
+   rawDir: string;
+   open: VerdictFinding[];
+   /** Open minor findings, listed one by one (owner decision 2026-10-16: minors are to be addressed, not only counted). */
+   minors: VerdictFinding[];
++  /**
++   * Flow 459. Findings the premise judge held (`challenged` / `owner-decision`) that the operator has not answered. They
++   * are in no count above and in no open list: an unanswered question is neither a blocker nor a fixed finding.
++   */
++  held: VerdictFinding[];
++  /** Premise claims read from {@link PREMISES_FILE} and applied, or `undefined` when the package holds none. */
++  premiseClaims: number | undefined;
+   reportedReviewers: string[];
+   /** Reviewers the package expects that have produced no result. `undefined` when the package does not say who was expected. */
+   pendingReviewers: string[] | undefined;
+   /** True when only an ingested round is present: a pending reviewer may have run clean. */
+   pendingAmbiguous: boolean;
+   /** Raw files that held no parsable reviewer result. */
+   unreadable: string[];
+   headline: string;
+   /** How the round runs (`<package>/run-profile.json`): `attended (default)`, `unattended (--unattended)`, ...; undefined for a package without one. */
+   runMode?: string | undefined;
+   /** Flow 458: `round N (source: …)` or `round 1 — no previous round found (sources tried: …)`, from round.json; undefined without one. */
+   round?: string | undefined;
+   /** A warning when `tests-to-run.json` lists tests and no `keryx review verify-run` record exists: "N tests listed to run; none recorded as run". */
+   testsNotRun?: string | undefined;
+   /** `Not run: <reviewer> — <reason>` for each reviewer `ledger build --skip` recorded as deliberately not run. */
+   notRun?: string[] | undefined;
+ };
+ 
+ const object = (value: unknown): Record<string, unknown> | undefined =>
+   value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+
+--- src/review/verdict.ts
+@@ 104,161 @@
+ }
+ 
+ /** `file:line` from the finding's own fields: `location`, else `file` (or `path`) with `line` (or `start_line`). */
+ function locationOf(record: Record<string, unknown>): string | undefined {
+   const given = text(record.location);
+   if (given !== undefined) return oneLine(given);
+   const file = text(record.file) ?? text(record.path);
+   if (file === undefined) return undefined;
+   const line = typeof record.line === "number" ? record.line : typeof record.start_line === "number" ? record.start_line : text(record.line);
+   return line === undefined ? file : `${file}:${line}`;
+ }
+ 
+ function severityOf(value: unknown): Severity {
+   const normalised = typeof value === "string" ? value.toLowerCase() : "";
+   return (SEVERITIES as readonly string[]).includes(normalised) ? (normalised as Severity) : "info";
+ }
+ 
+ type Loose = { record: Record<string, unknown>; fallbackReviewer: string; index: number };
+ 
+ /** Findings of one record, as the verdict counts them. `kept` is false for a refuted or dismissed finding. */
+-function classify(loose: Loose): { finding: VerdictFinding; state: "kept" | "refuted" | "dismissed" | "resolved" } {
++function classify(loose: Loose): { finding: VerdictFinding; state: "kept" | "refuted" | "dismissed" | "resolved" | "held" } {
+   const { record, fallbackReviewer, index } = loose;
+   const verification = text(object(record.verification)?.verdict);
+   const disposition = text(object(record.disposition)?.state);
+   const finding: VerdictFinding = {
+     id: text(record.id) ?? `${fallbackReviewer}#${index + 1}`,
+     reviewer: text(record.reviewer) ?? fallbackReviewer,
+     severity: severityOf(record.severity),
+     problem: oneLine(text(record.problem) ?? text(record.summary) ?? text(record.title) ?? "(no problem statement)"),
+     ...(locationOf(record) === undefined ? {} : { location: locationOf(record) }),
+     verification: verification === "confirmed" ? "confirmed" : verification === "unverifiable" ? "unverifiable" : "none",
+   };
+   if (verification === "refuted") return { finding, state: "refuted" };
+   if (disposition !== undefined && disposition.startsWith("dismissed")) return { finding, state: "dismissed" };
+   if (disposition !== undefined && RESOLVED_DISPOSITIONS.has(disposition)) return { finding, state: "resolved" };
++  // The operator's answer is already on the record by now (`computeVerdict` applies the package's decisions), so a hold
++  // that is still `awaiting` here has no answer: not an open blocker or major, listed for the operator instead.
++  if (premiseHoldState(record) === "awaiting") return { finding, state: "held" };
+   return { finding, state: "kept" };
+ }
+ 
+ async function rawResults(dir: string): Promise<{ results: Array<{ name: string; reviewer: string; findings: Array<Record<string, unknown>> }>; unreadable: string[] }> {
+   const results: Array<{ name: string; reviewer: string; findings: Array<Record<string, unknown>> }> = [];
+   const unreadable: string[] = [];
+   if (!existsSync(dir)) return { results, unreadable };
+   for (const name of (await readdir(dir)).filter((entry) => entry.endsWith(".txt")).sort()) {
+     const body = await readFile(path.join(dir, name), "utf8");
+     if (isEmptyOutput(body)) continue;
+     const parsed = parseReviewResult(body);
+     if (parsed === undefined || !isReviewerResult(parsed)) {
+       if (/REVIEW_RESULT/i.test(body)) unreadable.push(`${path.basename(dir)}/${name}`);
+       continue;
+     }
+     results.push({ name, reviewer: text(parsed.reviewer) ?? name.replace(/\.txt$/, ""), findings: (parsed.findings ?? []).filter((entry) => object(entry) !== undefined) });
+   }
+   return { results, unreadable };
+ }
+ 
+
+--- src/review/verdict.ts
+@@ 185,363 @@
+ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promise<number | undefined> {
+   const source = await readJson(path.join(packageDir, VERIFICATIONS_FILE));
+   if (source === undefined) return undefined;
+   let claims;
+   try {
+     // A claim citing a `keryx review verify-run` record of its finding in this package ran in the parent (flow 457).
+     claims = promoteParentExecutions(verificationClaims(source as VerificationSource), packageDir);
+   } catch {
+     return undefined;
+   }
+   const pending = entries.filter((entry) => object(entry.record.verification) === undefined);
+   const subjects = pending.map((entry) => ({ ...entry.record, id: text(entry.record.id) ?? `${entry.fallbackReviewer}#${entry.index + 1}`, reviewer: text(entry.record.reviewer) ?? entry.fallbackReviewer }) as unknown as StructuredReviewFinding);
+   const merged = mergeVerifications(subjects, claims, { mode: "annotate" });
+   merged.retained.forEach((finding, position) => {
+     const entry = pending[position];
+     if (entry !== undefined && finding.verification !== undefined) entry.record = { ...entry.record, verification: finding.verification };
+   });
+   return merged.counts.applied;
+ }
+ 
++/**
++ * Premise claims the package holds, applied to the records that carry no premise yet (flow 459). A downgrade lowers the
++ * severity the counts use; a held verdict takes the finding out of the open lists. Nothing is removed here either.
++ */
++async function applyPremiseClaims(packageDir: string, entries: Loose[]): Promise<number | undefined> {
++  const source = await readJson(path.join(packageDir, PREMISES_FILE));
++  if (source === undefined) return undefined;
++  let parsed;
++  try {
++    parsed = parsePremiseClaims(source);
++  } catch {
++    return undefined;
++  }
++  const pending = entries.filter((entry) => object(entry.record.premise) === undefined);
++  const subjects = pending.map((entry) => ({ ...entry.record, id: text(entry.record.id) ?? `${entry.fallbackReviewer}#${entry.index + 1}`, reviewer: text(entry.record.reviewer) ?? entry.fallbackReviewer }) as unknown as StructuredReviewFinding);
++  const merged = mergePremises(subjects, parsed);
++  merged.findings.forEach((finding, position) => {
++    const entry = pending[position];
++    if (entry !== undefined && finding.premise !== undefined) entry.record = { ...entry.record, severity: finding.severity, premise: finding.premise };
++  });
++  return merged.counts.applied;
++}
++
+ export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
+   const rawDir = options.rawDir ?? path.join(packageDir, "raw");
+   const ingested = await readJson(path.join(packageDir, "findings.json"));
+   const raws = await rawResults(rawDir);
+   const useRound = Array.isArray(ingested);
+ 
+   const loose: Loose[] = [];
+   if (useRound) {
+     (ingested as unknown[]).forEach((entry, index) => {
+       const record = object(entry);
+       if (record !== undefined) loose.push({ record, fallbackReviewer: "review-orchestrator", index });
+     });
+   } else {
+     for (const result of raws.results) result.findings.forEach((record, index) => loose.push({ record, fallbackReviewer: result.reviewer, index }));
+   }
+ 
+   const verifierClaims = await applyVerifierClaims(packageDir, loose);
++  const premiseClaims = await applyPremiseClaims(packageDir, loose);
++  // The operator's answers (`premise-question` decisions) land on the records before anything is classified: an
++  // upheld finding is an ordinary open one again, a dismissed one is out with the operator's reason as its evidence.
++  const decisions = await readPremiseDecisions(packageDir);
++  if (decisions.length > 0) {
++    const applied = applyPremiseDecisions(loose.map((entry) => entry.record), decisions);
++    loose.forEach((entry, position) => { entry.record = applied[position] as Record<string, unknown>; });
++  }
+   const counts: Record<Severity, number> = { blocker: 0, major: 0, minor: 0, info: 0 };
+   const open: VerdictFinding[] = [];
+   const minors: VerdictFinding[] = [];
++  const held: VerdictFinding[] = [];
+   let verified = 0;
+   let unverified = 0;
+   let refuted = 0;
+   let dismissed = 0;
+   let resolved = 0;
+   for (const entry of loose) {
+     const { finding, state } = classify(entry);
+     if (state === "refuted") { refuted += 1; continue; }
+     if (state === "dismissed") { dismissed += 1; continue; }
+     if (state === "resolved") { resolved += 1; continue; }
++    if (state === "held") { held.push(finding); continue; }
+     counts[finding.severity] += 1;
+     if (finding.verification === "confirmed") verified += 1;
+     else unverified += 1;
+     if (finding.severity === "blocker" || finding.severity === "major") open.push(finding);
+     else if (finding.severity === "minor") minors.push(finding);
+   }
+   minors.sort((a, b) => a.id.localeCompare(b.id));
++  held.sort((a, b) => a.id.localeCompare(b.id));
+   open.sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || a.id.localeCompare(b.id));
+ 
+   const reported = new Set<string>(raws.results.map((result) => result.reviewer));
+   if (useRound) for (const entry of loose) reported.add(text(entry.record.reviewer) ?? "review-orchestrator");
+   const expected = await expectedReviewers(packageDir);
+   const pendingReviewers = expected?.filter((reviewer) => !reported.has(reviewer));
+ 
+   const total = counts.blocker + counts.major + counts.minor + counts.info;
+   const source: InterimVerdict["source"] = useRound ? "ingested round" : raws.results.length > 0 ? "raw reviewer results" : "none";
++  const awaiting = held.length === 0 ? "" : `; awaiting operator: ${held.map((finding) => finding.id).join(", ")}`;
+   const headline =
+     source === "none" ? "no reviewer results in the package yet"
+-    : total === 0 ? "no findings"
++    : total === 0 && held.length === 0 ? "no findings"
+     : `${counts.blocker > 0 ? `${counts.blocker} open blocker(s): do not merge`
+       : counts.major > 0 ? `${counts.major} open major(s): resolve or justify before merge`
+-      : "no open blockers or majors"}${counts.minor > 0 ? `; ${counts.minor} minor to address` : ""}`;
++      : "no open blockers or majors"}${counts.minor > 0 ? `; ${counts.minor} minor to address` : ""}${awaiting}`;
+   // An ingested round lists only reviewers that raised a finding; one that ran clean is indistinguishable from one that never ran.
+   const pendingAmbiguous = useRound && raws.results.length === 0;
+   const profile = readRunProfile(packageDir);
+   const runMode = profile === undefined ? undefined : `${profile.mode} (${profile.declaredVia})`;
+   const testsNotRun = testsNotRunWarning(packageDir);
+   // A malformed round.json is refused by slice, ledger and complete; the verdict only reports, so it says so instead.
+   let round: string | undefined;
+   try {
+     const roundRecord = readRoundRecord(packageDir);
+     round = roundRecord === undefined ? undefined : renderRoundLine(roundRecord);
+   } catch (error) {
+     round = `round record unusable: ${error instanceof Error ? error.message : String(error)}`;
+   }
+   const dispatchRecord = object(object(await readJson(path.join(packageDir, "research.json")))?.dispatch);
+   // M6: reviewers the required set dropped as superseded or overlapping are named in the verdict, with what replaced them.
+   const superseded = (Array.isArray(dispatchRecord?.superseded) ? dispatchRecord.superseded : []).flatMap((entry) => {
+     const item = object(entry);
+     const reviewer = text(item?.reviewer);
+     const reason = text(item?.reason);
+     return reviewer === undefined || reason === undefined ? [] : [`excluded: ${reviewer} — ${reason}`];
+   });
+   const notRun = [...dispatchSkips(dispatchRecord).map(skipLine), ...superseded];
+-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
++  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, held, premiseClaims, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
+ }
+ 
+ function findingLine(finding: VerdictFinding): string {
+   return `- ${finding.id} [${finding.severity}]${finding.location === undefined ? "" : ` ${finding.location}`} (${finding.reviewer}, ${finding.verification === "confirmed" ? "verified" : "unverified"}): ${finding.problem}`;
+ }
+ 
+ export function renderVerdict(verdict: InterimVerdict, reviewId: string): string {
+   const lines = [`# Interim verdict: ${reviewId}`, "", `verdict: ${verdict.headline}`, `source: ${verdict.source}`];
+   if (verdict.round !== undefined) lines.push(verdict.round);
+   if (verdict.runMode !== undefined) lines.push(`run mode: ${verdict.runMode}`);
+   if (verdict.testsNotRun !== undefined) lines.push(`warning: ${verdict.testsNotRun}`);
+-  if (verdict.total === 0 && verdict.source !== "none") lines.push("findings: none");
++  if (verdict.total === 0 && verdict.held.length === 0 && verdict.source !== "none") lines.push("findings: none");
+   else lines.push(`findings: ${verdict.total} (${SEVERITIES.map((severity) => `${verdict.counts[severity]} ${severity}`).join(", ")})`);
+   lines.push(`verified: ${verdict.verified}, unverified: ${verdict.unverified}`);
+   lines.push(`excluded: ${verdict.refuted} refuted, ${verdict.dismissed} dismissed, ${verdict.resolved} acted on (fixed)`);
+   if (verdict.verifierClaims !== undefined) lines.push(`verifier results applied: ${verdict.verifierClaims} claim(s) from ${VERIFICATIONS_FILE}`);
++  if (verdict.premiseClaims !== undefined) lines.push(`premise results applied: ${verdict.premiseClaims} claim(s) from ${PREMISES_FILE}`);
++  if (verdict.held.length > 0) lines.push(`awaiting operator: ${verdict.held.map((finding) => finding.id).join(", ")}`);
+   if (verdict.source === "raw reviewer results" || verdict.pendingAmbiguous) lines.push(`raw results read from: ${verdict.rawDir}`);
+   lines.push(`reviewers reported: ${verdict.reportedReviewers.length === 0 ? "none" : verdict.reportedReviewers.join(", ")}`);
+   lines.push(verdict.pendingReviewers === undefined
+     ? "reviewers not reported: unknown (the package does not record who was expected)"
+     : `${verdict.pendingAmbiguous ? "reviewers with no findings or not reported" : "reviewers not reported"}: ${verdict.pendingReviewers.length === 0 ? "none" : verdict.pendingReviewers.join(", ")}`);
+   for (const line of verdict.notRun ?? []) lines.push(line);
+   for (const file of verdict.unreadable) lines.push(`unreadable result: ${file}`);
+   if (verdict.open.length > 0) {
+     lines.push("", "## Open blockers and majors", "");
+     for (const finding of verdict.open) lines.push(findingLine(finding));
+   }
++  if (verdict.held.length > 0) {
++    lines.push("", "## Awaiting operator (premise)", "");
++    for (const finding of verdict.held) lines.push(findingLine(finding));
++  }
+   if (verdict.minors.length > 0) {
+     lines.push("", "## Minor findings to address", "");
+     for (const finding of verdict.minors) lines.push(findingLine(finding));
+   }
+   lines.push("", "Interim: written before ledger, mutation pass and `complete`; it does not replace the completion gate.");
+   return `${lines.join("\n")}\n`;
+ }
+ 
+ /** Compute the interim verdict of a package, write `verdict-interim.md` into it, and return both. */
+ export async function writeVerdict(packageDir: string, reviewId: string, options: VerdictOptions = {}): Promise<{ verdict: InterimVerdict; markdown: string; file: string }> {
+   const verdict = await computeVerdict(packageDir, options);
+   const markdown = renderVerdict(verdict, reviewId);
+   const file = path.join(packageDir, VERDICT_FILE);
+   await writeFileAtomic(file, markdown);
+   return { verdict, markdown, file };
+ }
+
+--- src/review/verification.ts
+@@ 439,479 @@
+ function claimName(claim: VerificationClaimInput): string {
+   return typeof claim.finding === "string" && claim.finding !== "" ? claim.finding : "<unnamed>";
+ }
+ 
+ /**
+  * An actor name reduced to what identifies it, for the AC9 comparison only.
+  *
+  * `verifier` and `reviewer` are free text a model fills in. Comparing them with
+  * `===` made AC9 a formatting coincidence: `"review-logic "`, `" review-logic"`,
+  * `"Review-Logic"` and `"review-logic(sonnet)"` all walked past the guard, and
+  * in `filter` mode that is a blocker deleted by its own author with no rejection
+  * row to show it happened.
+  *
+  * Deliberately OVER-matching, because the two directions cost different things.
+  * A false self-verification costs a verdict and the finding is retained — every
+  * rejection path in this module retains the finding. A missed one costs the
+  * finding itself. So a trailing model annotation is stripped and separators are
+  * folded, and `review-logician` still reads as a different actor because nothing
+  * here does prefix matching.
+  */
+-function actorKey(name: string): string {
++export function actorKey(name: string): string {
+   return name
+     .toLowerCase()
+     .replace(/\s*\([^)]*\)\s*$/, "")
+     .replace(/[\s_]+/g, "-")
+     .replace(/[^a-z0-9-]/g, "")
+     .replace(/-+/g, "-")
+     .replace(/^-+|-+$/g, "");
+ }
+ 
+ function unknownProperties(claim: VerificationClaimInput): string[] {
+   return Object.keys(claim)
+     .filter((key) => !(VERIFICATION_CLAIM_PROPERTIES as readonly string[]).includes(key))
+     .sort();
+ }
+ 
+ function isVerdict(value: unknown): value is VerificationVerdict {
+   return typeof value === "string" && (VERIFICATION_VERDICTS as readonly string[]).includes(value);
+ }
+ 
+ function isMethod(value: unknown): value is VerificationMethod {

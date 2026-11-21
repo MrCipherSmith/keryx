@@ -1,0 +1,131 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-performance",
+  "summary": "Slice slice-04 read in full (completion-gate, coverage, dispatch-usage, ledger, locate, managed, mutate, readiness, research, types). One major: the new session-history path scan in the completion gate uses a lazy, unanchored regex that goes quadratic on any long run of path-safe characters in a tool result, and it re-scans the whole history on every gate evaluation. Four minor/info items on repeated git/IO work in readiness and the gate, and on regex shapes. No N+1, no leak, no unbounded collection found; the locate/usage/ledger additions are linear.",
+  "findings": [
+    {
+      "id": "PERF-001",
+      "reviewer": "review-performance",
+      "severity": "major",
+      "confidence": "medium",
+      "file": "src/review/completion-gate.ts",
+      "quote": "const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\\s\"'`<>|;&()]*?)\\.metaproject[\\\\/]reviews[\\\\/]([^\\\\/\\s\"'`<>|;&()]+)/g;",
+      "problem": "REVIEW_PACKAGE_PATH has no literal prefix and begins with a lazy `[^\\s\"'`<>|;&()]*?` that must extend to the end of the current run of path-safe characters before the `.metaproject` literal can fail. matchAll tries every start offset, so one run of k such characters costs O(k^2). sessionReviewRoots feeds it every string message content and every tool-call arguments string of the whole session history.",
+      "impact": "Hot path: findReviewGateState runs on every turn end of a managed review run (up to MAX_REVIEW_GATE_CONTINUES = 20 evaluations), each time over the entire, growing history. Reproducible input: a tool result that holds one long run with no whitespace, quote, bracket, pipe, semicolon or ampersand, for example a base64 or hex dump, a lockfile integrity blob or a minified one-line asset read during the review. A 200 KB run is about 2e10 regex steps, a multi-second to minute stall of the shell's event loop at the gate, repeated on each continue. Ordinary prose and JSON (which contains quotes) stay linear, so this is input dependent, not constant.",
+      "suggested_fix": "Anchor the scan on the literal first: find each `.metaproject/reviews/` (or `.metaproject\\\\reviews\\\\`) occurrence with indexOf/a literal-prefixed regex, then walk backwards a bounded number of characters (or to the previous delimiter) to recover the prefix. Alternatively cap the scanned length per message (for example the first and last 64 KB). Also cache the roots found so far and scan only messages added since the last evaluation.",
+      "class_scope": {
+        "sites": [
+          "src/review/completion-gate.ts:REVIEW_PACKAGE_PATH",
+          "src/review/completion-gate.ts:sessionReviewRoots scan()"
+        ],
+        "enumeration_method": "read slice-04 for regex literals applied to unbounded transcript or reply text; the other new unbounded-text regexes (USAGE_LINE, UNREADABLE_INPUT) are bounded or linear and are reported separately as info"
+      },
+      "evidence": "diff of slice-04, src/review/completion-gate.ts: see quote"
+    },
+    {
+      "id": "PERF-002",
+      "reviewer": "review-performance",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "src/review/completion-gate.ts",
+      "quote": "    if (typeof message.content === \"string\") scan(message.content);",
+      "problem": "sessionReviewRoots is a pure function of the whole history and is recomputed from scratch on every gate evaluation; nothing remembers which messages were already scanned. Each result root then costs an extra readdir plus a read and stat of every manifest.json under that root's reviews dir (scanRoot) and a resolveActiveReview.",
+      "impact": "Per gate evaluation (at most 20 per run) the cost grows with total transcript size, which includes large tool results. Correct, but it is work proportional to history that an incremental scan (index of last scanned message) would make proportional to the new messages only.",
+      "suggested_fix": "Keep a per-session cursor (last scanned index) and a Set of roots in the gate's state, and scan only messages after the cursor.",
+      "evidence": "diff lines for sessionReviewRoots: loops `for (const message of history)` with no cursor; findReviewGateState passes the result as extraRoots each call."
+    },
+    {
+      "id": "PERF-003",
+      "reviewer": "review-performance",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "src/review/readiness.ts",
+      "quote": "  const coverage = problems.length === 0 ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "problem": "reviewersCheck now runs the complete coverage gate (packageScopeFiles, packageChangedLines, blast-radius and PR-context probes, pendingMutants, and, for a dispatch that says depth light, effectiveDepth -> packageDiffStats) on every readiness computation. packageDiffStats spawns git rev-parse --show-toplevel (up to twice, sequentially), up to five git rev-parse calls in resolveBase, and a git diff -U20 over the whole PR scope with a 15 s timeout and an 8 MB buffer.",
+      "impact": "Readiness is read by `review status`, the panel and `review complete` (complete already runs the same gate through packageResearchErrors), so a light-depth package pays for the same git diff at least twice per close and once per status or panel refresh. Only light-depth dispatches reach the git path, and only on a big PR does -U20 get costly, so this is a repeated cost, not a hang.",
+      "suggested_fix": "Memoise the packageDiffStats result per (packageDir, manifest head) for the lifetime of one command, or let complete pass its already computed coverage errors into computeReadiness. Use `git diff --numstat`/`--name-only` instead of -U20 if only the file list and line count are needed.",
+      "evidence": "diff of readiness.ts reviewersCheck and research.ts packageCoverageErrors, plus coverage.ts packageDiffStats git spawns."
+    },
+    {
+      "id": "PERF-004",
+      "reviewer": "review-performance",
+      "severity": "minor",
+      "confidence": "low",
+      "file": "src/review/coverage.ts",
+      "quote": "  const cwd = (await gitTopLevel(options.packageDir)) ?? (await gitTopLevel(options.root));",
+      "problem": "Every packageDiffStats call starts one or two sequential git processes just to find the repository top level, before the base is resolved (up to five more rev-parse spawns inside resolveBase, run one after another) and the diff itself. The top level of a package directory does not change within a command, and the base candidates are independent probes.",
+      "impact": "Up to roughly eight process spawns of latency before the diff, per light-depth coverage check. Small per call; it multiplies with PERF-003.",
+      "suggested_fix": "Cache gitTopLevel by directory for the process, and probe the base candidates in parallel or with a single `git rev-parse --verify` over all names.",
+      "evidence": "gitTopLevel is awaited inline; resolveBase is imported dynamically and run per call."
+    },
+    {
+      "id": "PERF-005",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "confidence": "low",
+      "file": "src/review/dispatch-usage.ts",
+      "quote": "  const body = raw.replace(USAGE_LINE, \"\").replace(/\\s+$/, \"\");",
+      "problem": "`/\\s+$/` is quadratic in the length of any whitespace run inside the text, because each start offset in a run scans to the run's end and fails at `$`. It runs only when a KERYX_USAGE line is present, on a reviewer reply (attacker-influenced text). splitUsage is also called by parseReviewResult and isEmptyOutput, so the body is rebuilt once per reader.",
+      "impact": "Needs a reply with a very long internal whitespace run (tens of KB) plus a usage line; reviewer replies do not normally look like that. Settles with: a 100 KB space run in a raw result.",
+      "suggested_fix": "Use `raw.trimEnd()` (linear) in place of the regex, and parse the body once per raw file instead of per reader.",
+      "evidence": "diff of slice-04, src/review/dispatch-usage.ts: see quote"
+    },
+    {
+      "id": "PERF-006",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "confidence": "low",
+      "file": "src/review/ledger.ts",
+      "quote": "  const hit = UNREADABLE_INPUT.map((re) => re.exec(result.summary!)).find((m) => m !== null);",
+      "problem": "Both UNREADABLE_INPUT patterns are tried eagerly through map even when the first matches, and each pattern pairs two {0,80} windows behind a many-alternative prefix, so the worst case on text full of near matches (\"cannot read\" repeated) is about 80 x 80 steps per start offset. The regexes are compiled once at module level, which is right.",
+      "impact": "Reviewer summaries are normally a few KB, so this is negligible today; it becomes a cost only for a summary in the hundreds of KB. unreadableInputClaim is called once per reviewer result in the ledger build.",
+      "suggested_fix": "Short-circuit with a for loop instead of map+find; cap the summary length scanned (for example the first 20 KB).",
+      "evidence": "diff of slice-04, src/review/ledger.ts: see quote"
+    },
+    {
+      "id": "PERF-007",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "confidence": "low",
+      "file": "src/review/completion-gate.ts",
+      "quote": "    const scanned = await scanRoot(root, since);",
+      "problem": "Roots are scanned one after another, and every root's open-package candidates are collected even when the active-review pointer then decides the package. The result of the candidate scan is only used for closedAt and the fallback.",
+      "impact": "Each scanRoot reads and parses every manifest.json under that root's reviews directory; with many historical packages that is hundreds of small reads, serial per root. Pre-existing per root, now multiplied by the number of roots named in the session. Typically one or two roots.",
+      "suggested_fix": "Scan roots with Promise.all, and skip the candidate list when the pointer already names the package (closedAt still needs the closed manifests).",
+      "evidence": "diff of slice-04, src/review/completion-gate.ts: see quote"
+    }
+  ],
+  "slices": [
+    "slice-04"
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 3,
+    "info": 3
+  }
+}
+```
+
+## Performance Review (slice-04)
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 3
+- Info: 3
+
+### Findings
+- PERF-001 (major) `src/review/completion-gate.ts` REVIEW_PACKAGE_PATH: lazy unanchored regex, quadratic on long path-safe runs in transcript text, re-run over the whole history each gate evaluation.
+- PERF-002 (minor) whole-history rescan with no cursor, plus extra manifest reads per discovered root.
+- PERF-003 (minor) `src/review/readiness.ts`: readiness now runs the full coverage gate (git diff -U20 for light dispatches), repeated by status, panel and complete.
+- PERF-004 (minor) `src/review/coverage.ts`: serial git spawns (top level, up to five rev-parse) before the diff.
+- PERF-005 (info) `src/review/dispatch-usage.ts`: `/\s+$/` quadratic on long internal whitespace; usage split repeated per reader.
+- PERF-006 (info) `src/review/ledger.ts`: eager double regex over summary, bounded windows.
+- PERF-007 (info) `src/review/completion-gate.ts`: serial root scans and unused candidate scan when the pointer decides.
+
+### Clean Areas
+N+1 queries (none), React re-renders and MobX (not touched), unbounded collections (MAX_HITS and bounded locate preserved, `candidates` bounded by the scan), memory leaks, bundle imports (the dynamic `import("./prior-round")` is per call, module-cached), synchronous blocking (all new I/O is async), pagination. The locate.ts kind/candidates additions, usageTotals, runUsage, quotesLocatedCheck and coverageFromResearch are linear. Not read: git history for the removed `mtime < since` ingest special case (no read-only git offered in the payload beyond the diff).

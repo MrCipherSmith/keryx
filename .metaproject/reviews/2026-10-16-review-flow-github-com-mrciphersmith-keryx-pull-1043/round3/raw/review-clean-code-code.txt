@@ -1,0 +1,81 @@
+REVIEW_RESULT review-clean-code round 3 (delta f47ebb0ec..8a9ae3d20)
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "prior_dispositions": [
+    {"id": "r2-review-clean-code-code#CC2-1", "disposition": "closed", "evidence": "src/review/premise.test.ts:99-100: the local is now `claimed`/`untouched`; no `const first = finding()` remains, `first` is only the helper at :58"},
+    {"id": "r2-review-clean-code-code#CC2-2", "disposition": "closed", "evidence": "the field rule is stated once in task-implementer/SKILL.md:101 (FIX_CONTEXT); job-orchestrator/SKILL.md:1190, flow-orchestrator/SKILL.md:440, feature-dev/SKILL.md:116, review-pr-feedback/SKILL.md:366 point to 'as task-implementer's FIX_CONTEXT defines them'"},
+    {"id": "r2-review-clean-code-code#CC2-3", "disposition": "closed", "evidence": "session-plan-bridge.mdc:39 names `step-0` … `step-14` and `step-10b`; session-plan-bridge-contract.test.ts:108-109 asserts it"},
+    {"id": "r2-review-clean-code-skills#CC2-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.detail.md:666 'Not waivable', :668 'A failing item but premise-decisions'; SKILL.md:136 'each failing item but premise-decisions'; docs/docs/cli-reference.md:4857 'not waivable' and lists it last"},
+    {"id": "r2-review-clean-code-skills#CC2-002", "disposition": "closed", "evidence": "same as CC2-3: session-plan-bridge.mdc:39 and session-plan-bridge-contract.test.ts:109 now cover step-10b"},
+    {"id": "r2-review-clean-code-skills#CC2-003", "disposition": "open", "evidence": "flow-orchestrator/SKILL.md:277 heading paragraph is still followed by 'Then freeze and start' at :279 and the flow freeze block with no heading of its own; the freeze step still reads as the tail of the finding-sourced paragraph"},
+    {"id": "review-clean-code-w9#CC-002", "disposition": "partial", "evidence": "src/flow/review-gate.test.ts:1610 still defines a local `heldFinding` wrapper (over shared heldPremise); review-operator-cli.test.ts:65 and operator-confirm-review-tools.test.ts:356 now use the shared heldFinding; verdict.test.ts:32 keeps its own `held` builder over the shared heldFinding. One name, two meanings (shared vs local heldFinding) remains in review-gate.test.ts"},
+    {"id": "review-clean-code-skills#CC-005", "disposition": "closed", "evidence": "no 'findings it raised' text remains under src/gdskills/bundled/skills (grep empty); external-never-downgraded and dismissal->disagree are in review-pr-feedback/SKILL.md:366"}
+  ],
+  "findings": [
+    {
+      "id": "CC3-1",
+      "severity": "minor",
+      "file": "src/review/premise-question.ts",
+      "line": 82,
+      "problem": "isReviewPackageDir restates the rule for where a review package lives (directly under .metaproject/reviews/ or .metaproject/flows/<flow>/reviews/) that prior-round.ts already owns as PACKAGE_GLOBS (prior-round.ts:128). The predicate is also a generic path check housed in the premise-answer module, and src/commands/automatic-review.ts now imports it from there for the --prior approval.",
+      "impact": "A change to the package layout (a new location, a rename of the flows tree) needs two edits in two modules; the one that is missed makes --prior accept or refuse a directory the round detector treats the opposite way, which is the SEC2-001 boundary.",
+      "suggested_fix": "Put one `isReviewPackageDir(dir, projectRoot)` next to PACKAGE_GLOBS in prior-round.ts (or a small review-package-path module) and import it from premise-question.ts and automatic-review.ts.",
+      "evidence": "premise-question.ts:82-98; prior-round.ts:128; automatic-review.ts import of isReviewPackageDir from ../review/premise-question",
+      "confidence": "medium",
+      "principle": "Clean Code G5 duplication / SRP"
+    },
+    {
+      "id": "CC3-2",
+      "severity": "minor",
+      "file": "src/commands/automatic-review.ts",
+      "line": 253,
+      "problem": "touchesOperatorOnly answers two questions under a name that states one: whether a path hits an operator-only name, and (last clause, `!real.startsWith(realDir + sep)`) whether the resolved target escapes the package. A reader of the call site at :323 sees 'not operator-only' and cannot tell it also decides containment. It also resolves symlinks repeatedly: realTarget(resolved) runs at :322 and again inside at :259, and realTarget(dir) at :260 for every approved patch path.",
+      "impact": "A later edit that narrows the helper to its name (for example to reuse it for a read check) silently drops the containment guard; the repeated filesystem walks are cheap today but hide that the caller and the helper must agree on the same real path.",
+      "suggested_fix": "Split into `touchesOperatorOnlyName` and `escapesPackage`, compute `real` once in the approval and pass it in; keep the call site reading `inside && dataExtension && !operatorOnly`.",
+      "evidence": "automatic-review.ts:253-262, :322-323",
+      "confidence": "medium",
+      "principle": "Clean Code G11/N4 (name says one thing), G5"
+    },
+    {
+      "id": "CC3-3",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 238,
+      "problem": "normaliseCarriedPremise grew to five exit paths and three derived flags (stale, stray, stillADowngrade) mixing three rules: strip the operator answer, strip a severity a non-downgrade verdict cannot carry, and re-validate a downgrade against the finding's severity or drop the premise. Each rule is commented in the doc block, but the function body interleaves them.",
+      "impact": "Adding a verdict or a fourth rule needs reasoning about which early return it must precede; the two `{ ...finding, premise: ... }` branches differ only by which keys are removed.",
+      "suggested_fix": "Extract `withoutStraySeverity(judgement)` and `downgradeStillHolds(finding, premise)` so the body reads: strip operator; if not downgraded return stripped; if downgrade no longer holds drop the premise; else restamp severity.",
+      "evidence": "premise.ts:238-259",
+      "confidence": "medium",
+      "principle": "Clean Code F3/G30 (one level of abstraction, function does one thing)"
+    },
+    {
+      "id": "CC3-4",
+      "severity": "minor",
+      "file": "src/review/premise-question.ts",
+      "line": 171,
+      "problem": "answerPremiseQuestion carries a mutable `rerecord` flag that the applyFirst callback sets and the undo closure clears, then is read after recordPremiseDecision returns: control state passed through a captured variable across two closures and a lock boundary. The function also now does four things (apply to findings.json with undo, append the decision, decide whether the registry vouched, re-record and warn).",
+      "impact": "The invariant 'rerecord is true only when the findings write landed and the decision append did not undo it' lives in three places (assignment at 202, reset at 205, read at 211); a future early return in the callback that forgets the reset leaves the registry re-recording a package whose answer was rolled back.",
+      "suggested_fix": "Have the callback return `{ undo, vouched }` (or have recordPremiseDecision return what applyFirst returned) so the caller reads one value after the lock instead of a flag mutated by two closures; move the registry step into a small `reRecordRegistry(packageDir, registry)` helper.",
+      "evidence": "premise-question.ts:171-216 (delta lines 124-171)",
+      "confidence": "medium",
+      "principle": "Clean Code G36/F3 (flag state across closures, function does one thing)"
+    },
+    {
+      "id": "CC3-5",
+      "severity": "info",
+      "file": "src/review/verdict.ts",
+      "line": 252,
+      "problem": "readPremiseClaimsFile is typed `Promise<ReturnType<typeof parsePremiseClaims>>` while its doc says it returns undefined when there are no claims; the type depends on parsePremiseClaims' return admitting undefined, and `ReturnType<typeof ...>` hides that from the reader. Informational: the rename premiseClaims to premisedFindings in InterimVerdict is complete in src (no stale reader found).",
+      "impact": "None today; a change to parsePremiseClaims' return type changes this signature silently.",
+      "suggested_fix": "Name the type: `Promise<ParsedPremiseClaims | undefined>`.",
+      "evidence": "verdict.ts delta lines 431-443",
+      "confidence": "low",
+      "principle": "Clean Code N1/G11"
+    }
+  ]
+}
+```
+
+Summary: 8 prior clean-code findings from rounds 1-2: 6 closed, 1 partial (CC-002, review-gate.test.ts keeps a local heldFinding wrapper), 1 open (CC2-003, flow-orchestrator freeze block still has no heading). 0 regressed. The delta is sound: cardSafe extraction, the lock around recordDispositions/ingest, singleEmbeddedBlock and the ScopeExtras move are clean. New: 0 blocker, 0 major, 4 minor (duplicated package-location rule, touchesOperatorOnly mixing containment with name check, normaliseCarriedPremise doing three rules, rerecord flag across closures), 1 info.

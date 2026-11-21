@@ -1,0 +1,123 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "CC-001",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 597,
+      "title": "partitionRegionsByFix is ~50 lines mixing classification, context labelling and piece building",
+      "problem": "partitionRegionsByFix classifies each changed line, labels context lines by nearest change (half-and-half), and builds the ScopedRegion pieces in one body, with a tri-state boolean|undefined array (kinds) and a boolean array (labels) carrying different meanings. The labelling step (the before/after nearest-change search) is the non-obvious part and has no name of its own.",
+      "suggested_fix": "Extract labelContextLines(kinds) and cutRegionByLabels(region, lines, labels) so the exported function reads as classify, label, cut.",
+      "evidence": "export function partitionRegionsByFix(regions: readonly ScopedRegion[], hunks: readonly FixHunk[]): { fix: ScopedRegion[]; other: ScopedRegion[] } {",
+      "principle": "Clean Code - Functions B1"
+    },
+    {
+      "id": "CC-002",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 561,
+      "title": "Hunk containment and region line walking exist in three variants; the new walkRegion/lineInHunk are not used by secondLookClaimBacked",
+      "problem": "lineInHunk takes an inline structural type identical to RoundHunk (round-record.ts) instead of naming it. Three sites test whether a changed line lies in a hunk: lineInHunk (handles removed lines via line-1), regionInSecondLook (region overlap), and secondLookClaimBacked, which still hand-rolls its own region walk (let line = region.startLine; for (const entryLine of region.text.split(newline))) and checks line >= hunk.startLine && line <= hunk.endLine. The new helpers do the same walk with different removed-line and backslash-line handling, so the two walks can disagree on one slice.",
+      "suggested_fix": "Type the hunk parameter as RoundHunk and reuse walkRegion/lineInHunk in secondLookClaimBacked (and an onlyInHunks(text, hunks) helper shared with onlyFixLines).",
+      "evidence": "function lineInHunk(hunk: { file: string; startLine: number; endLine: number }, file: string, line: number, removed: boolean): boolean {",
+      "principle": "Clean Code - DRY E1 (sites: round-split.ts lineInHunk, regionInSecondLook, secondLookClaimBacked)"
+    },
+    {
+      "id": "CC-003",
+      "severity": "minor",
+      "file": "src/review/research.ts",
+      "line": 344,
+      "title": "Local record / str coercion helpers re-declared again (4 modules define `record`)",
+      "problem": "dispatchRuns declares its own `record` closure on every call, plus `str`; ingestScreenedOf inlines the same object check. `const record = (value: unknown)` is already defined in readiness.ts, coverage-complete.ts and round-record.ts (grep over src/review), so the shape exists in four modules and this diff adds a fourth copy plus a fifth inline form.",
+      "suggested_fix": "Export one asRecord helper from src/lib/json (or similar) and import it; hoist str to module level if still needed.",
+      "evidence": "const record = (value: unknown): Record<string, unknown> | undefined =>",
+      "principle": "Clean Code - DRY E1"
+    },
+    {
+      "id": "CC-004",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 769,
+      "title": "expectedFixRoles takes text optionally while fixClaimBacked now requires it; omitting it silently narrows the roster",
+      "problem": "The same fix-claim rule is checked by fixClaimBacked(entry, context, text) with text mandatory, but expectedFixRoles(entry, context, text?) treats a missing text as touched = [], so the roster is computed from the manifest's findingIds alone. That is the 'drop an id from the manifest to drop its author' hole the new doc comment says the function closes, left open by an optional parameter. Today routing-check passes text, but the signature invites a caller that does not.",
+      "suggested_fix": "Make text required, or split into a roster-from-ids function and the text-aware one.",
+      "evidence": "export function expectedFixRoles(entry: Pick<SliceEntry, \"findingIds\">, context: FixContext, text?: string): string[] {",
+      "principle": "Clean Code - Functions B2 (optional argument changing behaviour)"
+    },
+    {
+      "id": "CC-005",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 83,
+      "title": "COVERAGE_MD_MARK, a coverage.md write-format constant, is owned by the readiness reader",
+      "problem": "The marker line is written by `review ingest` and only read here, yet it is defined and exported from readiness.ts. The writer must import the checklist module (with its heavy imports) to emit one string; changing the writer's format means editing the checker.",
+      "suggested_fix": "Define COVERAGE_MD_MARK next to the coverage.md writer (or in a light module) and import it into readiness.ts.",
+      "evidence": "export const COVERAGE_MD_MARK = \"<!-- keryx: coverage.md written from the dispatch record (flow 460) -->\";",
+      "principle": "SOLID - SRP F1 (reader owns the writer's format)"
+    },
+    {
+      "id": "CC-006",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 137,
+      "title": "reviewersCheck is ~45 lines mixing path I/O, set arithmetic, gate invocation and message composition",
+      "problem": "reviewersCheck reads raw/ files, computes four name lists, runs the coverage gate, builds an ok note, a failure message and a repair string. The diff adds the coverageGated branch and gateNote on top, pushing it further past one abstraction level; the missing-result-file scan (`lost`) is a self-contained unit.",
+      "suggested_fix": "Extract runsMissingResultFile(ctx, runs) and the failure-message composition; keep reviewersCheck as gather, gate, decide.",
+      "evidence": "const gateNote = ctx.coverageGated ? \"the coverage gate accepts the dispatch\"",
+      "principle": "Clean Code - Functions B1/B3"
+    },
+    {
+      "id": "CC-007",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 538,
+      "title": "SECURITY_PROBLEM alternation contains redundant branches",
+      "problem": "security|secur\\w+ (the second subsumes the first) and injection|inject\\w* (likewise) read as a keyword list but several terms are dead; a maintainer adding a term cannot tell which entries matter. A readability cost, not a behaviour defect.",
+      "suggested_fix": "Collapse to secur\\w*|inject\\w*|... and add one comment line stating the intended bias (recall over precision, since a false positive only adds a reviewer).",
+      "evidence": "const SECURITY_PROBLEM = /\\b(security|secur\\w+|injection|inject\\w*|travers\\w+|secret|credential|password|token leak|xss|csrf|ssrf|rce|privilege|auth(entication|orization)?|sandbox escape|untrusted)\\b/i;",
+      "principle": "Clean Code - Names A2"
+    },
+    {
+      "id": "CC-008",
+      "severity": "minor",
+      "file": "src/review/verdict.ts",
+      "line": 993,
+      "title": "readPremiseClaimsFile name and doc now understate what it returns",
+      "problem": "The function now returns parsePremiseClaimSets output (a list of claim sets), while its name and the doc comment above it ('premise claims file, parsed') still describe one claims object.",
+      "suggested_fix": "Rename to readPremiseClaimSetsFile and update the doc line.",
+      "evidence": "async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typeof parsePremiseClaimSets>> {",
+      "principle": "Clean Code - Names A3"
+    },
+    {
+      "id": "CC-009",
+      "severity": "info",
+      "file": "src/review/retry-eval.ts",
+      "line": 438,
+      "title": "collectLateResults JSDoc paragraph is now one over-long sentence",
+      "problem": "The edit appended clauses without re-wrapping: one line joins two statements (what is covered, what `collected` counts) and runs far past the file's wrap width. Cosmetic.",
+      "suggested_fix": "Re-wrap and split into two sentences.",
+      "evidence": "a reply that names none covers none, as in the ledger.",
+      "principle": "Clean Code - Comments C1"
+    },
+    {
+      "id": "CC-010",
+      "severity": "info",
+      "file": "src/review/research.ts",
+      "line": 41,
+      "title": "DispatchRun carries fields (notRunReason, executionReason, routedOut) that may have no reader in this diff",
+      "problem": "dispatchRuns copies rawEvidence, notRunReason, executionReason and routedOut, but the readiness consumers in this slice read only reviewer and status. If no other reader exists the type is speculative width; I did not read every consumer in ledger.ts, dispatch.ts or managed.ts, so this is an observation. A grep for each field's consumers would settle it.",
+      "suggested_fix": "Trim to fields with a reader, or confirm each has one.",
+      "evidence": "executionReason?: string | undefined;",
+      "principle": "Clean Code - YAGNI"
+    }
+  ]
+}
+```
+
+Summary: the slice is clean and well documented; the flow 460 comments match the code. Findings are maintainability only: one long function (partitionRegionsByFix), a growing check (reviewersCheck), duplicated hunk and record helpers, an optional parameter that weakens expectedFixRoles, and some naming and ownership nits. No blocker or major.

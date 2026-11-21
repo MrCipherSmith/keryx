@@ -1,0 +1,61 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r5-review-clean-code-code#CC5-001", "disposition": "closed", "evidence": "src/review/prior-round.ts:861 record() takes `note = \"\"` and appends it to the pushed detail (:870); :902-904 compute `skipped` and `note` first and pass the note into record(\"flow\", ..., note). The tried.at(-1) read-back and the post-push mutation are gone."},
+    {"id": "r5-review-clean-code-code#CC5-002", "disposition": "closed", "evidence": "heldFindingsChanged and claimsNoLongerHeld (the `finding as unknown as Loose` cast sites) are deleted; carriedPremiseHolds (src/review/premise.ts:746-763) is one loop over Loose records and one `as ReviewFindingPremise` cast (:756), constrained to `T extends StructuredReviewFinding`."},
+    {"id": "r5-review-clean-code-skills#CC5-001", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:363-365 rule 6 is back on its three hard-wrapped lines, as in origin/main; the delta-skills hunk @@ -360 restores it. Rule 3 differs from origin/main only by its added premise sentence (content, not rewrap)."},
+    {"id": "r5-review-clean-code-skills#CC5-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1128 now reads 'The judge's claims name the `id`...'; the pronoun has an antecedent."},
+    {"id": "r4-review-clean-code-skills#CC4-001", "disposition": "open", "evidence": "src/gdskills/bundled/skills/review/review-premise/SKILL.md source row is untouched by the round-6 delta; owner-dismissed, not re-raised."}
+  ],
+  "findings": [
+    {
+      "id": "r6-review-clean-code-code#CC6-001",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 756,
+      "problem": "carriedPremiseHolds copies `record.premise` from the previous findings.json into the new finding with a bare `as ReviewFindingPremise` cast. heldRecords (:766-769) checks only that `premise.verdict` is a held word, and the doc comment (:736-737) justifies the copy with 'which that ingest's merge already validated'. findings.json is a file an agent can write (the same comment says so about premises.json, SEC4-001/SEC5-001), so the shape is not guaranteed. The old path re-parsed the claims through parsePremiseClaims and mergePremises; the new one skips every shape check on `options`, `question`, `practice_sources`, `intent_signals`.",
+      "impact": "A hand-edited or damaged held record (for example `options` a string, or a held verdict with no `question`) is carried into the new findings.json as a valid hold. renderPremiseMarkdown (:703) calls `premise.options.join` and would throw on a non-array, an ingest crash after earlier writes rather than the clean 'Nothing was written' refusal. The operator-only guarantee is not weakened: only holds carry, a hold can only keep a finding for the operator, a dismissal still needs the decisions store, and the subject (severity, verdict, problem digest) must match so an existing decision still binds. The gap is robustness and the unstated trust in findings.json.",
+      "suggested_fix": "Validate the carried premise before use: re-run the record's premise through the same schema/shape guard the merge applies (or a small `isValidHeldPremise(premise)` that checks verdict, non-empty question, options array of strings, source arrays), and put the finding in `changed` (refuse) when it fails. Add a unit test with a malformed held premise in the previous findings.json.",
+      "evidence": "src/review/premise.ts:756 (cast), :766-769 (heldRecords checks verdict only); src/review/premise.ts:703 (options.join)",
+      "confidence": "medium"
+    },
+    {
+      "id": "r6-review-clean-code-code#CC6-002",
+      "severity": "minor",
+      "file": "src/review/package-location.ts",
+      "line": 29,
+      "problem": "packageDirById is a third copy of 'standalone package, else a flow's package' beside resolveReviewPackagePath (managed.ts:2780-2807) and the async listFlowDirs in flow/store.ts:50; the private sync flowDirs (:36) duplicates listFlowDirs. The three differ: resolveReviewPackagePath requires manifest.json for the standalone hit, packageDirById only existsSync of the directory, so an empty or stray standalone directory named like the id shadows the real flow package. flowDirs returns raw readdir order (no sort, no directory filter), so an id present in two flows resolves by filesystem order. The header comment (:3-9) says resolveReviewPackagePath 'walks both roots with these helpers', which it does not (it uses listFlowDirs and its own loop).",
+      "impact": "Two lookups of the same thing can disagree about which package an id names; verify-run records are then promoted from the wrong package or not at all. Maintenance cost grows with each new copy.",
+      "suggested_fix": "Have resolveReviewPackagePath and packageDirById share one resolver (a sync `findPackageDir(cwd, id)` using one agreed test, manifest.json or directory, and sorted flow dirs), or reuse listFlowDirs by making the caller async. Correct the header comment either way.",
+      "evidence": "src/review/package-location.ts:29-40 vs src/review/managed.ts:2789-2804",
+      "confidence": "medium"
+    },
+    {
+      "id": "r6-review-clean-code-code#CC6-003",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "line": 1083,
+      "problem": "The ingest output still says 'premise claims: carried forward', but nothing carries claims any more: the holds are carried and the merge then reports `claims: 0` (premise.test.ts: counts claims 0, held 1). The result field is still named premisesCarriedForward (types.ts:889) and the report label says claims.",
+      "impact": "A reader sees 'claims carried' next to a claims count of 0. Cosmetic.",
+      "suggested_fix": "Say 'premise holds: carried forward from this package's previous findings.json ...' and rename the field to premiseHoldsCarried when convenient.",
+      "confidence": "low"
+    },
+    {
+      "id": "r6-review-clean-code-code#CC6-004",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 753,
+      "problem": "carriedPremiseHolds does `findIndex`, then reads `carried[index]` and later writes `carried[index]` with index possibly -1; the miss is handled only because `carried[-1]` is undefined and `candidate === undefined` routes to `changed`. The loop mixes lookup, candidate construction and subject comparison, and relies on that sentinel.",
+      "impact": "Correct today; the write at :759 is only reached when candidate is defined, so index >= 0. A refactor that reorders the branches could write at -1.",
+      "suggested_fix": "Guard `index < 0` explicitly (push to `changed` and `continue`) and extract the candidate step into a small helper `withPreviousPremise(current, record)`.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+Summary: all five tracked priors are closed except CC4-001 (skills), which is untouched and owner-dismissed. The redesigned carry meets the stated contract: carriedPremiseHolds takes only the validated findings.json records (managed.ts:369 reads findings.json alone, premises.json is never read for the carry), carries only held verdicts, refuses when a held finding is gone or its severity, verdict or problem digest changed, and keeps the operator-only guarantees (a dismissal still comes only from the decisions store, the subject binding is unchanged, holds can only keep a finding back). The RG4-001, SEC5-001 and LG5-003 cases each have a test. New: 0 blocker, 0 major, 2 minor (carried premise copied from findings.json without a shape check; a third, divergent package-by-id resolver), 2 info (stale 'claims' wording, index -1 sentinel).

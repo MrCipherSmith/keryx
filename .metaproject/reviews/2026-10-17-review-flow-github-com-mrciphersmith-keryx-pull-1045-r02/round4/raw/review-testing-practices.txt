@@ -1,0 +1,317 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Round-4 verification of the round-3 fix (testing lens). Every round-3 finding and every testing-domain prior record is dispositioned. One new major: review.test.ts runs a real gh because the delta added a gh call to every PR-target start/attach/ingest and the ingest() helper passes no seam. Mutation pass not run: the brief is read-only and forbids running tests, so no mutation table is published and the pass is skipped, not simulated. Cap: 0 of the added gates mutated; candidates are the fileHash reuse rule, mapBounded limit, ghPrBase validation and the COVERAGE_ENTRY anchoring.",
+  "findings": [
+    {
+      "id": "TP4-001",
+      "severity": "major",
+      "file": "src/commands/review.test.ts",
+      "line": 105,
+      "quote": "async function ingest(reviewId: string, extra: string[] = []): Promise<string> {",
+      "problem": "The delta makes every `review start|attach|ingest` of a pull request target call `ghPrBase(targetRef)` (src/commands/review.ts:1069), which runs `gh pr view <ref> --json baseRefName` when `gh` is on PATH, unless the `prBase` seam is passed. The `ingest()` helper in review.test.ts calls reviewCommand([\"ingest\", ...]) with no seams, and four tests pass it `--target pr --ref https://github.com/acme/app/pull/7`: the tests therefore run a real `gh` against GitHub.",
+      "impact": "Running `bun test src/commands/review.test.ts` on any machine or CI runner with `gh` installed (GitHub-hosted runners have it) makes up to four real network requests, each allowed 15 s (PR_BASE_TIMEOUT_MS) before it is abandoned. The test is nondeterministic by environment (signed in, signed out, offline, rate limited) and slow when the network hangs. prior-round.test.ts:643 shows the intended pattern: it defaults the seam to `async () => undefined`.",
+      "suggested_fix": "Give the `ingest()` helper (and any other direct reviewCommand start/attach/ingest call that names a pull request target) a seams argument defaulting to `{ prBase: async () => undefined }`, or set the seam once in a beforeEach through a module-level default; or make ghPrBase return undefined under the test runner. Keep one test, with a stand-in `gh` on PATH like review.test.ts:330, for the real ghPrBase.",
+      "evidence": "review.ts:1069 `const prBase = targetKind === \"pr\" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;` runs for mode ingest too (runCreate, :1043). review.test.ts:105-119 passes `...extra` and no seam; callers at :255, :261, :269 (PR_URL, https://github.com/acme/app/pull/7) and :327 (GATE_PR, same URL). ghPrBase (review.ts:654) returns early only when `Bun.which(\"gh\") === null`. Mutation pass not run (read-only brief); this finding rests on the call path, not on a result.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "class_scope": {
+        "sites": [
+          "src/commands/review.test.ts:255",
+          "src/commands/review.test.ts:261",
+          "src/commands/review.test.ts:269",
+          "src/commands/review.test.ts:327"
+        ],
+        "enumeration_method": "rg for '\"--target\", \"pr\"' and '--target pr' over src/**/*.test.ts: review.test.ts (4 sites, all through ingest()), prior-round.test.ts:649 (passes the prBase seam), review-plan.test.ts:96 (recorded runner, never reaches runCreate), review-run.test.ts / autonomous-*.test.ts / automatic-review.test.ts (argument parsing or fake runners only)"
+      }
+    },
+    {
+      "id": "TP4-002",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 37,
+      "quote": "async function fileHash(file: string): Promise<string> {",
+      "problem": "Gates and helpers the delta added carry no test that builds the input separating them from the condition beside them: (1) fileHash's reuse rule (stat key, 2 s racy window, 4096 cap) in completion-gate.ts:37; the only signature test is completion-gate.test.ts:169-177, a file appearing, which passes whether or not a rewritten same-size file is re-read. (2) src/lib/map-bounded.ts has no test (order, the limit, an empty list); it gates two scans (completion-gate.ts:509, package-location.ts:75). (3) ghPrBase's branch-name validation (review.ts:654-665) is reachable only through the real gh. (4) coverage-md.ts COVERAGE_ENTRY's `^`/`m` anchoring and `\\r?\\n`: coverage-md.test.ts only feeds it the writer's own output, which already collapses line breaks.",
+      "impact": "A later edit to any of these is unprotected; the racy-window rule is the one that decides whether a rewritten working file keeps the gate's stall counter moving.",
+      "suggested_fix": "fileHash: write a file, take the signature after the racy window, rewrite it with same-size different content (utimes back to the old mtime is not enough; the ctime moves), assert the signature changes. mapBounded: a table test (order kept, at most `limit` in flight, empty input). ghPrBase: one test with a stand-in gh printing `-x`, `a..b`, and `main`. coverage.md: one parse of `note reviewer: x\\nstatus: y` and of a CRLF entry.",
+      "evidence": "Searches: no test file references fileHash, dirSignature, RACY_WINDOW_MS or MAX_HASHED_FILES; no src/lib/map-bounded.test.ts; the mutation pass was not run (read-only brief), so this is reported at info as the skill requires for an unexecuted result.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TP4-003",
+      "severity": "info",
+      "file": "src/review/ledger.test.ts",
+      "line": 1119,
+      "quote": "const exec = spyOn(RegExp.prototype, \"exec\");",
+      "problem": "The two tests that replaced the 500 ms bounds pin a call count on RegExp.prototype.exec: exactly one call with an input over 1000 characters (hostile usage line) and none (long reply). That removes the clock, but it no longer pins the property the test name claims for USAGE_LINE (linear time): the one permitted call would still be one call if the pattern were changed to a backtracking form. It also couples the test to the implementation: a change that rejects an over-long line before any pattern runs makes the first test fail with 0 calls.",
+      "impact": "The 'a long line of braces is read in linear time' guarantee has no remaining regression check; the whitespace test does pin that reply text reaches no pattern.",
+      "suggested_fix": "For the usage line, assert the cap rather than the count (the line is refused by length before objectOfLine: JSON.parse not called, usage undefined, body free of the marker, which the test already does) and drop the `toHaveLength(1)`; or keep a generous bound (several seconds, compared to a doubled input) as the skill's convention for the one regex-backed claim.",
+      "evidence": "ledger.test.ts:1119-1131 (`expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toHaveLength(1)`), :1186-1191 (`toEqual([])`); the matched call is dispatch-usage.ts:148 `USAGE_LINE.exec(line)`, USAGE_LINE at :64. Not executed.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TP4-004",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "line": 1500,
+      "quote": "if (calls >= 10) throw new Error(\"idSeq boom\");",
+      "problem": "The thrown-error test reaches the child's inner catch by making idSeq throw on its tenth call. The threshold is the number of idSeq calls the code happens to make before the failure point; it is not stated or derived.",
+      "impact": "If setup makes more or fewer idSeq calls, the throw lands in the outer setup-error path or never fires. The test then fails loudly (status and `failed: idSeq boom` are asserted), so this is maintenance cost, not a false pass.",
+      "suggested_fix": "Throw from something the child calls after setup (a provider that throws on the first stream, as refusingProvider does for rate limits) instead of counting idSeq calls.",
+      "evidence": "spawn-subagent-tool.test.ts:1500-1527 (diff hunk @@ -1488), assertions `result.status === \"Error\"` and `/failed: idSeq boom/`.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "needs_context": [],
+  "prior_dispositions": [
+    {
+      "id": "r3-review-architecture-code:R3-ARCH-001",
+      "disposition": "closed",
+      "evidence": "deltaRoundCut now lives in src/review/round-cut.ts:43; review-slice.ts imports it from ../review/round-cut; review-slice.test.ts and second-look.test.ts import it from there"
+    },
+    {
+      "id": "r3-review-architecture-code:R3-ARCH-002",
+      "disposition": "open",
+      "evidence": "info, accepted: the packageDiffStatsCached key in src/review/coverage.ts still holds packageDir, root and target, not the resolved base sha; delta did not change it"
+    },
+    {
+      "id": "r3-review-clean-code-code:CC-R3-001",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:1336-1344 attributionReviewers has its own doc; the stub-refusal doc now sits at :1364-1370 directly above refuseStubReport (:1371)"
+    },
+    {
+      "id": "r3-review-clean-code-code:CC-R3-002",
+      "disposition": "closed",
+      "evidence": "round-cut.ts:43-56 deltaRoundCut uses withoutOmitted/cutRegions/routeAsDelta/secondLookCut helpers; the `look!` assertion is gone"
+    },
+    {
+      "id": "r3-review-clean-code-code:CC-R3-003",
+      "disposition": "open",
+      "evidence": "info: src/review/ledger.ts:29 still `Pick<ParsedResult, \"inputs_unreadable\" | \"status\" | \"summary\">`; not in delta"
+    },
+    {
+      "id": "r3-review-clean-code-code:CC-R3-004",
+      "disposition": "open",
+      "evidence": "info: src/review/readiness.ts:26-29 still re-exports COVERAGE_MD_MARK; managed.test.ts:2 and readiness.test.ts:16 still import it through readiness"
+    },
+    {
+      "id": "r3-review-clean-code-code:CC-R3-005",
+      "disposition": "closed",
+      "evidence": "src/review/slice.ts:427 regionsByFile pushes in place; ledgerOmissions uses it"
+    },
+    {
+      "id": "r3-review-clean-code-code:CC-R3-006",
+      "disposition": "open",
+      "evidence": "info: src/review/coverage.ts:549 still spreads `{ ...target, head: target.head }`; resolveBase still takes a whole target (git-base.ts untouched)"
+    },
+    {
+      "id": "r3-review-core-boundaries-code:CB3-001",
+      "disposition": "closed",
+      "evidence": "same move as CC-R3-001: managed.ts:1336-1344 and :1364-1371"
+    },
+    {
+      "id": "r3-review-highload-code:HL-R3-001",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:64 USAGE_LINE ends `(.*?)\\r?$`; pinned by ledger.test.ts:1132 (CRLF usage and other lines, isEmptyOutput with CRLF) which fails if the pattern goes back to `(.*)$`"
+    },
+    {
+      "id": "r3-review-highload-code:HL-R3-002",
+      "disposition": "closed",
+      "evidence": "package-location.ts:73 readStandalonePackages reads heads once (mapBounded, 16 wide); flowPackageDirs(:90) takes them; governance/aggregate.ts:48 reads once per pass; pinned by managed.test.ts:242-247"
+    },
+    {
+      "id": "r3-review-highload-code:HL-R3-003",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:338 recordSaves chain, :355 saveDispatchRecord serialises per path, :368 saveDispatchRecordNow; harness-robustness.test.ts:638 runs three concurrent saves and asserts all three usages"
+    },
+    {
+      "id": "r3-review-highload-code:HL-R3-004",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:37 fileHash reuses a hash for an unchanged file (stat key, 2 s racy window, 4096 cap); :509 reads manifests with mapBounded(16). No test pins the cache (see finding TP4-002, info)"
+    },
+    {
+      "id": "r3-review-logic-code:LG-001",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:368-: a non-final record keeps the earlier one only when it is complete or this dispatch has no text; harness-robustness.test.ts:619 pins partial A then partial B (B replaces) and an empty third keeping B"
+    },
+    {
+      "id": "r3-review-logic-code:LG-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:173 shellCommands drops redirections (`2>&1`, `>&2`, `&>`) and keeps `|` stages; completion-gate.test.ts:501-: eight redirection forms, pipe filters, `cd sub && keryx review start --pr N 2>&1` roots; :432 adds invocation.cwd as a root"
+    },
+    {
+      "id": "r3-review-logic-code:LG-003",
+      "disposition": "closed",
+      "evidence": "coverage.ts:595 widestDiff takes per-dimension maxima; coverage.test.ts:670 asserts files from one diff and changedLines from the other, both orders"
+    },
+    {
+      "id": "r3-review-logic-code:LG-004",
+      "disposition": "closed",
+      "evidence": "CHANGELOG.md:18 now names 'the roles its own changed lines route by content'; review-orchestrator SKILL.md:685, SKILL.detail.md:699 and flow-orchestrator SKILL.md:529 updated (delta-docs.diff)"
+    },
+    {
+      "id": "r3-review-logic-code:LG-005",
+      "disposition": "open",
+      "evidence": "info: src/review/locate.ts:248-249 still reports kind 'absent' for a one-line quote under MIN_SUBSTRING_QUOTE_CHARS; the floor is now documented but the reason text is unchanged"
+    },
+    {
+      "id": "r3-review-performance-code:PERF-R3-001",
+      "disposition": "closed",
+      "evidence": "same change as HL-R3-002 (package-location.ts:73, aggregate.ts:48)"
+    },
+    {
+      "id": "r3-review-performance-code:PERF-R3-002",
+      "disposition": "closed",
+      "evidence": "slice.ts:427 regionsByFile, used by ledgerOmissions and buildSlices"
+    },
+    {
+      "id": "r3-review-performance-code:PERF-R3-003",
+      "disposition": "open",
+      "evidence": "info: coverage.ts:610 `for (const base of resolved.bases)` still awaits gitDiffAt one base at a time (now up to three bases)"
+    },
+    {
+      "id": "r3-review-regression-code:RG3-001",
+      "disposition": "closed",
+      "evidence": "same change as LG-001; recordSaveNote (spawn-subagent-tool.ts:394) words the note from what was kept ('complete' | 'partial') or replaced; harness-robustness.test.ts:629 asserts the wording, and `not.toContain(\"complete\")` for a kept partial"
+    },
+    {
+      "id": "r3-review-regression-code:RG3-002",
+      "disposition": "closed",
+      "evidence": "same change as LG-002; completion-gate.test.ts:569 and the 'cd sub && keryx review start --pr 7975 2>&1' case name sub's package"
+    },
+    {
+      "id": "r3-review-regression-code:RG3-003",
+      "disposition": "closed",
+      "evidence": "review-finding.schema.json quote description, reviewer-finding.schema.json:82, CHANGELOG.md quote entry and docs/docs/cli-reference.md (~6681) all state the 12-character floor (delta-code/docs diffs)"
+    },
+    {
+      "id": "r3-review-regression-code:RG3-004",
+      "disposition": "closed",
+      "evidence": "review.ts:654/1069 ghPrBase records the PR's own base as target.base (target.prBase beside a --base); coverage.ts:578 resolveDiffBases measures it; prior-round.test.ts:676 and coverage.test.ts:642 pin it. Residual: with gh unavailable the defaults apply, as documented in the test comment"
+    },
+    {
+      "id": "r3-review-security-code-code:SEC-R3-001",
+      "disposition": "closed",
+      "evidence": "round-split.ts manifestRosterRoles/ALWAYS_DISPATCHED_ROUTED_ROLES; wave-drivers.ts:34, estimate.ts, review-ledger.ts, review.ts runRequired all use it; round-split.test.ts:237 asserts the roster and a 1-wave estimate for review-security-code"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-001",
+      "disposition": "closed",
+      "evidence": "same as CC-R3-001"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-002",
+      "disposition": "closed",
+      "evidence": "coverage.ts:560 readPackageTarget returns recordedBase/prBase/head only; nominalBase, kind and ref are gone"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-003",
+      "disposition": "closed",
+      "evidence": "loop.ts:489 and flow/review-gate.ts use `const name = path.basename(packageDir)`"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-005",
+      "disposition": "closed",
+      "evidence": "src/lib/shell-tool-names.ts is the one list; completion-gate.ts:12,336 and commands/approval-cause.ts import it (the 'bash' member was dropped from the gate's set; tests moved to shell_exec)"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-006",
+      "disposition": "closed",
+      "evidence": "round-cut.ts withoutOmitted and cutRegions replace the repeated option spread and omitted-path filter"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-007",
+      "disposition": "partial",
+      "evidence": "completion-gate.ts:173 shellCommands is now exported and tested directly (completion-gate.test.ts:501-), but it grew (redirection, pipe, fd handling) and is longer and branchier than the one the finding described"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-008",
+      "disposition": "open",
+      "evidence": "info: same as CC-R3-003, ledger.ts:29 unchanged"
+    },
+    {
+      "id": "r3-review-style-code:STY-R3-009",
+      "disposition": "open",
+      "evidence": "info: src/review/wave-drivers.ts:8 still `import { type SliceManifest } from \"./slice\"`"
+    },
+    {
+      "id": "r3-review-style-docs:r3-review-style-docs:DS-001",
+      "disposition": "closed",
+      "evidence": "SKILL.detail.md:699 delta row now lists review-security-code for a security finding and the content-routed roles (delta-docs.diff)"
+    },
+    {
+      "id": "r3-review-style-docs:r3-review-style-docs:DS-002",
+      "disposition": "open",
+      "evidence": "info: review-orchestrator/SKILL.md BLOCKED bullet (~1226) is not in delta-docs.diff; remedy text unchanged"
+    },
+    {
+      "id": "r3-review-style-docs:r3-review-style-docs:DS-003",
+      "disposition": "open",
+      "evidence": "info: docs/docs/guides/review-with-a-record.md is not in delta-docs.diff; the lines at 656/965 are still unwrapped"
+    },
+    {
+      "id": "r3-review-testing-practices-code:NTP-001",
+      "disposition": "closed",
+      "evidence": "ledger.test.ts:1119 and :1186 no longer read a clock: both count RegExp.prototype.exec calls over inputs longer than 1000 characters (see finding TP4-003 for what that pins and no longer pins)"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.test.ts:1408 (NaN/Infinity and one-sided counts), :1432 (silent empty record), :1500 (thrown error); spawn-subagent-lifecycle.test.ts:132 (rate-limited, no usage); harness-robustness.test.ts:619-650 (replace, keep, serialise)"
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.test.ts:228 adds a newer unpointed package (pr-8000, later mtime) beside the pointed one (pr-7975): the newest-mtime fallback would pick pr-8000, so the pointer branch is now discriminated"
+    },
+    {
+      "id": "r2-review-testing-practices-w1:T-R2-002",
+      "disposition": "closed",
+      "evidence": "retry-eval.test.ts:30 drives collectLateResults with a reply that names no slices (covered []) and one naming slice-09, which the driver was not handed (covered [slice-01])"
+    },
+    {
+      "id": "r2-review-testing-practices-w3:TP-001",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.test.ts:1432 asserts `silent.output` does not contain 'saved to raw/review-style.txt'; the note format `[${what} saved to ${savePath}]` makes that discriminate the quietWhenSaved clause"
+    },
+    {
+      "id": "r2-review-testing-practices-w3:TP-002",
+      "disposition": "closed",
+      "evidence": "NaN/Infinity case at spawn-subagent-tool.test.ts:1408; recordSaveNote error branch asserted at harness-robustness.test.ts:629 ('could NOT be saved')"
+    },
+    {
+      "id": "r2-review-testing-practices-w4:TP-002",
+      "disposition": "closed",
+      "evidence": "ledger.test.ts:1119 and :1186 are deterministic (spyOn RegExp.prototype.exec and JSON.parse); no absolute wall-clock bound remains in ledger.test.ts for these two"
+    },
+    {
+      "id": "r2-review-testing-practices-w4:TP-007",
+      "disposition": "closed",
+      "evidence": "managed.test.ts:281 now `{ ... } satisfies BlastRadiusScreenInput` with the full BlastRadiusEntry shape (blast-radius.ts:163-175)"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0,
+    "info": 3
+  }
+}
+```
+
+## review-testing-practices, round 4 verification
+
+Prior dispositions: 45 checked ({'closed': 34, 'open': 10, 'partial': 1}). Round-3 findings: 38 (STY-R3-004 skipped as owner-dismissed). Testing-domain prior records: 7 (TP-004 skipped, accepted).
+
+New: major 1, minor 0, info 3.
+
+- TP4-001 (major): `ghPrBase` runs real `gh` from four review.test.ts tests through the seam-less `ingest()` helper (review.test.ts:105; sites :255, :261, :269, :327). prior-round.test.ts:643 shows the fix.
+- TP4-002 (info): fileHash cache, mapBounded, ghPrBase validation, COVERAGE_ENTRY anchoring have no test that separates them.
+- TP4-003 (info): the clock-free replacements for the 500 ms bounds pin an exec call count; the linear-time claim for USAGE_LINE is no longer checked.
+- TP4-004 (info): the thrown-error test reaches its branch with a magic `calls >= 10`.
+
+Mutation pass: not run (read-only brief). No mutation table is published; none of the added gates was mutated, so no survivor is claimed.

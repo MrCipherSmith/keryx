@@ -1,0 +1,87 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 03 reads cleanly: the failChild extraction and the readiness/ledger option cleanups remove duplication. Four minor and two info readability points, no major.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "ST-001",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "quote": "  type PremiseSource,",
+      "problem": "The new type import is inserted between ManagedReviewInput and ManagedReviewMode, breaking the alphabetical order the rest of that import list keeps (ManagedReviewInput, ManagedReviewMode, PremiseSource, ReviewFindingsSource ...).",
+      "impact": "Readability only: the next editor scanning the sorted list will not find the name where expected.",
+      "suggested_fix": "Move `type PremiseSource,` to after `type ManagedReviewMode,`.",
+      "evidence": "slice-03.diff lines 565-568: PremiseSource sits before ManagedReviewMode.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-002",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+      "problem": "readPremises casts twice (`sources[0] as string`, `readPremiseFile(source)) as PremiseSource`) to bridge the return type ManagedReviewInput[\"premises\"] (which includes undefined) to PremiseSource. The casts hide that readPremiseFile never returns undefined.",
+      "impact": "A reader cannot tell whether the cast is a guarantee or a silenced type error; a later change that lets readPremiseFile return undefined would not be caught.",
+      "suggested_fix": "Give readPremiseFile the narrower return type PremiseSource and drop both casts.",
+      "evidence": "slice-03.diff lines 681-687 and 702.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-003",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "partialSaved === undefined || (partial.length === 0 && !(\"error\" in partialSaved))",
+      "problem": "The partialSaveNote chain now nests a compound condition inside a four-way ternary chain. The empty-and-saved case is expressed as a negated `in` check, and the save call above it mixes the placeholder choice, the usage suffix and the save in one long line.",
+      "impact": "Hard to see which of four notes a given case yields; the empty case silently produces no note.",
+      "suggested_fix": "Extract a small helper with early returns for the note, and name `const text = partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER` before the save call.",
+      "evidence": "slice-03.diff lines 1330-1339.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-004",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "quote": "Item 11 (premise-decisions) is never waived",
+      "problem": "The description string now derives the upper bound from READINESS_ITEMS.length but still hard-codes `Item 11` for premise-decisions; SKILL.detail.md likewise hard-codes `twelve items`. Half the sentence tracks the list, half does not.",
+      "impact": "Adding a further readiness item updates one number automatically and leaves the others stale.",
+      "suggested_fix": "Refer to premise-decisions by id only, or derive its number from the list.",
+      "evidence": "slice-03.diff line 96.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-005",
+      "severity": "info",
+      "file": "src/commands/review-slice.ts",
+      "quote": "one is a security finding; every other slice is",
+      "problem": "In the help text the reflowed paragraph has one line well over 120 characters while the lines around it wrap near 100, so the wrapping is uneven.",
+      "impact": "Cosmetic; the help output is unaffected.",
+      "suggested_fix": "Re-wrap the paragraph at the width of its neighbours.",
+      "evidence": "slice-03.diff lines 417-419.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-006",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "quote": "async function readPremiseFile(source: string)",
+      "problem": "readPremiseFile is a new function with no doc comment, and the JSDoc left above readPremises (read from a file or stdin) now describes the per-file behaviour rather than the list handling the function does.",
+      "impact": "The documentation sits on the wrong function.",
+      "suggested_fix": "Move the file/stdin sentence to readPremiseFile and document the repeatable-flag merge on readPremises.",
+      "evidence": "slice-03.diff lines 666-703.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 2 }
+}
+```
+
+# Style Review Report (slice-03)
+
+Verdict: APPROVE_WITH_SUGGESTIONS. The slice removes duplication (failChild, packageCoverageErrors options) and the changes are readable. Remaining points: an out-of-order import, two avoidable casts, a nested ternary chain, a half-derived readiness count, and misplaced JSDoc / uneven help wrapping.

@@ -1,0 +1,30 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "summary": "Slice 02 is tests, docs, flow records and schema descriptions; no production hot path, pool, queue, cache or retry code changed. One stale doc paragraph found.",
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops",
+      "problem": "The 'A finding points at the code it quotes' section was not updated when the locator gained a third step (a one-line quote as an exact substring of exactly one line, method 'substring'). The schema description and locator.method enum in this same slice add it, but this section still says matching stops after whitespace-collapsed and lists no substring method.",
+      "impact": "Documentation drift only (no load failure mode): the CLI reference disagrees with review-finding.schema.json in the same diff, so an operator expects a fragment-of-a-line quote to be unlocatable when it now derives a line.",
+      "suggested_fix": "Edit the paragraph to read: exact, then whitespace collapsed, then (one-line quote) as an exact substring of exactly one line, then it stops; mention locator.method 'substring'.",
+      "evidence": "slice-02 schema hunk adds 'substring' to locator.method and to the quote description; docs/docs/cli-reference.md line 6674 at head still says 'then it stops'. keryx ctx rg for 'substring' in cli-reference.md, review-with-a-record.md and review-orchestrator SKILL.md finds no mention.",
+      "confidence": "high"
+    }
+  ],
+  "needs_context": []
+}
+```
+
+## High-Load Review
+
+Scope: slice-02 (tests, docs, flow records, schema text). Load profile: not provided. No concurrency, resource, cache, DB, queue, retry or idempotency code in the slice. Test files use process.chdir and env mutation but restore them in afterEach and run serially within bun, so no shared-state race. One minor doc drift (HL-001).
+
+Stats: blocker 0 | major 0 | minor 1 | info 0

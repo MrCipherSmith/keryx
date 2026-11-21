@@ -1,0 +1,81 @@
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "summary": "slice-02 (new): docs, schemas, flow record and tests for flow 460 L5/L6. Doc claims checked against code: readiness has twelve items (src/review/readiness.ts), the substring locator method exists (src/review/locate.ts), ingest still refuses unlocatable quotes that are not absent/ambiguous (src/review/managed.ts refuseUnresolvedLocators), premises.json written as an array for several files is read back by parsePremiseClaimSets, merged_duplicates is written and validated by src/review/filter-stats.ts, and the fix-roster wording matches the round-split tests of commit 851e83b24. No blocker or major: one stale doc paragraph, one stale flow task status, two info observations.",
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 },
+  "findings": [
+    {
+      "id": "LG-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "title": "cli-reference still says the locator stops after the whitespace pass; a substring pass now follows",
+      "file": "docs/docs/cli-reference.md",
+      "line": 6674,
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops — nothing",
+      "problem": "This PR adds a third match pass (a one-line quote as an exact substring of exactly one line, locator.method \"substring\") and updates the schema description of `quote` and the locator.method enum to say so, but the user-facing section \"A finding points at the code it quotes\" in cli-reference.md still states matching stops after the whitespace-collapsed pass.",
+      "impact": "A reader of the reference sees `method: substring` in findings.json that the documentation says cannot happen, and a reviewer quoting a fragment of a line is told it will not be placed.",
+      "suggested_fix": "Reword to: \"Matching is exact first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops — nothing fuzzy.\", matching the schema text.",
+      "evidence": "src/review/locate.ts returns { state: \"derived\", method: \"substring\" } when a single-line needle is a substring of exactly one line (the Flow 460 block after the whitespace-normalised pass); .metaproject/core/gdskills/contracts/review-finding.schema.json quote.description and locator.method were updated in this diff; keryx ctx rg 'nothing fuzzy|then it stops' over docs, skills, core and src finds only docs/docs/cli-reference.md:6674.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "title": "Flow 460 records T13 (L6) as todo although the L6 lane is merged at the reviewed head",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "line": 225,
+      "quote": "\"title\": \"L6 fix slices get the fix roster; fix hunks are the ones touching a finding\",",
+      "problem": "T13 is added with status \"todo\" and no task-done event, yet commit 851e83b24 (fix(review): a fix slice gets the fix roster ... flow 460 L6) and merge 7b4efeb1f are in the reviewed head 375279e78, and the journal entry in the same diff reports the plan \"After L6\". T12 (L5) was marked done after its lane merged (5bd6ae567); T13 was not.",
+      "impact": "Flow status and the flow's tasks gate report L6 as outstanding work that is already on the branch; anyone resuming from flow status would treat L6 as not done.",
+      "suggested_fix": "Record T13 done through the keryx flow CLI, as was done for T12.",
+      "evidence": "git log -- .metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json: last commit 0c5d56f8c 'chore(flow): 460 L6 task'; HEAD 375279e78 contains 7b4efeb1f 'merge lane 460-l6'; flow.json T13 \"status\": \"todo\".",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-003",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "title": "The documented causes of an ingest quote refusal omit the empty quote",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 314,
+      "quote": "it still refuses, naming the finding, a quote it could not check at all",
+      "problem": "locateQuote returns kind \"empty\" for a quote with no lines; managed.ts flags only absent/ambiguous as quote_unlocated, so an empty-quote finding would fall to refuseUnresolvedLocators and refuse the round. The SKILL.md sentence (and the refusal text in managed.ts) lists only commit-not-in-checkout, no file named, or a size bound.",
+      "impact": "Observation only: whether an empty or whitespace-only quote reaches locateQuote (rather than being treated as no quote by locateFinding) was not traced; if it does, the operator gets a refusal whose stated causes do not include the real one.",
+      "suggested_fix": "Trace locateFinding for quote \"\" and \"   \"; if it reaches locateQuote, add \"an empty quote\" to the documented causes and the refusal text, or treat it as no quote.",
+      "evidence": "src/review/locate.ts locateQuote: needle.length === 0 → kind \"empty\"; src/review/managed.ts:1445 flags only absent/ambiguous; src/review/managed.ts:1547 refusal causes.",
+      "confidence": "low"
+    },
+    {
+      "id": "LG-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "title": "e2e plan helper reduces without a seed, so a run that writes no plan.json fails with a TypeError instead of an assertion",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "line": 73,
+      "quote": "return plans.reduce((newest, candidate) => (candidate.round.number > newest.round.number ? candidate : newest));",
+      "problem": "Array.prototype.reduce with no initial value throws 'Reduce of empty array with no initial value' when no package holds plan.json. The test still fails in that case, but the message does not say the plan was not written.",
+      "impact": "Diagnostic only; the test outcome is correct.",
+      "suggested_fix": "Assert expect(plans.length).toBeGreaterThan(0) before the reduce.",
+      "evidence": "src/commands/review-plan.e2e.test.ts, plan() helper.",
+      "confidence": "high"
+    }
+  ],
+  "needs_context": []
+}
+```
+
+## Logic Review — slice-02 (new), PR #1045 round 2
+
+- Spec compliance: slice checked against the flow 460 description (G, H) and the L5/L6 doc claims.
+- Stats: blocker 0 | major 0 | minor 2 | info 2
+- LG-001 (minor): the cli-reference locator paragraph was not updated for the new `substring` pass.
+- LG-002 (minor): flow.json still has T13 (L6) as `todo`, although L6 is merged at head.
+- LG-003 (info): the empty-quote refusal cause is not documented; whether it can be reached was not checked.
+- LG-004 (info): the e2e test helper calls reduce without a seed.
+- Checked and consistent: the twelve readiness items, reading premises.json back as an array, the merged_duplicates writer and validator, the fix-roster wording against the round-split tests, and the repeatable `--premises` usage lines (no stale copies remain).
+- History came from git log/show. Code search used keryx ctx rg. Graph and wiki layers were not needed.

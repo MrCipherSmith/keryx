@@ -1,0 +1,133 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "summary": "Round-4 verification of the round-3 fix (delta e586628a4). 9 in-domain prior records: 8 closed, 1 partial. 40 round-3 findings (STY-R3-004 dismissed, skipped): 30 closed, 10 open (all info/minor style or perf observations not touched by the delta). New: 0 blocker, 0 major, 2 minor, 3 info.",
+  "findings": [
+    {
+      "id": "LG-R4-001",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 296,
+      "quote": "  if (program === \"grep\") return operands.length <= 1;",
+      "problem": "isPipeFilter checks file operands only for cat and grep. head, tail, less and more are accepted as pass-through filters whatever their operands, and grep with one operand passes even under -r. `keryx review start --pr 7 | head notes.md` (or `| tail -n 50 notes.md`, `| grep -r path`) prints a file's content, not keryx's, yet keryxReviewInvocations still returns alone=true, so the tracker reads `# managed review:` and `path:` lines from that file as keryx's own output.",
+      "impact": "A file a pull request commits can name a package directory or review id for the session (the SEC-R2-001 class the delta closed for manifests), for example to release the gate with a closed package or to point the nudge at another root. It needs a command shape an agent rarely writes, so minor.",
+      "suggested_fix": "Treat head/tail/less/more as filters only when they name no file operand (skip the value of -n/-c and similar), and grep only when it has exactly the pattern operand and no -r/-R/-d recurse flag. Add the cases to the 'a pipe keeps its left command' test.",
+      "evidence": "completion-gate.ts:158 PIPE_FILTERS includes head/tail/less/more; :290-297 operands are counted only for cat (:294) and grep (:295), every other filter returns true (:296); keryxReviewInvocations skips a piped filter without counting it as another command, so alone stays true; completion-gate.test.ts pipe test covers only `| tee start.log`, `| head -40`, `| cat - notes.md`.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-R4-002",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 2476,
+      "quote": "const failedSaved = await saveRecord(assistant.trim(), { final: false }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));",
+      "problem": "The new thrown-error save records the child's usage without `partial: true`. A child that throws mid-request (provider stream error, abort) has not had that request's usage reported, the same situation the timeout path marks partial (:2333). The save note is also quiet (`quietWhenSaved: true`) even when assistant text was written, while the timeout path tells the parent that a partial result was saved.",
+      "impact": "usageTotals counts the dispatch as a full measurement, so `complete` can be true and usageTotalsLine prints an exact spend that undercounts. The parent is not told a partial reply is on disk. No gate reads usage, so the cost is a wrong spend line and a missing note.",
+      "suggested_fix": "Save with `{ final: false, partial: true }` on the thrown path, and pass `quietWhenSaved: assistant.trim() === \"\"` as the timeout path does.",
+      "evidence": "spawn-subagent-tool.ts:1975-1979 measuredUsage adds partial only when options.partial; :2333 timeout saves {final:false, partial:true} and :2334 is quiet only when empty; :2476-2477 thrown path saves {final:false} and is always quiet; dispatch-usage.ts usageTotals sets complete only when partial === 0.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-R4-003",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 149,
+      "quote": "const VALUELESS_FLAGS: ReadonlySet<string> = new Set([\"--json\", \"--yes\", \"--dry-run\", \"--force\", \"--partial\", \"--waive-coverage\", \"--help\"]);",
+      "problem": "`--waive-coverage` takes the operator's words as its value (review.ts:4545-4547 refuses it without one), yet it is listed as valueless; valueless flags of the package subcommands such as `--final`, `--detail` or `--brief` are absent, so the word after them is skipped as a value.",
+      "impact": "Inert today: status, complete and publish read the id at args[0] and readiness accepts only --json, so a valid command never puts a flag before the id. The list is wrong for its stated purpose and would mislead a later caller.",
+      "suggested_fix": "Drop --waive-coverage from the set (and --waive, which takes two values, needs its own skip), or derive the set from the subcommands' flag tables.",
+      "evidence": "completion-gate.ts:149; explicitReviewIds skips the next word for any `--flag` not in the set; review.ts:4545-4547 (--waive-coverage value required), :4329/:4490/:4536 (ref = args[0]), :4459 (readiness flags [--json]).",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-R4-004",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 286,
+      "quote": "  return scriptName === \"cli.ts\" || scriptName === \"cli.js\" || (name === \"bun\" && run && script === \"keryx\") ? rest.slice(at + 1) : undefined;",
+      "problem": "keryxArgs takes any `bun|node [run] <path>/cli.ts|cli.js` as keryx, so another project's CLI with a `review` subcommand (`node dist/cli.js review status x`) sets runSeen and adds roots and ids for the session.",
+      "impact": "A session in a non-keryx project could be nudged as if a managed review ran. Rare; display and nudge only.",
+      "suggested_fix": "Accept cli.ts/cli.js only under a directory that holds keryx's package.json (or under `src/` of the session's own keryx checkout), or document the false positive.",
+      "evidence": "completion-gate.ts:271-287 keryxArgs; test 'keryx is recognised by path…' pins `bun run /w/keryx/src/cli.ts` and `node dist/cli.js` without a keryx check.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-R4-005",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "line": 1069,
+      "quote": "const prBase = targetKind === \"pr\" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;",
+      "problem": "`review ingest` dispatches runCreate without seams (review.ts:718), so every ingest of a PR target spawns `gh pr view` (up to PR_BASE_TIMEOUT_MS = 15 s offline) and re-derives the base; only start/attach can be stubbed.",
+      "impact": "Latency and a network call on ingest; tests of `ingest --target pr` through the CLI cannot avoid gh. No wrong answer found.",
+      "suggested_fix": "Pass seams to the ingest runCreate call, and skip the gh read when ingest binds an existing package whose target already records base/prBase.",
+      "evidence": "review.ts:710/714 pass seams, :718 does not; :231-241 ghPrBase; :1069-1071.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r2-review-logic-w3:LG-002", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:2374 the rate-limited exit now saves `saveRecord(\"\", { final: false })` unconditionally (unknown usage gets an incomplete line, dispatch-usage formatRecordLine); :2476 the thrown-error exit saves too. Pinned by spawn-subagent-lifecycle.test.ts 'a rate-limited child that reported no usage still records its dispatch' and spawn-subagent-tool.test.ts 'a child that fails with a thrown error still records its dispatch'."},
+    {"id": "r2-review-logic-w4:LG-002", "disposition": "closed", "evidence": "ledger.test.ts: both 500 ms wall-clock bounds (former :1118 and :1168) are replaced by spyOn(JSON.parse)/spyOn(RegExp.prototype.exec) call-count assertions; the remaining performance.now bounds in the file (:144, :274, :437, 2000 ms) are other tests, not this record."},
+    {"id": "r2-review-logic-w5:LG-002", "disposition": "closed", "evidence": "completion-gate.ts:173-245 shellCommands drops redirections (`2>&1`, `>&2`, `&>`) instead of splitting at their `&`; :432 a `keryx review` run in a subdirectory adds invocation.cwd as a root even without output. Tests 'cd sub && keryx review start --pr N 2>&1 names the package under sub' and 'a keryx review command run in a subdirectory makes it a root'."},
+    {"id": "r2-review-logic-w9:LG-003", "disposition": "closed", "evidence": "Same as r2-review-logic-w4:LG-002: the ledger.test.ts 500 ms bounds are gone (deterministic spy checks); completion-gate.test.ts:397 stays at 10_000 ms."},
+    {"id": "review-logic-w3:F-002", "disposition": "closed", "evidence": "completion-gate.test.ts 'the nudge names the package the active-review pointer names, not … a newer unpointed one' writes pr-8000 with a newer manifest mtime (t1) than the pointed pr-7975 (t0), so newest(candidates) would pick pr-8000 and only the pointer branch picks pr-7975."},
+    {"id": "review-testing-practices-w2:T-001", "disposition": "closed", "evidence": "Same test as review-logic-w3:F-002: the newer unpointed candidate discriminates the pointer branch of pickPackage."},
+    {"id": "review-logic-w4:F-004", "disposition": "partial", "evidence": "review.ts:1068-1075 now records the PR's own base (gh baseRefName, origin/<name>) as target.base when no --base is given, and as target.prBase beside one; coverage.ts:578-592 measures it. But resolveDiffBases still adds the default base (origin/main…) and widestDiff (:595) keeps the widest per dimension, so a PR into a non-main branch is still measured against origin/main in effect (the RG3-004 observation)."},
+    {"id": "review-logic-w2:F-005", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:374-375 an earlier record is complete only with a reply and no `incomplete` mark; a non-final record with text replaces an earlier partial (:390 replaced:'partial'), and recordSaveNote (:396-399) names complete vs partial. harness-robustness.test.ts row 14 'a later partial replaces an earlier partial' and 'the parent is told what was actually kept or replaced'."},
+    {"id": "review-logic-w1:LG-006", "disposition": "closed", "evidence": "Every exit now leaves a record: timeout :2333, rate-limited :2374 (unconditional), empty :2399, completion :2438, thrown error :2476; an unknown-usage dispatch writes `KERYX_USAGE {\"by\":\"host\",\"incomplete\":true}`, which reads as unknown (dispatch-usage formatRecordLine)."},
+    {"id": "r3-review-architecture-code:R3-ARCH-001", "disposition": "closed", "evidence": "deltaRoundCut, firstRoundCut, renumberSlices and SecondLookSource moved to src/review/round-cut.ts:18-78; review-slice.ts imports them (diff review-slice.ts imports)."},
+    {"id": "r3-review-architecture-code:R3-ARCH-002", "disposition": "open", "evidence": "coverage.ts:567 cache key is still JSON.stringify([packageDir, root, target]) with no resolved base sha (target now also holds prBase). Info."},
+    {"id": "r3-review-clean-code-code:CC-R3-001", "disposition": "closed", "evidence": "managed.ts: the stub-report doc block now sits directly above refuseStubReport (diff hunk @@ -1367 adds it at the function, @@ -1332 removes it above attributionReviewers)."},
+    {"id": "r3-review-clean-code-code:CC-R3-002", "disposition": "closed", "evidence": "round-cut.ts:614-650 equivalent: cutRegions(from, regions, sizes, withDrops) and secondLookCut take `look` as a defined value; no `look!` remains; routeAsDelta replaces the repeated route/classify shape."},
+    {"id": "r3-review-clean-code-code:CC-R3-003", "disposition": "open", "evidence": "ledger.ts:29 still Pick<ParsedResult, \"inputs_unreadable\" | \"status\" | \"summary\">. Info."},
+    {"id": "r3-review-clean-code-code:CC-R3-004", "disposition": "open", "evidence": "readiness.ts:29 still `export { COVERAGE_MD_MARK };`. Info."},
+    {"id": "r3-review-clean-code-code:CC-R3-005", "disposition": "closed", "evidence": "slice.ts ledgerOmissions now uses regionsByFile (push in place), shared with buildSlices."},
+    {"id": "r3-review-clean-code-code:CC-R3-006", "disposition": "open", "evidence": "git-base.ts:53 resolveBase still types target as { kind?, ref?, base? }; coverage.ts:549 still spreads `{ ...target, head: target.head }`. (coverage no longer passes kind/ref.) Info."},
+    {"id": "r3-review-core-boundaries-code:CB3-001", "disposition": "closed", "evidence": "Same as CC-R3-001: the stub doc is on refuseStubReport, attributionReviewers carries one doc."},
+    {"id": "r3-review-highload-code:HL-R3-001", "disposition": "closed", "evidence": "dispatch-usage.ts:64 USAGE_LINE is `(.*?)\\r?$`; ledger.test.ts 'a file saved with CRLF line endings states its usage' pins usage, others, body and isEmptyOutput of a CRLF placeholder."},
+    {"id": "r3-review-highload-code:HL-R3-002", "disposition": "closed", "evidence": "package-location.ts readStandalonePackages reads heads once with mapBounded(16); governance/aggregate.ts collectFlowGovernance reads it once and passes it to readFlowReviewManifests -> flowPackageDirs(cwd, dir, standalone). loop.ts/review-gate.ts read one flow per call."},
+    {"id": "r3-review-highload-code:HL-R3-003", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:338 recordSaves per-path promise chain; saveDispatchRecord serialises read-modify-write; harness-robustness.test.ts 'saves to one path run one after the other' keeps all three usages. (In-process only, as suggested.)"},
+    {"id": "r3-review-highload-code:HL-R3-004", "disposition": "closed", "evidence": "completion-gate.ts fileHash caches content hashes by size:mtime:ctime:ino with a 2 s racy window and a 4096-entry cap; scanRoot reads manifests with mapBounded(SCAN_CONCURRENCY=16)."},
+    {"id": "r3-review-logic-code:LG-001", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:374-375 the kept branch requires a complete prior (no incomplete mark) unless this record has no text; :390 a partial over a partial replaces it; :398 note says partial. Test 'a later partial replaces an earlier partial … (LG-001, RG3-001)'."},
+    {"id": "r3-review-logic-code:LG-002", "disposition": "closed", "evidence": "completion-gate.ts:218-232 a `>`/`<`/`&>` redirection drops its fd number and target instead of ending the command; :432 adds invocation.cwd as a root. Tests in 'the shell reader: redirections, pipes …'."},
+    {"id": "r3-review-logic-code:LG-003", "disposition": "closed", "evidence": "coverage.ts:595 widestDiff takes the file union and the max changedLines; diffOfTarget returns widestDiff(diffs). coverage.test.ts 'the widest diff is the widest in each dimension' (900 lines kept with 11 files)."},
+    {"id": "r3-review-logic-code:LG-004", "disposition": "closed", "evidence": "delta-docs: CHANGELOG.md:22, cli-reference.md plan row, bundled and .metaproject review-orchestrator SKILL.md:685 and SKILL.detail.md:699, flow-orchestrator SKILL.md:529 all add the fix lines' own content roles."},
+    {"id": "r3-review-logic-code:LG-005", "disposition": "open", "evidence": "locate.ts:249 a too-short substring quote still returns kind 'absent'. Info, display only."},
+    {"id": "r3-review-performance-code:PERF-R3-001", "disposition": "closed", "evidence": "As HL-R3-002: standalone heads read once per governance pass and with bounded concurrency."},
+    {"id": "r3-review-performance-code:PERF-R3-002", "disposition": "closed", "evidence": "slice.ts regionsByFile pushes in place; ledgerOmissions and buildSlices share it."},
+    {"id": "r3-review-performance-code:PERF-R3-003", "disposition": "open", "evidence": "coverage.ts diffOfTarget still awaits gitDiffAt per base in a for loop (now up to three bases). Info."},
+    {"id": "r3-review-regression-code:RG3-001", "disposition": "closed", "evidence": "Same as LG-001: partial-over-partial replaces, the note no longer claims a complete result; harness-robustness.test.ts covers the A-then-B timeout case."},
+    {"id": "r3-review-regression-code:RG3-002", "disposition": "closed", "evidence": "Same as LG-002: `2>&1` is a redirection; `cd sub && keryx review start --pr 7975 2>&1` test names sub's package and root."},
+    {"id": "r3-review-regression-code:RG3-003", "disposition": "closed", "evidence": "delta-docs: cli-reference.md matching paragraph, bundled reviewer-finding.schema.json:85, src/gdskills/contracts/review-finding.schema.json:195 and the .metaproject schema copy:85 all state the 12-character floor."},
+    {"id": "r3-review-regression-code:RG3-004", "disposition": "open", "evidence": "coverage.ts:586-592 still adds the default base whenever it gives another merge-base, and widestDiff keeps the widest; a stacked PR still reads at full depth. Info, deliberate (SEC-001)."},
+    {"id": "r3-review-security-code-code:SEC-R3-001", "disposition": "closed", "evidence": "round-split.ts:367 manifestRosterRoles adds review-security-code wherever routing gave any original slice it; used by wave-drivers.ts:34, estimate.ts:302, review-ledger.ts:298 and review.ts:3369. round-split.test.ts 'a slice routed to the security reviewer adds it to the roster in a light round too'."},
+    {"id": "r3-review-style-code:STY-R3-001", "disposition": "closed", "evidence": "As CC-R3-001."},
+    {"id": "r3-review-style-code:STY-R3-002", "disposition": "closed", "evidence": "coverage.ts PackageTarget is { recordedBase, prBase, head }; nominalBase, kind and ref are gone and the refusals name recordedBase."},
+    {"id": "r3-review-style-code:STY-R3-003", "disposition": "closed", "evidence": "loop.ts and flow/review-gate.ts use `const name = path.basename(packageDir)`."},
+    {"id": "r3-review-style-code:STY-R3-005", "disposition": "closed", "evidence": "src/lib/shell-tool-names.ts SHELL_TOOL_NAMES is shared by approval-cause.ts and completion-gate.ts (\"bash\" dropped; the gate's only caller is keryx shell, commands/agent.ts:3487, whose tool is shell_exec)."},
+    {"id": "r3-review-style-code:STY-R3-006", "disposition": "closed", "evidence": "round-cut.ts cutRegions and withoutOmitted replace the four `{ ...sizes, keepLedgers: true }` sites and the repeated omission filter."},
+    {"id": "r3-review-style-code:STY-R3-007", "disposition": "open", "evidence": "shellCommands (completion-gate.ts:173-245) grew (redirections, pipes); the doc comment now states the covered forms, but it is still one hand-written state machine. Info."},
+    {"id": "r3-review-style-code:STY-R3-008", "disposition": "open", "evidence": "As CC-R3-003: ledger.ts:29 unchanged. Info."},
+    {"id": "r3-review-style-code:STY-R3-009", "disposition": "open", "evidence": "wave-drivers.ts:8 still `import { type SliceManifest } from \"./slice\";`. Info."},
+    {"id": "r3-review-style-docs:r3-review-style-docs:DS-001", "disposition": "closed", "evidence": "SKILL.detail.md:699 (bundled and .metaproject copies) now lists review-security-code when one finding is a security finding, plus the fix lines' content roles."},
+    {"id": "r3-review-style-docs:r3-review-style-docs:DS-002", "disposition": "open", "evidence": "review-orchestrator SKILL.md BLOCKED bullet (:1226) not in delta-docs; the remedy still reads as a larger budget only. Info."},
+    {"id": "r3-review-style-docs:r3-review-style-docs:DS-003", "disposition": "open", "evidence": "review-with-a-record.md:656/965 not in delta-docs; cli-reference.md 5545-5567 paragraph re-flowed but still ends on the short line '`ledger build` records each'. Info."},
+    {"id": "r3-review-testing-practices-code:NTP-001", "disposition": "closed", "evidence": "ledger.test.ts: the added 500 ms bound is replaced by spy-based checks (RegExp.prototype.exec never sees the 200 000-char line)."}
+  ],
+  "needs_context": []
+}
+```
+
+Summary: the round-3 fixes hold. Partial-over-partial saves, the per-path save chain, the thrown-error and rate-limit records, the redirection-aware shell reader, basename-only package naming, per-dimension widest diff, the light-round security roster, CRLF usage lines and the round-cut extraction all close their findings, and each has a test. One in-domain prior stays partial: review-logic-w4:F-004. The PR's own base is now recorded, but the default base still widens the measurement, so the recheck still effectively measures against origin/main. Open round-3 items are info-level leftovers the delta did not touch: CC-R3-003/004/006, R3-ARCH-002, LG-005, PERF-R3-003, RG3-004, STY-R3-007/008/009, DS-002, DS-003.
+
+New: 2 minor, 3 info.
+- LG-R4-001 (minor): isPipeFilter accepts head/tail/less/more with a file operand, and `grep -r`, so a file's text can pass as keryx output.
+- LG-R4-002 (minor): the thrown-error save does not mark its usage partial, and it never tells the parent that partial text was saved.
+- LG-R4-003 (info): VALUELESS_FLAGS is wrong (it lists `--waive-coverage`, which takes a value) but has no effect today.
+- LG-R4-004 (info): any cli.ts or cli.js is taken as keryx.
+- LG-R4-005 (info): ingest always runs gh and has no test seam for it.

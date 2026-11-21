@@ -1,0 +1,125 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r3-review-architecture-code#R3-ARCH-001",
+      "verdict": "upheld",
+      "reasoning": "isReviewPackageDir (premise-question.ts:82-94) re-encodes the two package roots that reviewsRoot/flowsRoot (managed.ts:89, :1110-1115) and PACKAGE_GLOBS (prior-round.ts:128) already own, and automatic-review.ts imports it from the answer module. The predicate is introduced by this branch (SEC2-001 fix), so its placement is no prior deliberate choice; no practice source favours a third copy."
+    },
+    {
+      "finding_id": "r3-review-clean-code-code#CC3-1",
+      "verdict": "upheld",
+      "reasoning": "Same fact as R3-ARCH-001 from the duplication angle: the package-location rule is restated beside PACKAGE_GLOBS with no shared source. Branch-introduced, no intent signal against it; moving it beside the roots makes the system more consistent."
+    },
+    {
+      "finding_id": "r3-review-clean-code-code#CC3-2",
+      "verdict": "upheld",
+      "reasoning": "touchesOperatorOnly (automatic-review.ts:253-262) also returns true when the real target leaves the package (last clause); only its doc comment (:249, added by this branch) says 'or leave it'. The call site at :323 reads as a name check. The split the reviewer suggests keeps behaviour and matches the name; no signal of a deliberate merge of the two questions."
+    },
+    {
+      "finding_id": "r3-review-clean-code-code#CC3-3",
+      "verdict": "upheld",
+      "reasoning": "normaliseCarriedPremise (premise.ts:238-257) does interleave three rules across five returns; the doc block explains them but no signal says the interleaving is chosen. A minor readability refactor with a sound suggested fix."
+    },
+    {
+      "finding_id": "r3-review-clean-code-code#CC3-4",
+      "verdict": "upheld",
+      "reasoning": "The rerecord flag is set inside the applyFirst callback (premise-question.ts:201), cleared in the undo closure (:203) and read after the lock (:208): control state shared through captured variables. Returning the value from the callback is a standard, sound alternative; no intent signal against it."
+    },
+    {
+      "finding_id": "r3-review-clean-code-skills#CC3-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "bb0423cab:src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:286", "says": "at the merge base, before this branch, 'Then freeze and start' already sat as the tail of the '### A verification step in the plan is a task' section with no heading of its own" },
+        { "ref": "3cb8ded48", "says": "the round 2 fix replaced the branch's own '### A flow sourced from a finding' heading with a bold lead, restoring the base layout around the freeze block rather than moving it" },
+        { "ref": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md:42", "says": "cites \"A flow sourced from a finding\", which is still the bold lead text at flow-orchestrator/SKILL.md:277, so the citation still resolves" }
+      ],
+      "reasoning": "The finding presents the freeze step's position under the tasks-gate heading as a regression of this change, and says the feature-dev citation broke. Both are false: the layout is the base's, and the cited phrase is still there. Adding a '### Freeze and start' heading may still be an improvement, but it is a pre-existing structure, not a defect of this delta.",
+      "question": "The freeze step sat under the tasks-gate section before this branch, and feature-dev's citation still resolves. Keep the layout as on main, or add a 'Freeze and start' heading in this PR anyway?",
+      "options": ["dismiss — keep the layout as on main; not a defect of this change", "uphold — add a '### Freeze and start' heading in this PR"]
+    },
+    {
+      "finding_id": "r3-review-clean-code-skills#CC3-002",
+      "verdict": "upheld",
+      "reasoning": "feature-dev/SKILL.md:42 sends the claims to a **Premise** slot; the Implementation Spec list at :45-50 defines no such field, and .feature-spec.md (:51) is saved from that list. No signal of intent; adding the conditional field is consistent with the list."
+    },
+    {
+      "finding_id": "r3-review-clean-code-skills#CC3-003",
+      "verdict": "upheld",
+      "reasoning": "review-premise/SKILL.md:73-75 names git log -L, git blame and git show as the method in question 1 while the Read-only law and the branch row make git host-conditional; the page disagrees with itself. A one-clause fallback is sound."
+    },
+    {
+      "finding_id": "r3-review-clean-code-skills#CC3-004",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "bb0423cab:src/gdskills/bundled/skills/review/review-style/SKILL.md:28", "says": "before this branch, the reviewer's shared input law ('Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs') is already restated inline in the Purpose sentence" },
+        { "ref": "bb0423cab:src/gdskills/bundled/skills/review/review-logic/SKILL.md:30", "says": "the same shared law restated inline in a sibling reviewer; at the base 24 bundled skills carry it inline rather than pointing to one shared file" },
+        { "ref": "src/gdskills/bundled/skills/review/review-style/SKILL.md:69", "says": "the 'Supplied text first' copy names the shared law ('law 4') and states it inline, the same pattern as the input law" }
+      ],
+      "reasoning": "Restating a shared reviewer law inline in each skill is the project's established pattern: each reviewer is dispatched alone on a clean context and reads only its own SKILL.md. The host-git caveat follows that pattern. Replacing it with a pointer would make this one law differ from its siblings and cost every reviewer an extra file read; the drift cost is real but is the known price of the pattern, not a defect of this change.",
+      "question": "The host-git caveat is inlined in each reviewer skill, as the project already does for its other shared reviewer laws. Keep it inline, or move it to one shared place with pointers?",
+      "options": ["dismiss — keep it inline, as the sibling shared laws are", "uphold — state it once in the shared reviewer laws and point to it from each skill"]
+    },
+    {
+      "finding_id": "r3-review-logic-code#LG3-001",
+      "verdict": "upheld",
+      "reasoning": "The guard at automatic-review.ts:258 folds with toLowerCase, and the comment at :213-214 claims that matches APFS/NTFS. Unicode simple case folding is wider (U+017F folds to 's'), and realTarget returns a missing tail as written (:232-246). The comment's claim fails; no intent signal argues for the narrower fold. Same class as SEC3-001."
+    },
+    {
+      "finding_id": "r3-review-logic-skills#LG3-001",
+      "verdict": "upheld",
+      "reasoning": "review-orchestrator/SKILL.md:1127 tells the orchestrator to renumber collisions and to name a global_id only for a carried finding sharing a new one's id. Ingest keys by global_id, so that pair is not a collision. claimTargets (premise.ts:219) then matches the bare id on both, and :324-325 rejects the claim on the new finding as ambiguous-finding. The two instructions do not cover the case; no signal of intent."
+    },
+    {
+      "finding_id": "r3-review-logic-skills#LG3-002",
+      "verdict": "upheld",
+      "reasoning": "Same fact as CC3-002: feature-dev/SKILL.md:42 names a Premise section that the spec field list at :44-50 does not define. Without a flow, that spec is the only record. Upheld."
+    },
+    {
+      "finding_id": "r3-review-regression-skills#RG3-001",
+      "verdict": "upheld",
+      "reasoning": "review-orchestrator/SKILL.md:1127 says 'renumber a collision before dispatch' without saying in which artifact. Ingest's findingKeyCollisions (managed.ts:452-459) runs over the saved results, so a payload-only renumber leaves ingest refusing, or leaves the claims naming ids that do not exist. Naming the saved reviewer results is a sound clarification."
+    },
+    {
+      "finding_id": "r3-review-security-code-code#SEC3-001",
+      "verdict": "upheld",
+      "reasoning": "The guard at automatic-review.ts:216/:258 uses toLowerCase. The filesystem match is wider, and realTarget appends a missing tail as written (:232-246), so a U+017F spelling of operator-decisions.json gets past approvesPatchTargets (:312-325) before the real file exists. The comment at :213-214 states an intent (to match the case-insensitive filesystem), and the code fails that intent, so it is no signal against the finding. A security finding; its severity measures exposure and is not lowered."
+    },
+    {
+      "finding_id": "r3-review-style-skills#R3-001",
+      "verdict": "upheld",
+      "reasoning": "Same fact as CC3-002 and LG3-002: the Premise slot named at feature-dev/SKILL.md:42 has no field in the spec template at :44-50."
+    },
+    {
+      "finding_id": "r3-review-style-skills#R3-002",
+      "verdict": "upheld",
+      "reasoning": "review-pr-feedback/SKILL.md:528 puts the 'premise:' constraint string after the 'scope:' string on one line, while every other constraint in the array (:524-527) has its own line. A layout inconsistency with a trivial, consistent fix."
+    },
+    {
+      "finding_id": "r3-review-style-skills#R3-003",
+      "verdict": "upheld",
+      "reasoning": "SKILL.detail.md:668 reads 'A failing item but `premise-decisions` is waived only by the operator.' 'but' as 'except' needs 'any', and as written the sentence can be misread in the one place that states the exception. 'other than' is clearer."
+    }
+  ]
+}
+```
+
+## Summary
+
+- upheld: 15
+- downgraded: 0
+- challenged: 2
+- owner-decision: 0
+
+Held findings:
+
+- **r3-review-clean-code-skills#CC3-001** (challenged). Question: the freeze step sat under the tasks-gate section before this branch, and feature-dev's citation still resolves. Keep the layout as on main, or add a 'Freeze and start' heading in this PR anyway? Options: "dismiss — keep the layout as on main; not a defect of this change" / "uphold — add a '### Freeze and start' heading in this PR". Signals: bb0423cab:flow-orchestrator/SKILL.md:286 (the base layout is the same, with no heading); 3cb8ded48 (round 2 put back the base layout around the freeze block); feature-dev/SKILL.md:42 (the citation still matches the bold lead at :277).
+- **r3-review-clean-code-skills#CC3-004** (challenged). Question: the host-git caveat is inlined in each reviewer skill, as the project already does for its other shared reviewer laws. Keep it inline, or move it to one shared place with pointers? Options: "dismiss — keep it inline, as the sibling shared laws are" / "uphold — state it once in the shared reviewer laws and point to it from each skill". Signals: bb0423cab:review-style/SKILL.md:28 and bb0423cab:review-logic/SKILL.md:30 (the shared input law is inlined in 24 skills at the base); review-style/SKILL.md:69 (law 4 is inlined the same way).
+
+Duplicates noted, all upheld, for the merge to fold: R3-ARCH-001 and CC3-1; CC3-002, LG3-002 (skills) and R3-001; LG3-001 (code) and SEC3-001.
+
+History read: git log, git show and git grep on the merge base bb0423cab and on 3cb8ded48. Nothing was run.

@@ -1,0 +1,114 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check of slice-04 (completion-gate.ts, coverage.ts, dispatch-usage.ts, ledger.ts, locate.ts, managed.ts, mutate.ts, readiness.ts, research.ts, types.ts and the two test helpers), walked over the computed blast-radius set (40 hop-1 files retained; the cap dropped 14, the test-consumer rule 158 and the text-hub rule 146; 441 dropped entries are recorded in blast-radius.json; 20 changed files are non-code and unresolved). Three regressions found. (1) The ledger stopped letting a DONE reply with no slices claim its assignment, but retry-eval.collectLateResults, which `review next` and `retry-plan` call, still does, writes the result into retry-state covered, and the ledger trusts that list. (2) completion-gate.findReviewGateState now skips every open package and active-review pointer older than the session start, so a review resumed in a fresh shell session is reported as having no package and the nudge says to run `review start`. (3) readiness.ts's new coverage-md omission check and coverage-gate call turn packages ingested before flow 460 NOT READY, which blocks `review publish` and the shell's `gh pr review` guard. Two info observations follow. No mandatory input was missing.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "REG-W3-001",
+      "severity": "major",
+      "file": "src/review/retry-eval.ts",
+      "line": 81,
+      "quote": "const claimed = result.slices === undefined ? assigned.ids : readSliceIds(result.slices).ids.filter((id) => allowed.has(id));",
+      "problem": "Flow 460 D changed src/review/ledger.ts buildLedger so that a reply with no `slices` claims no slice (`const ids = sliceIdsOf(reply.slices);`, with the `closed ? assigned` branch removed). The sibling reader in src/review/retry-eval.ts collectLateResults was not changed. It still credits a DONE or DONE_WITH_CONCERNS reply that has no `slices` with the driver's whole assignment, and its comment still says this is the ledger's rule (\"Same rule as the ledger ... no list means the whole assignment\"). The two readers now disagree, and the stale one feeds the new one. evaluateRetry passes `late.covered` into planRetry as `covered`, planRetry writes it to `state.reviewers[reviewer].covered`, and `review next --apply` (review-next.ts:154) or `retry-plan` saves it to slices/retry-state.json. ledger.ts buildLedger then adds every `known?.covered` id to `claimed` (`for (const id of known?.covered ?? []) claimed.add(id);`), so the ledger marks the run scopeComplete after all.",
+      "impact": "Trigger: a reviewer saves `{status: DONE, reviewer, findings}` with no `slices` to raw/<reviewer>-wN.txt, then the orchestrator runs `keryx review next --package <dir> --apply` (the documented loop step) before `ledger build`. Outcome: retry-state records every assigned slice as covered, the ledger sees scopeComplete: true, and coverage is claimed for slices the reviewer never named. This is the false coverage flow 460 D was meant to stop. Without --apply, `review next` reports done (no dispatch owed) while `ledger build` reports the uncovered slices as a gap, so the two commands give the operator opposite answers.",
+      "suggested_fix": "Apply the ledger's rule in collectLateResults: `const claimed = readSliceIds(result.slices).ids.filter((id) => allowed.has(id));`. Also skip a reply for which `unreadableInputClaim(result)` (ledger.ts) is defined. Update the comment, and add a test where `review next` followed by `ledger build` over a DONE reply with no slices leaves a gap.",
+      "evidence": "src/review/retry-eval.ts:79-81 (comment and old rule); retry-eval.ts:146-153 (late.covered goes into evaluateRetry's covered); retry-plan.ts:270-290 (covered persisted into state.reviewers[reviewer].covered); review-next.ts:125 and :154 (evaluateRetry with packageSource, state written on --apply); commands/review-ledger.ts:308 (ledger loads slices/retry-state.json); ledger.ts:525 (known.covered added to claimed); diff hunk ledger.ts @@ 485,587 (assigned-slices fallback removed).",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/retry-eval.ts:81", "src/review/review-next.ts:125", "src/commands/review-slice.ts:393"],
+        "enumeration_method": "Ran `keryx ctx rg \"slices === undefined|\\.slices \\?\\?|assignedSlices|payloadSlices\" src --all` over the code and checked each blast-radius dependent of src/review/ledger.ts that reads a reply's slices (retry-eval.ts, review-next.ts, review-slice.ts, replay.ts, verdict.ts, result-parse.ts). retry-eval.ts:81 is the only remaining place that treats a missing `slices` as the whole assignment. review-next.ts:125 and review-slice.ts (retry-plan) reach it through evaluateRetry."
+      }
+    },
+    {
+      "id": "REG-W3-002",
+      "severity": "major",
+      "file": "src/commands/agent.ts",
+      "line": 3487,
+      "quote": "? await findReviewGateState(process.cwd(), sessionStartedAt(history), sessionReviewRoots(history, process.cwd())).catch(() => null)",
+      "problem": "The change to src/review/completion-gate.ts findReviewGateState/scanRoot now skips every open package whose manifest.json mtime is before `since` (`if (info.mtimeMs < since) continue;`), where before only stale `ingest`-mode drafts were skipped. It also ignores the active-review pointer when `Date.parse(pointer.startedAt) < since`. `since` is sessionStartedAt(history), the first message of the current shell session. When a review opened in an earlier session is continued in a new `keryx shell` session, its package and its active pointer both predate `since`, so neither is named. The gate then returns the placeholder `(no package yet)` with the blocker \"no review package exists: `keryx review start` has not opened one\", and nextStep tells the model to run `keryx review start`.",
+      "impact": "Trigger: an operator starts a fresh shell session to continue an unfinished review (the long-loop situation flow 460 describes) and the model runs any `keryx review` command, so runSeen is true. In that turn it dispatches reviewers and saves raw results but writes nothing that touches manifest.json. Outcome: the stop gate states something false (that no package exists) and pushes the model, for up to 20 continues, to open a second package for the same PR instead of finishing the one the active pointer names. Before this change the gate named the open package.",
+      "suggested_fix": "Trust the active-review pointer whatever its startedAt: it is the explicit record of the review in progress, and the bug C fix only needs the newest-open-package fallback to be bounded by `since`. Alternatively, keep an older open package when the session's own history names its path (sessionReviewRoots already scans the paths) or its reviewId.",
+      "evidence": "Diff hunk completion-gate.ts @@ 1,158: lines `if (info.mtimeMs < since) continue;` and `if (pointer === undefined || Date.parse(pointer.startedAt) < since) continue;`. completion-gate.ts sessionStartedAt returns the first history ts. agent.ts:3483-3488 is the only production caller. active-review.ts resolveActiveReview returns the pointer for any package that is not closed.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/commands/agent.ts:3487"],
+        "enumeration_method": "`keryx ctx rg \"findReviewGateState|sessionReviewRoots\" src --all`: agent.ts:3487 is the only non-test caller of the changed function, so the class has exactly one member."
+      }
+    },
+    {
+      "id": "REG-W3-003",
+      "severity": "major",
+      "file": "src/review/publish.ts",
+      "line": 156,
+      "quote": "if (partial && options.partial !== true) throw new Error(readinessRefusal(readiness, \"publish\"));",
+      "problem": "src/review/readiness.ts changed two checks that existing packages fail without anyone touching them. coverageMdCheck now FAILS when coverage.md omits any reviewer in research.json dispatch.runs. Every package ingested before flow 460 with a research ledger and no --reviewers/--coverage has a coverage.md that lists only the stand-in `review-orchestrator`; this is defect F, and pr-992-round2/round3 in this checkout list 0 of their 9 runs. reviewersCheck now also runs packageCoverageErrors, which for a `light` dispatch also runs git on every readiness call. computeReadiness is called by publish.ts publishReview, by publish-guard.ts reviewPublishRefusal (the shell's guard on `gh pr review <n>`, which also checks completed packages when a PR number is given) and by tui/review-panel.ts for every listed package.",
+      "impact": "Trigger: after upgrading, an operator runs `keryx review publish <id>` on a round closed before flow 460, or runs `gh pr review <n> ...` in keryx shell for a PR whose newest package is such a round. Outcome: publish is refused (\"NOT READY ... coverage-md\") or goes out with a false \"Partial review\" header under --partial, the guard refuses the gh command, and the review panel shows every historical closed round as NOT READY. The repair the item gives (\"re-run keryx review ingest\") is not available for a closed package.",
+      "suggested_fix": "Make the omission check read only coverage.md that flow-460 code wrote, for example by gating on a manifest field or version that ingest now stamps, or by treating a coverage.md that lists exactly the stand-in `review-orchestrator` as legacy and passing it with a note. Alternatively, skip the new readiness checks for a package whose status is closed: it already passed the complete gate of its own version.",
+      "evidence": "Diff hunk readiness.ts @@ 207,292 (coverageMdCheck `omitted` → `bad(...)`) and @@ 147,201 (reviewersCheck → packageCoverageErrors). managed.ts normalizeCoverage fell back to `[\"review-orchestrator\"]` before this change. publish.ts:153-156, publish-guard.ts:118-124, tui/review-panel.ts:118-126 call computeReadiness. A local survey of .metaproject/reviews/*: 2026-10-13-pr-992-round2-d9ccfb6c and round3 record 9 runs, and coverage.md omits all 9.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/publish.ts:156", "src/review/publish-guard.ts:124", "src/tui/review-panel.ts:126", "src/commands/operator-confirm-review.ts:321"],
+        "enumeration_method": "`rg -n \"computeReadiness|readinessRefusal\" src --glob '!*.test.ts'`, keeping the blast-radius dependents of src/review/readiness.ts that evaluate an existing, possibly closed, package. managed.ts:994 (complete) is left out: there a re-ingest repairs an open package."
+      }
+    },
+    {
+      "id": "REG-W3-004",
+      "severity": "info",
+      "file": "src/commands/review-slice.ts",
+      "line": 393,
+      "quote": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "problem": "spawn-subagent-tool.ts now appends a `KERYX_USAGE {...}` line to each saved child result. Only src/review/ledger.ts parseReviewResult and isEmptyOutput strip it. wholeFileResult (retry-eval.ts), used here and at retry-eval.ts:69, still JSON.parses the whole file, so a plain-JSON result saved by spawn_subagent no longer parses as a whole file and falls through to parseReviewResult. That reader is stricter: an object needs a reviewer or a findings array. Only a plain-JSON result that omits both, which `--reviewer` used to supply, would now be refused.",
+      "impact": "Observation. A schema-conformant result carries reviewer and findings, so this is not reached by valid output. It would be settled by a retry-plan test that saves `{\"status\":\"DONE\",\"slices\":[...]}` plus a usage line.",
+      "suggested_fix": "Have wholeFileResult parse `splitUsage(raw).body`, so both readers see the reply without the host's line.",
+      "evidence": "spawn-subagent-tool.ts:2363 (`${raw}${usageSuffix()}`); retry-eval.ts:40-45 (wholeFileResult parses the raw text); diff hunk ledger.ts @@ 332,374 (only parseReviewResult strips the line).",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/commands/review-slice.ts:393", "src/review/retry-eval.ts:69"],
+        "enumeration_method": "`rg -n \"wholeFileResult|JSON\\.parse\\(raw\\)\" src/review src/commands --glob '!*.test.ts'`"
+      }
+    },
+    {
+      "id": "REG-W3-005",
+      "severity": "info",
+      "file": "src/tui/review-panel.ts",
+      "line": 118,
+      "quote": "for (const review of listed ?? (await listReviewPackages(cwd))) {",
+      "problem": "reviewersCheck in src/review/readiness.ts now calls packageCoverageErrors on every computeReadiness. For a dispatch recorded `depth: light`, coverage.ts packageDiffStats then spawns `git rev-parse --show-toplevel`, resolveBase's git probes and `git diff -U20` (15 s timeout each). loadReviewDepth calls computeReadiness once per listed package, one after another.",
+      "impact": "Observation. Panel load time grows with the number of light-depth packages, and each one can hold the panel for up to the git timeout. This was not measured; a timing of loadReviewDepth over a checkout with several light rounds would settle it.",
+      "suggested_fix": "Pass `diffStats` from a per-package cache, or skip the depth recompute for closed packages when readiness is computed for display only.",
+      "evidence": "Diff hunks readiness.ts @@ 147,201 and coverage.ts @@ 442,580; tui/review-panel.ts:116-126.",
+      "confidence": "low",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 3, "minor": 0, "info": 2 }
+}
+```
+
+## review-regression — slice-04 (wave 3)
+
+**Status:** DONE_WITH_CONCERNS · blocker 0 · major 3 · minor 0 · info 2
+
+**Radius:** 40 hop-1 files were retained. The cap dropped 14, the test-consumer rule 158 and the text-hub rule 146; blast-radius.json records 441 dropped entries, so this was not a complete sweep. 20 changed files are Markdown or JSON and unresolved, so the radius cannot say what depends on them. The graph has no edge for the spawn_subagent → raw file → ledger handoff or the retry-state.json handoff; I traced both by reading the code.
+
+### Findings
+- **REG-W3-001 (major)** `src/review/retry-eval.ts:81`: collectLateResults still credits a DONE reply that has no `slices` with its whole assignment. `review next --apply` and `retry-plan` save that to retry-state, and the ledger trusts retry-state's `covered`. This undoes flow 460 D (`ledger.ts` buildLedger), and `review next` and `ledger build` now disagree.
+- **REG-W3-002 (major)** `src/commands/agent.ts:3487`: `completion-gate.ts` findReviewGateState now drops open packages and active pointers older than the session start. A review continued in a fresh shell session is reported as "no package exists", and the model is pushed to `review start` a duplicate.
+- **REG-W3-003 (major)** `src/review/publish.ts:156`: the new `readiness.ts` coverage-md omission check fails every package ingested before flow 460 (coverage.md lists only `review-orchestrator`). That blocks `review publish` and the shell's `gh pr review` guard on rounds already closed, where the repair it names (re-ingest) is not available.
+- **REG-W3-004 (info)**: wholeFileResult does not strip the new `KERYX_USAGE` line. It is harmless for schema-conformant results.
+- **REG-W3-005 (info)**: the review panel now runs the coverage gate, including git diff for light rounds, for every package. Not measured.
+
+Checked and not regressions: the extra `usage` fields on runs and the ledger (dispatchErrors and researchErrors ignore unknown keys); the `line: null` that newly unrefused findings carry (bot/post.ts, pr-comments.ts, publish.ts and dedupe.ts handle null); the research.ts refactor into packageCoverageErrors (same behaviour); and `ledger.ts` notRun with mutationRecorded.

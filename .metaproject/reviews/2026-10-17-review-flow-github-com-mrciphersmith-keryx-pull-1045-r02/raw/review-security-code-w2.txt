@@ -1,0 +1,84 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-07 (schema quote_unlocated/substring, flow 458/459/460 records, review-orchestrator skill text, CHANGELOG, cli-reference, review-with-a-record guide, ledger test). No exploitable vulnerability. One committed absolute local path (username, upload dir, session id), one stale doc paragraph that still says quote matching stops after whitespace normalisation, and two process observations.",
+  "slices": [{ "id": "slice-07", "status": "DONE", "coverage": "all 25 hunks read; KERYX_USAGE parsing (src/review/dispatch-usage.ts) and substring locator (src/review/locate.ts) read at head to check the documented behaviour" }],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "minor",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/context.md",
+      "line": null,
+      "quote": "Source report: /Users/Goodea/.claude/uploads/",
+      "problem": "The committed flow context records an absolute path into the developer's local Claude upload directory, including the OS username and the Claude session UUID (6e21c062-...). The file it points to is not in the repository, so the line is useless to any other reader.",
+      "impact": "Anyone reading the public repository learns the maintainer's local username, home layout and a Claude Code session id; low-grade information disclosure that also leaks the name of a third-party repository's PR process report. No credential is exposed.",
+      "suggested_fix": "Replace the absolute path with a neutral reference (e.g. 'Source report: owner-supplied PR #7975 process report (not committed)') or commit a redacted copy under the flow folder and link it relatively.",
+      "evidence": "git grep -l 'Users/Goodea' -- .metaproject/flows returns only this file: no other tracked flow commits a local absolute path, so this is not an established project convention (shared law 4 checked).",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops — nothing",
+      "problem": "The section 'A finding points at the code it quotes' still says matching stops after the whitespace-collapsed pass ('nothing fuzzy'), but this PR adds a third tier: a one-line quote is placed when it is an exact substring of exactly one line (locate.ts method 'substring', schema enum 'substring', and the schema's quote description updated in the same slice). The doc's outcome table also does not mention `quote_unlocated`'s `ambiguous` candidate set derived from the substring scan.",
+      "impact": "An operator or reviewer relying on the reference believes a short quote cannot anchor a finding; in fact any unique substring of one line (no minimum length) now derives a line. A reader auditing why a finding was anchored where it was gets the wrong rule.",
+      "suggested_fix": "Change the sentence to: 'Matching is exact first, then with whitespace collapsed, then — for a one-line quote only — as an exact substring of exactly one line; nothing fuzzy.' and add `substring` to the `derived` row.",
+      "evidence": "src/review/locate.ts:233-244 at HEAD 375279e78 adds the substring tier; .metaproject/core/gdskills/contracts/review-finding.schema.json quote description was updated in this slice to name it; docs/docs/cli-reference.md:6674 was not.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "info",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+      "line": null,
+      "quote": "The package's plan confirmation stays unrecorded in keryx.",
+      "problem": "Round 2 dispatched 55 reviewer runs over the 40-dispatch threshold with the operator's approval given in chat only; the package carries no confirm-plan record. The orchestrator skill states dispatch-check and ledger build refuse an unconfirmed plan and that the agent never writes an operator quote itself.",
+      "impact": "No attacker path; the over-threshold gate exists to keep spend under operator control and is satisfied here by a chat statement that keryx cannot verify. Either ledger build will refuse this package, or the round will need an operator waiver/confirm at a terminal before it can close. What would settle it: run `keryx review ledger build --package <pkg> --dry-run` and see whether it names the missing confirmation.",
+      "suggested_fix": "Have the owner run `keryx review confirm-plan --package <pkg>` at a terminal before ledger build, or record the gap as Not run in the report. The out-of-scope note in description.md already names the missing no-terminal confirmation path as a separate task.",
+      "evidence": "journal.md round-2 entry; review-orchestrator/SKILL.md Round plan step 6.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "pr-process",
+      "publication": "question"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "line": null,
+      "quote": "\"title\": \"L6 fix slices get the fix roster; fix hunks are the ones touching a finding\",",
+      "problem": "flow.json at HEAD still has T13 (L6) as todo although commit 851e83b24 merged lane L6, and T9 (close flows 458/459) as todo while this PR moves 458 and 459 only to 'implemented' — AC8 asks for them closed through the flow CLI including `complete`.",
+      "impact": "No security impact. The flow record understates finished work (T13) and AC8 is not yet met by what the PR contains; a gate reading flow.json will report the flow incomplete.",
+      "suggested_fix": "Run `keryx flow task done 460 T13`, and `keryx flow complete` for 458 and 459 (then T9 done), before asking for AC8 confirmation.",
+      "evidence": "git show HEAD:.metaproject/flows/460-.../flow.json: T9 todo, T13 todo; 458/459 flow.json status 'implemented'; git log shows 851e83b24 'fix(review): a fix slice gets the fix roster ... (flow 460 L6)'.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+## Summary
+
+Second-look security review of slice-07 (docs, schema, flow records, skill text, one test file) for PR #1045 round 2.
+
+- Blockers: 0, Major: 0, Minor: 2, Info: 2.
+- SEC-001 (minor): a committed absolute local path in flow 460's context.md exposes the maintainer's username and a Claude session id. No other tracked flow does this.
+- SEC-002 (minor): cli-reference still says quote matching stops after the whitespace pass. The new one-line substring tier is not mentioned there.
+- SEC-003 (info, pr-process question): round 2's over-threshold plan was approved in chat only, so the package has no confirm-plan record.
+- SEC-004 (info): flow 460 T13 and T9 are still todo. AC8 is not met while 458 and 459 are only `implemented`.
+
+Clean areas checked: injection (no shell/SQL construction in the slice), secrets (none; the KERYX_USAGE format carries counts and model only), auth/authz of operator decisions (docs keep decisions with the operator, `premise-decisions` stays non-waivable), path handling (locator docs keep realpath containment at the recorded commit), parsing hardening (`splitUsage` bounds line length and token counts, last line wins, and the line is stripped before the emptiness check). Reviewer-spoofable usage is a documented, deliberate choice (dispatch-usage.ts header: no gate reads usage), so it is not reported.
+
+Routing audit: graph_used: no (not-relevant: docs/data slice); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

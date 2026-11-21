@@ -1,0 +1,81 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "AR-001",
+      "severity": "minor",
+      "file": "src/review/research.ts",
+      "line": 46,
+      "title": "dispatchRuns is introduced as the shared dispatch.runs reader but only two of the readers use it",
+      "problem": "research.ts now exports dispatchRuns (typed DispatchRun) as the lenient reader of research.json dispatch.runs, and coverageMdCheck and managed.ts use it. reviewersCheck in the same file as coverageMdCheck still re-parses the same array by hand (record + Array.isArray), and coverage-complete.ts (lines 63, 80, 96) and tui/review-panel.ts (line 96) each keep their own parse. The dispatch.runs shape is now read through one typed accessor and four ad hoc ones; a field added to a run (status values, routedOut) has to be taught to each.",
+      "why_it_matters": "A second reading of the same record is the drift the new helper was meant to end; readiness and the coverage gate can disagree on what a run is.",
+      "suggested_fix": "Route reviewersCheck (readiness.ts) and the coverage-complete.ts readers through dispatchRuns, or state in its doc comment why they are exempt.",
+      "evidence": "export function dispatchRuns(research: unknown): DispatchRun[] {"
+    },
+    {
+      "id": "AR-002",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 137,
+      "title": "The coverage.md format contract lives in the checker (readiness), and the writer imports it from there",
+      "problem": "COVERAGE_MD_MARK and COVERAGE_ENTRY (the reader of the `reviewer:`/`status:` layout) are defined in readiness.ts, while the writer renderCoverage in managed.ts imports the mark from readiness and hard-codes the `reviewer: ..\\nstatus: ..` layout in its own template. The ingest (producer) therefore depends on the verification layer for a constant of the artifact it owns, and the two halves of one format (template and regex) sit in different modules with no shared definition.",
+      "why_it_matters": "Dependency direction runs from producer to checker, and a change to the layout in renderCoverage silently breaks the regex in readiness without a compile-time link.",
+      "suggested_fix": "Move COVERAGE_MD_MARK, the entry regex and a small parseCoverageEntries/renderCoverageEntry pair into one coverage-md module that both managed.ts and readiness.ts import.",
+      "evidence": "export const COVERAGE_MD_MARK = \"<!-- keryx: coverage.md written from the dispatch record (flow 460) -->\";"
+    },
+    {
+      "id": "AR-003",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 173,
+      "title": "reviewersCheck keeps a private parse of dispatch.runs next to the new dispatchRuns",
+      "problem": "Within the same diff, coverageMdCheck was moved to dispatchRuns while reviewersCheck, three functions above, continues to build its own runs array from record(ctx.research?.dispatch). One file reads one record two ways.",
+      "why_it_matters": "Same class as AR-001, local to this module; the two items (reviewers, coverage-md) can classify a malformed run differently (dispatchRuns drops runs with an empty reviewer, reviewersCheck keeps them via String(run.reviewer)).",
+      "suggested_fix": "Build runs in reviewersCheck from dispatchRuns(ctx.research).",
+      "evidence": "const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record).filter((run): run is Record<string, unknown> => run !== undefined);"
+    },
+    {
+      "id": "AR-004",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 251,
+      "title": "secondLookClaimBacked repeats the changed-line walk that walkRegion and lineInHunk now centralise, with different removed-line semantics",
+      "problem": "The diff adds walkRegion/lineInHunk/onlyFixLines so that fix claims are judged by the slice's changed lines, and fixClaimBacked now delegates to onlyFixLines. secondLookClaimBacked, the sibling check of the same kind, keeps its own inline walk over region.text. The two walks treat a removed line differently: walkRegion/lineInHunk accept a removed line at `line` or `line - 1`, the inline one tests only the running line without a `\\` no-newline guard. regionInSecondLook is a third overlap predicate.",
+      "why_it_matters": "A removed line on the edge of a hunk can count as fix and not as second-look, and the disjointness the comment in secondLookClaimBacked relies on is held by two different line conventions.",
+      "suggested_fix": "Express secondLookClaimBacked through walkRegion plus a generalised hunk-membership helper taking the hunk list, so fix and second-look share one definition of 'a changed line lies in a hunk'.",
+      "evidence": "for (const entryLine of region.text.split(\"\\n\")) {"
+    },
+    {
+      "id": "AR-005",
+      "severity": "info",
+      "file": "src/review/round-record.ts",
+      "line": 17,
+      "title": "NOT_REVIEW_PACKAGES_ANY_DEPTH is a second hand-kept copy of the NOT_REVIEW_PACKAGES exclusion list",
+      "problem": "The new constant restates the same two exclusions as NOT_REVIEW_PACKAGES in glob form. If a new committed-package location is excluded later, one list can be updated without the other; the doc comment explains the depth difference but nothing ties the two.",
+      "why_it_matters": "Divergence would make the coverage gate's light recheck count different files than the slicer. No such divergence exists in this diff.",
+      "suggested_fix": "Derive both from one list of package-directory globs, or add a test asserting they exclude the same paths.",
+      "evidence": "export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\", \":(exclude,glob)**/.metaproject/flows/*/reviews/**\"];"
+    },
+    {
+      "id": "AR-006",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": 264,
+      "title": "coverageGated puts a policy decision on the Context that depends on manifest.status, and both checks apply it separately",
+      "problem": "coverageGated is computed once in computeReadiness and consulted in two different checks (reviewersCheck and coverageMdCheck) with different effects (skip the gate, skip the omitted-reviewer check), and a third reader (`review complete`, which runs the same coverage gate per the comment) is not visibly bound to it. The 'closed means grandfathered' rule is thus encoded in readiness only.",
+      "why_it_matters": "If complete or publish run packageCoverageErrors without this flag, the claim that readiness mirrors `review complete` holds only for open packages. Not verified in this slice, so reported as information.",
+      "suggested_fix": "Confirm the other callers of packageCoverageErrors apply the same grandfathering, or move the predicate beside packageCoverageErrors in research.ts so every caller shares it.",
+      "evidence": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\","
+    }
+  ]
+}
+```
+
+## Summary
+
+Slice-06 (readiness, research, retry-eval, round-record/split, routing-check, types, verdict) is structurally sound: no layer or runtime dependency problems, and the fix/new split now has one pure partition function feeding the classifier, the backing check and the routing check. Remaining observations are duplication and ownership issues: the new dispatchRuns reader is not adopted by sibling readers, the coverage.md format contract sits in the checker rather than with its writer, and the second-look backing check keeps its own line walk beside the new shared one.

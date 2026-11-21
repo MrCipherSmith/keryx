@@ -1,0 +1,219 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r2-review-architecture-code#F-001",
+      "verdict": "upheld",
+      "reasoning": "No intent signal at base (the lock and its comment are new in this branch); managed.ts:1831 writes findings.json with writeFileAtomic and no lock, while operator-decisions.ts:24 documents the lock as serialising findings.json for a premise answer. The fact and the overclaiming comment both stand; either suggested fix is sound."
+    },
+    {
+      "finding_id": "r2-review-architecture-code#F-002",
+      "verdict": "upheld",
+      "reasoning": "premiseDecisionsCheck (readiness.ts:197-207) prints a decide-premise remedy, and findHeldFinding (premise-question.ts:46-49) refuses when findings.json is absent, while premiseRecords (verdict.ts) reads raw results plus premises.json before ingest. The 'one view' comment justifies the reading, not the remedy text; no signal or practice against the finding."
+    },
+    {
+      "finding_id": "r2-review-architecture-code#F-003",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "bb0423cab:src/commands/operator-confirm-review.ts:26",
+          "says": "before this branch (merge-base with main), the review card module already imports cardSafe from \"../trigger/schedules\" (added in 5af73424d, on main)"
+        },
+        {
+          "ref": "src/commands/operator-confirm-other.ts:46-47",
+          "says": "sibling operator-card module on main imports cardSafe from ../trigger/schedules alongside the schedule helpers"
+        },
+        {
+          "ref": "src/trigger/schedules.ts:405-410",
+          "says": "cardSafe is documented as the flow 295 F7 card sanitiser, the one helper every operator card shares"
+        }
+      ],
+      "reasoning": "The import the finding flags in review-operator.ts:19 follows the pattern the codebase already uses on main in two other command modules (operator-confirm-review.ts, operator-confirm-other.ts). The branch added one more consumer of an established helper; it did not create the layer dependency. Moving cardSafe to src/lib may be a good refactor, but it is a pre-existing module-placement question, not a defect of this change, and doing it here touches main-owned files outside the flow.",
+      "question": "review-operator.ts imports cardSafe from trigger/schedules the same way two command modules on main already do. Keep the established import for this flow (refactor separately), or move cardSafe to src/lib now?",
+      "options": [
+        "dismiss — keep the established import; file the move to src/lib as a separate refactor",
+        "uphold — move cardSafe to src/lib in this flow and update all importers"
+      ]
+    },
+    {
+      "finding_id": "r2-review-architecture-skills#F-001",
+      "verdict": "upheld",
+      "reasoning": "session-plan-bridge.mdc:39 names the range `step-0` … `step-14` while review-orchestrator/SKILL.md:105,120 publish step-10b too; the rule is the id contract the skill cites. No intent signal for omitting it."
+    },
+    {
+      "finding_id": "r2-review-clean-code-code#CC2-1",
+      "verdict": "upheld",
+      "reasoning": "premise.test.ts:57 defines the module helper `first(result)` and :99 declares a local `const first = finding()`; the branch introduced both. Shadowing is an accepted clean-code smell, and the rename is cheap and sound."
+    },
+    {
+      "finding_id": "r2-review-clean-code-code#CC2-2",
+      "verdict": "upheld",
+      "reasoning": "The field rule is restated across five skills with diverging wording; review-orchestrator/SKILL.md itself says prompts must 'never paraphrase a contract', which supports a single statement with pointers. No signal of deliberate duplication."
+    },
+    {
+      "finding_id": "r2-review-clean-code-code#CC2-3",
+      "verdict": "upheld",
+      "reasoning": "Same defect as the architecture-skills F-001: the rule row omits step-10b that the skill now publishes. Upheld on the same reading of session-plan-bridge.mdc:39 and review-orchestrator/SKILL.md:105,120."
+    },
+    {
+      "finding_id": "r2-review-clean-code-skills#CC2-001",
+      "verdict": "upheld",
+      "reasoning": "readiness.ts:444-458 refuses to waive premise-decisions, while the docs describe every failing item as waivable by the operator. Doc drift from code introduced by this branch; no intent signal against it."
+    },
+    {
+      "finding_id": "r2-review-clean-code-skills#CC2-002",
+      "verdict": "upheld",
+      "reasoning": "Same rule-row drift (session-plan-bridge.mdc:39 vs SKILL.md:105,120); the contract test at session-plan-bridge-contract.test.ts:106 pins only the step-0…step-14 literal, so it cannot catch it."
+    },
+    {
+      "finding_id": "r2-review-clean-code-skills#CC2-003",
+      "verdict": "upheld",
+      "reasoning": "flow-orchestrator/SKILL.md:277-286: the new ### heading now owns 'Then freeze and start' and the freeze/start block, which applies to every flow. Structural doc defect introduced by this branch; the suggested own heading is sound."
+    },
+    {
+      "finding_id": "r2-review-highload-code#HL2-001",
+      "verdict": "upheld",
+      "reasoning": "automatic-review.ts:266-268 lowercases the extension but compares the relative name to OPERATOR_ONLY_FILES exactly; the guard is new in this branch, and case-insensitive default filesystems (APFS, NTFS) make the mismatch real. Case-folded comparison is the accepted practice for such a guard."
+    },
+    {
+      "finding_id": "r2-review-highload-code#HL2-002",
+      "verdict": "upheld",
+      "reasoning": "Same fact as architecture-code F-001: OPERATOR_DECISIONS_LOCK's doc claims findings.json serialisation that managed.ts:1831 and ingest do not honour. No intent signal predating the branch."
+    },
+    {
+      "finding_id": "r2-review-highload-code#HL2-003",
+      "verdict": "upheld",
+      "reasoning": "recordPremiseDecision (operator-decisions.ts:~185-188) appends the decision, then runs onRecorded with no rollback or partial-success report; the ordering is new in this branch and no comment accepts the split state."
+    },
+    {
+      "finding_id": "r2-review-logic-code#LG2-001",
+      "verdict": "upheld",
+      "reasoning": "Same guard defect as HL2-001: the exact-case compare at automatic-review.ts:268 beside a lowercased extension check. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-code#LG2-002",
+      "verdict": "upheld",
+      "reasoning": "normaliseCarriedPremise (premise.ts:216-223) overwrites premise.severity with finding.severity on a stale downgrade, keeping verdict `downgraded`, which can record a non-lowering downgrade that the schema and the strictly-lower invariant reject. Its comment ('finding.severity wins') is introduced by this branch, so it cannot ratify itself."
+    },
+    {
+      "finding_id": "r2-review-logic-skills#LG2-001",
+      "verdict": "upheld",
+      "reasoning": "At base, review-logic/SKILL.md:72 said 'a read-only child has no shell, so run no git command'; HEAD replaces it with a git permission. spawn-subagent-tool.ts:1002-1004 ('Both native modes lack shell ... Default mode is read_only (no shell)') and profiles.ts:152 (shell: \"deny\") confirm the keryx-shell child cannot run git. The text now claims a capability that host lacks and gives no fallback. No practice or intent against it."
+    },
+    {
+      "finding_id": "r2-review-logic-skills#LG2-002",
+      "verdict": "upheld",
+      "reasoning": "claimTargets (premise.ts:205-209) matches global_id or id or merged_from; global_ids are minted at ingest, after Wave D, as `<reviewId>#<id>`, so the skill's 'global_id disambiguates two reviewers' F-001' does not hold for new findings. Doc defect; no intent signal."
+    },
+    {
+      "finding_id": "r2-review-logic-skills#LG2-003",
+      "verdict": "upheld",
+      "reasoning": "flow-orchestrator/SKILL.md:279 lists two by-hand rules while PREMISE_REJECTION_REASONS (premise.ts:63-85) also holds security-downgrade, downgrade-below-threshold, held-without-question, owner-decision-without-options and self-judgement, all of which apply to a single finding. Incomplete contract; upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-skills#LG2-004",
+      "verdict": "upheld",
+      "reasoning": "review-pr-feedback rule 7 runs review-premise, and flow-orchestrator Phase 1 runs it again for an external-comment flow; nothing in the dispatch tells the second site the premise is recorded. No intent signal; the suggested constraint is sound."
+    },
+    {
+      "finding_id": "r2-review-regression-code#RG2-001",
+      "verdict": "upheld",
+      "reasoning": "registryVouches (round-registry.ts:158-167) requires the current findingsSha256 to match a recorded entry, and the only recordFinishedRound callers are ingest/complete/publish; answerPremiseQuestion now rewrites findings.json without re-recording. A real regression path introduced by this branch; no intent or practice signal shrinks it."
+    },
+    {
+      "finding_id": "r2-review-regression-code#RG2-002",
+      "verdict": "upheld",
+      "reasoning": "dedupe.ts:356-359 (new in this branch) moves an absorbed member's premise onto the canonical record whatever its severity, while the delta judge skips premised findings, so a higher-severity re-statement can inherit an old hold unjudged. The LG8-003 comment is the branch's own and does not cover the held case."
+    },
+    {
+      "finding_id": "r2-review-regression-code#RG2-003",
+      "verdict": "upheld",
+      "reasoning": "waiveReadiness refuses premise-decisions (readiness.ts:458), but the card's buildCard draws the waiver card first, and the schema text still says '1-10' (grep confirms the literal in operator-confirm-review.ts). Wasted operator confirmation; upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-code#RG2-004",
+      "verdict": "upheld",
+      "reasoning": "managed.ts:507-508 removes research-evidence/premises.json on an ingest without --premises; its stated reason (no stale re-apply) is already covered by verdict.ts applyPremiseClaims returning early when ingested. The rm and its comment are new in this branch; no prior signal."
+    },
+    {
+      "finding_id": "r2-review-regression-skills#NEW-1",
+      "verdict": "upheld",
+      "reasoning": "Same mechanism defect as logic-skills LG2-002: global_id does not exist at Wave D dispatch for new findings (minted at ingest). Upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-skills#NEW-2",
+      "verdict": "upheld",
+      "reasoning": "review-premise/SKILL.md Input Contract says the comment URL is the `id` for external-comment, while review-pr-feedback rule 7 names `C-NNN` as `id`. Two contracts disagree; upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-skills#NEW-3",
+      "verdict": "upheld",
+      "reasoning": "Same rule-row drift as architecture-skills F-001 (session-plan-bridge.mdc:39 vs SKILL.md:105). Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-code#SEC2-001",
+      "verdict": "upheld",
+      "reasoning": "automatic-review.ts:262-269 compares only the exact top-level name, so a mixed-case or nested target is approved; carryPremiseDecisions (premise-question.ts:82-97) copies decisions from a previous package the agent can choose. Both the guard and the carry are new in this branch. A security finding is never downgraded, and no practice or intent signal challenges it."
+    },
+    {
+      "finding_id": "r2-review-security-code-code#SEC2-002",
+      "verdict": "upheld",
+      "reasoning": "premiseHoldState (premise.ts:529-538) returns `none` for an unanswered held finding with any dismissed* disposition (hasTerminalOutcome, :476-480). The justifying comment ('waits for nobody') is introduced by this branch, so it is not a prior deliberate choice; the finding names how an agent-written dismissal lifts an operator-only hold. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-code#STYLE-R2-001",
+      "verdict": "upheld",
+      "reasoning": "managed.ts:2474 places `type ScopeExtras` between renderScope's docblock and `function renderScope` (:2481), so the docblock attaches to the type. Accepted TSDoc practice puts a symbol's doc immediately before it; upheld."
+    },
+    {
+      "finding_id": "r2-review-style-code#STYLE-R2-002",
+      "verdict": "upheld",
+      "reasoning": "applyPremiseClaims(…, ingested) returns a count without applying when ingested (verdict.ts:228), and the field keeps the name premiseClaims while it counts premised findings. Name/behaviour mismatch introduced by this branch; upheld."
+    },
+    {
+      "finding_id": "r2-review-style-skills#R2-001",
+      "verdict": "upheld",
+      "reasoning": "Same heading-scope defect as clean-code-skills CC2-003, in the .metaproject mirror (flow-orchestrator/SKILL.md:277). Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-skills#R2-002",
+      "verdict": "upheld",
+      "reasoning": "At base the file is hard-wrapped (line 1268 'The bound is a ceiling, not a target. Repetition ends the loop earlier and' wraps at ~80 columns; 30 of 2235 lines exceed 200 chars), and HEAD joins that paragraph into one line (:1264). Unrelated re-wrap churn against the file's own convention; upheld."
+    },
+    {
+      "finding_id": "r2-review-style-skills#R2-003",
+      "verdict": "upheld",
+      "reasoning": "The Verdicts row (review-premise/SKILL.md) names minor and external as never-downgraded, while the Iron Laws row also forbids downgrading a review-security-code finding. Two statements of one rule differ; upheld."
+    },
+    {
+      "finding_id": "r2-review-style-skills#R2-004",
+      "verdict": "upheld",
+      "reasoning": "feature-dev/SKILL.md Phase 1 item 1 points to `<flow-dir>/premise/<n>.json` though feature-dev has no flow package and names no alternative. Upheld."
+    }
+  ]
+}
+```
+
+## Summary
+
+Judged 34 of 34 findings (none raised by this judge; none below minor).
+
+- upheld: 33
+- downgraded: 0
+- challenged: 1
+- owner-decision: 0
+
+### Held findings
+
+- **r2-review-architecture-code#F-003** (challenged, minor). Question: review-operator.ts imports cardSafe from trigger/schedules the same way two command modules on main already do. Keep the established import for this flow (refactor separately), or move cardSafe to src/lib now?
+  - Signals: base `bb0423cab:src/commands/operator-confirm-review.ts:26` already imports cardSafe from ../trigger/schedules (commit 5af73424d, on main); `src/commands/operator-confirm-other.ts:46-47` does the same on main; `src/trigger/schedules.ts:405-410` documents cardSafe as the shared card sanitiser.
+
+### Notes
+
+- Duplicates judged separately, same verdict each: session-plan-bridge step-10b (architecture-skills F-001, clean-code-code CC2-3, clean-code-skills CC2-002, regression-skills NEW-3); case-sensitive operator-only guard (highload HL2-001, logic-code LG2-001, security SEC2-001); unlocked findings.json writers (architecture-code F-001, highload HL2-002); global_id at Wave D (logic-skills LG2-002, regression-skills NEW-1); flow-orchestrator heading scope (clean-code-skills CC2-003, style-skills R2-001).
+- Most comment-level "intent" at these sites (normaliseCarriedPremise, hasTerminalOutcome, the premises.json rm, the dedupe premise carry) is introduced by this branch, so it is not evidence of a prior deliberate choice.
+- The input ids use the `<reviewer>-<wave>#<id>` shape; logic-skills LG2-002 notes these may resolve as unknown-finding in mergePremises. Claims name the ids exactly as given.

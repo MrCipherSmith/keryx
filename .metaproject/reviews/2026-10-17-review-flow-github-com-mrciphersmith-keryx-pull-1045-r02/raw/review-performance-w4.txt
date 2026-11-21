@@ -1,0 +1,83 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "Slice-05 (completion-gate, coverage, dispatch-usage, ledger, locate, managed, premise, prior-round and others) read in full. No blocker or major: every added loop is bounded (MAX_HITS, session caps, 4096-char usage line, 20 shown blockers) and the git helpers never throw, so the process caches cannot pin a rejected promise. Two minors and three infos, all off a hot path that scales with data size.",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "PF-001",
+      "severity": "minor",
+      "title": "Session gate keeps whole keryx-review tool-call arguments and substring-scans all of them for every stale package on every stop",
+      "file": "src/review/completion-gate.ts",
+      "line": 161,
+      "problem": "SessionReviewTracker.scan stores call.arguments verbatim (up to 64 entries, no length cap). namedBySession then runs namesToken (indexOf loop) over every stored command, for each id (manifest.reviewId and dir name), for every open package whose manifest predates the session, on every holdReviewGate call. A command that embeds a report, dispositions or findings JSON inline is tens to hundreds of KB.",
+      "impact": "Hot path: agent.ts holdReviewGate runs at every agent stop once a keryx review command was seen. Cost per stop is about (stale packages) x 2 x (sum of stored argument sizes). With a few hundred accumulated packages under .metaproject/reviews and a few MB of stored arguments this is up to seconds of synchronous string scanning per stop, plus the arguments held in memory for the whole session. The manifest reads in scanRoot are already linear in packages, so this term can dominate only when arguments are large.",
+      "suggested_fix": "Do not retain the raw arguments. When scan sees a keryx review call, extract the review-id-shaped tokens (SAFE_REVIEW_ID matches) once into a bounded Set, and test membership in namedBySession. That makes the per-package check O(ids).",
+      "evidence": "      remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PF-002",
+      "severity": "minor",
+      "title": "resolveBase always spawns up to five git merge-base processes even when the first candidate settles it",
+      "file": "src/review/prior-round.ts",
+      "line": 323,
+      "problem": "The sequential loop returned at the first qualifying candidate, so with a recorded base it cost one git spawn. Promise.all now runs merge-base for the recorded base, origin/main, main, origin/master and master every call, then discards all but the first qualifying result. defaultGitRunner has no timeout, so one slow probe also gates the whole result.",
+      "impact": "resolveBase runs for every review plan, every light-depth coverage check through resolveDiffBase, and prior-round resolution. The common case (recorded base, or origin/main resolves) now pays four extra process spawns and their repository reads. Faster only when the early candidates fail. Nothing in the diff or the comment gives a before/after for this change (performance law 3).",
+      "suggested_fix": "Keep the sequential early exit, or probe the first candidate alone and start the remaining ones only if it is missing or its range is empty. If the parallel form is kept, record the measurement that justified it.",
+      "evidence": "  const shas = await Promise.all(candidates.map((ref) => mergeBaseOf(git, ref, head)));",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PF-003",
+      "severity": "info",
+      "title": "Diff-stat cache keeps only successes, so the unresolvable case this flow targets re-runs git on every coverage call",
+      "file": "src/review/coverage.ts",
+      "line": 547,
+      "problem": "packageDiffStatsCached passes keep = !('error' in value). A package with no resolvable base, an empty range (merged PR without a recorded base) or a failed diff is recomputed on each call: rev-parse, up to five merge-base probes, and possibly a -U20 diff. The comment promises readiness and complete pay once, which holds only on success.",
+      "impact": "A few repeated git runs (tens of milliseconds each) per readiness, ledger, complete or panel refresh while the package stays unresolvable. Not a defect unless the failure is slow; would be settled by measuring a failed resolution on a large repository.",
+      "suggested_fix": "Cache the error too, keyed per command, or for a short time-to-live; or state in the comment that failures are deliberately retried.",
+      "evidence": "const packageDiffStatsCached = processCache(async (key: string): Promise<DiffStats | { error: string }> => {",
+      "confidence": "low",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PF-004",
+      "severity": "info",
+      "title": "Process-lifetime git caches: the comment says per command, and the stats key does not include the base tip",
+      "file": "src/review/coverage.ts",
+      "line": 500,
+      "problem": "gitTopLevel and packageDiffStatsCached live for the whole process, but the gitTopLevel comment justifies them as unchanged within a command. keryx shell is long-lived. The stats key is [packageDir, root, target] with the target's head sha and recorded base name; it does not include the commit the base name (origin/main, main) points at.",
+      "impact": "In a long session, a success cached before a fetch keeps feeding the light/full depth decision with the diff size computed against the old base tip. Only matters when the base moves in a way that changes merge-base with the head, so the effect is small; hence info. Settled by checking whether the shell ever re-enters coverage after a base update for the same head.",
+      "suggested_fix": "Add the resolved merge-base sha to the key (it is already computed in resolveBase), or clear the caches at command start.",
+      "evidence": "const gitTopLevel = processCache(uncachedGitTopLevel, (top) => top !== undefined);",
+      "confidence": "low",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PF-005",
+      "severity": "info",
+      "title": "Ledger build scans the canonical list several times per raw finding, before knowing a disposition exists",
+      "file": "src/review/ledger.ts",
+      "line": 625,
+      "problem": "For each raw finding, canonicalByReviewer, canonicalByObligation, resolvesOnce and then closeWith (matching(given.id), matching(finding)) each filter the whole canonical array. These arguments are computed eagerly, even when no disposition was given and closeWith returns immediately. Also screenedAs is a linear find per finding. The same shape appears at the follow-up and extra-disposition call sites (which pass undefined).",
+      "impact": "Runs once per ledger build; cost is raw findings x canonical findings x about five passes. The findings cap bounds both to the low hundreds, so this is milliseconds. Noted only so the quadratic term is a decision: a Map keyed by id and global_id would remove it.",
+      "suggested_fix": "Build id and global_id indexes of input.canonical once before the loop, and compute the default link only when a status:finding disposition without a link is present.",
+      "evidence": "      const byObligation = byReviewer.length === 1 ? [] : canonicalByObligation(id);",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    }
+  ]
+}
+```
+
+## Summary
+
+Performance review of slice-05 found no blocker or major. Checked and clean: locate.ts findSubstring (one linear pass, only after exact and whitespace matching fail, stops at MAX_HITS, file size already bounded), dispatch-usage.ts (no backtracking regex, 4096-char cap, linear removal), filter-stats and premise merging (arithmetic only; claim lookup stays as before), managed.ts additions (one extra mkdir and small file write per ingest, stub check is a trim and includes), mutate.ts directory reads, describeBlockers (bounded to 20 lines of 300 chars), and the SessionReviewTracker incremental cursor (scans only new messages when the history array is reused, as agent.ts does).
+
+Findings: 0 blocker, 0 major, 2 minor (PF-001 retained and rescanned command text in the stop gate, PF-002 unconditional five-way merge-base fan-out with no before/after), 3 info (PF-003 failures not cached, PF-004 process-lifetime cache keyed without the base tip, PF-005 repeated linear scans in the ledger loop).

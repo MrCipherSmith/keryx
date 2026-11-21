@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-highload",
+  "wave": 4,
+  "waves": 5,
+  "slices": [
+    "slice-05"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-05",
+      "path": "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/.metaproject/reviews/2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045-r02/slices/slice-05.diff",
+      "bytes": 145446
+    }
+  ],
+  "result": "raw/review-highload-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+}

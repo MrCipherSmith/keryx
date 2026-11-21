@@ -1,0 +1,890 @@
+--- .metaproject/core/gdskills/contracts/review-finding.schema.json
+@@ 218,249 @@
+         }
+       ]
+     },
+     "path_missing": {
+       "type": "boolean",
+       "description": "Written, as true, only by `review ingest` when `file` does not exist at the round's reviewed head (a cat-file existence check of `<head>:<file>`). The finding is kept, never dropped, and is listed in scope.md: a finding that cites a path nobody can open is the reviewer's claim, not a located site."
+     },
+     "quote_unlocated": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": ["reason"],
+-      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused.",
++      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused. It is the machine-readable outcome of the same check that writes `locator` (`state: unlocatable`, its `reason` the prose of it): ingest writes both from one result and recomputes both on every ingest, so they never disagree. Gates and readers branch on this flag; `locator` is the record of how the line was or was not derived.",
+       "properties": {
+         "reason": { "type": "string", "enum": ["absent", "ambiguous"] },
+         "candidate_lines": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
+       }
+     },
+     "symbol": { "type": ["string", "null"] },
+     "problem": { "type": "string" },
+     "impact": { "type": "string" },
+     "suggested_fix": { "type": "string" },
+     "evidence": { "type": "string" },
+     "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+     "dedupe_key": { "type": ["string", "null"] },
+     "blocking_merge": { "type": "boolean", "default": false },
+     "related_skill": { "type": ["string", "null"] },
+     "learning_candidate": { "type": "boolean", "default": false },
+     "source": {
+       "title": "Who raised this finding: one of our reviewers, or somebody on the pull request",
+       "type": "string",
+       "enum": ["internal", "external"],
+       "default": "internal",
+
+--- docs/docs/cli-reference.md
+@@ 4829,4868 @@
+ **An unrecognised option is refused, not ignored**, and the command exits 1. A
+ flag that is silently dropped writes nothing and still reports success.
+ 
+ `--head <sha>` is the commit the round ran against, written to
+ `manifest.target.head` and read by the `review` completion gate — which refuses
+ to complete a flow whose last round cannot say which tree it read. Omitted, it
+ is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+ `pr` target's own head so that a round run against something other than what
+ will merge *fails* the gate instead of passing it. With no checkout to ask and a
+ `pr` target, the pull request's head is used instead; with neither, the head is
+ left off and the gate reports it as unobserved.
+ 
+ `review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+ at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+ records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+ head that is not the pull request's head still needs the first line of `report.md` to name it and
+ say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+ 
+ A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+ 
+-`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
++`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+ 
+ | Subcommand | Description |
+ |---|---|
+ | `attach` | Create a managed package linked to an existing Task Manager flow. Like `start`, it marks the package active (`.metaproject/data/review-active/active-review.json`, not committed) so keryx writes `tool-calls/orchestrator.jsonl` itself; `review complete` removes the pointer when it closes the package. |
+ | `start` | Create a standalone managed review package, and mark it active: from then on `keryx memory` commands, the MCP memory tools and the keryx agent's memory calls append to the package's `tool-calls/orchestrator.jsonl` (the agent never writes that file). |
+ | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
+ | `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. After those it prints what the round left behind that no count shows, and nothing when there is none: `Not run: <n> candidates (cap <c>): <mutant ids>` for proposed mutants no pass has run, `held: <finding> stays <severity> (mutant <id>): <reason>` for a severity a presentation-only survivor did not raise, and `follow-up open: <id> <text>` (or `follow-up narrowed: … (remains: …)`) for each parent follow-up no disposition closes. |
+ | `readiness` | Print the twelve-item checklist that gates `completed` and publishing (`keryx review readiness <review-id-or-path> [--json]`): every changed file covered, no file the blast radius cut left unreviewed, every planned reviewer ingested, the verifier's coverage stated, the ledger READY, coverage.md truthful, the head matching the PR, leftovers named in the report, the changed-file count equal to the PR's own list, and the orchestrator's memory reads confined to its one memory stage (`memory-outside-stage`: any other orchestrator `keryx memory` call in `tool-calls/orchestrator.jsonl`, which keryx writes itself, fails it; a call by a reviewer's id passes, and a call with no caller is `unattributed`, which warns in the detail and never blocks. `orchestrator log: recorded` or `orchestrator log: none`, and the unattributed count, show on `review readiness`, `review status`, the Review depth tab and the sidebar. Limits: only calls through keryx are visible; unmarked calls outside the keryx shell are `unattributed`; the log is not a sandbox; the log is a plain editable file; `review start --memory-query "<query>"` records the stage query in the manifest's `cleanContext` block), every held finding answered by the operator (`premise-decisions`: a finding `review-premise` held as `challenged` or `owner-decision` without a recorded `decide-premise` answer fails it; not waivable, each held finding needs its own answer), and, last, every open finding whose quote ingest could not place answered (`quotes-located`: a finding flagged `quote_unlocated` with no disposition fails it, naming the reason and any candidate lines; waivable). Each failing item prints its evidence and the command that repairs it. It writes nothing and exits 1 when the verdict is NOT READY. `review complete` refuses `completed` while an item fails; only the operator waives one, any item but `premise-decisions`, in a terminal (`--waive <item> "<quote>"`, recorded with the time; a reviewer's own memory lookup is never judged). `review status`, the Review depth tab, the sidebar and `/review readiness` show the same verdict from the same projection. |
+ | `publish` | Post a package to its pull request as a GitHub review (`keryx review publish <review-id-or-path> [--event COMMENT\|REQUEST_CHANGES\|APPROVE] [--partial] [--yes]`). It refuses a package that is not READY. `--partial` posts it anyway under a "Partial review" header and never approves. The keryx shell guard refuses a raw `gh pr review` or `gh api` review post for a package that is not READY; a publisher outside the keryx shell (CI, another agent, a script file) is not stopped. |
+ | `report-parity` | Print the Markdown to paste into `report.md` so the leftovers of a round are named (`keryx review report-parity <review-id-or-path>`): a `## Review parity` block with one line each for `Not run: <n> candidates`, `Held severity:` and `Not verified:`; with nothing to carry it says so and prints no block. It reads the package and writes nothing. `review complete` adds a warning, never a refusal, for each kind of leftover the report does not name (a line that opens with `Not run`, `Held severity` or `Not verified`, or one that mentions the mutant or obligation id). `/review parity` in the shell, the readline `/reviews` and the sidebar show the same counts from the same projection. In an automatic review, `report-parity <this review>` runs without a prompt. |
+ | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
+ | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
+ | `scope` | Build the bounded review scope deterministically. See below. |
+ | `floor` | Report the edits in a diff that lower the bar: a threshold moved the weakening way, a disabled test, a test region that checks fewer things, a new suppression. Exits 1 when it finds any. See below. |
+ | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
+ | `layers` | Refresh the graph, the wiki and the memory index for one review, with no model, and write `layers.json`. See below. |
+ | `chunks` | Plan, estimate and run the blast-radius files the per-pass cap dropped, one chunk at a time. See below. |
+ | `coverage` | Print how many in-scope files are covered, covered by a named omission, and uncovered. See below. |
+ | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
+
+--- src/commands/agent.ts
+@@ 3467,3507 @@
+       finishReason,
+       ...(stop !== undefined ? { budgetStop: stop } : {}),
+       ...(outcome.submitted !== undefined ? { submittedResult: outcome.submitted } : {}),
+       ...(outcome.error !== undefined ? { submitResultError: outcome.error } : {}),
+     };
+   };
+ 
+   // Loop: request → stream → (execute tool calls, re-request) until a text-only
+   // finish or an independent model-round/tool-call guard trips.
+   let toollessReprompts = 0;
+   let planFollowThroughCount = 0;
+   let lastFollowThroughSignature: string | undefined;
+   let reviewGateContinues = 0;
+   let reviewGateStalls = 0;
+   let lastReviewGateSignature: string | undefined;
+   /** True when the managed-review gate refused this stop and queued a nudge: the caller re-enters the round loop. */
+   const holdReviewGate = async (): Promise<boolean> => {
+     if (subagentBudget !== undefined || deps.unattended === true) return false;
+     const runSeen = reviewRunSeenInHistory(history);
+     const open = runSeen
+-      ? await findReviewGateState(process.cwd(), sessionStartedAt(history), sessionReviewRoots(history, process.cwd())).catch(() => null)
++      ? await findReviewGateState(process.cwd(), sessionStartedAt(history), sessionReviewNames(history, process.cwd())).catch(() => null)
+       : null;
+     const gate = decideReviewGate({
+       open,
+       runSeen,
+       continues: reviewGateContinues,
+       stalls: reviewGateStalls,
+       lastSignature: lastReviewGateSignature,
+     });
+     if (gate.action === "continue") {
+       reviewGateContinues += 1;
+       reviewGateStalls = gate.stalls;
+       lastReviewGateSignature = gate.signature;
+       system(`\n[review-gate] Review not complete (continue ${reviewGateContinues}); \`review complete\` still refuses. Continuing.\n`);
+       history.push({
+         role: "user",
+         content: wrapHarnessNudge(gate.message, controlNonce),
+         provenance: "harness",
+         ts: now(),
+       });
+       io.onHistoryChange?.("tool");
+
+--- src/commands/review-ledger.ts
+@@ 30,63 @@
+ 
+   keryx review ledger build [<input-dir>] [--package <review-dir>] [--mode all|diff]
+                             [--findings <findings.json>] [--dispositions <file>]
+                             [--out <research.json>] [--skip <reviewer> --reason "<why>"]...
+                             [--dry-run] [--json]
+ 
+ Builds the research ledger \`keryx review ingest --research\` and \`complete\` demand, from
+ files only. <input-dir> holds raw/*.txt (reviewer replies), drivers/*.json and
+ slices/manifest.json, and defaults to --package (each review keeps its own raw/ and drivers/; the
+ shared .metaproject/data/review is read only when named); --package (default: <input-dir> when it holds scope-files.json) holds
+ scope-files.json, findings.json and retry-state.json. Writes research.json there (--out).
+ 
+ Per required reviewer: the latest raw result decides. DONE / DONE_WITH_CONCERNS with no open
+ needs_context and every slice its path gate requires covered by its dispatched payloads is a
+ complete run (source-only, executionRequired false); anything else — NEEDS_CONTEXT, BLOCKED,
+ INCOMPLETE, missing slices, no result — stays incomplete or not-run, never declared complete.
+-Each raw finding becomes an obligation, closed only by a matching canonical finding or a
+-valid --dispositions entry ({id, status finding|refuted|out-of-scope|narrowed, evidence, reason,
+-finding?, remains? — required for narrowed: what of the finding still stands}; default: the obligations already in research.json).
++Each raw finding becomes an obligation <raw stem>:<id> (raw/review-logic-w1.txt finding F-001 is
++review-logic-w1:F-001), closed only by a matching canonical finding or a valid --dispositions entry
++(default: the obligations already in research.json). Every entry needs id, status (finding|refuted|
++out-of-scope|narrowed), evidence and reason; status finding links to exactly one canonical finding
++(global_id or id) — "finding" may be omitted, and then it is the canonical finding whose id is the
++entry's id, else the one the raw finding already resolves to; status narrowed also needs remains
++(what of the finding still stands).
++With no entry, a raw finding closes by itself when the canonical findings hold it: the same reviewer
++and id, a canonical id equal to the obligation id, or a survivor whose merged_from lists it (review
++ingest merged it as a duplicate); one review ingest screened out of findings.json (scope B, recorded in
++research-evidence/ingest-screened.json) closes out-of-scope with the screen's reason.
++Finding ids hold no "#" (the global_id separator, <reviewId>#<id>): canonical findings with one are refused.
+ --dispositions is a JSON array, or an object holding one under dispositions, items, results, data, entries or
+ obligations; a row with no id, an unknown status or a narrowed row without remains refuses the build with the list of bad rows.
+ Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded".
++scopeReviewed and rawReconciled are true only when established.
++
+ Token spend: a raw file may end with a \`KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"…"}\` line (keryx shell's
+
+--- src/commands/review-ledger.ts
+@@ 171,222 @@
+     }
+     const value = args[i + 1];
+     if (value === undefined || value.trim() === "" || value.startsWith("--")) throw new Error(`${arg} needs a value: --skip <reviewer> --reason "<why>"`);
+     i++;
+     if (arg === "--skip") {
+       const open = skips.find((skip) => skip.reason === undefined);
+       if (open !== undefined) throw new Error(`--skip ${open.reviewer} has no --reason; give each --skip its own --reason before the next --skip`);
+       if (skips.some((skip) => skip.reviewer === value.trim())) throw new Error(`--skip ${value.trim()} is given twice`);
+       skips.push({ reviewer: value.trim() });
+     } else {
+       const open = skips.find((skip) => skip.reason === undefined);
+       if (open === undefined) throw new Error("--reason must follow the --skip <reviewer> it explains");
+       open.reason = value.trim();
+     }
+   }
+   const unexplained = skips.find((skip) => skip.reason === undefined);
+   if (unexplained !== undefined) throw new Error(`--skip ${unexplained.reviewer} needs --reason "<why>": a skip without a reason is a silent pass`);
+   return skips as ReviewerSkip[];
+ }
+ 
+-export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false, notRun: readonly string[] = [], models: ReadonlyArray<{ reviewer: string; model?: string | undefined }> = [], usage?: UsageTotals): string {
++/** What the ledger report prints beside the verdict, the gaps and the gate's blockers. */
++export type LedgerReportExtras = {
++  /** True for `--dry-run`: research.json "would be written". */
++  dryRun?: boolean | undefined;
++  /** `Not run: <reviewer> — <why>` lines. */
++  notRun?: readonly string[] | undefined;
++  models?: ReadonlyArray<{ reviewer: string; model?: string | undefined }> | undefined;
++  usage?: UsageTotals | undefined;
++};
++
++export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], extras: LedgerReportExtras = {}): string {
++  const { dryRun = false, notRun = [], models = [], usage } = extras;
+   const verb = dryRun ? "would be written" : "written";
+   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
+   for (const line of notRun) lines.push(`- ${line}`);
+   if (models.length > 0) lines.push(`models: ${models.map((entry) => `${entry.reviewer} ${entry.model ?? "model not recorded"}`).join(", ")}`);
+   if (usage !== undefined) lines.push(usageTotalsLine(usage));
+   for (const gap of gaps) lines.push(`- gap${gap.reviewer ? ` [${gap.reviewer}]` : ""}: ${gap.detail}\n    next: ${gap.next}`);
+   const waves = gaps.filter((gap) => gap.reviewer !== undefined && gap.waves !== undefined && gap.waves > 0);
+   if (waves.length > 0) lines.push(`remaining waves: ${waves.map((gap) => `${gap.reviewer} ${gap.waves}`).join(", ")}`);
+   if (!ready) for (const blocker of blockers.slice(0, 10)) lines.push(`- gate: ${blocker}`);
+   if (blockers.length > 10) lines.push(`- gate: … and ${blockers.length - 10} more`);
+   if (ignored.length > 0) lines.push(`ignored (not reviewer results): ${ignored.join(", ")}`);
+   return lines.join("\n");
+ }
+ 
+ /** The model of each run that has a reviewer result: the recorded one, or none (`model not recorded` in the report). */
+ export function modelsOf(runs: unknown): Array<{ reviewer: string; model?: string | undefined }> {
+   return (Array.isArray(runs) ? runs : [])
+     .filter((run): run is { reviewer: string; model?: string; rawEvidence?: unknown } => run !== null && typeof run === "object" && typeof (run as { reviewer?: unknown }).reviewer === "string" && (run as { rawEvidence?: unknown }).rawEvidence !== undefined)
+     .map((run) => ({ reviewer: run.reviewer, model: typeof run.model === "string" ? run.model : undefined }));
+ }
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 274,314 @@
+   later round cannot be screened against a set nobody recomputed.
+ 
+ Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
+ 
+ `--refuted` takes the findings this round **raised and then dismissed**, in the
+ same finding shape, each carrying `disposition: {state, evidence}` with one of
+ the `dismissed-*` states. Without it a package keeps only the survivors of an
+ unlogged triage — which is why precision measured over the recorded corpus
+ returns 100% whatever the reviewers actually got right.
+ 
+ `review complete --finding <id> --disposition <state> --evidence <ref>` records
+ what became of a finding when the fix round closes; the triple is repeatable, one
+ group per finding. States: `unknown`, `acted-on`, `dismissed-incorrect`,
+ `dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`.
+ Everything except `unknown` must cite where the outcome is written down — the
+ commit, the test, the decision. A recorded state and its citation cannot be
+ overwritten by a later close; record a correction as a new round.
+ 
+ `review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
+ `review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
+-`review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
++`review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition); it still refuses, naming the finding, a quote it could not check at all (commit not in the checkout, no file named, or a size bound), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
+ A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".
+ 
+ **Closing a fix round without dispositions leaves every finding reading `unknown`.** That is not "the reviewers were right"; it is "nobody wrote down what happened", and it is the single reason the precision figure cannot be read.
+ 
+ Managed modes:
+ 
+ - `lightweight`: report-only; no flow or managed review artifacts are created, and nothing is posted — no `comments reply`.
+ - `attach-review`: write under
+   `.metaproject/flows/<flow-dir>/reviews/<review-id>/`.
+ - `review-flow`: write under `.metaproject/reviews/<review-id>/`.
+ - `ingest`: convert an existing review report into managed findings, decisions,
+   and learning handoff, attached to a flow when one is explicit or matched.
+ 
+ Required artifacts for managed modes:
+ 
+ - `manifest.json`
+ - `scope.md`
+ - `coverage.md`
+ - `report.md`
+ - `findings.json`
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1888,1945 @@
+           "(e.g. a direct file read or a plain text/code search) or report the gap instead of " +
+           "spending rounds probing the same dead end. When a tool result says your budget is nearly " +
+           "spent, stop exploring and return your result. If a limit is reached you get one final round " +
+           "in which the only tool is submit_result — use it to hand back a partial result. " +
+           "End with a short factual summary the parent can use.",
+         idSeq: () => idSeq(),
+         // Flow 347 T17: the child's OWN control-nudge nonce, never the parent's —
+         // a child that echoes its nudges back cannot hand the parent a marker
+         // the parent's instruction would accept.
+         controlNonce: generateControlNonce(),
+         maxRounds,
+         ...(configuredMaxToolCalls === undefined ? {} : { maxToolCalls: configuredMaxToolCalls }),
+         subagentBudget: advisoryToolCalls === undefined ? {} : { advisoryToolCalls },
+       };
+ 
+       let assistant = "";
+       let closed = false;
+       // Flow 460 (H): the child's token use, summed over its provider requests; written into `save_result_to` as a
+       // `KERYX_USAGE` line so `review ledger build` can state the round's spend. Unknown (no line) when nothing reported.
+       const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
+-      const usageSuffix = (): string =>
+-        childUsage.known ? `\n${formatUsageLine({ tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}` })}` : "";
++      const usageSuffix = (options: { partial?: boolean } = {}): string =>
++        childUsage.known ? `\n${formatUsageLine({ tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}`, ...(options.partial === true ? { partial: true } : {}) })}` : "";
+       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
+       // own reasons (the deadline below, the catch block's cleanup) exactly
+       // as `childAbort` always was; `composed` additionally aborts when the
+       // PARENT turn does (`ctx.signal`, `commands/agent.ts`), so interrupting
+       // the parent reaches an in-flight child instead of leaving it running
+       // past the turn that spawned it. Same composition `deep-enrich.ts` uses
+       // for its own deadline-vs-caller-cancellation signal (`lib/abort-compose.ts`).
+       const internalAbort = new AbortController();
+       const composed = composeAbortSignals(toolCtx?.signal, internalAbort.signal);
+       const io: AgentIO = {
+         write: (s) => {
+           assistant += s;
+         },
+         onUsage: (usage) => {
+-          const tokensIn = Number.isFinite(usage.inputTokens) ? (usage.inputTokens as number) : undefined;
+-          const tokensOut = Number.isFinite(usage.outputTokens) ? (usage.outputTokens as number) : undefined;
++          const tokensIn = finiteNumber(usage.inputTokens);
++          const tokensOut = finiteNumber(usage.outputTokens);
+           if (tokensIn === undefined && tokensOut === undefined) return;
+           childUsage.tokens_in += tokensIn ?? 0;
+           childUsage.tokens_out += tokensOut ?? 0;
+           childUsage.known = true;
+         },
+         onAssistantText: (text) => {
+           assistant = text;
+           if (closed) {
+             return;
+           }
+           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "text", text } });
+         },
+         onReasoning: (text) => {
+           if (closed) {
+             return;
+           }
+           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
+         },
+         onToolCall: (name) => {
+           if (closed) {
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 2316,2337 @@
+         }
+         // D2b: a clean stream/text finish is NOT automatically "Completed" —
+         // check whether `runAgentTurnCore` itself cut the turn short for one
+         // of D2a's two internal reasons FIRST. No new detection here; this
+         // only labels what `finishReason` (D2a) already computed.
+         const status = subagentStatusForFinishReason(turnResult?.finishReason);
+         // Flow 460 E: a child that ended with no text and submitted nothing produced no result. It is an
+         // error outcome, never "Completed" with a placeholder summary the parent could read as success.
+-        if (status === "Completed" && raw === "(subagent produced no text)" && turnResult?.submittedResult === undefined) {
+-          emitFleetEvent({
+-            kind: "upsert",
+-            id: workerId,
+-            label,
+-            status: "failed",
+-            detail: "empty-reply",
+-            model: `${runModel.provider}/${runModel.model}`,
+-            task,
+-          });
+-          await foldChildSlateAndCleanup("incomplete");
+-          await fireSubagentStop("Error");
++        if (status === "Completed" && producedNoText && turnResult?.submittedResult === undefined) {
++          await failChild("empty-reply", "Error", { withModel: true });
++          // Flow 460 (H): the empty dispatch was paid for, so `save_result_to` still records it (the placeholder, which
++          // every reader treats as empty, and the usage line), never over a complete result already there.
++          const emptySaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`);
++          const emptySaveNote = emptySaved === undefined || !("error" in emptySaved) ? "" : `\n[the empty result could NOT be recorded in ${String(input.save_result_to)}]`;
++          // PRD R9: advice for the parent model only. A read-only child changed nothing, so one more dispatch is safe; a
++          // general child may already have edited files or run commands before it ended, so a blind re-dispatch is not.
++          const advice =
++            mode === "read_only"
++              ? "treat the task as not done: re-dispatch it once, and if it ends empty again, report it as not run instead of dispatching it a third time."
++              : "treat the task as not done, but it may have changed files or run commands before it ended: inspect the working tree before re-dispatching it, and do not re-dispatch it more than once.";
+           return {
+             status: "Error",
+
+--- src/review/completion-gate.test.ts
+@@ 193,217 @@
+ 
+ async function writeSubPackage(name: string, manifest: Record<string, unknown>): Promise<string> {
+   const dir = path.join(root, "sub", ".metaproject", "reviews", name);
+   await mkdir(dir, { recursive: true });
+   await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: name, ...manifest }));
+   return dir;
+ }
+ 
+ async function writeOldPackage(name: string): Promise<void> {
+   const dir = await writePackage(name, { mode: "review-flow", status: "draft" });
+   const past = new Date(Date.now() - 3_600_000);
+   await utimes(path.join(dir, "manifest.json"), past, past);
+ }
+ 
+ test("the nudge names the package the active-review pointer names, not an older open one in cwd", async () => {
+   await writeOldPackage("pr-7912");
+   const since = Date.now() - 60_000;
+   const current = await writeSubPackage("pr-7975", { mode: "review-flow", status: "draft" });
+   const sub = path.join(root, "sub");
+   await writeActiveReview(sub, { id: "pr-7975", dir: current });
+-  const found = await findReviewGateState(root, since, [sub]);
++  const found = await findReviewGateState(root, since, { roots: [sub] });
+   expect(found?.reviewId).toBe("pr-7975");
+   expect(found?.packageDir).toBe(current);
+ });
+ 
+
+--- src/review/ingest-locator-sha.test.ts
+@@ 75,95 @@
+   expect(kept.quote_unlocated).toEqual({ reason: "ambiguous", candidate_lines: [1, 3] });
+   expect(await readFile(path.join(dir, result.path, "scope.md"), "utf8")).toContain("candidate lines 1, 3");
+ });
+ 
+ test("a quote that could not be checked at all (the head is not in this checkout) still refuses, names the finding and the SHA, and writes nothing", async () => {
+   const missing = "f".repeat(40);
+   const error = await ingest({ target: { kind: "report", ref: "review.md", head: missing } }).catch((e: Error) => e);
+   expect(error).toBeInstanceOf(Error);
+   expect((error as Error).message).toContain("F-001");
+   expect((error as Error).message).toContain(missing.slice(0, 7));
+   expect((error as Error).message).toContain("src/greet.ts");
+   await expect(readFile(path.join(dir, ".metaproject", "reviews"), "utf8")).rejects.toThrow();
+ });
+ 
+-// Flow 458 AC12 (supersedes the old refusal): a finding's own file absent at the SHA is kept and flagged path_missing;
+-// only a quote that fails at a file that EXISTS refuses (above). Citations of absent files are refused elsewhere.
++// Flow 458 AC12 (supersedes the old refusal): a finding's own file absent at the SHA is kept and flagged path_missing.
++// Only a quote that could not be checked at all (the head is not in this checkout, an empty quote, a size bound) refuses
++// (above); a quote that was checked and is absent or ambiguous is kept and flagged quote_unlocated.
+ test("a file that is not in the tree at the SHA is kept, flagged path_missing, not refused", async () => {
+   const result = await ingest({ findings: [finding({ file: "src/gone.ts", quote: "anything" })] });
+   const [kept] = JSON.parse(await readFile(path.join(dir, result.path, "findings.json"), "utf8"));
+   expect(kept.path_missing).toBe(true);
+
+--- src/review/locate.test.ts
+@@ 63,86 @@
+     // because it comes first is exactly the confident wrong anchor this exists
+     // to prevent.
+     const outcome = locateQuote(FILE, "  const trimmed = name.trim();");
+     expect(outcome.state).toBe("unlocatable");
+     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
+     expect(outcome.state === "unlocatable" && outcome.reason).toContain("lines 2, 10");
+     // Flow 460: the candidates are recorded as data, so ingest can list them without parsing the reason.
+     expect(outcome).toMatchObject({ kind: "ambiguous", candidates: [2, 10] });
+   });
+ 
+   test("AMBIGUITY — the same rule holds for the whitespace-normalised pass", () => {
+     // The exact pass had this test and the loose pass did not, so collapsing
+     // the loose branch to "return the first hit" left the whole suite green.
+     // These two lines differ exactly, and are identical once whitespace is
+     // collapsed — so only the second pass can see them as two.
+     const file = ["const a = 1;", "const b = 2;", "const  a  =  1;"].join("\n");
+     const outcome = locateQuote(file, "const   a = 1;");
+     expect(outcome.state).toBe("unlocatable");
+     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
+     expect(outcome.state === "unlocatable" && outcome.reason).toContain("whitespace");
++    expect(outcome).toMatchObject({ kind: "ambiguous", candidates: [1, 3] });
+   });
+ 
+   test("a quote past the line bound is refused rather than matched slowly", () => {
+
+--- src/review/completion-gate.ts
+@@ 23,164 @@
+ async function dirSignature(dir: string): Promise<string> {
+   try {
+     const entries = await readdir(dir, { withFileTypes: true });
+     const parts: string[] = [];
+     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+       const file = path.join(dir, entry.name);
+       if (entry.isSymbolicLink()) continue;
+       const content = entry.isDirectory()
+         ? await dirSignature(file)
+         : await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
+       parts.push(`${entry.name}:${content}`);
+     }
+     return parts.join(",");
+   } catch {
+     return "";
+   }
+ }
+ 
+ type PackageCandidate = { dir: string; mtime: number; id: string; root: string };
+ 
+-const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\s"'`<>|;&()]*?)\.metaproject[\\/]reviews[\\/]([^\\/\s"'`<>|;&()]+)/g;
++const METAPROJECT = ".metaproject";
++const REVIEWS = "reviews";
++/** A package path's prefix ends at whitespace, a quote, a shell operator or `=` (`--package=dir`). */
++const PREFIX_DELIMITERS = new Set([..."\"'`<>|;&()="]);
++/** The longest prefix walked back from `.metaproject`: a longer one is not a package path the session named. */
++const MAX_PREFIX_CHARS = 1024;
++const MAX_NAME_CHARS = 255;
++/** The most recent project roots the gate scans: each one costs directory reads on every stop. */
++export const MAX_SESSION_REVIEW_ROOTS = 8;
++const MAX_SESSION_REVIEW_PACKAGES = 32;
++const MAX_SESSION_REVIEW_COMMANDS = 64;
++/** A review id fit to quote in a harness nudge or to match as a token. */
++const SAFE_REVIEW_ID = /^[A-Za-z0-9._:-]{1,120}$/;
++
++const isPathDelimiter = (ch: string): boolean => PREFIX_DELIMITERS.has(ch) || /\s/.test(ch);
++const isSeparator = (ch: string | undefined): boolean => ch === "/" || ch === "\\";
+ 
+ /**
+- * Project roots (the directory holding `.metaproject`) this session's tool calls and results named
+- * through a review package path, e.g. the path `review start` printed. A relative path resolves
+- * against `cwd`, so a review nested under a subdirectory is found as well as one at `cwd`.
++ * Every `<prefix>.metaproject/reviews/<name>` in `text`, in linear time: each occurrence of the literal is found
++ * with indexOf, the prefix is walked back to the nearest delimiter (never past the previous match and never more
++ * than {@link MAX_PREFIX_CHARS}), and the name is walked forward. No regex runs over the whole text.
+  */
+-export function sessionReviewRoots(
+-  history: ReadonlyArray<{ toolCalls?: ReadonlyArray<{ arguments: string }> | undefined; content?: unknown }>,
+-  cwd: string,
+-): string[] {
+-  const roots = new Set<string>();
+-  const scan = (text: string): void => {
+-    for (const match of text.matchAll(REVIEW_PACKAGE_PATH)) {
+-      const prefix = match[1] ?? "";
+-      roots.add(path.resolve(cwd, prefix === "" ? "." : prefix));
++export function reviewPackagePaths(text: string): Array<{ prefix: string; name: string }> {
++  const found: Array<{ prefix: string; name: string }> = [];
++  let from = 0;
++  let floor = 0;
++  for (;;) {
++    const at = text.indexOf(METAPROJECT, from);
++    if (at < 0) return found;
++    const sep = at + METAPROJECT.length;
++    from = sep;
++    if (!isSeparator(text[sep]) || !text.startsWith(REVIEWS, sep + 1) || !isSeparator(text[sep + 1 + REVIEWS.length])) continue;
++    const nameStart = sep + REVIEWS.length + 2;
++    let end = nameStart;
++    while (end < text.length && end - nameStart < MAX_NAME_CHARS && !isSeparator(text[end]) && !isPathDelimiter(text[end]!)) end += 1;
++    if (end === nameStart) continue;
++    let start = at;
++    while (start > floor && at - start < MAX_PREFIX_CHARS && !isPathDelimiter(text[start - 1]!)) start -= 1;
++    found.push({ prefix: text.slice(start, at), name: text.slice(nameStart, end) });
++    from = end;
++    floor = end;
++  }
++}
++
++/** What this session's own `keryx review` commands named. The gate looks only here, never at arbitrary tool output. */
++export type SessionReviewNames = {
++  /** Project roots (the directory holding `.metaproject`) inside `cwd`, other than `cwd`: the newest {@link MAX_SESSION_REVIEW_ROOTS}. */
++  roots: readonly string[];
++  /** Absolute package directories named by path. */
++  packageDirs: readonly string[];
++  /** Review ids keryx itself printed in reply to this session's commands (`# managed review: <id>`). */
++  reviewIds: readonly string[];
++  /** The arguments of this session's `keryx review` tool calls, newest last: a review id named there counts as named. */
++  commands: readonly string[];
++};
++
++type HistoryMessage = {
++  role?: string | undefined;
++  content?: unknown;
++  toolCallId?: string | undefined;
++  toolCalls?: ReadonlyArray<{ id?: string | undefined; arguments: string }> | undefined;
++};
++
++const KERYX_REVIEW_COMMAND = /\bkeryx review\b/;
++/** The lines `keryx review start|attach|ingest` prints about the package it opened. */
++const OWN_OUTPUT_LINE = /^(# managed review|path): (\S.*)$/;
++
++function remember<T>(items: Map<T, true>, item: T, cap: number): void {
++  items.delete(item);
++  items.set(item, true);
++  if (items.size > cap) items.delete(items.keys().next().value as T);
++}
++
++function inside(parent: string, child: string): boolean {
++  const rel = path.relative(parent, child);
++  return rel === "" || (rel.split(/[\\/]/)[0] !== ".." && !path.isAbsolute(rel));
++}
++
++/**
++ * Collects {@link SessionReviewNames} from a history incrementally: `update` scans only the messages added since
++ * the last call, and starts over when the history was rewritten (compacted or cleared).
++ */
++export class SessionReviewTracker {
++  private cursor = 0;
++  private last: unknown;
++  private readonly pendingCalls = new Set<string>();
++  private readonly roots = new Map<string, true>();
++  private readonly packageDirs = new Map<string, true>();
++  private readonly reviewIds = new Map<string, true>();
++  private readonly commands = new Map<string, true>();
++
++  constructor(readonly cwd: string) {}
++
++  update(history: ReadonlyArray<HistoryMessage>): SessionReviewNames {
++    if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();
++    for (; this.cursor < history.length; this.cursor += 1) this.scan(history[this.cursor]!);
++    this.last = history[this.cursor - 1];
++    return {
++      roots: [...this.roots.keys()],
++      packageDirs: [...this.packageDirs.keys()],
++      reviewIds: [...this.reviewIds.keys()],
++      commands: [...this.commands.keys()],
++    };
++  }
++
++  private reset(): void {
++    this.cursor = 0;
++    this.last = undefined;
++    this.pendingCalls.clear();
++    this.roots.clear();
++    this.packageDirs.clear();
++    this.reviewIds.clear();
++    this.commands.clear();
++  }
++
++  private scan(message: HistoryMessage): void {
++    for (const call of message.toolCalls ?? []) {
++      if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;
++      remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);
++      if (call.id !== undefined) this.pendingCalls.add(call.id);
++      this.namePaths(call.arguments);
+     }
+
+--- src/review/coverage.ts
+@@ 512,556 @@
+ 
+ const UNRESOLVED = "the diff could not be resolved from git to confirm the size";
+ 
+ /**
+  * The scope the package's target names, recomputed from git (flow 460). A pull-request target's `ref` is its URL or
+  * number, never a revision: the diff runs against the recorded `target.base`, else the first of origin/main, main,
+  * origin/master, master that resolves (`resolveBase`, as `review plan` reads it). Another target diffs against its base
+  * when one is recorded, else its ref. Git runs at the repository top level of the package — the scope's files are
+  * repository paths, and a package can sit under a subdirectory's `.metaproject` — with review packages excluded at any
+- * depth. A refusal names the directory, the base and the head.
++ * depth. A range that resolves empty (base equals head, as for a merged pull request with no recorded base) is not a
++ * small diff: it refuses, so the full set applies until a base is given. A refusal names the directory, the base and
++ * the head. A successful result is remembered per package, target and head for the process (see packageDiffStatsCached),
++ * so readiness and complete in one command, or a panel refresh, pay for the git diff once.
+  */
+ async function packageDiffStats(options: CoverageOptions): Promise<DiffStats | { error: string }> {
+   if (options.diffStats !== undefined) return (await options.diffStats()) ?? { error: UNRESOLVED };
+   if (options.packageDir === undefined) return { error: UNRESOLVED };
+-  const manifest = await readFile(path.join(options.packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
++  const target = await readPackageTarget(options.packageDir);
++  if (target.head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (cwd ${options.packageDir}, base ${target.nominalBase ?? "unresolved"}, head unrecorded)` };
++  return packageDiffStatsCached(JSON.stringify([options.packageDir, options.root, target]));
++}
++
++type PackageTarget = { kind: string; ref?: string | undefined; recordedBase?: string | undefined; head?: string | undefined; nominalBase?: string | undefined };
++
++/** The target fields the light recheck reads from the package manifest. `nominalBase` is the base a refusal names before git resolves one. */
++async function readPackageTarget(packageDir: string): Promise<PackageTarget> {
++  const manifest = await readFile(path.join(packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
+   const target = manifest?.target && typeof manifest.target === "object" ? (manifest.target as Record<string, unknown>) : {};
+   const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined);
+   const kind = str(target.kind) ?? "";
+   const ref = str(target.ref);
+   const recordedBase = str(target.base);
+-  const head = str(target.head);
+-  const cwd = (await gitTopLevel(options.packageDir)) ?? (await gitTopLevel(options.root));
+-  const where = (base: string | undefined): string => `cwd ${cwd ?? options.packageDir}, base ${base ?? "unresolved"}, head ${head ?? "unrecorded"}`;
+-  if (head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (${where(recordedBase ?? (kind === "pr" ? undefined : ref))})` };
+-  if (cwd === undefined) return { error: `${UNRESOLVED}: the package is not inside a git work tree (${where(recordedBase ?? (kind === "pr" ? undefined : ref))})` };
+-  let base: string | undefined;
+-  if (kind === "pr" || recordedBase !== undefined) {
+-    const { defaultGitRunner, resolveBase } = await import("./prior-round");
+-    base = (await resolveBase(defaultGitRunner(cwd), { kind, ref: ref ?? "", base: recordedBase }, head))?.ref;
+-    if (base === undefined) return { error: `${UNRESOLVED}: no base resolves (tried ${[recordedBase, "origin/main", "main", "origin/master", "master"].filter(Boolean).join(", ")}) (${where(recordedBase)})` };
+-  } else {
+-    base = ref;
+-    if (base === undefined) return { error: `${UNRESOLVED}: the package manifest records no target ref or base (${where(undefined)})` };
++  return { kind, ref, recordedBase, head: str(target.head), nominalBase: recordedBase ?? (kind === "pr" ? undefined : ref) };
++}
++
++const packageDiffStatsCached = processCache(async (key: string): Promise<DiffStats | { error: string }> => {
++  const [packageDir, root, target] = JSON.parse(key) as [string, string, PackageTarget];
++  return diffOfTarget(packageDir, root, target, target.head!);
++}, (value) => !("error" in value));
++
++/** The base the diff runs against: the PR's base as `review plan` resolves it, else the target's ref; or why none does. */
++async function resolveDiffBase(cwd: string, target: PackageTarget, head: string): Promise<{ base: string } | { error: string }> {
++  if (target.kind !== "pr" && target.recordedBase === undefined) {
++    return target.ref === undefined ? { error: "the package manifest records no target ref or base" } : { base: target.ref };
+   }
+
+--- src/review/dispatch-usage.ts
+@@ 1,34 @@
+ // Per-dispatch token use (flow 460, H): what one reviewer dispatch cost, carried IN the saved raw result.
+ //
+ // One channel, so every host does the same thing: the raw result file (`raw/<reviewer>.txt`) may end with a line
+ //
+ //   KERYX_USAGE {"tokens_in":12345,"tokens_out":678,"model":"anthropic/claude-sonnet"}
+ //
+ // keryx shell's spawn_subagent writes it itself when it saves a child's result (`save_result_to`). A host that saves the
+ // reply on its own (Claude Code, Codex) appends the same line with the counts its own agent result reported. A reviewer's
+-// result object may instead carry `usage: {tokens_in, tokens_out, model}`; the line wins when both are present, because
+-// the host measured it and the reviewer cannot. Nothing here invents a count: a dispatch with no usage is `unknown`, and a
+-// total over dispatches where some are unknown says how many, never folds them in as 0.
++// result object may instead carry `usage: {tokens_in, tokens_out, model}`; the line wins when both are present, and the
++// last line wins over earlier ones, so a host line appended after the reply overrides any line inside it.
++//
++// The figure is a reported one, not a proof. On a host where the reviewer writes its own raw file (Claude Code, Codex) the
++// reviewer can write a line too, and nothing here can tell it from the host's. That is acceptable only because no gate
++// decision reads usage: it is the round's stated spend, nothing more. Counts above MAX_DISPATCH_TOKENS are not believed.
++// Nothing here invents a count: a dispatch with no usage is `unknown`, and a total over dispatches where some are unknown
++// says how many, never folds them in as 0.
+ 
+ export const USAGE_MARKER = "KERYX_USAGE";
+ 
+-export type DispatchUsage = { tokens_in: number; tokens_out: number; model?: string | undefined };
++/** The `## Token spend` heading report.md carries (see renderSpendMarkdown). */
++export const SPEND_HEADING = "## Token spend";
++
++/**
++ * One dispatch's token use. `partial` marks counts taken before the dispatch finished (a child stopped at its deadline,
++ * whose request in flight had not reported yet): they are a lower bound, and a total that holds one says so.
++ */
++export type DispatchUsage = { tokens_in: number; tokens_out: number; model?: string | undefined; partial?: true | undefined };
++
++/** A run's usage in `dispatch.runs[].usage`: the known sums over its dispatches, and how many of them reported none. */
++export type RunUsage = { tokens_in: number; tokens_out: number; model?: string; dispatches: number; unknown: number; partial?: number };
++
++/** More tokens than one dispatch can spend: a count above it is not a measurement, so the dispatch reads as unknown. */
++export const MAX_DISPATCH_TOKENS = 100_000_000;
+ 
+
+--- src/review/dispatch-usage.ts
+@@ 40,55 @@
+-const count = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined);
++/** A non-negative, finite token count no larger than MAX_DISPATCH_TOKENS, rounded; undefined otherwise. */
++const toTokenCount = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= MAX_DISPATCH_TOKENS ? Math.round(value) : undefined);
++
++/** The usage the rest of a `KERYX_USAGE` line states: one JSON object and nothing else, else undefined. */
++function usageOfLine(rest: string): DispatchUsage | undefined {
++  const object = rest.trim();
++  if (object.length > MAX_USAGE_LINE_CHARS || !object.startsWith("{") || !object.endsWith("}")) return undefined;
++  try {
++    return usageFrom(JSON.parse(object));
++  } catch {
++    return undefined;
++  }
++}
+ 
+ /** A `{tokens_in, tokens_out, model?}` object, or undefined when either count is missing or not a non-negative number. */
+ export function usageFrom(value: unknown): DispatchUsage | undefined {
+
+--- src/review/ledger.ts
+@@ 17,37 @@
+ const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
+ 
+ /** The mandatory inputs of a reviewer dispatch: a reply that says it could not read one did not review what it was asked to. */
+-const MANDATORY_INPUT = "(?:pr[_ -]?context|result[_ -]?schema|(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)";
+-const UNREADABLE = "(?:(?:could|can|did|was|were|is|are)(?:\\s+not|n['\u2019]t)|cannot|unable\\s+to|failed\\s+to|fail(?:s|ed)?\\s+to|missing|unreadable|not\\s+found|does\\s+not\\s+exist|no\\s+such\\s+file|permission\\s+denied)";
++const MANDATORY_INPUT = "(?:pr[_ -]?context(?:\\.json)?|result[_ -]?schema|(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)";
++/** Where a statement about the reviewer's own reading starts: the start of the summary or of a sentence, or a first-person subject. */
++const OWN_STATEMENT = "(?:^|[.;:!?]\\s+|\\b(?:I|we|this\\s+reviewer|the\\s+reviewer)\\s+)";
++const CANNOT = "(?:could\\s+not|couldn['\u2019]t|cannot|can['\u2019]t|did\\s+not|didn['\u2019]t|(?:was|were)\\s+unable\\s+to|unable\\s+to|failed\\s+to)";
++const INPUT_NAMED = `(?:the\\s+|my\\s+|its\\s+|this\\s+|any\\s+)?(?:dispatch(?:ed)?\\s+|mandatory\\s+)?${MANDATORY_INPUT}`;
++/**
++ * Flow 460 D: the only phrasings that count as the reviewer saying it could not read a mandatory input. Each is anchored
++ * to a statement about the reviewer's own reading (a sentence start or a first-person subject) and names the input right
++ * next to a reading verb, so defect prose about a schema or a payload ("the payload parser is missing a guard",
++ * "reviewer-finding.schema.json is missing a slices property", "pr-context is not passed to the light check",
++ * "loadSchema cannot open the schema when\u2026") never matches. No gap of free text is allowed between the parts.
++ */
+ const UNREADABLE_INPUT = [
+-  new RegExp(`${UNREADABLE}[^.\\n]{0,80}\\b(?:read|open|load|access|find|parse)\\b[^.\\n]{0,80}\\b${MANDATORY_INPUT}\\b`, "i"),
+-  new RegExp(`\\b${MANDATORY_INPUT}\\b[^.\\n]{0,80}${UNREADABLE}`, "i"),
++  // "I could not read pr_context.json", "Unable to open the context file", "Failed to load the payload".
++  new RegExp(`${OWN_STATEMENT}${CANNOT}\\s+(?:read|open|load|access|find|parse)\\s+${INPUT_NAMED}\\b`, "im"),
++  // "The result schema could not be read", "The payload was unreadable", "The result schema was not found; \u2026".
++  new RegExp(`${OWN_STATEMENT}${INPUT_NAMED}(?:\\s+file)?\\s+(?:(?:could\\s+not|couldn['\u2019]t)\\s+be\\s+(?:read|opened|loaded|accessed|found|parsed)|was\\s+(?:unreadable|not\\s+readable)|was\\s+not\\s+found\\s*(?:[.;:,]|$))`, "im"),
+ ];
+
+--- src/review/ledger.ts
+@@ 630,642 @@
+-      const hit = canonicalByReviewer(reviewer, fid);
+-      const link = hit.length === 1 ? hit[0]! : undefined;
+-      const key = link === undefined ? undefined : (text(link.global_id) ? link.global_id : link.id);
+-      if (text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1) {
+-        obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
++      if (resolvesOnce(key)) {
++        const merged = hit[0]!.id !== fid && hit[0]!.id !== id && hit[0]!.global_id !== id;
++        obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: merged ? `reported by ${reviewer} as ${fid}; review ingest merged it as a duplicate into canonical ${key}` : `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
++        continue;
++      }
++      const screened = screenedAs(reviewer, id, fid);
++      if (screened !== undefined) {
++        obligations.push({ ...base, status: "out-of-scope", evidence: input.screenedEvidence ?? INGEST_SCREENED_FILE, reason: `review ingest's scope-B screen kept it out of findings.json (${screened.rule}): ${screened.detail}` });
+         continue;
+       }
+       obligations.push({ ...base, status: "unresolved" });
+       gaps.push({ detail: `${id}: raw finding is not in the canonical findings and has no closure`, next: `add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
+     }
+
+--- src/review/locate.ts
+@@ 58,69 @@
+  * `ambiguous` into the finding's `quote_unlocated` flag.
+  */
+ export type UnlocatableKind = "absent" | "ambiguous" | "bound" | "empty";
+ 
++/** How a finding's `line` was arrived at. */
++/**
++ * How a quote was placed. `substring` (flow 460): a one-line quote, edges trimmed, that is an exact substring of exactly
++ * one line of the file — a reviewer quoting the middle of a long line. Still exact text, never a near-match.
++ */
++export type LocateMethod = "exact" | "whitespace-normalised" | "substring";
++
+ export type LocatorRecord =
+
+--- src/review/managed.ts
+@@ 1205,1236 @@
+     ...(args.input.mode === "review-flow"
+       ? { cleanContext: { startedAt: args.at, ...(args.input.memoryQuery === undefined ? {} : { memoryQuery: args.input.memoryQuery }) } }
+       : {}),
+     createdAt: args.at,
+     updatedAt: args.at,
+   };
+   if (args.flowMatch) {
+     manifest.flow = {
+       id: args.flowMatch.id,
+       path: `.metaproject/flows/${args.flowMatch.dir}`,
+     };
+   }
+   return manifest;
+ }
+ 
+ /**
+  * Flow 460 F: the reviewers a research record says were dispatched, with the status each ended in. With a research
+  * record and no explicit `--reviewers`, coverage lists these rather than a stand-in orchestrator that never reviewed.
+  */
+ function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {
+-  const dispatch = research !== null && typeof research === "object" ? (research as { dispatch?: unknown }).dispatch : undefined;
+-  const runs = dispatch !== null && typeof dispatch === "object" ? (dispatch as { runs?: unknown }).runs : undefined;
+-  if (!Array.isArray(runs)) return [];
+   const seen = new Set<string>();
+   const entries: ReviewCoverageEntry[] = [];
+-  for (const run of runs) {
+-    if (run === null || typeof run !== "object") continue;
+-    const { reviewer, status, notRunReason, executionReason } = run as Record<string, unknown>;
+-    if (typeof reviewer !== "string" || reviewer.length === 0 || seen.has(reviewer)) continue;
++  for (const { reviewer, status, routedOut, notRunReason, executionReason } of dispatchRuns(research)) {
++    if (seen.has(reviewer)) continue;
+     seen.add(reviewer);
+-    if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
+-    else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${typeof executionReason === "string" ? ` (${executionReason})` : ""}` });
+-    else entries.push({ reviewer, status: "failed", reason: `not run: ${typeof notRunReason === "string" ? notRunReason : "the research ledger records no result"}` });
++    // A routed-out role is recorded complete but was never dispatched: coverage.md says so rather than "dispatched".
++    if (status === "complete" && routedOut === true) entries.push({ reviewer, status: "run", reason: "routed out: slice routing gave this role no slice, so it was not dispatched" });
++    else if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
++    else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${executionReason === undefined ? "" : ` (${executionReason})`}` });
++    else entries.push({ reviewer, status: "failed", reason: `not run: ${notRunReason ?? "the research ledger records no result"}` });
+   }
+   return entries;
+
+--- src/review/mutate.ts
+@@ 354,370 @@
+   await writeFile(md, renderMutationTable(record), "utf8");
+   return { json, md };
+ }
+ 
++/** A recorded mutation pass, `mutation-<n>.json`; the number is captured. A baseline-failed record does not match. */
++const MUTATION_RECORD_FILE = /^mutation-(\d+)\.json$/;
++/** A record whose baseline failed, `mutation-baseline-<n>.json`: it judged no mutant. */
++const BASELINE_RECORD_FILE = /^mutation-baseline-(\d+)\.json$/;
++
++/** The names of the package's recorded mutation passes in `research-evidence/`; [] when there is none. */
++async function mutationRecordNames(packageDir: string): Promise<string[]> {
++  const dir = path.join(packageDir, EVIDENCE_DIR);
++  if (!existsSync(dir)) return [];
++  return (await readdir(dir)).filter((n) => MUTATION_RECORD_FILE.test(n));
++}
++
+ /** Whether the package holds a recorded mutation pass (`research-evidence/mutation-<n>.json`); a baseline-failed record does not count. */
+
+--- src/review/retry-eval.ts
+@@ 78,102 @@
+     const assigned = readSliceIds(driver.slices, "assigned");
+     if (assigned.unusable > 0) continue;
+-    // Same rule as the ledger: the reply's own slice list bounded by what was assigned; no list means the whole assignment.
++    // Same rule as the ledger (flow 460 D): the reply's own slice list bounded by what was assigned; no list claims none.
+     const allowed = new Set(assigned.ids);
+-    const claimed = result.slices === undefined ? assigned.ids : readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
++    const claimed = readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
+     if (!countedFiles.has(file) && claimed.some((id) => !known.has(id) && !covered.has(id))) {
+       collected += 1;
+       countedFiles.add(file);
+     }
+     for (const id of claimed) covered.add(id);
+   }
+   return { covered: [...covered], collected };
+ }
+ 
+ /**
+  * Flow 457 (T7, audit row 11): the review package a slice manifest belongs to — `<package>/slices/manifest.json` —
+  * so retry-plan reads that package's raw/ and drivers/ without `--package`. Undefined for the shared slice directory.
+  */
+ export function packageOfManifest(manifestDir: string): string | undefined {
+   const candidate = path.dirname(manifestDir);
+   return path.basename(manifestDir) === "slices" && existsSync(path.join(candidate, "manifest.json")) && existsSync(path.join(candidate, "raw"))
+     ? candidate
+     : undefined;
+ }
+ 

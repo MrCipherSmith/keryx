@@ -1,0 +1,106 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-03"],
+  "summary": "slice-03 is test-only (active-review, complete-coverage-gate, complete-head-gate, completion-gate, coverage, evidence-level, ingest-locator-sha, ledger, locate, managed, readiness, research tests). The new tests match the source at dff7a38a1 and exercise AC1/AC2/AC6/AC7/D/F. One behaviour they lock in is wrong: the flow 460 D unreadable-input heuristic in ledger.ts fires on ordinary finding summaries that mention a schema or payload as missing something, and the tests only check positive cases. Three tests no longer exercise the path their names describe after the fixture and semantics changed in this PR.",
+  "needs_context": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "line": 23,
+      "quote": "  new RegExp(`\\b${MANDATORY_INPUT}\\b[^.\\n]{0,80}${UNREADABLE}`, \"i\"),",
+      "problem": "The flow 460 D check that marks a DONE reply as incomplete when it says it could not read a mandatory input matches ordinary finding summaries. The second pattern only needs the word `schema`, `payload`, `context file` and so on, followed within 80 characters by `missing`, `not found`, `is not`, `does not exist` and similar. It does not require a reading verb or a first-person subject. So the summary `reviewer-finding.schema.json is missing a slices property` matches: the \\b before `schema` holds after the dot. So does `the payload parser is missing a guard for empty slices`, and so does `the schema is unchanged and nothing is missing`. Each one moves a finished reviewer to status incomplete with scopeComplete false.",
+      "impact": "If a reviewer reports a real defect about a schema or a payload, and this repository's review code is built from both, the ledger records that reviewer as not having finished. The gap reads `the reply states a mandatory input could not be read`, scopeReviewed goes false and `keryx review complete` refuses. The operator then re-dispatches a reviewer that did finish. That is the readiness/complete disagreement loop flow 460 was written to remove. The new tests at src/review/ledger.test.ts (`D: a DONE reply that states a mandatory input could not be read is incomplete`) check three positive phrasings and one benign summary that never puts an input noun before a negation word, so they do not catch this.",
+      "suggested_fix": "Anchor the claim to the reviewer's own reading. Require a first-person or passive reading verb next to the input noun in both patterns: drop the bare `missing` and `is/are not` alternatives from the noun-first form, or require `(?:could not|couldn't|cannot|unable to|failed to) (?:read|open|load|access|find)` in both orders. Add negative cases to ledger.test.ts, such as `reviewer-finding.schema.json is missing a slices property` and `the payload parser is missing a guard`, and assert that they stay complete.",
+      "evidence": "Read src/review/ledger.ts:19-31 and 505-536. UNREADABLE includes `missing`, `not\\s+found` and `(?:is|are)(?:\\s+not)`. Pattern 2 is `\\b<input>\\b[^.\\n]{0,80}<UNREADABLE>`. MANDATORY_INPUT includes the bare `schema` and `payload`. A non-undefined claim forces `finished` to false at line 506.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:23", "src/review/ledger.ts:22"],
+        "enumeration_method": "keryx ctx rg 'unreadableInputClaim|UNREADABLE_INPUT' src: the only producer is ledger.ts:21-31 and the only consumer is ledger.ts:505. Both patterns in UNREADABLE_INPUT share the over-broad UNREADABLE alternation; pattern 2 (line 23) is the one with no verb requirement."
+      }
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/completion-gate.test.ts",
+      "line": 208,
+      "quote": "  await writeActiveReview(sub, { id: \"pr-7975\", dir: current });",
+      "problem": "The test `the nudge names the package the active-review pointer names, not an older open one in cwd` passes even if the pointer branch of findReviewGateState is removed. The pointed-at package pr-7975 was written just now, so its mtime is after `since`, and the fallback scan already picks it as the only in-session candidate. The next test proves exactly that: the same fixture without a pointer returns pr-7975. The pointer path at src/review/completion-gate.ts:124-132 is therefore untested.",
+      "impact": "A regression that ignores the pointer, which was part of C's root cause, would leave the suite green.",
+      "suggested_fix": "Make the pointer decide the outcome. Write a second, newer in-session package that has no pointer, or backdate the pointed-at manifest while the pointer's startedAt stays inside the session. Then assert that the pointed-at one is named.",
+      "evidence": "src/review/completion-gate.ts:133-135 falls back to the newest candidate when no pointer resolves. In the fixture the only candidate newer than `since` is pr-7975.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "line": 96,
+      "quote": "test(\"a finding the round dismissed is recorded rather than refused\", async () => {",
+      "problem": "Flow 460 changed ingest so that a quote absent from its file at the head never refuses. These two tests still use an absent quote at a head that exists: `a finding the round dismissed is recorded rather than refused` (line 96) and `a dismissed finding and an external comment are not asked to resolve` (line 105). They now pass whether or not refuseUnresolvedLocators exempts dismissed and external findings. The `disposition === undefined` and `source !== \"external\"` filters at src/review/managed.ts:1488-1489 still matter for quotes that could not be checked at all, such as an empty quote or a size bound, and no test covers them.",
+      "impact": "If either exemption is dropped, a dismissed or external finding with an unverifiable quote would refuse the whole round again, and these tests would not notice.",
+      "suggested_fix": "Point both tests at a case that still refuses, such as an empty or over-bound quote, or a head the checkout lacks, and keep the dismissed or external disposition. Then assert that the ingest succeeds.",
+      "evidence": "src/review/managed.ts:1401-1406 flags absent and ambiguous quotes as quote_unlocated, and refuseUnresolvedLocators filters out `quote_unlocated !== undefined` at line 1492. So an absent quote never reaches the throw, with or without a disposition.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "line": 88,
+      "quote": "// only a quote that fails at a file that EXISTS refuses (above). Citations of absent files are refused elsewhere.",
+      "problem": "This comment from the flow 458 era says that a quote failing at an existing file refuses. After flow 460 that case is kept and flagged quote_unlocated, as the tests directly above now assert. Only a quote that could not be checked at all still refuses.",
+      "impact": "The comment contradicts the tests next to it and the refuseUnresolvedLocators doc comment, and points the next editor at the wrong rule.",
+      "suggested_fix": "Reword: `only a quote that could not be checked at all (the head is not in this checkout, an empty quote, a size bound) refuses (above)`.",
+      "evidence": "Compare the flow 460 comment at lines 46-48 of the same file with src/review/managed.ts:1467-1477.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/ledger.test.ts",
+      "line": 764,
+      "quote": "  test(\"BLOCKED A and DONE B without slice claims do not close payload union A+B\", async () => {",
+      "problem": "This PR makes the `raw()` fixture default to `slices: [\"slice-01\", \"slice-02\"]` (line 835 of the diff). So `DONE B` in this test now claims both slices, and the title's `without slice claims` is no longer true. The test still fails scopeComplete, but for a different reason: two raws for one reviewer without assignedSlices give no implicit assignment (ledger.ts:518), not the absence of claims. `one raw result cannot implicitly close multiple dispatches` has the same drift.",
+      "impact": "No behaviour is wrong today. A reader trusts the title for a property the test no longer isolates.",
+      "suggested_fix": "Pass `{ slices: undefined }` in these two raws, or rename the tests after what they now assert.",
+      "evidence": "Read src/review/ledger.ts:514-527 and the raw() default changed in this diff.",
+      "confidence": "medium"
+    }
+  ]
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Slice: slice-03 (test files only), PR #1045 head dff7a38a1 (fix/review-gate-consistency)
+- Spec compliance gate: ran against flow 460 description.md. AC1 (top-level diff against target.base), AC2 (override decisions), C (session-scoped nudge), D/F, G (quote_unlocated) and H (usage) each have tests in this slice. No spec gap was found in the tests.
+
+### Summary
+The new tests follow the source and cover the flow 460 outcomes. One source behaviour they lock in is wrong. The D heuristic that marks a DONE reply as input-starved (ledger.ts:22-23) also matches ordinary finding summaries about a schema or payload that is "missing" something. That turns finished reviewers into incomplete ones and recreates the complete-refuses loop. Three tests (the pointer nudge test and the two dismissed/external ingest tests) no longer exercise what their names say, and one comment is stale.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 3  |  info: 1
+
+### Logic Bugs
+- [F-001] major: src/review/ledger.ts:23. The unreadable-input regex matches summaries that describe a defect, such as "X.schema.json is missing a field". This yields a false `incomplete` and the complete gate refuses.
+
+### Test coverage that no longer tests its claim
+- [F-002] minor: completion-gate.test.ts:208. The pointer test passes even without the pointer branch.
+- [F-003] minor: ingest-locator-sha.test.ts:96/105. The dismissed and external exemptions are no longer exercised.
+- [F-004] minor: ingest-locator-sha.test.ts:88. The comment states the old refusal rule.
+- [F-005] info: ledger.test.ts:764. The title says "without slice claims", but the fixture now claims slices.
+
+### Async & Concurrency / Error Handling / Null Safety / Type Contracts / Edge Cases
+None detected in this slice.
+
+Routing audit: graph_used no (not-relevant: test-only slice, callers enumerated with ctx rg); wiki_used no (not-relevant: intent came from the flow description); ctx_used yes; raw_rg_used no.

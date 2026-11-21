@@ -1,0 +1,37 @@
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-performance",
+    "status": "DONE",
+    "slices": ["slice-03"],
+    "findings": [
+      {
+        "id": "PF-001",
+        "severity": "info",
+        "title": "Omission de-duplication is quadratic in the number of omitted files",
+        "file": "src/commands/review-slice.ts",
+        "quote": "filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index)",
+        "problem": "The merged omissions list (built.manifest, fixBuilt and secondBuilt) is de-duplicated with findIndex inside filter, which is O(n^2) in omitted files. The previous code did an O(n*m) scan only for the second-look list.",
+        "impact": "Runs once per `review slice` CLI call and n is the count of omitted ledgers, lockfiles and snapshots, normally tens. No measurable cost at that size. It would matter only for a diff with thousands of omitted files.",
+        "suggested_fix": "If it ever matters, key a Map or Set by path and keep the first occurrence.",
+        "evidence": "Hot path: one-shot CLI, once per slicing run; no loop above it. Not reproducible as a cost at realistic n, so info (shared law 1).",
+        "confidence": "high"
+      },
+      {
+        "id": "PF-002",
+        "severity": "info",
+        "title": "Slice cut and routing now run once per partition on a delta round",
+        "file": "src/commands/review-slice.ts",
+        "quote": "const fixBuilt = parts === undefined || parts.fix.length === 0 ? undefined : buildSlices({ ...source, regions: parts.fix, drops: [] }, { maxBytes, waveBytes });",
+        "problem": "A delta round now calls buildSlices and routeSlices up to three times (other, fix and second-look) over the partitioned regions instead of once. The regions are disjoint, so total work is about the same as a single cut. The only extra is the fixed per-call overhead. The fix side is skipped when empty. Separately, partitionRegionsByFix (src/review/round-split.ts, outside this slice) rescans changedAt for every context line (filter/find), so a very large mixed region costs lines x changes. That is bounded by region size and runs once per slicing run.",
+        "impact": "No regression visible: it is a one-shot CLI step, and the same PR drops two scans from ledger build (packageChangedLines and pendingMutants are no longer called there).",
+        "suggested_fix": "None needed. If a mixed region is ever huge, precompute the previous and next changed index in one pass.",
+        "evidence": "Hot path: once per `review slice` on delta rounds only; no loop calls it.",
+        "confidence": "medium"
+      }
+    ]
+  }
+}
+```
+
+Summary: slice-03 holds no hot-path performance problem. Checked: N+1 or repeated I/O (review-ledger loadRaws now splits usage once instead of twice; ledger build drops two package scans), unbounded growth (none added), sync blocking (none), redundant work (the delta slice cut runs on disjoint partitions, so total work is unchanged). Two info observations: PF-001 (quadratic omission de-dup, tiny n) and PF-002 (extra per-partition cut and a quadratic context-labelling loop in round-split.ts, one-shot CLI). The spawn-subagent-tool changes (failChild helper, placeholder handling, partial-save on timeout) add no loops or allocations on a repeated path.
