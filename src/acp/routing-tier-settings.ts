@@ -1,23 +1,17 @@
 import type { ModelClassConfig, RoutingConfigLayer } from "../harness/routing/config";
 import { ROUTING_TIERS, modelRefKey, type ModelRef, type RoutingTier, type TierSettingsSnapshot } from "../harness/routing/model-class";
 import { readRoutingSettings, updateRoutingLayer, type RoutingLocation, type RoutingSettings } from "../harness/routing/settings";
-import type { RoutingCategory } from "../harness/routing/table";
-
+import { ROUTING_CATEGORIES, ROUTING_CATEGORY_TIERS } from "../harness/routing/table";
 
 const tiers = ["strong", "middle", "light"] as const satisfies readonly RoutingTier[];
 const MAX_TIER_MODELS = 32;
 const modelId = /^[a-z\d][a-z\d_./:@+%-]{0,159}$/i;
 
-const legacyTiers: Record<RoutingTier, readonly RoutingCategory[]> = {
-  strong: ["planning", "review"],
-  middle: ["subagents", "coding", "docs", "unattended", "default"],
-  light: ["quick"],
-};
-
 function legacyModels(layer: RoutingConfigLayer | undefined, tier: RoutingTier): ModelRef[] {
   if (!layer || layer.tierRouting) return [];
   const models = new Map<string, ModelRef>();
-  for (const category of legacyTiers[tier]) {
+  for (const category of ROUTING_CATEGORIES) {
+    if (ROUTING_CATEGORY_TIERS[category] !== tier) continue;
     const assignment = layer.categories?.[category];
     if (assignment?.mode === "model") models.set(modelRefKey(assignment.target), assignment.target);
   }
@@ -47,7 +41,6 @@ export function describeTierSettings(settings: RoutingSettings): TierSettingsSna
     }),
   };
 }
-
 
 export async function saveTierSettings(location: RoutingLocation, revision: string, raw: unknown) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw) || typeof Reflect.get(raw, "replaceOverrides") !== "boolean") {

@@ -1,9 +1,9 @@
 import { routingDigest, type ModelClassConfig, type NormalizedRoutingConfig, type RoutingAssignment, type RoutingCandidate } from "./config";
 import type { RoutingAssignmentSource, RoutingDecision, RoutingExclusion, RoutingFallbackReason, RoutingNotice, RoutingReason } from "./decision";
-import { compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
+import { ROUTING_TIERS, compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
 import { ROUTING_CAPABILITIES, type RoutingRequest } from "./routing-request";
 import { isVerifiedRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot } from "./snapshot";
-import { isRoutingCategory } from "./table";
+import { ROUTING_CATEGORY_TIERS, isRoutingCategory } from "./table";
 
 interface AssignmentResolution {
   readonly assignment: RoutingAssignment;
@@ -106,7 +106,7 @@ function assignmentFor(request: RoutingRequest, config: NormalizedRoutingConfig)
     const suggested = request.recommendation?.modelClass;
     const modelClass = suggested === "frontier" && !config.classes.frontier.candidates.some(candidate => candidate.enabled)
       ? "expert" : suggested ??
-      (request.category === "quick" ? "light" : request.category === "planning" ? "expert" : "standard");
+      ROUTING_TIERS[ROUTING_CATEGORY_TIERS[request.category]];
     const { candidates, fallbackClasses } = config.classes[modelClass];
     const hasCandidates = candidates.some(candidate => candidate.enabled) || fallbackClasses.length > 0;
     return {

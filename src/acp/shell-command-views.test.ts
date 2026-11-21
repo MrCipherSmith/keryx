@@ -131,7 +131,9 @@ describe("/routing", () => {
     expect(old.personalOverrides).toBe(true);
     expect((await run(host, "routing", `tiers ${old.revision} ${JSON.stringify({ modelPools, replaceOverrides: true })}`)).refused).toBeUndefined();
     expect((await read()).personalOverrides).toBe(false);
-    expect(loadRouting(host.cwd, host.configDir).categories.subagents).toEqual({ mode: "auto" });
+    expect(loadRouting(host.cwd, host.configDir).categories).toMatchObject({
+      subagents: { mode: "auto" }, review: { mode: "baseline" }, default: { mode: "baseline" },
+    });
   });
 
   test("one row per category with its source, a set action, and a form for a model pick", async () => {

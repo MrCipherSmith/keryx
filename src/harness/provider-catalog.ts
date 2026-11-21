@@ -40,6 +40,7 @@ import {
   isCatalogFresh,
   loadProviderCatalogCache,
   saveProviderCatalogCache,
+  withCatalogRefreshLock,
   type ProviderCatalog,
   type ProviderCatalogEntry,
 } from "./provider-catalog-cache";
@@ -261,20 +262,26 @@ async function loadOrRefreshWith(
   opts: CatalogRefreshOptions,
   refresh: () => Promise<ProviderCatalog>,
 ): Promise<ProviderCatalog> {
-  if (opts.force !== true) {
+  const now = deps.now ?? Date.now;
+  const readFresh = () => {
+    if (opts.force) return undefined;
     const cached = loadProviderCatalogCache(deps.dir);
-    const now = deps.now ?? Date.now;
     if (cached && isServableCatalog(cached, now, opts.ttlMs) &&
         (!opts.checkEntryDates || Object.values(cached.providers).every(entry =>
           isCatalogFresh({ fetchedAt: entry.fetchedAt, providers: {} }, now, opts.ttlMs)
         ))) {
       return cached;
     }
-  }
-  const fresh = await refresh();
-  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
-  else await clearProviderCatalogCache(deps.dir);
-  return fresh;
+    return undefined;
+  };
+  return readFresh() ?? withCatalogRefreshLock(deps.dir, async () => {
+    const cached = readFresh();
+    if (cached) return cached;
+    const fresh = await refresh();
+    if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
+    else await clearProviderCatalogCache(deps.dir);
+    return fresh;
+  }, now);
 }
 
 /**

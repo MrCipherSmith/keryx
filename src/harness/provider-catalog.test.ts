@@ -562,6 +562,7 @@ test("routing refreshes stale entries even when another provider made the cache 
   const stale = new Date(now - 6 * 60_000).toISOString();
   await saveProviderCatalogCache({ fetchedAt: current, providers: {
     ollama: { name: "ollama", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: stale },
+    openai: { name: "openai", status: "ok", models: ["fresh-model"], fallbackModels: [], fetchedAt: current },
   } }, dir);
   let probes = 0;
   const deps = {
@@ -572,5 +573,28 @@ test("routing refreshes stale entries even when another provider made the cache 
   const fresh = await loadOrRefreshProviderCatalogLive(deps, options);
   expect(catalogToFlatPickerProviders(fresh)).toEqual([{ name: "ollama", models: ["refreshed-model"], observedAt: current }]);
   await loadOrRefreshProviderCatalogLive(deps, options);
+  expect(probes).toBe(1);
+});
+
+test("concurrent catalogue readers share one live probe", async () => {
+  const dir = emptyCustomProvidersDir();
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let probes = 0;
+  const deps = {
+    fetch, env: {}, dir,
+    redetect: async () => {
+      probes++;
+      started.resolve();
+      await release.promise;
+      return [{ name: "ollama", models: ["shared-model"] }];
+    },
+  };
+  const first = loadOrRefreshProviderCatalogLive(deps, { checkEntryDates: true });
+  await started.promise;
+  const second = loadOrRefreshProviderCatalogLive(deps, { checkEntryDates: true });
+  release.resolve();
+  const [a, b] = await Promise.all([first, second]);
+  expect(b).toEqual(a);
   expect(probes).toBe(1);
 });

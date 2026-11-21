@@ -21,7 +21,7 @@
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
-import { withFileLock } from "../lib/fs";
+import { isLockHeld, withFileLock } from "../lib/fs";
 import type { ModelsResolveResult, ProviderBalance } from "../commands/providers";
 
 /**
@@ -62,6 +62,30 @@ const CACHE_LOCK_STALE_MS = 5_000;
 
 function catalogFile(dir?: string): string {
   return path.join(keryxConfigDir(dir), CATALOG_CACHE_FILE);
+}
+
+/** Serialize live probes across processes while leaving cache writes free to merge. */
+export async function withCatalogRefreshLock(
+  dir: string | undefined,
+  refresh: () => Promise<ProviderCatalog>,
+  now: () => number,
+): Promise<ProviderCatalog> {
+  const lockPath = `${catalogFile(dir)}.refresh.lock`;
+  let acquired = false;
+  try {
+    ensureKeryxConfigDir(dir);
+    return await withFileLock(lockPath, () => {
+      acquired = true;
+      return refresh();
+    }, { timeoutMs: 12_000, retryMs: 50 });
+  } catch (error) {
+    if (acquired) throw error;
+    if (await isLockHeld(lockPath)) {
+      return loadProviderCatalogCache(dir) ?? { fetchedAt: new Date(now()).toISOString(), providers: {} };
+    }
+    // A read-only config directory still permits live detection.
+    return refresh();
+  }
 }
 
 function sanitizeBalance(value: unknown): ProviderBalance | undefined {

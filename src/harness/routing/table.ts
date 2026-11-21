@@ -8,6 +8,7 @@
 // is handed in already loaded (`config.ts` owns reading `routing.config.json`
 // and the per-user shell config).
 import { isDeniedModel } from "../../gdskills/model-denylist";
+import type { RoutingTier } from "./model-class";
 
 /**
  * The catalogue of task categories (PRD §4). All eight ship in Flow A; only
@@ -27,6 +28,20 @@ export const ROUTING_CATEGORIES = [
 ] as const;
 
 export type RoutingCategory = (typeof ROUTING_CATEGORIES)[number];
+
+/** Default model pool for each task, also used when suggesting old pins for migration.
+ * The review coordinator and default session still follow explicit or baseline routing.
+ */
+export const ROUTING_CATEGORY_TIERS: Readonly<Record<RoutingCategory, RoutingTier>> = {
+  default: "middle",
+  review: "strong",
+  subagents: "middle",
+  quick: "light",
+  coding: "middle",
+  planning: "strong",
+  docs: "middle",
+  unattended: "middle",
+};
 
 const ROUTING_CATEGORY_SET: ReadonlySet<string> = new Set(ROUTING_CATEGORIES);
 
