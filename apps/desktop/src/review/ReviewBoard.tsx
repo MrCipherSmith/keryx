@@ -108,7 +108,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const clearPrivateView = useCallback((resetState = false) => {
     setSubscriptions(new Set());
     setSubscriptionNumber(null);
-    restoreFocus.current = !!document.activeElement?.closest('.review-board [role="dialog"]');
+    restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role="dialog"], .review-detail-panel');
     setQuery("");
     setFilters((old) => resetState ? EMPTY_FILTERS : { ...EMPTY_FILTERS, state: old.state });
     setSelected(null);
