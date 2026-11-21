@@ -61,6 +61,14 @@ export function renderMarkdown(src: string): string {
   return sanitize(marked.parse(src, { async: false }) as string);
 }
 
+/** Allows repository-relative hrefs for remote Markdown. Its caller must resolve every link
+ * against the verified remote repository and keep only HTTP(S) before attaching it to the DOM. */
+export function renderRepositoryMarkdown(src: string): string {
+  return DOMPurify.sanitize(marked.parse(src, { async: false }) as string, {
+    ...SANITIZE, ALLOWED_URI_REGEXP: /^(?:https?:|[#/?]|[^:/?#]+(?:[/?#]|$))/i,
+  }) as string;
+}
+
 export function renderInline(src: string): string {
   const html = marked.parseInline(src, { async: false }) as string;
   return DOMPurify.sanitize(html, SANITIZE) as string;

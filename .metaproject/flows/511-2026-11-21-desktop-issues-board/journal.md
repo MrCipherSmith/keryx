@@ -25,3 +25,5 @@
 - 2026-11-21T21:03:50.308Z - task-attempt: T9: started (attempt 1) — Desktop board, list and resizable issue detail
 - 2026-11-21T21:09:25.357Z - task-done: T7: Resolve issue repository and bind or resume its ACP session
 - 2026-11-21T21:09:25.899Z - task-attempt: T8: started (attempt 1) — Adopt or initialize the package and hand off an idempotent coordinator turn.
+- 2026-11-21T21:09:26.820Z - task-done: T9: Build Issues board, list and resizable detail in Desktop
+- 2026-11-21T21:09:27.096Z - task-attempt: T10: started (attempt 1) — Read GitHub Projects and conditionally update explicit Status choices.

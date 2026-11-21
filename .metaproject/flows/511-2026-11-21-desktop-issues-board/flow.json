@@ -11,7 +11,7 @@
   "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
   "status": "in-progress",
   "createdAt": "2026-11-21T20:10:01.247Z",
-  "updatedAt": "2026-11-21T21:09:25.899Z",
+  "updatedAt": "2026-11-21T21:09:27.096Z",
   "source": {
     "type": "description",
     "ref": null
@@ -190,7 +190,7 @@
       "id": "T9",
       "title": "Build Issues board, list and resizable detail in Desktop",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -206,7 +206,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -218,8 +219,14 @@
         "T9"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T21:09:27.096Z",
+            "outcome": "started",
+            "detail": "Read GitHub Projects and conditionally update explicit Status choices."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -417,6 +424,16 @@
       "at": "2026-11-21T21:09:25.899Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 1) — Adopt or initialize the package and hand off an idempotent coordinator turn."
+    },
+    {
+      "at": "2026-11-21T21:09:26.820Z",
+      "event": "task-done",
+      "detail": "T9: Build Issues board, list and resizable detail in Desktop"
+    },
+    {
+      "at": "2026-11-21T21:09:27.096Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — Read GitHub Projects and conditionally update explicit Status choices."
     }
   ],
   "acKinds": {
