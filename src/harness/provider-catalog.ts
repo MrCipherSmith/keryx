@@ -365,6 +365,19 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { w
   return out;
 }
 
+/**
+ * Native providers without a catalogue endpoint retain the existing model
+ * profile checks. A failed live probe still carries its offline/auth status.
+ */
+export function catalogToRoutingProviders(catalog: ProviderCatalog): FlatPickerProvider[] {
+  return catalogToFlatPickerProviders(catalog, { withStatusRows: true }).map(row => {
+    const entry = catalog.providers[row.name];
+    return row.offline && entry?.status === "not-supported"
+      ? { name: row.name, models: entry.fallbackModels, observedAt: entry.fetchedAt, profileOnly: true }
+      : row;
+  });
+}
+
 /** One short phrase for a catalog status, for a notice/status line. */
 export function describeCatalogStatus(status: ProviderCatalogEntry["status"]): string {
   switch (status) {

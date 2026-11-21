@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { catalogToFlatPickerProviders } from "../provider-catalog";
+import { catalogToFlatPickerProviders, catalogToRoutingProviders } from "../provider-catalog";
 import { normalizeRoutingConfig } from "./config";
 import { resolveRoutingDecision } from "./resolver";
 import type { ModelProfile } from "./model-profile";
@@ -215,4 +215,25 @@ test("offline baseline retains credential and auth-failure gates", () => {
       status: "blocked", reason: authFailed ? "auth-failed" : "credentials-missing",
     });
   }
+});
+
+test("routing uses profiles only when native model listing is unsupported", () => {
+  const model = { providerId: "anthropic", modelId: "claude-sonnet-5" };
+  const alternate: RoutingRequest = { ...request, userOverride: { mode: "model", target: model } };
+  const profiles = { [profileKey(model.providerId, model.modelId)]: profile(model.providerId, model.modelId) };
+  const config = normalizeRoutingConfig({});
+  const selection = (status: "not-supported" | "timeout", fetchedAt: string = SNAPSHOT_META.observedAt) => {
+    const providers = catalogToRoutingProviders({
+      fetchedAt: SNAPSHOT_META.observedAt,
+      providers: { anthropic: { name: "anthropic", status, models: [], fallbackModels: [model.modelId], fetchedAt } },
+    });
+    return resolveRoutingDecision(alternate, buildCatalogRoutingSnapshot({
+      ...SNAPSHOT_META, configDigest: config.configDigest, baseline: request.baseline,
+      request: alternate, providers, profiles, policy,
+    }), config);
+  };
+  expect(selection("not-supported")).toMatchObject({ status: "selected", selection: model });
+  expect(selection("timeout")).toMatchObject({ status: "blocked", reason: "candidate-unverified" });
+  expect(selection("not-supported", "2026-11-03T23:58:00.000Z"))
+    .toMatchObject({ status: "blocked", reason: "candidate-unverified" });
 });

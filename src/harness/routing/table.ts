@@ -397,6 +397,8 @@ export interface FlatPickerProvider {
   readonly models?: readonly string[];
   /** Canonical time when this provider catalogue row was observed. */
   readonly observedAt?: string;
+  /** The provider has no listing endpoint. A current model profile supplies availability. */
+  readonly profileOnly?: true;
   /**
    * Flow 309, AC4 — `models` is the curated OFFLINE fallback (the provider's
    * live `/models` fetch failed, or it has no live listing endpoint) rather

@@ -91,6 +91,7 @@ function observedAvailability(
   const catalogObservedAt = provider.observedAt === undefined ? NaN : Date.parse(provider.observedAt);
   const freshCatalog = Number.isFinite(catalogObservedAt)
     && catalogObservedAt <= nowMs && nowMs - catalogObservedAt <= ttlMs;
+  if (provider.profileOnly) return freshCatalog ? profileAvailability : "unknown";
   if (!freshCatalog) return profileAvailability;
   // A newer explicit negative observation supersedes a successful listing.
   if (profileAvailability === "unavailable" && profile !== undefined
