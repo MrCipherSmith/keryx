@@ -487,7 +487,7 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   await act(async () => field("General comment").click());
   expect(field("General comment").checked).toBe(false);
   expect(restoredInline.textContent).toContain("src/owner.ts:73");
-  expect(dialog.textContent).toContain("Project overlay applied");
+  expect(dialog.textContent).toContain("English · Keryx template + project overlay");
   expect(label("Project overlay")).toBeUndefined();
   await act(async () => field("Approve with suggestions").click());
   await act(async () => field("Omit it as out of scope").click());
