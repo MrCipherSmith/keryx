@@ -102,6 +102,20 @@ test("a changed head cannot inherit the previous CI; a failed next page keeps co
   expect(result.warnings.length).toBeGreaterThan(0);
 });
 
+test("a review period includes the boundary and stops before older PR pages", async () => {
+  const since = "2026-11-18T00:00:00Z";
+  const old = { ...card(3), updatedAt: "2026-11-17T23:59:59Z", assignees: { nodes: [], pageInfo: more } };
+  let requests = 0;
+  const result = await listReviewCards(repo, [repo], "merged", async <T>(query: string) => {
+    expect(query).toContain("field:UPDATED_AT");
+    expect(++requests).toBe(1);
+    return page([card(1), { ...card(2), updatedAt: since }, old], more) as T;
+  }, false, { cursor: null }, Date.parse(since));
+  expect(result.cards.map(pr => pr.number)).toEqual([1, 2]);
+  expect(result.nextCursor).toBeNull();
+  expect(result.warnings).toEqual([]);
+});
+
 test("reported access loss on a later page is fatal", async () => {
   await expect(listReviewCards(repo, [repo], "open", queryFrom([page([card(1)], more), new Error("access: denied")]))).rejects.toThrow("access:");
 });

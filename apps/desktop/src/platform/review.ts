@@ -85,10 +85,10 @@ function verifyProjectViewer(viewer: string, expectedViewer?: string): void {
   }
 }
 
-export function fetchReviewBoard(cwd: string, state: ReviewBoardState, repo?: string, signal?: AbortSignal, expectedViewer?: string): Promise<ReviewBoardSnapshot> {
+export function fetchReviewBoard(cwd: string, state: ReviewBoardState, repo?: string, signal?: AbortSignal, expectedViewer?: string, updatedSince?: string): Promise<ReviewBoardSnapshot> {
   return collectBoardPages(async (cursor, canonicalRepo) => {
-    const page = await boards.read(JSON.stringify([cwd, expectedViewer, state, canonicalRepo, cursor]),
-      () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor }));
+    const page = await boards.read(JSON.stringify([cwd, expectedViewer, state, canonicalRepo, cursor, updatedSince]),
+      () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor, updatedSince }));
     if (page?.viewer) verifyProjectViewer(page.viewer, expectedViewer);
     return page;
   }, repo, signal);

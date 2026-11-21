@@ -23,7 +23,7 @@ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
 import { EMPTY_FILTERS, filterReviews, stateQuery, type Filters } from "./model";
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
-import type { ReviewBoardSnapshot, ReviewBoardState, ReviewCard } from "./types";
+import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
 export type ReviewTabIndicator = "attention" | "watching" | null;
 
@@ -48,7 +48,7 @@ interface Props {
 }
 
 interface ReadState {
-  scope: ReviewBoardState;
+  scope: string;
   snapshot: ReviewBoardSnapshot | null;
   error: string;
   loading: boolean;
@@ -79,7 +79,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const snapshots = useRef(new Map<ReviewBoardState, ReviewBoardSnapshot>());
+  const snapshots = useRef(new Map<string, ReviewBoardSnapshot>());
   const [query, setQuery] = useState("");
   const [filtering, setFiltering] = useState(false);
   const [dismissedWarning, setDismissedWarning] = useState("");
@@ -97,7 +97,9 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   // A delayed GitHub refresh can carry older local run badges than a just-finished launch.
   const pendingBadges = useRef<Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">> | null>(null);
   const restoreFocus = useRef(false);
-  const scope = stateQuery(filters.state);
+  const state = stateQuery(filters.state);
+  const period = filters.updatedWithin;
+  const scope = `${state}/${period ?? ""}`;
   const [read, setRead] = useState<ReadState>({ scope, snapshot: null, error: "", loading: true });
   const q = useDeferredValue(query);
 
@@ -180,7 +182,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       ? { ...old, loading: true }
       : { scope, snapshot: null, error: "", loading: true });
     const controller = new AbortController();
-    void load(cwd, scope, repo, controller.signal, expectedViewer).then((snapshot) => {
+    const updatedSince = period && new Date(Date.now() - period * 86_400_000).toISOString();
+    void load(cwd, state, repo, controller.signal, expectedViewer, updatedSince).then((snapshot) => {
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
       if (identity.current && identity.current !== nextIdentity) {
@@ -193,7 +196,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         }) };
       }
       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
-      const replaceAttention = identity.current !== nextIdentity || scope === "open" || scope === "all";
+      const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
       setAttentionPrs(previous => {
         const next = new Set(replaceAttention ? [] : previous);
         for (const card of snapshot.cards) {
@@ -238,7 +241,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       }
     });
     return () => { sequence.current++; controller.abort(); };
-  }, [cwd, expectedViewer, scope, repo, attempt, load, clearPrivateView, accessLost]);
+  }, [cwd, expectedViewer, state, period, scope, repo, attempt, load, clearPrivateView, accessLost]);
 
   useEffect(() => {
     if (restoreFocus.current && !overlayOpen()) search.current?.focus();

@@ -230,6 +230,26 @@ test("historical states are requested lazily and a merged pull request appears i
   expect(host.textContent).not.toContain(pr.title);
 });
 
+test("the period filters the GitHub request and is saved for the repository", async () => {
+  const cutoffs: (string | undefined)[] = [];
+  await render(async (_cwd, _state, _repo, _signal, _viewer, since) => {
+    cutoffs.push(since);
+    return snapshot([pr]);
+  });
+  await click(button("Filters"));
+  const period = host.querySelector<HTMLSelectElement>('[aria-label="PR updated within"]')!;
+  await act(async () => {
+    period.value = "7";
+    period.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const expected = Date.now() - 7 * 86_400_000;
+  await click(button("Apply filters"));
+  expect(cutoffs[0]).toBeUndefined();
+  expect(Math.abs(Date.parse(cutoffs.at(-1)!) - expected) < 5_000).toBe(true);
+  expect(readReviewFilters(reviewFilterKey("/project", "repo1", "ann")).updatedWithin).toBe(7);
+  expect(host.textContent).toContain("Updated · Last 7 days");
+});
+
 test("a board refresh started before a local launch preserves the live lane after the drawer closes", async () => {
   let finish!: (s: ReviewBoardSnapshot) => void;
   let calls = 0;

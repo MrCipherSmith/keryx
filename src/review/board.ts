@@ -32,11 +32,11 @@ interface BoardPage {
 }
 
 const states = { open: "[OPEN]", closed: "[CLOSED]", merged: "[MERGED]", all: "[OPEN, CLOSED, MERGED]" } as const;
-const listQuery = (state: ReviewBoardState, reviewerFields: string, first: number, watcher: boolean) => `query($owner: String!, $name: String!, $cursor: String) {
+const listQuery = (state: ReviewBoardState, reviewerFields: string, first: number, watcher: boolean, byUpdate: boolean) => `query($owner: String!, $name: String!, $cursor: String) {
   viewer { login }
   repository(owner:$owner, name:$name) {
     id nameWithOwner
-    pullRequests(first:${first}, after:$cursor, states:${states[state]}, orderBy:{field:CREATED_AT, direction:DESC}) {
+    pullRequests(first:${first}, after:$cursor, states:${states[state]}, orderBy:{field:${byUpdate ? "UPDATED_AT" : "CREATED_AT"}, direction:DESC}) {
       ${pageFields}
       nodes {
         number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision changedFiles additions deletions
@@ -111,7 +111,7 @@ async function readPeople<T>(key: "assignees" | "reviewRequests", fields: string
   }
 }
 
-export async function listReviewCards(repo: string, repositories: string[], state: ReviewBoardState, read: Query, trackRequestIds = false, page?: {cursor: string | null; size?: number}): Promise<ReviewBoardSnapshot> {
+export async function listReviewCards(repo: string, repositories: string[], state: ReviewBoardState, read: Query, trackRequestIds = false, page?: {cursor: string | null; size?: number}, updatedSince?: number): Promise<ReviewBoardSnapshot> {
   const reviewerFields = trackRequestIds ? `id ${reviewer}` : reviewer;
   const [owner, name] = repo.split("/") as [string, string];
   const params = { owner, name };
@@ -127,7 +127,7 @@ export async function listReviewCards(repo: string, repositories: string[], stat
   let nextCursor: string | null = null;
   for (;;) {
     try {
-      const result: BoardPage = await query<BoardPage>(listQuery(state, reviewerFields, page?.size ?? 100, trackRequestIds), cursor ? { ...params, cursor } : params);
+      const result: BoardPage = await query<BoardPage>(listQuery(state, reviewerFields, page?.size ?? 100, trackRequestIds, updatedSince !== undefined), cursor ? { ...params, cursor } : params);
       if (!result.repository?.id || !result.viewer?.login) throw new Error("access: GitHub repository or account is unavailable.");
       if (repositoryId && (repositoryId !== result.repository.id || viewer !== result.viewer.login)) {
         throw new Error("access: GitHub account or repository changed. Refresh the board.");
@@ -137,7 +137,9 @@ export async function listReviewCards(repo: string, repositories: string[], stat
       repositoryId = result.repository.id;
       viewer = result.viewer.login;
       const canonical = result.repository.nameWithOwner;
-      const pageCards = await mapPool(prs.nodes, OVERFLOW_PARENTS, async (pr): Promise<ReviewCard | null> => {
+      const cutoff = updatedSince === undefined ? -1 : prs.nodes.findIndex(pr => !!pr && Date.parse(pr.updatedAt) < updatedSince);
+      const nodes = cutoff < 0 ? prs.nodes : prs.nodes.slice(0, cutoff);
+      const pageCards = await mapPool(nodes, OVERFLOW_PARENTS, async (pr): Promise<ReviewCard | null> => {
         if (!pr || !Number.isSafeInteger(pr.number) || !pr.title || !["OPEN", "MERGED", "CLOSED"].includes(pr.state)) {
           warnings.add("Some pull requests could not be read.");
           return null;
@@ -170,7 +172,7 @@ export async function listReviewCards(repo: string, repositories: string[], stat
         };
       }, { stopOnError: true });
       for (const card of pageCards) if (card) cards.set(card.number, card);
-      if (!prs.pageInfo.hasNextPage) break;
+      if (cutoff >= 0 || !prs.pageInfo.hasNextPage) break;
       cursor = prs.pageInfo.endCursor;
       if (!cursor || cursors.has(cursor)) throw new Error("unavailable: GitHub pagination stopped before the last page.");
       cursors.add(cursor);

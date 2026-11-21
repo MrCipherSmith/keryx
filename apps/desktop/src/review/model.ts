@@ -12,7 +12,9 @@ export const LANES = {
 } as const;
 export type Lane = keyof typeof LANES;
 export type Dimension = "author" | "assignee" | "reviewer" | "decision" | "state" | "ci";
-export type Filters = Record<Dimension, string[]>;
+export const REVIEW_PERIODS = [7, 30, 90] as const;
+export type ReviewPeriod = typeof REVIEW_PERIODS[number];
+export type Filters = Record<Dimension, string[]> & { updatedWithin?: ReviewPeriod };
 export const EMPTY_FILTERS: Filters = {
   author: [], assignee: [], reviewer: [], decision: [], state: ["open", "draft"], ci: [],
 };

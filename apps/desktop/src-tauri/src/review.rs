@@ -129,9 +129,16 @@ pub async fn review_board(
     repositories_only: Option<bool>,
     paged: Option<bool>,
     cursor: Option<String>,
+    updated_since: Option<String>,
     badge_target: Option<BadgeTarget>,
 ) -> Result<Value, String> {
-    let args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target)?;
+    let mut args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target)?;
+    if let Some(value) = updated_since {
+        if pr_state.is_none() || value.len() > 24 {
+            return Err("configuration: Invalid pull request period".into());
+        }
+        args.push(format!("--updated-since={value}"));
+    }
     invoke_review(app, view, cwd, args, true).await
 }
 
