@@ -122,6 +122,8 @@ pub fn run() {
             gitinfo::git_repository,
             files::project_files,
             files::project_file_read,
+            gitinfo::git_changes,
+            gitinfo::git_file_diff,
             pullrequest::pr_info,
             review::github_accounts,
             review::github_login,

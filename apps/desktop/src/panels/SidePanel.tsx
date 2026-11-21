@@ -13,6 +13,7 @@ const FilesPanel = lazy(() => import("./FilesPanel").then((m) => ({ default: m.F
 export const SIDE_TABS: Array<{ id: SidePanelTab; label: string; icon: IconName }> = [
   { id: "terminal", label: "Terminal", icon: "terminal" },
   { id: "browser", label: "Browser", icon: "globe" },
+  { id: "changes", label: "Changes", icon: "pencil" },
   { id: "activity", label: "Activity", icon: "checklist" },
   { id: "info", label: "Info", icon: "info" },
   { id: "files", label: "Files", icon: "folder" },
@@ -35,7 +36,7 @@ function useAgentReveal(): void {
   }, []);
 }
 
-/** The right side panel of a project window (D-13): Terminal, Browser, Activity and Info tabs. */
+/** The right side panel of a project window (D-13): Terminal, Browser, Changes, Activity and Info tabs. */
 export function SidePanel({ cwd, visible = true }: { cwd: string; visible?: boolean }) {
   const prefs = usePrefs();
   useAgentReveal();
@@ -109,8 +110,8 @@ export function SidePanel({ cwd, visible = true }: { cwd: string; visible?: bool
             </div>
           ) : null}
         </Suspense>
-        {/* Activity and Info are the session view's: it portals them into these slots (see sideSlots.ts). */}
-        {tab === "activity" || tab === "info" ? <div key={tab} className="side-pane side-slot" data-slot={tab} ref={slotRef(tab)} /> : null}
+        {/* Activity, Changes and Info are the session view's: it portals them into these slots (see sideSlots.ts). */}
+        {tab === "activity" || tab === "changes" || tab === "info" ? <div key={tab} className="side-pane side-slot" data-slot={tab} ref={slotRef(tab)} /> : null}
       </div>
     </aside>
   );

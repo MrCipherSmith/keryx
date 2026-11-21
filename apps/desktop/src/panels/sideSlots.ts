@@ -2,9 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 
-type Slot = "activity" | "info" | "sessionControls";
+type Slot = "activity" | "info" | "changes" | "sessionControls";
 
-const slots: Record<Slot, HTMLElement | null> = { activity: null, info: null, sessionControls: null };
+const slots: Record<Slot, HTMLElement | null> = { activity: null, info: null, changes: null, sessionControls: null };
 let running = 0;
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((s) => s());
@@ -16,6 +16,7 @@ const subscribe = (cb: () => void) => {
 const refs: Record<Slot, (el: HTMLElement | null) => void> = {
   activity: (el) => setSlot("activity", el),
   info: (el) => setSlot("info", el),
+  changes: (el) => setSlot("changes", el),
   sessionControls: (el) => setSlot("sessionControls", el),
 };
 function setSlot(tab: Slot, el: HTMLElement | null): void {

@@ -279,6 +279,28 @@ export interface ProjectFileContent {
 
 export const projectFiles = (cwd: string, query?: string) => invoke<ProjectFiles>("project_files", { cwd, query });
 export const projectFileRead = (cwd: string, path: string) => invoke<ProjectFileContent>("project_file_read", { cwd, path });
+/** One changed file of the checkout: `R` carries the old path, `?` is untracked. */
+export interface ChangedFile {
+  path: string;
+  status: "M" | "A" | "D" | "R" | "?";
+  origPath?: string;
+  staged: boolean;
+}
+
+export interface FileDiff {
+  path: string;
+  status: ChangedFile["status"];
+  binary: boolean;
+  tooLarge: boolean;
+  /** Unified diff text; absent for a binary or too large file. */
+  text?: string;
+}
+
+/** The files that differ from HEAD. `truncated` when the host stopped at its cap. */
+export const gitChanges = (cwd: string) => invoke<{ files: ChangedFile[]; truncated: boolean }>("git_changes", { cwd });
+
+/** The diff of one file the last `gitChanges` returned (the host refuses any other path). */
+export const gitFileDiff = (cwd: string, path: string) => invoke<FileDiff>("git_file_diff", { cwd, path });
 
 /** The current checkout's GitHub origin, as owner/repo; null when unknown. */
 export const gitRepository = (cwd: string) => invoke<string | null>("git_repository", { cwd });
