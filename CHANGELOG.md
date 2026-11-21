@@ -5,6 +5,22 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.43] - 2026-11-21
+
+**Keryx Desktop 0.2.6** requires Keryx 0.4.43 or newer.
+
+### Added
+
+- Subscribe to individual pull requests for review activity, review requests, approval changes and CI status through the shared PR watcher.
+- Enable automatic maintenance on your own pull requests. Keryx can rebase a clean branch, resolve merge conflicts, fix failed GitHub Actions checks and address review feedback. Choose a provider and model for repairs, with the current session model as the default.
+- Keryx can move a pull request to Draft during a repair and return it to Ready after publishing the fix. It posts English replies to review feedback after the fix reaches GitHub.
+- Open pull requests directly in Chrome, start session drafts from pull requests and flows, and see changed-file and line counts when starting a review.
+
+### Fixed
+
+- Fixed Select All and reduced input lag when scrolling in the embedded Chromium browser.
+- Preserve existing pull request subscriptions when upgrading Desktop.
+
 ## [0.4.42] - 2026-11-21
 
 **Keryx Desktop 0.2.5** requires Keryx 0.4.42 or newer.
