@@ -244,6 +244,11 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // importing it, since core may never import client (see this table's header
   // comment) — see that file's own comment for why the duplication is safe.
   { segment: "learning", zone: "core" },
+  // Worktree readiness (flow 506): create/prepare/promote/remove for a linked
+  // checkout — deterministic git and file operations over shared primitives,
+  // memory and learning. Core: `ctx` (core) reads its agent lines, the adapter
+  // commands and the harness (client) call it, and it imports nothing above.
+  { segment: "worktree", zone: "core" },
   // Flow 356 (A-1, audit remediation 3): the impact-evidence gate
   // (`computeImpactEvidence`, the session-state log, the provider, the host-
   // delivery status check) — deterministic composition over the gdgraph

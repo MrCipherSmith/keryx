@@ -65,7 +65,7 @@ async function exists(target: string): Promise<boolean> {
 
 /** The configuration used when a project has no `.metaproject/worktree.config.json` (spec §4). */
 export async function defaultWorktreeConfig(mainRoot: string): Promise<WorktreeConfig> {
-  let names: string[] = [];
+  let names: string[];
   try {
     names = await readdir(mainRoot);
   } catch {
