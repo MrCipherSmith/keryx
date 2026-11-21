@@ -139,7 +139,7 @@ async function installWorkspaceReviewControls(cwd: string, checkout: string, sig
   for (const workspace of main ? [cwd, main] : [cwd]) {
     const [staged, committed] = await Promise.all([
       trackedFiles(workspace),
-      git(workspace, ["ls-tree", "-r", "--name-only", "-z", "HEAD", "--", ...paths], signal),
+      git(workspace, ["ls-tree", "-r", "--name-only", "-z", ...revisionOperand("HEAD"), "--", ...paths], signal),
     ]);
     const tracked = new Set([pinned, staged, committed].flatMap(files => files.split("\0")));
     const candidates = [...entrypoints];
