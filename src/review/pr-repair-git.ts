@@ -113,7 +113,7 @@ export class RepairCheckout {
     } catch (error) {
       const files = (await this.git(["diff", "--name-only", "--diff-filter=U", "-z"])).split("\0").filter(Boolean);
       if (!files.length) throw error;
-      if (files.some(file => !repairPathAllowed(file))) throw new Error("A conflict touches a file that requires manual resolution.");
+      if (files.some(file => !repairPathAllowed(file))) throw new Error("A conflict touches a file that requires manual resolution.", { cause: error });
       return files;
     }
     return [];
