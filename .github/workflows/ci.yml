@@ -83,6 +83,48 @@ jobs:
           AC8_RESULT: ${{ needs.ac8-full-suite.result }}
         run: test "$AC8_RESULT" = success
 
+  issues-acceptance:
+    name: Issues board, Projects and session-to-Flow acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.5'
+
+      - name: Install core and Desktop dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd apps/desktop && bun install --frozen-lockfile)
+
+      - name: Verify frozen Flow 511 criteria
+        shell: bash
+        run: |
+          status=0
+          for ac in AC1 AC2 AC3 AC5 AC6 AC7 AC8 AC9 AC10 AC11 AC12 AC13 AC14; do
+            echo "::group::$ac"
+            if python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py "$ac"; then
+              echo "- $ac passed" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- $ac failed" >> "$GITHUB_STEP_SUMMARY"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+      - name: Build Desktop and exercise the Issues view
+        working-directory: apps/desktop
+        run: |
+          bun run build
+          bun test ./src/issues/IssuesBoard.dom.test.tsx
+
   static-checks:
     name: Lint and typecheck
     runs-on: ubuntu-latest
