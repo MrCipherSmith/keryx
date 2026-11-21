@@ -31,7 +31,7 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
     const noop = () => {};
     return (
       <AppShell cwd={cwd} projects={["/dev/alpha", "/dev/beta"]} view={view} onView={onView}
-        title={view} status={{ tone: "ok", label: "Ready" }} flowsActive={2} activity="idle"
+        onOpenSourceIssue={() => onView("issues")} title={view} status={{ tone: "ok", label: "Ready" }} flowsActive={2} activity="idle"
         recents={[]} live={[]} onRemoveProject={noop} onOpenFolder={noop} onSwitchProject={switchProject}
         onNewWindow={noop} onCloseProject={noop} onPalette={noop}>
         <span>{view}</span>
@@ -42,6 +42,12 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
   const left = host.querySelector(".titlebar-left")!;
   expect(left.querySelector(".project-switcher")?.nextElementSibling?.textContent).toBe("session");
   expect(left.querySelector(".titlebar-title")?.hasAttribute("data-tauri-drag-region")).toBe(true);
+  const origin = host.querySelector<HTMLButtonElement>('.titlebar-right > button[aria-label="Open source issue"]')!;
+  expect(left.contains(origin)).toBe(false);
+  expect(origin.hasAttribute("data-tauri-drag-region")).toBe(false);
+  await React.act(() => origin.click());
+  expect(host.querySelector('main nav [aria-current="page"]')?.textContent).toContain("Issues");
+  expect(host.querySelector('button[aria-label="Open source issue"]')).toBeNull();
   const status = host.querySelector('.titlebar-right > [role="status"]')!;
   expect(status.textContent).toBe("Ready");
   expect(status.previousElementSibling?.getAttribute("aria-label")).toBe("Commands and sessions");

@@ -499,9 +499,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
     view === "session" ? (
-      <><span className="truncate">{sessionTitle}</span>
-        {sessionFlow && sessionFlags(sessionFlow).hasIssue && <button className="btn btn-sm" onClick={() => openIssueOrigin({sessionId:sessionFlow.sessionId})}>Open source issue</button>}
-      </>
+      <span className="truncate">{sessionTitle}</span>
     ) : (
       <span className="truncate">
         {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : view === "issues" ? "Issues" : "Pull requests"}`}
@@ -529,6 +527,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onView={go}
       onProjectSettings={openProjectSettings}
       title={title}
+      onOpenSourceIssue={sessionFlow && sessionFlags(sessionFlow).hasIssue
+        ? () => openIssueOrigin({sessionId: sessionFlow.sessionId}) : undefined}
       hasSession={state.sessionId !== null}
       status={status}
       flowsActive={flowsActive}

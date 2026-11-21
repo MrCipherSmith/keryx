@@ -362,7 +362,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bund
         return Err(format!("Not a folder: {cwd}"));
     }
 
-    let env = app.state::<AppState>().environment().clone();
+    let mut env = app.state::<AppState>().environment().clone();
     // Reads are confined to the git toplevel, which is what keryx binds its session to.
     let fs_root = fs::project_root(&root, env.get("PATH").map(String::as_str));
     let settings = settings::load_settings(app);
@@ -375,6 +375,17 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bund
         prefer_bundled,
     )?;
     let can_fall_back = locator::can_fall_back(settings.keryx_source, &located, exe_dir.as_deref());
+
+    // A coordinator invoking `keryx flow` must use the same CLI as its ACP receiver.
+    // Only the bundled executable lives in an app-controlled directory of sidecars.
+    if located.source == KeryxSource::Bundled {
+        if let Some(dir) = located.path.parent() {
+            let inherited = env.get("PATH").map(String::as_str).unwrap_or_default();
+            let paths = std::iter::once(dir.to_owned()).chain(std::env::split_paths(inherited));
+            let joined = std::env::join_paths(paths).map_err(|e| e.to_string())?;
+            env.insert("PATH".into(), joined.to_string_lossy().into_owned());
+        }
+    }
 
     let mut args = vec!["acp".to_string()];
     if !no_profile {

@@ -47,6 +47,7 @@ interface ShellProps {
   onProjectSettings?: () => void;
   title: ReactNode;
   hasSession?: boolean;
+  onOpenSourceIssue?: () => void;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
   reviewIndicator?: ReviewTabIndicator;
@@ -271,6 +272,8 @@ function TitleBar(p: ShellProps) {
         {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
       </div>
       <div className="titlebar-right" data-tauri-drag-region>
+        {p.view === "session" && p.onOpenSourceIssue && <button className="icon-btn" aria-label="Open source issue"
+          title="Open source issue" onClick={p.onOpenSourceIssue}><Icon name="circleDot" size={15} /></button>}
         <InfoToggle show={p.view === "session"} />
         {p.view === "session" && p.hasSession && <ActivityToggle />}
         <SideToggles />
