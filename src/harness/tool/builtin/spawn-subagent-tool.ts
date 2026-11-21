@@ -1651,7 +1651,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           parentAllowed: parentAllowed(target),
           cooldown: false,
         }));
-        const profiles = loadModelProfiles(deps.routingConfigDir);
+        const profiles = loadModelProfiles(deps.routingConfigDir, () => Date.parse(observedAt));
         let routingBudget = routingBudgets.get(routingConfig.configDigest);
         if (routingBudget === undefined) {
           routingBudget = new RoutingBudgetLedger({
