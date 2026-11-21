@@ -17,10 +17,11 @@ export interface WorkProps {
 interface Props {
   cwd: string; login: string; viewer: IssueViewer; row: IssueSummary; request: typeof requestIssues;
   close: () => void; onAccessLost: (reason: string) => void; mobile: boolean;
+  verifiedDetail?: Detail;
   actions: ReactNode; onPrevious?: () => void; onNext?: () => void;
 }
 
-export function IssueDetail({ cwd, login, viewer, row, request, close, onAccessLost, mobile, actions, onPrevious, onNext }: Props) {
+export function IssueDetail({ cwd, login, viewer, row, request, close, onAccessLost, mobile, actions, verifiedDetail, onPrevious, onNext }: Props) {
   const panel = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(550);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -60,6 +61,11 @@ export function IssueDetail({ cwd, login, viewer, row, request, close, onAccessL
     const gen = ++generation.current;
     busy.current = false;
     setError(""); setDetail(null); setComments([]); setCursor(null); setCommentError(""); setBusyComments(false);
+    if (verifiedDetail) {
+      setDetail(verifiedDetail);
+      void readComments(null, gen);
+      return () => { generation.current++; };
+    }
     void request<{ viewer: IssueViewer; issue: Detail }>(cwd, login, "detail", { ref: issue }).then(response => {
       if (gen !== generation.current) return;
       if (identity !== issueViewerKey(response.viewer) || issueKey(response.issue.ref) !== issueKey(issue)) {
@@ -72,20 +78,20 @@ export function IssueDetail({ cwd, login, viewer, row, request, close, onAccessL
       const reason = errMessage(e); if (isAccessError(reason)) onAccessLost(reason); else setError(reason);
     });
     return () => { generation.current++; };
-  }, [cwd, login, request, issue, identity, retry, readComments, onAccessLost]);
+  }, [cwd, login, request, issue, identity, retry, readComments, onAccessLost, verifiedDetail]);
 
   const current = detail ?? row;
   const clamp = (v: number) => Math.max(360, Math.min(Math.max(360, (panel.current?.parentElement?.clientWidth ?? 1300) - 280), v));
   const drag = useRef<{ x: number; width: number } | null>(null);
   return <aside ref={panel} className="issue-detail side-panel" role={mobile ? "dialog" : "region"} aria-modal={mobile || undefined}
-    aria-label={"Issue " + issueName(row)} style={mobile ? undefined : { width }} onClick={e => {
+    aria-label={"Issue " + issueName(row)} style={mobile || verifiedDetail ? undefined : { width }} onClick={e => {
       const link = (e.target as Element).closest("a");
       if (!link) return;
       e.preventDefault();
       const url = webUrl(link.getAttribute("href"));
       if (url) void openExternal(url).catch(cause => setError(errMessage(cause)));
     }}>
-    {!mobile && <div className="side-resize issue-resize" role="separator" aria-label="Issue details width" aria-orientation="vertical"
+    {!mobile && !verifiedDetail && <div className="side-resize issue-resize" role="separator" aria-label="Issue details width" aria-orientation="vertical"
       aria-valuemin={360} aria-valuemax={clamp(Infinity)} aria-valuenow={clamp(width)} tabIndex={0}
       onKeyDown={e => {
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); setWidth(clamp(width + (e.key === "ArrowLeft" ? 24 : -24))); }
@@ -95,8 +101,8 @@ export function IssueDetail({ cwd, login, viewer, row, request, close, onAccessL
       onLostPointerCapture={() => { drag.current = null; }} />}
     <header className="sheet-head">
       <div className="sheet-head-row"><span className="flow-id">{issueName(row)}</span><span className="spacer" />
-        <button className="icon-btn" aria-label="Previous issue" disabled={!onPrevious} onClick={onPrevious}><Icon name="arrowLeft" /></button>
-        <button className="icon-btn" aria-label="Next issue" disabled={!onNext} onClick={onNext}><Icon name="arrowRight" /></button>
+        {!verifiedDetail && <><button className="icon-btn" aria-label="Previous issue" disabled={!onPrevious} onClick={onPrevious}><Icon name="arrowLeft" /></button>
+        <button className="icon-btn" aria-label="Next issue" disabled={!onNext} onClick={onNext}><Icon name="arrowRight" /></button></>}
         <button ref={active} className="icon-btn" aria-label="Close issue" onClick={close}><Icon name="x" /></button>
       </div>
       <h2>{current.title}</h2><div className="issue-detail-actions">{actions}

@@ -102,6 +102,7 @@ nav:
       - Let the review arbiter answer policy questions: guides/review-arbiter.md
       - Jev in the delivery loop: guides/jev-in-the-delivery-loop.md
       - Get a GitHub and board digest on a schedule: guides/scheduled-digest.md
+      - Work on a GitHub issue in Desktop: guides/desktop-issues.md
       - Take work in from GitHub as cards in Telegram: guides/work-intake.md
       - Shared Agent Context (experimental): guides/shared-agent-context.md
       - "/goal: deterministic starts, autonomous continuation": guides/goal.md

@@ -43,7 +43,7 @@ export function IssueOriginDetail({ cwd, login, origin, close, onWork }: Props) 
   return <div className="issue-workspace issue-origin">
     {error && <p role="alert">{error} <button className="btn btn-sm" onClick={() => retry(n => n + 1)}>Retry</button></p>}
     {row && result && <IssueDetail cwd={cwd} login={login} viewer={result.viewer} row={row} request={requestIssues}
-      close={close} onAccessLost={loseAccess} mobile actions={<>
+      close={close} onAccessLost={loseAccess} mobile={false} verifiedDetail={row} actions={<>
         <button className="btn btn-sm" disabled={busy} onClick={() => void work("open-session")}>Open session</button>
         {"flowDir" in origin || (row.work && row.work.stage !== "none")
           ? <button className="btn btn-sm" disabled={busy} onClick={() => void work("open-flow")}>Open Flow</button>

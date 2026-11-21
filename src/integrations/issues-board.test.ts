@@ -156,3 +156,43 @@ test("AC5 GitHub state, Project Status and Keryx stage stay independent on refre
   expect(shown.issue.work?.reason).toBe("Choose the execution branch");
   expect(shown.issue.state).toBe("closed");
 });
+
+test("AC3 source links reopen a private session or legacy Flow only after the selected account can read the ticket", async () => {
+  const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { readIssueOrigin } = await import("./issue-origin");
+  const { withIssueBinding } = await import("./issue-session");
+  const { readSessionFlags } = await import("../session/organize");
+  const { sessionDir } = await import("../session/paths");
+  const root = await mkdtemp(join(tmpdir(), "issue-origin-"));
+  const profile = join(root, "profile");
+  const flowDir = "007-existing-issue";
+  const auth = await account(async (_url, options) => {
+    const variables = JSON.parse(String(options.body)).variables;
+    return json({ data: variables.id
+      ? { node: { ...graphIssue, body: "Authoritative body" } }
+      : { repository: { issue: { ...graphIssue, body: "Authoritative body" } } } });
+  });
+  try {
+    const live = (await issueDetail(auth, ref)).issue;
+    const project = { cwd: root, projectId: "p", cloneId: "c", baseBranch: "main" };
+    const sessionId = await withIssueBinding(auth.viewer, project, { ...live, body: "Old private body" }, profile,
+      async record => record.launch.sessionId!);
+    expect(readSessionFlags(sessionDir(root, sessionId, profile)).hasIssue).toBe(true);
+    expect((await readIssueOrigin(root, auth, {sessionId}, profile)).issue?.body).toBe("Authoritative body");
+    const wrongUser = { ...auth, viewer: { ...auth.viewer, nodeId: "other-viewer" } };
+    await expect(readIssueOrigin(root, wrongUser, {sessionId}, profile)).rejects.toThrow("access:");
+    const pkg = join(root, ".metaproject", "flows", flowDir);
+    await mkdir(pkg, { recursive: true });
+    await writeFile(join(pkg, "flow.json"), JSON.stringify({ schemaVersion: 2, source: { type: "github-issue", ref: ref.url } }));
+    expect((await readIssueOrigin(root, auth, {flowDir}, profile)).ref).toEqual(ref);
+    const denied = await account(async () => json({}, { status: 404 }));
+    await expect(readIssueOrigin(root, denied, {flowDir}, profile)).rejects.toThrow("access:");
+    await expect(readIssueOrigin(root, denied, {sessionId}, profile)).rejects.toThrow("access:");
+    await expect(readIssueOrigin(root, auth, {flowDir: "../outside"}, profile)).rejects.toThrow("Invalid Issues request");
+    await expect(readIssueOrigin(root, auth, {sessionId,flowDir}, profile)).rejects.toThrow("Invalid Issues request");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
