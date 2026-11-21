@@ -70,4 +70,34 @@ describe("review slice with a pinned --head", () => {
     expect(sliceText).not.toContain("later-change");
     expect(sliceText).not.toContain("uncommitted");
   });
+
+  test("pinned generated JSON larger than the source reader limit becomes review evidence", async () => {
+    const unchanged = "scripts/backend-openapi.generated.json";
+    const changed = "scripts/contract.generated.json";
+    const invalid = "scripts/broken.generated.json";
+    const padding = "x".repeat(1_240_000);
+    git("reset", "--", "src/uncommitted.ts");
+    const from = commit("generated base", {
+      [unchanged]: JSON.stringify({ padding, paths: { "/query": "get" } }),
+      [changed]: `{"padding":"${padding}","a/b~":9007199254740992}`,
+      [invalid]: "{",
+    });
+    const to = commit("generated head", {
+      [unchanged]: JSON.stringify({ paths: { "/query": "get" }, padding }),
+      [changed]: `{"padding":"${padding}","a/b~":9007199254740993}`,
+      [invalid]: "{ invalid",
+    });
+    write(changed, '{"notThePinnedHead":true}');
+    const out = path.join(root, "structural-slices");
+    await reviewCommand(["slice", "--ref", from, "--head", to, "--out", out]);
+    const manifest = JSON.parse(readFileSync(path.join(out, "manifest.json"), "utf8")) as SliceManifest;
+    expect(manifest.structuralJsonFiles?.sort()).toEqual([unchanged, changed].sort());
+    expect(manifest.omissions.map(entry => entry.path)).toEqual([invalid]);
+    const evidence = manifest.slices.map(slice => readFileSync(path.join(out, slice.path), "utf8")).join("\n");
+    expect(evidence).toContain("Parsed JSON is unchanged");
+    expect(evidence).toContain('- "/a~1b~0": 9007199254740992');
+    expect(evidence).toContain('+ "/a~1b~0": 9007199254740993');
+    expect(evidence).not.toContain("notThePinnedHead");
+    expect(evidence.length).toBeLessThan(2_000);
+  });
 });

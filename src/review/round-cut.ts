@@ -46,7 +46,11 @@ export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; 
   /** A second-look slice is routed by the head alone, then tagged with the round it answers. */
   const routeAsSecondLook = (slices: BuiltSlice[]): BuiltSlice[] => tagSecondLookSlices(routeSlices(slices, { head: routing.head }), delta.round - 1);
   const ledgers = ledgerOmissions(source.regions);
-  const parts = partitionRegionsByFix(withoutOmitted(source.regions, ledgers), delta.fixHunks);
+  const retained = withoutOmitted(source.regions, ledgers);
+  // Structural JSON uses pointers and synthetic anchors, so Git line-based fix
+  // attribution is inapplicable. Review this evidence as new in the delta.
+  const parts = partitionRegionsByFix(retained.filter(region => !region.structuralJson), delta.fixHunks);
+  parts.other.push(...retained.filter(region => region.structuralJson));
   const built = cutRegions(source, parts.other, sizes, true);
   const fixSlices = parts.fix.length === 0 ? [] : routeAsDelta(cutRegions(source, parts.fix, sizes, false).slices);
   const classified = routeAsDelta(built.slices);

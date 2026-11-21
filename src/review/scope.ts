@@ -150,6 +150,8 @@ export type ScopedRegion = {
   contextTruncated: boolean;
   /** The window in unified-diff form, prefixes preserved. */
   text: string;
+  /** The text describes JSON pointers. Its anchors are not source line numbers. */
+  structuralJson?: true;
 };
 
 /**
@@ -445,7 +447,7 @@ type ParsedLine = {
 
 type ParsedHunk = { header: string; lines: ParsedLine[] };
 
-type ParsedFile = { path: string; binary: boolean; hunks: ParsedHunk[] };
+type ParsedFile = { path: string; binary: boolean; hunks: ParsedHunk[]; blobs?: readonly [string, string]; regularChange?: "new" | "deleted" };
 
 const HUNK_HEADER = /^@@+ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
@@ -517,6 +519,23 @@ function parseUnifiedDiff(diff: string): ParsedFile[] {
       }
       continue;
     }
+    if (current !== undefined && hunk === undefined && line.startsWith("index ")) {
+      // Require the full object IDs emitted by Git and a regular file on both sides.
+      const index = /^index ([0-9a-f]{40})\.\.([0-9a-f]{40})( 100(?:644|755))?$/.exec(line);
+      if (index) {
+        const before = /^0{40}$/.test(index[1]!);
+        const after = /^0{40}$/.test(index[2]!);
+        if (index[3] && !before && !after || current.regularChange === "new" && before && !after ||
+            current.regularChange === "deleted" && !before && after) {
+          current.blobs = [index[1]!, index[2]!];
+        }
+      }
+      continue;
+    }
+    if (current !== undefined && hunk === undefined) {
+      const mode = /^(new|deleted) file mode 100(?:644|755)$/.exec(line)?.[1];
+      if (mode === "new" || mode === "deleted") current.regularChange = mode;
+    }
     if (current !== undefined && (line.startsWith("Binary files ") || line.startsWith("GIT binary patch"))) {
       closeHunk();
       current.binary = true;
@@ -561,6 +580,12 @@ function parseUnifiedDiff(diff: string): ParsedFile[] {
   }
   closeFile();
   return files.filter((file) => file.path.length > 0 && file.path !== "/dev/null");
+}
+
+export function reviewDiffBlobPairs(diff: string, candidates: ReadonlySet<string>) {
+  return parseUnifiedDiff(diff).flatMap(file => file.blobs && !file.binary && candidates.has(file.path)
+    ? [{ path: file.path, blobs: file.blobs }]
+    : []);
 }
 
 // ---------------------------------------------------------------------------

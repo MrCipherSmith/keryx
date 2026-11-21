@@ -14,6 +14,8 @@ import { pendingMutants } from "./mutate";
 import { buildReviewScope } from "./scope";
 import { assertGitRevision } from "../lib/git-revision";
 import { decideRoleSwitches, packageEnabledRoles, readRoleConfig, rolesThatRan } from "./role-switches";
+import { structuralJsonPaths, type SliceManifest } from "./slice";
+import { readJsonFileOr } from "../lib/json";
 
 export type ReviewMode = "all" | "diff";
 export type RoundDepth = "light" | "full";
@@ -901,7 +903,10 @@ export function skipLine(skip: ReviewerSkip): string {
 export async function packageScopeFiles(packageDir: string): Promise<string[] | undefined> {
   try {
     const parsed = JSON.parse(await readFile(path.join(packageDir, "scope-files.json"), "utf8"));
-    return Array.isArray(parsed?.files) && parsed.files.every((f: unknown) => typeof f === "string") ? parsed.files : undefined;
+    if (!Array.isArray(parsed?.files) || !parsed.files.every((file: unknown) => typeof file === "string")) return;
+    const manifest = await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
+    const structured = structuralJsonPaths(manifest);
+    return structured.length ? [...new Set<string>([...parsed.files, ...structured])] : parsed.files;
   } catch {
     return undefined;
   }

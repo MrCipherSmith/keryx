@@ -72,6 +72,8 @@ export type SliceManifest = {
   source: "diff" | "scoped-diff";
   /** Project roles whose slice assignments were recorded by this version of the slicer. */
   projectRoles?: readonly string[];
+  /** JSON paths whose whole-file omissions were replaced by structural evidence. */
+  structuralJsonFiles?: string[];
   slices: SliceEntry[];
   omissions: SliceOmission[];
   totals: {
@@ -85,6 +87,12 @@ export type SliceManifest = {
 };
 
 export type BuiltSlice = SliceEntry & { text: string };
+
+export function structuralJsonPaths(manifest: Pick<SliceManifest, "structuralJsonFiles"> | undefined): string[] {
+  return Array.isArray(manifest?.structuralJsonFiles)
+    ? manifest.structuralJsonFiles.filter(file => typeof file === "string" && /\.json$/i.test(file))
+    : [];
+}
 
 const encoder = new TextEncoder();
 
@@ -418,6 +426,7 @@ export function validateWaveBytes(value: number, maxBytes: number): number {
 export function ledgerOmissions(regions: readonly ScopedRegion[]): SliceOmission[] {
   const omissions: SliceOmission[] = [];
   for (const [filePath, fileRegions] of regionsByFile(regions)) {
+    if (fileRegions.every(region => region.structuralJson)) continue;
     const bytes = sectionsBytes(fileRegions.map(regionSection));
     const ledger = classifyLedger(filePath, bytes);
     if (ledger !== null) omissions.push({ path: filePath, reason: ledger.reason, detail: ledger.detail, bytes });
@@ -464,7 +473,7 @@ export function buildSlices(
   const byDomain = new Map<string, Map<string, ScopedRegion[]>>();
   for (const [filePath, regions] of byFile) {
     const bytes = sectionsBytes(regions.map(regionSection));
-    const ledger = options.keepLedgers === true ? null : classifyLedger(filePath, bytes);
+    const ledger = options.keepLedgers === true || regions.every(region => region.structuralJson) ? null : classifyLedger(filePath, bytes);
     if (ledger !== null) {
       omissions.push({ path: filePath, reason: ledger.reason, detail: ledger.detail, bytes });
       continue;

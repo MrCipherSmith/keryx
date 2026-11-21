@@ -26,12 +26,13 @@ import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
 import { readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
 import { isDeltaRound, partitionRegionsBySecondLook, splitCounts } from "../review/round-split";
 import { type SecondLookSource, deltaRoundCut, firstRoundCut } from "../review/round-cut";
+import { includeStructuredJson } from "../review/structured-json-slices";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
 export type SliceDeps = {
   /** `git diff <ref> [<head>]`: with a head the diff ends at that commit, never at the working tree. */
-  gitDiff: (ref: string | undefined, contextLines: number, head?: string) => Promise<string>;
+  gitDiff: (ref: string | undefined, contextLines: number, head?: string, fullIndex?: boolean) => Promise<string>;
   readDiffSource: (source: string) => Promise<string>;
   parseContextLines: (raw: string | undefined) => number;
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
@@ -87,8 +88,9 @@ reviewer's child deadline. Its default depends on --host (default: detected from
 keryx-shell ${HOST_WAVE_BYTES["keryx-shell"]} (a child is killed after 5 minutes), claude-code, codex and other
 ${HOST_WAVE_BYTES["claude-code"]} (no child deadline; ${DEFAULT_WAVE_BYTES} was the old default for every host). The
 manifest records host and waveBytes. Data ledgers (csv, tsv, jsonl,
-parquet), lockfiles, snapshots, generated and oversize json are never sliced:
-they are listed under omissions with their reason and size.
+parquet), lockfiles, snapshots and generated output are listed under omissions
+with their reason and size. For pinned Git ranges, generated and oversize JSON
+is compared by JSON pointer when its full structural diff fits the evidence budget.
 
 Each slice is routed: \`roles\` are the reviewers its content needs (review-logic on
 every slice), \`depth\` is deep (every round role whose path gate allows its files
@@ -236,14 +238,17 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     const cut = await deltaSliceDiff(delta, contextLines);
     if (cut.note !== undefined) console.error(cut.note);
     diff = cut.diff;
-  } else diff = await deps.gitDiff(ref, contextLines, pinnedHead);
+  } else diff = await deps.gitDiff(ref, contextLines, pinnedHead, ref !== undefined && pinnedHead !== undefined);
   const hostArg = optionValue(args, "--host");
   const host = hostArg === undefined ? detectReviewHost() : parseReviewHost(hostArg);
   if (host === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = validateWaveBytes(rawWave === undefined ? defaultWaveBytes(host, maxBytes) : Number(rawWave), maxBytes);
   const scopeConfig = { contextLines, ...(await commentRuleScopeConfig(process.cwd())) };
-  const source = sliceSourceFromDiff(diff, scopeConfig);
+  let source = sliceSourceFromDiff(diff, scopeConfig);
+  if (diffFile === undefined && (delta !== undefined || ref !== undefined && pinnedHead !== undefined)) {
+    source = await includeStructuredJson(process.cwd(), diff, source);
+  }
   // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
   const head = pinnedHead ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
@@ -284,7 +289,9 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     const base = delta?.range.base ?? round?.range.base ?? ref;
     throw new Error(`review slice refused: empty review range${base === undefined || base === null ? "" : `: base ${String(base).slice(0, 12)} equals head or changes nothing`} (${head === "no-head" ? "no head" : head.slice(0, 12)}); there is nothing to slice. For a merged pull request pass its recorded base (\`review start --base <sha|ref>\` / \`review plan --ref <base>\`).`);
   }
+  const structuralJsonFiles = source.regions.filter(region => region.structuralJson).map(region => region.path);
   const manifest = { ...cut.manifest, host, waveBytes, omissions, totals,
+    ...(structuralJsonFiles.length ? { structuralJsonFiles } : {}),
     ...(gates.length > 0 ? { projectRoles: gates.map(gate => gate.name) } : {}), slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
@@ -367,7 +374,7 @@ export async function secondLookSource(
 /** `git diff <base> <head>` of a delta round, without committed review packages (the same pathspec the round's hunks were cut with). */
 async function gitRangeDiff(base: string, head: string, contextLines: number): Promise<string> {
   for (const sha of [base, head]) if (!/^[0-9a-f]{7,64}$/i.test(sha)) throw new Error(`round.json range ${base}..${head} is not a pair of commit SHAs; re-run \`keryx review start\``);
-  const proc = Bun.spawn(["git", "diff", "--no-color", `-U${contextLines}`, "--no-ext-diff", "--end-of-options", base, head, "--", ...NOT_REVIEW_PACKAGES], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", "diff", "--no-color", `-U${contextLines}`, "--no-ext-diff", "--no-textconv", "--full-index", "--end-of-options", base, head, "--", ...NOT_REVIEW_PACKAGES], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (exitCode !== 0) throw new Error(`git diff ${base.slice(0, 12)}..${head.slice(0, 12)} failed (exit ${exitCode}): ${stderr.trim()}`);
   return stdout;
