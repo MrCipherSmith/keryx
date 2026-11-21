@@ -7,10 +7,10 @@ import { parseDiffHunks, type ReviewComment } from "./bot/post";
 import { screenCommentBody } from "./bot/redaction";
 import { verifyDeskSubject } from "./desk-run-service";
 import { DeskRunStore } from "./desk-run-store";
-import { PUBLICATION_REQUEST_LIMIT, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
+import { PUBLICATION_RECEIPT, PUBLICATION_REQUEST_LIMIT, PUBLICATION_SKIPPED, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
 import type { DeskRunKey } from "./desk-run-types";
-import { applyReviewOverlay, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReviewOverlay, renderDeskFinding,
-  renderDeskReviewReport, reportFindingMetadata, scopedFile, type DeskReportFinding } from "./desk-review-report";
+import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay, renderDeskFinding,
+  renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, scopedFile, type DeskReportFinding } from "./desk-review-report";
 import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
 import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
 import { premiseHoldState } from "./premise";
@@ -26,10 +26,11 @@ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
 type Draft = { settings: PublicationSettings; savedAt: string };
+type Operation = PublicationRequest | { kind: "automatic"; id: string; settings: PublicationSettings };
 type Receipt = { url?: string };
-type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string };
+type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
 type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
-type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][] };
+type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string };
 const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheFile = "publication-preview-cache.json";
@@ -44,7 +45,7 @@ async function json<T>(root: string, relative: string, limit: number): Promise<T
 }
 
 async function previewSubject(cwd: string, directory: string, key: DeskRunKey, auth: GithubConnection,
-  request: PublicationRequest, revision: { baseSha: string; headSha: string }): Promise<PreviewCache> {
+  request: Operation, revision: { baseSha: string; headSha: string }): Promise<PreviewCache> {
   const cacheKey = hash([cwd, key, revision, auth.binding, auth.env.GH_TOKEN, auth.env.GITHUB_TOKEN]);
   const cached = request.kind === "preview" && !request.refresh
     ? await json<PreviewCache>(directory, previewCacheFile, previewCacheLimit).catch(() => undefined) : undefined;
@@ -74,9 +75,18 @@ async function findPreviousPublication(cwd: string, key: DeskRunKey, auth: Githu
   }
 }
 
+async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubConnection) {
+  const base = `repos/${key.repo}`;
+  const resources = [`pulls/${key.number}/reviews`, `pulls/${key.number}/comments`, `issues/${key.number}/comments`];
+  const pages = await Promise.all(resources.map(resource => boardGh(cwd, [
+    "api", "--hostname", "github.com", "--paginate", "--slurp", `${base}/${resource}?per_page=100`,
+  ], auth)));
+  return hash(pages);
+}
+
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
-  key: DeskRunKey; auth: GithubConnection; request: PublicationRequest; current: boolean; cache: PreviewCache;
+  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; cache: PreviewCache;
 }): Promise<Prepared> {
   const { cwd, directory, run, key, auth, request, current, cache } = input;
   const packageDir = path.join(directory, "package");
@@ -86,10 +96,11 @@ async function prepare(input: {
       manifest.target.base !== run.baseSha || manifest.target.head !== run.headSha) {
     throw new Error("configuration: This review has no matching local package to publish.");
   }
-  const [recorded, verdict, draft, receipt, { overlay, overlayWarning }, readiness, report] = await Promise.all([
+  const [recorded, verdict, draft, receipt, skipped, { overlay, overlayWarning }, readiness, report] = await Promise.all([
     premiseRecords(packageDir), computeVerdict(packageDir),
     json<Draft>(directory, "publication-draft.json", draftLimit),
-    json<Receipt>(directory, "publication-receipt.json", 4096),
+    json<Receipt>(directory, PUBLICATION_RECEIPT, 4096),
+    scopedFile(directory, PUBLICATION_SKIPPED, 64),
     projectReviewOverlay(cwd), computeReadiness(packageDir), scopedFile(directory, "package/report.md", 2 * 1024 * 1024),
   ]);
   const recordFor = (entry: VerdictFinding) => recorded.records.find(row =>
@@ -139,6 +150,10 @@ async function prepare(input: {
     item.id !== "premise-decisions" || !answered ||
     recorded.records.some(row => premiseHoldState(row, recorded.decisions) === "awaiting" && !Object.hasOwn(answers, text(row.global_id ?? row.id))));
   const complete = run.result?.coverage === "complete" && failing.length === 0;
+  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && current &&
+    (request.kind === "preview" || request.kind === "submit" || request.kind === "automatic")
+    ? cache.discussion ?? await publicationDiscussion(cwd, key, auth) : undefined;
+  if (discussion) cache.discussion = discussion;
   const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
   const settings: PublicationSettings = {
     inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
@@ -186,6 +201,8 @@ async function prepare(input: {
   }
   const roundNumber = readRoundNumber(packageDir) ?? 1;
   const solo = run.options?.orchestrator === false;
+  const slots = projectReportSlots(overlay, report, roundNumber, settings.verdict, !solo);
+  const emptyOverlay = overlay?.kind === "slots" && Object.keys(slots).length === 0;
   const coverageNote = complete ? "" : solo
     ? "**Single-reviewer coverage.**"
     : `**Partial review.** Reviewer coverage or readiness is incomplete.${failing.length ? ` Open checks: ${failing.map(item => item.id).join(", ")}.` : ""}`;
@@ -204,6 +221,7 @@ async function prepare(input: {
     findings: settings.general ? publishable : publishable.filter(finding => !inBody.includes(finding)),
     bodyFindings: settings.general ? inBody : [], inlineCount: comments.length, omittedCount: settings.general ? 0 : inBody.length,
     evidenceLevel: deskReportEvidence(report), coverageNote,
+    slots,
     ...(settings.general && { refuted }),
     howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${run.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
   });
@@ -215,26 +233,54 @@ async function prepare(input: {
   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
   body += `\n\n${marker}`;
   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
-  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions]);
+  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion]);
   const approval = eventFor[settings.verdict] === "APPROVE";
+  const templateChanged = request.kind === "automatic" &&
+    await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
   const blockedReason = publishedUrl ? "This review has already been published."
     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
     : !current ? "The pull request is closed or its revision moved. You can still save this draft locally."
     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
     : !answered ? "Answer each finding question before publishing."
+    : overlay?.kind === "slots" && !settings.general ? "Enable General comment to include the project report overlay."
+    : request.kind === "automatic" && (skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
+      ? "This review needs a publication decision in Desktop."
+    : !englishReviewText([visibleBody, ...comments.map(comment => comment.body)].join("\n"))
+      ? "GitHub reviews must be written in English. This draft contains non-English prose."
     : approval && !complete ? "A partial review cannot approve. Select Comment only or Request changes."
     : inlineUnavailable ? "The pull request diff is unavailable. Retry or turn off inline comments."
     : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT || comments.some(comment => comment.body.length > PUBLISHED_BODY_LIMIT)
       ? "This draft exceeds the GitHub review size limit. Change what is included or split the review."
     : !settings.general && !comments.length ? "Enable General comment or select inline comments that are on the diff." : undefined;
   return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, inlineComments: comments,
-    questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay,
+    questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay && !emptyOverlay,
+    ...(overlay?.requiresApproval && { overlayRequiresApproval: true }),
     canSubmit: !blockedReason, digest, ...(blockedReason ? { blockedReason } : {}),
-    ...(overlayWarning ? { overlayWarning } : {}),
-    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : {}) }, comments, publicationBody: body };
+    ...(overlayWarning ? { overlayWarning } : emptyOverlay ? { overlayWarning: "This draft has no project overlay content. Only the Keryx template is shown." } : {}),
+    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}) },
+    comments, publicationBody: body, ...(discussion && { discussion }) };
 }
 
-export async function requestDeskPublication(cwd: string, key: DeskRunKey, request: PublicationRequest,
+function englishReviewText(body: string): boolean {
+  // Ignore source quotations and identifiers. Generated prose is requested in English at review time.
+  const prose = body.replace(/^`{3,}[^\n]*\n[\s\S]*?^`{3,}[^\n]*$/gm, "").replace(/`+[^`\n]+`+/g, "")
+    .replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
+  return !/[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(prose);
+}
+
+export function requestDeskPublication(cwd: string, key: DeskRunKey, request: PublicationRequest,
+  confirmSubmit?: (state: PublicationState) => Promise<void>): Promise<PublicationState> {
+  return publication(cwd, key, request, confirmSubmit);
+}
+
+export async function publishCompletedDeskReview(cwd: string, key: DeskRunKey, id: string): Promise<void> {
+  await publication(cwd, key, { kind: "automatic", id, settings: {
+    inline: false, general: true, keryxTemplate: true, overlay: true,
+    verdict: "comment", verdictOverride: "comment", answers: {},
+  } });
+}
+
+async function publication(cwd: string, key: DeskRunKey, request: Operation,
   confirmSubmit?: (state: PublicationState) => Promise<void>): Promise<PublicationState> {
   if (!uuid.test(request.id) || !/^[\w-]+\/[\w.-]+$/.test(key.repo) || !Number.isSafeInteger(key.number) || key.number < 1) {
     throw new Error("configuration: Invalid review publication target.");
@@ -249,6 +295,7 @@ export async function requestDeskPublication(cwd: string, key: DeskRunKey, reque
   const run = attempt?.run;
   if (!attempt || !run?.result?.reviewed || run.source === "existing" ||
       (run.state !== "completed" && run.state !== "partial") ||
+      (request.kind === "automatic" && (!run.options?.autoPublish || run.state !== "completed" || run.decision || attempt.cwd !== cwd)) ||
       attempt.key.number !== key.number || attempt.key.repositoryId !== key.repositoryId ||
       attempt.key.repo.toLowerCase() !== key.repo.toLowerCase() || attempt.key.viewer.toLowerCase() !== key.viewer.toLowerCase() ||
       !sha.test(run.baseSha) || !sha.test(run.headSha) ||
@@ -265,7 +312,12 @@ export async function requestDeskPublication(cwd: string, key: DeskRunKey, reque
     return state;
   }
   return withFileLock(path.join(directory, "publication.lock"), async () => {
-    const { state, comments, publicationBody } = await render();
+    const { state, comments, publicationBody, discussion } = await render();
+    if (request.kind === "skip") {
+      if (state.publishedUrl) return state;
+      await writeFileAtomic(path.join(directory, PUBLICATION_SKIPPED), "true", { mode: 0o600 });
+      return { ...state, skipped: true };
+    }
     const savedAt = new Date().toISOString();
     const draft: Draft = { settings: state.settings, savedAt };
     const encoded = JSON.stringify(draft);
@@ -276,24 +328,27 @@ export async function requestDeskPublication(cwd: string, key: DeskRunKey, reque
       await save();
       return { ...state, savedAt };
     }
-    if (request.digest !== state.digest) throw new Error("stale: The review preview changed. Refresh it before submitting.");
+    if (request.kind === "submit" && request.digest !== state.digest) throw new Error("stale: The review preview changed. Refresh it before submitting.");
     if (!state.canSubmit) throw new Error(`configuration: ${state.blockedReason}`);
-    if (!confirmSubmit) throw new Error("permission: Confirm the exact review before publishing.");
+    if (request.kind === "submit" && !confirmSubmit) throw new Error("permission: Confirm the exact review before publishing.");
     const outbound = { event: eventFor[state.settings.verdict], body: publicationBody, comments, commit_id: run.headSha };
     for (const body of [outbound.body, ...comments.map(comment => comment.body)]) {
       if (!(await screenCommentBody(cwd, body)).ok) {
         throw new Error("configuration: The security output check withheld this draft. Review the selected content before submitting.");
       }
     }
-    await confirmSubmit(state);
+    if (request.kind === "submit") await confirmSubmit?.(state);
     await verifyDeskSubject(cwd, key, run, connection);
     // Pin only after independently verifying the active viewer with the default connection.
     const auth: GithubConnection = connection.login ? connection : {
       ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
     };
     if (auth !== connection) await verifyDeskSubject(cwd, key, run, auth);
+    if (discussion && discussion !== await publicationDiscussion(cwd, key, auth)) {
+      throw new Error("stale: The pull request discussion changed. Refresh the preview and check the draft before publishing.");
+    }
     await save();
-    const receiptPath = path.join(directory, "publication-receipt.json");
+    const receiptPath = path.join(directory, PUBLICATION_RECEIPT);
     // Persist the intent before the network call. A lost response must not cause a duplicate review.
     await writeFileAtomic(receiptPath, "{}", { mode: 0o600 });
     const options = reviewCommandOptions(cwd, auth.env);
@@ -334,6 +389,7 @@ export async function requestDeskPublication(cwd: string, key: DeskRunKey, reque
       throw new Error("unavailable: Submission could not be confirmed. Check the pull request before sending another review.");
     }
     await writeFileAtomic(receiptPath, JSON.stringify({ url: publishedUrl }), { mode: 0o600 });
-    return { ...state, savedAt, publishedUrl, canSubmit: false, blockedReason: "This review has already been published." };
+    const { skipped: _skipped, ...published } = state;
+    return { ...published, savedAt, publishedUrl, canSubmit: false, blockedReason: "This review has already been published." };
   });
 }

@@ -16,12 +16,15 @@ function ReviewTags({ card }: { card: ReviewCard }) {
     {prState(card) === "draft" && <span className="badge">Draft</span>}
     {card.decision && <span className={`badge pr-${card.decision.toLowerCase()}`}>{DECISION_LABEL[card.decision]}</span>}
     {card.reviewers.length > 0 && <span className="badge pr-review_requested" title={card.reviewers.join(", ")}>Review requested</span>}
+    {card.state === "open" && card.localReview?.publicationPending && <span className="badge review-publication-pending">Action required</span>}
   </span>;
 }
 
 function ReviewAction({ card, onReview }: Pick<ReviewActions, "onReview"> & { card: ReviewCard }) {
   if (card.state !== "open" && !card.localReview?.runState) return null;
-  const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" : card.localReview?.runState ? "View review result" : "Run review";
+  const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
+    card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
+    card.localReview?.runState ? "View review result" : "Run review";
   return <button type="button" className="btn btn-sm review-row-action" aria-label={`${label} for #${card.number}`}
     onClick={() => onReview(card)}>{label}</button>;
 }

@@ -152,11 +152,11 @@ async fn invoke_review_at(
     root: impl FnOnce() -> Result<PathBuf, String> + Send + 'static,
 ) -> Result<Value, String> {
     invoke_review_at_with(app, read_only, root, move |mut cmd| {
-        let desktop_decision = args.first().map(String::as_str) == Some("review")
+        let desktop_action = args.first().map(String::as_str) == Some("review")
             && args.get(1).map(String::as_str) == Some("desk-run")
-            && args.get(2).map(String::as_str) == Some("decide");
+            && matches!(args.get(2).map(String::as_str), Some("start" | "decide"));
         cmd.args(args);
-        if desktop_decision {
+        if desktop_action {
             cmd.env("KERYX_DESKTOP_REVIEW_ACTION", "1");
         }
         run_reader(cmd)
@@ -451,7 +451,7 @@ pub async fn review_publish(
 ) -> Result<Value, String> {
     let (read_only, submit) = match request["kind"].as_str() {
         Some("preview") => (true, false),
-        Some("save") => (false, false),
+        Some("save" | "skip") => (false, false),
         Some("submit") => (false, true),
         _ => return Err("configuration: Unknown Review publication operation.".into()),
     };

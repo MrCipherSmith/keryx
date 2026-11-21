@@ -80,15 +80,20 @@ records its result locally.
 
 ### Publish a review to GitHub
 
-Open a finished Keryx review with a recorded pull request revision and choose
-**Publish to GitHub**. The dialog shows the project GitHub account and a
+A finished review awaiting a publication decision has an orange **Action required**
+tag. Open **Review publication** to preview and publish the review or choose
+**Skip publication** to keep it local. The dialog shows the project GitHub account and a
 formatted preview of the general comment and a separate preview of each inline
 comment with its file and line. Choose whether to include inline
-comments and findings in the general comment. Desktop formats both the local
-report and the publication using the Keryx review template and applies the project overlay automatically
-when available. To define a project overlay, add
-`.metaproject/review-publish-template.md` with one `{{review}}` placeholder
-where the generated comment should appear.
+comments and findings in the general comment. GitHub reviews are written in
+English using the Keryx template and the applicable project overlay. Desktop
+supports an imported orchestration skill with a `templates/report-overlay.md`
+file, such as Vantage Review. It also supports a project wrapper in
+`.metaproject/review-publish-template.md` with one `{{review}}` placeholder.
+
+Enable **Publish to GitHub automatically** in **Run review** to post one
+review comment after full coverage. If the project overlay requires approval,
+the review waits for you to confirm its final draft.
 
 The review suggests a verdict based on its findings and coverage. You can
 change it or choose **Use recommendation** to keep updating the verdict as the

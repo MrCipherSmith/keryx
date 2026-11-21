@@ -58,17 +58,19 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
     } finally { inFlight.current = false; }
   }, [cwd, link]);
   const pending = !run || runActive(run);
+  const automaticPublication = run?.options?.autoPublish && run.publication === "pending" ? run.finishedAt : null;
   useEffect(() => {
     if (!visible) return;
-    if (!pending) return;
-    void refresh();
+    if (pending) void refresh();
     const poll = () => {
       if (document.visibilityState !== "hidden") void refresh(true);
     };
-    const timer = window.setInterval(poll, 6000);
+    const timer = pending || automaticPublication ? window.setInterval(() => {
+      if (pending || (automaticPublication && Date.now() - Date.parse(automaticPublication) < 120_000)) poll();
+    }, 6000) : undefined;
     window.addEventListener("focus", poll);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", poll); };
-  }, [visible, pending, refresh]);
+  }, [visible, pending, automaticPublication, refresh]);
 
   async function mutate(action: Extract<ReviewRunAction, { kind: "cancel" | "answer" }>) {
     if (writing.current) return;
@@ -111,13 +113,15 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
   const status = run ? runStatusLabel(run) : "Checking review status…";
   const awaitAnswer = run && pendingManualQuestions(run).length > 0;
   const terminal = !!run && !runActive(run);
-  const sessionLabel = awaitAnswer ? "Answer review question" : terminal ? "View review result" : "Open review session";
+  const needsPublication = run?.publication === "pending";
+  const sessionLabel = awaitAnswer ? "Answer review question" : needsPublication ? "Review publication" : terminal ? "View review result" : "Open review session";
   const latest = run?.coordinatorActivity?.filter(item => item.kind === "status" || item.kind === "message" || item.kind === "error").at(-1);
   return <>
   {typeof link.prompt === "string" && link.prompt && <p className="session-review-prompt" aria-label="Your review request">{link.prompt}</p>}
   <article className="session-review-item">
     <header>
       <strong role="status">{prefix} {status}</strong>
+      {needsPublication && <span className="badge review-publication-pending">Action required</span>}
       {run && <div className="review-action-row">
         <button className="btn review-icon-action" type="button" aria-label={sessionLabel} title={sessionLabel}
           aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name={terminal ? "file" : "chat"} /></button>
@@ -127,6 +131,7 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
     {run && <>
       {run.options?.orchestrator !== false && <ReviewProgress state={run.state} progress={run.reviewerProgress} />}
       {terminal && <ReviewOutcome run={run} />}
+      {needsPublication && <p className="session-review-message">Choose whether to publish on GitHub.</p>}
       {latest && run.state !== "completed" && <p className="session-review-message">{prefix} {latest.text}</p>}
       {!terminal && !latest && (run.reason || run.phase) && <p className="session-review-message">{prefix} {run.reason || run.phase}</p>}
       {!!run.coordinatorActivity?.length && <details>
@@ -136,6 +141,7 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
       </details>}
     </>}
     {visible && open && run && <ReviewRunDialog run={run} card={{ number: link.key.number, ...link.revision }}
+      publication={{ cwd, target: link.key, url: `https://github.com/${link.key.repo}/pull/${link.key.number}` }}
       working={working} activity={{ follow: PASSIVE_FOLLOW, loaded: run.id, error }}
       error={error} onClose={() => setOpen(false)} onRefresh={() => void refresh()}
       loadAttempt={async id => {

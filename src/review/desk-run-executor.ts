@@ -21,12 +21,12 @@ import type { ManagedReviewManifest } from "./types";
 import { DESK_OPTIONS_ENV, deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
-import { DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
+import { DESK_REPORT_OVERLAY_FILE, DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
 import { DESK_RELATED_PRS, linkedReviewPulls, relatedPullGitDir, type RelatedReviewPull } from "./desk-related-prs";
 import { finishAutoDesktopReview } from "./desk-auto-finalize";
-import { applyReviewOverlay, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReviewOverlay,
-  renderDeskReviewReport, reportFindingMetadata, reviewReportDisclosure, scopedFile } from "./desk-review-report";
+import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay,
+  renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, reviewReportDisclosure, scopedFile } from "./desk-review-report";
 import { readRoundNumber } from "./round-record";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
 
@@ -313,9 +313,12 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
             problem: typeof premise?.question === "string" && premise.question.trim() ? premise.question : finding.problem };
         });
         const reported = evaluated.reportedReviewers.length ? ` Reviewers: ${evaluated.reportedReviewers.join(", ")}.` : "";
+        const round = readRoundNumber(dir) ?? 1;
+        const recommendation = deskReportRecommendation(complete, findings);
         formatted = applyReviewOverlay(renderDeskReviewReport({
-          repo: options.repo, base: options.baseSha, head: options.headSha, round: readRoundNumber(dir) ?? 1,
-          verdict: deskReportRecommendation(complete, findings), findings, evidenceLevel: deskReportEvidence(report),
+          repo: options.repo, base: options.baseSha, head: options.headSha, round,
+          verdict: recommendation, findings, evidenceLevel: deskReportEvidence(report),
+          slots: projectReportSlots(overlay, report, round, recommendation, !solo),
           coverageNote: complete ? "" : solo ? "**Single-reviewer coverage.**" : "**Partial review.**",
           howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${options.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
         }), overlay);
@@ -382,6 +385,13 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       result = { ...EMPTY, outcome: "blocked", reason: "The PR closed or its base/head changed. Refresh the card before starting another review." };
     } else {
       if (options.context) writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(options.context), { flag: "wx", mode: 0o600 });
+      const { overlay, overlayWarning } = await projectReviewOverlay(options.cwd);
+      if (options.options?.autoPublish && !overlayWarning) {
+        await writeFileAtomic(path.join(runDir, DESK_TEMPLATE_SELECTION), JSON.stringify(reportTemplateFingerprint(overlay)), { mode: 0o600 });
+      }
+      if (overlay?.kind === "slots") {
+        writeFileSync(path.join(checkout, DESK_REPORT_OVERLAY_FILE), overlay.source, { flag: "wx", mode: 0o600 });
+      }
       const related = options.options?.mode === "auto" && typeof prepared.body === "string"
         ? await prepareRelatedPulls(options, checkout, prepared.body, auth) : [];
       if (related.length) {

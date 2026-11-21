@@ -19,6 +19,7 @@ type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
   reviewerProgress?: LocalBadge["progress"];
   pendingQuestion?: DeskRun["pendingQuestion"];
   pendingQuestions?: DeskRun["pendingQuestions"];
+  publication?: DeskRun["publication"];
   awaitingAnswer?: boolean;
   lastActivityAt?: string | undefined;
 };
@@ -40,6 +41,7 @@ export function localBadge(runs: readonly BadgeRun[], revision: DeskRevision): L
       && !!run.result && sameRange(run.result.reviewed, revision)),
     ...(latest ? { runState: same ? latest.state : "other-revision" } : {}),
     ...(same && latest.state === "running" && latest.source === "manual" && awaiting && { awaitingAnswer: true }),
+    ...(same && latest.publication === "pending" && sameRange(latest.result?.reviewed ?? null, revision) && { publicationPending: true }),
     ...(same && latest.state === "running" && latest.lastActivityAt && { lastActivityAt: latest.lastActivityAt }),
     ...(roster ? { progress: { planned: roster.planned, finished: roster.finished, wave: roster.wave,
       ...(roster.completed !== undefined && { completed: roster.completed }),

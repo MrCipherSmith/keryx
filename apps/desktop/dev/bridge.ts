@@ -603,9 +603,9 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
   if (readOnly) reviewReaders++;
   let stdout: string;
   try {
-    const desktopDecision = argv[0] === "review" && argv[1] === "desk-run" && argv[2] === "decide";
+    const desktopAction = argv[0] === "review" && argv[1] === "desk-run" && (argv[2] === "start" || argv[2] === "decide");
     ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024,
-      ...(desktopDecision && { env: { ...process.env, KERYX_DESKTOP_REVIEW_ACTION: "1" } }) }));
+      ...(desktopAction && { env: { ...process.env, KERYX_DESKTOP_REVIEW_ACTION: "1" } }) }));
   } catch (error) {
     const reason = (error as { stderr?: string }).stderr?.trim();
     throw new Error(reason || "unavailable: Could not run the Review reader");

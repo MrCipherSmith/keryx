@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import { PUBLICATION_REQUEST_LIMIT, type PublicationOptionId, type PublicationRequest, type PublicationState } from "../review/desk-publication-types";
 import type { DeskRunKey } from "../review/desk-run-types";
+import { isAutonomousEnv } from "../review/run-profile";
 
 export const DESK_PUBLISH_USAGE =
   "keryx review desk-publish --json --repo owner/name --repository-id ID --viewer LOGIN --number N (--request <JSON> | --request-file <path>)";
@@ -25,6 +26,7 @@ const settings = z.strictObject({
   answers: z.record(answerKey, z.union([z.enum(["uphold", "dismiss"]), optionId])),
 });
 const request = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("skip"), id: attemptId }),
   z.strictObject({ kind: z.literal("preview"), id: attemptId, settings: settings.optional(), refresh: z.boolean().optional() }),
   z.strictObject({ kind: z.literal("save"), id: attemptId, settings }),
   z.strictObject({ kind: z.literal("submit"), id: attemptId, settings, digest: z.string().regex(/^[0-9a-f]{64}$/) }),
@@ -53,6 +55,7 @@ export function parsePublicationRequest(raw: string): PublicationRequest {
   const parsed = request.safeParse(data);
   if (!parsed.success) throw new Error("configuration: Invalid Review publication request.");
   const operation = parsed.data;
+  if (operation.kind === "skip") return operation;
   const cleanSettings = ({ verdictOverride, ...rest }: z.infer<typeof settings>) =>
     ({ ...rest, ...(verdictOverride === undefined ? {} : { verdictOverride }) });
   if (operation.kind === "preview") {
@@ -144,6 +147,9 @@ export async function runReviewDeskPublish(args: string[]): Promise<void> {
     repo: values.repo, repositoryId: values["repository-id"], viewer: values.viewer, number: Number(values.number),
   });
   const input = parsePublicationRequest(hasFile ? await readPublicationRequest(requestFile) : values.request ?? "");
+  if (input.kind === "skip" && (process.env.KERYX_TOOL_CALL === "1" || process.env.KERYX_UNATTENDED === "1" || isAutonomousEnv(process.env))) {
+    throw new Error("permission: Skipping publication requires the operator.");
+  }
   if (input.kind === "submit" && process.stdin.isTTY !== true) throw new Error(TERMINAL_REQUIRED);
   const { requestDeskPublication } = await import("../review/desk-publication");
   const result = await requestDeskPublication(process.cwd(), targetKey, input, state => confirmSubmit(targetKey, state));

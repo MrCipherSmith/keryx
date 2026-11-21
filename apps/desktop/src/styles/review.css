@@ -15,6 +15,7 @@
 .review-tags .pr-open, .review-tags .pr-approved { color: var(--ok); background: var(--ok-soft); }
 .review-tags .pr-merged, .review-tags .pr-review_requested { color: var(--info); background: var(--info-soft); }
 .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
+.badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
 .review-row-action { justify-self: start; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
 .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }

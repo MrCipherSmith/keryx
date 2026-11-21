@@ -8,7 +8,7 @@ import { splitUsage } from "./dispatch-usage";
 import { computeVerdict } from "./verdict";
 import { hasDesktopReviewerEvidence } from "./desk-run-executor-recovery";
 import { createManagedReviewPackage } from "./managed";
-import { renderDeskReviewReport, STATIC_DESKTOP_REVIEW_EVIDENCE, type DeskReportFinding } from "./desk-review-report";
+import { embeddedReportSlots, renderDeskReviewReport, scopedFile, STATIC_DESKTOP_REVIEW_EVIDENCE, type DeskReportFinding } from "./desk-review-report";
 import { readRoundNumber } from "./round-record";
 import type { AutonomousSummary } from "./autonomous-summary";
 import type { ManagedReviewManifest } from "./types";
@@ -93,11 +93,12 @@ export async function finishAutoDesktopReview(input: {
         ...(typeof suggested_fix === "string" ? { suggested_fix } : {}),
       }];
     });
+    const reportSlots = embeddedReportSlots(await scopedFile(dir, "report.md", 2 * 1024 * 1024));
     const reportText = renderDeskReviewReport({
       repo: new URL(ref).pathname.split("/").slice(1, 3).join("/"), base, head, round: readRoundNumber(dir) ?? 1,
       verdict: "comment", findings: reportFindings, evidenceLevel: STATIC_DESKTOP_REVIEW_EVIDENCE,
       howRun: "Review orchestrator · Auto. The coordinator's recorded dispositions were preserved. Additional reviewer observations were retained without independent verification.",
-    });
+    }) + (reportSlots ? "\n\n```json keryx:report-slots\n" + reportSlots + "\n```\n" : "");
     signal.throwIfAborted();
     await createManagedReviewPackage({ cwd: checkout, mode: "ingest", target: { kind: "pr", ref, base, head },
       reviewId: manifest.reviewId, reportText, findings, research: await json(ledgerFile) });

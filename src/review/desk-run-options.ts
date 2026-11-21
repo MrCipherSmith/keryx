@@ -7,6 +7,7 @@ export type DeskReviewPool = "strong" | "middle" | "light";
 export interface DeskReviewOptions {
   mode: "auto" | "manual";
   orchestrator?: boolean;
+  autoPublish?: true;
   adaptive: boolean;
   maxWaves?: number;
   maxParallel?: number;
@@ -30,12 +31,14 @@ function modelName(value: unknown, label: string): string {
   return value;
 }
 export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {
-  const input = object(value, ["mode", "orchestrator", "adaptive", "maxWaves", "maxParallel", "maxTokens", "flowId", "modelPools"], "launch settings");
+  const input = object(value, ["mode", "orchestrator", "autoPublish", "adaptive", "maxWaves", "maxParallel", "maxTokens", "flowId", "modelPools"], "launch settings");
   if (input.mode !== "auto" && input.mode !== "manual") invalid("mode");
   if (typeof input.adaptive !== "boolean") invalid("adaptive");
   if (input.orchestrator !== undefined && typeof input.orchestrator !== "boolean") invalid("orchestrator");
   const pools = object(input.modelPools, DESK_REVIEW_POOLS, "modelPools");
   const out: DeskReviewOptions = { mode: input.mode, adaptive: input.adaptive, modelPools: { strong: [], middle: [], light: [] } };
+  if (input.autoPublish !== undefined && typeof input.autoPublish !== "boolean") invalid("autoPublish");
+  if (input.autoPublish === true) out.autoPublish = true;
   if (input.orchestrator === false) {
     out.orchestrator = false;
     out.adaptive = false;

@@ -181,6 +181,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
   const [mode, setMode] = useState<DeskReviewOptions["mode"]>("auto");
   const [orchestrator, setOrchestrator] = useState(true);
   const [adaptive, setAdaptive] = useState(true);
+  const [autoPublish, setAutoPublish] = useState(false);
   const [draftLimits, setDraftLimits] = useState({ maxWaves: "0", maxParallel: String(DEFAULT_REVIEW_PARALLEL), maxTokens: "0" });
   const [chosenFlow, setChosenFlow] = useState<string>();
   const [pools, setPools] = useState<DeskReviewOptions["modelPools"]>({ strong: [], middle: [], light: [] });
@@ -229,7 +230,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
         { baseSha: card.baseSha, headSha: card.headSha }, {
           mode, ...(orchestrator ? { adaptive, modelPools: pools } : {
             orchestrator: false, adaptive: false, modelPools: { strong: [], middle: [], light: [] },
-          }), ...(flow && { flowId: flow }),
+          }), ...(flow && { flowId: flow }), ...(orchestrator && autoPublish && { autoPublish: true }),
           ...Object.fromEntries(limitFields.filter(field => field.number > 0).map(field => [field.key, field.number])),
         });
       if (live.current) onClose();
@@ -305,6 +306,14 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
           </label>)}</div>
       </section>
       {orchestrator && <ModelPools models={models} pools={pools} onChange={setPools} />}
+      <section className="review-launch-section">
+        <label className="review-launch-adaptive"><input type="checkbox" checked={orchestrator && autoPublish} disabled={!orchestrator}
+          aria-describedby={id + "-publication"} onChange={e => setAutoPublish(e.currentTarget.checked)} /> Publish to GitHub automatically</label>
+        <small className="field-hint" id={id + "-publication"}>
+          {orchestrator ? "Posts an English review comment after full coverage, using the Keryx template plus any project overlay. If the overlay requires approval, you’ll be asked to confirm the finished draft."
+            : "Automatic posting requires full coverage from the review orchestrator."}
+        </small>
+      </section>
       {!modelsValid && <p role="alert" className="inline-banner tone-warn">A selected model is no longer available. Remove it to continue.</p>}
       {card && (!card.baseSha || !card.headSha) && <p role="alert" className="inline-banner tone-warn">The PR revision is unavailable. Find the pull request again.</p>}
       {applyError && <p className="inline-banner tone-warn" role="alert">{applyError}</p>}

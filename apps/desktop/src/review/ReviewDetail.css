@@ -104,7 +104,7 @@
 .review-session-heading small { flex-basis: 100%; color: var(--fg-muted); font-size: var(--fs-sm); font-weight: 400; }
 .review-session-footer { flex: 1; }
 
-.review-publish-actions { display: flex; margin-top: var(--sp-3); }
+.review-publish-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .review-publish { display: grid; gap: var(--sp-3); }
 .review-publish > p { margin: 0; }
 .review-publish-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: var(--sp-3); }
