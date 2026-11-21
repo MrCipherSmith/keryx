@@ -123,6 +123,14 @@ test("Discussion formats Markdown and groups inline replies without exposing ses
   expect(document.querySelectorAll(".review-detail-thread .review-detail-message")).toHaveLength(2);
 });
 
+test("Discussion shows the PR description even when the conversation is empty", async () => {
+  await show(8, async () => ({
+    ...detail(8), description: "**Change overview**", comments: [], reviews: [], threads: [],
+  }));
+  expect(document.querySelector(".discussion-description strong")?.textContent).toBe("Change overview");
+  expect(document.querySelector(".pr-discussion")?.textContent).toContain("No discussion yet.");
+});
+
 test("PR, discussion and check links open externally and keep details visible", async () => {
   const urls: string[] = [];
   let closed = 0;

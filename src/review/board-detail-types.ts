@@ -44,6 +44,7 @@ export interface ReviewDetailSnapshot {
   number: number;
   fetchedAt: string;
   headSha: string;
+  description?: string;
   comments: ReviewMessage[];
   reviews: SubmittedReview[];
   threads: ReviewThread[];

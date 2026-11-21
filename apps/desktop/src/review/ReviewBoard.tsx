@@ -361,12 +361,14 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); };
 
   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+  const [detailWidth, setDetailWidth] = useState(560);
   const openReview = useCallback((card: ReviewCard) => {
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
 
-  return <section className="flows review-board" hidden={!tabActive} aria-label="Pull requests">
+  return <div className="review-workspace" hidden={!tabActive}>
+    <section className="flows review-board" aria-label="Pull requests">
     <div className="flows-toolbar">
       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
         {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
@@ -435,6 +437,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
         {q || active.length ? "Try another title, number, or filter." : undefined}
       </EmptyState>)}
+    </section>
     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
       owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
@@ -446,8 +449,9 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
+      width={detailWidth} onResize={setDetailWidth}
       reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={onOpenSession && (() => onOpenSession(card))}
       projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
-  </section>;
+  </div>;
 }
