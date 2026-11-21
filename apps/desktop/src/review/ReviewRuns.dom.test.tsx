@@ -647,7 +647,7 @@ test("history opens a specific earlier attempt in a dialog and keeps it selected
   expect(dialog.textContent).not.toContain("another-run");
   await click("Close");
   expect(document.activeElement).toBe(trigger);
-  expect(document.querySelector(".sheet")).not.toBeNull();
+  expect(document.querySelector(".review-detail-panel")).not.toBeNull();
 });
 
 test("review session renders public activity and sends the selected answer for the waiting manual attempt", async () => {
