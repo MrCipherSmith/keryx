@@ -2,7 +2,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createOwnerOnlyFileExclusive, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { ASK_USER_CANCEL, type AskUserAnswer, type AskUserRequest } from "../lib/ask-user-contract";
-import { issueDigest } from "./issue-checkouts";
+import { issueDigest } from "./issue-key";
 import { privateJson, type BoundIssue } from "./issue-session";
 import type { IssueLaunch } from "./issues-contract";
 

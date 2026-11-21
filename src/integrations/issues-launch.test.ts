@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService, flowsRoot, githubAdapter, readFlow } from "../flow/service";
+import { shellHarness, textRound } from "../acp/shell-profile.test-helpers";
 import { listSessions, openSession, persistHistory, sessionDir } from "../session";
 import { readSessionFlags } from "../session/organize";
 import { issueWorkspace, type IssueWorkAction, type IssueWorkPorts, type IssueWorkRequest } from "./issues-launch";
@@ -130,6 +131,27 @@ test("AC11 concurrent callers and lost package/turn replies recover the same rea
   expect((await run("workspace")).problem?.code).toBe("resume_required");
   await writeFile(path.join(dir,"issue-preparation-turn.json"),"{");
   expect((await run("workspace")).problem?.code).toBe("launch_outcome_unknown");
+});
+
+test("AC11 shell-profile ACP accepts exactly one keyed preparation turn and replays its real session", async () => {
+  const workspace = await run("prepare-flow");
+  const first = workspace.initialTurn!;
+  const sessionId = workspace.session!.sessionId;
+  const h = shellHarness({ rounds: [textRound("Preparing the project.")],
+    clientCapabilities: { _meta: { keryx: { askUser: true } } }, serverOptions: { dataDir } });
+  try {
+    await h.initialize();
+    const load = h.request("session/load", { cwd:project.cwd, sessionId, mcpServers:[] });
+    expect((await h.waitFor(frame => frame.id === load)).error).toBeUndefined();
+    const params = { sessionId, prompt:[{type:"text",text:first.text}], _meta:{keryx:{issueLaunchId:first.launchId}} };
+    for (let i = 0; i < 2; i++) {
+      const id = h.request("session/prompt",params);
+      expect((await h.waitFor(frame => frame.id === id)).result?.["stopReason"]).toBe("end_turn");
+    }
+    const reopened = openSession({cwd:project.cwd, dataDir, resumeId:sessionId});
+    expect(reopened.history.filter(row => row.role === "user" && row.content.includes(first.text))).toHaveLength(1);
+    expect(reopened.history.some(row => row.content.includes("external content") && row.content.includes(issue.body))).toBe(true);
+  } finally { await h.end(); }
 });
 
 test("AC12 discover legacy CLI packages, require a choice for ambiguous packages, and diagnose missing capabilities", async () => {

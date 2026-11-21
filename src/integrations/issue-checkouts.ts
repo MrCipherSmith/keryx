@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { issueDigest } from "./issue-key";
+import { mapBounded } from "../lib/map-bounded";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { canonicalPath } from "../lib/clone-scope";
@@ -7,7 +8,7 @@ import { reviewGitCommonDir, reviewGitEnvironment, reviewRepositories } from "..
 import type { IssueProjectRef, IssueRef } from "./issues-contract";
 
 const exec = promisify(execFile);
-export const issueDigest = (key: string): string => createHash("sha256").update(key).digest("hex");
+
 
 async function branch(cwd: string, ref: string): Promise<string | undefined> {
   try {
@@ -18,25 +19,37 @@ async function branch(cwd: string, ref: string): Promise<string | undefined> {
 }
 
 /** Registered projects plus the directory the operator explicitly opened in Desktop or Shell. */
-export async function issueCheckouts(cwd: string, issue: IssueRef): Promise<IssueProjectRef[]> {
-  if (issue.host.toLowerCase() !== "github.com") return [];
+export async function issueCheckoutCatalog(cwd: string, issues: IssueRef[]): Promise<Map<string, IssueProjectRef[]>> {
+  const catalog = new Map<string, IssueProjectRef[]>();
+  const repoNames = new Map(issues.filter(i => i.host.toLowerCase() === "github.com")
+    .map(i => [`${i.owner}/${i.repo}`.toLowerCase(), i.repositoryId]));
+  if (!repoNames.size) return catalog;
   const paths = new Map<string,string>();
   for (const entry of listProjects().filter(entry => entry.state === "active")) {
     paths.set(await canonicalPath(entry.path), entry.projectId);
   }
   const current = await canonicalPath(cwd);
   if (!paths.has(current)) paths.set(current, issueDigest(current));
-  const matches: IssueProjectRef[] = [];
-  await Promise.all(Array.from(paths, async ([root, projectId]) => {
+  await mapBounded(Array.from(paths), 4, async ([root, projectId]) => {
     const names = await reviewRepositories(root).catch(() => []);
-    if (!names.some(name => name.toLowerCase() === `${issue.owner}/${issue.repo}`.toLowerCase())) return;
+    const ids = names.flatMap(name => repoNames.get(name.toLowerCase()) ?? []);
+    if (!ids.length) return;
     const common = await reviewGitCommonDir(root);
     if (!common) return;
     const base = (await branch(root, "refs/remotes/origin/HEAD"))?.replace(/^origin\//, "")
       ?? await branch(root, "HEAD") ?? "";
-    matches.push({ projectId, cwd: root, cloneId: issueDigest(await canonicalPath(common)), baseBranch: base });
-  }));
-  return matches.sort((a, b) => a.cwd.localeCompare(b.cwd));
+    const project = { projectId, cwd: root, cloneId: issueDigest(await canonicalPath(common)), baseBranch: base };
+    for (const id of new Set(ids)) {
+      const candidates = catalog.get(id);
+      if (candidates) candidates.push(project); else catalog.set(id, [project]);
+    }
+  });
+  for (const projects of catalog.values()) projects.sort((a, b) => a.cwd.localeCompare(b.cwd));
+  return catalog;
+}
+
+export async function issueCheckouts(cwd: string, issue: IssueRef): Promise<IssueProjectRef[]> {
+  return (await issueCheckoutCatalog(cwd, [issue])).get(issue.repositoryId) ?? [];
 }
 
 export function selectIssueCheckout(candidates: IssueProjectRef[], explicit?: string): IssueProjectRef | undefined {

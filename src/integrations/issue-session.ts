@@ -5,7 +5,7 @@ import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, wri
 import { withFileLock } from "../lib/fs";
 import { createSession, findSession, sessionDir } from "../session";
 import { readSessionFlags } from "../session/organize";
-import { issueDigest } from "./issue-checkouts";
+import { issueDigest } from "./issue-key";
 import { issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "./issues-contract";
 
 export interface BoundIssue {

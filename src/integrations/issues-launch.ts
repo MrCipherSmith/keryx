@@ -7,7 +7,7 @@ import { projectGithubBinding } from "../review/github-account-store";
 import { sessionDir } from "../session";
 import { sessionLeaseState } from "../session/lease";
 import { setSessionFlags } from "../session/organize";
-import { issueCheckouts, selectIssueCheckout } from "./issue-checkouts";
+import { issueCheckoutCatalog, issueCheckouts, selectIssueCheckout } from "./issue-checkouts";
 import { issueBindingFile, privateJson, saveBinding, withIssueBinding, type BoundIssue } from "./issue-session";
 import { issuePreparationPrompt, issueQuestion, issueTurnReceipt } from "./issue-turn";
 import { issueKey, type IssueWorkspace, type IssueRef, type IssueViewer, type IssueDetail, type IssueFlowRef,
@@ -103,7 +103,7 @@ export async function issueWorkspace(action: IssueWorkAction, cwd: string, login
       if (bound.launch.project.cwd !== root)
         return { ...await hydrate(result, bound, ports.dataDir), problem: { code: "project_required", message: "Open the checkout containing the linked discussion." } };
       const baseBranch = assertGitRevision(request.baseBranch ?? project.baseBranch);
-      if (!baseBranch.trim() || /[\s\x00-\x1f]/.test(baseBranch)) throw new Error("Select a valid base branch before preparing the Flow.");
+      if (!baseBranch.trim() || Array.from(baseBranch).some(char => char.charCodeAt(0) <= 32)) throw new Error("Select a valid base branch before preparing the Flow.");
       if (request.flowDir && bound.launch.flow && bound.launch.flow.flowDir !== request.flowDir)
         return { ...result, problem: { code: "flow_choice_required", message: "This discussion already belongs to a different Flow." } };
       const ref = linked ?? bound.launch.flow ?? result.flows[0] ?? await ports.init({ ...project, baseBranch }, issue);
@@ -121,10 +121,11 @@ export async function issueWorkspaceStages(cwd: string, viewer: IssueViewer, ref
   const stages: Record<string, IssueLocalStage> = {};
   const groups = new Map<string, IssueRef[]>();
   for (const ref of refs) { const group = groups.get(ref.repositoryId); if (group) group.push(ref); else groups.set(ref.repositoryId, [ref]); }
+  const catalog = await issueCheckoutCatalog(cwd, refs);
   await Promise.all(Array.from(groups.values(), async issues => {
     const first = issues[0]!;
     const urls = new Set(issues.map(ref => issueSourceUrl(ref.url)!));
-    for (const project of await issueCheckouts(cwd, first)) {
+    for (const project of catalog.get(first.repositoryId) ?? []) {
       if (!await projectIsAuthorized(project, viewer)) continue;
       const flows = await findIssueFlows(project.cwd, urls);
       for (const ref of issues) {
