@@ -810,9 +810,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (await pathExists(absolute)) {
           throw new Error(`Flow directory already exists: ${dir}`);
         }
+        const createdAt = now();
+        const allocation = { id, dir, at: createdAt, project: scope.project,
+          ...(source ? { issue: source, cwd: path.resolve(input.cwd) } : {}) };
+        // Reserve before materialization: sibling worktrees can recover a committed package even if init exits before replying.
+        if (source) await recordAllocation(scope, allocation);
         await mkdir(absolute, { recursive: true });
 
-        const createdAt = now();
         const flow: FlowState = {
           schemaVersion: 1,
           // Opt in this package to the task/review/owner gates. Written at
@@ -882,8 +886,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         await writeFileAtomic(path.join(absolute, "acceptance-criteria.md"), renderAcceptanceCriteria());
         await writeFileAtomic(path.join(absolute, "journal.md"), renderJournal(createdAt));
         await writeFlow(input.cwd, dir, flow);
-        await recordAllocation(scope, { id, dir, at: createdAt, project: scope.project,
-          ...(source ? { issue: source, cwd: path.resolve(input.cwd) } : {}) });
+        if (!source) await recordAllocation(scope, allocation);
 
         return {
           flow,

@@ -5,7 +5,5 @@ export { issueKey, type IssueRef, type IssueSummary, type IssueViewer } from "..
 export { issueWorkspaceStages, issueWorkspace, type IssueWorkAction, type IssueWorkRequest } from "../issues-launch";
 export { isIssueRef } from "../issues-contract";
 export { readGithubIssue } from "../issues-board";
-export { acceptIssueTurn, issueQuestion, rememberIssueQuestion, answerIssueQuestion, settleIssueTurn } from "../issue-turn";
-export { acceptShellIssuePreparation, issueShellAsk, issueShellSource } from "../issue-shell";
-export { issueContextForSession } from "../issue-session";
 export { readIssueProject, moveIssueProjectItem, type ProjectRequest, type MoveRequest } from "../issues-projects";
+export { readIssueOrigin } from "../issue-origin";

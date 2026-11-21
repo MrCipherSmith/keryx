@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import {
   connectIssueAccount,
+  readIssueOrigin,
   issueComments,
   issueDetail,
   issueKey,
@@ -16,7 +17,7 @@ import {
 } from "../integrations/issues/service";
 
 const usage =
-  "keryx issues <viewer|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json";
+  "keryx issues <viewer|origin|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json";
 
 export async function issuesCommand(args: string[], cwd = process.cwd()): Promise<void> {
   const [action, ...flags] = args;
@@ -45,6 +46,9 @@ export async function issuesCommand(args: string[], cwd = process.cwd()): Promis
   switch (action) {
     case "viewer":
       result = { viewer: account.viewer };
+      break;
+    case "origin":
+      result = await readIssueOrigin(cwd, account, request);
       break;
     case "list": {
       const page = await listIssuePage(account, request as unknown as ListIssueRequest);

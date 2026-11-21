@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { withFileLock } from "../lib/fs";
 import { createSession, findSession, sessionDir } from "../session";
 import { readSessionFlags } from "../session/organize";
@@ -28,7 +28,6 @@ export function privateJson<T>(file: string): T | undefined {
 }
 
 export function saveBinding(file: string, record: BoundIssue): void {
-  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   writeOwnerOnlyFileAtomic(file, JSON.stringify(record));
 }
 
@@ -45,6 +44,7 @@ export async function withIssueBinding<T>(
   apply: (record: BoundIssue, file: string) => Promise<T>,
 ): Promise<T> {
   const file = issueBindingFile(viewer, project, issue.ref, dataDir);
+  ensureKeryxSubdir(["issue-sessions"], keryxDataDir(dataDir));
   return withFileLock(file + ".lock", async () => {
     let record = privateJson<BoundIssue>(file);
     if (!record) {
