@@ -79,6 +79,7 @@ export async function withIssueBinding<T>(
       launch.stage = "session_bound";
     }
     if (!existsSync(dir)) throw new Error("The linked session is missing. Restore it in Sessions and retry.");
+    if (launch.flow) record.flowSourceUrl ??= launch.issue.url;
     launch.issue = issue.ref;
     record.body = issue.body;
     record.updatedAt = issue.updatedAt;

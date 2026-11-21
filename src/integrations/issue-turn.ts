@@ -23,8 +23,13 @@ export function issuePreparationPrompt(bound: BoundIssue): string {
 }
 
 export function issueTurnReceipt(dir: string): Receipt | undefined {
-  try { return privateJson<Receipt>(path.join(dir, "issue-preparation-turn.json")); }
-  catch { return { launchId: "", turnId: "", prompt: "" }; } // A torn exclusive write leaves an unknown outcome.
+  try {
+    const receipt = privateJson<Receipt>(path.join(dir, "issue-preparation-turn.json"));
+    if (receipt === undefined || receipt?.launchId && receipt.turnId && typeof receipt.prompt === "string") return receipt;
+  } catch {
+    // A torn exclusive write or inaccessible receipt leaves an unknown outcome.
+  }
+  return { launchId: "", turnId: "", prompt: "" };
 }
 
 /** Called by the receiver after taking the session lease. An ambiguous prior write is never retried. */

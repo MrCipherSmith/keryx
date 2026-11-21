@@ -140,6 +140,19 @@ test("AC11 concurrent callers and lost package/turn replies recover the same rea
   await writeFile(path.join(dir,"issue-preparation-turn.json"),"{");
   expect((await run("workspace")).problem?.code).toBe("launch_outcome_unknown");
   expect((await stages())?.canResumePreparation).toBeUndefined();
+  await writeFile(path.join(dir,"issue-preparation-turn.json"),"null");
+  expect((await run("prepare-flow")).initialTurn).toBeUndefined();
+});
+
+test("AC11 Shell and Desktop race to initialize an issue in separate worktrees of one clone", async () => {
+  const git = (args: string[]) => execFileSync("git", args, { cwd:project.cwd, stdio:"pipe" });
+  git(["-c","user.name=fixture","-c","user.email=fixture@example.invalid","commit","-q","--allow-empty","-m","fixture"]);
+  const sibling = path.join(root, "sibling");
+  git(["worktree","add","--detach",sibling,"HEAD"]);
+  const both = await Promise.all([project.cwd, sibling].map(cwd =>
+    service().init({ cwd, issue:issue.ref.url, title:issue.title })));
+  expect(new Set(both.map(entry => entry.flow.id)).size).toBe(1);
+  expect(both.filter(entry => entry.existingCwd !== undefined)).toHaveLength(1);
 });
 
 test("AC11 shell-profile ACP accepts exactly one keyed preparation turn and replays its real session", async () => {

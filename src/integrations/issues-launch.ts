@@ -60,7 +60,7 @@ async function hydrate(result: IssueWorkspace, bound: BoundIssue, dataDir?: stri
   result.session.flow = launch.flow;
   const question = issueQuestion(dir);
   const receipt = issueTurnReceipt(dir);
-  if (receipt && receipt.launchId !== launch.launchId || !receipt && launch.initialTurn.state !== "unsent") {
+  if ((receipt && receipt.launchId !== launch.launchId) || (!receipt && launch.initialTurn.state !== "unsent")) {
     launch.stage = "launch_outcome_unknown";
     result.problem = { code: "launch_outcome_unknown", message: "Inspect the linked session before resuming preparation." };
   } else if (receipt) {
@@ -95,9 +95,12 @@ export async function issueWorkspace(action: IssueWorkAction, cwd: string, login
       message: projects.length ? "Open a matching checkout to work on this issue." : "Connect a checkout of this repository to work on this issue." } };
   if (!await (ports.authorized ?? projectIsAuthorized)(project, viewer))
     return { ...result, problem: { code: "account_mismatch", message: "Select the GitHub account connected to this checkout." } };
-  const source = issueSourceUrl(issue.ref.url)!;
-  result.flows = (await findIssueFlows(project.cwd, new Set([source]))).map(f => flowRef(project, f));
   const record = privateJson<BoundIssue>(issueBindingFile(viewer, project, issue.ref, ports.dataDir));
+  const source = issueSourceUrl(issue.ref.url)!;
+  const urls = new Set([source]);
+  const previous = record && issueSourceUrl(record.flowSourceUrl ?? record.launch.issue.url);
+  if (previous) urls.add(previous);
+  result.flows = (await findIssueFlows(project.cwd, urls)).map(f => flowRef(project, f));
   const linked = result.flows.find(f => f.flowDir === (request.flowDir ?? record?.launch.flow?.flowDir));
   if (action === "workspace") return record ? hydrate(result, record, ports.dataDir) : result;
   if (action === "prepare-flow") {
@@ -118,6 +121,9 @@ export async function issueWorkspace(action: IssueWorkAction, cwd: string, login
         return { ...result, problem: { code: "flow_choice_required", message: "This discussion already belongs to a different Flow." } };
       const ref = linked ?? bound.launch.flow ?? result.flows[0] ?? await ports.init({ ...project, baseBranch }, issue);
       if (!result.flows.some(flow => flow.flowDir === ref.flowDir)) result.flows.push(ref);
+      if (ref.cwd !== project.cwd) {
+        return { ...result, problem: { code: "project_required", message: "Open the checkout containing the existing Flow." } };
+      }
       bound.launch.flow = ref;
       bound.flowSourceUrl ??= issue.ref.url;
       bound.preparationPrompt ??= issuePreparationPrompt(bound);
@@ -154,7 +160,7 @@ export async function issueWorkspaceStages(cwd: string, viewer: IssueViewer, ref
         if (stage === "awaiting_answer" || stage === "resume_required" || stage === "launch_outcome_unknown" || matches.some(f => f.flow.status === "blocked"))
           stages[issueKey(ref)] = { stage: "needs_answer", reason: reason ?? (workspace?.question ? "Answer the coordinator in Sessions." : "Inspect the blocked Flow.") };
         else if (!existing || existing.stage === "none") {
-          const status = matches.find(f => f.flow.status !== "done")?.flow.status ?? matches[0]?.flow.status;
+          const status = workspace?.launch?.flow?.status ?? matches.find(f => f.flow.status !== "done")?.flow.status ?? matches[0]?.flow.status;
           stages[issueKey(ref)] = {
             stage: status === "done" ? "done" : status === "initializing" || stage === "preparing" ? "preparing" : status ? "active" : "none",
             ...(workspace?.initialTurn ? { canResumePreparation: true } : {}),
