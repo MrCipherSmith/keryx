@@ -520,7 +520,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} onOpenFlow={(dir) => {
             setLinkedFlow(dir);
             setView("flows");
           }} />

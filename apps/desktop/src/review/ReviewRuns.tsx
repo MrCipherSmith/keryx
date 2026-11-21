@@ -6,7 +6,7 @@ import { absoluteTime, errMessage } from "../lib/format";
 import { DECISION_LABEL } from "./model";
 import type { ReviewCard } from "./types";
 import { runActive, sameRange } from "./useReviewRuns";
-import { ReviewProgress, pendingManualQuestions, runStatusLabel, TranscriptUpdate } from "./ReviewProgress";
+import { ReviewProgress, pendingManualQuestions, runStatusLabel, singleReviewerFinished, TranscriptUpdate } from "./ReviewProgress";
 import { ReviewSessions, type LoadReviewAttempt, type ActivitySubscription } from "./ReviewSessions";
 import type { AnswerReviewQuestion } from "./ReviewQuestion";
 import { ReviewUsage } from "./ReviewUsage";
@@ -14,6 +14,7 @@ import { runLimits } from "./ReviewRuleInfo";
 import { ReviewPublishDialog, type reviewPublish } from "./ReviewPublishDialog";
 import { ReviewLifecycle, reviewIsArchived, type ReviewLifecycleCommand } from "./ReviewLifecycle";
 import { ReviewOutcome } from "./ReviewOutcome";
+import { ReviewReportMarkdown } from "./ReviewReportMarkdown";
 
 function Range({ value }: { value: DeskRevision }) {
   if (!value.baseSha && !value.headSha) return <>Unrecorded</>;
@@ -68,7 +69,7 @@ function ReviewReport({ run, loadAttempt, onAccessLost }: { run: DeskRun } & Rep
     <summary>Open review report</summary>
     {error && <div role="alert" className="inline-banner tone-warn">{error} <button className="btn btn-sm"
       onClick={() => setAttempt(n => n + 1)}>Retry report</button></div>}
-    {open && (inline || report) && <pre>{inline || report}</pre>}
+    {open && (inline || report) && <ReviewReportMarkdown text={inline || report || ""} label="Review report" />}
     {!inline && report === "" && <p>Report unavailable.</p>}
     {open && !error && !inline && report === null && <Spinner label="Loading report" />}
   </details>;
@@ -124,7 +125,8 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
     {onOpenSession && question && <p className="desk-run-reason">{questions.length > 1 ? questions.length + " questions need your answer" : (question.reviewerSessionId ? question.reviewer || "Reviewer" : "Coordinator") + " asks · " + question.question}</p>}
     {run.state === "running" && !question && <TranscriptUpdate at={run.lastActivityAt} />}
     {children}
-    {(!question || run.reviewerProgress) && <ReviewProgress progress={run.reviewerProgress} state={run.state} />}
+    {run.options?.orchestrator !== false && (!question || run.reviewerProgress) &&
+      <ReviewProgress progress={run.reviewerProgress} state={run.state} />}
     {!active && showOutcome && <ReviewOutcome run={run} />}
     <dl className="desk-run-facts">
       {run.source === "scheduled" && run.schedule && <>
@@ -132,7 +134,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         <dt>Run budget</dt><dd>{runLimits(run.schedule.budgetMinutes, run.schedule.budgetTokens)}</dd>
       </>}
       {run.options && <>
-        <dt>Review mode</dt><dd>{run.options.mode === "auto" ? "Auto" : "Manual"} · {run.options.adaptive ? "Adaptive" : "Fixed tiers"}</dd>
+        <dt>Review mode</dt><dd>{run.options.mode === "auto" ? "Auto" : "Manual"} · {run.options.orchestrator === false ? "Single reviewer" : run.options.adaptive ? "Adaptive" : "Fixed tiers"}</dd>
         {run.options.flowId && <><dt>Associated Flow</dt><dd>#{run.options.flowId}</dd></>}
         <dt>Limits</dt><dd>{[
           run.options.maxWaves && `Up to ${run.options.maxWaves} waves`,
@@ -141,7 +143,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         ].filter(Boolean).join(" · ")}</dd>
       </>}
       <dt>Requested range</dt><dd><Range value={run} /></dd>
-      <dt>Phase</dt><dd role={active ? "status" : undefined}>{run.phase}</dd>
+      <dt>Phase</dt><dd role={active ? "status" : undefined}>{singleReviewerFinished(run) ? "Single reviewer finished" : run.phase}</dd>
       {run.startedAt && <><dt>Started</dt><dd><time dateTime={run.startedAt}>{absoluteTime(run.startedAt)}</time></dd></>}
       {run.finishedAt && <><dt>Finished</dt><dd><time dateTime={run.finishedAt}>{absoluteTime(run.finishedAt)}</time></dd></>}
       {result && <>

@@ -426,7 +426,7 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   let saved: PublicationSettings | undefined;
   const firstOption = `option:${"a".repeat(64)}` as const;
   const secondOption = `option:${"b".repeat(64)}` as const;
-  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false, verdict: "changes", verdictOverride: null, answers: {} };
+  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: true, verdict: "changes", verdictOverride: null, answers: {} };
   const questions: PublicationState["questions"] = [
     { id: "first", text: "Keep the owner finding?", options: [
       { id: firstOption, label: "Include the ownership finding" },
@@ -487,7 +487,8 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   await act(async () => field("General comment").click());
   expect(field("General comment").checked).toBe(false);
   expect(restoredInline.textContent).toContain("src/owner.ts:73");
-  await act(async () => field("Project overlay").click());
+  expect(dialog.textContent).toContain("Project overlay applied");
+  expect(label("Project overlay")).toBeUndefined();
   await act(async () => field("Approve with suggestions").click());
   await act(async () => field("Omit it as out of scope").click());
   await click("Next question");
@@ -523,7 +524,7 @@ test("updates automatic verdicts and only enables submission after the latest co
   let holdPreviews = true;
   let refuseRefresh = false;
   const openReview: typeof reviewRun = async () => ({ version: 1, runs: [complete] });
-  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false,
+  const defaults: PublicationSettings = { inline: false, general: true, keryxTemplate: true, overlay: false,
     verdict: "comment", verdictOverride: null, answers: {} };
   await show(openReview, { ...pr, number: 45 }, {
     publishCommand: async (_cwd, _subject, request) => {
@@ -553,16 +554,16 @@ test("updates automatic verdicts and only enables submission after the latest co
     .find(node => node.textContent?.trim().startsWith(name))!.querySelector("input")!;
   expect(dialog.textContent).toContain("Comment only recommended");
   await act(async () => input("Keep finding").click());
-  await act(async () => input("Keryx template").click());
+  await act(async () => input("General comment").click());
   await act(async () => input("Inline comments").click());
   expect(requests).toHaveLength(2);
-  expect(input("Keryx template").checked).toBe(false);
-  expect(input("Inline comments").checked).toBe(false);
+  expect(input("General comment").checked).toBe(false);
+  expect(input("Inline comments").checked).toBe(true);
   expect(btn("Save locally").disabled).toBe(true);
   expect(btn("Submit review").disabled).toBe(true);
   await act(async () => waiters.shift()!());
   expect(requests).toHaveLength(3);
-  expect(requests[2]).toMatchObject({ kind: "preview", settings: { keryxTemplate: false, inline: false,
+  expect(requests[2]).toMatchObject({ kind: "preview", settings: { keryxTemplate: true, general: false, inline: true,
     verdictOverride: null, answers: { held: "uphold" } } });
   expect(dialog.textContent).not.toContain("Preview 2");
   expect(btn("Submit review").disabled).toBe(true);

@@ -59,6 +59,7 @@ export type InterimVerdict = {
   open: VerdictFinding[];
   /** Open minor findings, listed one by one (owner decision 2026-10-16: minors are to be addressed, not only counted). */
   minors: VerdictFinding[];
+  info?: VerdictFinding[];
   /**
    * Flow 459. Findings the premise judge held (`challenged` / `owner-decision`) that the operator has not answered. They
    * are in no count above and in no open list: an unanswered question is neither a blocker nor a fixed finding.
@@ -295,6 +296,7 @@ function tallyVerdictFindings(loose: readonly Loose[], decisions: readonly Premi
   const counts: Record<Severity, number> = { blocker: 0, major: 0, minor: 0, info: 0 };
   const open: VerdictFinding[] = [];
   const minors: VerdictFinding[] = [];
+  const info: VerdictFinding[] = [];
   const held: VerdictFinding[] = [];
   let verified = 0;
   let unverified = 0;
@@ -312,12 +314,13 @@ function tallyVerdictFindings(loose: readonly Loose[], decisions: readonly Premi
     else unverified += 1;
     if (finding.severity === "blocker" || finding.severity === "major") open.push(finding);
     else if (finding.severity === "minor") minors.push(finding);
+    else info.push(finding);
   }
   minors.sort((a, b) => a.id.localeCompare(b.id));
   held.sort((a, b) => a.id.localeCompare(b.id));
   open.sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || a.id.localeCompare(b.id));
 
-  return { counts, open, minors, held, verified, unverified, refuted, dismissed, resolved };
+  return { counts, open, minors, info, held, verified, unverified, refuted, dismissed, resolved };
 }
 
 /** Historical imports classify only the normalized records they have read from the project artifact. */
@@ -328,7 +331,7 @@ export function ingestedFindingCounts(records: readonly Record<string, unknown>[
 export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
   const rawDir = options.rawDir ?? path.join(packageDir, "raw");
   const { loose, raws, useRound, verifierClaims, premisedFindings, decisions } = await verdictRecords(packageDir, rawDir);
-  const { counts, open, minors, held, verified, unverified, refuted, dismissed, resolved } = tallyVerdictFindings(loose, decisions);
+  const { counts, open, minors, info, held, verified, unverified, refuted, dismissed, resolved } = tallyVerdictFindings(loose, decisions);
 
   const reported = new Set<string>(raws.results.map((result) => result.reviewer));
   if (useRound) for (const entry of loose) reported.add(text(entry.record.reviewer) ?? "review-orchestrator");
@@ -366,7 +369,7 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
     return reviewer === undefined || reason === undefined ? [] : [`excluded: ${reviewer} — ${reason}`];
   });
   const notRun = [...dispatchSkips(dispatchRecord).map(skipLine), ...superseded];
-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, held, premisedFindings, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
+  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, ...(info.length ? { info } : {}), held, premisedFindings, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
 }
 
 function findingLine(finding: VerdictFinding): string {

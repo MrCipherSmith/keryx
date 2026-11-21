@@ -14,7 +14,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, type SpawnChild, type RunProgress } from "./autonomous-run";
 import type { ReviewRunUsage } from "./run-usage";
 import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
-import { computeVerdict, renderVerdict } from "./verdict";
+import { computeVerdict, premiseRecords, renderVerdict } from "./verdict";
 import { boardGh, boardGraphql, projectGithubConnection, reviewTool, verifyGithubBindingUnchanged, type GithubConnection } from "./board-github";
 import { withoutGithubCredentials } from "./github-cli";
 import type { ManagedReviewManifest } from "./types";
@@ -25,6 +25,9 @@ import { DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL, exitCode
 import { isReviewPackageDir } from "./package-location";
 import { DESK_RELATED_PRS, linkedReviewPulls, relatedPullGitDir, type RelatedReviewPull } from "./desk-related-prs";
 import { finishAutoDesktopReview } from "./desk-auto-finalize";
+import { applyReviewOverlay, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReviewOverlay,
+  renderDeskReviewReport, reportFindingMetadata, reviewReportDisclosure, scopedFile } from "./desk-review-report";
+import { readRoundNumber } from "./round-record";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
 
 interface DeskExecutionOptions {
@@ -275,6 +278,7 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
   let outcome: DeskExecutionResult["outcome"] = summary.status === "floor" ? "blocked" : summary.status === "stalled" ? "incomplete" : summary.status;
   let coverage: DeskExecutionResult["coverage"] = "unknown";
   let verdict: string | null = null;
+  let formatted: string | undefined;
   if (ownsPackage && manifest) {
     const entries = Array.isArray(manifest.coverage) ? manifest.coverage : [];
     const evaluated = await computeVerdict(dir);
@@ -284,17 +288,42 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
       coverage = matching && manifest.status === "closed" && outcome === "complete" && ingested &&
         completeDeskCoverage(dir, entries, summary.usage, evaluated, true) ? "complete" : "partial";
     }
+    if (options.options?.orchestrator === false && matching && manifest.mode === "ingest" && ingested && evaluated.source === "ingested round" &&
+        summary.status === "incomplete" && summary.floorRefusals === 0 && !options.signal.aborted) {
+      coverage = "partial";
+      result.reason = "The single reviewer finished. This review has single-reviewer coverage.";
+    }
+    const report = await scopedFile(dir, "report.md", 2 * 1024 * 1024);
     if (known) {
       result.findingsKnown = true;
       result.findings = evaluated.counts;
       // The intermediate headline "no findings" alone is not an approval.
-      if (matching) verdict = deskVerdictHeadline(evaluated, coverage === "complete");
+      if (matching) {
+        const complete = coverage === "complete";
+        const solo = options.options?.orchestrator === false;
+        verdict = deskVerdictHeadline(evaluated, complete);
+        const [{ records }, { overlay, overlayWarning }] = await Promise.all([premiseRecords(dir), projectReviewOverlay(options.cwd)]);
+        const metadata = reportFindingMetadata(report);
+        const findings = [...evaluated.open, ...evaluated.minors, ...(evaluated.info ?? []), ...evaluated.held].map(entry => {
+          const row = records.find(record => record.id === entry.id && (!record.reviewer || record.reviewer === entry.reviewer));
+          const finding = deskReportFinding(entry, row, metadata.get(entry.id));
+          if (!evaluated.held.includes(entry)) return finding;
+          const premise = row?.premise as { question?: unknown } | undefined;
+          return { ...finding, severity: "info" as const, question: true,
+            problem: typeof premise?.question === "string" && premise.question.trim() ? premise.question : finding.problem };
+        });
+        const reported = evaluated.reportedReviewers.length ? ` Reviewers: ${evaluated.reportedReviewers.join(", ")}.` : "";
+        formatted = applyReviewOverlay(renderDeskReviewReport({
+          repo: options.repo, base: options.baseSha, head: options.headSha, round: readRoundNumber(dir) ?? 1,
+          verdict: deskReportRecommendation(complete, findings), findings, evidenceLevel: deskReportEvidence(report),
+          coverageNote: complete ? "" : solo ? "**Single-reviewer coverage.**" : "**Partial review.**",
+          howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${options.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
+        }), overlay);
+        if (overlayWarning) formatted += `\n\n${overlayWarning}`;
+      }
       result.report += "\n" + renderVerdict(evaluated, manifest.reviewId);
     }
-    const file = path.join(dir, "report.md");
-    if ((await lstat(file).catch(() => undefined))?.isFile()) {
-      result.report += "\n" + (await readFile(file, "utf8"));
-    }
+    if (!formatted && report) result.report += "\n" + report;
   }
   if (outcome === "complete" && (!matching || coverage !== "complete")) {
     outcome = "incomplete";
@@ -308,7 +337,8 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
     result.reason = "Stopped by the operator.";
   }
   const saved = checkedDeskSummary(summary, { ...result, outcome }, !!ownsPackage);
-  result.report = renderReport(saved) + result.report;
+  const diagnostics = renderReport(saved) + result.report;
+  result.report = formatted ? formatted + "\n\n" + reviewReportDisclosure("Run diagnostics", diagnostics.trim()) : diagnostics;
   await saveDeskSummary(options.runDir, saved, result.report);
   return { ...result, outcome, coverage, checkedBase, checkedHead, verdict };
 }
@@ -414,7 +444,7 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       });
       let summary = execution.summary;
       const packageDir = summary.package && path.resolve(checkout, summary.package.path);
-      if (!ports.spawn && options.options?.mode === "auto" && !signal.aborted && summary.status === "incomplete" &&
+      if (!ports.spawn && options.options?.mode === "auto" && options.options.orchestrator !== false && !signal.aborted && summary.status === "incomplete" &&
           summary.floorRefusals === 0 && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews") &&
           isReviewPackageDir(packageDir, checkout) && await regularPackage(packageDir)) {
         const [bin, ...argv] = invocationArgv(resolveKeryxInvocation());

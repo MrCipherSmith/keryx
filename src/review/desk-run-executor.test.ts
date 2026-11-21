@@ -152,6 +152,27 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
   expect(JSON.parse(readFileSync(path.join(runDir, "execution-result.json"), "utf8"))).toEqual(result);
 });
 
+test("an explicit single reviewer records findings for the pinned range without claiming full coverage", async () => {
+  const result = await executeDeskReview({
+    ...options(), options: { mode: "auto", orchestrator: false, adaptive: false, modelPools: { strong: [], middle: [], light: [] } },
+  }, {
+    selectModel, remoteUrl: cwd, revision,
+    spawn(spec) {
+      const prompt = spec.argv.at(-1)!;
+      expect(prompt).toContain("as the only reviewer");
+      expect(prompt).toContain(`--base ${baseSha} --head ${headSha}`);
+      expect(prompt).not.toContain("spawn_subagent");
+      packageAt(spec, { base: baseSha, head: headSha }, []);
+      const file = path.join(spec.cwd, ".metaproject/reviews/pkg/manifest.json");
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), status: "draft", mode: "ingest" }));
+      return { exited: Promise.resolve(0), kill() {} };
+    },
+  });
+  expect(result).toMatchObject({ coverage: "partial", checkedBase: baseSha, checkedHead: headSha, findings: { major: 1 } });
+  expect(result.reason).toContain("The single reviewer finished");
+  expect(result.report).toContain("Handle missing repository");
+});
+
 test("a named credential is injected only into the private fetch and a concurrent disconnect prevents launch", async () => {
   const pathBefore = process.env.PATH, dataBefore = process.env.KERYX_DATA_DIR;
   try {

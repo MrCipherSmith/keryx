@@ -126,6 +126,8 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
     return;
   }
   deps.rejectUnknownFlags(args, PLAN_FLAGS, "plan");
+  const deskOptions = deskReviewOptions();
+  if (deskOptions?.orchestrator === false) throw new Error("Review planning is unavailable in a Desktop single-reviewer run.");
   const target = optionValue(args, "--target");
   if (target === undefined || target.trim() === "") throw new Error("review plan needs --target <pr-url|branch>. See `keryx review plan --help`.");
   const base = optionValue(args, "--ref");
@@ -153,7 +155,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const packageDir = packagePathOf(started.stdout, cwd);
   if (packageDir === undefined || !existsSync(packageDir)) throw new Error("review plan: `review start` printed no package path; the plan stops here.");
   const desktopMode = process.env[DESK_REVIEW_SHELL] === "1" && host === "keryx-shell" && kind === "pr" && head && base;
-  const launchOptions = desktopMode ? deskReviewOptions() : undefined;
+  const launchOptions = desktopMode ? deskOptions : undefined;
   if (desktopMode) await rm(path.join(packageDir, "desktop-dispatch.json"), { force: true });
   const desktopContext = desktopMode
     ? await collectDesktopPlanContext(target, head, packageDir, deps.run) : undefined;

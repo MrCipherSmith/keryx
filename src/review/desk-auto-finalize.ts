@@ -8,6 +8,8 @@ import { splitUsage } from "./dispatch-usage";
 import { computeVerdict } from "./verdict";
 import { hasDesktopReviewerEvidence } from "./desk-run-executor-recovery";
 import { createManagedReviewPackage } from "./managed";
+import { renderDeskReviewReport, STATIC_DESKTOP_REVIEW_EVIDENCE, type DeskReportFinding } from "./desk-review-report";
+import { readRoundNumber } from "./round-record";
 import type { AutonomousSummary } from "./autonomous-summary";
 import type { ManagedReviewManifest } from "./types";
 
@@ -78,13 +80,24 @@ export async function finishAutoDesktopReview(input: {
     const stagedFindings = path.join(runnerDir, "auto-findings.json");
     await writeFileAtomic(stagedFindings, JSON.stringify(findings, null, 2), { mode: 0o600 });
     if (!await run([...ledgerArgs, "--findings", stagedFindings])) return false;
-    const reportText = [
-      "# Managed Review Report", "Evidence level: static only — did not run: browser or running application",
-      "", `Target: ${ref}`, `Range: \`${base}...${head}\``,
-      "", "The coordinator's recorded dispositions were preserved. Additional reviewer observations were retained without independent verification.",
-      "", ...findings.map(f => `### ${f.id} — ${f.severity}\n\n${f.problem ?? ""}\n\nEvidence: ${f.evidence ?? f.file ?? ""}\n`),
-      ...(findings.length ? [] : ["No reviewer findings recorded."]), "",
-    ].join("\n");
+    const reportFindings = findings.flatMap((finding): DeskReportFinding[] => {
+      const { severity, id, problem, file, line, evidence, impact, suggested_fix, location_class: location } = finding;
+      if ((severity !== "blocker" && severity !== "major" && severity !== "minor") ||
+          typeof id !== "string" || typeof problem !== "string") return [];
+      return [{
+        id, severity, problem, file: typeof file === "string" ? file : null,
+        line: typeof line === "number" && Number.isSafeInteger(line) && line > 0 ? line : null,
+        ...(location === "in-diff" || location === "pre-existing" || location === "pr-process" ? { locationClass: location } : {}),
+        ...(typeof evidence === "string" ? { evidence } : {}),
+        ...(typeof impact === "string" ? { impact } : {}),
+        ...(typeof suggested_fix === "string" ? { suggested_fix } : {}),
+      }];
+    });
+    const reportText = renderDeskReviewReport({
+      repo: new URL(ref).pathname.split("/").slice(1, 3).join("/"), base, head, round: readRoundNumber(dir) ?? 1,
+      verdict: "comment", findings: reportFindings, evidenceLevel: STATIC_DESKTOP_REVIEW_EVIDENCE,
+      howRun: "Review orchestrator · Auto. The coordinator's recorded dispositions were preserved. Additional reviewer observations were retained without independent verification.",
+    });
     signal.throwIfAborted();
     await createManagedReviewPackage({ cwd: checkout, mode: "ingest", target: { kind: "pr", ref, base, head },
       reviewId: manifest.reviewId, reportText, findings, research: await json(ledgerFile) });
