@@ -5,6 +5,20 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.47] - 2026-11-22
+
+**Keryx Desktop 0.2.10** requires Keryx 0.4.47 or newer.
+
+### Added
+
+- Browse the selected GitHub account's issues in Desktop, switch between Board and List, and read descriptions and discussions in a resizable details pane. (#1280)
+- Change an issue's Status in a selected GitHub Project. If another client changes it first, Desktop shows the current value. (#1280)
+- Open the issue's session and prepare a Flow in that conversation. Resume questions after a restart, and open the same Flow from Desktop or Shell. (#1280)
+
+### Fixed
+
+- Compare large generated JSON structurally during PR reviews and reuse answers to context questions across reviewers. (#1276)
+
 ## [0.4.46] - 2026-11-21
 
 **Keryx Desktop 0.2.9** requires Keryx 0.4.46 or newer.
