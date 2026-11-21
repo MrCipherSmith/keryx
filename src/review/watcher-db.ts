@@ -61,7 +61,13 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
     CREATE INDEX IF NOT EXISTS review_rule_queue ON review_rule_work(watcher, state, number);
     CREATE INDEX IF NOT EXISTS review_rule_recorded_run ON review_rule_work(watcher, runId) WHERE runId IS NOT NULL;
     CREATE INDEX IF NOT EXISTS review_rule_history ON review_rule_work(watcher, at DESC);`);
-    return db.transaction(() => action(db)).immediate();
+    return db.transaction(() => {
+      // Older Desktop builds already have subscriptions with activity topics.
+      const columns = db.query<{ name: string }, []>("PRAGMA table_info(review_pr_subscriptions)").all();
+      if (!columns.some(column => column.name === "rebase"))
+        db.exec("ALTER TABLE review_pr_subscriptions ADD COLUMN rebase INTEGER NOT NULL DEFAULT 0");
+      return action(db);
+    }).immediate();
   } finally {
     db.close();
   }
