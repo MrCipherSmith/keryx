@@ -397,13 +397,19 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
       if (timer !== undefined) clearInterval(timer);
     }
     const reviewerProgress = readDeskReviewerProgress(runDir, key, { ...run, ...finish }, false);
-    store.atomic(() => {
+    const finished = store.atomic(() => {
       const a = store.byId(id);
-      if (!a || a.pid !== process.pid) return;
+      if (!a || a.pid !== process.pid) return false;
       if (reviewerProgress) a.run.reviewerProgress = reviewerProgress;
       store.end(a, finish);
       dispatchNext(store, key);
+      return true;
     });
+    if (finished && run.options?.autoPublish && finish.state === "completed" && finish.result?.coverage === "complete" && !controller.signal.aborted) {
+      const { publishCompletedDeskReview } = await import("./desk-publication");
+      // On refusal or a network error the completed review stays available for a publication decision.
+      await publishCompletedDeskReview(cwd, key, id).catch(() => undefined);
+    }
   } finally {
     process.off("SIGTERM", abort);
     process.off("SIGINT", abort);

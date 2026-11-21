@@ -8,6 +8,7 @@ import type { ReviewBoardSnapshot } from "./board-types";
 import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
+import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
 import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
@@ -302,6 +303,17 @@ export class DeskRunStore {
     ).get(key.repositoryId, key.number, key.viewer, id)?.report ?? undefined;
   }
 
+  private publication(id: string, state: DeskRun["state"], coverage: string | null | undefined): PublicationOutcome | undefined {
+    if (state !== "completed" || coverage !== "complete" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
+    const directory = this.directory(id);
+    const receipt = readConfigFile(path.join(directory, PUBLICATION_RECEIPT));
+    if (receipt.ok) {
+      try { if (typeof JSON.parse(receipt.text)?.url === "string") return "published"; }
+      catch { /* Receipt without a confirmed URL needs operator attention. */ }
+    }
+    return existsSync(path.join(directory, PUBLICATION_SKIPPED)) ? "skipped" : "pending";
+  }
+
   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
     // Keep periodic IPC responses bounded. The database retains full reports.
     // Return small recent reports inline and load the rest by attempt id.
@@ -338,6 +350,9 @@ export class DeskRunStore {
         if (updatedAt) run.lastActivityAt = updatedAt;
       }
       if (run.result) {
+        const publication = run.result.reviewed && run.source !== "existing" && run.decision?.action !== "archive" &&
+          this.publication(run.id, run.state, run.result.coverage);
+        if (publication) run.publication = publication;
         run.result.report = row.report;
         if (id === undefined && row.bytes > 0 && !row.report) run.result.reportDeferred = true;
         if (id !== undefined && row.chars > 524288) {
@@ -352,7 +367,7 @@ export class DeskRunStore {
   }
 
   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
-    type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null;
+    type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
       head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs or
     // other revisions never cross the SQLite boundary. No reports or session histories are returned.
@@ -365,6 +380,7 @@ export class DeskRunStore {
       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
         json_extract(r.details,'$.source') AS source,
+        json_extract(r.details,'$.result.coverage') AS coverage,
         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
@@ -393,7 +409,9 @@ export class DeskRunStore {
       for (const row of rows) {
         const runs = byPr.get(row.pr) ?? [];
         if (!runs.length) byPr.set(row.pr, runs);
+        const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);
         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
+          ...(publication && { publication }),
           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,

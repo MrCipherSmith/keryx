@@ -5,6 +5,21 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.42] - 2026-11-21
+
+**Keryx Desktop 0.2.5** requires Keryx 0.4.42 or newer.
+
+### Added
+
+- Launch adaptive reviews from Desktop chat and follow the coordinator, reviewer sessions, and results while continuing to work in the original session. Review runs show pending questions, coverage, findings, and PR history.
+- Publish an English review to GitHub using the Keryx report and an installed project overlay. A finished review prompts you to publish or skip. You can opt in to automatic comments at launch, subject to the project template's approval rules.
+- Browse project files and worktree changes in Desktop. Use chat attachments and message actions, and see context usage in the composer.
+- Prepare and promote Git worktrees with explicit readiness, dependency, environment, and port information.
+
+### Changed
+
+- Desktop reviews use the review orchestrator by default. Automatic reviews can inspect pinned sources from linked PRs, and the launch form supports reviewer model pools and configurable limits.
+
 ## [0.4.41] - 2026-11-20
 
 **Keryx Desktop 0.2.4** requires Keryx 0.4.41 or newer.

@@ -84,9 +84,9 @@ export function ReviewRunDialog({ onClose, error, onAnswer, onRefresh, ...attemp
       {terminal && <ReviewOutcome run={run} />}
       {hasCoordinator && <ReviewTranscript actor="Coordinator" events={run.coordinatorActivity ?? []}
         loading={activity.loaded !== run.id} error={activity.error} />}
-      <details className="review-session-details" open={!hasCoordinator || undefined}>
+      <details className="review-session-details" open={!hasCoordinator || run.publication === "pending" || undefined}>
         <summary>Run details, reviewers and report</summary>
-        <RunAttempt {...attempt} onAnswer={onAnswer} answerError={error} showOutcome={false} />
+        <RunAttempt {...attempt} onPublicationDecision={onRefresh} onAnswer={onAnswer} answerError={error} showOutcome={false} />
       </details>
     </div>
   </Dialog></div>, document.body);

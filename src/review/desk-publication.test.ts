@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { requestDeskPublication } from "./desk-publication";
+import { publishCompletedDeskReview, requestDeskPublication } from "./desk-publication";
 import { DeskRunStore } from "./desk-run-store";
 import { isolateGitDiscovery } from "./test-git-fixture";
 
@@ -198,6 +198,24 @@ test("inline edits reuse placement in preview and explicit refresh rereads the d
   expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("x");
   await requestDeskPublication(project, key, { kind: "preview", id, settings, refresh: true });
   expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("xx");
+});
+
+test("skipping a completed review clears the publication decision without writing to GitHub", async () => {
+  const store = new DeskRunStore();
+  try {
+    const attempt = store.byId(id)!;
+    const result = attempt.run.result!;
+    store.end(attempt, { state: "completed", phase: "Complete", reason: "", result: { ...result, coverage: "complete" } });
+    expect(store.history(key, id).runs[0]?.publication).toBe("pending");
+    const skipped = await requestDeskPublication(project, key, { kind: "skip", id });
+    expect(skipped.skipped).toBe(true);
+    expect(store.history(key, id).runs[0]?.publication).toBe("skipped");
+    expect((await requestDeskPublication(project, key, { kind: "preview", id })).skipped).toBe(true);
+    await expect(publishCompletedDeskReview(project, key, id)).rejects.toThrow("verified local review");
+    expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  } finally {
+    store.close();
+  }
 });
 
 test("a changed effective account or declined confirmation never reaches the write", async () => {

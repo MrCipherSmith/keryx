@@ -45,6 +45,7 @@ export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
 }
 
 function attentionReason(c: ReviewCard): string | null {
+  if (c.localReview?.publicationPending) return "Choose whether to publish on GitHub";
   if (c.localReview?.ready) return "Keryx review result available";
   if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
   if (c.reviewers.length) return "Review requested";

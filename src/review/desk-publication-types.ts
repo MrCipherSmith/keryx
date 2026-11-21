@@ -15,6 +15,7 @@ export interface PublicationSettings {
 }
 
 export type PublicationRequest =
+  | { kind: "skip"; id: string; settings?: never }
   | { kind: "preview"; id: string; settings?: PublicationSettings; refresh?: boolean }
   | { kind: "save"; id: string; settings: PublicationSettings }
   | { kind: "submit"; id: string; settings: PublicationSettings; digest: string };
@@ -32,10 +33,16 @@ export interface PublicationState {
     options?: { id: PublicationOptionId; label: string }[];
   }[];
   overlayAvailable: boolean;
+  overlayRequiresApproval?: true;
   overlayWarning?: string;
   canSubmit: boolean;
   blockedReason?: string;
   digest: string;
   savedAt?: string;
   publishedUrl?: string;
+  skipped?: true;
 }
+
+export type PublicationOutcome = "pending" | "published" | "skipped";
+export const PUBLICATION_RECEIPT = "publication-receipt.json";
+export const PUBLICATION_SKIPPED = "publication-skipped.json";

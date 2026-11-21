@@ -98,6 +98,7 @@ export type DeskReviewAction = typeof DESK_REVIEW_ACTIONS[number];
 export type DeskReviewDecision = { action: DeskReviewAction; reason: string; at: string };
 export type DeskReviewCheck = { id: string; title: string; evidence: string; canWaive: boolean };
 export interface DeskRun extends DeskRevision {
+  publication?: import("./desk-publication-types").PublicationOutcome;
   decision?: DeskReviewDecision;
   closure?: "completed" | "closed";
   /** Public events are projected on demand for the selected attempt. */

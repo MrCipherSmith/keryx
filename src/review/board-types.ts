@@ -9,6 +9,7 @@ export interface ReviewCard {
     active: boolean;
     ready: boolean;
     awaitingAnswer?: true;
+    publicationPending?: true;
     lastActivityAt?: string;
     runState?: DeskRunState | "other-revision";
     progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;

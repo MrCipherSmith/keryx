@@ -65,7 +65,12 @@ export async function runReviewDesk(args: string[]) {
   if (action !== "decide" && (v.decision !== undefined || v.reason !== undefined || v.waive !== undefined)) throw new Error(DESK_USAGE);
   let input: DeskAction;
   if (action === "start" && v.base && sha.test(v.base) && v.head && sha.test(v.head) && !v.id) {
-    input = { action, revision: { baseSha: v.base, headSha: v.head }, ...(v.options !== undefined ? { options: readDeskOptionsJson(v.options) } : {}) };
+    const options = v.options === undefined ? undefined : readDeskOptionsJson(v.options);
+    if (options?.autoPublish && (process.env.KERYX_TOOL_CALL === "1" || process.env.KERYX_UNATTENDED === "1" ||
+        isAutonomousEnv(process.env) || !(process.env.KERYX_DESKTOP_REVIEW_ACTION === "1" || (process.stdin.isTTY && process.stdout.isTTY)))) {
+      throw new Error("permission: Automatic GitHub publication must be enabled by the operator.");
+    }
+    input = { action, revision: { baseSha: v.base, headSha: v.head }, ...(options && { options }) };
   } else if (action === "answer" && v.id && uuid.test(v.id) && questionId && uuid.test(questionId) &&
       v.answer?.trim() && v.answer.length <= 2000 && !v.base && !v.head) {
     input = { action, id: v.id, questionId, answer: v.answer };

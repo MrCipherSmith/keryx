@@ -82,8 +82,9 @@ interface PublicationTarget {
   publishCommand?: typeof reviewPublish | undefined;
 }
 
-export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity, publication, onOpenSession, children, onAnswer, onLifecycle, answerError = "", showOutcome = true }: ReportProps & {
+export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity, publication, onPublicationDecision, onOpenSession, children, onAnswer, onLifecycle, answerError = "", showOutcome = true }: ReportProps & {
   publication?: PublicationTarget;
+  onPublicationDecision?: () => void;
   children?: ReactNode; onAnswer: AnswerReviewQuestion; answerError?: string;
   onLifecycle?: ReviewLifecycleCommand;
   onOpenSession?: (id: string) => void;
@@ -101,11 +102,13 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
   const historic = !!((recorded.headSha && recorded.headSha !== card.headSha) || (recorded.baseSha && recorded.baseSha !== card.baseSha));
   const draft = publication && run.source !== "existing" && (run.state === "completed" || run.state === "partial") &&
     result?.reviewed && /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[1-9]\d*\/?$/i.test(publication.url) ? publication : undefined;
+  const publicationPending = draft && !historic && run.publication === "pending";
   return <article className="desk-run" aria-label={'Review attempt ' + run.id}>
     <header className="desk-run-head">
       <div className="desk-run-state">
         <strong className={active && !question ? "review-live-state" : undefined}>{runStatusLabel(run)}</strong>
         {historic && <span className="badge">Earlier revision</span>}
+        {publicationPending && <span className="badge review-publication-pending">Action required</span>}
       </div>
       <div className="review-action-row">
         {onOpenSession && run.source !== "existing" && <button className="btn review-icon-action" type="button"
@@ -117,6 +120,10 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         {onLifecycle && <ReviewLifecycle run={run} working={working} command={onLifecycle} load={loadAttempt} />}
       </div>
     </header>
+    {publicationPending && <div className="review-publish-actions">
+      <span>Choose whether to publish on GitHub.</span>
+      <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>Review publication</button>
+    </div>}
     <div className="review-detail-meta">
       <span>{run.source === "manual" ? "Manual" : run.source === "scheduled" ? "Scheduled" : "Existing review"}</span>
       <time dateTime={run.createdAt}>{absoluteTime(run.createdAt)}</time>
@@ -157,11 +164,14 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
     {run.usage ? <ReviewUsage usage={run.usage} /> : !active && <p className="review-detail-muted">Token usage was not recorded.</p>}
     {run.source !== "existing" || run.reviewerProgress ? <ReviewSessions onAnswer={onAnswer} working={working} answerError={answerError} run={run} activity={activity} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
     <ReviewReport run={run} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />
-    {draft && <div className="review-publish-actions">
-      <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>Publish to GitHub</button>
-      {publishOpen && <ReviewPublishDialog cwd={draft.cwd} target={draft.target} id={run.id} command={draft.publishCommand}
-        onAccessLost={onAccessLost} onClose={() => setPublishOpen(false)} />}
+    {draft && !publicationPending && <div className="review-publish-actions">
+      <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>
+        {run.publication === "published" ? "View publication" : "Publish to GitHub"}
+      </button>
+      {run.publication === "skipped" && <span className="review-detail-muted">Publication skipped</span>}
     </div>}
+    {draft && publishOpen && <ReviewPublishDialog cwd={draft.cwd} target={draft.target} id={run.id} command={draft.publishCommand}
+      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)} />}
   </article>;
 }
 
@@ -183,6 +193,6 @@ export function ReviewRuns({ activity, card, runs, error, loaded, working, onCan
     {error && <p className="inline-banner tone-warn" role="alert">{error}</p>}
     {!loaded && !error && <Spinner label="Loading review history" />}
     {loaded && !latest && <p className="review-detail-muted">{runs.length ? "Archived reviews are available in History." : "No Keryx reviews for this pull request yet."}</p>}
-    {latest && <RunAttempt key={latest.id} publication={publication} onAnswer={onAnswer} answerError={error} onOpenSession={onOpenSession} activity={activity} run={latest} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} onLifecycle={onLifecycle} />}
+    {latest && <RunAttempt key={latest.id} publication={publication} onPublicationDecision={onRefresh} onAnswer={onAnswer} answerError={error} onOpenSession={onOpenSession} activity={activity} run={latest} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} onLifecycle={onLifecycle} />}
   </section>;
 }

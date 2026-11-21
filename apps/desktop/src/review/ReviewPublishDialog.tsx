@@ -34,12 +34,13 @@ function Preview({ text, label = "Review comment preview" }: { text: string; lab
   return text.trim() ? <ReviewReportMarkdown text={text} label={label} className="review-publish-markdown" /> : <p>No general comment in this draft.</p>;
 }
 
-export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onClose }: {
+export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onClose }: {
   cwd: string;
   target: DeskRunKey;
   id: string;
   command?: typeof reviewPublish | undefined;
   onAccessLost?: ((message: string) => void) | undefined;
+  onDecision?: (() => void) | undefined;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<PublicationState>();
@@ -53,6 +54,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const requestNumber = useRef(0);
   const activeRequest = useRef<PublicationRequest["kind"] | null>(null);
   const queuedPreview = useRef<Extract<PublicationRequest, { kind: "preview" }>>();
+  const decision = useRef(onDecision);
+  decision.current = onDecision;
   const verdictName = useId();
   const answerName = useId();
 
@@ -78,6 +81,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
             setSettings(result.settings);
             setPreviewStale(false);
           }
+          if (request.kind === "skip" || request.kind === "submit") decision.current?.();
         } catch (cause) {
           if (number !== requestNumber.current) return;
           const reason = errMessage(cause);
@@ -134,7 +138,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   }
 
   const busy = pending !== null;
-  const writing = pending === "save" || pending === "submit";
+  const writing = pending !== null && pending !== "preview";
   const posted = Boolean(draft?.publishedUrl);
   const questions = draft?.questions ?? [];
   const question = questions[Math.min(questionIndex, questions.length - 1)];
@@ -146,6 +150,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
       <div className="review-publish-footer">
         <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
         {!posted && <>
+          {!draft?.skipped && <button type="button" className="btn" disabled={busy || !draft}
+            onClick={() => void send({ kind: "skip", id })}>Skip publication</button>}
           <button type="button" className="btn" disabled={!canUsePreview}
             onClick={() => { if (canUsePreview) void send({ kind: "save", id, settings }); }}>Save locally</button>
           <button type="button" className="btn btn-primary" disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
@@ -155,6 +161,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
     }>
     <div className="review-publish" aria-busy={writing}>
       <p className="review-detail-meta">{target.repo} #{target.number} · @{target.viewer}</p>
+      {draft?.skipped && <p className="review-detail-muted" role="status">Publication skipped. This review is saved locally.</p>}
       {error && <div className="inline-banner tone-warn" role="alert">
         <span>{error}</span>
         {!draft && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
@@ -167,7 +174,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
               onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
             <label><input type="checkbox" checked={settings.inline}
               onChange={e => update({ inline: e.currentTarget.checked })} /> Inline comments</label>
-            {draft.overlayAvailable && <small className="review-detail-muted">Project overlay applied</small>}
+            <small className="review-detail-muted">English · Keryx template{draft.overlayAvailable ? " + project overlay" : ""}</small>
+            {draft.overlayRequiresApproval && <small className="review-detail-muted">This project requires confirmation of the finished report.</small>}
             {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
           </fieldset>
           <fieldset disabled={writing}>
@@ -228,6 +236,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
       </section>}
       {pending !== null && <p className="review-detail-meta"><Spinner />{
         pending === "preview" ? "Updating preview…" : pending === "save" ? "Saving draft locally…"
+          : pending === "skip" ? "Saving your decision…"
           : import.meta.env?.DEV && !isTauri() ? "Confirm publication in the dev server terminal." : "Submitting review…"
       }</p>}
       {!busy && !error && !posted && draft?.blockedReason && <p className="review-detail-muted" role="status">{draft.blockedReason}</p>}
