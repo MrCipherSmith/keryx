@@ -10,6 +10,7 @@ let mutationVersion = 0;
 export type ReviewRunAction =
   | { kind: "status"; id?: string; activityId?: string }
   | { kind: "start"; baseSha: string; headSha: string; options?: DeskReviewOptions }
+  | { kind: "continue"; id: string; guidance?: string }
   | { kind: "cancel"; id: string }
   | { kind: "readiness"; id: string }
   | { kind: "decide"; id: string; decision: DeskReviewAction; reason: string; waive?: string[] }

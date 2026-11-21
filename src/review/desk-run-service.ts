@@ -241,6 +241,7 @@ export type DeskAction =
   | { action: "status"; id?: string; activityId?: string }
   | { action: "answer"; id: string; questionId: string; answer: string }
   | { action: "start"; revision: DeskRevision; options?: DeskReviewOptions }
+  | { action: "continue"; id: string; guidance?: string }
   | { action: "cancel"; id: string };
 export async function requestDeskRun(
   cwd: string,
@@ -250,7 +251,9 @@ export async function requestDeskRun(
   const store = new DeskRunStore();
   try {
     const observedAdmission = input.action === "start" ? store.latestAdmission(key) : null;
-    await verifyDeskSubject(cwd, key, input.action === "start" ? input.revision : undefined);
+    const revision = input.action === "start" ? input.revision :
+      input.action === "continue" ? store.continuationSource(key, input.id).run : undefined;
+    await verifyDeskSubject(cwd, key, revision);
     if (input.action === "status" && !input.id && store.atomic(() => store.claimHistoryScan(cwd, key))) {
       const existing = readExistingReviews(cwd, key);
       store.atomic(() => store.recordExisting(cwd, key, existing));
@@ -266,6 +269,7 @@ export async function requestDeskRun(
     let startedRunId: string | null = null;
     store.atomic(() => {
       if (input.action === "start") startedRunId = store.requestManual(cwd, key, input.revision, observedAdmission, input.options && parseDeskReviewOptions(input.options));
+      if (input.action === "continue") startedRunId = store.requestContinuation(cwd, key, input.id, input.guidance);
       if (input.action === "answer") store.answerQuestion(key, input.id, input.questionId, input.answer);
       if (input.action === "cancel") store.cancel(key, input.id);
       dispatchNext(store, key);
@@ -360,6 +364,10 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
         baseSha: run.baseSha,
         headSha: run.headSha,
         ...(previous ? { previousRunDir: store.directory(previous.id) } : {}),
+        ...(run.continuation && {
+          resumeRunDir: store.directory(run.continuation.previousId),
+          ...(run.continuation.guidance && { guidance: run.continuation.guidance }),
+        }),
         ...(schedule ? {
           budgetMinutes: schedule.budgetMinutes,
           budgetTokens: schedule.budgetTokens,
@@ -369,7 +377,7 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
           if (schedule) await verifyScheduled(cwd, key, run, schedule);
           else await verifyDeskSubject(cwd, key, run);
         },
-        ...(run.source === "manual" && run.options?.mode !== "auto" ? { operatorRunId: id, isWaitingForOperator: () => store.hasPendingQuestion(id) } : {}),
+        ...(run.source === "manual" ? { operatorRunId: id, isWaitingForOperator: () => store.hasPendingQuestion(id) } : {}),
         runDir,
         signal: controller.signal,
         onProgress: (p) => {

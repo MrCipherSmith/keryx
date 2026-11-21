@@ -5,6 +5,17 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.44] - 2026-11-21
+
+**Keryx Desktop 0.2.7** requires Keryx 0.4.44 or newer.
+
+### Fixed
+
+- Open managed reviews in Sessions, answer coordinator and reviewer questions in Auto, and continue an incomplete review with guidance from its saved draft for the same revision.
+- Retrieve the verified commit for linked pull requests and explain when its source is unavailable.
+- Use current model availability for reviewer routing and fall back to the project's authorized Review route when adaptive selection is enabled.
+- Ask for approval before expanding a feasible review plan and explain when a plan exceeds Desktop capacity.
+
 ## [0.4.43] - 2026-11-21
 
 **Keryx Desktop 0.2.6** requires Keryx 0.4.43 or newer.

@@ -39,9 +39,19 @@ export function ReviewRunHistory({ runs, onSelect }: { runs: DeskRun[]; onSelect
 type Props = ComponentProps<typeof RunAttempt> & {
   onClose: () => void; error: string; onAnswer: (id: string, questionId: string, answer: string) => void;
   onRefresh: () => void;
+  onOpenWorkspace?: () => Promise<void>;
 };
-export function ReviewRunDialog({ onClose, error, onAnswer, onRefresh, ...attempt }: Props) {
+export function ReviewRunDialog({ onClose, error, onAnswer, onRefresh, onOpenWorkspace, ...attempt }: Props) {
   const { run, card, activity, working } = attempt;
+  const [openingWorkspace, setOpeningWorkspace] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  async function openWorkspace() {
+    setOpeningWorkspace(true);
+    setWorkspaceError("");
+    try { await onOpenWorkspace?.(); }
+    catch { setWorkspaceError("Could not open the review in Sessions."); }
+    finally { setOpeningWorkspace(false); }
+  }
   const hasCoordinator = run.source !== "existing";
   useEffect(() => {
     if (hasCoordinator) return activity.follow(run.id);
@@ -66,8 +76,10 @@ export function ReviewRunDialog({ onClose, error, onAnswer, onRefresh, ...attemp
       {run.reviewerProgress?.wave != null && <span className="review-wave">Wave {run.reviewerProgress.wave}</span>}
       {run.usage?.total.totalTokens != null && <span>{run.usage.total.totalTokens.toLocaleString()} tokens</span>}
       <time dateTime={run.createdAt}>{absoluteTime(run.createdAt)}</time>
-    </div><button className="btn btn-sm" onClick={onClose} data-autofocus>Close</button></>}>
+    </div>{onOpenWorkspace && <button className="btn btn-sm btn-primary" onClick={() => void openWorkspace()}
+      disabled={openingWorkspace}>Open in Sessions</button>}<button className="btn btn-sm" onClick={onClose} data-autofocus>Close</button></>}>
     <div className="review-run-dialog">
+      {workspaceError && <p role="alert" className="inline-banner tone-warn">{workspaceError}</p>}
       {error && <p role="alert" className="inline-banner tone-warn">{error} <button className="btn btn-sm" onClick={onRefresh} disabled={working}>Refresh session</button></p>}
       {questions.length > 0 && !visibleCoordinator && <section className="review-question-chooser">
         <h3>Questions needing your answer</h3>

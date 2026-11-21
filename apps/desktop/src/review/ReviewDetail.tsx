@@ -1,3 +1,4 @@
+import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
@@ -41,6 +42,7 @@ interface Props {
   onAccessLost?: (reason: string) => void;
   load?: typeof fetchReviewDetail;
   openBrowser?: typeof openExternal;
+  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
   onOpenSession?: (() => void) | undefined;
   runCommand?: typeof reviewRun;
   publishCommand?: typeof reviewPublish;
@@ -116,7 +118,7 @@ export function ReviewDetail(props: Props) {
   return <ReviewDetailSheet key={JSON.stringify([props.cwd, props.repo, props.repositoryId, props.viewer, props.card.number])} {...props} />;
 }
 
-function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser, onOpenSession, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
+function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser, onOpenSession, onOpenReviewSession, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
   const toast = useToast();
   const openingLink = useRef(false);
   const mounted = useRef(false);
@@ -155,6 +157,16 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
   }, [cwd, subject, runCommand]);
   const local = useReviewRuns(cwd, subject, card.baseSha, card.headSha, tab === "review" || !!sessionId, runCommand, onRunSnapshot, onAccessLost);
   const syncRuns = local.request;
+  function openManagedRun(id: string) {
+    const run = local.runs.find(item => item.id === id);
+    if (!onOpenReviewSession || !run || run.source === "existing") {
+      setSessionId(id);
+      return;
+    }
+    void onOpenReviewSession(subject, run).then(onClose, reason => {
+      if (mounted.current) toast({ level: "error", title: "Could not open the review in Sessions", detail: errMessage(reason) });
+    });
+  }
   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
     const snapshot = await runCommand(cwd, subject, action);
     if (action.kind === "decide") {
@@ -274,7 +286,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
         <span>The PR revision changed. Refresh the board to load the latest range.</span>
         {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh board</button>}
       </div>}
-      {tab === "automation" ? <PullRequestAutomation cwd={cwd} target={rulesTarget} number={card.number} open={card.state === "open"} command={rulesCommand} onAccessLost={onAccessLost} /> : tab === "review" ? <ReviewRuns publication={publication} onAnswer={answerQuestion} onOpenSession={setSessionId} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
+      {tab === "automation" ? <PullRequestAutomation cwd={cwd} target={rulesTarget} number={card.number} open={card.state === "open"} command={rulesCommand} onAccessLost={onAccessLost} /> : tab === "review" ? <ReviewRuns publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
         onCancel={id => void local.request({ kind: "cancel", id })}
         onLifecycle={lifecycle}
         onRefresh={() => void local.request({ kind: "status" })} /> : <>
@@ -287,7 +299,14 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
       </>}
       </>}
     </div>
-    {session && <ReviewRunDialog key={session.id} publication={publication} run={session} card={card} working={local.working} activity={local.activity}
+    {session && <ReviewRunDialog
+      {...(onOpenReviewSession && session.source !== "existing" && {
+        onOpenWorkspace: async () => {
+          await onOpenReviewSession({ repo, repositoryId, viewer, number: card.number }, session);
+          setSessionId(null);
+          onClose();
+        },
+      })} key={session.id} publication={publication} run={session} card={card} working={local.working} activity={local.activity}
       error={local.error} loadAttempt={loadAttempt} onAccessLost={onAccessLost} onClose={() => setSessionId(null)}
       onCancel={id => void local.request({ kind: "cancel", id })}
       onLifecycle={lifecycle}

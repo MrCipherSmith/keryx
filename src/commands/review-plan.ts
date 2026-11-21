@@ -12,11 +12,13 @@ import { estimatePackage, planConfirmed, type RoundEstimate, CONFIRM_PLAN_TOOL }
 import { readPriorFindings, readRoundRecord, renderRoundLine, type RoundRecord } from "../review/round-record";
 import { isDeltaRound } from "../review/round-split";
 import type { SliceEntry, SliceManifest } from "../review/slice";
-import { DESK_REVIEW_SHELL, deskReviewOptions } from "../review/autonomous-profile";
+import { DESK_REVIEW_RESUME_PACKAGE, DESK_REVIEW_SHELL, deskReviewOptions } from "../review/autonomous-profile";
 import { collectDesktopPlanContext, prepareDesktopDispatch } from "./review-plan-desktop";
 import { REVIEW_HOSTS } from "../review/host-profile";
 import { requiredSlices } from "../review/waves";
 import { writeWaveDrivers } from "../review/wave-drivers";
+import { isReviewPackageDir, reviewsRoot } from "../review/package-location";
+import type { ManagedReviewManifest } from "../review/types";
 
 export const PLAN_FILE = "plan.json";
 export const PLAN_FLAGS = ["--target", "--ref", "--head", "--host", "--memory-query", "--unattended", "--json", "--help", "-h"] as const;
@@ -137,6 +139,16 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const kind = targetKindOf(target);
   const warnings: string[] = [];
 
+  const desktopMode = process.env[DESK_REVIEW_SHELL] === "1" && host === "keryx-shell" && kind === "pr" && head && base;
+  const resumeId = desktopMode ? process.env[DESK_REVIEW_RESUME_PACKAGE] : undefined;
+  if (resumeId) {
+    const dir = path.join(reviewsRoot(cwd), resumeId);
+    if (!/^[\w.-]+$/.test(resumeId) || !isReviewPackageDir(dir, cwd)) throw new Error("The preserved review package is unavailable.");
+    const saved = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    if (saved.reviewId !== resumeId || saved.status !== "draft" || saved.target?.ref !== target ||
+        saved.target.base !== base || saved.target.head !== head) throw new Error("The preserved review package is for a different revision.");
+  }
+
   // 1. start: finds the previous round and writes round.json beside the package.
   const memoryQuery = optionValue(args, "--memory-query");
   const started = await deps.run([
@@ -145,6 +157,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
     kind,
     "--target-ref",
     target,
+    ...(resumeId ? ["--review-id", resumeId] : []),
     ...(head === undefined ? [] : ["--head", head]),
     ...(base === undefined ? [] : ["--base", base]),
     ...(host === undefined ? [] : ["--host", host]),
@@ -154,7 +167,6 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   if (started.exitCode !== 0) fail("start", started);
   const packageDir = packagePathOf(started.stdout, cwd);
   if (packageDir === undefined || !existsSync(packageDir)) throw new Error("review plan: `review start` printed no package path; the plan stops here.");
-  const desktopMode = process.env[DESK_REVIEW_SHELL] === "1" && host === "keryx-shell" && kind === "pr" && head && base;
   const launchOptions = desktopMode ? deskOptions : undefined;
   if (desktopMode) await rm(path.join(packageDir, "desktop-dispatch.json"), { force: true });
   const desktopContext = desktopMode

@@ -6,7 +6,7 @@ export function reviewRunArgs(target: unknown, action: unknown): string[] {
   }
   const key = target as Record<string, unknown>;
   const op = action as Record<string, unknown>;
-  if (!["status", "start", "cancel", "answer", "readiness", "decide"].includes(String(op.kind))) {
+  if (!["status", "start", "cancel", "continue", "answer", "readiness", "decide"].includes(String(op.kind))) {
     throw new Error("configuration: Unknown Review operation");
   }
   if (!Number.isSafeInteger(key.number) || Number(key.number) <= 0) {
@@ -20,7 +20,7 @@ export function reviewRunArgs(target: unknown, action: unknown): string[] {
     fields.push(["--activity-id", op.activityId]);
   }
   if (op.kind === "start") fields.push(["--base", op.baseSha], ["--head", op.headSha]);
-  if (op.kind === "cancel" || op.kind === "readiness" || op.kind === "decide" || (op.kind === "status" && op.id !== undefined)) fields.push(["--id", op.id]);
+  if (op.kind === "continue" || op.kind === "cancel" || op.kind === "readiness" || op.kind === "decide" || (op.kind === "status" && op.id !== undefined)) fields.push(["--id", op.id]);
   if (op.kind === "answer") fields.push(["--id", op.id], ["--question-id", op.questionId]);
   if (op.kind === "decide") fields.push(["--decision", op.decision]);
   const args = ["review", "desk-run", String(op.kind), "--json"];
@@ -36,6 +36,12 @@ export function reviewRunArgs(target: unknown, action: unknown): string[] {
       throw new Error("configuration: Invalid review settings.");
     }
     args.push(`--options=${json}`);
+  }
+  if (op.kind === "continue" && op.guidance !== undefined) {
+    if (typeof op.guidance !== "string" || op.guidance.length > 2000 || op.guidance.includes("\0")) {
+      throw new Error("configuration: Review guidance is too long.");
+    }
+    args.push(`--guidance=${op.guidance}`);
   }
   if (op.kind === "answer") {
     if (typeof op.answer !== "string" || !op.answer.trim() || op.answer.length > 2000 || op.answer.includes("\0")) {

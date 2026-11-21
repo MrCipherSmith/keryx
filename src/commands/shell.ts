@@ -4884,8 +4884,15 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       const reviewHead = reviewerRoutingRoot ? process.env[DESK_REVIEW_HEAD] : undefined;
       // Only an operator-specified pool can need non-session candidates. Discover them
       // with the normal credentialed adapter; the names in a pool do not prove availability.
+      const liveReviewModels = startLiveCodexModels();
       const reviewCatalog = reviewOptions && Object.values(reviewOptions.modelPools).some(pool => pool.length)
-        ? await detectProviders({ fetch: globalThis.fetch, env: envWithSavedApiKeys(process.env, configDir) }) : [{ name: provider }];
+        ? await Promise.all([
+            detectProviders({ fetch: globalThis.fetch, env: envWithSavedApiKeys(process.env, configDir) }),
+            liveReviewModels.start(),
+          ]).then(([catalog]) => catalog)
+        : [{ name: provider }];
+      const reviewerProviders = reviewCatalog.some(candidate => candidate.name === provider)
+        ? reviewCatalog : [...reviewCatalog, { name: provider }];
       const askReviewerContext = reviewerRoutingRoot ? desktopReviewerQuestion(agentCwd) : undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
@@ -4906,7 +4913,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)),
         describeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)).describe(),
-        getDetectedProviders: () => mergeLiveCodexModels(reviewCatalog, startLiveCodexModels().models(), startLiveCodexModels().observedAt?.()),
+        getDetectedProviders: () => mergeLiveCodexModels(reviewerProviders, liveReviewModels.models(), liveReviewModels.observedAt?.()),
         getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read
         // `slateSessionBox.current` BY REFERENCE, at fold time — same

@@ -5,7 +5,7 @@ import { DESK_REVIEW_ACTIONS, type DeskReviewAction } from "../review/desk-run-t
 import { isAutonomousEnv } from "../review/run-profile";
 
 export const DESK_USAGE =
-  "keryx review desk-run <start|status|cancel|answer|readiness|decide> --json --repo owner/name --repository-id ID --viewer LOGIN --number N [--id UUID] [--decision complete|close|archive|restore|delete --reason TEXT [--waive item,item]]";
+  "keryx review desk-run <start|status|cancel|answer|continue|readiness|decide> --json --repo owner/name --repository-id ID --viewer LOGIN --number N [--id UUID] [--guidance TEXT] [--decision complete|close|archive|restore|delete --reason TEXT [--waive item,item]]";
 const sha = /^[0-9a-f]{40}$/;
 const uuid = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 export async function runReviewDesk(args: string[]) {
@@ -15,9 +15,9 @@ export async function runReviewDesk(args: string[]) {
     return;
   }
   if (action === "answer" && process.env.KERYX_UNATTENDED === "1") throw new Error("access: Review replies require the operator.");
-  if (action === "decide" && (process.env.KERYX_TOOL_CALL === "1" || process.env.KERYX_UNATTENDED === "1" ||
+  if ((action === "decide" || action === "continue") && (process.env.KERYX_TOOL_CALL === "1" || process.env.KERYX_UNATTENDED === "1" ||
       isAutonomousEnv(process.env) || !(process.env.KERYX_DESKTOP_REVIEW_ACTION === "1" || (process.stdin.isTTY && process.stdout.isTTY)))) {
-    throw new Error("Review outcome changes require an operator in Desktop or at a terminal.");
+    throw new Error("Review continuation and outcome changes require an operator in Desktop or at a terminal.");
   }
   const { values: v } = parseArgs({
     args: flags,
@@ -34,6 +34,7 @@ export async function runReviewDesk(args: string[]) {
       id: { type: "string" },
       "question-id": { type: "string" },
       answer: { type: "string" },
+      guidance: { type: "string" },
       "activity-id": { type: "string" },
       decision: { type: "string" },
       reason: { type: "string" },
@@ -63,6 +64,7 @@ export async function runReviewDesk(args: string[]) {
   const questionId = v["question-id"];
   if (action !== "answer" && (questionId !== undefined || v.answer !== undefined)) throw new Error(DESK_USAGE);
   if (action !== "decide" && (v.decision !== undefined || v.reason !== undefined || v.waive !== undefined)) throw new Error(DESK_USAGE);
+  if (v.guidance !== undefined && action !== "continue") throw new Error(DESK_USAGE);
   let input: DeskAction;
   if (action === "start" && v.base && sha.test(v.base) && v.head && sha.test(v.head) && !v.id) {
     const options = v.options === undefined ? undefined : readDeskOptionsJson(v.options);
@@ -74,6 +76,9 @@ export async function runReviewDesk(args: string[]) {
   } else if (action === "answer" && v.id && uuid.test(v.id) && questionId && uuid.test(questionId) &&
       v.answer?.trim() && v.answer.length <= 2000 && !v.base && !v.head) {
     input = { action, id: v.id, questionId, answer: v.answer };
+  } else if (action === "continue" && v.id && uuid.test(v.id) && !v.base && !v.head &&
+      (v.guidance === undefined || (v.guidance.length <= 2000 && !v.guidance.includes("\0")))) {
+    input = { action, id: v.id, ...(v.guidance?.trim() && { guidance: v.guidance.trim() }) };
   } else if (action === "cancel" && v.id && uuid.test(v.id) && !v.base && !v.head) {
     input = { action, id: v.id };
   } else if (action === "readiness" && v.id && uuid.test(v.id) && !v.base && !v.head) {

@@ -9,7 +9,7 @@ import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/confi
 import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
 import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
-import { DESK_RUN_SCOPE } from "./desk-run-types";
+import { canContinueDeskRun, DESK_RUN_SCOPE } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
 import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
 
@@ -242,6 +242,25 @@ export class DeskRunStore {
     return this.requestAttempt(cwd, key, revision, undefined, options)?.id ?? null;
   }
 
+  continuationSource(key: DeskRunKey, id: string) {
+    const attempt = this.byId(id);
+    if (!attempt || attempt.key.repositoryId !== key.repositoryId || attempt.key.number !== key.number ||
+        attempt.key.viewer.toLowerCase() !== key.viewer.toLowerCase()) {
+      throw new Error("access: This attempt is unavailable for the selected account and pull request.");
+    }
+    if (!canContinueDeskRun(attempt.run) || this.latestAdmission(key) !== id || this.active(key) || this.queued(key)) {
+      throw new Error("stale: Another review is active or this attempt is out of date. Refresh the review.");
+    }
+    return attempt;
+  }
+
+  requestContinuation(cwd: string, key: DeskRunKey, id: string, guidance?: string) {
+    const { run } = this.continuationSource(key, id);
+    const result = this.requestAttempt(cwd, key, { baseSha: run.baseSha, headSha: run.headSha }, undefined, run.options,
+      { previousId: id, ...(guidance && { guidance }) });
+    return result?.id ?? null;
+  }
+
   save(a: Attempt) {
     this.db.run("UPDATE runs SET state=?, pid=?, details=? WHERE id=?", [
       a.run.state,
@@ -322,7 +341,7 @@ export class DeskRunStore {
     type Item = { details: string; state: string; bytes: number; chars: number; report: string };
     const selected = id === undefined ? "" : " AND id=?";
     const sql = `WITH scoped AS (
-        SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity') AS metadata,
+        SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.continuation.guidance') AS metadata,
           coalesce(json_extract(details,'$.result.report'),'') AS report
         FROM runs WHERE repo=? AND pr=? AND viewer=?
           AND coalesce(json_extract(details,'$.decision.action'),'')!='delete'${selected}
@@ -476,6 +495,7 @@ export class DeskRunStore {
     revision: DeskRevision,
     schedule?: DeskSchedule,
     options?: DeskReviewOptions,
+    continuation?: DeskRun["continuation"],
   ): { id: string; reused: boolean } | null {
     const match = (a: Attempt) =>
       a.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
@@ -491,7 +511,7 @@ export class DeskRunStore {
     // Failures, cancellations and partial results may already have consumed budget.
     // Only an explicit manual request may buy another attempt for this same range.
     if (
-      previous &&
+      previous && !continuation &&
       ((schedule && !previous.retryable) || (previous.state === "completed" && previous.complete))
     ) {
       return { id: previous.id, reused: true };
@@ -512,6 +532,7 @@ export class DeskRunStore {
       source: schedule ? "scheduled" : "manual",
       ...(schedule ? { schedule, preflightAttempt: (previous?.attempt ?? 0) + 1 } : {}),
       ...(options ? { options: parseDeskReviewOptions(options) } : {}),
+      ...(continuation && { continuation }),
       scope: DESK_RUN_SCOPE,
       ...revision,
       state: "queued",

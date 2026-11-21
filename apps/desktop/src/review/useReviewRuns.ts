@@ -25,7 +25,7 @@ export function useReviewRuns(
   const followers = useRef(new Map<symbol, string>());
   const followedId = useCallback(() => Array.from(followers.current.values()).at(-1), []);
   const [activityLoaded, setActivityLoaded] = useState<string>();
-  type PollAction = Exclude<Parameters<typeof reviewRun>[2], { kind: "decide" | "readiness" }>;
+  type PollAction = Exclude<Parameters<typeof reviewRun>[2], { kind: "continue" | "decide" | "readiness" }>;
   const pending = useRef<PollAction["kind"] | null>(null);
   const request = useCallback(async function request(action: PollAction, automatic = false): Promise<void> {
     // A mutation can overtake a status read. A stale read must never roll it back.

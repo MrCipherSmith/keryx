@@ -154,7 +154,7 @@ async fn invoke_review_at(
     invoke_review_at_with(app, read_only, root, move |mut cmd| {
         let desktop_action = args.first().map(String::as_str) == Some("review")
             && args.get(1).map(String::as_str) == Some("desk-run")
-            && matches!(args.get(2).map(String::as_str), Some("start" | "decide"));
+            && matches!(args.get(2).map(String::as_str), Some("start" | "continue" | "decide"));
         cmd.args(args);
         if desktop_action {
             cmd.env("KERYX_DESKTOP_REVIEW_ACTION", "1");
@@ -286,6 +286,7 @@ pub enum RunAction {
         options: Option<Value>,
     },
     Cancel { id: String },
+    Continue { id: String, guidance: Option<String> },
     Answer { id: String, #[serde(rename = "questionId")] question_id: String, answer: String },
     Readiness { id: String },
     Decide { id: String, decision: String, reason: String, waive: Option<Vec<String>> },
@@ -310,6 +311,15 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
                 payload_arg = Some(format!("--options={json}"));
             }
             ("start", vec![("--base", base_sha), ("--head", head_sha)])
+        },
+        RunAction::Continue { id, guidance } => {
+            if let Some(text) = guidance {
+                if text.encode_utf16().count() > 2000 || text.contains('\0') {
+                    return Err("configuration: Review guidance is too long.".into());
+                }
+                payload_arg = Some(format!("--guidance={text}"));
+            }
+            ("continue", vec![("--id", id)])
         },
         RunAction::Cancel { id } => ("cancel", vec![("--id", id)]),
         RunAction::Readiness { id } => ("readiness", vec![("--id", id)]),

@@ -603,7 +603,7 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
   if (readOnly) reviewReaders++;
   let stdout: string;
   try {
-    const desktopAction = argv[0] === "review" && argv[1] === "desk-run" && (argv[2] === "start" || argv[2] === "decide");
+    const desktopAction = argv[0] === "review" && argv[1] === "desk-run" && ["start", "continue", "decide"].includes(argv[2] ?? "");
     ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024,
       ...(desktopAction && { env: { ...process.env, KERYX_DESKTOP_REVIEW_ACTION: "1" } }) }));
   } catch (error) {
