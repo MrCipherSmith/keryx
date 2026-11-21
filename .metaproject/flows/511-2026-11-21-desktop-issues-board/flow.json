@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "511",
+  "slug": "desktop-issues-board",
+  "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
+  "status": "initializing",
+  "createdAt": "2026-11-21T20:10:01.247Z",
+  "updatedAt": "2026-11-21T20:13:46.106Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "human-request",
+    "quote": "из тикета так же нужна карточка создания - перехода к привязанной сессии, кнопка создания фло на основании тикета",
+    "source": "User request in Keryx Issues planning session"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Prepared the source analysis, integration contract, UI design and acceptance scenarios."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "T5 through T11 replace this generic implementation task."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "T12 and T13 replace this generic test task."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "T14 owns final review and operator guidance."
+    },
+    {
+      "id": "T5",
+      "title": "Define issue identity, viewer scope and launch contracts",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Implement account-scoped issue listing, detail and sync",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Resolve issue repository and bind or resume its ACP session",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Prepare or adopt an issue Flow with the native orchestrator",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Build Issues board, list and resizable detail in Desktop",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Support selected GitHub Project status and explicit moves",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Connect issue actions, Flow progress and the session inbox",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Exercise contracts, recovery and data isolation on GitHub CI",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T8",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Verify the native Desktop and Shell handoff on a test issue",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Review shipped behavior, compatibility and operator guidance",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-21T20:10:01.247Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-21T20:11:01.578Z",
+      "event": "task-added",
+      "detail": "T5: Define issue identity, viewer scope and launch contracts"
+    },
+    {
+      "at": "2026-11-21T20:11:01.802Z",
+      "event": "task-added",
+      "detail": "T6: Implement account-scoped issue listing, detail and sync"
+    },
+    {
+      "at": "2026-11-21T20:11:02.047Z",
+      "event": "task-added",
+      "detail": "T7: Resolve issue repository and bind or resume its ACP session"
+    },
+    {
+      "at": "2026-11-21T20:11:02.267Z",
+      "event": "task-added",
+      "detail": "T8: Prepare or adopt an issue Flow with the native orchestrator"
+    },
+    {
+      "at": "2026-11-21T20:11:02.488Z",
+      "event": "task-added",
+      "detail": "T9: Build Issues board, list and resizable detail in Desktop"
+    },
+    {
+      "at": "2026-11-21T20:11:02.725Z",
+      "event": "task-added",
+      "detail": "T10: Support selected GitHub Project status and explicit moves"
+    },
+    {
+      "at": "2026-11-21T20:11:02.969Z",
+      "event": "task-added",
+      "detail": "T11: Connect issue actions, Flow progress and the session inbox"
+    },
+    {
+      "at": "2026-11-21T20:11:03.199Z",
+      "event": "task-added",
+      "detail": "T12: Exercise contracts, recovery and data isolation on GitHub CI"
+    },
+    {
+      "at": "2026-11-21T20:11:03.435Z",
+      "event": "task-added",
+      "detail": "T13: Verify the native Desktop and Shell handoff on a test issue"
+    },
+    {
+      "at": "2026-11-21T20:11:03.677Z",
+      "event": "task-added",
+      "detail": "T14: Review shipped behavior, compatibility and operator guidance"
+    },
+    {
+      "at": "2026-11-21T20:13:45.356Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-21T20:13:45.605Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-21T20:13:45.858Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-21T20:13:46.106Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

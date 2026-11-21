@@ -1,0 +1,91 @@
+{
+  "phase": "COMPLETION",
+  "intent": "analyze",
+  "job_name": "analysis--issues-board",
+  "context": {
+    "project_dir": "."
+  },
+  "plan": {
+    "steps": [
+      {
+        "id": "analyze",
+        "type": "analyze",
+        "agent": "issue-analyzer",
+        "depends": [],
+        "status": "completed"
+      },
+      {
+        "id": "context",
+        "type": "context",
+        "agent": "context-collector",
+        "depends": [
+          "analyze"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "report",
+        "type": "report",
+        "agent": "orchestrator",
+        "depends": [
+          "context"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": "proposal",
+        "type": "proposal",
+        "agent": "orchestrator",
+        "depends": [
+          "report"
+        ],
+        "status": "completed"
+      }
+    ]
+  },
+  "documentation": {
+    "job_path": ".metaproject/jobs/analysis--issues-board",
+    "documents_created": [
+      "analysis.md",
+      "verification-report.md"
+    ]
+  },
+  "metrics": {
+    "steps": [
+      {
+        "step_id": "analyze",
+        "retries": 0,
+        "started_at": "2026-11-21T20:08:17.161Z",
+        "status": "completed",
+        "completed_at": "2026-11-21T20:10:01.505Z",
+        "duration_ms": 104344
+      },
+      {
+        "step_id": "context",
+        "retries": 0,
+        "started_at": "2026-11-21T20:10:01.769Z",
+        "status": "completed",
+        "completed_at": "2026-11-21T20:13:38.149Z",
+        "duration_ms": 216380
+      },
+      {
+        "step_id": "report",
+        "retries": 0,
+        "started_at": "2026-11-21T20:13:38.403Z",
+        "status": "completed",
+        "completed_at": "2026-11-21T20:14:10.882Z",
+        "duration_ms": 32479
+      },
+      {
+        "step_id": "proposal",
+        "retries": 0,
+        "started_at": "2026-11-21T20:14:11.146Z",
+        "status": "completed",
+        "completed_at": "2026-11-21T20:14:32.940Z",
+        "duration_ms": 21794
+      }
+    ]
+  },
+  "jobs_root": ".metaproject/jobs",
+  "updated_at": "2026-11-21T20:14:33.205Z"
+}

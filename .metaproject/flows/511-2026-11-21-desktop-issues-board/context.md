@@ -1,0 +1,19 @@
+# Проверенная основа для реализации
+
+Базовое дерево исследования — [Keryx main df73018d9](https://github.com/MrCipherSmith/keryx/tree/df73018d9). Пакет подготовлен в рабочем каталоге постановки. При начале разработки сравните перечисленные контракты с актуальным main. Архитектурная wiki и индекс графа использовались для навигации, факты ниже сверены по исходникам этой ревизии.
+
+| Что уже работает | Как использовать |
+|---|---|
+| Desktop открывает Sessions и подставляет ссылку, индексирует связанные сессии по `_meta.keryx.flow`. Путь ранее открытой сессии только загружает её. | Ввести подтверждаемую постоянную привязку ранее открытой сессии к Flow и запуск первого хода через ACP. [App.tsx](https://github.com/MrCipherSmith/keryx/blob/df73018d9/apps/desktop/src/App.tsx#L301) · [useAcpSession.ts](https://github.com/MrCipherSmith/keryx/blob/df73018d9/apps/desktop/src/session/useAcpSession.ts#L716) |
+| Desktop уже выбирает GitHub-аккаунт проекта. Адаптер Flow запускает gh и наследует окружение процесса. При отказе чтения ядро может создать пакет с заглушкой вместо описания. | Проверять эффективный viewer на всём пути. Отличать пустое описание от отказа, восстановить доступ до продолжения подготовки. [GitHub accounts](https://github.com/MrCipherSmith/keryx/blob/df73018d9/apps/desktop/src/platform/githubAccounts.ts) · [tracker](https://github.com/MrCipherSmith/keryx/blob/df73018d9/src/flow/tracker/github.ts) · [context](https://github.com/MrCipherSmith/keryx/blob/df73018d9/src/flow/context.ts#L29) |
+| Task Manager сохраняет URL в `source.ref`; выделяет номер под блокировкой, общей для worktree клона. Desktop читает карточки и перечитывает их по событиям. | Проецировать источник в карточку, находить legacy-пакеты. Отдельно обеспечить идемпотентность создания по ключу тикета. [Flow service](https://github.com/MrCipherSmith/keryx/blob/df73018d9/src/flow/service.ts#L783) · [парсер](https://github.com/MrCipherSmith/keryx/blob/df73018d9/apps/desktop/src-tauri/src/flows/parse.rs) |
+| Intake восстанавливает незавершённое действие по идентификатору карточки. | Заимствовать приём записи намерения и восстановления, расширив его на Desktop, Shell и самостоятельный CLI. [Intake actions](https://github.com/MrCipherSmith/keryx/blob/df73018d9/src/intake/actions.ts) |
+| Flow init собирает начальный контекст. Общий навык обогащает его, формирует описание, задачи и критерии. ACP передаёт вопросы с идентификатором сессии. | Передавать ограничение «подготовить» и фактические возможности хоста; вопросы, ответы и первый ход сохранять в настоящей сессии. [Flow init](https://github.com/MrCipherSmith/keryx/blob/df73018d9/.metaproject/skills/flow/init.md) · [ACP](https://github.com/MrCipherSmith/keryx/blob/df73018d9/src/acp/ask-user.ts) |
+
+## Аналоги и решение
+
+GitHub даёт полезные срезы назначений, авторства и упоминаний. Его REST-выдача может включать pull requests. Linear показывает удобство одного набора фильтров для списка и доски. В GitHub Projects перенос карточки меняет значение поля удалённого проекта. Отсюда два явных режима доски — вычисляемый ход работы Keryx и колонки выбранного GitHub Project. [GitHub Issues](https://docs.github.com/en/rest/issues/issues) · [Linear Board](https://linear.app/docs/board-layout) · [GitHub Projects API](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-api-to-manage-projects)
+
+Навык подготовки ищет проектные правила и контекст через index локального проекта. При наличии зарегистрированных референсов разрешает чтение в пределах настроенного доступа и фиксирует источник. Возможность референсов проверяется по доступным командам на целевом main. Сбор доступного контекста в проекте работает самостоятельно.
+
+Аудит маршрутизации: graph_used=yes (подсказка навигации, индекс старше базы), wiki_used=yes, ctx_used=yes, raw_rg_used=no.
