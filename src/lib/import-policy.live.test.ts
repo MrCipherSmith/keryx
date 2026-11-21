@@ -512,6 +512,10 @@ test("some core zones have no service.ts, so the facade rule is unsatisfiable fo
     "review",
     "sync",
     "trigger",
+    // Flow 506: `src/worktree/` is reached through its own `index.ts` barrel and
+    // direct imports from `commands/worktree.ts`; a `service.ts` facade would be
+    // a second door with no second caller.
+    "worktree",
   ]);
   // Load-bearing rather than theoretical: code really does import from them.
   expect(unavoidable).toBeGreaterThan(0);

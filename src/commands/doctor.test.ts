@@ -15,6 +15,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { chmod, mkdir, realpath, symlink, writeFile } from "node:fs/promises";
+import { readCheckout } from "../worktree/checkout";
+import { createWorktree } from "../worktree/create";
+import { createProjectFixture, everyPortFree } from "../worktree/project-fixture";
+import { addWorktree, createFixture } from "../worktree/test-support";
 import { COMMIT_MSG_FIX_LINE, installCommitMsgHookOrWarn } from "../lib/managed-git-hook";
 import {
   buildDoctorReport,
@@ -211,7 +215,10 @@ describe("buildDoctorReport — shape (AC1: {checks:[{id,status,detail,fix?}]})"
 
         const worktreesFromMain = fromMain.checks.find((c) => c.id === "worktrees");
         const worktreesFromLinked = fromLinked.checks.find((c) => c.id === "worktrees");
-        expect(worktreesFromLinked).toEqual(worktreesFromMain);
+        // Same verdict and same stale-entry answer; from a linked worktree the detail
+        // additionally describes that checkout (worktree readiness, spec §8).
+        expect(worktreesFromLinked?.status).toBe(worktreesFromMain?.status);
+        expect(worktreesFromLinked?.detail.startsWith(worktreesFromMain?.detail ?? "?")).toBe(true);
         // Both see the ONE registered worktree, not "no .claude/worktrees directory".
         expect(worktreesFromMain?.detail).toContain("1 worktree(s)");
       } finally {
@@ -242,6 +249,49 @@ describe("buildDoctorReport — shape (AC1: {checks:[{id,status,detail,fix?}]})"
       } finally {
         await rm(linkDir, { recursive: true, force: true });
         await rm(mainRoot, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("worktrees check: readiness of a linked worktree (spec §8)", () => {
+    test("a prepared worktree reports its label, ports, prepare state and unpromoted count; the main checkout adds nothing", async () => {
+      const project = await createProjectFixture();
+      try {
+        const created = await createWorktree({
+          cwd: project.main,
+          name: "wt-doctor",
+          base: "main",
+          runInstall: project.runInstall,
+          isPortFree: everyPortFree,
+        });
+        const label = await readCheckout(created.path);
+        expect(label).toBeDefined();
+
+        const linked = (await buildDoctorReport(created.path, {})).checks.find((c) => c.id === "worktrees");
+        expect(linked?.status).toBe("ok");
+        expect(linked?.detail).toContain(`checkoutId ${label?.checkoutId}`);
+        expect(linked?.detail).toContain("ports PORT=5200");
+        expect(linked?.detail).toContain("prepared ");
+        expect(linked?.detail).toContain("0 unpromoted entries");
+
+        const main = (await buildDoctorReport(project.main, {})).checks.find((c) => c.id === "worktrees");
+        expect(main?.detail).not.toContain("checkoutId");
+      } finally {
+        project.cleanup();
+      }
+    });
+
+    test("an unlabelled linked worktree says it is not prepared, without failing", async () => {
+      const fixture = createFixture();
+      try {
+        const worktree = addWorktree(fixture, "wt-bare");
+        await mkdir(path.join(worktree, ".metaproject"), { recursive: true }); // project-scoped checks run only in a keryx project
+        const check = (await buildDoctorReport(worktree, {})).checks.find((c) => c.id === "worktrees");
+        expect(check?.status).not.toBe("fail");
+        expect(check?.detail).toContain("checkoutId none");
+        expect(check?.detail).toContain("not prepared");
+      } finally {
+        fixture.cleanup();
       }
     });
   });

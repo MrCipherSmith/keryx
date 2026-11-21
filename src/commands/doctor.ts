@@ -35,6 +35,7 @@ import { harnessAdapterIds, doctorIntegration } from "../integrations/service";
 import { checkGraphStaleness } from "../gdgraph/service";
 import { readWikiFreshnessMetric } from "../health/service";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
+import { worktreeStatus } from "../worktree/status";
 import { gitToplevel } from "../lib/clone-scope";
 import { claudeHooksExpected, inspectEntrypoints, rulesBlockFix, rulesBlockKeptReason, type EntrypointInspection } from "../rules/entrypoint-inspection";
 import { COMMIT_MSG_HOOK_DISABLED_DETAIL, inspectCommitMsgHook } from "../lib/managed-git-hook";
@@ -92,6 +93,39 @@ async function registeredWorktrees(cwd: string): Promise<Set<string>> {
  * the directory this check reads needs to change.
  */
 async function checkWorktrees(cwd: string): Promise<DoctorCheck> {
+  const check = await checkWorktreeEntries(cwd);
+  const own = await describeOwnCheckout(cwd);
+  return own === undefined ? check : { ...check, detail: `${check.detail}; ${own}` };
+}
+
+/**
+ * When `cwd` is a linked worktree: its checkout label, ports, prepare state and
+ * unpromoted-entry count (names and counts only; spec §8). Informational — it never
+ * changes the check's status. `undefined` for the main checkout and outside git.
+ */
+async function describeOwnCheckout(cwd: string): Promise<string | undefined> {
+  try {
+    const status = await worktreeStatus(cwd);
+    if (status.main) return undefined;
+    const ports = Object.entries(status.ports).map(([name, value]) => `${name}=${value}`);
+    const failed = Object.entries(status.prepare?.steps ?? {}).filter(([, outcome]) => outcome === "failed").map(([step]) => step);
+    const prepared =
+      status.prepare === undefined
+        ? "not prepared (keryx worktree prepare)"
+        : `prepared ${status.prepare.at}${failed.length > 0 ? `, failed steps: ${failed.join(", ")}` : ""}`;
+    const unpromoted = status.unpromoted.memory.length + status.unpromoted.learning.length;
+    return [
+      `this checkout is a linked worktree, checkoutId ${status.checkout?.checkoutId ?? "none"}`,
+      `ports ${ports.length > 0 ? ports.join(" ") : "none"}`,
+      prepared,
+      `${unpromoted} unpromoted entr${unpromoted === 1 ? "y" : "ies"}`,
+    ].join(", ");
+  } catch {
+    return undefined;
+  }
+}
+
+async function checkWorktreeEntries(cwd: string): Promise<DoctorCheck> {
   const mainRoot = (await resolveMainCheckoutRoot(cwd)) ?? cwd;
   const worktreesDir = path.join(mainRoot, ".claude", "worktrees");
   let entries: string[];

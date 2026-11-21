@@ -63,6 +63,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
     reason:
       "rewrites three files in the Part 1 materials catalog from the repository itself and runs a script and archive tools (flow 404); a scheduled maintenance job for the operator, not an operation an agent calls for a result",
   },
+  {
+    verb: "worktree",
+    reason:
+      "creates and removes git worktrees and branches, copies .env secrets between checkouts and moves memory entries into the user area; an operator lifecycle action on the machine, not a callable operation for an agent",
+  },
   { verb: "dash", reason: "alias of dashboard open; opens a browser, no machine-consumable result" },
   { verb: "dashboard", reason: "build writes a human artifact and open launches a browser; neither is an agent operation" },
   {

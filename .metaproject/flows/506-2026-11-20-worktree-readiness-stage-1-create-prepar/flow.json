@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "506",
+  "slug": "worktree-readiness-stage-1-create-prepar",
+  "title": "Worktree readiness stage 1: create/prepare/promote, env, deps, ports, indexes, agent root lines",
+  "status": "in-progress",
+  "createdAt": "2026-11-20T22:26:21.757Z",
+  "updatedAt": "2026-11-20T23:33:39.639Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:eb49ccc6454c8364b6d1bcf896bf07873761f55d4082f4a168f428665013b697",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "context collected at init (context.md)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests ship with each implement task"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Foundations: config loader, checkout label, git helpers, env-files, deps",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T22:27:49.695Z",
+            "outcome": "started",
+            "detail": "506-T5 sonnet worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Ports journal and worktree env/exec",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T22:32:12.865Z",
+            "outcome": "started",
+            "detail": "506-T6 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "prepare/create/status/remove/promote and the keryx worktree CLI",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T22:34:54.221Z",
+            "outcome": "started",
+            "detail": "506-T7 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Integration: agent lines, trigger run, subagents, external agents, doctor",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T22:51:10.427Z",
+            "outcome": "started",
+            "detail": "506-T8 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "End-to-end demo and full checks",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-20T22:26:21.757Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-20T22:27:39.018Z",
+      "event": "task-added",
+      "detail": "T5: Foundations: config loader, checkout label, git helpers, env-files, deps"
+    },
+    {
+      "at": "2026-11-20T22:27:39.253Z",
+      "event": "task-added",
+      "detail": "T6: Ports journal and worktree env/exec"
+    },
+    {
+      "at": "2026-11-20T22:27:39.502Z",
+      "event": "task-added",
+      "detail": "T7: prepare/create/status/remove/promote and the keryx worktree CLI"
+    },
+    {
+      "at": "2026-11-20T22:27:39.741Z",
+      "event": "task-added",
+      "detail": "T8: Integration: agent lines, trigger run, subagents, external agents, doctor"
+    },
+    {
+      "at": "2026-11-20T22:27:39.971Z",
+      "event": "task-added",
+      "detail": "T9: End-to-end demo and full checks"
+    },
+    {
+      "at": "2026-11-20T22:27:40.195Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-20T22:27:40.420Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-20T22:27:40.660Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-20T22:27:43.508Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-20T22:27:43.757Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-20T22:27:49.695Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 506-T5 sonnet worker"
+    },
+    {
+      "at": "2026-11-20T22:32:12.576Z",
+      "event": "task-done",
+      "detail": "T5: Foundations: config loader, checkout label, git helpers, env-files, deps"
+    },
+    {
+      "at": "2026-11-20T22:32:12.866Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 506-T6 sonnet"
+    },
+    {
+      "at": "2026-11-20T22:34:53.970Z",
+      "event": "task-done",
+      "detail": "T6: Ports journal and worktree env/exec"
+    },
+    {
+      "at": "2026-11-20T22:34:54.221Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 506-T7 sonnet"
+    },
+    {
+      "at": "2026-11-20T22:51:10.179Z",
+      "event": "task-done",
+      "detail": "T7: prepare/create/status/remove/promote and the keryx worktree CLI"
+    },
+    {
+      "at": "2026-11-20T22:51:10.427Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 506-T8 sonnet"
+    },
+    {
+      "at": "2026-11-20T23:01:33.221Z",
+      "event": "task-done",
+      "detail": "T8: Integration: agent lines, trigger run, subagents, external agents, doctor"
+    },
+    {
+      "at": "2026-11-20T23:11:27.407Z",
+      "event": "task-done",
+      "detail": "T9: End-to-end demo and full checks"
+    },
+    {
+      "at": "2026-11-20T23:33:39.639Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/worktree/env-files.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/worktree/deps.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/worktree/ports.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/worktree/prepare.test.ts src/worktree/exec.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/worktree/promote.test.ts src/worktree/remove.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/worktree/metaproject.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/worktree/agent-lines.test.ts src/harness/child"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/commands/trigger-dispatch.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/commands/doctor.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/worktree/no-forbidden-git.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/worktree/config.test.ts"
+    },
+    "AC12": {
+      "kind": "judged"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun run typecheck"
+    }
+  }
+}
