@@ -14,7 +14,6 @@ export interface RepairGrant extends PrRepairSource {
 export interface RepairReply {
   kind: "thread" | "review";
   id: string;
-  url: string;
 }
 
 export interface RepairPlan {

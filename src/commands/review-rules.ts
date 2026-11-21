@@ -40,7 +40,7 @@ const choice = z.discriminatedUnion("mode", [
   z.strictObject({ mode: z.literal("project") }),
   z.strictObject({ mode: z.literal("manual") }),
 ]);
-const modelField = z.string().min(1).max(200).regex(/^[\w][\w.\/:+@-]*$/);
+const modelField = z.string().min(1).max(200).regex(/^[\w][\w./:+@-]*$/);
 const repair = z.strictObject({
   model: z.strictObject({ provider: modelField, model: modelField }),
   conflicts: z.boolean(), ci: z.boolean(), reviews: z.boolean(),

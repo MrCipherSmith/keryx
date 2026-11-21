@@ -1,3 +1,4 @@
+import type { RunPrRepair } from "./watcher-repair";
 import { scheduledRunOutcomes } from "./desk-run-store";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
@@ -205,9 +206,11 @@ export async function pollWatcher(
   {
     fetch = fetchOpenCards,
     dispatch,
+    runPrRepair,
     outcomes = scheduledRunOutcomes,
   }: {
     dispatch?: DispatchReviewRule;
+    runPrRepair?: RunPrRepair;
     outcomes?: typeof scheduledRunOutcomes;
     fetch?: (cwd: string, key: WatcherKey) => Promise<ReviewBoardSnapshot>;
   } = {},
@@ -298,8 +301,10 @@ export async function pollWatcher(
     const branchUpdates = openCards.filter(card => card.watcherMergeState === "BEHIND" || card.watcherMergeState === "DIRTY");
     if (branchUpdates.length) await rebaseWatchedPullRequests(cwd, key, branchUpdates);
     await dispatchReadyRules(cwd, key, dispatch);
-    const { repairWatchedPullRequests } = await import("./watcher-repair");
-    await repairWatchedPullRequests(cwd, key, openCards);
+    if (runPrRepair) {
+      const { repairWatchedPullRequests } = await import("./watcher-repair");
+      await repairWatchedPullRequests(cwd, key, openCards, runPrRepair);
+    }
   }
   return readWatcher(cwd, key);
 }

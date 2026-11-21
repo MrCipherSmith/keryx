@@ -112,7 +112,9 @@ export async function requestWatch(
   if (action === "tick") {
     // All full baseline/history writes are owned and fenced by the poll service.
     await verifyWatcherTimerTools();
-    return publicStatus(await pollWatcher(project, target));
+    return publicStatus(await pollWatcher(project, target, {
+      runPrRepair: async input => (await import("./pr-repair-agent")).runPrRepairAgent(input),
+    }));
   }
   if (action === "status") {
     const snapshot = readWatcher(project, target);

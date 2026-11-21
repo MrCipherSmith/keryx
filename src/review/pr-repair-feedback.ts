@@ -39,14 +39,14 @@ export async function readReviewFeedback(
     if (!thread.resolved && !thread.outdated && repairPathAllowed(thread.path) && message &&
         !message.own && reviewers.has(message.author) && message.body.trim()) {
       candidates.push({
-        cause: "thread:" + message.id, reply: { kind: "thread", id: thread.id, url: message.url },
+        cause: "thread:" + message.id, reply: { kind: "thread", id: thread.id },
         evidence: { body: message.body.slice(0, 8000), path: thread.path, line: thread.line },
       });
     }
   }
   for (const review of reviews) {
     if (!review.body.trim()) continue;
-    const reply: RepairReply = { kind: "review", id: review.id, url: review.url };
+    const reply: RepairReply = { kind: "review", id: review.id };
     if (discussion.comments.some(comment => comment.own && comment.body.includes(replyMarker(reply)))) continue;
     candidates.push({ cause: "review:" + review.id, reply, evidence: { body: review.body.slice(0, 8000) } });
   }

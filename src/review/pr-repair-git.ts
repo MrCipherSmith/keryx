@@ -3,6 +3,7 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { revisionOperand } from "../lib/git-revision";
 import { isUnattendedProtectedPath } from "../trigger/unattended";
 import { reviewTool } from "./github-cli";
 import { safeSourcePath } from "./pinned-source";
@@ -50,9 +51,9 @@ export class RepairCheckout {
     this.cwd = join(directory, "checkout");
     this.hooks = join(directory, "hooks");
     this.gitBin = reviewTool("git", auth.env);
+    const credentialEnvironment = ["PATH", "HOME", "XDG_CONFIG_HOME", "GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN"];
     this.env = {
-      PATH: auth.env.PATH, HOME: auth.env.HOME, XDG_CONFIG_HOME: auth.env.XDG_CONFIG_HOME,
-      GH_CONFIG_DIR: auth.env.GH_CONFIG_DIR, GH_TOKEN: auth.env.GH_TOKEN, GITHUB_TOKEN: auth.env.GITHUB_TOKEN,
+      ...Object.fromEntries(credentialEnvironment.map(name => [name, auth.env[name]])),
       GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_NO_REPLACE_OBJECTS: "1",
       GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1", GIT_EDITOR: "/usr/bin/true",
     };
@@ -96,11 +97,11 @@ export class RepairCheckout {
     await this.git(["init", "--quiet", "--template="]);
     await this.git(["check-ref-format", this.branchRef]);
     await this.git(["check-ref-format", baseRef]);
-    await this.git(["fetch", "--quiet", "--no-tags", target, `${baseRef}:refs/keryx/base`, `refs/pull/${number}/head:refs/keryx/head`]);
+    await this.git(["fetch", "--quiet", "--no-tags", ...revisionOperand(target), `${baseRef}:refs/keryx/base`, `refs/pull/${number}/head:refs/keryx/head`]);
     const head = (await this.git(["rev-parse", "refs/keryx/head"])).trim();
     const base = (await this.git(["rev-parse", "refs/keryx/base"])).trim();
     if (head !== this.head || base !== this.base) throw new Error("The pull request advanced before the checkout was prepared.");
-    await this.git(["checkout", "--quiet", "--detach", this.head]);
+    await this.git(["checkout", "--quiet", "--detach", ...revisionOperand(this.head)]);
     // The host commits with a GitHub-safe identity. No operator email is read from Git config.
     await this.git(["config", "user.name", key.viewer]);
     const emailName = Number.isSafeInteger(viewerId) && viewerId! > 0 ? `${viewerId}+${key.viewer}` : key.viewer;
@@ -109,7 +110,7 @@ export class RepairCheckout {
 
   async mergeBase(): Promise<string[]> {
     try {
-      await this.git(["merge", "--no-commit", "--no-ff", this.base]);
+      await this.git(["merge", "--no-commit", "--no-ff", ...revisionOperand(this.base)]);
     } catch (error) {
       const files = (await this.git(["diff", "--name-only", "--diff-filter=U", "-z"])).split("\0").filter(Boolean);
       if (!files.length) throw error;
@@ -145,7 +146,7 @@ export class RepairCheckout {
     // Git checks for remaining conflict markers. For a merge, limit the check to
     // the resolved paths so unrelated legacy whitespace in the base stays intact.
     if (conflictFiles.length || !await this.hasMerge()) {
-      await this.git(["--literal-pathspecs", "diff", "--cached", "--check", "--", ...conflictFiles]);
+      await this.git(["--literal-pathspecs", "diff", "--cached", "--check", "--end-of-options", "--", ...conflictFiles]);
     }
     if (!delta[0] && !await this.hasMerge()) return null;
     await this.git(["commit", "--quiet", "-m", message]);
@@ -158,7 +159,7 @@ export class RepairCheckout {
 
   async push(commit: string, authorize: <T>(act: () => T) => T) {
     if (!sha.test(commit)) throw new Error("Invalid repair commit.");
-    await this.git(["merge-base", "--is-ancestor", this.head, commit]);
+    await this.git(["merge-base", "--is-ancestor", ...revisionOperand(this.head), commit]);
     await authorize(() => this.git(["push", "--porcelain", "--no-follow-tags", `https://github.com/${this.headRepo}.git`, `${commit}:${this.branchRef}`], {
       ...this.env, KERYX_REPAIR_OLD: this.head, KERYX_REPAIR_NEW: commit, KERYX_REPAIR_REF: this.branchRef,
     }, this.hooks));

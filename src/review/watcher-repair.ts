@@ -9,10 +9,19 @@ import { readFailedActionsJob } from "./pr-repair-ci";
 import { isActionableReview, publishRepairReply, readReviewFeedback } from "./pr-repair-feedback";
 import { RepairCheckout } from "./pr-repair-git";
 import { RepairStore, type RepairGrant, type RepairPlan, type RepairReply } from "./watcher-repair-store";
-import type { WatcherKey } from "./watcher-types";
+import type { PrRepairModel, WatcherKey } from "./watcher-types";
 
 type RepairSubject = { project: string; key: WatcherKey; card: ReviewCard; grant: RepairGrant; store: RepairStore };
 const maxSeconds = 240;
+export type RunPrRepair = (input: {
+  cwd: string;
+  model: PrRepairModel;
+  task: string;
+  evidence: unknown;
+  conflicts: string[];
+  signal: AbortSignal;
+  authorize: () => void;
+}) => Promise<void>;
 interface RepairTask {
   cause: string;
   kind: "conflict" | "ci" | "review";
@@ -94,7 +103,7 @@ async function finishRepair(context: RepairSubject, id: string, plan: RepairPlan
   }, { timeoutMs: 0 });
 }
 
-async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, id: string, task: RepairTask) {
+async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, id: string, task: RepairTask, runPrRepair: RunPrRepair) {
   const { store, grant, key, card } = context;
   const signal = AbortSignal.timeout(maxSeconds * 1000);
   let stage = "preparing the checkout";
@@ -113,8 +122,7 @@ async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, 
     const conflicts = task.kind === "conflict" ? await checkout.mergeBase() : [];
     if (conflicts.length || task.kind !== "conflict") {
       stage = "waiting for the selected model to complete the repair";
-      const { runPrRepairAgent } = await import("../commands/pr-repair-agent");
-      await runPrRepairAgent({
+      await runPrRepair({
         cwd: checkout.cwd, model: grant.settings.model, task: task.prompt,
         evidence: task.evidence, conflicts, signal,
         authorize: () => store.authorized(grant, subject.auth, () => undefined),
@@ -139,14 +147,14 @@ async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, 
       const message = `Automatic repair stopped while ${stage}.`;
       if (current.state !== "prepared") store.event(card.headSha,
         message + (drafted ? " The pull request remains in Draft." : ""), id, "failed");
-      else store.event(card.headSha, message);
+      else store.event(card.headSha, "Waiting for GitHub to confirm the repair and any follow-up actions.");
     }
   } finally {
     await checkout?.dispose();
   }
 }
 
-export async function repairWatchedPullRequests(project: string, key: WatcherKey, cards: ReviewCard[]) {
+export async function repairWatchedPullRequests(project: string, key: WatcherKey, cards: ReviewCard[], runPrRepair: RunPrRepair) {
   const scope = watcherScope(project, key);
   for (const card of cards) {
     if (card.author.toLowerCase() !== key.viewer.toLowerCase()) continue;
@@ -183,7 +191,7 @@ export async function repairWatchedPullRequests(project: string, key: WatcherKey
       const id = store.claim(grant, task.cause, card.headSha);
       if (!id) continue;
       store.event(card.headSha, task.starting);
-      await executeRepair(context, subject, id, task);
+      await executeRepair(context, subject, id, task, runPrRepair);
       // One model turn per watcher tick leaves the remaining PRs for later polls.
       return;
     } catch {
