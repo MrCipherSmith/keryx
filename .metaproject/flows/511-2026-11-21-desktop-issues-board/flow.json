@@ -11,7 +11,7 @@
   "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
   "status": "in-progress",
   "createdAt": "2026-11-21T20:10:01.247Z",
-  "updatedAt": "2026-11-21T21:03:50.308Z",
+  "updatedAt": "2026-11-21T21:09:25.899Z",
   "source": {
     "type": "description",
     "ref": null
@@ -144,7 +144,7 @@
       "id": "T7",
       "title": "Resolve issue repository and bind or resume its ACP session",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -160,7 +160,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -172,8 +173,14 @@
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T21:09:25.899Z",
+            "outcome": "started",
+            "detail": "Adopt or initialize the package and hand off an idempotent coordinator turn."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -400,6 +407,16 @@
       "at": "2026-11-21T21:03:50.308Z",
       "event": "task-attempt",
       "detail": "T9: started (attempt 1) — Desktop board, list and resizable issue detail"
+    },
+    {
+      "at": "2026-11-21T21:09:25.357Z",
+      "event": "task-done",
+      "detail": "T7: Resolve issue repository and bind or resume its ACP session"
+    },
+    {
+      "at": "2026-11-21T21:09:25.899Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — Adopt or initialize the package and hand off an idempotent coordinator turn."
     }
   ],
   "acKinds": {

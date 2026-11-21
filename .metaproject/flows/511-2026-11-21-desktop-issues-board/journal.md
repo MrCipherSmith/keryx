@@ -23,3 +23,5 @@
 - 2026-11-21T20:59:55.771Z - task-attempt: T7: started (attempt 1) — Resolve the checkout and durable session identity.
 - 2026-11-21T21:03:49.691Z - task-done: T6: Implement account-scoped issue listing, detail and sync
 - 2026-11-21T21:03:50.308Z - task-attempt: T9: started (attempt 1) — Desktop board, list and resizable issue detail
+- 2026-11-21T21:09:25.357Z - task-done: T7: Resolve issue repository and bind or resume its ACP session
+- 2026-11-21T21:09:25.899Z - task-attempt: T8: started (attempt 1) — Adopt or initialize the package and hand off an idempotent coordinator turn.
