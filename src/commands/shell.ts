@@ -2753,10 +2753,10 @@ export async function runAgentRepl(
       if (finalizing) return;
       const abort = new AbortController();
       activeAgentAbort = abort;
-      const issueLine = issueShellSource(slateSession?.dir, operatorLine, history.some(row => row.role === "user" && !row.injected));
+      const externalContext = issueShellSource(slateSession?.dir, operatorLine, history.some(row => row.role === "user" && !row.injected));
       const finishIssueActivity = startIssueSessionActivity(slateSession?.dir);
-      const flight = runAgentTurn(agentIo, deps, history, issueLine ?? operatorLine, {
-        ...(issueLine ? { untrustedPrompt: true, operatorText: operatorLine } : {}),
+      const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        ...(externalContext ? { externalContext } : {}),
         ...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {}),
         recovery: rich.recovery ?? {},
         signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),

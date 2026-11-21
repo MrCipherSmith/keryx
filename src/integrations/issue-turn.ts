@@ -18,6 +18,7 @@ export function issuePreparationPrompt(bound: BoundIssue): string {
     "Use the project flow-orchestrator in prepare-only mode. Read the existing discussion, issue context, project instructions and skills.",
     `Use the verified source in context.md for every worker. For additional GitHub issue reads use keryx issues detail/comments with --login ${launch.viewer.login} and the confirmed issue ref. Never use ambient gh identity for this source.`,
     "Verify the source, collect relevant project context, write the concrete plan and verifiable acceptance criteria and register implementation tasks through the Flow CLI.",
+    "When editing the plan with apply_patch, supply a unified diff with file headers and numbered hunks. If a write fails, correct it and read back the saved plan, criteria and tasks before reporting that preparation is complete.",
     "Act as the coordinator. Consolidate reviewer questions, reuse earlier answers, and ask the operator in this session only if essential.",
     "Stop after preparing the package for operator inspection. Leave Freeze, Start, implementation and publication to the operator.",
   ].join("\n");

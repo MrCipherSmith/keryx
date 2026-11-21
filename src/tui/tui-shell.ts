@@ -11363,10 +11363,11 @@ export async function launchTuiAgentShell(opts: {
         const modelLine = source === undefined
           ? agentShaped && !looksLikeHcMessage(line) ? `${HC_PASTED_HEADER}\n\n${line}` : frameSubmittedLine(line)
           : line;
-        const issueLine = issueShellSource(slateSession?.dir, modelLine, history.some(row => row.role === "user" && !row.injected));
-        const finishIssueActivity = startIssueSessionActivity(slateSession?.dir);
-        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, issueLine ?? modelLine, {
-        ...(issueLine ? { untrustedPrompt: true, operatorText: modelLine } : {}),
+        const issueDir = liveSlateSession()?.dir;
+        const externalContext = issueShellSource(issueDir, modelLine, history.some(row => row.role === "user" && !row.injected));
+        const finishIssueActivity = startIssueSessionActivity(issueDir);
+        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
+        ...(externalContext ? { externalContext } : {}),
         signal: turnSignal,
         recovery: {},
         ...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin }),
