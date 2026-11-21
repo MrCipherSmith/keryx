@@ -4,6 +4,7 @@ import { withFileLock } from "../lib/fs";
 import { watcherScope } from "./watcher-db";
 import type { ReviewCard } from "./board-types";
 import { readOwnedPullRequest, type OwnedPullRequest } from "./watcher-rebase";
+import { setRepairDraft } from "./pr-repair-draft";
 import { readFailedActionsJob } from "./pr-repair-ci";
 import { isActionableReview, publishRepairReply, readReviewFeedback } from "./pr-repair-feedback";
 import { RepairCheckout } from "./pr-repair-git";
@@ -83,6 +84,11 @@ async function finishRepair(context: RepairSubject, id: string, plan: RepairPlan
     const current = await readCurrent(context, plan.commit);
     const authorized = <T>(act: () => T) => store.authorized(grant, current.auth, act);
     if (plan.reply) await publishRepairReply(current, key, card.number, plan.reply, authorized);
+    if (plan.ready) {
+      const latest = await readCurrent(context, plan.commit);
+      if (await setRepairDraft(latest, false, act => store.authorized(grant, latest.auth, act)))
+        store.event(plan.commit, "Marked the pull request ready for review.");
+    }
     authorized(() => undefined);
     store.event(plan.commit, description, id, "done");
   }, { timeoutMs: 0 });
@@ -92,7 +98,13 @@ async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, 
   const { store, grant, key, card } = context;
   const signal = AbortSignal.timeout(maxSeconds * 1000);
   const checkout = await RepairCheckout.create(subject, key, card.number, signal);
+  let drafted = false;
   try {
+    const beforeRepair = await readCurrent(context, card.headSha);
+    if (grant.settings.draftWhileRepairing) {
+      drafted = await setRepairDraft(beforeRepair, true, act => store.authorized(grant, beforeRepair.auth, act));
+      if (drafted) store.event(card.headSha, "Moved the pull request to Draft for the automatic repair.");
+    }
     const conflicts = task.kind === "conflict" ? await checkout.mergeBase() : [];
     if (conflicts.length || task.kind !== "conflict") {
       const { runPrRepairAgent } = await import("../commands/pr-repair-agent");
@@ -105,10 +117,14 @@ async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, 
     const commit = await checkout.commit(task.commitMessage, conflicts);
     if (!commit) throw new Error("There were no repair changes to push.");
     const current = await readCurrent(context, card.headSha);
-    const plan = { commit, ready: false, ...(task.reply && { reply: task.reply }) };
+    const plan = { commit, ready: drafted && grant.settings.readyAfterPush, ...(task.reply && { reply: task.reply }) };
     store.plan(id, plan);
     await checkout.push(commit, act => store.authorized(grant, current.auth, act));
     await finishRepair(context, id, plan, task.complete);
+  } catch (error) {
+    if (drafted && store.active(grant)?.id === id && store.active(grant)?.state === "working")
+      store.event(card.headSha, "The pull request remains in Draft because the automatic repair was not pushed.");
+    throw error;
   } finally {
     await checkout.dispose();
   }
