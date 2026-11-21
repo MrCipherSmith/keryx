@@ -70,6 +70,7 @@ export interface SetupPlan {
   blocked: Finding[];
   files: { path: string; outcome: "create" | "update" | "skip" | "conflict"; reason: string | null }[];
   entrypoints: FileEdit[];
+  lifecycleEffects?: { paths: string[]; detail: string }[];
   gitignore: FileEdit | null;
   trackedMetaproject: { count: number; examples: string[] } | null;
   ignore: { status: string; gitignoreBlock?: string; exclude?: { status: string; added?: string[]; removed?: string[] } } | null;

@@ -117,3 +117,19 @@ test("update previews preserved opt-in settings and refuses a newer writer", asy
     });
   });
 }, 30_000);
+
+test("approval covers conditional lifecycle targets outside the exact file preview", async () => {
+  await fixture(async (root, env) => {
+    const initial = '{"schemaVersion":1,"modules":{"gdgraph":false,"gdctx":false,"gdwiki":false,"gdskills":false,"health":false,"testing":false,"memory":false,"tasks":false,"security":false}}';
+    const init = setup(root, env, "plan", "--request", initial);
+    expect(setup(root, env, "apply", "--request", initial, "--plan-id", init.json.planId).exit).toBe(0);
+    const refresh = '{"schemaVersion":1}';
+    const approved = setup(root, env, "plan", "--request", refresh);
+    expect(approved.json.lifecycleEffects.flatMap((effect: { paths: string[] }) => effect.paths)).toContain(".metaproject/keryx-dashboard.html");
+    const service = path.join(root, ".metaproject", "keryx-dashboard.html");
+    await writeFile(service, "changed after approval");
+    const apply = setup(root, env, "apply", "--request", refresh, "--plan-id", approved.json.planId);
+    expect(apply.json.error.code).toBe("stale-plan");
+    expect(await readFile(service, "utf8")).toBe("changed after approval");
+  });
+}, 30_000);

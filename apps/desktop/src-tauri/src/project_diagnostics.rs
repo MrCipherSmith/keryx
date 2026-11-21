@@ -5,10 +5,10 @@ use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter, Manager, Webview};
+use tauri::{async_runtime::Mutex as AsyncMutex, AppHandle, Emitter, Manager, Webview};
 
 const UPDATED: &str = "project-diagnostics://updated";
 const FRESH_FOR: Duration = Duration::from_secs(90);
@@ -19,7 +19,7 @@ const SCAN_BUDGET: Duration = Duration::from_secs(45);
 #[derive(Default)]
 pub struct Diagnostics {
     // Serialize native scans across windows. The snapshot is independently readable.
-    scan: Mutex<()>,
+    scan: Arc<AsyncMutex<()>>,
     cache: Mutex<HashMap<PathBuf, Cached>>,
 }
 
@@ -59,8 +59,7 @@ fn inspect(app: &AppHandle, cwd: String, root: Option<&Path>, timeout: Duration)
     let (status, report, error) = match root {
         None => ("unavailable", None, Some("The project folder is unavailable.".to_owned())),
         Some(root) => {
-            let (operation, args) = setup::SetupAction::Inspect.args().expect("Inspect has fixed arguments");
-            match setup::run_setup(app, root, operation, args, timeout) {
+            match setup::run_inspection(app, root, timeout) {
                 Ok(response) if response.result.get("state").and_then(Value::as_str).is_some() =>
                     ("checked", Some(response.result), None),
                 Ok(_) => ("error", None, Some("Keryx could not inspect this project.".to_owned())),
@@ -79,9 +78,10 @@ fn inspect(app: &AppHandle, cwd: String, root: Option<&Path>, timeout: Duration)
 pub async fn project_diagnostics(app: AppHandle, view: Webview, kind: ScanKind) -> Result<(), String> {
     let current = app.state::<ProjectWindows>().cwd_for(view.label());
     let requested = Instant::now();
+    let gate = app.state::<Diagnostics>().scan.clone().lock_owned().await;
     tauri::async_runtime::spawn_blocking(move || {
+        let _gate = gate;
         let state = app.state::<Diagnostics>();
-        let _gate = state.scan.lock().unwrap();
         let prefs = settings::load_settings(&app);
         let source = (prefs.keryx_source, prefs.custom_path);
         let mut paths: Vec<_> = current.into_iter().collect();

@@ -2,7 +2,7 @@
 //
 // The human-readable guide is also rendered by the shell modal.
 
-import { parseSetupArgs, renderSetupGuide, renderSetupScenario, renderSetupUsage } from "./setup-guide";
+import { parseSetupArgs, renderSetupGuide, renderSetupScenario, renderSetupUsage, SETUP_JSON_USAGE } from "./setup-guide";
 
 export async function setupCommand(rest: string[]): Promise<void> {
   const operation = rest[0];
@@ -12,7 +12,6 @@ export async function setupCommand(rest: string[]): Promise<void> {
     return;
   }
   if (rest[0] === "--help" || rest[0] === "-h") {
-    const { SETUP_JSON_USAGE } = await import("./setup-project");
     console.log(`${renderSetupUsage()}
 Project automation
 ${SETUP_JSON_USAGE}`);

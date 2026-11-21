@@ -14,7 +14,7 @@ pub enum SetupAction {
 }
 
 impl SetupAction {
-    pub(crate) fn args(self) -> Result<(&'static str, Vec<String>), String> {
+    fn args(self) -> Result<(&'static str, Vec<String>), String> {
         let (operation, request, plan_id) = match self {
             Self::Inspect => ("inspect", None, None),
             Self::Plan { request } => ("plan", Some(request), None),
@@ -73,12 +73,16 @@ pub async fn project_setup(
 }
 
 
-pub(crate) fn run_setup(
+pub(crate) fn run_inspection(app: &AppHandle, root: &Path, timeout: Duration) -> Result<SetupResponse, String> {
+    run_setup(app, root, "inspect", vec!["setup".into(), "inspect".into(), "--json".into(), "--background".into()], timeout)
+}
+
+fn run_setup(
     app: &AppHandle, root: &Path, operation: &str, args: Vec<String>, timeout: Duration,
 ) -> Result<SetupResponse, String> {
     let state = app.state::<AppState>();
     let env = state.environment();
-    let prefs = settings::load_settings(&app);
+    let prefs = settings::load_settings(app);
     let exe = std::env::current_exe().map_err(|_| "Could not locate Keryx Desktop.".to_owned())?;
     let cli = locator::locate_for_app(
         prefs.keryx_source, prefs.custom_path.as_deref(), exe.parent(),
@@ -92,10 +96,10 @@ pub(crate) fn run_setup(
         "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR"] {
         cmd.env_remove(name);
     }
+    cmd.env_remove("GIT_CONFIG_PARAMETERS").env_remove("GIT_CONFIG_COUNT");
     if operation != "apply" {
         // A background git status must neither refresh the index nor call a repository fsmonitor.
-        cmd.env_remove("GIT_CONFIG_PARAMETERS")
-            .env("GIT_OPTIONAL_LOCKS", "0")
+        cmd.env("GIT_OPTIONAL_LOCKS", "0")
             .env("GIT_NO_LAZY_FETCH", "1")
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_CONFIG_COUNT", "1")
@@ -131,4 +135,26 @@ pub(crate) fn run_setup(
         locator::KeryxSource::Custom => "custom",
     };
     Ok(SetupResponse { cli_source, result })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn validates_setup_schema_and_plan_id() {
+        assert!(SetupAction::Plan { request: json!({"schemaVersion": 2}) }.args().is_err());
+        let request = json!({"schemaVersion": 1});
+        assert!(SetupAction::Apply {
+            request: request.clone(),
+            plan_id: "g".repeat(64),
+        }.args().is_err());
+        let id = "a".repeat(64);
+        let (_, args) = SetupAction::Apply {
+            request,
+            plan_id: id.clone(),
+        }.args().unwrap();
+        assert_eq!(&args[args.len() - 2..], &["--plan-id".to_owned(), id]);
+    }
 }

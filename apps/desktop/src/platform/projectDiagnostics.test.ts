@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { projectNotices, reconcileNoticeMemory, setupRequestForFinding, type ProjectCheck } from "./projectDiagnostics";
+import { projectNotices, reconcileNoticeMemory, setupRequestForFinding } from "../project/useProjectDiagnostics";
+import type { ProjectCheck } from "./projectDiagnostics";
 import type { SetupInspection } from "./projectSetup";
 
 const report: SetupInspection = {
@@ -55,4 +56,26 @@ test("repair choices come from the finding ID on fresh inspection", () => {
   expect(setupRequestForFinding(fresh, "wiki-freshness")).toEqual({ maintenanceOnly: true, actions: ["wikiFreshness"] });
   expect(setupRequestForFinding(fresh, "commit-msg-hook")).toEqual({});
   expect(setupRequestForFinding(report, "graph-freshness")).toEqual({ maintenanceOnly: true });
+});
+
+test("an interrupted maintenance run selects only its unfinished actions", () => {
+  const interrupted: SetupInspection = {
+    ...report,
+    findings: [{ id: "incomplete-setup", severity: "warning", message: "Previous run was interrupted" }],
+    lastApply: { active: "wikiFreshness", steps: [{ id: "graph", status: "completed" }] },
+  };
+  expect(setupRequestForFinding(interrupted, "incomplete-setup")).toEqual({
+    actions: ["wikiFreshness"], graph: "none", gitignore: false, maintenanceOnly: true,
+  });
+});
+
+test("update notices remain visible without treating unknown legacy writers as problems", () => {
+  const notices = projectNotices([check({ report: {
+    ...report,
+    findings: [
+      { id: "unknown-writer", severity: "info", message: "Legacy workspace" },
+      { id: "update-available", severity: "info", message: "Refresh project files" },
+    ],
+  } })]);
+  expect(notices.map(({ finding }) => finding)).toEqual(["update-available"]);
 });

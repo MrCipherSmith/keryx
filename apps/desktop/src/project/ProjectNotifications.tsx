@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { Spinner, useEscape, useFocusTrap } from "../components/ui";
 import { absoluteTime, basename, errMessage } from "../lib/format";
-import type { ProjectNotice, useProjectDiagnostics } from "../platform/projectDiagnostics";
+import type { ProjectNotice, useProjectDiagnostics } from "./useProjectDiagnostics";
 
 interface Props {
   diagnostics: ReturnType<typeof useProjectDiagnostics>;

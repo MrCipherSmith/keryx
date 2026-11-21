@@ -714,14 +714,13 @@ export async function buildDoctorReport(
 }
 
 /** Local diagnostics shared with project setup. Never checks for CLI releases. */
-export async function projectDoctorChecks(cwd: string): Promise<DoctorCheck[]> {
+export async function projectDoctorChecks(cwd: string, background = false): Promise<DoctorCheck[]> {
   return await Promise.all([
     Promise.resolve(checkMcp(cwd)),
-    checkIntegrations(cwd),
+    ...(!background ? [checkIntegrations(cwd), checkWorktrees(cwd)] : []),
     checkStandard(cwd),
     checkEntrypoints(cwd),
     checkCommitMsgHook(cwd),
-    checkWorktrees(cwd),
     checkGraphFreshness(cwd),
     checkWikiFreshness(cwd),
   ]);

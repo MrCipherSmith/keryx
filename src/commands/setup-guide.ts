@@ -583,3 +583,9 @@ export function renderSetupUsage(): string {
     "",
   ].join("\n");
 }
+
+export const SETUP_JSON_USAGE = [
+  "  inspect [--background] --json                                      Inspect the selected project.",
+  "  plan --request <JSON> --json                 Preview setup without writing.",
+  "  apply --request <JSON> --plan-id <id> --json   Apply the approved preview.",
+].join("\n");

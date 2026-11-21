@@ -269,7 +269,7 @@ export const USAGE_BODY = `Usage:
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness
-  keryx setup [init|refresh|repair]            Print the Metaproject preparation guide (does not run it)
+  keryx setup [init|refresh|repair]            Print a guide; see --help for project setup automation
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
@@ -489,7 +489,7 @@ export const USAGE_BODY = `Usage:
 Commands:
   help      Grouped command help by task: every verb, in nine onboarding-ordered groups
   doctor    One-page health check with a fix hint per line; --json for {checks:[...]}
-  setup     Print the Metaproject preparation guide: init, refresh, or repair
+  setup     Print the Metaproject guide, or inspect, plan and apply setup
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions

@@ -358,7 +358,7 @@ try {
   await React.act(() => namedButton("Project notifications, 1 unread").click());
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-notification-open")?.click());
   assert.ok(host.querySelector(".project-setup"));
-  assert.equal(host.querySelector<HTMLSelectElement>(".project-setup select")?.value, "check-and-rebuild");
+  assert.equal([...host.querySelectorAll<HTMLSelectElement>(".project-setup select")].find((select) => select.closest("label")?.textContent?.startsWith("Code graph"))?.value, "check-and-rebuild");
   await React.act(() => namedButton("Preview changes").click());
   assert.deepEqual(setupActions.at(-1)?.request, {
     schemaVersion: 1, modules: {}, gitignore: false, sharedAgents: false,

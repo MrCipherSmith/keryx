@@ -25,7 +25,11 @@ import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 
 /** Thrown by a caller that has no string-array error channel (mirrors `UnterminatedInstructionsBlockError`'s "refuse hard" idiom). */
-export class SymlinkRefusedError extends Error {}
+export class SymlinkRefusedError extends Error {
+  constructor(message: string, readonly relativePath?: string) {
+    super(message);
+  }
+}
 
 /**
  * Walks `relativePath` (posix-separated) segment by segment from `root`.

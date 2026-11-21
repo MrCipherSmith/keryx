@@ -1,6 +1,6 @@
 # Desktop Metaproject setup and diagnostics
 
-Status: proposed. Source baseline: `main` at `23834c60`. This plan covers the existing Keryx Desktop app, local projects and the CLI that Desktop resolves for a project.
+Status: stages 1–3 implemented for review. Stage 4 tracks verification and rollout. Source baseline: `main` at `23834c60`. This plan covers the existing Keryx Desktop app, local projects and the CLI that Desktop resolves for a project.
 
 ## Current behavior
 

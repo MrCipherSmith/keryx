@@ -39,7 +39,7 @@ import { modelOption, useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
 import { ProjectSetupDialog } from "./project/ProjectSetupDialog";
 import { ProjectNotifications } from "./project/ProjectNotifications";
-import { useProjectDiagnostics, type ProjectNotice } from "./platform/projectDiagnostics";
+import { useProjectDiagnostics, type ProjectNotice } from "./project/useProjectDiagnostics";
 import { inspectProjectSetup, shouldOfferProjectSetup, type SetupInspection, type SetupResult } from "./platform/projectSetup";
 import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
 import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";

@@ -13,6 +13,7 @@ import {
   type StaleWorktreeCandidate,
 } from "../lib/git-worktrees";
 import { confirm } from "../lib/prompt";
+import { normalizeMetaprojectModules } from "../lib/metaproject-modules";
 
 // R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
 // module-directory scaffolders below all receive an absolute path already
@@ -1830,20 +1831,9 @@ async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult
 
 function normalizeManifest(manifest: MetaprojectManifest): { manifest: MetaprojectManifest; migrated: boolean } {
   const modules = manifest.modules ?? {};
-  const legacyWiki = modules.wiki;
-  if (!legacyWiki || modules.gdwiki) {
-    return { manifest, migrated: false };
-  }
-  const restModules = { ...modules };
-  delete restModules.wiki;
-  return {
-    manifest: {
-      ...manifest,
-      modules: {
-        ...restModules,
-        gdwiki: legacyWiki,
-      },
-    },
+  const normalized = normalizeMetaprojectModules(modules);
+  return normalized === modules ? { manifest, migrated: false } : {
+    manifest: { ...manifest, modules: normalized },
     migrated: true,
   };
 }

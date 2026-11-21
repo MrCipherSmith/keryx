@@ -277,6 +277,7 @@ export async function findAgentEntrypoints(projectRoot: string, manifestSources:
       const code = (error as NodeJS.ErrnoException).code;
       throw new SymlinkRefusedError(
         `${candidatePath}: refuses a ${code === "ELOOP" ? "symlink cycle" : "dangling symlink"} at this entrypoint`,
+        candidate,
       );
     }
     if (seenRealPaths.has(resolved)) {

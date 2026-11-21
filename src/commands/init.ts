@@ -1533,6 +1533,7 @@ function printInitHelp(): void {
     { flag: "--preserve-project-settings", desc: "Keep existing hook and manifest settings during a module transition." },
     { flag: "--refresh-services", desc: "Refresh existing managed service files while applying module selections." },
     { flag: "--skip-testing-analysis", desc: "Skip generating testing context during setup." },
+    { flag: "--shared-agents", desc: "Create or update the shared AGENTS.md for Codex." },
     { flag: "--no-gdgraph", desc: "Do not enable gdgraph." },
     { flag: "--no-gdctx", desc: "Do not enable gdctx." },
     { flag: "--no-gdwiki", desc: "Do not enable gdwiki." },

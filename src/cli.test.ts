@@ -203,9 +203,9 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // `keryx setup`: the read-only Metaproject preparation guide — a brand-new
     // verb, so a USAGE_BODY line and a Commands: summary row, same shape as
     // flow 353's `doctor` above.
-    "  keryx setup [init|refresh|repair]            Print the Metaproject preparation guide (does not run it)\n",
+    "  keryx setup [init|refresh|repair]            Print a guide; see --help for project setup automation\n",
     "  keryx hub <serve|connect|import|sync|submit|pull|fetch> Team Hub prototype (--help for arguments)\n",
-    "  setup     Print the Metaproject preparation guide: init, refresh, or repair\n",
+    "  setup     Print the Metaproject guide, or inspect, plan and apply setup\n",
     // Flow 362 (product module P1): `keryx product index|open`, a brand-new
     // verb, so both USAGE_BODY lines and a Commands: summary row.
     "  keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent\n",

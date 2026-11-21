@@ -1,19 +1,22 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { checkGraphStaleness } from "../gdgraph/staleness";
+import { checkGraphStaleness } from "../gdgraph/service";
 import { GDSKILLS_PROFILES, normalizeGdskillsProfile, type GdskillsProfile } from "../gdskills/catalog";
-import { keryxConfigDir } from "../lib/config-dir";
 import { placePathWithinSync, resolveProjectRoot } from "../lib/contained-path";
 import { writeContained } from "../lib/contained-write";
-import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
+import { isNotFound, withFileLock } from "../lib/fs";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { currentWriterVersion, INSTALL_JOURNAL_RELATIVE_PATH, readInstallJournal } from "../lib/install-plan";
+import { normalizeMetaprojectModules } from "../lib/metaproject-modules";
 import { planMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { isCompiledBinaryEntry } from "../lib/self-invocation";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
 import { ignoredLocalTargetPaths, previewEntrypointEdits, resolveProjectEntrypoints } from "../rules/entrypoint-writers";
+import { captureSetupWriteScope } from "../lib/setup-write-scope";
+import { readSetupReceipt, setupLockPath, writeSetupReceipt } from "../lib/setup-receipts";
+import { SETUP_JSON_USAGE } from "./setup-guide";
 import { projectDoctorChecks } from "./doctor";
 import { planInitLifecycle } from "./init";
 import { buildInitFlags, moduleCatalog } from "./modules";
@@ -142,19 +145,6 @@ async function snapshot(root: string, relative: string): Promise<Buffer | null> 
   }
 }
 
-function receiptPath(root: string): string {
-  return path.join(keryxConfigDir(), "setup-receipts", `${digest(root)}.json`);
-}
-
-async function readReceipt(root: string): Promise<Record<string, unknown> | null> {
-  try {
-    const value: unknown = JSON.parse(await readFile(receiptPath(root), "utf8"));
-    return jsonObject(value) && value.schemaVersion === SCHEMA_VERSION && value.root === root ? value : null;
-  } catch {
-    return null;
-  }
-}
-
 function compareVersions(recorded: string | null): "unknown" | "current" | "older" | "newer" {
   if (recorded === CLI_VERSION) return "current";
   const semver = /^(\d+)\.(\d+)\.(\d+)$/;
@@ -165,7 +155,7 @@ function compareVersions(recorded: string | null): "unknown" | "current" | "olde
   return difference === undefined ? "current" : difference > 0 ? "newer" : "older";
 }
 
-async function inspect(root: string, includeDoctor: boolean) {
+async function inspect(root: string, includeDoctor: boolean, background = false) {
   const findings: Finding[] = [];
   let state: "uninitialized" | "initialized" | "incomplete" = "uninitialized";
   let manifest: Manifest | null = null;
@@ -197,7 +187,7 @@ async function inspect(root: string, includeDoctor: boolean) {
           throw new SetupError("invalid-manifest", "The Metaproject manifest has an invalid module configuration.");
         }
         manifest = {
-          modules: { ...value.modules, gdwiki: value.modules.gdwiki ?? value.modules.wiki },
+          modules: normalizeMetaprojectModules(value.modules),
           standardVersion: typeof value.standardVersion === "string" ? value.standardVersion : null,
           agentEntrypoints: value.agentEntrypoints,
         };
@@ -237,18 +227,21 @@ async function inspect(root: string, includeDoctor: boolean) {
   });
   const gdskills = manifest?.modules.gdskills;
   const profile = normalizeGdskillsProfile(jsonObject(gdskills) && typeof gdskills.profile === "string" ? gdskills.profile : undefined);
-  const lastApply = includeDoctor ? await readReceipt(root) : null;
+  const lastApply = includeDoctor ? readSetupReceipt(root) : null;
   if (lastApply?.status === "running" || lastApply?.status === "partial") {
+    const interruptedInstall = findings.findIndex(({ id }) => id === "interrupted-install");
+    if (interruptedInstall !== -1) findings.splice(interruptedInstall, 1);
     findings.push({ id: "incomplete-setup", severity: "warning", message: "The last setup did not complete. Generate a new plan to continue.", action: "replan" });
   }
   if (includeDoctor && state === "initialized" && !findings.some((finding) => finding.severity === "error")) {
     const graphEnabled = modules.some(({ name, enabled }) => name === "gdgraph" && enabled);
     const wikiEnabled = modules.some(({ name, enabled }) => name === "gdwiki" && enabled);
-    for (const check of await projectDoctorChecks(root)) {
+    for (const check of await projectDoctorChecks(root, background)) {
       if (check.status === "ok") continue;
       if (check.id === "graph-freshness" && !graphEnabled) continue;
       if (check.id === "wiki-freshness" && !wikiEnabled) continue;
-      const action = check.id === "graph-freshness" ? "check-and-rebuild" : check.fix === "keryx update" ? "update" : undefined;
+      const action: FindingAction | undefined = check.id === "graph-freshness" ? "check-and-rebuild"
+        : ["entrypoints", "commit-msg-hook", "standard"].includes(check.id) ? "update" : undefined;
       findings.push({
         id: check.id, severity: check.status === "fail" ? "error" : "warning", message: check.detail,
         ...(action === undefined ? {} : { action }),
@@ -376,9 +369,21 @@ async function plan(root: string, request: Request, commonDir: string | null) {
     if (step) Object.assign(step, { status: "skipped", detail: "The shared ignore rule is already present." });
   }
 
+  let writeScope: Awaited<ReturnType<typeof captureSetupWriteScope>> | null = null;
+  if (enteredProject && blocked.length === 0) {
+    try {
+      writeScope = await captureSetupWriteScope(root, commonDir, entrypoints.map((edit) => edit.path));
+    } catch (error) {
+      blocked.push({
+        id: "setup-write-scope", severity: "error",
+        message: error instanceof Error ? error.message : "Could not verify the lifecycle write scope.",
+      });
+    }
+  }
+
   const planId = digest(JSON.stringify({
     root, commonDir, CLI_VERSION, request, inputs, enabled: [...enabled], profile, intent,
-    files, lifecycleFingerprint: lifecycle?.inputFingerprint, entrypoints, ignore, settings, exclude: exclude && digest(exclude), ignoreEdit, tracked: tracked?.fingerprint, gitignore: beforeIgnore && digest(beforeIgnore), blocked,
+    files, lifecycleFingerprint: lifecycle?.inputFingerprint, writeScope: writeScope?.fingerprint, entrypoints, ignore, settings, exclude: exclude && digest(exclude), ignoreEdit, tracked: tracked?.fingerprint, gitignore: beforeIgnore && digest(beforeIgnore), blocked,
   }));
   return {
     result: {
@@ -389,7 +394,7 @@ async function plan(root: string, request: Request, commonDir: string | null) {
       mode: request.maintenanceOnly ? "maintenance" : report.state === "incomplete" ? "repair" : existing ? "update" : "init",
       modules: report.modules.map((module) => ({ ...module, selected: enabled.has(module.name) })),
       gdskillsProfile: profile,
-      steps, blocked, files, entrypoints, ignore, gitignore: ignoreEdit,
+      steps, blocked, files, entrypoints, lifecycleEffects: writeScope?.effects ?? [], ignore, gitignore: ignoreEdit,
       trackedMetaproject: tracked && { count: tracked.count, examples: tracked.examples },
       effects: { fetchRuntime: false, runCustomHooks: false, pruneWorktrees: false, reconcileManagedHooks: !request.maintenanceOnly, managedHooksPreview: request.maintenanceOnly ? "unchanged" : "unavailable" },
     },
@@ -430,18 +435,14 @@ async function applyGraph(root: string, graph: GraphAction): Promise<Omit<StepRe
 async function apply(root: string, request: Request, approved: string) {
   const commonDir = await gitDirectory(root);
   // A shared lock for linked worktrees accounts for Git's common hooks and info/exclude.
-  const lockBase = commonDir ?? path.join(keryxConfigDir(), "setup-locks");
-  const lockName = commonDir ? "keryx-setup.lock" : `${digest(root)}.lock`;
-  return await withFileLock(path.join(lockBase, lockName), async () => {
+  return await withFileLock(setupLockPath(root, commonDir), async () => {
     if (commonDir !== await gitDirectory(root)) throw new SetupError("stale-plan", "The Git working tree changed. Generate a new plan.");
     const prepared = await plan(root, request, commonDir);
     if (prepared.result.planId !== approved) throw new SetupError("stale-plan", "Project inputs changed. Generate a new plan.");
     if (prepared.result.blocked.length > 0) throw new SetupError("blocked-plan", "Resolve the plan’s blocked items before applying.");
     const results: StepResult[] = [];
-    const saveReceipt = async (status: "running" | "partial" | "completed", active: StepId | null = null) => {
-      await writeFileAtomic(receiptPath(root), JSON.stringify({
-        schemaVersion: SCHEMA_VERSION, root, planId: approved, status, active, steps: results,
-      }), { mode: 0o600 });
+    const saveReceipt = (status: "running" | "partial" | "completed", active: StepId | null = null) => {
+      writeSetupReceipt(root, { planId: approved, status, active, steps: results });
     };
     let journaled = true;
     for (const step of prepared.result.steps) {
@@ -454,7 +455,7 @@ async function apply(root: string, request: Request, approved: string) {
         continue;
       }
       try {
-        await saveReceipt("running", step.id);
+        saveReceipt("running", step.id);
       } catch {
         journaled = false;
         results.push({ id: step.id, status: "failed", detail: "Could not record setup progress." });
@@ -486,7 +487,7 @@ async function apply(root: string, request: Request, approved: string) {
     const failed = results.some(({ status }) => status === "failed");
     if (journaled) {
       try {
-        await saveReceipt(failed ? "partial" : "completed");
+        saveReceipt(failed ? "partial" : "completed");
       } catch {
         journaled = false;
       }
@@ -498,12 +499,6 @@ async function apply(root: string, request: Request, approved: string) {
     } as const;
   }, { timeoutMs: 5_000 });
 }
-
-export const SETUP_JSON_USAGE = [
-  "  inspect --json                               Inspect the selected project.",
-  "  plan --request <JSON> --json                 Preview setup without writing.",
-  "  apply --request <JSON> --plan-id <id> --json   Apply the approved preview.",
-].join("\n");
 
 export async function setupProjectCommand(operation: "inspect" | "plan" | "apply", args: string[]): Promise<void> {
   if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
@@ -517,7 +512,7 @@ export async function setupProjectCommand(operation: "inspect" | "plan" | "apply
     for (let i = 0; i < args.length; i++) {
       const option = args[i]!;
       if (parsed.has(option)) invalidRequest("Duplicate setup option.");
-      if (option === "--json") {
+      if (option === "--json" || (operation === "inspect" && option === "--background")) {
         parsed.set(option, "");
         continue;
       }
@@ -528,7 +523,7 @@ export async function setupProjectCommand(operation: "inspect" | "plan" | "apply
     if (expected.size > 0) invalidRequest("Required setup option is missing.");
     const root = await realpath(process.cwd());
     if (operation === "inspect") {
-      output = (await inspect(root, true)).report;
+      output = (await inspect(root, true, parsed.has("--background"))).report;
     } else {
       const request = parseRequest(parsed.get("--request")!);
       if (operation === "plan") {

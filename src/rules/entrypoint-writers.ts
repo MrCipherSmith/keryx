@@ -8,14 +8,14 @@
 // `writeEntrypointBlocks` is the one writer `syncAgentRules` calls, so `init`,
 // `update`, `rules sync` and `rules distill` cannot disagree about it.
 
-import { readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { removeContained, writeContained } from "../lib/contained-write";
 import { pathExists } from "../lib/fs";
 import { indexHoldsFile, readHeadBlob, readIndexBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "../lib/git-head";
 import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
-import { refuseEscapingSymlink } from "../lib/symlink-safety";
+import { refuseEscapingSymlink, SymlinkRefusedError } from "../lib/symlink-safety";
 import { renderAgentEntrypoint } from "../lib/templates";
 import { ensureMetaprojectReference, findAgentEntrypoints, renderManagedIndexBlock, renderMetaprojectReference } from "./agent-entrypoints";
 import { overrideRulesSlot, overrideSourceHash, parseCodexOverrideProvenance, renderCodexOverride } from "./codex-override";
@@ -197,8 +197,7 @@ export async function previewEntrypointEdits(
     return error;
   });
   if (sources instanceof Error) {
-    const failedPath = sources.message.slice(0, sources.message.indexOf(": "));
-    return [{ path: path.relative(projectRoot, failedPath), action: "conflict", detail: sources.message }];
+    return [{ path: sources instanceof SymlinkRefusedError ? sources.relativePath ?? "." : ".", action: "conflict", detail: sources.message }];
   }
 
   const edits = new Map<string, EntrypointEdit>();
@@ -323,6 +322,7 @@ export async function previewEntrypointEdits(
   }
 
   const codexSources = new Set(targets.root.flatMap((entry) => entry.runtime === "codex" && entry.scope === "local" ? [entry.source] : []));
+  let checkoutConfig: Promise<boolean> | undefined;
   for (const source of effectiveSources) {
     if (sharedPaths.has(source.toLowerCase()) || deferred.has(source)) continue;
     const content = await readTarget(source);
@@ -332,9 +332,10 @@ export async function previewEntrypointEdits(
     const teamFile = TEAM_FILE_NAMES.includes(source.toLowerCase()) || codexSources.has(source);
     const move = planTeamIndexMove(content, filePath, head, teamFile);
     if (move === undefined) continue;
-    if (!teamFile) {
-      annotate(source, "skip", "Keryx removes its managed index block from this custom rule source during setup.");
-    } else if (move.kind === "restore" && await checkoutCanChangeBytes(projectRoot, source, filePath)) {
+    if (move.kind === "restore" && await checkoutCanChangeBytes(projectRoot, source, filePath, () => (
+      checkoutConfig ??= gitCheckoutQuery(projectRoot, ["config", "--get-regexp", "^core\\.(autocrlf|eol)$"])
+        .then((config) => !config || config.code > 1 || config.text.trim() !== "")
+    ))) {
       deferred.set(source, "Git checkout conversion determines the file contents during setup.");
     } else {
       setEdit(source, content, move.next);
@@ -371,18 +372,30 @@ export async function previewEntrypointEdits(
   return [...edits.values()];
 }
 
+async function gitCheckoutQuery(projectRoot: string, args: string[]): Promise<{ code: number; text: string } | null> {
+  try {
+    const child = Bun.spawn(["git", ...args], {
+      cwd: projectRoot, stdout: "pipe", stderr: "ignore", signal: AbortSignal.timeout(5_000),
+    });
+    const [code, text] = await Promise.all([child.exited, new Response(child.stdout).text()]);
+    return { code, text };
+  } catch {
+    return null;
+  }
+}
+
 /** Comparing to the HEAD blob is exact only when checkout does not transform it. */
-async function checkoutCanChangeBytes(projectRoot: string, relativePath: string, filePath: string): Promise<boolean> {
-  if (await realpath(filePath) !== filePath) return true;
-  const attributes = Bun.spawn(["git", "--literal-pathspecs", "check-attr", "-z", "filter", "text", "eol", "working-tree-encoding", "ident", "--", relativePath], {
-    cwd: projectRoot, stdout: "pipe", stderr: "ignore",
-  });
-  const configured = Bun.spawn(["git", "config", "--get-regexp", "^core\\.(autocrlf|eol)$"], {
-    cwd: projectRoot, stdout: "pipe", stderr: "ignore",
-  });
-  const [attr, config] = await Promise.all([new Response(attributes.stdout).text(), new Response(configured.stdout).text()]);
-  return (await attributes.exited) !== 0 || (await configured.exited) > 1 || config.trim() !== "" ||
-    attr.split("\0").some((value, index) => index % 3 === 2 && value !== "unspecified" && value !== "unset");
+async function checkoutCanChangeBytes(
+  projectRoot: string, relativePath: string, filePath: string, checkoutConfig: () => Promise<boolean>,
+): Promise<boolean> {
+  const metadata = await lstat(filePath).catch(() => null);
+  if (!metadata?.isFile()) return true;
+  const [attributes, configMayTransform] = await Promise.all([
+    gitCheckoutQuery(projectRoot, ["--literal-pathspecs", "check-attr", "-z", "filter", "text", "eol", "working-tree-encoding", "ident", "--", relativePath]),
+    checkoutConfig(),
+  ]);
+  return !attributes || attributes.code !== 0 || configMayTransform ||
+    attributes.text.split("\0").some((value, index) => index % 3 === 2 && value !== "unspecified" && value !== "unset");
 }
 
 /**

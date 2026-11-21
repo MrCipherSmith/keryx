@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, Spinner } from "../components/ui";
 import { basename, errMessage } from "../lib/format";
-import { setupRequestForFinding } from "../platform/projectDiagnostics";
+import { setupRequestForFinding } from "./useProjectDiagnostics";
 import {
   applyProjectSetup, inspectProjectSetup, planProjectSetup, ProjectSetupError,
   type GraphAction, type SetupActionId, type SetupInspection, type SetupPlan, type SetupRequest, type SetupResult,
@@ -279,7 +279,7 @@ function SetupPreview({ plan }: { plan: SetupPlan }) {
       </li>)}</ul>
       {plan.mode !== "maintenance" ? <p className="field-hint">Keryx may reconcile its managed hooks. Their exact changes depend on the existing hook files.</p> : null}
     </div>
-    {edits.length > 0 || changes.length > 0 || plan.ignore?.exclude ? <div>
+    {edits.length > 0 || changes.length > 0 || plan.lifecycleEffects?.length || plan.ignore?.exclude ? <div>
       <h4>Files</h4>
       {edits.map((edit) => <details key={edit.path}>
         <summary><code>{edit.path}</code> · {edit.action}</summary>
@@ -292,6 +292,13 @@ function SetupPreview({ plan }: { plan: SetupPlan }) {
       {changes.length > 0 ? <details>
         <summary>Managed files ({changes.length})</summary>
         <ul>{changes.map((file) => <li key={file.path}><code>{file.path}</code> · {file.outcome}</li>)}</ul>
+      </details> : null}
+      {plan.lifecycleEffects?.length ? <details>
+        <summary>Other files setup may change</summary>
+        {plan.lifecycleEffects.map(({ paths, detail }) => <div key={detail}>
+          <p>{detail}</p>
+          <ul>{paths.map((filename) => <li key={filename}><code>{filename}</code></li>)}</ul>
+        </div>)}
       </details> : null}
       {plan.ignore?.exclude ? <details>
         <summary>Local Git exclude · {plan.ignore.exclude.status}</summary>
