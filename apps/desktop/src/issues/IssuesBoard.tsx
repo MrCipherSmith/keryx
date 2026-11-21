@@ -152,13 +152,15 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
     observer.observe(el); return () => observer.disconnect();
   }, []);
 
-  const close = useCallback(() => {
-    setSelection(null);
-    requestAnimationFrame(() => {
-      const el = returnFocus.current;
-      (el?.isConnected ? el : title.current)?.focus();
-    });
-  }, []);
+  const close = useCallback(() => setSelection(null), []);
+  // On narrow layouts the opener is hidden until React commits the dismissal.
+  // Restore focus after the detail's focus trap has also finished its cleanup.
+  useEffect(() => {
+    if (selection || !returnFocus.current) return;
+    const opener = returnFocus.current;
+    returnFocus.current = null;
+    (opener.isConnected ? opener : title.current)?.focus();
+  }, [selection]);
   useEffect(() => { if (selection && !selected && !busy) close(); }, [selection, selected, busy, close]);
   const accessLost = useCallback((reason: string) => {
     invalidate(reason); clear(reason);
