@@ -5,6 +5,7 @@ pub mod child;
 pub mod chromium;
 pub mod framing;
 pub mod flows;
+pub mod files;
 pub mod fs;
 pub mod images;
 pub mod gitinfo;
@@ -119,6 +120,8 @@ pub fn run() {
             flows::flows_watch,
             gitinfo::git_info,
             gitinfo::git_repository,
+            files::project_files,
+            files::project_file_read,
             gitinfo::git_changes,
             gitinfo::git_file_diff,
             pullrequest::pr_info,
