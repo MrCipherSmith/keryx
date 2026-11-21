@@ -322,6 +322,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     [s, fillComposer],
   );
 
+  const openSessionWith = useCallback(async (reference: string, flow?: FlowCard) => {
+    const id = flow ? await s.workOnFlow(flow.dir, "new") : await s.newSession();
+    if (id) fillComposer(reference);
+  }, [s, fillComposer]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
@@ -447,7 +452,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <span className="truncate">{state.title?.trim() || "New session"}</span>
     ) : (
       <span className="truncate">
-        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : "Review"}`}
+        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : "Pull requests"}`}
       </span>
     );
 
@@ -472,12 +477,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (reviewDisconnected) return Promise.reject(new Error("Choose the project's GitHub account in Project Settings."));
     return loadSessionReviewTargets(cwd, reviewViewer, hint, signal);
   }, [cwd, reviewViewer, reviewDisconnected]);
-  const reviewModels = useMemo(() => modelChoices(modelOption(state.configOptions)).flatMap(option => {
+  const sessionModel = modelOption(state.configOptions);
+  const reviewModels = useMemo(() => modelChoices(sessionModel).flatMap(option => {
     const provider = providerOf(option);
     const model = provider ? option.value.slice(provider.length + 1) : "";
     return provider && model ? [{ provider, model, label: option.name }] : [];
-  }), [state.configOptions]);
-
+  }), [sessionModel]);
+  const currentReviewModel = reviewModels.find(choice => `${choice.provider}/${choice.model}` === sessionModel?.currentValue);
 
   return (
     <AppShell
@@ -511,7 +517,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {workView === "flows" ? (
         <div className="view" hidden={view !== "flows"}>
-          <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
+          <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
       <div className="view" hidden={view !== "review"}>
@@ -520,7 +526,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} onOpenFlow={(dir) => {
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+              flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
             setLinkedFlow(dir);
             setView("flows");
           }} />

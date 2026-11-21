@@ -18,6 +18,7 @@ export interface ReviewCard {
   addressedReplyIds?: string[];
   number: number;
   title: string;
+  changeStats?: { files: number; additions: number; deletions: number };
   url: string;
   state: Exclude<ReviewBoardState, "all">;
   draft: boolean;
@@ -29,6 +30,8 @@ export interface ReviewCard {
   reviewers: string[];
   /** Present on watcher polls to recognize a re-request between two observations. */
   reviewRequestIds?: Record<string, string>;
+  watcherMergeState?: string;
+  watcherReviews?: { id: string; login: string; state: string }[];
   decision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
   ci: ReviewCi;
   headSha: string;

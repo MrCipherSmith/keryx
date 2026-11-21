@@ -20,6 +20,30 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
     CREATE TABLE IF NOT EXISTS watcher_recovery_warnings (watcher TEXT PRIMARY KEY, warning TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS watcher_events (id INTEGER PRIMARY KEY, watcher TEXT NOT NULL, event TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS recent_watcher_events ON watcher_events(watcher, id DESC);
+    CREATE TABLE IF NOT EXISTS review_pr_subscriptions (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, topics TEXT NOT NULL, rebase INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (watcher, number)
+    );
+    CREATE TABLE IF NOT EXISTS review_pr_repairs (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, settings TEXT NOT NULL,
+      repositoryId TEXT NOT NULL, branch TEXT NOT NULL, generation TEXT NOT NULL,
+      PRIMARY KEY (watcher, number)
+    );
+    CREATE TABLE IF NOT EXISTS review_pr_repair_runs (
+      id TEXT PRIMARY KEY, watcher TEXT NOT NULL, number INTEGER NOT NULL,
+      generation TEXT NOT NULL, pause INTEGER NOT NULL, cause TEXT NOT NULL, headSha TEXT NOT NULL,
+      state TEXT NOT NULL, claimedAt INTEGER NOT NULL, plan TEXT,
+      UNIQUE(watcher, number, generation, cause)
+    );
+    CREATE INDEX IF NOT EXISTS review_pr_repair_current ON review_pr_repair_runs(watcher, number, state);
+    CREATE TABLE IF NOT EXISTS review_pr_rebase_attempts (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, baseSha TEXT NOT NULL, headSha TEXT NOT NULL,
+      PRIMARY KEY (watcher, number, baseSha, headSha)
+    );
+    CREATE TABLE IF NOT EXISTS review_pr_subscription_events (
+      id INTEGER PRIMARY KEY, watcher TEXT NOT NULL, number INTEGER NOT NULL, event TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS review_pr_subscription_history ON review_pr_subscription_events(watcher, number, id DESC);
     CREATE TABLE IF NOT EXISTS review_rules (
       watcher TEXT NOT NULL, id TEXT NOT NULL, rule TEXT NOT NULL, armed INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (watcher, id)
@@ -37,7 +61,13 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
     CREATE INDEX IF NOT EXISTS review_rule_queue ON review_rule_work(watcher, state, number);
     CREATE INDEX IF NOT EXISTS review_rule_recorded_run ON review_rule_work(watcher, runId) WHERE runId IS NOT NULL;
     CREATE INDEX IF NOT EXISTS review_rule_history ON review_rule_work(watcher, at DESC);`);
-    return db.transaction(() => action(db)).immediate();
+    return db.transaction(() => {
+      // Older Desktop builds already have subscriptions with activity topics.
+      const columns = db.query<{ name: string }, []>("PRAGMA table_info(review_pr_subscriptions)").all();
+      if (!columns.some(column => column.name === "rebase"))
+        db.exec("ALTER TABLE review_pr_subscriptions ADD COLUMN rebase INTEGER NOT NULL DEFAULT 0");
+      return action(db);
+    }).immediate();
   } finally {
     db.close();
   }

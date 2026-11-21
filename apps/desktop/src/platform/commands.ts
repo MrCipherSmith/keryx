@@ -117,14 +117,22 @@ export const saveChatFile = (extension: string, data: string) => invoke<string>(
 export const discardChatAttachment = (path: string) => invoke<void>("discard_chat_attachment", { path });
 export const commitChatAttachments = (paths: string[]) => invoke<void>("commit_chat_attachments", { paths });
 
-export async function openExternal(url: string): Promise<void> {
+export async function openExternal(url: string, browser?: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) throw new Error("Only http and https links can be opened.");
   if (isTauri()) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(url);
+    await openUrl(url, browser);
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export async function openPullRequest(url: string): Promise<void> {
+  try {
+    await openExternal(url, "Google Chrome");
+  } catch {
+    await openExternal(url);
+  }
 }
 
 type FolderPrompter =(title: string) => Promise<string | null>;

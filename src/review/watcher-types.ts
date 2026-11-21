@@ -12,6 +12,10 @@ export interface WatcherEvent {
     | "push"
     | "review_requested"
     | "review_request_removed"
+    | "review_submitted"
+    | "draft_changed"
+    | "rebase"
+    | "repair"
     | "decision"
     | "ci"
     | "updated";
@@ -20,6 +24,30 @@ export interface WatcherEvent {
   headSha: string;
   description: string;
   reviewer?: string;
+}
+
+export const PR_WATCH_TOPICS = ["reviews", "requests", "status", "checks"] as const;
+export type PrWatchTopic = typeof PR_WATCH_TOPICS[number];
+
+export interface PrRepairModel { provider: string; model: string }
+
+export interface PrRepairSettings {
+  model: PrRepairModel;
+  conflicts: boolean;
+  ci: boolean;
+  reviews: boolean;
+  draftWhileRepairing: boolean;
+  readyAfterPush: boolean;
+}
+
+export interface PrRepairSource { repositoryId: string; branch: string }
+
+export interface PrSubscription {
+  number: number;
+  topics: PrWatchTopic[];
+  rebase?: true;
+  repair?: PrRepairSettings;
+  activity?: WatcherEvent[];
 }
 
 export interface WatcherSnapshot {

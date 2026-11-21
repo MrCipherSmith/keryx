@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { setPrefs } from "../lib/prefs";
-import { gitInfo, openExternal, prInfo, type GitInfo, type PrInfo } from "../platform/commands";
+import { gitInfo, openPullRequest, prInfo, type GitInfo, type PrInfo } from "../platform/commands";
 import { CHANGES_REQUESTED_TITLE, ciTitle, prTitle, samePr, threadsTitle } from "./gitPrText";
 
 const POLL_MS = 60_000;
@@ -87,7 +87,7 @@ export const GitStatus = memo(function GitStatus({ cwd, busy }: { cwd: string; b
       {git.changed > 0 ? <ChangedFilesButton count={git.changed} /> : null}
       {pr ? (
         <>
-          <button type="button" className="git-pr" title={prTitle(pr)} onClick={() => void openExternal(pr.url).catch(() => {})}>
+          <button type="button" className="git-pr" title={prTitle(pr)} onClick={() => void openPullRequest(pr.url).catch(() => {})}>
             <Icon name="pr" size={12} />#{pr.number}
           </button>
           {ci ? <span className={`git-ci git-ci-${pr.ci}`} title={ci} role="img" aria-label={ci} /> : null}

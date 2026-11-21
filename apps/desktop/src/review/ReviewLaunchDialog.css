@@ -55,3 +55,7 @@
 @media (max-height: 520px) {
   .review-model-results { max-block-size: 20dvh; }
 }
+
+.review-launch-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); color: var(--fg-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.review-launch-stats .review-added { color: var(--ok); }
+.review-launch-stats .review-deleted { color: var(--danger); }

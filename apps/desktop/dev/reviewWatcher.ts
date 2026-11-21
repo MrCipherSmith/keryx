@@ -12,7 +12,7 @@ function reviewTargetArgs(target: unknown): string[] {
 
 export function reviewRuleArgs(target: unknown, action: unknown): string[] {
   if (!action || typeof action !== "object" || !("kind" in action) ||
-      !["status", "save", "delete", "mode"].includes(String(action.kind))) throw new Error("Unknown review rule operation.");
+      !["status", "save", "delete", "mode", "subscription"].includes(String(action.kind))) throw new Error("Unknown review rule operation.");
   const request = JSON.stringify(action);
   if (Buffer.byteLength(request) > 8192) throw new Error("Review rule request is too large.");
   return ["review", "rules", "--json", ...reviewTargetArgs(target), "--request", request];

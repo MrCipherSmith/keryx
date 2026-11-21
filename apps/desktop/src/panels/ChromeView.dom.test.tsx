@@ -64,3 +64,21 @@ test("app shortcuts are left to the app", () => {
   host.querySelector("textarea")!.dispatchEvent(new KeyboardEvent("keydown", { key: "w", code: "KeyW", metaKey: true, bubbles: true, cancelable: true }));
   expect(sent).toEqual([]);
 });
+
+test("a native select-all consumed by WebKit reaches Chromium before paste", () => {
+  sent.length = 0;
+  const canvas = host.querySelector("canvas")!;
+  const keys = host.querySelector("textarea")!;
+  canvas.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  keys.select();
+  keys.dispatchEvent(new Event("select"));
+  keys.dispatchEvent(new Event("select"));
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: { getData: () => "replacement" } });
+  keys.dispatchEvent(paste);
+  expect(sent.map(item => item.e).filter(event => event.kind !== "mouse")).toEqual([
+    { kind: "key", type: "keyDown", key: "a", code: "KeyA", keyCode: 65, modifiers: 4 },
+    { kind: "key", type: "keyUp", key: "a", code: "KeyA", keyCode: 65, modifiers: 4 },
+    { kind: "text", text: "replacement" },
+  ]);
+});

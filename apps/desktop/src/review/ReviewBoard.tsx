@@ -10,7 +10,8 @@ import { sameRange, type RunObserver } from "./useReviewRuns";
 import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
 import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
 import { ProjectReviewRules } from "./ProjectReviewRules";
-import type { reviewRules } from "../platform/reviewRules";
+import { reviewRules } from "../platform/reviewRules";
+import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
 import { ReviewWatcher } from "./ReviewWatcher";
 import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
 import { readReplies, subscribeReviewReads } from "./reviewReadState";
@@ -32,7 +33,9 @@ interface Props {
   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
   flows: FlowCard[];
   reviewModels?: readonly ReviewLaunchModel[];
+  currentRepairModel?: ReviewLaunchModel | undefined;
   onOpenFlow: (dir: string) => void;
+  onOpenSession?: ((card: ReviewCard) => void) | undefined;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
@@ -65,11 +68,13 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
   const [attentionPrs, setAttentionPrs] = useState<ReadonlySet<number>>(() => new Set());
+  const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
+  const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const snapshots = useRef(new Map<ReviewBoardState, ReviewBoardSnapshot>());
@@ -99,6 +104,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   }, [read]);
 
   const clearPrivateView = useCallback((resetState = false) => {
+    setSubscriptions(new Set());
+    setSubscriptionNumber(null);
     restoreFocus.current = !!document.activeElement?.closest('.review-board [role="dialog"]');
     setQuery("");
     setFilters((old) => resetState ? EMPTY_FILTERS : { ...EMPTY_FILTERS, state: old.state });
@@ -327,6 +334,18 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const watcherViewer = snapshot?.viewer;
   const watcherTarget = useMemo(() => watcherRepo && watcherRepoId && watcherViewer
     ? { repo: watcherRepo, repositoryId: watcherRepoId, viewer: watcherViewer } : null, [watcherRepo, watcherRepoId, watcherViewer]);
+  useEffect(() => {
+    if (!tabActive || !watcherTarget) {
+      setSubscriptionNumber(null);
+      return;
+    }
+    let current = true;
+    void rulesCommand(cwd, watcherTarget, { kind: "status" }).then(result => {
+      if (current) setSubscriptions(new Set(result.subscriptions?.map(item => item.number)));
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [cwd, rulesCommand, tabActive, watcherTarget]);
+
   const indicator: ReviewTabIndicator = attentionPrs.size ? "attention" :
     watchingTarget && watcherTarget && watchingTarget.repositoryId === watcherTarget.repositoryId &&
     watchingTarget.viewer === watcherTarget.viewer ? "watching" : null;
@@ -345,9 +364,9 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
 
-  return <section className="flows review-board" hidden={!tabActive} aria-label="Review">
+  return <section className="flows review-board" hidden={!tabActive} aria-label="Pull requests">
     <div className="flows-toolbar">
-      <div className="flows-heading"><h1>Review</h1>{snapshot && <span className="count-label">
+      <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
         {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
       </span>}</div>
       <label className="search-field"><Icon name="search" size={14} />
@@ -407,17 +426,25 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} /> :
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
+        {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
         {q || active.length ? "Try another title, number, or filter." : undefined}
       </EmptyState>)}
+    {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
+      cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
+      owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
+        item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
+      models={reviewModels} currentModel={currentRepairModel}
+      watching={watchingTarget !== null} onAccessLost={accessLost}
+      onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
-      reviewModels={reviewModels}
+      reviewModels={reviewModels} onOpenSession={onOpenSession && (() => onOpenSession(card))}
       projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </section>;

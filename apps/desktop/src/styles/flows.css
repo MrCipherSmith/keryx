@@ -45,6 +45,10 @@
   cursor: default; transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
   content-visibility: auto; contain-intrinsic-size: auto 96px;
 }
+.flow-card-main { display: grid; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; }
+.card-actions { display: flex; align-items: center; gap: var(--sp-1); }
+.card-actions .icon-btn { flex: none; }
+.flow-list .col-actions { width: calc(28px + 2 * var(--sp-3)); }
 .flow-card:hover { border-color: var(--border-strong); }
 .flow-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .flow-card.is-blocked { border-left: 3px solid var(--danger); padding-left: 10px; }

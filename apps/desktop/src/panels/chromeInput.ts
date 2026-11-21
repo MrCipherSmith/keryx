@@ -39,7 +39,7 @@ export function mouseInput(
   return { kind: "mouse", type, ...point, button: BUTTONS[e.button] ?? "left", clicks: Math.max(1, e.detail || 1), modifiers: modifiers(e) };
 }
 
-export function wheelInput(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey">, point: { x: number; y: number }): BrowserInput {
+export function wheelInput(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey">, point: { x: number; y: number }): Extract<BrowserInput, { kind: "wheel" }> {
   // Lines and pages to pixels, roughly as browsers do.
   const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
   return { kind: "wheel", ...point, dx: e.deltaX * unit, dy: e.deltaY * unit, modifiers: modifiers(e) };

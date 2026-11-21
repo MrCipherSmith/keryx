@@ -123,39 +123,32 @@ test("Discussion formats Markdown and groups inline replies without exposing ses
   expect(document.querySelectorAll(".review-detail-thread .review-detail-message")).toHaveLength(2);
 });
 
-test("PR, discussion and check links open the project browser and reveal it after success", async () => {
-  const { getPrefs, setPrefs } = await import("../lib/prefs");
+test("PR, discussion and check links open externally and keep details visible", async () => {
   const urls: string[] = [];
   let closed = 0;
-  const before = getPrefs().sidePanel;
-  try {
-    const number = 7;
-    const data = detail(number);
-    const openBrowser = async (cwd: string, url: string) => {
-      expect(cwd).toBe("/browser-project");
-      urls.push(url);
-      return { id: 5, active: true, loading: false, title: "Page", url };
-    };
-    const load = async () => ({ ...data, comments: [{ ...data.comments[0]!, body: "[Guide](https://example.com/docs)" }],
-      checks: [{ id: "build", name: "Build Linux", status: "FAILURE", url: "https://example.com/job" }] });
-    const onClose = () => { closed++; root.render(null); };
-    const openSheet = () => act(async () => root.render(createElement(ReviewDetail, {
-      cwd: "/browser-project", repo: "org/repo", repositoryId: "repo-node", viewer: "me", card: card(number),
-      load, openBrowser, onClose, runCommand: async () => ({version: 1 as const, runs: []}),
-    })));
-    const follow = async (selector: string) => act(async () => { document.querySelector<HTMLAnchorElement>(selector)!.click(); });
-    await openSheet();
-    const prLink = document.querySelector<HTMLAnchorElement>(".review-pr-link")!;
-    expect(prLink.getAttribute("aria-label")).toBe("Open pull request");
-    expect(prLink.previousElementSibling?.getAttribute("aria-label")).toBe("Refresh details");
-    await follow(".review-pr-link");
-    expect(getPrefs().sidePanel).toBe("browser");
-    await openSheet(); await follow(".discussion-markdown a");
-    await openSheet(); await follow(".discussion-byline a");
-    await openSheet(); await act(async () => button("Checks").click());
-    expect(document.querySelector(".review-checks .check-tone-danger")).not.toBeNull();
-    await follow(".review-check-name a");
-    expect(closed).toBe(4);
-    expect(urls).toEqual([card(number).url, "https://example.com/docs", "https://example.com/comment", "https://example.com/job"]);
-  } finally { setPrefs({ sidePanel: before }); }
+  const number = 7;
+  const data = detail(number);
+  const openBrowser = async (url: string) => {
+    urls.push(url);
+  };
+  const load = async () => ({ ...data, comments: [{ ...data.comments[0]!, body: "[Guide](https://example.com/docs)" }],
+    checks: [{ id: "build", name: "Build Linux", status: "FAILURE", url: "https://example.com/job" }] });
+  const onClose = () => { closed++; root.render(null); };
+  const openSheet = () => act(async () => root.render(createElement(ReviewDetail, {
+    cwd: "/browser-project", repo: "org/repo", repositoryId: "repo-node", viewer: "me", card: card(number),
+    load, openBrowser, onClose, runCommand: async () => ({version: 1 as const, runs: []}),
+  })));
+  const follow = async (selector: string) => act(async () => { document.querySelector<HTMLAnchorElement>(selector)!.click(); });
+  await openSheet();
+  const prLink = document.querySelector<HTMLAnchorElement>(".review-pr-link")!;
+  expect(prLink.getAttribute("aria-label")).toBe("Open pull request");
+  expect(prLink.previousElementSibling?.getAttribute("aria-label")).toBe("Refresh details");
+  await follow(".review-pr-link");
+  await openSheet(); await follow(".discussion-markdown a");
+  await openSheet(); await follow(".discussion-byline a");
+  await openSheet(); await act(async () => button("Checks").click());
+  expect(document.querySelector(".review-checks .check-tone-danger")).not.toBeNull();
+  await follow(".review-check-name a");
+  expect(closed).toBe(0);
+  expect(urls).toEqual([card(number).url, "https://example.com/docs", "https://example.com/comment", "https://example.com/job"]);
 });

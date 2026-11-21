@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { z } from "zod";
+import { PR_WATCH_TOPICS, type PrRepairSource } from "../review/watcher-types";
 import { applyReviewRuleAction } from "../review/review-rules";
 import type { ReviewRuleAction } from "../review/review-rule-types";
 import { mainCheckout, parseWatcherKey, verifyIdentity } from "../review/watcher-project";
@@ -39,9 +40,17 @@ const choice = z.discriminatedUnion("mode", [
   z.strictObject({ mode: z.literal("project") }),
   z.strictObject({ mode: z.literal("manual") }),
 ]);
+const modelField = z.string().min(1).max(200).regex(/^[\w][\w./:+@-]*$/);
+const repair = z.strictObject({
+  model: z.strictObject({ provider: modelField, model: modelField }),
+  conflicts: z.boolean(), ci: z.boolean(), reviews: z.boolean(),
+  draftWhileRepairing: z.boolean(), readyAfterPush: z.boolean(),
+}).refine(value => (value.conflicts || value.ci || value.reviews) &&
+  (!value.readyAfterPush || value.draftWhileRepairing), "Select a repair trigger and a valid draft policy.");
 const actions = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("status"), number: number.optional() }),
   z.strictObject({ kind: z.literal("mode"), number, choice }),
+  z.strictObject({ kind: z.literal("subscription"), number, topics: z.array(z.enum(PR_WATCH_TOPICS)).max(PR_WATCH_TOPICS.length), rebase: z.boolean().optional(), repair: repair.optional() }),
   z.strictObject({ kind: z.literal("save"), rule, expected: rule.nullable().optional(), number: number.optional() }),
   z.strictObject({ kind: z.literal("delete"), id, expected: rule.optional(), number: number.optional() }),
 ]);
@@ -84,7 +93,17 @@ export async function runReviewRules(args: string[]) {
   const action = parseRuleRequest(values.request ?? '{"kind":"status"}');
   const project = await mainCheckout(process.cwd());
   await verifyIdentity(project, key);
-  const snapshot = applyReviewRuleAction(project, key, action);
+  let source: PrRepairSource | undefined;
+  if (action.kind === "subscription" && (action.rebase || action.repair)) {
+    const { readOwnedPullRequest } = await import("../review/watcher-rebase");
+    const { pull } = await readOwnedPullRequest(project, key, action.number);
+    if (action.repair) {
+      if (!pull.headRepository?.id || !["ADMIN", "MAINTAIN", "WRITE"].includes(pull.headRepository.viewerPermission ?? ""))
+        throw new Error("configuration: The GitHub account needs write access to this pull request’s source branch.");
+      source = { repositoryId: pull.headRepository.id, branch: pull.headRefName };
+    }
+  }
+  const snapshot = applyReviewRuleAction(project, key, action, source);
   await new Promise<void>((resolve, reject) =>
     process.stdout.write(JSON.stringify(snapshot) + "\n", (error) => (error ? reject(error) : resolve())),
   );

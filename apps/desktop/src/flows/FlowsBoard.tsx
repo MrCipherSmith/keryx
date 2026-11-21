@@ -16,6 +16,7 @@ interface Props {
   /** Sessions already linked to a flow package, newest first. */
   linkedSessions: (dir: string) => LinkedSession[];
   /** Work on a flow in a new session or in one already linked to it. */
+  onOpenSession: (card: FlowCard) => void;
   onWorkOn: (card: FlowCard, target: "new" | string) => void;
 }
 
@@ -23,7 +24,7 @@ const LANE_CAP = 30;
 const DONE_CAP = 20;
 const LIST_CAP = 150;
 
-export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, onWorkOn }: Props) {
+export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, onWorkOn, onOpenSession }: Props) {
   const [query, setQuery] = useState("");
   const [owner, setOwner] = useState<string>("");
   const [view, setView] = useState<"board" | "list">(() => {
@@ -177,9 +178,9 @@ export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, 
           </button>
         </EmptyState>
       ) : view === "board" ? (
-        <Board lanes={lanes} onOpen={setOpenDir} openDir={openDir} loading={flows.loading && flows.cards.length === 0} />
+        <Board onOpenSession={onOpenSession} lanes={lanes} onOpen={setOpenDir} openDir={openDir} loading={flows.loading && flows.cards.length === 0} />
       ) : (
-        <ListView cards={visible} onOpen={setOpenDir} openDir={openDir} />
+        <ListView onOpenSession={onOpenSession} cards={visible} onOpen={setOpenDir} openDir={openDir} />
       )}
 
       {openCard ? (
@@ -201,11 +202,13 @@ export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, 
 function Board({
   lanes,
   onOpen,
+  onOpenSession,
   openDir,
   loading,
 }: {
   lanes: Map<LaneId, FlowCard[]>;
   onOpen: (dir: string) => void;
+  onOpenSession: Props["onOpenSession"];
   openDir: string | null;
   loading: boolean;
 }) {
@@ -214,7 +217,7 @@ function Board({
   return (
     <div className="board" role="list" aria-label="Flow lanes">
       {all.map((l) => (
-        <Lane key={l.id} id={l.id} label={l.label} cards={lanes.get(l.id) ?? []} onOpen={onOpen} openDir={openDir} loading={loading} />
+        <Lane key={l.id} id={l.id} label={l.label} cards={lanes.get(l.id) ?? []} onOpen={onOpen} onOpenSession={onOpenSession} openDir={openDir} loading={loading} />
       ))}
     </div>
   );
@@ -225,6 +228,7 @@ function Lane({
   label,
   cards,
   onOpen,
+  onOpenSession,
   openDir,
   loading,
 }: {
@@ -232,6 +236,7 @@ function Lane({
   label: string;
   cards: FlowCard[];
   onOpen: (dir: string) => void;
+  onOpenSession: Props["onOpenSession"];
   openDir: string | null;
   loading: boolean;
 }) {
@@ -274,7 +279,7 @@ function Lane({
         ) : cards.length === 0 ? (
           <div className="lane-empty">Nothing here</div>
         ) : (
-          shown.map((c) => <FlowCardView key={c.dir} card={c} onOpen={onOpen} selected={c.dir === openDir} />)
+          shown.map((c) => <FlowCardView key={c.dir} card={c} onOpen={onOpen} onOpenSession={onOpenSession} selected={c.dir === openDir} />)
         )}
         {cards.length > limit ? (
           <button className="lane-more" onClick={() => setLimit((n) => n + (isDone ? DONE_CAP : LANE_CAP))}>
@@ -289,20 +294,19 @@ function Lane({
 const FlowCardView = memo(function FlowCardView({
   card,
   onOpen,
+  onOpenSession,
   selected,
 }: {
   card: FlowCard;
   onOpen: (dir: string) => void;
+  onOpenSession: Props["onOpenSession"];
   selected: boolean;
 }) {
   const pct = card.tasksTotal > 0 ? Math.round((card.tasksDone / card.tasksTotal) * 100) : 0;
   const allAc = card.acTotal > 0 && card.acConfirmed >= card.acTotal;
   return (
-    <button
-      className={`flow-card${card.blocked ? " is-blocked" : ""}${card.error ? " is-broken" : ""}${selected ? " is-selected" : ""}`}
-      onClick={() => onOpen(card.dir)}
-      title={card.title}
-    >
+    <article className={`flow-card${card.blocked ? " is-blocked" : ""}${card.error ? " is-broken" : ""}${selected ? " is-selected" : ""}`}>
+    <button type="button" className="flow-card-main" onClick={() => onOpen(card.dir)} title={card.title}>
       <div className="flow-card-top">
         <span className="flow-id">#{card.id}</span>
         {card.blocked ? <span className="badge badge-danger">Blocked</span> : null}
@@ -346,10 +350,18 @@ const FlowCardView = memo(function FlowCardView({
         ) : null}
       </div>
     </button>
+    <div className="card-actions"><FlowSessionButton card={card} onOpenSession={onOpenSession} /></div>
+    </article>
   );
 });
 
-function ListView({ cards, onOpen, openDir }: { cards: FlowCard[]; onOpen: (dir: string) => void; openDir: string | null }) {
+function FlowSessionButton({ card, onOpenSession }: { card: FlowCard; onOpenSession: Props["onOpenSession"] }) {
+  const label = `Open flow #${card.id} in Sessions`;
+  return <button type="button" className="icon-btn" title={label} aria-label={label}
+    onClick={event => { event.stopPropagation(); onOpenSession(card); }}><Icon name="chat" size={15} /></button>;
+}
+
+function ListView({ cards, onOpen, openDir, onOpenSession }: { cards: FlowCard[]; onOpen: (dir: string) => void; openDir: string | null; onOpenSession: Props["onOpenSession"] }) {
   const [limit, setLimit] = useState(LIST_CAP);
   return (
     <div className="flow-list-wrap">
@@ -364,6 +376,7 @@ function ListView({ cards, onOpen, openDir }: { cards: FlowCard[]; onOpen: (dir:
             <th className="col-owner">Owner</th>
             <th className="col-pr">PR</th>
             <th className="col-time">Updated</th>
+            <th className="col-actions"><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -373,7 +386,7 @@ function ListView({ cards, onOpen, openDir }: { cards: FlowCard[]; onOpen: (dir:
               className={c.dir === openDir ? "is-selected" : undefined}
               onClick={() => onOpen(c.dir)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+                if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
                   e.preventDefault();
                   onOpen(c.dir);
                 }
@@ -397,6 +410,7 @@ function ListView({ cards, onOpen, openDir }: { cards: FlowCard[]; onOpen: (dir:
               <td className="col-time" title={absoluteTime(c.updatedAt)}>
                 {relativeTime(c.updatedAt)}
               </td>
+              <td className="col-actions"><FlowSessionButton card={c} onOpenSession={onOpenSession} /></td>
             </tr>
           ))}
         </tbody>

@@ -1,3 +1,4 @@
+import type { RunPrRepair } from "./watcher-repair";
 import { scheduledRunOutcomes } from "./desk-run-store";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
@@ -9,7 +10,9 @@ import { listReviewCards } from "./board";
 import { boardGraphql, projectGithubConnection } from "./board-github";
 import { projectGithubBinding, saveProjectGithubBinding, verifyProjectGithubAccountIntent } from "./github-account-store";
 import { resolveWatcherCheckout } from "./watcher-project";
-import type { ReviewBoardSnapshot } from "./board-types";
+import { rebaseWatchedPullRequests } from "./watcher-rebase";
+import type { ReviewCard, ReviewBoardSnapshot } from "./board-types";
+import { recordPrSubscriptionEvents } from "./watcher-subscriptions";
 import { observedCards, watcherChanges, type WatchedCard } from "./watcher-events";
 import {
   DEFAULT_WATCHER_MINUTES,
@@ -203,9 +206,11 @@ export async function pollWatcher(
   {
     fetch = fetchOpenCards,
     dispatch,
+    runPrRepair,
     outcomes = scheduledRunOutcomes,
   }: {
     dispatch?: DispatchReviewRule;
+    runPrRepair?: RunPrRepair;
     outcomes?: typeof scheduledRunOutcomes;
     fetch?: (cwd: string, key: WatcherKey) => Promise<ReviewBoardSnapshot>;
   } = {},
@@ -227,6 +232,7 @@ export async function pollWatcher(
   });
   if (!claimed) return readWatcher(cwd, key);
   let cards: WatchedCard[] | undefined;
+  let openCards: ReviewCard[] = [];
   let failure: string | null = null;
   let recoveryWarning: string | null = null;
   let settled: { links: ReturnType<typeof linkedReviewRuns>; outcomes: ReturnType<typeof scheduledRunOutcomes> } | undefined;
@@ -234,6 +240,7 @@ export async function pollWatcher(
     const board = await fetch(cwd, key);
     validateObservation(board, key);
     cards = observedCards(board.cards);
+    openCards = board.cards;
     try {
       const links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
         ? linkedReviewRuns(db, id) : []);
@@ -268,6 +275,7 @@ export async function pollWatcher(
       const changes =
         row.baseline === null ? [] : watcherChanges(JSON.parse(row.baseline) as WatchedCard[], cards, at);
       observeRules(db, id, cards, changes, at, settled);
+      recordPrSubscriptionEvents(db, id, changes);
       if (changes.length) {
         const insert = db.prepare("INSERT INTO watcher_events (watcher,event) VALUES (?,?)");
         for (const event of changes.slice(-historyLimit)) insert.run(id, JSON.stringify(event));
@@ -289,6 +297,14 @@ export async function pollWatcher(
     }
     return !!cards;
   });
-  if (observed) await dispatchReadyRules(cwd, key, dispatch);
+  if (observed) {
+    const branchUpdates = openCards.filter(card => card.watcherMergeState === "BEHIND" || card.watcherMergeState === "DIRTY");
+    if (branchUpdates.length) await rebaseWatchedPullRequests(cwd, key, branchUpdates);
+    await dispatchReadyRules(cwd, key, dispatch);
+    if (runPrRepair) {
+      const { repairWatchedPullRequests } = await import("./watcher-repair");
+      await repairWatchedPullRequests(cwd, key, openCards, runPrRepair);
+    }
+  }
   return readWatcher(cwd, key);
 }

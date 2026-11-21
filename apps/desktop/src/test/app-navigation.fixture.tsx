@@ -159,9 +159,15 @@ try {
   assert.deepEqual(reads, accountReads);
   const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");
   assert.equal(reviewDot(), "attention", "Review requests reach the navigation on Sessions");
-  await go("Review");
+  await go("Pull requests");
   assert.equal(host.querySelector('.titlebar-right button[aria-label="Activity"]'), null);
   assert.ok(host.textContent?.includes("Navigation proof"));
+  const browserLink = () => host.querySelector<HTMLAnchorElement>('a[aria-label="Open PR #12 in browser"]');
+  assert.equal(browserLink()?.href, prUrl);
+  await React.act(() => namedButton("List").click());
+  assert.equal(browserLink()?.href, prUrl);
+  assert.ok(namedButton("Open PR #12 in Sessions"));
+  await React.act(() => namedButton("Board").click());
   assert.ok(composer.closest("[hidden]"));
   await React.act(() => namedButton("Settings").click());
   assert.equal(host.querySelector('main .project-views'), null);
@@ -170,7 +176,7 @@ try {
   await go("Flows");
   assert.equal(reviewDot(), "attention", "Flows keeps the project notice");
   offline = true;
-  await go("Review");
+  await go("Pull requests");
   assert.deepEqual(reads, accountReads);
   assert.ok(host.textContent?.includes("Navigation proof"));
   const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh pull requests"]');
@@ -203,7 +209,7 @@ try {
   assert.match(host.textContent ?? "", /\[Review #12\] Wave 1 started/);
   assert.ok(!current.disabled, "The originating composer remains editable");
   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
-  await go("Review");
+  await go("Pull requests");
   assert.match(host.textContent ?? "", /Keryx review in progress/);
   await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());

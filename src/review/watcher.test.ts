@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewBoardSnapshot, ReviewCard } from "./board-types";
+import { applyReviewRuleAction } from "./review-rules";
+import { rebaseWatchedPullRequests } from "./watcher-rebase";
 import { watcherScope, watcherTransaction } from "./watcher-db";
 import { configureWatcher, listConfiguredWatchers, pauseWatcher, pollWatcher, readWatcher } from "./watcher";
 
@@ -192,4 +194,72 @@ test("unverified head CI and partial reviewer pages cannot remove requests or re
   expect(partial.lastSuccessAt).toEqual(success.lastSuccessAt);
   expect(partial.events).toEqual([]);
   expect((await tick(stable)).events).toEqual([]);
+});
+
+test("PR subscriptions record only selected topics and preserve independent watcher history", async () => {
+  configureWatcher(cwd, key, 5);
+  const save = () => applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: ["requests", "reviews"] });
+  const activity = () => applyReviewRuleAction(cwd, key, { kind: "status", number: 2 }).subscriptions?.[0]?.activity;
+  expect(save().subscriptions).toEqual([{ number: 2, topics: ["requests", "reviews"], activity: [] }]);
+  await tick(board(card({ watcherReviews: [] }), card({ number: 3 })));
+  const changed = board(card({ decision: "APPROVED", ci: "passed", reviewers: ["teammate"],
+    watcherReviews: [{ id: "one", login: "teammate", state: "APPROVED" }] }), card({ number: 3, reviewers: ["team"] }));
+  await tick(changed);
+  await tick(changed);
+  expect(activity()?.map(event => event.kind)).toEqual(["review_submitted", "review_requested"]);
+  expect(readWatcher(cwd, key).events.some(event => event.number === 3)).toBe(true);
+  expect(applyReviewRuleAction(cwd, { ...key, viewer: "other" }, { kind: "status" }).subscriptions).toEqual([]);
+  expect(applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: [] }).subscriptions).toEqual([]);
+});
+
+test("existing PR subscriptions retain their topics when the watcher schema adds rebase", async () => {
+  const { Database } = await import("bun:sqlite");
+  const dir = join(cwd, "desktop-review");
+  mkdirSync(dir);
+  const db = new Database(join(dir, "watchers.sqlite"));
+  try {
+    db.exec(`CREATE TABLE review_pr_subscriptions (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, topics TEXT NOT NULL, PRIMARY KEY(watcher, number)
+    )`);
+    db.run('INSERT INTO review_pr_subscriptions VALUES (?, ?, ?)', [watcherScope(cwd, key), 2, '["checks"]']);
+  } finally {
+    db.close();
+  }
+  const subscriptions = () => applyReviewRuleAction(cwd, key, { kind: "status", number: 2 }).subscriptions;
+  expect(subscriptions()).toEqual([{ number: 2, topics: ["checks"], activity: [] }]);
+  applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: ["checks"], rebase: true });
+  expect(subscriptions()).toEqual([{ number: 2, topics: ["checks"], rebase: true, activity: [] }]);
+});
+
+test("automatic rebase claims a current owned revision once and never writes through a pause", async () => {
+  configureWatcher(cwd, key, 5);
+  const headSha = "a".repeat(40);
+  const current = card({ author: key.viewer, headSha, watcherMergeState: "BEHIND" });
+  applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: [], rebase: true });
+  const owned = { checkout: cwd, auth: { login: key.viewer, env: {} }, pull: {
+    id: "PR_2", author: { login: key.viewer }, state: "OPEN", headRefOid: headSha, baseRefOid: current.baseSha,
+    headRefName: "feature", baseRefName: "main", mergeable: "MERGEABLE", mergeStateStatus: "BEHIND",
+    headRepository: { defaultBranchRef: { name: "main" } },
+  } };
+  const reads = mock(async () => owned);
+  const requests: { query: string; params: Record<string, string | number> }[] = [];
+  const mutate = async <T>(_checkout: string, query: string, params: Record<string, string | number>) => {
+    requests.push({ query, params });
+    return { updatePullRequestBranch: { pullRequest: { id: "PR_2" } } } as T;
+  };
+  const run = (pr: ReviewCard, read = reads) => rebaseWatchedPullRequests(cwd, key, [pr], { read, mutate });
+  await run(card({ ...current, author: "different-owner" }));
+  await run(card({ ...current, headSha: "b".repeat(40) }));
+  expect(requests).toHaveLength(0);
+  await Promise.all([run(current), run(current)]);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]?.params).toEqual({ id: "PR_2", head: headSha });
+  expect(requests[0]?.query).toContain("updateMethod:REBASE");
+  expect(applyReviewRuleAction(cwd, key, { kind: "status", number: 2 }).subscriptions?.[0]?.activity?.[0]?.kind).toBe("rebase");
+  const newBase = "b".repeat(40);
+  await run(card({ ...current, baseSha: newBase }), mock(async () => {
+    pauseWatcher(cwd, key);
+    return { ...owned, pull: { ...owned.pull, baseRefOid: newBase } };
+  }));
+  expect(requests).toHaveLength(1);
 });
