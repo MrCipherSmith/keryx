@@ -50,5 +50,8 @@ test("active Keryx runs precede GitHub attention and available results bring an 
   const card = { ...pr, decision: null, reviewers: [], ci: "passed" as const };
   expect(reviewLane({ ...card, localReview: { active: true, ready: true } })).toBe("review");
   expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
-  expect(reviewLane({ ...card, state: "merged", localReview: { active: true, ready: true } })).toBe("done");
+  const merged = { ...card, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
+  expect(reviewLane(merged)).toBe("attention");
+  expect(filterReviews([merged], { ...EMPTY_FILTERS, author: ["someone else"], updatedWithin: 7 }, "")).toEqual([merged]);
+  expect(filterReviews([merged], EMPTY_FILTERS, "#999")).toEqual([]);
 });

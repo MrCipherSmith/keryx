@@ -3,10 +3,10 @@ import { readLinkedFlows } from "../review/pr-context";
 import { decodeBoardCursor, splitBoardCard } from "../review/board-transport";
 import { parseWatcherKey } from "../review/watcher-project";
 import { readBoardBadges } from "../review/board-badge-read";
-import { attachDeskRunBadges, readLocalBadges } from "../review/desk-run-store";
+import { attachDeskRunBadges, readLocalActiveReviewNumbers, readLocalBadges } from "../review/desk-run-store";
 import { parseArgs } from "node:util";
 import { attachAddressedReplies } from "../review/board-addressed-replies";
-import { listReviewCards } from "../review/board";
+import { listActiveReviewCards, listReviewCards } from "../review/board";
 import { readReviewBoardDetail } from "../review/board-detail";
 import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, withCurrentGithubBinding, type GithubConnection } from "../review/board-github";
 
@@ -76,6 +76,20 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
       continue;
     }
     attachDeskRunBadges(result);
+    if (!page?.cursor && !continuation.part) {
+      try {
+        const present = new Set(result.cards.map(card => card.number));
+        const outstanding = readLocalActiveReviewNumbers(result).filter(number => !present.has(number));
+        if (outstanding.length) {
+          const cards = await listActiveReviewCards(result, outstanding, query);
+          const active = attachDeskRunBadges({ ...result, cards }).cards.filter(card => card.localReview?.active);
+          if (active.length) result.activeReviewCards = active;
+        }
+      } catch (error) {
+        if (error instanceof Error && /^(access|configuration):/.test(error.message)) throw error;
+        result.warnings.push("Some active Keryx reviews could not be loaded. Refresh to retry.");
+      }
+    }
     // Check the notification feed once per refresh, including unread candidates beyond page one.
     if (!values["cards-only"] && !page?.cursor && !continuation.part && (state === "open" || state === "all"))
       await attachAddressedReplies(result, async (endpoint, timeoutMs) =>

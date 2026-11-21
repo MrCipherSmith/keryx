@@ -444,6 +444,16 @@ export class DeskRunStore {
     }
   }
 
+  activeReviewNumbers({ repositoryId, viewer }: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
+    return this.db.query<{ pr: number }, [string, string]>(`
+      SELECT DISTINCT pr FROM runs WHERE repo=? AND viewer=?
+        AND state IN ('queued','running','cancelling')
+        AND json_extract(details,'$.source') IN ('manual','scheduled')
+        AND coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete')
+      ORDER BY pr DESC
+    `).all(repositoryId, viewer).map(({ pr }) => pr);
+  }
+
   private previousAttempt(key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, anyOptions = false) {
     return this.db
       .query<
@@ -704,6 +714,12 @@ export function readLocalBadges(snapshot: { repositoryId: string; viewer: string
   if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return;
   const store = new DeskRunStore(deskRunRoot(), true);
   try { store.attachBadges(snapshot); } finally { store.close(); }
+}
+
+export function readLocalActiveReviewNumbers(key: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
+  if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return [];
+  const store = new DeskRunStore(deskRunRoot(), true);
+  try { return store.activeReviewNumbers(key); } finally { store.close(); }
 }
 
 export function attachDeskRunBadges(snapshot: ReviewBoardSnapshot) {

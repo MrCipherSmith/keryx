@@ -217,7 +217,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
   useEffect(() => {
     const next = initialLaunch.current;
     if (!next) return;
-    if (tab !== "review" || local.error || card.state !== "open" || revisionChanged ||
+    if (tab !== "review" || local.error || (next.kind === "start" && (card.state !== "open" || revisionChanged)) ||
       next.baseSha !== card.baseSha || next.headSha !== card.headSha) {
       initialLaunch.current = undefined;
       return;

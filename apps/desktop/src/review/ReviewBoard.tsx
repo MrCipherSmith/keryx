@@ -268,7 +268,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   useEffect(() => {
     if (!tabActive || !snapshot || selected !== null) return;
     const { repo, repositoryId, viewer } = snapshot;
-    const active = snapshot.cards.filter(c => c.state === "open" && c.localReview?.active);
+    const active = snapshot.cards.filter(c => c.localReview?.active);
     if (!active.length) return;
     let cancelled = false;
     async function poll() {
@@ -320,7 +320,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   }, [viewer, repositoryId]);
   const visible = useMemo(() => {
     if (!snapshot) return [];
-    return filterReviews(snapshot.cards, filters, q).map(card => {
+    return filterReviews(snapshot.cards, filters, q).sort((a, b) => Number(!!b.localReview?.active) - Number(!!a.localReview?.active)).map(card => {
       if (!card.addressedReplyIds?.length) return card;
       const readIds = readReplies(snapshot.viewer, snapshot.repositoryId, card.number, card.addressedReplyIds);
       const ids = card.addressedReplyIds.filter(id => !readIds.has(id));

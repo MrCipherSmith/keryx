@@ -35,15 +35,16 @@ function matchesRole(selected: string[], values: string[], complete = true) {
 
 export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
   const q = query.trim().toLowerCase();
-  return cards.filter((c) => (
-    (!q || c.title.toLowerCase().includes(q) || String(c.number).includes(q.replace(/^#(?=\d)/, ""))) &&
-    (!f.author.length || f.author.includes(c.author)) &&
-    matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
-    matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
-    (!f.decision.length || f.decision.includes(c.decision ?? ":none")) &&
-    (!f.ci.length || f.ci.includes(c.ci)) &&
-    (!f.state.length || f.state.includes(prState(c)))
-  ));
+  return cards.filter(c => {
+    if (q && !c.title.toLowerCase().includes(q) && !String(c.number).includes(q.replace(/^#(?=\d)/, ""))) return false;
+    if (c.localReview?.active) return true;
+    return (!f.author.length || f.author.includes(c.author)) &&
+      matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
+      matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
+      (!f.decision.length || f.decision.includes(c.decision ?? ":none")) &&
+      (!f.ci.length || f.ci.includes(c.ci)) &&
+      (!f.state.length || f.state.includes(prState(c)));
+  });
 }
 
 function attentionReason(c: ReviewCard): string | null {
@@ -57,18 +58,18 @@ function attentionReason(c: ReviewCard): string | null {
 }
 
 export function reviewLane(c: ReviewCard): Lane {
-  if (c.state !== "open") return "done";
   if (c.localReview?.awaitingAnswer) return "attention";
   if (c.localReview?.active) return "review";
+  if (c.state !== "open") return "done";
   return attentionReason(c) ? "attention" : "open";
 }
 
 export function laneReason(c: ReviewCard) {
-  if (c.state !== "open") return STATE_LABEL[c.state];
   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
   if (c.localReview?.runState === "queued") return "Keryx review queued";
   if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
   if (c.localReview?.active) return "Keryx review in progress";
+  if (c.state !== "open") return STATE_LABEL[c.state];
   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);
   if (attention) return attention;

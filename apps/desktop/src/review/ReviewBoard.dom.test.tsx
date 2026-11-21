@@ -807,8 +807,9 @@ test("filter editing waits for the first verified snapshot before restoring save
   await click(button("Cancel"));
 });
 
-test("a coordinator question moves the PR to Needs attention and opens the pinned session from either view", async () => {
-  const pending = { ...pr, localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
+test("a merged PR awaiting a Keryx answer stays actionable in the Open filter from either view", async () => {
+  const pending = { ...pr, state: "merged" as const,
+    localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
   const actions: string[] = [];
   const command: typeof reviewRun = async (_cwd, _key, action) => {
     actions.push(action.kind);

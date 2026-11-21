@@ -71,7 +71,10 @@ export async function collectBoardPages(readPage: (cursor: string | null, repo?:
     cursors.add(cursor);
   }
   if (pieces) warnings.add("Only part of the repository could be loaded. Refresh to retry.");
-  const { replyHints, cardPart: _part, ...header } = first!;
+  const { replyHints, activeReviewCards, cardPart: _part, ...header } = first!;
+  for (const card of activeReviewCards ?? []) {
+    if (!cards.has(card.number)) cards.set(card.number, card);
+  }
   for (const hint of replyHints ?? []) {
     const card = cards.get(hint.number);
     if (card?.state === "open") cards.set(card.number, { ...card, addressedReplyIds: hint.ids });

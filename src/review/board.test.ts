@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runReviewBoard } from "../commands/review-board";
-import { listReviewCards, verifyScheduledSubject } from "./board";
+import { listActiveReviewCards, listReviewCards, verifyScheduledSubject } from "./board";
 import { configuredRepositories, selectRepository } from "./board-github";
 import { fixtureGitEnv, isolateGitDiscovery } from "./test-git-fixture";
 
@@ -114,6 +114,17 @@ test("a review period includes the boundary and stops before older PR pages", as
   expect(result.cards.map(pr => pr.number)).toEqual([1, 2]);
   expect(result.nextCursor).toBeNull();
   expect(result.warnings).toEqual([]);
+});
+
+test("active review lookup keeps a merged PR and verifies the board identity", async () => {
+  const subject = { repo, repositoryId: "repo-id", viewer: "me" };
+  const response = { viewer: { login: "me" }, repository: { id: "repo-id", p7: { ...card(7), state: "MERGED" } } };
+  const result = await listActiveReviewCards(subject, [7], async <T>(query: string) => {
+    expect(query).toContain("p7:pullRequest(number:7)");
+    return response as T;
+  });
+  expect(result[0]).toMatchObject({ number: 7, state: "merged" });
+  await expect(listActiveReviewCards(subject, [7], queryFrom([{ ...response, viewer: { login: "other" } }]))).rejects.toThrow("access:");
 });
 
 test("reported access loss on a later page is fatal", async () => {
