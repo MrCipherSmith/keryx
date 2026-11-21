@@ -1884,8 +1884,15 @@ test("manual reviewer waits without spending a request, consumes the operator's 
       question = store.pendingQuestions(id)[0];
     }
     if (!question) throw new Error("Expected a reviewer question");
-    expect(question).toMatchObject({ reviewer: "review-layout", wave: 1, question: "What was the measured width?" });
-    expect(events[0]).toMatchObject({ sessionId: question.reviewerSessionId });
+    expect(question).toMatchObject({ reviewContext: true, allowFreeform: true,
+      question: expect.stringContaining("What was the measured width?") });
+    expect(question.reviewerSessionId).toBeUndefined();
+    const startedReviewer = events[0];
+    if (startedReviewer?.type !== "reviewer_activity" || startedReviewer.activity !== "started") {
+      throw new Error("Expected a reviewer session");
+    }
+    expect(startedReviewer).toMatchObject({ reviewer: "review-layout", wave: 1 });
+    const { sessionId: reviewerSessionId } = startedReviewer;
     await Bun.sleep(250);
     expect(requests).toHaveLength(1);
     expect(existsSync(path.join(cwd, save))).toBe(false);
@@ -1897,8 +1904,8 @@ test("manual reviewer waits without spending a request, consumes the operator's 
     expect(requests[1]!.messages).toContainEqual(expect.objectContaining({ role: "assistant", content: expect.stringContaining("What was the measured width?") }));
     expect(parseReviewResult(await readFile(path.join(cwd, save), "utf8"))).toMatchObject({ status: "DONE", summary: "Rechecked measurements" });
     expect(store.pendingQuestions(id)).toHaveLength(0);
-    expect(events.filter(e => e.type === "reviewer_activity" && e.activity === "answer")).toMatchObject([{ sessionId: question.reviewerSessionId, text: "320px at the narrowest viewport" }]);
-    expect(events.at(-1)).toMatchObject({ sessionId: question.reviewerSessionId, outcome: "completed" });
+    expect(events.filter(e => e.type === "reviewer_activity" && e.activity === "answer")).toMatchObject([{ sessionId: reviewerSessionId, text: "320px at the narrowest viewport" }]);
+    expect(events.at(-1)).toMatchObject({ sessionId: reviewerSessionId, outcome: "completed" });
   } finally {
     controller.abort();
     await pending;

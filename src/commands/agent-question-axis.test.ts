@@ -580,8 +580,9 @@ test("a manual Desktop review resumes the same provider turn with its operator's
     expect(store.pendingQuestion(id)).toBeUndefined();
     expect(coordinatorActivity(dir)).toEqual([
       { kind: "tool", text: "Started read_file" }, { kind: "result", text: "read_file finished" },
-      { kind: "message", text: "Checking the selected range" }, { kind: "message", text: question.question },
-      { kind: "answer", text: "1" },
+      { kind: "message", text: "Checking the selected range" },
+      { kind: "question", questionId: pending!.id, text: question.question },
+      { kind: "answer", questionId: pending!.id, text: "1" },
     ]);
   } finally {
     store.cancel(key, id);
