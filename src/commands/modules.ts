@@ -67,10 +67,12 @@ const MODULES: ModuleDef[] = [
   },
 ];
 
-/** The module table, for tests that assert its coverage. */
-export function modulesForTest(): readonly ModuleDef[] {
+/** Shared catalog for module selection and diagnostics. */
+export function moduleCatalog(): readonly ModuleDef[] {
   return MODULES;
 }
+
+export const modulesForTest = moduleCatalog;
 
 /**
  * Build the `init` argv that reproduces `next` exactly.

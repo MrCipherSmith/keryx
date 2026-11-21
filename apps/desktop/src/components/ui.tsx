@@ -52,10 +52,11 @@ function onEscapeKey(e: KeyboardEvent) {
 }
 
 /** Register a layer; `null` holds the layer (it blocks lower ones) without closing. */
-export function useEscape(handler: (() => void) | null) {
+export function useEscape(handler: (() => void) | null, active = true) {
   const ref = useRef(handler);
   ref.current = handler;
   useEffect(() => {
+    if (!active) return;
     if (!escapeStack.length) window.addEventListener("keydown", onEscapeKey);
     const entry = { get current() { return ref.current; } };
     escapeStack.push(entry);
@@ -66,7 +67,7 @@ export function useEscape(handler: (() => void) | null) {
       if (!escapeStack.length) window.removeEventListener("keydown", onEscapeKey);
       overlayListeners.forEach((l) => l());
     };
-  }, []);
+  }, [active]);
 }
 
 const overlayListeners = new Set<() => void>();

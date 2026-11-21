@@ -13,6 +13,7 @@ import {
   type StaleWorktreeCandidate,
 } from "../lib/git-worktrees";
 import { confirm } from "../lib/prompt";
+import { normalizeMetaprojectModules } from "../lib/metaproject-modules";
 
 // R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
 // module-directory scaffolders below all receive an absolute path already
@@ -162,6 +163,7 @@ import {
   isPreviewRequested,
   parseDivergenceResolution,
   type DivergenceResolution,
+  type InstallPlan,
 } from "../lib/install-plan";
 import {
   renderTestingPostCommitHook,
@@ -210,6 +212,7 @@ type UpdateOptions = {
   help: boolean;
   hooks: boolean;
   skipRuntime: boolean;
+  noPrune: boolean;
   noTasks: boolean;
   preview: boolean;
   resolution: DivergenceResolution | undefined;
@@ -327,7 +330,9 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     process.exitCode = 1;
   }
 
-  await offerStaleWorktreePrune(projectRoot, options);
+  if (!options.noPrune) {
+    await offerStaleWorktreePrune(projectRoot, options);
+  }
 
   const steps: string[] = [];
   if (options.hooks) {
@@ -451,7 +456,7 @@ type RefreshSummary = {
  * read, so this path cannot write — including the default AGENTS.md that
  * `syncAgentRules` would create on a real run.
  */
-async function previewServiceFiles(projectRoot: string, options: UpdateOptions): Promise<string> {
+async function buildUpdateLifecyclePlan(projectRoot: string, options: UpdateOptions) {
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
@@ -475,6 +480,16 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
     },
     { intent: "update", steps: [rulesReadmeStep(metaprojectRoot, "managed")] },
   );
+  return { plan, manifestState, manifest };
+}
+
+export async function planUpdateLifecycle(projectRoot: string, args: string[]): Promise<InstallPlan> {
+  const options = parseUpdateArgs(args);
+  return (await buildUpdateLifecyclePlan(projectRoot, options)).plan;
+}
+
+async function previewServiceFiles(projectRoot: string, options: UpdateOptions): Promise<string> {
+  const { plan, manifestState, manifest } = await buildUpdateLifecyclePlan(projectRoot, options);
   return formatInstallPlan(plan, {
     ...(options.resolution === undefined ? {} : { resolution: options.resolution }),
     relativeTo: projectRoot,
@@ -1816,25 +1831,14 @@ async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult
 
 function normalizeManifest(manifest: MetaprojectManifest): { manifest: MetaprojectManifest; migrated: boolean } {
   const modules = manifest.modules ?? {};
-  const legacyWiki = modules.wiki;
-  if (!legacyWiki || modules.gdwiki) {
-    return { manifest, migrated: false };
-  }
-  const restModules = { ...modules };
-  delete restModules.wiki;
-  return {
-    manifest: {
-      ...manifest,
-      modules: {
-        ...restModules,
-        gdwiki: legacyWiki,
-      },
-    },
+  const normalized = normalizeMetaprojectModules(modules);
+  return normalized === modules ? { manifest, migrated: false } : {
+    manifest: { ...manifest, modules: normalized },
     migrated: true,
   };
 }
 
-async function inferManifestFromExistingMetaproject(metaprojectRoot: string): Promise<MetaprojectManifest> {
+export async function inferManifestFromExistingMetaproject(metaprojectRoot: string): Promise<MetaprojectManifest> {
   const modules: Record<string, ManifestModule> = {};
   const checks: Record<string, string[]> = {
     gdgraph: ["core/gdgraph", "data/gdgraph", "modules/gdgraph.md", "skills/gdgraph"],
@@ -1879,6 +1883,7 @@ const UPDATE_FLAGS = [
   "-h",
   "--hooks",
   "--skip-runtime",
+  "--no-prune",
   "--no-tasks",
   "--preview",
   "--dry-run",
@@ -1906,6 +1911,7 @@ function parseUpdateArgs(args: string[]): UpdateOptions {
     help: helpWord || args.includes("--help") || args.includes("-h"),
     hooks: args.includes("--hooks"),
     skipRuntime: args.includes("--skip-runtime"),
+    noPrune: args.includes("--no-prune"),
     noTasks: args.includes("--no-tasks"),
     preview: isPreviewRequested(args),
     resolution: parseDivergenceResolution(args),
@@ -2011,7 +2017,7 @@ function runtimeSourcePath(relativePath: string): string {
 
 function printHelp(): void {
   helpTitle("keryx update", "refresh .metaproject service files (data left untouched)");
-  helpUsage(["keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]"]);
+  helpUsage(["keryx update [--skip-runtime] [--no-prune] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]"]);
   heading("Default behavior");
   for (const line of [
     "updates managed runtime when present;",
@@ -2024,6 +2030,7 @@ function printHelp(): void {
   }
   helpOptions([
     { flag: "--skip-runtime", desc: "Refresh local service files without fetching the managed runtime." },
+    { flag: "--no-prune", desc: "Do not check or prune stale worktrees, even with --yes." },
     { flag: "--hooks", desc: "Run executable .metaproject/hooks/post-update.d hooks explicitly." },
     { flag: "--no-tasks", desc: "Do not backfill/enable the Task Manager module." },
     { flag: "--preview, --dry-run", desc: "Print the lifecycle plan (create/update/skip/conflict + base digests) and write nothing." },

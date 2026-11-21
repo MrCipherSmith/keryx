@@ -129,7 +129,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "setup",
     group: "Start here",
-    summary: "Print the Metaproject preparation guide: init, refresh, or repair.",
+    summary: "Print the Metaproject guide, or inspect, plan and apply setup.",
   },
   {
     kind: "slash",

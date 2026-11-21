@@ -12,6 +12,14 @@ const starts: unknown[] = [];
 const replies: unknown[] = [];
 let refuseReply = true;
 const calls: string[] = [];
+const setupActions: Array<{ kind: string; request?: unknown; planId?: string }> = [];
+const setupPlanId = "c".repeat(64);
+let setupCompleted = false;
+let staleSetup = false;
+let acpStarts = 0;
+let projectFinding: string | null = null;
+let graphFinding = false;
+let diagnosticTarget: { cwd: string; setupFinding: string } | undefined;
 const runId = "e968ba9b-c8a3-438f-a5c8-93625e427905";
 const prUrl = "https://github.com/org/project/pull/12";
 const question = (id: string, reviewer: string, text: string) => ({
@@ -38,9 +46,60 @@ mockIPC(async (cmd, args) => {
     case "window_initial_cwd": return cwd;
     case "settings_get": return { recentProjects: [] };
     case "projects_state": return [];
+    case "project_take_setup": {
+      const finding = projectFinding;
+      projectFinding = null;
+      return finding;
+    }
+    case "project_switch": {
+      const target = args as { cwd: string; setupFinding?: string };
+      if (target.setupFinding) {
+        diagnosticTarget = { cwd: target.cwd, setupFinding: target.setupFinding };
+        if (target.cwd === cwd) {
+          projectFinding = target.setupFinding;
+          await emit("projects://setup-requested");
+        }
+        // A different webview would consume its own native handoff.
+      }
+      return null;
+    }
+    case "project_diagnostics": return null;
     case "flows_list": return [{ id: "505", idValid: true, dir: "505-review", title: "Review flow", prUrl }];
     case "pr_info": return { url: prUrl, number: 12 };
-    case "acp_start": return { keryxPath: "/fixture/keryx" };
+    case "project_setup": {
+      const input = args as { cwd: string; action: (typeof setupActions)[number] };
+      assert.equal(input.cwd, cwd);
+      setupActions.push(input.action);
+      const operation = input.action.kind;
+      let result: Record<string, unknown>;
+      if (operation === "inspect") {
+        result = {
+          root: cwd, state: setupCompleted ? "initialized" : "uninitialized", enclosingRoot: null,
+          cliVersion: "1.0.0", writerVersion: null, compatibility: "unknown",
+          modules: [{ name: "gdgraph", description: "Code graph", enabled: null, defaultEnabled: true }],
+          gdskillsProfile: "recommended", gdskillsProfiles: ["recommended"], graphActions: ["none", "check", "check-and-rebuild"],
+          actions: [], findings: graphFinding ? [{ id: "graph-freshness", severity: "warning", message: "Graph needs attention" }] : [],
+        };
+      } else if (operation === "plan") {
+        result = {
+          root: cwd, planId: setupPlanId, mode: "init", status: "ready", modules: [],
+          steps: [{ id: "init", status: "ready" }], blocked: [], files: [], ignore: null, gitignore: null, trackedMetaproject: null,
+          entrypoints: [{ path: "CLAUDE.local.md", action: "create", after: "# Project routing" }],
+        };
+      } else {
+        assert.equal(input.action.planId, setupPlanId);
+        assert.deepEqual(input.action.request, setupActions.filter((action) => action.kind === "plan").at(-1)?.request);
+        if (staleSetup) {
+          staleSetup = false;
+          result = { status: "error", error: { code: "stale-plan", message: "Refresh preview" } };
+        } else {
+          setupCompleted = true;
+          result = { root: cwd, planId: setupPlanId, status: "completed", journaled: true, steps: [{ id: "init", status: "completed" }] };
+        }
+      }
+      return { cliSource: "bundled", result: { schemaVersion: 1, operation, ...result } };
+    }
+    case "acp_start": acpStarts++; return { keryxPath: "/fixture/keryx" };
     case "version_check": return { ok: true };
     case "github_login": connectedNewAccount = true; return null;
     case "github_accounts": {
@@ -115,6 +174,14 @@ function namedButton(label: string) {
   return button;
 }
 
+async function waitForView(ready: () => boolean, description: string) {
+  const deadline = Date.now() + 2500;
+  while (!ready() && Date.now() < deadline) {
+    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  }
+  assert.ok(ready(), description);
+}
+
 async function chooseAccount(login: string) {
   const picker = host.querySelector<HTMLSelectElement>('[role="dialog"] select');
   assert.ok(picker);
@@ -128,10 +195,17 @@ async function chooseAccount(login: string) {
 }
 try {
   await React.act(async () => root.render(<ToastProvider><App /></ToastProvider>));
-  const deadline = Date.now() + 2500;
-  while (host.querySelector("textarea")?.disabled !== false && Date.now() < deadline) {
-    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
-  }
+  await waitForView(() => host.querySelector(".project-setup") !== null, "The initial setup wizard opened");
+  assert.equal(acpStarts, 0, "Folder inspection precedes ACP startup");
+  assert.equal(setupActions.at(-1)?.kind, "inspect");
+  assert.ok(host.textContent?.includes("Set up Metaproject"));
+  await React.act(() => namedButton("Preview changes").click());
+  assert.ok(host.textContent?.includes("# Project routing"));
+  assert.equal(setupActions.at(-1)?.kind, "plan");
+  assert.equal(setupCompleted, false, "Preview does not apply");
+  await React.act(() => namedButton("Open without setup").click());
+  assert.equal(setupActions.some((action) => action.kind === "apply"), false);
+  await waitForView(() => host.querySelector("textarea")?.disabled === false, "ACP session composer is ready");
   const composer = host.querySelector<HTMLTextAreaElement>("textarea");
   assert.ok(composer && !composer.disabled, "ACP session composer is ready");
   assert.ok(host.textContent?.includes("Choose a GitHub account"));
@@ -254,11 +328,49 @@ try {
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
   assert.ok(projectSettings);
   await React.act(() => projectSettings.click());
+  await React.act(() => namedButton("Set up Metaproject…").click());
+  await React.act(() => namedButton("Preview changes").click());
+  staleSetup = true;
+  await React.act(() => namedButton("Apply changes").click());
+  assert.match(host.textContent ?? "", /Project files changed since the preview/);
+  assert.equal(setupCompleted, false);
+  await React.act(() => namedButton("Preview changes").click());
+  await React.act(() => namedButton("Apply changes").click());
+  assert.match(host.textContent ?? "", /Setup completed/);
+  assert.equal(setupCompleted, true);
+  assert.equal(acpStarts, 1, "Setup refreshes the project without restarting the session");
+  await React.act(() => namedButton("Done").click());
   await chooseAccount("second");
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
   await React.act(() => namedButton("GitHub · @second").click());
   await React.act(() => namedButton("Disconnect from project").click());
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");
+  const otherCwd = "/dev/another-project";
+  await React.act(() => emit("project-diagnostics://updated", [{
+    cwd: otherCwd, root: otherCwd, checkedAt: 1700000000000, status: "checked", error: null,
+    report: { root: otherCwd, state: "initialized", findings: [{ id: "graph-freshness", severity: "warning", message: "Graph needs attention" }] },
+  }]));
+  await React.act(() => namedButton("Project notifications, 1 unread").click());
+  const issue = host.querySelector<HTMLButtonElement>(".project-notification-open");
+  assert.ok(issue?.textContent?.includes("another-project"));
+  await React.act(() => issue?.click());
+  assert.deepEqual(diagnosticTarget, { cwd: otherCwd, setupFinding: "graph-freshness" });
+  assert.equal(host.querySelector(".project-setup"), null, "The originating view must not open the target wizard");
+  graphFinding = true;
+  await React.act(() => emit("project-diagnostics://updated", [{
+    cwd, root: cwd, checkedAt: 1700000000001, status: "checked", error: null,
+    report: { root: cwd, state: "initialized", findings: [{ id: "graph-freshness", severity: "warning", message: "Graph needs attention" }] },
+  }]));
+  await React.act(() => namedButton("Project notifications, 1 unread").click());
+  await React.act(() => host.querySelector<HTMLButtonElement>(".project-notification-open")?.click());
+  assert.ok(host.querySelector(".project-setup"));
+  assert.equal([...host.querySelectorAll<HTMLSelectElement>(".project-setup select")].find((select) => select.closest("label")?.textContent?.startsWith("Code graph"))?.value, "check-and-rebuild");
+  await React.act(() => namedButton("Preview changes").click());
+  assert.deepEqual(setupActions.at(-1)?.request, {
+    schemaVersion: 1, modules: {}, gitignore: false, sharedAgents: false,
+    graph: "check-and-rebuild", actions: [], maintenanceOnly: true,
+  });
+
 } finally {
   await React.act(() => root.unmount());
   clearMocks();

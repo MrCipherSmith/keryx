@@ -44,6 +44,8 @@ interface ShellProps {
   view: View;
   onView: (v: View) => void;
   onProjectSettings?: () => void;
+  onProjectSetup?: () => void;
+  notifications?: ReactNode;
   title: ReactNode;
   hasSession?: boolean;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
@@ -235,6 +237,7 @@ function TitleBar(p: ShellProps) {
   const items: MenuItem[] = [
     { kind: "header", id: "h-current", label: <span className="truncate" title={cwd}>{cwd}</span> },
     ...(p.onProjectSettings ? [{ id: "project-settings", label: "Project Settings", icon: "settings" as const, onSelect: p.onProjectSettings }] : []),
+    ...(p.onProjectSetup ? [{ id: "project-setup", label: "Set up Metaproject…", icon: "settings" as const, onSelect: p.onProjectSetup }] : []),
     { id: "open", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
     { id: "newwin", label: "Open this folder in a new window", icon: "external", onSelect: () => onNewWindow(cwd) },
     ...(others.length
@@ -274,6 +277,7 @@ function TitleBar(p: ShellProps) {
         {p.view === "session" && p.hasSession && <ActivityToggle />}
         <SideToggles />
         {p.actions}
+        {p.notifications}
         <button className="palette-btn" onClick={onPalette} aria-label="Commands and sessions" title="Commands and sessions">
           <Icon name="search" size={13} />
           <span>Commands</span>

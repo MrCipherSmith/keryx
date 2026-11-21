@@ -13,6 +13,42 @@ background tasks; anything it does not draw yet still works in `keryx shell`.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
+## Set up Metaproject for a folder
+
+When you open a folder, Desktop uses the selected Keryx CLI to check
+Metaproject before starting the first agent session for that view. If the
+project needs setup, an update, or repair, Desktop offers the setup wizard.
+Choose **Open without setup** to continue without making changes. You can
+also open the wizard at any time from the project dropdown, **Run → Set up
+Metaproject…**, or **Project Settings → Metaproject**.
+
+Select modules and optional graph, Code Health, testing and wiki actions.
+**Preview changes** shows the planned operations, managed files, and
+available Markdown previews for agent instructions. You can also preview
+a shared ignore rule in `.gitignore`. **Apply changes** runs the approved plan.
+If the project changes after preview, create a new preview. The result
+lists completed, failed, and skipped steps.
+
+The wizard uses the [project setup JSON commands](cli-reference.md#project-setup-json).
+If the selected CLI does not provide this protocol, check the CLI source
+under **Settings → Desktop**. Browser dev mode continues to open folders and
+shows a native-app requirement when you open the wizard manually.
+
+### Project notifications
+
+Desktop checks the current and recent projects on startup and when you open
+a folder. The bell in the header shows unread findings, the project, and when
+each check last ran. Use **Check projects again** to refresh, or dismiss an
+item until the underlying finding changes. If a recent folder is unavailable,
+its notification offers a retry.
+
+Select a finding to open the setup wizard in that project. The wizard checks
+the folder again and selects the relevant repair when one is available. A
+graph or wiki finding can be resolved without refreshing managed project
+files. CLI availability and compatibility findings open Desktop settings.
+The background checks only diagnose projects. They do not apply changes,
+rebuild indexes, or run repository tests.
+
 ## Set up GitHub for a project
 
 1. Open **Settings → Integrations**, then select **Connect account** under

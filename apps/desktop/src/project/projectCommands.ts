@@ -1,24 +1,20 @@
-// Project commands the title bar's Project menu runs in a terminal tab: `keryx init`, `keryx update`,
-// the wiki maintenance commands, and `keryx wiki enrich` built from its settings dialog. No React.
+// Project wiki commands run in a terminal tab. Wiki enrich builds its arguments from a dialog.
 
 /** One menu entry: the keryx arguments it runs (the program itself is the app's keryx). */
 export interface ProjectCommand {
   id: string;
-  group: "Project" | "Wiki";
   label: string;
   description: string;
   args: readonly string[];
 }
 
 export const PROJECT_COMMANDS: readonly ProjectCommand[] = [
-  { id: "init", group: "Project", label: "Init", description: "Set up Keryx in this project", args: ["init"] },
-  { id: "update", group: "Project", label: "Update", description: "Refresh the managed Keryx files", args: ["update"] },
-  { id: "wiki-status", group: "Wiki", label: "Wiki status", description: "Pages, drafts and what needs work", args: ["wiki", "status"] },
-  { id: "wiki-collect", group: "Wiki", label: "Wiki collect", description: "Draft pages from graph, health and test data", args: ["wiki", "collect"] },
-  { id: "wiki-index", group: "Wiki", label: "Wiki index", description: "Rebuild the wiki index", args: ["wiki", "index"] },
-  { id: "wiki-validate", group: "Wiki", label: "Wiki validate", description: "Metadata, links and index checks", args: ["wiki", "validate"] },
-  { id: "wiki-freshness", group: "Wiki", label: "Wiki freshness", description: "Pages the code has moved under", args: ["wiki", "freshness"] },
-  { id: "wiki-refresh", group: "Wiki", label: "Wiki refresh", description: "Regenerate Reference blocks from the graph", args: ["wiki", "refresh"] },
+  { id: "wiki-status", label: "Wiki status", description: "Pages, drafts and what needs work", args: ["wiki", "status"] },
+  { id: "wiki-collect", label: "Wiki collect", description: "Draft pages from graph, health and test data", args: ["wiki", "collect"] },
+  { id: "wiki-index", label: "Wiki index", description: "Rebuild the wiki index", args: ["wiki", "index"] },
+  { id: "wiki-validate", label: "Wiki validate", description: "Metadata, links and index checks", args: ["wiki", "validate"] },
+  { id: "wiki-freshness", label: "Wiki freshness", description: "Pages the code has moved under", args: ["wiki", "freshness"] },
+  { id: "wiki-refresh", label: "Wiki refresh", description: "Regenerate Reference blocks from the graph", args: ["wiki", "refresh"] },
 ];
 
 /** `--concurrency` above this is clamped by keryx. */

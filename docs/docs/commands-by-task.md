@@ -13,7 +13,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx shell` | Start the interactive TUI agent harness (--no-tui or --chat to opt out). |
 | `keryx help` | Grouped command help by task — keryx help [group\|command]. |
 | `keryx doctor` | One-page health check: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness. |
-| `keryx setup` | Print the Metaproject preparation guide: init, refresh, or repair. |
+| `keryx setup` | Print the Metaproject guide, or inspect, plan and apply setup. |
 
 | Shell command | Summary |
 |---|---|

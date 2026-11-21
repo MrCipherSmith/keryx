@@ -58,7 +58,21 @@ pub fn run_bounded(cmd: Command, timeout: Duration, cap: usize) -> Result<Output
     run_bounded_with_stdin(cmd, Stdio::null(), timeout, cap)
 }
 
-pub fn run_bounded_with_stdin(mut cmd: Command, stdin: Stdio, timeout: Duration, cap: usize) -> Result<Output, RunError> {
+/// Use a separate Unix process group for commands that spawn work of their own.
+pub fn run_bounded_tree(mut cmd: Command, timeout: Duration, cap: usize) -> Result<Output, RunError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    run_bounded_inner(cmd, Stdio::null(), timeout, cap, true)
+}
+
+pub fn run_bounded_with_stdin(cmd: Command, stdin: Stdio, timeout: Duration, cap: usize) -> Result<Output, RunError> {
+    run_bounded_inner(cmd, stdin, timeout, cap, false)
+}
+
+fn run_bounded_inner(mut cmd: Command, stdin: Stdio, timeout: Duration, cap: usize, tree: bool) -> Result<Output, RunError> {
     let mut child = cmd
         .stdin(stdin)
         .stdout(Stdio::piped())
@@ -73,6 +87,13 @@ pub fn run_bounded_with_stdin(mut cmd: Command, stdin: Stdio, timeout: Duration,
             Ok(Some(s)) => break s,
             Ok(None) if Instant::now() < deadline => std::thread::sleep(POLL),
             other => {
+                // Only signal the group while the child has not been reaped.
+                #[cfg(unix)]
+                if tree && matches!(&other, Ok(None)) {
+                    unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
+                }
+                #[cfg(not(unix))]
+                let _ = tree;
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err(match other {

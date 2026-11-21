@@ -116,6 +116,7 @@ import {
   InstallPlanBlockedError,
   isPreviewRequested,
   parseDivergenceResolution,
+  type InstallPlan,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport, rulesBlocksLeavingLocalTargets } from "../rules/rules-export-migration";
@@ -190,6 +191,11 @@ type InitOptions = {
   testingTia: boolean;
   noTestingTia: boolean;
   preview: boolean;
+  preserveProjectSettings: boolean;
+  refreshServices: boolean;
+  hasGdskillsProfile: boolean;
+  skipTestingAnalysis: boolean;
+  sharedAgents: boolean;
 };
 
 type ModuleConfig =
@@ -247,65 +253,21 @@ type MetaprojectManifest = {
   hooks?: { commitMsg?: boolean } & Record<string, unknown>;
 };
 
-export async function initCommand(args: string[]): Promise<void> {
-  const options = parseInitArgs(args);
-  if (options.help) {
-    printInitHelp();
-    return;
-  }
-
-  const projectRoot = process.cwd();
-  const metaprojectRoot = path.join(projectRoot, ".metaproject");
-  const alreadyExists = await pathExists(metaprojectRoot);
-  const existingManifest = await readExistingManifest(metaprojectRoot);
-
-  banner(
-    "keryx init",
-    alreadyExists
-      ? `Updating the .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`
-      : `Setting up a .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`,
-  );
-
-  // Interactive shortcut: one question ahead of the per-module ones below,
-  // answering the question every one of THEM already asks by default ("y" ==
-  // "accept the Recommended default"). Mutating `options.yes` — rather than a
-  // separate local flag — means every `!options.yes`/`options.yes` branch
-  // below (already exactly kept in sync with each individual confirm's own
-  // Recommended default) needs no duplicate logic, and an explicit
-  // `--no-<module>` flag still wins exactly as it does under `--yes` on the
-  // command line: those checks run BEFORE `options.yes` in every branch.
-  if (!options.yes) {
-    const yesToAll = await confirm(
-      "Install everything with recommended defaults?",
-      true,
-    );
-    if (yesToAll) {
-      options.yes = true;
-    }
-  }
-
-  if (!options.yes) {
-    note("Press Enter to accept the Recommended default for each question.");
-    heading("Modules");
-  }
-
+async function resolveInitModules(options: InitOptions, existingManifest?: MetaprojectManifest) {
   let enableGdgraph = true;
   let enableGdctx = true;
   let enableGdwiki = true;
   let enableGdskills = true;
-  let gdskillsProfile = options.gdskillsProfile;
+  const existingGdskills = existingManifest?.modules?.gdskills;
+  let gdskillsProfile =
+    options.preserveProjectSettings && !options.hasGdskillsProfile && existingGdskills?.enabled
+      ? normalizeGdskillsProfile(existingGdskills.profile)
+      : options.gdskillsProfile;
   let enableHealth = true;
   let enableTesting = true;
   let enableMemory = true;
   let enableTasks = true;
   let enableSecurity = true;
-  let enableGdgraphHook = false;
-  let enableGdskillsHook = false;
-  let enableHealthHook = false;
-  let enableTestingPostCommitHook = false;
-  let enableTestingPrePushHook = false;
-  let enableSecurityPrePushHook = false;
-  let enableSecurityAgentHook = false;
   if (options.noGdgraph) {
     enableGdgraph = false;
   } else if (!options.yes) {
@@ -430,6 +392,141 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (options.preserveProjectSettings && existingManifest) {
+    if (!options.mcp && !options.noMcp) {
+      enableMcp = existingManifest.modules?.mcp?.enabled === true;
+    }
+    if (!options.sac && !options.noSac) {
+      enableSac = existingManifest.modules?.sac?.enabled === true;
+    }
+  }
+
+  return {
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    gdskillsProfile,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+    enableMcp,
+    mcpInitRuntime,
+    enableSac,
+  };
+}
+
+async function buildInitLifecyclePlan(
+  projectRoot: string,
+  modules: Awaited<ReturnType<typeof resolveInitModules>>,
+  existingManifest: MetaprojectManifest | undefined,
+  options: InitOptions,
+) {
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  const candidates = declaredImportSources(existingManifest?.agentEntrypoints);
+  const ruleSources = await listRootEntrypoints(projectRoot, candidates);
+  // The shared entrypoint is created before rule import when explicitly requested.
+  if (options.sharedAgents && !ruleSources.includes("AGENTS.md")) ruleSources.unshift("AGENTS.md");
+  const plan = await planRoutingEntrypointPair(
+    metaprojectRoot,
+    {
+      ...modules,
+      enableMcp: modules.enableMcp || (!options.preserveProjectSettings && existingManifest?.modules?.mcp?.enabled === true),
+      ruleSources,
+      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+    },
+    {
+      intent: "init",
+      steps: [rulesReadmeStep(metaprojectRoot, options.refreshServices ? "managed" : "create-if-absent")],
+    },
+  );
+  return { plan, ruleSources };
+}
+
+export async function planInitLifecycle(projectRoot: string, args: string[]): Promise<InstallPlan> {
+  const options = parseInitArgs([...args, "--yes"]);
+  const manifest = await readExistingManifest(path.join(projectRoot, ".metaproject"));
+  return (await buildInitLifecyclePlan(
+    projectRoot,
+    await resolveInitModules(options, manifest),
+    manifest,
+    options,
+  )).plan;
+}
+
+export async function initCommand(args: string[]): Promise<void> {
+  const options = parseInitArgs(args);
+  if (options.help) {
+    printInitHelp();
+    return;
+  }
+
+  const projectRoot = process.cwd();
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  const alreadyExists = await pathExists(metaprojectRoot);
+  const existingManifest = await readExistingManifest(metaprojectRoot);
+
+  banner(
+    "keryx init",
+    alreadyExists
+      ? `Updating the .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`
+      : `Setting up a .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`,
+  );
+
+  // Interactive shortcut: one question ahead of the per-module ones below,
+  // answering the question every one of THEM already asks by default ("y" ==
+  // "accept the Recommended default"). Mutating `options.yes` — rather than a
+  // separate local flag — means every `!options.yes`/`options.yes` branch
+  // below (already exactly kept in sync with each individual confirm's own
+  // Recommended default) needs no duplicate logic, and an explicit
+  // `--no-<module>` flag still wins exactly as it does under `--yes` on the
+  // command line: those checks run BEFORE `options.yes` in every branch.
+  if (!options.yes) {
+    const yesToAll = await confirm(
+      "Install everything with recommended defaults?",
+      true,
+    );
+    if (yesToAll) {
+      options.yes = true;
+    }
+  }
+
+  if (!options.yes) {
+    note("Press Enter to accept the Recommended default for each question.");
+    heading("Modules");
+  }
+
+  const modules = await resolveInitModules(options, existingManifest);
+  const {
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    gdskillsProfile,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+    enableMcp,
+    mcpInitRuntime,
+    enableSac,
+  } = modules;
+
+  const preserveHooks = options.preserveProjectSettings && alreadyExists;
+  const existingHooks = (module: string) => {
+    const entry = existingManifest?.modules?.[module];
+    return entry?.enabled ? entry.hooks : undefined;
+  };
+  let enableGdgraphHook = false;
+  let enableGdskillsHook = false;
+  let enableHealthHook = false;
+  let enableTestingPostCommitHook = false;
+  let enableTestingPrePushHook = false;
+  let enableSecurityPrePushHook = false;
+  let enableSecurityAgentHook = false;
   if (
     !options.yes &&
     (enableGdgraph || enableGdskills || enableHealth || enableTesting || enableSecurity)
@@ -440,6 +537,8 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableGdgraph) {
     if (options.noGdgraphHook) {
       enableGdgraphHook = false;
+    } else if (preserveHooks) {
+      enableGdgraphHook = Boolean(existingHooks("gdgraph")?.gitPostCommit);
     } else if (options.yes) {
       enableGdgraphHook = true;
     } else {
@@ -453,6 +552,8 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableGdskills) {
     if (options.noGdskillsHook) {
       enableGdskillsHook = false;
+    } else if (preserveHooks) {
+      enableGdskillsHook = Boolean(existingHooks("gdskills")?.gitPostCommit);
     } else if (options.yes) {
       enableGdskillsHook = true;
     } else {
@@ -466,6 +567,8 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableHealth) {
     if (options.noHealthHook) {
       enableHealthHook = false;
+    } else if (preserveHooks) {
+      enableHealthHook = Boolean(existingHooks("health")?.gitPostCommit);
     } else if (options.yes) {
       enableHealthHook = true;
     } else {
@@ -479,6 +582,8 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableTesting) {
     if (options.noTestingPostCommitHook) {
       enableTestingPostCommitHook = false;
+    } else if (preserveHooks) {
+      enableTestingPostCommitHook = Boolean(existingHooks("testing")?.gitPostCommit);
     } else if (options.yes) {
       enableTestingPostCommitHook = true;
     } else {
@@ -490,6 +595,8 @@ export async function initCommand(args: string[]): Promise<void> {
 
     if (options.noTestingPrePushHook) {
       enableTestingPrePushHook = false;
+    } else if (preserveHooks) {
+      enableTestingPrePushHook = Boolean(existingHooks("testing")?.prePush);
     } else if (options.yes) {
       enableTestingPrePushHook = false;
     } else {
@@ -503,6 +610,8 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableSecurity) {
     if (options.noSecurityHook) {
       enableSecurityPrePushHook = false;
+    } else if (preserveHooks) {
+      enableSecurityPrePushHook = Boolean(existingHooks("security")?.prePush);
     } else if (options.yes) {
       enableSecurityPrePushHook = true;
     } else {
@@ -514,6 +623,8 @@ export async function initCommand(args: string[]): Promise<void> {
 
     if (options.noSecurityAgentHook) {
       enableSecurityAgentHook = false;
+    } else if (preserveHooks) {
+      enableSecurityAgentHook = Boolean(existingHooks("security")?.agent);
     } else if (options.yes) {
       enableSecurityAgentHook = true;
     } else {
@@ -546,7 +657,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableMemory,
     enableTasks,
     enableSecurity,
-    enableMcp: enableMcp || existingManifest?.modules?.mcp?.enabled === true,
+    enableMcp: enableMcp || (!options.preserveProjectSettings && existingManifest?.modules?.mcp?.enabled === true),
   };
 
   // Preview: every decision above is made, nothing below has run, and nothing
@@ -556,18 +667,11 @@ export async function initCommand(args: string[]): Promise<void> {
   const divergenceResolution = parseDivergenceResolution(args);
 
   if (options.preview) {
-    const previewRuleSources = await listRootEntrypoints(
+    const { plan, ruleSources: previewRuleSources } = await buildInitLifecyclePlan(
       projectRoot,
-      declaredImportSources(existingManifest?.agentEntrypoints),
-    );
-    const plan = await planRoutingEntrypointPair(
-      metaprojectRoot,
-      {
-        ...routingModuleFlags,
-        ruleSources: previewRuleSources,
-        hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
-      },
-      { intent: "init", steps: [rulesReadmeStep(metaprojectRoot, "create-if-absent")] },
+      modules,
+      existingManifest,
+      options,
     );
     console.log(
       formatInstallPlan(plan, {
@@ -605,7 +709,7 @@ export async function initCommand(args: string[]): Promise<void> {
   // It is reached through the same HEAD decision a legacy manifest takes, so
   // a block the team already committed to AGENTS.md/CLAUDE.md stays shared
   // instead of being stripped out of a tracked file by a re-init.
-  const entrypoints = await resolveProjectEntrypoints(projectRoot, existingManifest?.agentEntrypoints);
+  const entrypoints = await resolveProjectEntrypoints(projectRoot, existingManifest?.agentEntrypoints, { sharedAgents: options.sharedAgents });
   const entrypointNotices = [...entrypoints.notices];
   // The Claude hooks target is settled from the settings files themselves:
   // managed hooks the team committed keep it shared, anything else is local.
@@ -691,13 +795,15 @@ export async function initCommand(args: string[]): Promise<void> {
     if (enableTestingPostCommitHook) {
       await installTestingPostCommitHook(projectRoot, hookWarnings);
     }
-    if (enableGdgraphHook || enableGdskillsHook || enableHealthHook || enableTestingPostCommitHook) {
+    if (!preserveHooks && (enableGdgraphHook || enableGdskillsHook || enableHealthHook || enableTestingPostCommitHook)) {
       await installMetaprojectDashboardPostCommitHook(projectRoot, hookWarnings);
     }
     if (enableTestingPrePushHook) {
       await installTestingPrePushHook(projectRoot, hookWarnings);
     }
-    await analyzeTestingProject(projectRoot);
+    if (!options.skipTestingAnalysis) {
+      await analyzeTestingProject(projectRoot);
+    }
   }
 
   if (enableMemory) {
@@ -726,6 +832,23 @@ export async function initCommand(args: string[]): Promise<void> {
     await createSacStructure(metaprojectRoot);
   }
 
+  if (preserveHooks) {
+    const managedHooks = [
+      ["post-commit", "gdgraph-post-commit", !enableGdgraph || options.noGdgraphHook],
+      ["post-commit", "gdwiki-post-commit", !enableGdgraph || !enableGdwiki || options.noGdgraphHook],
+      ["post-commit", "gdskills-post-commit", !enableGdskills || options.noGdskillsHook],
+      ["post-commit", "health-post-commit", !enableHealth || options.noHealthHook],
+      ["post-commit", "testing-post-commit", !enableTesting || options.noTestingPostCommitHook],
+      ["pre-push", "testing-pre-push", !enableTesting || options.noTestingPrePushHook],
+    ] as const;
+    for (const [hook, block, disabled] of managedHooks) {
+      if (disabled) {
+        const warning = await removeManagedHookOrWarn(projectRoot, hook, block);
+        if (warning) hookWarnings.push(warning);
+      }
+    }
+  }
+
   // Reconcile disabled security hooks with on-disk reality. When a hook is now
   // off (module disabled via --no-security, or --no-security-agent-hook /
   // --no-security-hook) but was previously installed, remove the managed
@@ -734,16 +857,18 @@ export async function initCommand(args: string[]): Promise<void> {
   const existingSecurityModule = existingManifest?.modules?.security;
   const existingSecurityHooks =
     existingSecurityModule?.enabled === true ? existingSecurityModule.hooks : undefined;
-  const securityAgentHookPreviouslyInstalled =
-    Boolean(existingSecurityHooks?.agent) ||
-    (await agentSettingsHasSecuritySentinel(projectRoot));
-  if (!enableSecurityAgentHook && securityAgentHookPreviouslyInstalled) {
+  if (
+    !enableSecurityAgentHook &&
+    (!preserveHooks || !enableSecurity || options.noSecurityAgentHook) &&
+    (Boolean(existingSecurityHooks?.agent) || await agentSettingsHasSecuritySentinel(projectRoot))
+  ) {
     await uninstallSecurityAgentHooks(projectRoot);
   }
-  const securityPrePushPreviouslyInstalled =
-    Boolean(existingSecurityHooks?.prePush) ||
-    (await prePushHasSecurityBlock(projectRoot));
-  if (!enableSecurityPrePushHook && securityPrePushPreviouslyInstalled) {
+  if (
+    !enableSecurityPrePushHook &&
+    (!preserveHooks || !enableSecurity || options.noSecurityHook) &&
+    (Boolean(existingSecurityHooks?.prePush) || await prePushHasSecurityBlock(projectRoot))
+  ) {
     const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
     if (warning) hookWarnings.push(warning);
   }
@@ -754,7 +879,7 @@ export async function initCommand(args: string[]): Promise<void> {
   const commitMsgWarning = (await applyCommitMsgHookSetting(projectRoot)).warning;
   if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
 
-  const manifest = buildManifest({
+  let manifest = buildManifest({
     projectName: path.basename(projectRoot),
     enableGdgraph,
     enableGdctx,
@@ -785,6 +910,10 @@ export async function initCommand(args: string[]): Promise<void> {
     (manifest.modules as Record<string, unknown>).mcp = buildMcpModuleEntry();
   }
 
+  if (options.preserveProjectSettings && existingManifest) {
+    manifest = preserveManifestSettings(existingManifest, manifest, enableMcp);
+  }
+
   // Attach the gdgraph tree-sitter capability entry (B1). Only when a flag was
   // passed, so the default manifest is unchanged. The enriched `{ id, enabled,
   // kind, optionalDependency }` object is what `resolveCapability(
@@ -807,6 +936,12 @@ export async function initCommand(args: string[]): Promise<void> {
     }
   }
 
+  if (
+    options.preserveProjectSettings && existingManifest &&
+    JSON.stringify({ ...manifest, updatedAt: existingManifest.updatedAt }) === JSON.stringify(existingManifest)
+  ) {
+    manifest.updatedAt = existingManifest.updatedAt;
+  }
   await writeJsonIfChanged(
     projectRoot,
     path.join(metaprojectRoot, "metaproject.json"),
@@ -867,7 +1002,7 @@ export async function initCommand(args: string[]): Promise<void> {
       },
       {
         intent: "init",
-        steps: [rulesReadmeStep(metaprojectRoot, "create-if-absent")],
+        steps: [rulesReadmeStep(metaprojectRoot, options.refreshServices ? "managed" : "create-if-absent")],
         ...(divergenceResolution === undefined ? {} : { resolution: divergenceResolution }),
         onNotice: (line) => {
           if (line.trim().length > 0) {
@@ -901,13 +1036,16 @@ export async function initCommand(args: string[]): Promise<void> {
     }),
   );
 
+  // A batch module transition can also refresh the managed files Update owns.
+  // Project configuration, wiki and memory content remain create-if-absent.
+  const writeServiceFile = options.refreshServices ? writeTextIfChanged : writeTextIfMissing;
   if (enableGdgraph) {
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "gdgraph.md"),
       renderGdgraphManifest(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "core", "gdgraph", "README.md"),
       renderGdgraphCoreReadme(),
@@ -926,12 +1064,12 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "gdctx.config.json"),
       renderGdctxConfig(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "gdctx.md"),
       renderGdctxManifest(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "core", "gdctx", "README.md"),
       renderGdctxCoreReadme(),
@@ -954,7 +1092,7 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "wiki", "templates", "page.md"),
       renderWikiPageTemplate(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "gdwiki.md"),
       renderGdwikiManifest(),
@@ -972,12 +1110,12 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "health.config.json"),
       renderHealthConfig(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "health.md"),
       renderHealthManifest(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "core", "health", "README.md"),
       renderHealthCoreReadme(),
@@ -999,12 +1137,12 @@ export async function initCommand(args: string[]): Promise<void> {
         coverageMapEnabled: enableTestingTia,
       }),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "testing.md"),
       renderTestingManifest(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "core", "testing", "README.md"),
       renderTestingCoreReadme(),
@@ -1044,12 +1182,12 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "memory", "templates", "entry.md"),
       renderMemoryEntryTemplate(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "memory.md"),
       renderMemoryManifest(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "core", "memory", "README.md"),
       renderMemoryCoreReadme(),
@@ -1062,12 +1200,12 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   if (enableTasks) {
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "flows", "README.md"),
       renderFlowsReadme(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "tasks.md"),
       renderTasksManifest(),
@@ -1100,12 +1238,12 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "security.config.json"),
       renderSecurityConfig(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "modules", "security.md"),
       renderSecurityManifest(),
     );
-    await writeTextIfMissing(
+    await writeServiceFile(
       projectRoot,
       path.join(metaprojectRoot, "core", "security", "README.md"),
       renderSecurityCoreReadme(),
@@ -1307,6 +1445,7 @@ export async function initCommand(args: string[]): Promise<void> {
 }
 
 function parseInitArgs(args: string[]): InitOptions {
+  const gdskillsProfile = optionValue(args, "--gdskills-profile");
   return {
     help: args.includes("--help") || args.includes("-h"),
     yes: args.includes("--yes") || args.includes("-y"),
@@ -1314,7 +1453,7 @@ function parseInitArgs(args: string[]): InitOptions {
     noGdctx: args.includes("--no-gdctx"),
     noGdwiki: args.includes("--no-gdwiki"),
     noGdskills: args.includes("--no-gdskills"),
-    gdskillsProfile: normalizeGdskillsProfile(optionValue(args, "--gdskills-profile")),
+    gdskillsProfile: normalizeGdskillsProfile(gdskillsProfile),
     noHealth: args.includes("--no-health"),
     noTesting: args.includes("--no-testing"),
     noMemory: args.includes("--no-memory"),
@@ -1336,6 +1475,11 @@ function parseInitArgs(args: string[]): InitOptions {
     testingTia: args.includes("--testing-tia"),
     noTestingTia: args.includes("--no-testing-tia"),
     preview: isPreviewRequested(args),
+    preserveProjectSettings: args.includes("--preserve-project-settings"),
+    refreshServices: args.includes("--refresh-services"),
+    hasGdskillsProfile: gdskillsProfile !== undefined,
+    skipTestingAnalysis: args.includes("--skip-testing-analysis"),
+    sharedAgents: args.includes("--shared-agents"),
   };
 }
 
@@ -1386,6 +1530,10 @@ function printInitHelp(): void {
   helpUsage(["keryx init [options]"]);
   helpOptions([
     { flag: "--yes, -y", desc: "Use recommended defaults (non-interactive)." },
+    { flag: "--preserve-project-settings", desc: "Keep existing hook and manifest settings during a module transition." },
+    { flag: "--refresh-services", desc: "Refresh existing managed service files while applying module selections." },
+    { flag: "--skip-testing-analysis", desc: "Skip generating testing context during setup." },
+    { flag: "--shared-agents", desc: "Create or update the shared AGENTS.md for Codex." },
     { flag: "--no-gdgraph", desc: "Do not enable gdgraph." },
     { flag: "--no-gdctx", desc: "Do not enable gdctx." },
     { flag: "--no-gdwiki", desc: "Do not enable gdwiki." },
@@ -1763,6 +1911,35 @@ async function readExistingManifest(
   }
 }
 
+function preserveManifestSettings(
+  existing: MetaprojectManifest,
+  generated: MetaprojectManifest,
+  enableMcp: boolean,
+): MetaprojectManifest {
+  const modules = { ...existing.modules, ...generated.modules };
+  for (const [name, next] of Object.entries(generated.modules)) {
+    const previous = existing.modules?.[name];
+    if (next.enabled && previous?.enabled) {
+      // Hook ownership is represented by the generated settings. Other
+      // metadata, including opt-in capabilities and MCP exposure, stays local.
+      const merged = { ...previous, ...next };
+      if (next.hooks === undefined) delete merged.hooks;
+      if (previous.capabilities !== undefined) merged.capabilities = previous.capabilities;
+      modules[name] = merged;
+    }
+  }
+  const previousMcp = existing.modules?.mcp;
+  const nextMcp = generated.modules?.mcp;
+  if (enableMcp && nextMcp && previousMcp) {
+    modules.mcp = previousMcp.enabled
+      ? { ...nextMcp, ...previousMcp }
+      : { ...previousMcp, ...nextMcp };
+  } else if (!enableMcp && previousMcp) {
+    modules.mcp = { ...previousMcp, enabled: false };
+  }
+  return { ...existing, ...generated, modules };
+}
+
 function buildManifest({
   projectName,
   enableGdgraph,
@@ -1809,7 +1986,7 @@ function buildManifest({
   existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
   const existingProjectSkillRegistry =
-    existingManifest?.modules.gdskills?.enabled === true
+    existingManifest?.modules?.gdskills?.enabled === true
       ? existingManifest.modules.gdskills.projectSkillRegistry
       : undefined;
 

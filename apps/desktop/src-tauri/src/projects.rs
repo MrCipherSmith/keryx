@@ -58,6 +58,7 @@ struct Inner {
 #[derive(Default)]
 pub struct ProjectWindows {
     inner: Mutex<Inner>,
+    pending_setup: Mutex<HashMap<String, String>>,
     next_window: AtomicU64,
     next_view: AtomicU64,
 }
@@ -215,7 +216,7 @@ impl ProjectWindows {
         self.inner.lock().unwrap().by_label.get(view).and_then(|entry| entry.cwd.clone())
     }
 
-    fn snapshot(&self) -> Vec<ProjectState> {
+    pub(crate) fn snapshot(&self) -> Vec<ProjectState> {
         self.inner.lock().unwrap().snapshot()
     }
 
@@ -258,22 +259,36 @@ fn build_host_window(app: &AppHandle, label: &str) -> Result<Window, String> {
 /// Add a project view for `cwd` (`None`: the welcome screen) to `window`, filling it and following
 /// its size. It is registered, not yet in front: see `bring_to_front`.
 pub fn add_view(app: &AppHandle, window: &Window, cwd: Option<String>) -> Result<Webview, String> {
+    add_view_with_setup(app, window, cwd, None)
+}
+
+fn add_view_with_setup(app: &AppHandle, window: &Window, cwd: Option<String>, setup: Option<String>) -> Result<Webview, String> {
     let state = app.state::<ProjectWindows>();
     let n = state.next_view.fetch_add(1, Ordering::SeqCst) + 1;
     let size = window.inner_size().map_err(|e| e.to_string())?;
     let label = format!("project-{n}");
-    if let Some(cwd) = cwd {
-        let root = panels::project_dir(&cwd)?;
+    if let Some(cwd) = &cwd {
+        let root = panels::project_dir(cwd)?;
         app.state::<panels::PanelRoots>().set(&label, root);
-        app.state::<bridge::AppState>().set_pending_cwd(&label, cwd);
+        app.state::<bridge::AppState>().set_pending_cwd(&label, cwd.clone());
     }
     // Registered first: the page may call in before `add_child` returns.
-    state.inner.lock().unwrap().add(&label, window.label());
+    {
+        let mut inner = state.inner.lock().unwrap();
+        inner.add(&label, window.label());
+        if let Some(entry) = inner.by_label.get_mut(&label) {
+            entry.cwd = cwd;
+        }
+    }
+    if let Some(finding) = setup {
+        state.pending_setup.lock().unwrap().insert(label.clone(), finding);
+    }
     let builder = navigation_guarded(app, &label).auto_resize();
     match window.add_child(builder, PhysicalPosition::new(0, 0), size) {
         Ok(view) => Ok(view),
         Err(e) => {
             state.inner.lock().unwrap().remove(&label);
+            state.pending_setup.lock().unwrap().remove(&label);
             app.state::<panels::PanelRoots>().remove(&label);
             app.state::<bridge::AppState>().view_closed(&label);
             Err(format!("Could not open the project view: {e}"))
@@ -351,6 +366,7 @@ fn move_view(app: &AppHandle, view: &Webview, window: &Window) -> Result<(), Str
 /// Drop everything a project view owned. `close_tabs`: also close its browser tab views (false
 /// when its window is destroyed and took them along).
 fn release(app: &AppHandle, label: &str, close_tabs: bool) {
+    app.state::<ProjectWindows>().pending_setup.lock().unwrap().remove(label);
     // Never wait out the stop grace period here.
     app.state::<bridge::AppState>().view_closed(label);
     // Unsent chat attachments of a closed view go with it; sent ones stay until the app exits.
@@ -477,7 +493,19 @@ pub fn projects_state(state: State<'_, ProjectWindows>) -> Vec<ProjectState> {
 /// Show project `cwd` in this view's window in its place: the view already running it, or a new
 /// one. A project in front of another window is brought forward there instead.
 #[tauri::command]
-pub async fn project_switch(app: AppHandle, webview: Webview, state: State<'_, ProjectWindows>, cwd: String) -> Result<(), String> {
+pub async fn project_switch(
+    app: AppHandle, webview: Webview, state: State<'_, ProjectWindows>, cwd: String, setup_finding: Option<String>,
+) -> Result<(), String> {
+    if let Some(finding) = &setup_finding {
+        if finding.is_empty() || finding.len() > 80 || !finding.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+            return Err("Invalid project setup finding.".into());
+        }
+        panels::project_dir(&cwd)?;
+        if state.cwd_for(webview.label()).as_deref() == Some(cwd.as_str()) {
+            queue_setup(&app, &state, &webview, finding.clone());
+            return Ok(());
+        }
+    }
     let window = webview.window();
     let existing = {
         let inner = state.inner.lock().unwrap();
@@ -486,6 +514,7 @@ pub async fn project_switch(app: AppHandle, webview: Webview, state: State<'_, P
             .and_then(|l| inner.by_label.get(&l).map(|e| (l.clone(), inner.is_front(&l), e.window.clone())))
     };
     let existing = existing.and_then(|(l, front, win)| app.get_webview(&l).map(|v| (v, front, win)));
+    let mut setup_finding = setup_finding;
     let target = match existing {
         // On screen in a window of its own: bring that window forward.
         Some((view, true, win)) => {
@@ -495,6 +524,9 @@ pub async fn project_switch(app: AppHandle, webview: Webview, state: State<'_, P
             }
             let _ = view.set_focus();
             state.inner.lock().unwrap().touch(view.label());
+            if let Some(finding) = setup_finding {
+                queue_setup(&app, &state, &view, finding);
+            }
             return Ok(());
         }
         Some((view, false, win)) if win == window.label() => view,
@@ -503,12 +535,25 @@ pub async fn project_switch(app: AppHandle, webview: Webview, state: State<'_, P
             move_view(&app, &view, &window)?;
             view
         }
-        None => add_view(&app, &window, Some(cwd))?,
+        None => add_view_with_setup(&app, &window, Some(cwd), setup_finding.take())?,
     };
+    if let Some(finding) = setup_finding {
+        queue_setup(&app, &state, &target, finding);
+    }
     bring_to_front(&app, &window, &target);
     close_over_cap(&app, &state);
     state.broadcast(&app);
     Ok(())
+}
+
+fn queue_setup(app: &AppHandle, state: &ProjectWindows, view: &Webview, finding: String) {
+    state.pending_setup.lock().unwrap().insert(view.label().to_owned(), finding);
+    let _ = app.emit_to(view.label(), "projects://setup-requested", ());
+}
+
+#[tauri::command]
+pub fn project_take_setup(webview: Webview, state: State<'_, ProjectWindows>) -> Option<String> {
+    state.pending_setup.lock().unwrap().remove(webview.label())
 }
 
 #[cfg(test)]
