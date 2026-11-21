@@ -15,6 +15,7 @@ export interface WatcherEvent {
     | "review_submitted"
     | "draft_changed"
     | "rebase"
+    | "repair"
     | "decision"
     | "ci"
     | "updated";

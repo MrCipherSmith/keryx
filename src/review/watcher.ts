@@ -229,7 +229,7 @@ export async function pollWatcher(
   });
   if (!claimed) return readWatcher(cwd, key);
   let cards: WatchedCard[] | undefined;
-  let branchUpdates: ReviewCard[] = [];
+  let openCards: ReviewCard[] = [];
   let failure: string | null = null;
   let recoveryWarning: string | null = null;
   let settled: { links: ReturnType<typeof linkedReviewRuns>; outcomes: ReturnType<typeof scheduledRunOutcomes> } | undefined;
@@ -237,7 +237,7 @@ export async function pollWatcher(
     const board = await fetch(cwd, key);
     validateObservation(board, key);
     cards = observedCards(board.cards);
-    branchUpdates = board.cards.filter(card => card.watcherMergeState === "BEHIND" || card.watcherMergeState === "DIRTY");
+    openCards = board.cards;
     try {
       const links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
         ? linkedReviewRuns(db, id) : []);
@@ -295,8 +295,11 @@ export async function pollWatcher(
     return !!cards;
   });
   if (observed) {
+    const branchUpdates = openCards.filter(card => card.watcherMergeState === "BEHIND" || card.watcherMergeState === "DIRTY");
     if (branchUpdates.length) await rebaseWatchedPullRequests(cwd, key, branchUpdates);
     await dispatchReadyRules(cwd, key, dispatch);
+    const { repairWatchedPullRequests } = await import("./watcher-repair");
+    await repairWatchedPullRequests(cwd, key, openCards);
   }
   return readWatcher(cwd, key);
 }

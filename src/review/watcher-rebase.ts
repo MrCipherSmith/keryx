@@ -20,10 +20,10 @@ export interface PullRequest {
   reviewDecision?: string | null;
   headRepository: { id?: string; nameWithOwner?: string; viewerPermission?: string; defaultBranchRef: { name: string } | null } | null;
 }
-export interface OwnedPullRequest { pull: PullRequest; checkout: string; auth: GithubConnection }
+export interface OwnedPullRequest { pull: PullRequest; checkout: string; auth: GithubConnection; viewerId?: number }
 
 const readQuery = `query($owner:String!, $name:String!, $number:Int!) {
-  viewer { login }
+  viewer { login databaseId }
   repository(owner:$owner,name:$name) {
     id
     pullRequest(number:$number) {
@@ -43,7 +43,7 @@ export async function readOwnedPullRequest(project: string, key: WatcherKey, num
   const auth = await projectGithubConnection(checkout, process.env, key.viewer);
   const [owner, name] = key.repo.split("/") as [string, string];
   const data = await boardGraphql<{
-    viewer?: { login: string };
+    viewer?: { login: string; databaseId?: number };
     repository?: { id: string; pullRequest?: PullRequest };
   }>(checkout, readQuery, { owner, name, number }, auth);
   const pull = data.repository?.pullRequest;
@@ -58,7 +58,7 @@ export async function readOwnedPullRequest(project: string, key: WatcherKey, num
       pull.headRefName === pull.headRepository.defaultBranchRef.name || pull.headRefName === pull.baseRefName) {
     throw new Error("configuration: Automatic rebase requires an open PR with its own source branch.");
   }
-  return { pull, checkout, auth };
+  return { pull, checkout, auth, ...(data.viewer?.databaseId && { viewerId: data.viewer.databaseId }) };
 }
 
 export async function rebaseWatchedPullRequests(project: string, key: WatcherKey, cards: ReviewCard[],
@@ -92,7 +92,13 @@ export async function rebaseWatchedPullRequests(project: string, key: WatcherKey
       const claim = db.run(`INSERT OR IGNORE INTO review_pr_rebase_attempts(watcher,number,baseSha,headSha)
         VALUES(?,?,?,?)`, [scope, card.number, card.baseSha, card.headSha]);
       if (claim.changes !== 1) return;
-      if (conflict) return { conflict: true } as const;
+      if (conflict) {
+        const repair = db.query<{ settings: string }, [string, number]>(
+          "SELECT settings FROM review_pr_repairs WHERE watcher=? AND number=?",
+        ).get(scope, card.number);
+        if (repair && (JSON.parse(repair.settings) as { conflicts?: boolean }).conflicts) return;
+        return { conflict: true } as const;
+      }
       const result = mutate<{ updatePullRequestBranch?: { pullRequest?: { id: string } } }>(
         checkout, rebaseQuery, { id: pull.id, head: card.headSha }, auth,
       );
