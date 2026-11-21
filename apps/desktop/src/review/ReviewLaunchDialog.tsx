@@ -51,7 +51,7 @@ function limitHelp(value: string, field: LimitField) {
   };
 }
 
-function ModelPicker({ tier, choices, onSelect, onClose }: {
+export function ModelPicker({ tier, choices, onSelect, onClose }: {
   tier: string; choices: ReviewLaunchModel[]; onSelect: (model: ReviewLaunchModel) => void; onClose: () => void;
 }) {
   const id = useId();

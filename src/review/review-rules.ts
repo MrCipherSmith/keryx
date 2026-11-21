@@ -8,7 +8,7 @@ import type {
   ReviewRuleSnapshot,
 } from "./review-rule-types";
 import { readPrSubscriptions, savePrSubscription } from "./watcher-subscriptions";
-import type { WatcherKey } from "./watcher-types";
+import type { PrRepairSource, WatcherKey } from "./watcher-types";
 import { watcherScope, watcherTransaction } from "./watcher-db";
 
 export interface StoredRule {
@@ -60,6 +60,7 @@ export function applyReviewRuleAction(
   project: string,
   key: WatcherKey,
   action: ReviewRuleAction,
+  source?: PrRepairSource,
 ): ReviewRuleSnapshot {
   const scope = watcherScope(project, key);
   return watcherTransaction((db) => {
@@ -93,7 +94,7 @@ export function applyReviewRuleAction(
         db.run("DELETE FROM review_rules WHERE watcher=? AND id=?", [scope, action.id]);
       }
     } else if (action.kind === "subscription") {
-      savePrSubscription(db, scope, action.number, action.topics, action.rebase);
+      savePrSubscription(db, scope, action.number, action.topics, action.rebase, action.repair, source);
     } else if (action.kind === "mode") {
       if (action.choice.mode === "auto") {
         const rule = db

@@ -477,12 +477,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (reviewDisconnected) return Promise.reject(new Error("Choose the project's GitHub account in Project Settings."));
     return loadSessionReviewTargets(cwd, reviewViewer, hint, signal);
   }, [cwd, reviewViewer, reviewDisconnected]);
-  const reviewModels = useMemo(() => modelChoices(modelOption(state.configOptions)).flatMap(option => {
+  const sessionModel = modelOption(state.configOptions);
+  const reviewModels = useMemo(() => modelChoices(sessionModel).flatMap(option => {
     const provider = providerOf(option);
     const model = provider ? option.value.slice(provider.length + 1) : "";
     return provider && model ? [{ provider, model, label: option.name }] : [];
-  }), [state.configOptions]);
-
+  }), [sessionModel]);
+  const currentReviewModel = reviewModels.find(choice => `${choice.provider}/${choice.model}` === sessionModel?.currentValue);
 
   return (
     <AppShell
@@ -525,7 +526,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
               flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
             setLinkedFlow(dir);
             setView("flows");

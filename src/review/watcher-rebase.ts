@@ -6,7 +6,7 @@ import { resolveWatcherCheckout } from "./watcher-project";
 import { appendPrSubscriptionEvent } from "./watcher-subscriptions";
 import type { WatcherKey } from "./watcher-types";
 
-interface PullRequest {
+export interface PullRequest {
   id: string;
   author: { login: string } | null;
   state: string;
@@ -16,9 +16,11 @@ interface PullRequest {
   baseRefName: string;
   mergeable: string;
   mergeStateStatus: string;
-  headRepository: { defaultBranchRef: { name: string } | null } | null;
+  isDraft?: boolean;
+  reviewDecision?: string | null;
+  headRepository: { id?: string; nameWithOwner?: string; viewerPermission?: string; defaultBranchRef: { name: string } | null } | null;
 }
-interface OwnedPullRequest { pull: PullRequest; checkout: string; auth: GithubConnection }
+export interface OwnedPullRequest { pull: PullRequest; checkout: string; auth: GithubConnection }
 
 const readQuery = `query($owner:String!, $name:String!, $number:Int!) {
   viewer { login }
@@ -26,7 +28,7 @@ const readQuery = `query($owner:String!, $name:String!, $number:Int!) {
     id
     pullRequest(number:$number) {
       id author { login } state headRefOid baseRefOid headRefName baseRefName mergeable mergeStateStatus
-      headRepository { defaultBranchRef { name } }
+      isDraft reviewDecision headRepository { id nameWithOwner viewerPermission defaultBranchRef { name } }
     }
   }
 }`;

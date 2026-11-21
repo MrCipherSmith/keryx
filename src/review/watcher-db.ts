@@ -24,6 +24,11 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
       watcher TEXT NOT NULL, number INTEGER NOT NULL, topics TEXT NOT NULL, rebase INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (watcher, number)
     );
+    CREATE TABLE IF NOT EXISTS review_pr_repairs (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, settings TEXT NOT NULL,
+      repositoryId TEXT NOT NULL, branch TEXT NOT NULL, generation TEXT NOT NULL,
+      PRIMARY KEY (watcher, number)
+    );
     CREATE TABLE IF NOT EXISTS review_pr_rebase_attempts (
       watcher TEXT NOT NULL, number INTEGER NOT NULL, baseSha TEXT NOT NULL, headSha TEXT NOT NULL,
       PRIMARY KEY (watcher, number, baseSha, headSha)

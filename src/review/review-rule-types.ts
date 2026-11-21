@@ -1,5 +1,5 @@
 // Wire contract shared by the CLI, native host and Desktop.
-import type { PrSubscription, PrWatchTopic } from "./watcher-types";
+import type { PrRepairSettings, PrSubscription, PrWatchTopic } from "./watcher-types";
 
 export interface ReviewRule {
   id: string;
@@ -22,7 +22,7 @@ export type ReviewRuleAction =
   | { kind: "save"; rule: ReviewRule; expected?: ReviewRule | null | undefined; number?: number | undefined }
   | { kind: "delete"; id: string; expected?: ReviewRule | undefined; number?: number | undefined }
   | { kind: "mode"; number: number; choice: ReviewPrMode }
-  | { kind: "subscription"; number: number; topics: PrWatchTopic[]; rebase?: boolean | undefined };
+  | { kind: "subscription"; number: number; topics: PrWatchTopic[]; rebase?: boolean | undefined; repair?: PrRepairSettings | undefined };
 
 export interface ReviewRuleActivity {
   number: number;

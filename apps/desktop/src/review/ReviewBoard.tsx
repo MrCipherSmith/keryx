@@ -33,6 +33,7 @@ interface Props {
   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
   flows: FlowCard[];
   reviewModels?: readonly ReviewLaunchModel[];
+  currentRepairModel?: ReviewLaunchModel | undefined;
   onOpenFlow: (dir: string) => void;
   onOpenSession?: ((card: ReviewCard) => void) | undefined;
   load?: typeof fetchReviewBoard;
@@ -67,7 +68,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, onOpenFlow, onOpenSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -436,6 +437,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
       owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
         item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
+      models={reviewModels} currentModel={currentRepairModel}
       watching={watchingTarget !== null} onAccessLost={accessLost}
       onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
