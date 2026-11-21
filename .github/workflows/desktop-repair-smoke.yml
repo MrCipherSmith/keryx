@@ -1,0 +1,18 @@
+name: Desktop PR repair smoke
+on:
+  pull_request:
+    branches: [test/desktop-pr-repair-base]
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check health fixture
+        run: |
+          if [ "$(cat health.txt)" != "healthy" ]; then
+            echo "::error file=health.txt::Expected health.txt to contain healthy"
+            exit 1
+          fi
