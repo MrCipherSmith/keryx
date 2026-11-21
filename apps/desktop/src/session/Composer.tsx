@@ -5,6 +5,8 @@ import { AttachmentImage } from "./AttachmentImage";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { flattenGroups, groupCommands } from "../acp/commands";
+import { ContextMeter } from "./ContextMeter";
+import type { Usage } from "./reducer";
 import { lineCommentRange, type LineComment } from "./lineComments";
 import { useChatAttachments, type LocalAttachment, type SaveChatFile, type SaveChatImage } from "./chatImages";
 import { adoptNoSessionDraft, draftOf, withDraft, type Drafts } from "./drafts";
@@ -50,6 +52,10 @@ interface Props {
   /** Context that goes out with the next message (page elements picked in the browser panel). */
   attachments?: readonly ComposerAttachment[];
   onRemoveAttachment?: (key: number) => void;
+  /** Context fill for the toolbar gauge; with `onCompact` and `onDetails` it shows its menu. */
+  usage?: Usage | null;
+  onCompact?: () => void;
+  onDetails?: () => void;
 }
 
 export interface ComposerAttachment {
@@ -99,7 +105,7 @@ export function modelChoices(option: ConfigOption | undefined): ConfigSelectOpti
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, searchFiles, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, searchFiles, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment, usage, onCompact, onDetails },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -588,6 +594,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </button>
         ) : null}
         <div className="grow" />
+        {onCompact && onDetails ? <ContextMeter usage={usage} busy={busy} onCompact={onCompact} onDetails={onDetails} /> : null}
         <span className="composer-hint truncate" title={disabled ? undefined : sendHint}>{disabled ? (text ? disabledReason : "") : busy ? "esc to stop" : sendHint}</span>
         {busy ? (
           <button className="send-btn is-stop" onClick={onStop} title="Stop the current turn (Esc)" aria-label="Stop">

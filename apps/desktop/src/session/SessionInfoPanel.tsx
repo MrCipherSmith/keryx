@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
 import type { SessionState, TokenPair } from "./reducer";
 import { modelOption } from "./useAcpSession";
+import { contextFill } from "./ContextMeter";
 
 interface Props {
   state: SessionState;
@@ -68,7 +69,8 @@ function useGit(cwd: string, sessionId: string | null, busy: boolean): GitInfo |
 export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, projectName }: Props) {
   const git = useGit(cwd, state.sessionId, state.busy);
   const usage = state.usage;
-  const ctx = usage && usage.size > 0 ? Math.min(100, Math.round((usage.used / usage.size) * 100)) : null;
+  const fill = contextFill(usage);
+  const ctx = fill ? fill.pct : null;
   const info = state.sessions.find((x) => x.sessionId === state.sessionId);
   const mode = state.modes?.availableModes.find((m) => m.id === state.modes?.currentModeId)?.name ?? state.modes?.currentModeId;
   const done = state.plan.filter((p) => p.status === "completed").length;
@@ -142,7 +144,7 @@ export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, pro
           </div>
           {ctx !== null ? (
             <div className="info-meter" title={`Last model call used ${formatTokens(usage!.used)} of ${formatTokens(usage!.size)} tokens`}>
-              <span style={{ width: `${ctx}%` }} className={ctx >= 85 ? "is-high" : undefined} />
+              <span style={{ width: `${ctx}%` }} className={fill?.tone === "high" ? "is-high" : undefined} />
             </div>
           ) : null}
         </section>
