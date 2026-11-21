@@ -549,7 +549,7 @@ export function useAcpSession(cwd: string) {
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
             _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true } : {}) } },
           },
-          clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.4" },
+          clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });
         if (l.gen !== gen) return;
         l.initialized = true;
