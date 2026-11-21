@@ -146,6 +146,8 @@ import type { ShellConfirmAction, ShellView } from "./shell-views";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
+import { clientPreparesReview, type RequestReviewDraft } from "./prepare-review";
+import { PREPARE_REVIEW_METHOD } from "./review-draft";
 import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
 import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
 import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
@@ -622,6 +624,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       return ASK_USER_CANCEL;
     }
     return askUserAnswerFromResult(outcome.result, request);
+  };
+
+  const reviewDraftFor = (sessionId: string): RequestReviewDraft => async hints => {
+    const turn = activeTurns.get(sessionId);
+    if (!turn || turn.cancelled || stopping) return false;
+    let requestId: string | undefined;
+    try {
+      const outcome = await clientRequests.request(PREPARE_REVIEW_METHOD, { sessionId, ...hints }, id => {
+        requestId = id;
+        turn.permissionRequestIds.add(id);
+      });
+      return outcome.kind === "result" && (outcome.result as { prepared?: unknown } | null)?.prepared === true;
+    } finally {
+      if (requestId !== undefined) turn.permissionRequestIds.delete(requestId);
+    }
   };
 
   /** Token totals per session, for `usage_update`. */
@@ -1610,13 +1627,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // Shell profile only: the editor profile's answer stays byte-for-byte
       // what it was (AC2). `_keryx/info` answers the same in either profile.
       // `liveSessions: true` tells a client that opening a session releases none.
-      ...(shellProfile ? { _meta: { keryx: keryxAcpProfileMeta(profile) } } : {}),
+      ...(shellProfile ? { _meta: { keryx: keryxAcpProfileMeta(profile, clientPreparesReview(clientCapabilities)) } } : {}),
     };
   }
 
   /** `_keryx/info` (any profile): what a client checks before it relies on a keryx extension. */
   function handleKeryxInfo(): ReturnType<typeof keryxAcpInfo> {
-    return keryxAcpInfo((options.agentInfo ?? DEFAULT_AGENT_INFO).version, profile);
+    return keryxAcpInfo((options.agentInfo ?? DEFAULT_AGENT_INFO).version, profile, clientPreparesReview(clientCapabilities));
   }
 
   /** `session/set_mode` — registered in the shell profile only; the editor profile still refuses it. */
@@ -1800,6 +1817,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
       metaprojectPort: metaprojectFor(root),
       ...(clientAnswersAskUser(state.clientCapabilities) ? { askUser: askUserFor(sessionId) } : {}),
+      ...(clientPreparesReview(state.clientCapabilities) ? { requestReviewDraft: reviewDraftFor(sessionId) } : {}),
       ...(mcp !== undefined ? { mcp } : {}),
     });
   }
@@ -2659,6 +2677,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    *                  rather than an accidental fallthrough.
    */
   function replayHistory(sessionId: string, history: readonly NormalizedMessage[]): void {
+    let parentTurn = 0;
+    const spawnCalls = new Set<string>();
     for (const message of history) {
       if (message.role === "system") {
         continue;
@@ -2668,16 +2688,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // A delegate note replays as what it is: the result text with the run it came from in `_meta`,
         // never the envelope (the model-facing history keeps it). A client that does not know the
         // meta shows the plain text.
-        const note = isInjectedUserMessage(message) ? parseDelegateNote(message.content) : undefined;
+        const injected = isInjectedUserMessage(message);
+        if (!injected) parentTurn++;
+        const note = injected ? parseDelegateNote(message.content) : undefined;
         if (note !== undefined) {
           sendUpdate(sessionId, {
             sessionUpdate: "user_message_chunk",
             content: textBlock(note.text),
-            _meta: { keryx: { delegateResult: note } },
+            _meta: { keryx: { delegateResult: note, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
           });
           continue;
         }
-        sendUpdate(sessionId, { sessionUpdate: "user_message_chunk", content: textBlock(message.content) });
+        sendUpdate(sessionId, { sessionUpdate: "user_message_chunk", content: textBlock(message.content), _meta: { keryx: { parentTurn } } });
         continue;
       }
       if (message.role === "assistant") {
@@ -2685,6 +2707,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           sendUpdate(sessionId, { sessionUpdate: "agent_message_chunk", content: textBlock(message.content) });
         }
         for (const call of message.toolCalls ?? []) {
+          if (call.name === "spawn_subagent") spawnCalls.add(call.id);
           sendUpdate(sessionId, {
             sessionUpdate: "tool_call",
             toolCallId: call.id,
@@ -2693,6 +2716,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
             kind: toolKindFor(call.name),
             status: "pending",
             rawInput: tryParseJson(call.arguments),
+            ...(call.name === "spawn_subagent" ? { _meta: { keryx: { parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } } } : {}),
           });
         }
         continue;
@@ -2702,7 +2726,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       sendUpdate(sessionId, {
         sessionUpdate: "tool_call_update",
         toolCallId,
-        status: "completed",
+        status: spawnCalls.delete(toolCallId) && message.isError ? "failed" : "completed",
         content: [{ type: "content", content: textBlock(message.content) }],
         rawOutput: message.content,
       });

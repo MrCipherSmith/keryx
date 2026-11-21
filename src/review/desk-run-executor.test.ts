@@ -101,9 +101,13 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
   const phases: string[] = [];
   const context = { version: 1 as const, pr: { url: "https://github.com/example/project/pull/12", title: "linked PR", state: "OPEN", baseSha, headSha }, flows: [], totalFlows: 0, history: [], totalRuns: 0 };
   let inspected = false;
-  const result = await executeDeskReview({ ...options(), context, onProgress: p => { phases.push(p.phase); } }, {
+  const launch = { mode: "auto" as const, adaptive: false, maxWaves: 3, maxParallel: 2, maxTokens: 100000, modelPools: { strong: [], middle: [], light: [] } };
+  const result = await executeDeskReview({ ...options(), options: launch, context, onProgress: p => { phases.push(p.phase); } }, {
     selectModel, remoteUrl: cwd, revision,
     spawn(spec) {
+      expect(JSON.parse(spec.env.KERYX_DESK_REVIEW_OPTIONS!)).toEqual(launch);
+      expect(spec.argv.at(-1)).toContain("waves of at most 2");
+      expect(spec.argv.at(-1)).toContain("Tiers are fixed for this run");
       expect(spec.argv).toContain("--agent");
       expect(spec.argv).toContain("--print");
       expect(spec.argv[spec.argv.indexOf("--provider") + 1]).toBe("test-provider");

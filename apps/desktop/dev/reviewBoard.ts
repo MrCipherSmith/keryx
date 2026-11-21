@@ -31,7 +31,7 @@ export function reviewBoardArgs(args: Json): string[] {
 
   if (args.paged === true) {
     if (args.prState == null) throw new Error("configuration: Select a board state to page");
-    argv.push("--page");
+    argv.push("--page", "--cards-only");
   }
   if (args.cursor != null) {
     if (args.paged !== true || typeof args.cursor !== "string" || !args.cursor || args.cursor.length > 4096) throw new Error("configuration: Invalid board cursor");

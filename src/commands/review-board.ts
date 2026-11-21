@@ -10,7 +10,7 @@ import { listReviewCards } from "../review/board";
 import { readReviewBoardDetail } from "../review/board-detail";
 import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, withCurrentGithubBinding, type GithubConnection } from "../review/board-github";
 
-export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N]\n  keryx review board --json --repositories\n  keryx review board --json --state STATE --page [--cursor CURSOR] [--repo owner/name]\n  keryx review board --json --repo owner/name --badge-revisions N:BASE:HEAD[,...] --repository-id ID --viewer LOGIN";
+export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N]\n  keryx review board --json --repositories\n  keryx review board --json --state STATE --page [--cards-only] [--cursor CURSOR] [--repo owner/name]\n  keryx review board --json --repo owner/name --badge-revisions N:BASE:HEAD[,...] --repository-id ID --viewer LOGIN";
 
 export async function runReviewBoard(args: string[], cwd = process.cwd()): Promise<void> {
   if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
@@ -18,13 +18,14 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
     return;
   }
   const { values } = parseArgs({ args, strict: true, allowPositionals: false, options: {
-    page: { type: "boolean" }, cursor: { type: "string" }, "badge-revisions": {type: "string"}, viewer: {type: "string"}, "repository-id": {type: "string"},
+    "cards-only": { type: "boolean" }, page: { type: "boolean" }, cursor: { type: "string" }, "badge-revisions": {type: "string"}, viewer: {type: "string"}, "repository-id": {type: "string"},
     json: { type: "boolean" }, repositories: { type: "boolean" }, repo: { type: "string" }, number: { type: "string" }, state: { type: "string" },
   } });
   const state = values.state ?? "open";
   if (!values.json || (state !== "open" && state !== "closed" && state !== "merged" && state !== "all")) throw new Error(BOARD_USAGE);
   const revisions = values["badge-revisions"];
-  if ((values.cursor !== undefined && (!values.page || !values.cursor || values.cursor.length > 4096)) ||
+  if ((values["cards-only"] && !values.page) ||
+      (values.cursor !== undefined && (!values.page || !values.cursor || values.cursor.length > 4096)) ||
       (values.page && (values.repositories || values.number !== undefined || revisions !== undefined))) throw new Error(BOARD_USAGE);
   if (revisions !== undefined) {
     const key = parseWatcherKey(values);
@@ -71,7 +72,7 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
     }
     attachDeskRunBadges(result);
     // Check the notification feed once per refresh, including unread candidates beyond page one.
-    if (!page?.cursor && !continuation.part && (state === "open" || state === "all"))
+    if (!values["cards-only"] && !page?.cursor && !continuation.part && (state === "open" || state === "all"))
       await attachAddressedReplies(result, async (endpoint, timeoutMs) =>
         JSON.parse(await boardGh(cwd, ["api", "--hostname", "github.com", endpoint], auth, timeoutMs)), !!result.nextCursor);
     const json = JSON.stringify(result);

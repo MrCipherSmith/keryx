@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { CHAT_MIN, fitSidePanelWidth, PALETTES, parsePrefs } from "./prefs";
+import { CHAT_MIN, fitSidePanelWidth, PALETTES, parsePrefs, SIDE_PANEL_TABS } from "./prefs";
 
 describe("palette pref", () => {
   test("defaults both display modes independently", () => {
@@ -74,5 +74,13 @@ describe("fitSidePanelWidth", () => {
   test("in a very small window the panel keeps a usable floor; no window size keeps the stored width", () => {
     expect(fitSidePanelWidth(520, 600)).toBe(240);
     expect(fitSidePanelWidth(520, 0)).toBe(520);
+  });
+});
+
+describe("side panel tab pref", () => {
+  test("every known tab, including Changes, is kept; an unknown one is dropped", () => {
+    for (const tab of SIDE_PANEL_TABS) expect(parsePrefs(JSON.stringify({ sidePanel: tab })).sidePanel).toBe(tab);
+    expect(SIDE_PANEL_TABS).toContain("changes");
+    expect(parsePrefs(JSON.stringify({ sidePanel: "diff" })).sidePanel).toBeNull();
   });
 });

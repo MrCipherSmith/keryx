@@ -4,6 +4,7 @@ import path from "node:path";
 import type { DeskReviewerProgress, DeskReviewerSession, DeskRun, DeskRunKey } from "./desk-run-types";
 import { assignedReviewerWave, finishedReviewerSession, identifier, reviewerName, summarizeReviewerAssignments, waveNumber } from "./reviewer-activity";
 import { isReviewerResult, parseReviewResult } from "./ledger";
+import { publicReviewerOutput, publicReviewText } from "./desk-public-text";
 import { splitUsage } from "./dispatch-usage";
 import { usageCounts, validUsageCounts } from "./run-usage";
 
@@ -57,11 +58,22 @@ function observedSession(value: unknown, detailed: boolean): DeskReviewerSession
   if (validUsageCounts(value.usage)) session.usage = usageCounts(value.usage);
   if (value.usagePartial === true) session.usagePartial = true;
   if (detailed && Array.isArray(value.activity)) {
-    session.activity = value.activity.slice(-24).flatMap(entry =>
-      isRecord(entry) && isClock(entry.at) && typeof entry.label === "string" &&
-      /^(?:Reviewer (?:started|completed|partial|failed|cancelled)|Started [\w-]{1,96}|[\w-]{1,96} (?:finished|failed))$/.test(entry.label)
-        ? [{ at: entry.at, label: entry.label }] : []);
+    session.activity = value.activity.slice(-24).flatMap((entry): NonNullable<DeskReviewerSession["activity"]> => {
+      if (!isRecord(entry) || !isClock(entry.at) || typeof entry.label !== "string") return [];
+      if (entry.kind === "message" || entry.kind === "answer") return [{ at: entry.at, kind: entry.kind, label: publicReviewText(entry.label, 1200) }];
+      const kind = entry.kind;
+      if (kind !== undefined && kind !== "status" && kind !== "tool" && kind !== "result" && kind !== "error") return [];
+      if (!/^(?:Reviewer (?:started|completed|partial|failed|cancelled)|Started [\w-]{1,96}(?: · [\w.-]{1,96})?|[\w-]{1,96} (?:finished|failed))$/.test(entry.label)) return [];
+      return [{ at: entry.at, label: publicReviewText(entry.label, 220), ...(kind ? { kind } : {}) }];
+    });
     if (value.truncated === true || value.activity.length > 24) session.truncated = true;
+  }
+  if (value.needsContext === true && session.state === "partial") session.needsContext = true;
+  if (detailed && typeof value.finalOutput === "string" && finishedReviewerSession(session)) {
+    session.finalOutput = publicReviewText(value.finalOutput, 4800);
+  }
+  if (detailed && typeof value.outcomeReason === "string" && finishedReviewerSession(session)) {
+    session.outcomeReason = publicReviewText(value.outcomeReason, 1800);
   }
   return session;
 }
@@ -87,12 +99,21 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
   const pkg = ownProgress?.packageId;
   if (typeof pkg === "string" && /^[\w-][\w.-]{0,199}$/.test(pkg)) candidates.push(["checkout", ".metaproject", "reviews", pkg]);
   let planned: number | null = null;
+  let assignmentsKnown = false;
   for (const parts of candidates) {
     const target = readObject(directory, [...parts, "manifest.json"])?.target;
     if (!isRecord(target) || typeof target.ref !== "string" || target.ref.toLowerCase() !== ref ||
         target.base !== run.baseSha || target.head !== run.headSha) continue;
-    const calls = readObject(directory, [...parts, "desktop-dispatch.json"])?.calls;
-    if (!Array.isArray(calls)) continue;
+    const plan = readObject(directory, [...parts, "plan.json"]);
+    const matches = isRecord(plan?.target) && plan.target.ref === target.ref && plan.target.base === run.baseSha && plan.target.head === run.headSha;
+    const dispatches = matches ? plan?.dispatches : undefined;
+    if (typeof dispatches === "number" && Number.isSafeInteger(dispatches) && dispatches > 0) planned = dispatches;
+    const queue = readObject(directory, [...parts, "desktop-dispatch.json"]);
+    const calls = queue?.calls;
+    if (!Array.isArray(calls)) {
+      if (planned !== null) break; // The host writes the plan before preparing its dispatch payloads.
+      continue;
+    }
     const observed = new Map<string, DeskReviewerSession | null>();
     for (const session of sessions) {
       const pair = `${session.reviewer}:${session.wave}`;
@@ -110,7 +131,8 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       if (queued.has(key)) continue;
       queued.add(key);
       const checkpoint = observed.get(key);
-      if (checkpoint === null || (checkpoint && (active || finishedReviewerSession(checkpoint)))) continue;
+      if (checkpoint === null || (checkpoint && !detailed && (active || finishedReviewerSession(checkpoint)))) continue;
+      if (active && checkpoint && !finishedReviewerSession(checkpoint)) continue;
       const session: DeskReviewerSession = checkpoint ?? { id: key, reviewer, wave, state: active ? "planned" : "unknown" };
       if (isRecord(call.expected_model)) {
         if (!session.model && identifier(call.expected_model.model)) session.model = call.expected_model.model;
@@ -122,11 +144,14 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
         const { body, incomplete, usage } = splitUsage(raw);
         const saved = parseReviewResult(body);
         if (!incomplete && isReviewerResult(saved) && saved.reviewer === reviewer) {
-          if (saved.status === "DONE" || saved.status === "DONE_WITH_CONCERNS") session.state = "completed";
-          if (saved.status === "BLOCKED" || saved.status === "NEEDS_CONTEXT") session.state = "partial";
-          if (detailed && finishedReviewerSession(session)) {
+          const savedState = saved.status === "DONE" || saved.status === "DONE_WITH_CONCERNS" ? "completed"
+            : saved.status === "BLOCKED" || saved.status === "NEEDS_CONTEXT" ? "partial" : undefined;
+          if (savedState && (!checkpoint || !finishedReviewerSession(checkpoint))) session.state = savedState;
+          if (saved.status === "NEEDS_CONTEXT" && session.state === "partial") session.needsContext = true;
+          if (detailed && savedState === session.state) {
+            Object.assign(session, publicReviewerOutput(saved));
             const activity = session.activity ??= [];
-            activity.push({ label: "Reviewer result saved" });
+            activity.push({ label: "Reviewer result saved", kind: "result" });
             if (activity.length > 24) { activity.shift(); session.truncated = true; }
           }
         }
@@ -140,10 +165,14 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
     if (queued.size === calls.length) {
       // Old checkpoints could include auxiliary children saving outside the review package.
       sessions = sessions.filter(session => queued.has(`${session.reviewer}:${session.wave}`));
-      planned = queued.size;
+      assignmentsKnown = true;
+      // Keep the entire plan in the denominator, including assignments that failed preparation.
+      planned = Math.max(planned ?? 0, queued.size + (Array.isArray(queue?.blocked) ? queue.blocked.length : 0));
     }
     break;
   }
-  if (!sessions.length) return;
-  return { planned, ...summarizeReviewerAssignments(sessions), sessions };
+  if (!sessions.length && planned === null) return;
+  const summary = summarizeReviewerAssignments(sessions);
+  if (planned !== null && !assignmentsKnown) summary.completed = 0;
+  return { planned, ...summary, sessions };
 }

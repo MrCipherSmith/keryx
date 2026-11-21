@@ -1,4 +1,5 @@
-import { deskReviewRoutingRoot } from "../review/autonomous-profile";
+import type { DeskReviewModel } from "../review/desk-run-options";
+import { deskReviewRoutingRoot, deskReviewOptions } from "../review/autonomous-profile";
 import { ACCOUNTS_USAGE, runReviewAccounts } from "./review-accounts";
 import { RULES_USAGE, runReviewRules } from "./review-rules";
 import { runReviewWatch, WATCH_USAGE } from "./review-watch";
@@ -594,6 +595,7 @@ const BLAST_RADIUS_FLAGS = [
 ] as const;
 
 const TIER_FLAGS = [
+  "--desk-tier",
   "--help",
   "-h",
   "--scope",
@@ -1692,6 +1694,7 @@ async function resolveReviewRouting(
   task = "review",
   requirements: RoutingRequirements = { capabilities: ["tools"], inputTokensRequired: 4_096, outputTokensReserved: 4_096 },
   sharedBudget?: RoutingBudgetLedger,
+  override?: DeskReviewModel,
 ): Promise<RoutingDecisionReceipt> {
   const observedAt = new Date().toISOString();
   const env = envWithSavedApiKeys();
@@ -1741,8 +1744,9 @@ async function resolveReviewRouting(
     origin: "review",
     baseline,
     requirements,
+    ...(override ? { userOverride: { mode: "model" as const, target: { providerId: override.provider, modelId: override.model } } } : {}),
   };
-  if (routingConfig.categories.review.mode === "auto") {
+  if (!override && routingConfig.categories.review.mode === "auto") {
     const budget = sharedBudget ?? new RoutingBudgetLedger({
       configUsd: routingConfig.execution.maxEstimatedCostUsd,
       unknownCost: routingConfig.execution.unknownCost,
@@ -1807,15 +1811,13 @@ async function applyReviewRoutingCategory(
   routingConfig: NormalizedRoutingConfig,
   routingTask: string,
   routingRequirements: RoutingRequirements,
+  pool: readonly DeskReviewModel[] = [],
 ): Promise<ReviewRoutingResult> {
-  const receipt = await resolveReviewRouting(
-    cwd,
-    catalog,
-    session,
-    routingConfig,
-    routingTask,
-    routingRequirements,
+  const resolve = (candidate?: DeskReviewModel) => resolveReviewRouting(
+    cwd, catalog, session, routingConfig, routingTask, routingRequirements, undefined, candidate,
   );
+  let receipt = await resolve(pool[0]);
+  for (let i = 1; i < pool.length && receipt.decision.status !== "selected"; i++) receipt = await resolve(pool[i]);
   const contextLines = contextUnknownLines(receipt.decision, "review");
   if (receipt.decision.status !== "selected") {
     const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
@@ -1856,9 +1858,17 @@ async function runTier(args: string[], discover = tierCatalog): Promise<void> {
   const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
   // The tier is a reporting field: only the routing receipt below selects the
   // dispatch provider/model, so the tier never ranks candidates itself.
+  const requestedTier = optionValue(args, "--desk-tier");
+  const options = deskReviewOptions();
+  if (requestedTier !== undefined && (!options || !["deep", "standard", "light"].includes(requestedTier))) {
+    throw new Error("--desk-tier requires an active Desktop launch and a registered tier.");
+  }
   const tierDecision = decideDispatchModel(session, signals, []);
+  const deskTier = requestedTier === "deep" || requestedTier === "standard" || requestedTier === "light" ? requestedTier : undefined;
+  const pool = deskTier && options ? options.modelPools[deskTier === "deep" ? "strong" : deskTier === "standard" ? "middle" : "light"] : [];
+
   const { decision, routed, routingRefused, notices: routeNotices, routing } = await applyReviewRoutingCategory(
-    tierDecision,
+    deskTier ? { ...tierDecision, tier: deskTier, tier_reasons: [options?.adaptive ? "desktop:adaptive" : "desktop:fixed"] } : tierDecision,
     routingRoot,
     catalog,
     session,
@@ -1869,6 +1879,7 @@ async function runTier(args: string[], discover = tierCatalog): Promise<void> {
       inputTokensRequired: Math.max(2_048, parseNonNegativeInteger(optionValue(args, "--input-tokens"), "--input-tokens") ?? (signals.diffLines ?? 128) * 32),
       outputTokensReserved: 4_096,
     },
+    pool,
   );
   const notices = [...settings.notices, ...routeNotices];
   // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s

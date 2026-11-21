@@ -112,16 +112,44 @@ echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullReques
     return JSON.parse(stdout) as DeskRunSnapshot;
   }
   try {
-    const first = await call(project, "start", ["--base", base, "--head", head]);
+    const launch = { mode: "manual" as const, adaptive: true, modelPools: { strong: [], middle: [], light: [] } };
+    const flags = ["--base", base, "--head", head, "--options", JSON.stringify(launch)];
+    await expect(call(project, "start", ["--base", base, "--head", head, "--options", "{}"])).rejects.toThrow("Invalid Review option");
+    const first = await call(project, "start", flags);
+    expect(first.startedRunId).toBe(first.runs[0]?.id);
+    expect(first.runs[0]?.options).toEqual(launch);
     expect(first.runs[0]!.scope).toBe("review-autonomous/fixed-pr/v2");
     const id = first.runs[0]!.id;
     await waitForChange(root, () => existsSync(path.join(root, "checking")), "the worker to enter revision verification");
-    const second = await call(worktree, "start", ["--base", base, "--head", head]);
+    const second = await call(worktree, "start", flags);
+    expect(second.startedRunId).toBe(id);
     expect(second.runs.map((r) => r.id)).toEqual([id]);
-    expect((await call(worktree, "cancel", ["--id", id])).runs[0]!.state).toBe("cancelling");
     const storePath = path.join(root, "data", "desktop-review");
-    const store = new DeskRunStore(storePath, true);
+    const store = new DeskRunStore(storePath);
     try {
+      const questionId = crypto.randomUUID();
+      store.openQuestion(id, { id: questionId, question: "Choose a filename", allowFreeform: true, options: [] });
+      expect((await call(worktree, "status", ["--activity-id", id])).runs[0]?.pendingQuestion?.id).toBe(questionId);
+      const reply = ["--id", id, "--question-id", questionId, "--answer=--verbose.txt"];
+      expect((await call(worktree, "answer", reply)).runs[0]?.pendingQuestion).toBeUndefined();
+      expect(store.questionAnswer(id, questionId)).toBe("--verbose.txt");
+      await expect(call(worktree, "answer", reply)).rejects.toThrow("stale:");
+      const reviewerQuestions = ["review-layout", "review-frontend"].map(reviewer => ({
+        id: crypto.randomUUID(), reviewerSessionId: crypto.randomUUID(), reviewer, wave: 1,
+        question: "Which fixture should I use?", allowFreeform: true, options: [],
+      }));
+      for (const question of reviewerQuestions) store.openQuestion(id, question);
+      const next = (await call(worktree, "status", ["--activity-id", id])).runs[0]!;
+      expect(next.pendingQuestions?.map(q => q.reviewerSessionId).sort())
+        .toEqual(reviewerQuestions.map(q => q.reviewerSessionId).sort());
+      const [layout, frontend] = reviewerQuestions;
+      const layoutReply = ["--id", id, "--question-id", layout!.id, "--answer", "Use the compact fixture."];
+      const updated = (await call(worktree, "answer", layoutReply)).runs[0]!;
+      expect(updated.pendingQuestions?.map(q => q.id)).toEqual([frontend!.id]);
+      expect(store.questionAnswer(id, layout!.id)).toBe("Use the compact fixture.");
+      expect(store.questionAnswer(id, frontend!.id)).toBeNull();
+      await expect(call(worktree, "answer", layoutReply)).rejects.toThrow("stale:");
+      expect((await call(worktree, "cancel", ["--id", id])).runs[0]!.state).toBe("cancelling");
       writeFileSync(gate, "");
       await waitForChange(storePath, () => store.byId(id)?.run.state === "cancelled", "the worker's terminal commit");
     } finally {

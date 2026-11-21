@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State, Webview};
 
-/// The project root each window's panel runs in, set by `panel_register`.
+/// Canonical project roots assigned by the host when creating project views.
 #[derive(Default)]
 pub struct PanelRoots(Mutex<HashMap<String, PathBuf>>);
 
@@ -25,6 +25,14 @@ impl PanelRoots {
         self.0.lock().unwrap().get(window).cloned()
     }
 
+    pub fn require_project(&self, window: &str, cwd: &str) -> Result<PathBuf, String> {
+        let root = self.get(window).ok_or("Open a project first")?;
+        if project_dir(cwd)? != root {
+            return Err("The requested folder does not belong to this project view".into());
+        }
+        Ok(root)
+    }
+
     pub fn remove(&self, window: &str) {
         self.0.lock().unwrap().remove(window);
     }
@@ -35,7 +43,7 @@ pub fn project_dir(cwd: &str) -> Result<PathBuf, String> {
     if !p.is_absolute() || !p.is_dir() {
         return Err(format!("{cwd} is not a folder"));
     }
-    Ok(p.to_path_buf())
+    p.canonicalize().map_err(|e| format!("Could not resolve project folder {cwd}: {e}"))
 }
 
 fn sink(channel: Channel<PtyEvent>) -> crate::pty::Sink {
@@ -151,4 +159,23 @@ pub async fn pty_close(app: AppHandle, view: Webview, id: u64) -> Result<(), Str
 #[tauri::command]
 pub fn pty_list(view: Webview, ptys: State<'_, PtyManager>) -> Vec<TabInfo> {
     ptys.list(view.label())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_project_view_accepts_only_its_registered_root() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let roots = PanelRoots::default();
+        let root = project_dir(a.path().to_str().unwrap()).unwrap();
+        let alias = a.path().join(".");
+        assert!(roots.require_project("view", alias.to_str().unwrap()).is_err());
+        roots.set("view", root.clone());
+        assert_eq!(roots.require_project("view", alias.to_str().unwrap()).unwrap(), root);
+        assert!(roots.require_project("view", b.path().to_str().unwrap()).is_err());
+        assert!(roots.require_project("other", alias.to_str().unwrap()).is_err());
+    }
 }

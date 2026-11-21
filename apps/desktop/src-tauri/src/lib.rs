@@ -19,6 +19,7 @@ pub mod review;
 pub mod pty;
 pub mod settings;
 pub mod shellenv;
+mod slots;
 pub mod version;
 pub mod webkit;
 
@@ -39,6 +40,7 @@ pub fn run() {
         .manage(flows::watch::FlowWatchers::default())
         .manage(pty::PtyManager::default())
         .manage(panels::PanelRoots::default())
+        .manage(images::ChatImages::default())
         .manage(browser::Browsers::default())
         .manage(chromium::engine::Engines::default())
         .manage(chromium::consent::Consents::default())
@@ -116,6 +118,9 @@ pub fn run() {
             flows::flows_action,
             flows::flows_watch,
             gitinfo::git_info,
+            gitinfo::git_repository,
+            gitinfo::git_changes,
+            gitinfo::git_file_diff,
             pullrequest::pr_info,
             review::github_accounts,
             review::github_login,
@@ -145,6 +150,10 @@ pub fn run() {
             browser::browser_frame,
             browser::browser_input,
             images::local_image,
+            images::save_chat_image,
+            images::save_chat_file,
+            images::discard_chat_attachment,
+            images::commit_chat_attachments,
             chromium::consent::browser_consent_answer,
             chromium::cookies::cookie_profiles,
             chromium::cookies::cookie_scan,
@@ -162,6 +171,7 @@ pub fn run() {
             chromium::engine::close_all(handle);
             let _ = std::fs::remove_file(std::env::temp_dir().join(format!("keryx-panels-{}.sock", std::process::id())));
             handle.state::<bridge::AppState>().stop_all();
+            handle.state::<images::ChatImages>().clear();
         }
     });
 }

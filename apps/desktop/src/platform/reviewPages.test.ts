@@ -13,7 +13,7 @@ test("browser host sends scoped badges, page cursors and untouched legacy board 
   const r = "1:"+"a".repeat(40)+":"+"b".repeat(40);
   expect(reviewBoardArgs({repo:"org/repo",badgeTarget:{viewer:"me",repositoryId:"R",revisions:r}}))
     .toEqual(["review","board","--json","--repo","org/repo","--viewer","me","--repository-id","R","--badge-revisions",r]);
-  expect(reviewBoardArgs({prState:"open",paged:true,cursor:"-abc"}).slice(-2)).toEqual(["--page","--cursor=-abc"]);
+  expect(reviewBoardArgs({prState:"open",paged:true,cursor:"-abc"}).slice(-3)).toEqual(["--page","--cards-only","--cursor=-abc"]);
   expect(reviewBoardArgs({prState:"open"})).toEqual(["review","board","--json","--state","open"]);
   expect(() => reviewBoardArgs({repo:"org/repo",number:1,paged:true})).toThrow();
 });

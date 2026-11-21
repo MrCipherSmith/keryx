@@ -1,3 +1,4 @@
+import { savingDone, waitFor } from "./testWait";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
 import type { AvailableCommand } from "../acp/types";
@@ -84,6 +85,130 @@ async function key(k: string, init: KeyboardEventInit = {}) {
 
 const options = () => Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
 const names = () => options().map((o) => o.querySelector(".slash-name")!.textContent);
+
+const plus = () => host.querySelector<HTMLButtonElement>('[aria-label="Add to message"]');
+const menuItem = (label: string) => Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+  .find((item) => item.textContent?.trim() === label);
+
+test("the plus menu offers files, folders and slash commands without erasing the draft", async () => {
+  const m = mount({ pickAttachmentFolder: async () => null, saveFile: async () => "/tmp/files/notes.txt" });
+  await act(() => m.render());
+  await type("keep this draft");
+  await act(() => plus()?.click());
+  expect(menuItem("Add files or images")?.disabled).toBe(false);
+  expect(menuItem("Add folder")?.disabled).toBe(false);
+  await act(() => menuItem("Slash commands")?.click());
+  expect(names()).toContain("/tasks");
+  expect(area().value).toBe("keep this draft");
+  await key("Escape");
+  expect(options()).toHaveLength(0);
+});
+
+test("the explicit slash picker preserves arguments and closes across sessions", async () => {
+  const m = mount({ sessionId: "slash-first" });
+  await act(() => m.render());
+  await type("/tasks  kill t9\nmore");
+  await act(() => plus()?.click());
+  await act(() => menuItem("Slash commands")?.click());
+  await key("ArrowUp");
+  await key("Tab");
+  expect(area().value).toBe("/compact  kill t9\nmore");
+  await act(() => plus()?.click());
+  await act(() => menuItem("Slash commands")?.click());
+  expect(options().length).toBeGreaterThan(0);
+  await act(() => m.render({ sessionId: "slash-second" }));
+  await act(() => m.render());
+  expect(options()).toHaveLength(0);
+  expect(area().value).toBe("/compact  kill t9\nmore");
+});
+
+test("a folder chosen from the plus menu is attached and sent without a caption", async () => {
+  const sent: unknown[] = [];
+  const m = mount({ pickAttachmentFolder: async () => "/project/folder", onSend: (...args) => { sent.push(args); return true; } });
+  await act(() => m.render({ sessionId: "folder-picker" }));
+  await act(() => plus()?.click());
+  await act(async () => menuItem("Add folder")?.click());
+  expect(host.querySelector('[aria-label="Remove folder"]')?.tagName).toBe("BUTTON");
+  await key("Enter");
+  expect(sent).toEqual([["", [], [{ kind: "folder", label: "folder", path: "/project/folder" }]]]);
+});
+
+test("choosing a file from the plus menu saves it and sends its path", async () => {
+  const stored: string[][] = [];
+  const sent: unknown[] = [];
+  const path = "/tmp/keryx-chat-images-test/file-123.txt";
+  const m = mount({
+    saveFile: async (extension, data) => { stored.push([extension, data]); return path; },
+    onSend: (...args) => { sent.push(args); return true; },
+  });
+  await act(() => m.render({ sessionId: "file-picker" }));
+  await act(() => plus()?.click());
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+  const opened: string[] = [];
+  input?.addEventListener("click", () => { opened.push("opened"); });
+  await act(() => menuItem("Add files or images")?.click());
+  expect(opened).toEqual(["opened"]);
+  Object.defineProperty(input, "files", { value: [new File(["hello"], "notes.TXT", { type: "text/plain" })] });
+  await act(async () => { input?.dispatchEvent(new Event("change", { bubbles: true })); });
+  await waitFor(() => savingDone(host), act);
+  expect(stored).toEqual([["txt", "aGVsbG8="]]);
+  expect(host.querySelector('[aria-label="Remove notes.TXT"]')?.tagName).toBe("BUTTON");
+  await key("Enter");
+  expect(sent).toEqual([["", [], [{ kind: "file", label: "notes.TXT", path }]]]);
+});
+
+test("discard releases unsent files but sending retains stored attachments", async () => {
+  const discarded: string[] = [];
+  let stored = 0;
+  const m = mount({ sessionId: "discard-draft", saveFile: async () => `/tmp/file-${++stored}.txt`,
+    discardFile: async (path) => { discarded.push(path); } });
+  await act(() => m.render());
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error("File input is missing");
+  Object.defineProperty(input, "files", { value: [new File(["draft"], "draft.txt", { type: "text/plain" })] });
+  const select = async () => {
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    await waitFor(() => savingDone(host), act);
+  };
+  await select();
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Remove draft.txt"]')?.click());
+  expect(discarded).toEqual(["/tmp/file-1.txt"]);
+  expect(host.querySelector('[aria-label="Remove draft.txt"]')).toBeNull();
+  await select();
+  await key("Enter");
+  expect(m.sent).toEqual([""]);
+  expect(discarded).toEqual(["/tmp/file-1.txt"]);
+});
+
+test("a Windows folder path from the picker is accepted and labelled by its last part", async () => {
+  const sent: unknown[] = [];
+  const m = mount({ pickAttachmentFolder: async () => "C:\\work\\proj", onSend: (...args) => { sent.push(args); return true; } });
+  await act(() => m.render({ sessionId: "win-folder" }));
+  await act(() => plus()?.click());
+  await act(async () => menuItem("Add folder")?.click());
+  expect(host.querySelector('[aria-label="Remove proj"]')?.tagName).toBe("BUTTON");
+  await key("Enter");
+  expect(sent).toEqual([["", [], [{ kind: "folder", label: "proj", path: "C:\\work\\proj" }]]]);
+});
+
+test("the textarea is a combobox whose popup attributes follow the open list", async () => {
+  const m = mount();
+  await act(() => m.render());
+  expect(area().getAttribute("role")).toBeNull();
+  expect(area().getAttribute("aria-expanded")).toBeNull();
+  expect(area().getAttribute("aria-controls")).toBeNull();
+  await type("/");
+  expect(area().getAttribute("role")).toBe("combobox");
+  expect(area().getAttribute("aria-expanded")).toBe("true");
+  const list = document.getElementById(area().getAttribute("aria-controls") ?? "");
+  expect(list?.getAttribute("role")).toBe("listbox");
+  const active = document.getElementById(area().getAttribute("aria-activedescendant") ?? "");
+  expect(active?.getAttribute("aria-selected")).toBe("true");
+  expect(list?.contains(active ?? null)).toBe(true);
+  await type("hello");
+  expect(area().getAttribute("role")).toBeNull();
+  expect(area().getAttribute("aria-controls")).toBeNull();
+});
 
 test("typing / lists every command grouped, uncapped, with hint and description", async () => {
   const m = mount();

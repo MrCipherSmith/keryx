@@ -1,0 +1,8 @@
+.session-review-activity { display: grid; gap: var(--sp-2); margin-block: var(--sp-3); justify-items: start; }
+.session-review-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); width: 100%; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-surface); }
+.session-review-prompt { justify-self: end; max-inline-size: min(100%, 75ch); margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-review-item > header { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.session-review-item > header > strong { min-inline-size: 0; overflow-wrap: anywhere; }
+.session-review-item summary { cursor: pointer; color: var(--accent); }
+.session-review-message { color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.session-review-message[role="alert"] { display: block; }

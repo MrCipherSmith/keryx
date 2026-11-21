@@ -112,6 +112,10 @@ export async function windowOpenProject(cwd: string): Promise<void> {
 /** Open an http(s) URL in the system browser (the Tauri opener plugin; a new tab in browser dev mode). */
 /** A local image the agent linked to, as a data: URL (the host reads image files inside the project only). */
 export const localImage = (path: string) => invoke<string>("local_image", { path });
+export const saveChatImage = (mimeType: string, data: string) => invoke<string>("save_chat_image", { mimeType, data });
+export const saveChatFile = (extension: string, data: string) => invoke<string>("save_chat_file", { extension, data });
+export const discardChatAttachment = (path: string) => invoke<void>("discard_chat_attachment", { path });
+export const commitChatAttachments = (paths: string[]) => invoke<void>("commit_chat_attachments", { paths });
 
 export async function openExternal(url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) throw new Error("Only http and https links can be opened.");
@@ -258,6 +262,32 @@ export interface GitInfo {
 
 /** `null` outside a git checkout, or when git is missing or slow. */
 export const gitInfo = (cwd: string) => invoke<GitInfo | null>("git_info", { cwd });
+
+/** One changed file of the checkout: `R` carries the old path, `?` is untracked. */
+export interface ChangedFile {
+  path: string;
+  status: "M" | "A" | "D" | "R" | "?";
+  origPath?: string;
+  staged: boolean;
+}
+
+export interface FileDiff {
+  path: string;
+  status: ChangedFile["status"];
+  binary: boolean;
+  tooLarge: boolean;
+  /** Unified diff text; absent for a binary or too large file. */
+  text?: string;
+}
+
+/** The files that differ from HEAD. `truncated` when the host stopped at its cap. */
+export const gitChanges = (cwd: string) => invoke<{ files: ChangedFile[]; truncated: boolean }>("git_changes", { cwd });
+
+/** The diff of one file the last `gitChanges` returned (the host refuses any other path). */
+export const gitFileDiff = (cwd: string, path: string) => invoke<FileDiff>("git_file_diff", { cwd, path });
+
+/** The current checkout's GitHub origin, as owner/repo; null when unknown. */
+export const gitRepository = (cwd: string) => invoke<string | null>("git_repository", { cwd });
 
 /** The open GitHub PR of the project's branch, summarized from the `gh` CLI. */
 export interface PrInfo {

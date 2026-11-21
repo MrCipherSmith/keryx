@@ -292,6 +292,20 @@ describe("exit codes", () => {
     expect(run.summary.reason).toContain("review ingest");
   });
 
+  test("a reviewer waiting for the operator inside spawn_subagent survives the idle timeout", async () => {
+    let waiting = true;
+    const run = await runAutonomousReview(options(scripted(async c => {
+      c.emit({ type: "tool_call", name: "spawn_subagent", input: "{}" });
+      await c.sleep(160);
+      if (c.killed()) return 143;
+      waiting = false;
+      c.emit({ type: "tool_result", name: "spawn_subagent", output: "Completed" });
+      writePackage("rv-1", "closed");
+      return 0;
+    }), { stallMs: 75, isWaitingForOperator: () => waiting }));
+    expect(run.status).toBe("complete");
+  });
+
   test("a child that keeps writing is not stalled", async () => {
     const run = await runAutonomousReview(
       options(

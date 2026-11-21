@@ -151,7 +151,9 @@ import {
 } from "../tui/session-info";
 import { loadSessionLimits, startSessionLimits } from "./model-limits";
 import { ENV_REVIEW_SYSTEM } from "../review/review-system";
-import { AUTONOMOUS_PROFILE, DESK_REVIEW_SHELL, deskReviewRoutingRoot } from "../review/autonomous-profile";
+import { desktopReviewerQuestion } from "../review/desk-reviewer-question";
+import { AUTONOMOUS_PROFILE, DESK_REVIEW_HEAD, DESK_REVIEW_SHELL, deskReviewOptions, deskReviewRoutingRoot } from "../review/autonomous-profile";
+import { reviewSourceTool } from "../harness/tool/builtin/read-review-source";
 import { makeDeskReviewProvider } from "./review-desk-provider";
 import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
@@ -4877,9 +4879,18 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // Same reset-per-turn wiring as the TUI's makeAgentDeps (own spawn_subagent instance).
       let resetSubagentBudget: (() => void) | undefined;
       const reviewerRoutingRoot = deskReviewRoutingRoot();
+      const reviewOptions = deskReviewOptions();
+      const reviewHead = reviewerRoutingRoot ? process.env[DESK_REVIEW_HEAD] : undefined;
+      // Only an operator-specified pool can need non-session candidates. Discover them
+      // with the normal credentialed adapter; the names in a pool do not prove availability.
+      const reviewCatalog = reviewOptions && Object.values(reviewOptions.modelPools).some(pool => pool.length)
+        ? await detectProviders({ fetch: globalThis.fetch, env: envWithSavedApiKeys(process.env, configDir) }) : [{ name: provider }];
+      const askReviewerContext = reviewerRoutingRoot ? desktopReviewerQuestion(agentCwd) : undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
-        ...(reviewerRoutingRoot ? { routingProjectRoot: reviewerRoutingRoot } : {}),
+        ...(askReviewerContext ? { askReviewerContext } : {}),
+        ...(reviewOptions ? { deskOptions: reviewOptions } : {}),
+        ...(reviewerRoutingRoot ? { routingProjectRoot: reviewerRoutingRoot, preparedReviewOnly: true } : {}),
         ...(meter ? { onReviewerActivity: meter.emit, observeExternal: (reviewer: string, runtime: string) => observeExternalReview(meter, reviewer, runtime),
           observeProvider: (port: ProviderPort, reviewer: string, provider: string, model: string, sessionId?: string) =>
           observeReviewProvider(port, meter, { participant: "reviewer", reviewer, ...(sessionId && { sessionId }) }, provider, model, configDir) } : {}),
@@ -4894,7 +4905,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)),
         describeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)).describe(),
-        getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models(), startLiveCodexModels().observedAt?.()),
+        getDetectedProviders: () => mergeLiveCodexModels(reviewCatalog, startLiveCodexModels().models(), startLiveCodexModels().observedAt?.()),
         getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read
         // `slateSessionBox.current` BY REFERENCE, at fold time — same
@@ -4918,6 +4929,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           metaprojectPort,
           searchController: searchProviderController,
           spawnTool,
+          ...(reviewHead ? { reviewSource: reviewSourceTool(agentCwd, reviewHead) } : {}),
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
           mcp: mcpRuntime,
@@ -4974,6 +4986,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // names a tool this session was not given.
       const agentDeps: AgentDeps = {
         ...agentDepsBase,
+        ...(reviewOptions?.maxParallel ? { maxSubagentConcurrency: reviewOptions.maxParallel } : {}),
         // Flow 347 T17: one control-nudge nonce for this readline session.
         controlNonce: generateControlNonce(),
         systemInstruction: buildAgentSystemInstruction(orient, {

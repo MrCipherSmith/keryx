@@ -56,7 +56,7 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   writeFileSync(path.join(root, PR_CONTEXT_FILE), JSON.stringify({ pr: { url: ref, headSha: head, baseSha: base, state: "OPEN" }, flows: [] }));
   writeFileSync(path.join(dir, "pr-context.md"), "PR");
   mkdirSync(path.dirname(path.join(root, definition)), { recursive: true });
-  writeFileSync(path.join(root, definition), "---\nname: review-team\ndescription: test reviewer\n---\nReview");
+  writeFileSync(path.join(root, definition), "---\nname: review-team\ndescription: test reviewer\nmodel_tier: light\n---\nReview");
   const plan: ReviewPlan = { v: 1, package: dir, target: { kind: "pr", ref, base, head },
     round: { number: 2, mode: "delta", previous: "previous", source: "local-package", range: { base, head }, fixHunks: 1, newHunks: 1, priorFindings: 1, carried: 0, line: "" },
     slices: { fix: [], new: [] }, roster: [role, "review-style"], dispatches: 3, minutes: { min: 1, max: 2 },
@@ -109,6 +109,21 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   expect(partial.calls).toHaveLength(3);
   expect(partial.blocked).toMatchObject([{ reviewer: missing, driver: missing + "-w1.json" }]);
   expect(partial.routedOut).toEqual(["review-style"]);
+
+  const launch = { mode: "manual" as const, adaptive: false, maxWaves: 1, modelPools: { light: [], middle: [], strong: [] } };
+  const tiers: string[] = [];
+  const capture: PlanDeps["run"] = async args => {
+    if (args[0] === "tier") tiers.push(args[args.indexOf("--desk-tier") + 1]!);
+    return run(args);
+  };
+  const limitedFile = await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, capture, launch);
+  const limited = JSON.parse(readFileSync(path.join(root, limitedFile), "utf8"));
+  expect(limited.calls).toHaveLength(1);
+  expect(limited.blocked.map((item: { reason: string }) => item.reason)).toEqual(Array(2).fill("Excluded by the configured limit of 1 reviewer waves."));
+  expect(tiers).toEqual(["light"]);
+  tiers.length = 0;
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, capture, { ...launch, adaptive: true });
+  expect(tiers).toEqual(["standard"]); // repeated fix raises the small-scope tier
 
   maxContext = requirements[0]! - 1;
   const smaller = await prepareDesktopDispatch(root, plan, base, manifest, [drivers[0]!], prContext, run);

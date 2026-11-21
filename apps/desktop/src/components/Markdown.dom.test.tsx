@@ -25,6 +25,179 @@ afterAll(async () => {
   await unregisterDom();
 });
 
+test("PR references open externally on click and offer the internal browser on right-click", async () => {
+  const opened: string[][] = [];
+  await act(() => root.render(createElement(Markdown, {
+    text: "Published in PR #9130. `PR #12` is code. [other PR](https://github.com/other/repo/pull/8).",
+    prLinks: {
+      repository: "example/project",
+      openExternal: (url: string) => { opened.push(["external", url]); },
+      openInternal: (url: string) => { opened.push(["internal", url]); },
+    },
+  })));
+  const links = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a"));
+  expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+    ["PR #9130", "https://github.com/example/project/pull/9130"],
+    ["other PR", "https://github.com/other/repo/pull/8"],
+  ]);
+  const link = links[0];
+  await act(() => link?.click());
+  expect(opened).toEqual([["external", "https://github.com/example/project/pull/9130"]]);
+  const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  await act(() => { link?.dispatchEvent(menu); });
+  expect(menu.defaultPrevented).toBe(true);
+  const internal = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    .find((b) => b.textContent?.includes("Open in Keryx Browser"));
+  await act(() => internal?.click());
+  expect(opened.at(-1)).toEqual(["internal", "https://github.com/example/project/pull/9130"]);
+});
+
+test("repository changes preserve unchanged links and close menus anchored on replaced links", async () => {
+  const props = (repository: string) => ({ repository, openExternal: () => {} });
+  const text = "[Explicit](https://github.com/example/proj/pull/1).";
+  await act(() => root.render(createElement(Markdown, { text, prLinks: props("example/old") })));
+  const explicit = host.querySelector(".md a");
+  await act(() => root.render(createElement(Markdown, { text, prLinks: props("example/new") })));
+  expect(host.querySelector(".md a")).toBe(explicit);
+  const bare = "Published in PR #9130.";
+  await act(() => root.render(createElement(Markdown, { key: "bare", text: bare, prLinks: props("example/old") })));
+  const anchor = host.querySelector(".md a");
+  await act(() => { anchor?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+  expect(host.querySelector('[role="menu"]')).not.toBeNull();
+  await act(() => root.render(createElement(Markdown, { key: "bare", text: bare, prLinks: props("example/new") })));
+  expect(host.querySelector('[role="menu"]')).toBeNull();
+  expect(host.querySelector(".md a")?.getAttribute("href")).toBe("https://github.com/example/new/pull/9130");
+});
+
+test("soft-wrapped and inline-formatted PR references become links", async () => {
+  const text = "See PR\n#1254 and **PR** #77, but `PR #5` stays code.";
+  await act(() => root.render(createElement(Markdown, { text, prLinks: { repository: "example/project", openExternal: () => {} } })));
+  const hrefs = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a")).map((a) => a.getAttribute("href"));
+  expect(hrefs).toEqual([
+    "https://github.com/example/project/pull/1254",
+    "https://github.com/example/project/pull/77",
+    "https://github.com/example/project/pull/77",
+  ]);
+  const anchors = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a"));
+  expect(anchors.length).toBe(3);
+  expect(anchors[1]?.getAttribute("aria-hidden")).toBeNull();
+  expect(anchors[1]?.getAttribute("aria-label")).toBe("PR #77");
+  expect(anchors[1]?.getAttribute("tabindex")).not.toBe("-1");
+  expect(anchors[2]?.getAttribute("tabindex")).toBe("-1");
+  expect(anchors[2]?.getAttribute("aria-hidden")).toBe("true");
+  expect(host.querySelector(".md code")?.querySelector("a")).toBeNull();
+});
+
+test("the PR link menu opens above a link at the bottom edge and stays on screen", async () => {
+  const original = Element.prototype.getBoundingClientRect;
+  const offsetDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("menu") ? 70 : 0; } });
+  const viewport = window.innerHeight;
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    return this.classList.contains("menu") ? rect(0, 70) : this.tagName === "A" ? rect(viewport - 5, 14) : original.call(this);
+  };
+  try {
+    await act(() => root.render(createElement(Markdown, { text: "See PR #1254", prLinks: { repository: "example/project", openExternal: () => {}, openInternal: () => {} } })));
+    await act(() => { host.querySelector(".md a")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    const menu = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    const top = parseFloat(menu?.style.top ?? "NaN");
+    expect(top >= 8).toBe(true);
+    expect(top + 70 <= viewport - 8).toBe(true);
+    expect(top + 70 <= viewport - 5 - 4).toBe(true);
+  } finally {
+    Element.prototype.getBoundingClientRect = original;
+    if (offsetDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetDescriptor);
+    else Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+  }
+});
+
+test("the PR link menu opens below a link at the top edge", async () => {
+  await act(() => root.render(null));
+  const original = Element.prototype.getBoundingClientRect;
+  const offsetDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("menu") ? 70 : 0; } });
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    return this.classList.contains("menu") ? rect(0, 70) : this.tagName === "A" ? rect(5, 14) : original.call(this);
+  };
+  try {
+    await act(() => root.render(createElement(Markdown, { text: "See PR #1254", prLinks: { repository: "example/project", openExternal: () => {}, openInternal: () => {} } })));
+    await act(() => { host.querySelector(".md a")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    const menu = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    const top = parseFloat(menu?.style.top ?? "NaN");
+    expect(top >= 5 + 14 + 4).toBe(true);
+  } finally {
+    Element.prototype.getBoundingClientRect = original;
+    if (offsetDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetDescriptor);
+    else Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+  }
+});
+
+test("the PR link menu closes on scroll only once its link has moved", async () => {
+  await act(() => root.render(null));
+  const original = Element.prototype.getBoundingClientRect;
+  let linkTop = 100;
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    return this.tagName === "A" ? rect(linkTop, 14) : original.call(this);
+  };
+  try {
+    await act(() => root.render(createElement(Markdown, { text: "See PR #1254", prLinks: { repository: "example/project", openExternal: () => {}, openInternal: () => {} } })));
+    await act(() => { host.querySelector(".md a")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    await act(() => { window.dispatchEvent(new Event("scroll")); });
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    linkTop = 120;
+    await act(() => { window.dispatchEvent(new Event("scroll")); });
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+  } finally {
+    Element.prototype.getBoundingClientRect = original;
+  }
+});
+
+test("an explicit PR link of another repository opens like any other, whatever the project's remote is", async () => {
+  const opened: string[] = [];
+  await act(() => root.render(createElement(Markdown, {
+    text: "[other PR](https://github.com/other/repo/pull/8)",
+    prLinks: { repository: "example/project", openExternal: (url: string) => { opened.push(url); }, openInternal: (url: string) => { opened.push(url); } },
+  })));
+  const link = host.querySelector<HTMLAnchorElement>(".md a");
+  expect(link?.getAttribute("href")).toBe("https://github.com/other/repo/pull/8");
+  await act(() => { link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
+  expect(opened).toEqual(["https://github.com/other/repo/pull/8"]);
+});
+
+test("hostile markup beside a PR reference never keeps an event-handler attribute", async () => {
+  await act(() => root.render(createElement(Markdown, {
+    text: "<svg><style><img src=x onerror=alert(1)> PR #1",
+    prLinks: { repository: "example/project", openExternal: () => {} },
+  })));
+  expect(host.querySelector("[onerror]")).toBeNull();
+  const attrs = Array.from(host.querySelectorAll("*")).flatMap((el) => el.getAttributeNames());
+  expect(attrs.some((name) => name.toLowerCase().startsWith("on"))).toBe(false);
+});
+
+test("without a repository only explicit GitHub PR links can open", async () => {
+  const opened: string[] = [];
+  await act(() => root.render(createElement(Markdown, {
+    text: "Bare PR #5. [real PR](https://github.com/owner/repo/pull/6) and [other](https://github.com.example/owner/repo/pull/7).",
+    prLinks: { openExternal: (url: string) => { opened.push(url); } },
+  })));
+  const md = host.querySelector(".md");
+  expect(md?.textContent).toContain("Bare PR #5.");
+  const links = Array.from(md?.querySelectorAll<HTMLAnchorElement>("a") ?? []);
+  expect(links.map((a) => a.textContent)).toEqual(["real PR", "other"]);
+  for (const link of links) {
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(() => { link.dispatchEvent(click); });
+    expect(click.defaultPrevented).toBe(true);
+  }
+  expect(opened).toEqual(["https://github.com/owner/repo/pull/6"]);
+});
+
 test("a rendered code block shows the escape marker and Copy writes the raw text", async () => {
   const raw = "let a = 1;‮ // evil";
   const written: string[] = [];
