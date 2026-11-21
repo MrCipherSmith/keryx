@@ -106,6 +106,7 @@ import {
   type AcpSetSessionConfigOptionResponse,
   type AcpStopReason,
 } from "./protocol";
+import { acceptIssueTurn, answerIssueQuestion, issueContextForSession, issueQuestion, rememberIssueQuestion, settleIssueTurn } from "../integrations/issue-session/service";
 import { renderAcpPrompt } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
 import { SessionMcpGrants } from "./mcp-grants";
@@ -605,6 +606,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const askUserFor = (sessionId: string): AskUserFn => async (request) => {
     const turn = activeTurns.get(sessionId);
     if (turn?.cancelled === true) return ASK_USER_CANCEL;
+    const state = registry.get(sessionId);
+    const bound = state && issueContextForSession(state.handle.dir, options.dataDir);
+    const saved = state && bound?.launch.flow ? rememberIssueQuestion(state.handle.dir, bound, request) : undefined;
+    if (saved?.answer !== undefined && !request.irreversible && !request.untrustedContent) return saved.answer;
     let requestId: string | undefined;
     const outcome = await clientRequests.request(KERYX_ACP_EXTENSION_METHODS.askUser, askUserParams(sessionId, request), (id) => {
       requestId = id;
@@ -623,7 +628,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       options.logError(`acp: ${KERYX_ACP_EXTENSION_METHODS.askUser} went unanswered (${outcome.reason}); the question counts as declined`);
       return ASK_USER_CANCEL;
     }
-    return askUserAnswerFromResult(outcome.result, request);
+    const answer = askUserAnswerFromResult(outcome.result, request);
+    if (state && saved && registry.canPersist(sessionId)) answerIssueQuestion(state.handle.dir, saved, answer);
+    return answer;
   };
 
   const reviewDraftFor = (sessionId: string): RequestReviewDraft => async hints => {
@@ -640,6 +647,24 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (requestId !== undefined) turn.permissionRequestIds.delete(requestId);
     }
   };
+
+  const restoringIssueQuestion = new Set<string>();
+  async function restoreIssueQuestion(state: AcpSessionState): Promise<void> {
+    const { sessionId } = state;
+    if (stopping || activeTurns.has(sessionId) || restoringIssueQuestion.has(sessionId) || !clientAnswersAskUser(state.clientCapabilities)) return;
+    const pending = issueQuestion(state.handle.dir);
+    if (!pending || pending.answer !== undefined || !issueContextForSession(state.handle.dir, options.dataDir)?.launch.flow) return;
+    restoringIssueQuestion.add(sessionId);
+    try {
+      const answer = await askUserFor(sessionId)(pending.request);
+      if (answer === ASK_USER_CANCEL || stopping || !registry.canPersist(sessionId) || activeTurns.has(sessionId)) return;
+      await handleSessionPrompt({ sessionId, prompt: [
+        textBlock("Continue preparing the existing issue Flow using my saved answer. Check existing artifacts before resuming work."),
+        { type: "resource", _meta: { keryx: { untrusted: true } },
+          resource: { uri: "keryx:issue-question/" + pending.id, text: JSON.stringify({ question: pending.request.question, answer }) } },
+      ] });
+    } finally { restoringIssueQuestion.delete(sessionId); }
+  }
 
   /** Token totals per session, for `usage_update`. */
   const sessionUsage = new Map<string, TokenTally>();
@@ -860,6 +885,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const dir = state.handle.dir;
     planDirSessions.set(dir, sessionId);
     onReplied(requestId, () => {
+      void restoreIssueQuestion(state).catch(() => options.logError("acp: Could not resume the pending issue question; reopen the linked session."));
       const title = state.handle.summary.title;
       if (typeof title === "string" && title.length > 0) {
         sendUpdate(sessionId, { sessionUpdate: "session_info_update", title, updatedAt: state.handle.summary.updatedAt });
@@ -2257,7 +2283,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
     }
 
-    const rendered = renderAcpPrompt(promptField);
+    const launchId = (obj["_meta"] as { keryx?: { issueLaunchId?: unknown } } | undefined)?.keryx?.issueLaunchId;
+    const bound = shellProfile ? issueContextForSession(state.handle.dir, options.dataDir) : undefined;
+    const includeSource = bound && (launchId !== undefined || !state.history.some(message => message.role === "user" && !message.injected));
+    const rendered = renderAcpPrompt(includeSource ? [...promptField,
+      { type: "resource", _meta: { keryx: { untrusted: true } },
+        resource: { uri: bound.launch.issue.url, text: `GitHub issue (updated ${bound.updatedAt})\n${bound.body}` } }] : promptField);
     const userLine = rendered.text;
     // The roster, and why it is exactly what it is: `roster.ts`.
     const tools = sessionTools(sessionId, state);
@@ -2322,6 +2353,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // first turn would search an empty catalog. Awaited only AFTER the slot
       // is taken, so the busy guard above still holds while this waits.
       await sessionMcp.get(sessionId)?.mcp.ready;
+      if (launchId !== undefined) {
+        const missing = ["ask_user", "spawn_subagent", "shell_exec", "apply_patch"].filter(name => !toolNames.includes(name));
+        if (typeof launchId !== "string" || !shellProfile || missing.length || sessionReadOnly.get(sessionId))
+          throw new Error(`capability_missing: Issue preparation needs the writable shell coordinator with interactive tools (${missing.join(", ")}).`);
+        if (!acceptIssueTurn(state.handle.dir, bound, launchId, rendered.trustedText)) return { stopReason: "end_turn" };
+      }
       const io = createAcpAgentIo(
         sessionId,
         sendUpdate,
@@ -2431,6 +2468,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         archive: archive.messages,
       });
       registry.updateHandle(sessionId, updatedHandle);
+      if (bound?.launch.flow) settleIssueTurn(state.handle.dir);
       if (shellProfile && updatedHandle.summary.title !== state.handle.summary.title) {
         sendUpdate(sessionId, {
           sessionUpdate: "session_info_update",

@@ -1,3 +1,4 @@
+import { acceptShellIssuePreparation, issueShellSource } from "../integrations/issue-session/service";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
@@ -2752,7 +2753,9 @@ export async function runAgentRepl(
       if (finalizing) return;
       const abort = new AbortController();
       activeAgentAbort = abort;
-      const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+      const issueLine = issueShellSource(slateSession?.dir, operatorLine, history.some(row => row.role === "user" && !row.injected));
+      const flight = runAgentTurn(agentIo, deps, history, issueLine ?? operatorLine, {
+        ...(issueLine ? { untrustedPrompt: true, operatorText: operatorLine } : {}),
         ...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {}),
         recovery: rich.recovery ?? {},
         signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
@@ -3616,7 +3619,7 @@ export interface ShellCliFlags {
  * delivered once in total: a second iterator over the same iterable goes
  * straight to stdin. stdin is not read before the prompt has been handed out.
  */
-export function withInitialLine(initial: string | undefined, rest: AsyncIterator<string>): AsyncIterable<string> {
+export function withInitialLine(initial: string | undefined | (() => string | undefined), rest: AsyncIterator<string>): AsyncIterable<string> {
   if (initial === undefined) return { [Symbol.asyncIterator]: () => rest };
   let sent = false;
   return {
@@ -3624,7 +3627,8 @@ export function withInitialLine(initial: string | undefined, rest: AsyncIterator
       next: async () => {
         if (!sent) {
           sent = true;
-          return { done: false, value: initial };
+          const value = typeof initial === "string" ? initial : initial();
+          if (value !== undefined) return { done: false, value };
         }
         return rest.next();
       },
@@ -3889,6 +3893,7 @@ export function chooseShellSurface(
  * that provider's first detected model.
  */
 export interface ShellCommandRuntime {
+  issuePreparation?: { sessionId: string; launchId: string };
   checkVersion?: () => Promise<VersionCheckResult>;
   cacheDir?: string;
   isTty?: boolean;
@@ -3985,6 +3990,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   const takeInitialPrompt = (): string | undefined => {
     const prompt = pendingInitialPrompt;
     pendingInitialPrompt = undefined;
+    if (prompt !== undefined && runtime.issuePreparation && !acceptShellIssuePreparation(process.cwd(), runtime.issuePreparation, prompt)) return;
     return prompt;
   };
   if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
@@ -4691,9 +4697,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // Flow 481 T7: the positional prompt reaches the REPL alone. The provider/mode pickers read
   // `io.lines` (= `sharedLines`) and the held-session choice reads `lineIterator`, so neither can
   // take the task as a menu answer. `takeInitialPrompt()` is empty if the TUI already submitted it.
-  const readlineInitialPrompt = oneShotPrompt === undefined ? takeInitialPrompt() : undefined;
+  // Issue launches claim their first turn only when the leased REPL consumes its input.
+  const readlineInitialPrompt = oneShotPrompt === undefined && !runtime.issuePreparation ? takeInitialPrompt() : undefined;
   const replLines: AsyncIterable<string> =
-    oneShotPrompt === undefined ? withInitialLine(readlineInitialPrompt, lineIterator) : sharedLines;
+    oneShotPrompt === undefined ? withInitialLine(runtime.issuePreparation ? takeInitialPrompt : readlineInitialPrompt, lineIterator) : sharedLines;
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 

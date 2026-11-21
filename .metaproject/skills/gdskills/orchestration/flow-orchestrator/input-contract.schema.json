@@ -26,6 +26,7 @@
       "type": "string",
       "enum": [
         "init",
+        "prepare-only",
         "execute",
         "complete",
         "resume",

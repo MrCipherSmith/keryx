@@ -11,7 +11,7 @@
   "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
   "status": "in-progress",
   "createdAt": "2026-11-21T20:10:01.247Z",
-  "updatedAt": "2026-11-21T21:09:27.580Z",
+  "updatedAt": "2026-11-21T21:12:22.961Z",
   "source": {
     "type": "description",
     "ref": null
@@ -167,7 +167,7 @@
       "id": "T8",
       "title": "Prepare or adopt an issue Flow with the native orchestrator",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T7"
@@ -184,7 +184,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -244,8 +245,14 @@
         "T9"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T21:12:22.961Z",
+            "outcome": "started",
+            "detail": "Connect native issue actions and verified source navigation."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -440,6 +447,16 @@
       "at": "2026-11-21T21:09:27.580Z",
       "event": "task-done",
       "detail": "T10: Support selected GitHub Project status and explicit moves"
+    },
+    {
+      "at": "2026-11-21T21:12:22.308Z",
+      "event": "task-done",
+      "detail": "T8: Prepare or adopt an issue Flow with the native orchestrator"
+    },
+    {
+      "at": "2026-11-21T21:12:22.961Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — Connect native issue actions and verified source navigation."
     }
   ],
   "acKinds": {

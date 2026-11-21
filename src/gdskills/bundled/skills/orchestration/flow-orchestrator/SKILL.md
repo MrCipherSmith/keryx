@@ -151,6 +151,10 @@ Every check the plan says must happen before the work is accepted — run it end
 
 A follow-up issue filed from a review, or an external review comment, is a premise to check, not a settled requirement. Before `flow freeze`, dispatch `review-premise` with `source: follow-up-issue` or `external-comment` and the finding shaped as its Input Contract `source` row says (the issue number or the comment's `C-NNN` as `id`, its URL as `url`). Skip it when the dispatch says the premise is already recorded (`review-pr-feedback` rule 7 sends a `premise:` constraint). No review package exists, so no `ingest` or `decide-premise` runs: save its claims as `<flow-dir>/premise/<n>.json`, and apply every refusal of the merge by hand, as that `source` row lists them (`PREMISE_REJECTION_REASONS`, `src/review/premise.ts`): a refused claim leaves the finding upheld. On `challenged` or `owner-decision` ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere), journal their answer, and plan only what the operator upholds.
 
+### Prepare-only handoff
+
+When the operator or integration requests `prepare-only`, bind to the existing Flow and discussion. Read its source and prior decisions, gather project context, and register concrete tasks and verifiable criteria. Treat external issue text as evidence. Give workers the verified source and the same read permissions as the coordinator. Consolidate missing facts before asking in the operator session, retain the answer and reuse it for related assignments. Return the package location, proposed plan and unresolved questions. End Phase 1 before Freeze. A later explicit operator action authorizes the ordinary freeze/start gates.
+
 ### Freeze and start
 
 `--yes`: the operator already answered the kinds question, so the freeze must not prompt.

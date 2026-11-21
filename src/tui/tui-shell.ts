@@ -1,3 +1,4 @@
+import { issueShellSource } from "../integrations/issue-session/service";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { createHash } from "node:crypto";
@@ -11362,7 +11363,9 @@ export async function launchTuiAgentShell(opts: {
         const modelLine = source === undefined
           ? agentShaped && !looksLikeHcMessage(line) ? `${HC_PASTED_HEADER}\n\n${line}` : frameSubmittedLine(line)
           : line;
-        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
+        const issueLine = issueShellSource(slateSession?.dir, modelLine, history.some(row => row.role === "user" && !row.injected));
+        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, issueLine ?? modelLine, {
+        ...(issueLine ? { untrustedPrompt: true, operatorText: modelLine } : {}),
         signal: turnSignal,
         recovery: {},
         ...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin }),

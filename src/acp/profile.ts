@@ -151,6 +151,7 @@ export interface KeryxAcpProfileMeta {
   readonly profiles: readonly AcpProfile[];
   readonly extensions: readonly string[];
   readonly liveSessions?: true;
+  readonly issuePreparation?: true;
   readonly minDesktopVersion?: string;
 }
 
@@ -163,7 +164,7 @@ export function keryxAcpProfileMeta(profile: AcpProfile, prepareReview = false):
     profile,
     profiles: [...ACP_PROFILES],
     extensions: [...acpProfileExtensions(profile), ...(profile === "shell" && prepareReview ? [PREPARE_REVIEW_METHOD] : [])],
-    ...(profile === "shell" ? { liveSessions: true as const, minDesktopVersion: MIN_DESKTOP_VERSION } : {}),
+    ...(profile === "shell" ? { liveSessions: true as const, issuePreparation: true as const, minDesktopVersion: MIN_DESKTOP_VERSION } : {}),
   };
 }
 
