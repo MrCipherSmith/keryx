@@ -12,8 +12,8 @@ import { installedRosterRoles } from "./roster";
 import { packageEnabledRoles } from "./role-switches";
 import { operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, type SliceManifest } from "./slice";
-import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
-import { requiredSlices, sliceGraph } from "./waves";
+import { ROLES_RUN_WITHOUT_SLICES, isRoutedManifest } from "./slice-routing";
+import { hasSliceRoleRouting, requiredSlices, sliceGraph } from "./waves";
 import { splitCounts } from "./round-split";
 import { isHostQuestion, type HostQuestion } from "./types";
 
@@ -95,7 +95,7 @@ export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan">
  */
 export function roleDispatchWaves(manifest: SliceManifest, role: string): SliceEntry[][] {
   const ids = requiredSlices(manifest, role);
-  if (ids.length === 0) return isRoutedManifest(manifest) && ROUTABLE_ROLES.has(role) && !ROLES_RUN_WITHOUT_SLICES.has(role) ? [] : [[]];
+  if (ids.length === 0) return isRoutedManifest(manifest) && hasSliceRoleRouting(manifest, role) && !ROLES_RUN_WITHOUT_SLICES.has(role) ? [] : [[]];
   const waves = packWavesByKind(sliceGraph(manifest, role).open(ids, new Set()), waveBytesOf(manifest));
   return waves.length === 0 ? [[]] : waves;
 }

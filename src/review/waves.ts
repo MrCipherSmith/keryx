@@ -2,14 +2,18 @@ import { BUNDLED_PATH_GATES } from "./coverage";
 import type { SliceEntry, SliceManifest } from "./slice";
 import { ROUTABLE_ROLES } from "./slice-routing";
 
+export function hasSliceRoleRouting(manifest: Pick<SliceManifest, "projectRoles">, reviewer: string): boolean {
+  return ROUTABLE_ROLES.has(reviewer) || manifest.projectRoles?.includes(reviewer) === true;
+}
+
 /**
  * Slices a reviewer must have seen: the manifest's original slices it owns. A slice that carries `roles` (slice routing)
- * is owned by those roles; a reviewer routing does not decide for (a project reviewer, `review-pr-contract`) and a slice
- * without `roles` keep the old rule: every slice whose files its path gate matches.
+ * is owned by those roles. Reviewers without recorded routing (including project reviewers from older manifests)
+ * and slices without roles keep the previous path-gate behavior.
  */
-export function requiredSlices(manifest: Pick<SliceManifest, "slices">, reviewer: string): string[] {
+export function requiredSlices(manifest: Pick<SliceManifest, "slices" | "projectRoles">, reviewer: string): string[] {
   const gate = BUNDLED_PATH_GATES[reviewer];
-  const routable = ROUTABLE_ROLES.has(reviewer);
+  const routable = hasSliceRoleRouting(manifest, reviewer);
   return manifest.slices
     // A fix slice of a delta round (flow 458) belongs to exactly its roster, whether or not a role is routable: an author
     // that is a project reviewer reads the slice that answers its finding, and no other project reviewer is owed it.

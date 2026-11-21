@@ -7,6 +7,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isPrBound } from "./complete-head-gate";
 import { readRunProfile } from "./run-profile";
+import { publicProjectReport } from "./report-overlay";
 import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
 import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
@@ -157,7 +158,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (partial && event === "APPROVE") {
     throw new Error(`A partial review cannot approve: ${failing.length} readiness item(s) are failing (${failing.map((item) => item.id).join(", ")}). Use --event COMMENT or REQUEST_CHANGES, or repair the items.`);
   }
-  const report = (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")).trim();
+  const report = publicProjectReport(await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => ""));
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
   const head = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
   const foot = runModeFooter(packageDir);

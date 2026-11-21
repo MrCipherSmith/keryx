@@ -10,7 +10,8 @@ import { isCompiledBinaryEntry } from "../lib/self-invocation";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { revisionOperand } from "../lib/git-revision";
 import { shellQuote } from "../lib/shell-quote";
-import { writeFileAtomic } from "../lib/fs";
+import { isNotFound, writeFileAtomic } from "../lib/fs";
+import { placePathWithinSync, realOrResolved } from "../lib/contained-path";
 import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, type SpawnChild, type RunProgress } from "./autonomous-run";
 import type { ReviewRunUsage } from "./run-usage";
 import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
@@ -28,6 +29,7 @@ import { finishAutoDesktopReview } from "./desk-auto-finalize";
 import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay,
   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, reviewReportDisclosure, scopedFile } from "./desk-review-report";
 import { readRoundNumber } from "./round-record";
+import { mainReviewRoot } from "./report-overlay";
 import { askDesktopOperator } from "./desk-questions";
 import { estimatePlan, planConfirmed, recordPlanConfirmation } from "./plan-confirmation";
 import { DEFAULT_MAX_PASSES } from "./chunks-estimate";
@@ -125,6 +127,46 @@ async function git(cwd: string, args: string[], signal: AbortSignal, githubToken
   }
 }
 
+/** Import workspace-installed review documents, without promoting any file tracked by the reviewed PR. */
+async function installWorkspaceReviewControls(cwd: string, checkout: string, signal: AbortSignal) {
+  const skills = ".metaproject/project-skills";
+  const rules = ".metaproject/rules/project";
+  const roots = [`${skills}/review`, `${skills}/orchestration`, rules];
+  const entrypoints = [".metaproject/index.md", ".metaproject/routing.md", "AGENTS.md", "CLAUDE.md"];
+  const paths = [...roots, ...entrypoints];
+  const trackedFiles = (root: string) => git(root, ["ls-files", "-z", "--", ...paths], signal);
+  const [pinned, main] = await Promise.all([trackedFiles(checkout), mainReviewRoot(cwd)]);
+  for (const workspace of main ? [cwd, main] : [cwd]) {
+    const [staged, committed] = await Promise.all([
+      trackedFiles(workspace),
+      git(workspace, ["ls-tree", "-r", "--name-only", "-z", "HEAD", "--", ...paths], signal),
+    ]);
+    const tracked = new Set([pinned, staged, committed].flatMap(files => files.split("\0")));
+    const candidates = [...entrypoints];
+    for (const root of roots) {
+      const files = await readdir(path.join(workspace, root), { recursive: true, withFileTypes: true })
+        .catch(error => {
+          if (isNotFound(error)) return [];
+          throw error;
+        });
+      for (const file of files) {
+        const relative = path.relative(workspace, path.join(file.parentPath, file.name)).split(path.sep).join("/");
+        if (file.isFile() && relative.startsWith(root + "/") && /^[\w./-]+$/.test(relative) &&
+            /\.(?:md|mdc|json)$/.test(file.name)) candidates.push(relative);
+      }
+    }
+    for (const relative of candidates) {
+      const target = path.join(checkout, relative);
+      if (tracked.has(relative) || existsSync(target)) continue;
+      const source = await scopedFile(workspace, relative, 128 * 1024);
+      const placed = placePathWithinSync(checkout, relative, checkout);
+      if (source === undefined || !placed.ok || placed.path !== path.join(realOrResolved(checkout), relative)) continue;
+      await mkdir(path.dirname(target), { recursive: true });
+      writeFileSync(target, source, { flag: "wx", mode: 0o600 });
+    }
+  }
+}
+
 async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts,
   readRevision: () => Promise<Revision>, githubToken?: string) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
@@ -214,6 +256,7 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   // index only, so a submitted .gitattributes cannot select a checkout filter.
   await run(["update-ref", "--no-deref", "HEAD", headSha]);
   await run(["read-tree", headSha]);
+  await installWorkspaceReviewControls(cwd, checkout, signal);
   return pull;
 }
 
@@ -444,9 +487,11 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
         const context = { ...options.context, ...(options.guidance && { operatorGuidance: options.guidance }) };
         writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(context), { flag: "wx", mode: 0o600 });
       }
-      const { overlay, overlayWarning } = await projectReviewOverlay(options.cwd);
+      const { overlay, overlayWarning } = await projectReviewOverlay(checkout);
       if (options.options?.autoPublish && !overlayWarning) {
-        await writeFileAtomic(path.join(runDir, DESK_TEMPLATE_SELECTION), JSON.stringify(reportTemplateFingerprint(overlay)), { mode: 0o600 });
+        const local = overlay ? {} : await projectReviewOverlay(options.cwd);
+        const selected = overlay ?? (local.overlay?.kind === "wrapper" ? local.overlay : undefined);
+        await writeFileAtomic(path.join(runDir, DESK_TEMPLATE_SELECTION), JSON.stringify(reportTemplateFingerprint(selected)), { mode: 0o600 });
       }
       if (overlay?.kind === "slots") {
         writeFileSync(path.join(checkout, DESK_REPORT_OVERLAY_FILE), overlay.source, { flag: "wx", mode: 0o600 });

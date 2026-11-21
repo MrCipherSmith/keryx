@@ -338,13 +338,12 @@ export function applyOverlapGroups(
   notes: string[] = [],
 ): string[] {
   const kept = new Set(required);
-  const byName = new Map([...inventory.project, ...inventory.bundled].map((reviewer) => [reviewer.name, reviewer] as const));
-  const projectGates = new Map(inventory.project.filter((r) => r.pathsSource !== "none" && r.paths.length > 0).map((r) => [r.name, r.paths.map(globToRegExp)]));
+  const byName = new Map([...inventory.bundled, ...inventory.project].map((reviewer) => [reviewer.name, reviewer] as const));
+  const projectGates = new Map(inventory.project.map(r => [r.name, r.paths.map(globToRegExp)]));
   const gateOf = (name: string): ((file: string) => boolean) | undefined => {
-    const bundled = BUNDLED_PATH_GATES[name];
-    if (bundled !== undefined) return bundled;
     const patterns = projectGates.get(name);
-    return patterns === undefined ? undefined : (file) => patterns.some((p) => p.test(file));
+    if (patterns !== undefined) return patterns.length ? file => patterns.some(pattern => pattern.test(file)) : undefined;
+    return BUNDLED_PATH_GATES[name];
   };
   const covers = (winner: string, loser: string): boolean => {
     const wide = gateOf(winner);
@@ -396,8 +395,9 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
   const stack = await detectProjectStack(root, { files });
   const excluded: RequiredSet["excluded"] = [];
   const roster: string[] = [];
+  const projectNames = new Set(inventory.project.map(reviewer => reviewer.name));
   for (const reviewer of inventory.bundled) {
-    if (!reviewer.name.startsWith("review-") || NOT_ROSTER.has(reviewer.name) || reviewer.engine !== undefined) continue;
+    if (projectNames.has(reviewer.name) || !reviewer.name.startsWith("review-") || NOT_ROSTER.has(reviewer.name) || reviewer.engine !== undefined) continue;
     const content = await readSkill(root, reviewer.path);
     const decision = scopeReviewerByStack(reviewer.name, parseStackRequires(content ? extractStackRequiresField(content) : undefined), stack);
     if (!decision.include) { excluded.push({ reviewer: reviewer.name, reason: `stack: ${decision.reason}` }); continue; }
@@ -405,6 +405,11 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
   }
   const projectGates = new Map<string, RegExp[]>();
   for (const reviewer of inventory.project) {
+    const decision = scopeReviewerByStack(reviewer.name, reviewer.stackRequires, stack);
+    if (!decision.include && !NEVER_SUPERSEDED.has(reviewer.name)) {
+      excluded.push({ reviewer: reviewer.name, reason: `stack: ${decision.reason}` });
+      continue;
+    }
     roster.push(reviewer.name);
     if (reviewer.pathsSource !== "none" && reviewer.paths.length) projectGates.set(reviewer.name, reviewer.paths.map(globToRegExp));
   }
@@ -422,23 +427,26 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
   for (const name of roster) if (switchedOff(name)) excluded.push({ reviewer: name, reason: switches.off.get(name) as string });
   roster.splice(0, roster.length, ...roster.filter((name) => !switchedOff(name)));
   const switchFields = { ...(warnings.length === 0 ? {} : { warnings }), ...(rolesOff.length === 0 ? {} : { rolesOff }) };
-  if (options.depth === "light") {
-    const conventions = lightConventionsReviewer(roster, inventory);
-    const keep = new Set([...LIGHT_FIXED_REVIEWERS, ...(conventions === undefined ? [] : [conventions])]);
-    const light = roster.filter((name) => keep.has(name));
-    for (const name of roster) if (!keep.has(name)) excluded.push({ reviewer: name, reason: "light round: only logic, testing and the stack's conventions reviewer run" });
-    for (const name of [REGRESSION, PR_CONTRACT]) if (inventory.bundled.some((r) => r.name === name)) excluded.push({ reviewer: name, reason: "light round: not part of the light set" });
-    const notes: string[] = [];
-    const kept = applySupersedes(light, inventory, excluded, { root, files }, notes).sort();
-    return { mode, depth: "light", required: kept, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }), ...switchFields };
-  }
   const gated = (name: string): boolean | undefined => {
     if (!filesKnown) return undefined;
-    const bundled = BUNDLED_PATH_GATES[name];
-    if (bundled) return files.some(bundled);
     const patterns = projectGates.get(name);
-    return patterns ? files.some((file) => patterns.some((p) => p.test(file))) : undefined;
+    if (projectNames.has(name) && !NEVER_SUPERSEDED.has(name))
+      return patterns ? files.some(file => patterns.some(pattern => pattern.test(file))) : undefined;
+    const bundled = BUNDLED_PATH_GATES[name];
+    return bundled ? files.some(bundled) : undefined;
   };
+  if (options.depth === "light") {
+    const project = roster.filter(name => projectNames.has(name) && gated(name) !== false);
+    const conventions = lightConventionsReviewer(roster.filter(name => !projectNames.has(name) || gated(name) !== false), inventory);
+    const keep = new Set([...LIGHT_FIXED_REVIEWERS, ...project, ...(conventions === undefined ? [] : [conventions])]);
+    const light = roster.filter(name => keep.has(name));
+    for (const name of roster) if (!keep.has(name)) excluded.push({ reviewer: name, reason: projectGates.has(name)
+      ? "no-matching-paths: no scope-A file matches its path triggers" : "light round: only logic, testing and the stack's conventions reviewer run" });
+    for (const name of [REGRESSION, PR_CONTRACT]) if (inventory.bundled.some(r => r.name === name)) excluded.push({ reviewer: name, reason: "light round: not part of the light set" });
+    const notes: string[] = [];
+    const kept = applyOverlapGroups(applySupersedes(light, inventory, excluded, { root, files }, notes), inventory, files, excluded, { root }, notes).sort();
+    return { mode, depth: "light", required: kept, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }), ...switchFields };
+  }
   let required = roster.filter((name) => {
     if (gated(name) === false) { excluded.push({ reviewer: name, reason: "no-matching-paths: no scope-A file matches its path triggers" }); return false; }
     return true;

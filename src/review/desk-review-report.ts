@@ -1,7 +1,6 @@
-import { lstat, readdir, readFile, realpath } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import path from "node:path";
-import { isNotFound } from "../lib/fs";
+import type { ReportSlots } from "./report-overlay";
+export { applyReviewOverlay, DESK_TEMPLATE_SELECTION, embeddedReportSlots, projectReportSlots, projectReviewOverlay,
+  reportTemplateFingerprint, scopedFile } from "./report-overlay";
 import type { PublicationSettings } from "./desk-publication-types";
 import { parseEmbeddedFindings } from "./managed";
 import type { VerdictFinding } from "./verdict";
@@ -29,120 +28,6 @@ const bold = (value: string) => singleLine(value).replace(/[*_]/g, "\\$&");
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const object = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-const overlayPath = ".metaproject/review-publish-template.md";
-const placeholder = "{{review}}";
-const projectSkills = ".metaproject/project-skills/orchestration";
-const baseTemplate = ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md";
-const slotNames = ["pre-verdict", "after-verdict", "verified-clean", "how-run"] as const;
-type SlotName = typeof slotNames[number];
-type ReportSlots = Partial<Record<SlotName, string>>;
-type ReviewOverlay =
-  | { kind: "wrapper"; source: string; requiresApproval: boolean }
-  | { kind: "slots"; source: string; id: string; names: SlotName[]; requiresApproval: boolean; rereadDiscussion: boolean };
-export const DESK_TEMPLATE_SELECTION = "publication-template.json";
-export function reportTemplateFingerprint(overlay: ReviewOverlay | undefined): string {
-  return createHash("sha256").update(overlay?.source ?? "").digest("hex");
-}
-
-async function templateExists(file: string): Promise<boolean> {
-  try { await lstat(file); return true; }
-  catch (error) { if (!isNotFound(error)) throw error; return false; }
-}
-
-export async function scopedFile(root: string, relative: string, limit: number): Promise<string | undefined> {
-  const target = path.join(root, relative);
-  try {
-    const stat = await lstat(target);
-    if (!stat.isFile() || stat.size > limit || await realpath(target) !== path.join(await realpath(root), relative)) return;
-    return await readFile(target, "utf8");
-  } catch (error) {
-    if (!isNotFound(error)) throw error;
-  }
-}
-
-export async function projectReviewOverlay(cwd: string): Promise<{ overlay?: ReviewOverlay; overlayWarning?: string }> {
-  try {
-    const packages = await readdir(path.join(cwd, projectSkills), { withFileTypes: true }).catch(error => {
-      if (!isNotFound(error)) throw error;
-      return [];
-    });
-    const imported = (await Promise.all(packages.filter(entry => entry.isDirectory()).map(async ({ name }) => {
-      const relative = `${projectSkills}/${name}/templates/report-overlay.md`;
-      const source = await scopedFile(cwd, relative, 32 * 1024);
-      if (source === undefined && !await templateExists(path.join(cwd, relative))) return;
-      return { source, name };
-    }))).filter(entry => entry !== undefined);
-    if (imported.length > 1) return { overlayWarning: "More than one project review overlay is installed." };
-    const entry = imported[0];
-    if (entry) {
-      const yaml = /^```ya?ml\s*\r?\n([\s\S]*?)^\s*```\s*$/m.exec(entry.source ?? "")?.[1];
-      const meta = object(yaml && Bun.YAML.parse(yaml));
-      const source = entry.source;
-      const declared: unknown[] = Array.isArray(meta?.slots) ? meta.slots : [];
-      const names = slotNames.filter(name => declared.includes(name));
-      const headings = [...(source ?? "").matchAll(/^## slot:\s*(\S+)\s*$/gm)].map(match => match[1]);
-      if (!source || meta?.extends !== "review-orchestrator" || meta.overlay !== entry.name || !names.length ||
-          names.length !== declared.length || headings.length !== names.length || names.some(name => headings.filter(heading => heading === name).length !== 1)) {
-        return { overlayWarning: "The project report overlay has invalid Keryx slot declarations." };
-      }
-      const base = await scopedFile(cwd, baseTemplate, 128 * 1024);
-      if (!base || names.some(name => base.split(`<!-- slot:${name} -->`).length !== 2)) {
-        return { overlayWarning: "The base Keryx template does not have the required overlay slots." };
-      }
-      const rules = meta.requires_rules ?? [];
-      if (!Array.isArray(rules) || !(await Promise.all(rules.map(rule =>
-        typeof rule === "string" && /^(?:[\w-]+\/)*[\w.-]+\.mdc$/.test(rule) &&
-        scopedFile(cwd, `.metaproject/rules/project/${rule}`, 128 * 1024)))).every(Boolean)) {
-        return { overlayWarning: "The project report overlay is missing a required project rule." };
-      }
-      return { overlay: { kind: "slots", source, id: entry.name, names,
-        requiresApproval: meta.requires_approval === true || /post only after they approve that body/i.test(source),
-        rereadDiscussion: meta.reread_discussion === true || /re-read the head and the whole thread/i.test(source) } };
-    }
-    const source = await scopedFile(cwd, overlayPath, 8192);
-    if (source?.split(placeholder).length === 2) return { overlay: { kind: "wrapper", source, requiresApproval: false } };
-    return await templateExists(path.join(cwd, overlayPath))
-      ? { overlayWarning: "The project template must be a readable file with one {{review}} placeholder." } : {};
-  } catch {
-    return { overlayWarning: "The project template could not be read. The standard report is available." };
-  }
-}
-
-export function applyReviewOverlay(report: string, overlay: ReviewOverlay | undefined) {
-  return overlay?.kind === "wrapper" ? overlay.source.replace(placeholder, () => report) : report;
-}
-
-export function projectReportSlots(overlay: ReviewOverlay | undefined, report: string | undefined,
-  round: number, verdict: PublicationSettings["verdict"], orchestrated: boolean): ReportSlots {
-  if (overlay?.kind !== "slots") return {};
-  const slots: ReportSlots = {};
-  const block = embeddedReportSlots(report);
-  if (block) {
-    try {
-      const parsed = object(JSON.parse(block));
-      const rendered = parsed?.overlay === overlay.id ? object(parsed.slots) : undefined;
-      for (const name of overlay.names) {
-        const value = text(rendered?.[name]);
-        if (value && value.length <= 8192 && !/<\/?(?:details|summary)\b|<!--/i.test(value)) slots[name] = value;
-      }
-    } catch { /* Older or interrupted runs may not have rendered these optional slots. */ }
-  }
-  if (overlay.id === "vantage-review") {
-    const label = { approve: "Approve", suggestions: "Approve with suggestions", changes: "Request changes", comment: "Comment only" }[verdict];
-    slots["after-verdict"] = [
-      `**Round ${round} of 3** · ${round === 1 ? "First review" : "Follow-up review"} · ${label}.`,
-      round === 3 && "Third round — a fourth means the PR is mis-scoped (split, pair, or back to design).",
-      slots["after-verdict"],
-    ].filter(Boolean).join("\n\n");
-    if (orchestrated) slots["how-run"] = ['- **Orchestrator:** `review-orchestrator` by Keryx.', slots["how-run"]].filter(Boolean).join("\n");
-  }
-  return slots;
-}
-
-export function embeddedReportSlots(report?: string) {
-  return /^```json[ \t]+keryx:report-slots[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/m.exec(report ?? "")?.[1];
-}
-
 export function reportFindingMetadata(report: string | undefined) {
   const entries = new Map<string, Record<string, unknown>>();
   if (!report) return entries;
@@ -248,7 +133,7 @@ export function renderDeskReviewReport(input: Revision & {
     input.omittedCount ? `${input.omittedCount} finding(s) without an inline location omitted from this review.` : "",
     preexisting.length && reviewReportDisclosure("Pre-existing (not blocking)", format(preexisting)),
     scope.length && reviewReportDisclosure("Scope", format(scope)),
-    input.slots?.["verified-clean"] && reviewReportDisclosure("Verified clean", input.slots["verified-clean"]),
+    input.slots?.["verified-clean"] && reviewReportDisclosure(input.slots["verified-clean"].startsWith("### Vantage mandatory checks") ? "Verification" : "Verified clean", input.slots["verified-clean"]),
     reviewReportDisclosure("How this review was run", [input.howRun, input.slots?.["how-run"]].filter(Boolean).join("\n\n")),
   ].filter(Boolean).join("\n\n");
 }
