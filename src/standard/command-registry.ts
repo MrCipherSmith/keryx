@@ -74,6 +74,18 @@ export interface CommandDescriptor {
  * `(module, command)` so output is deterministic regardless of insertion order.
  */
 export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
+  {
+    module: "integrations",
+    command: "issues list",
+    summary: "Read one page of GitHub issues for a connected account.",
+    intent: ["мои тикеты GitHub", "list my GitHub issues"],
+    args: [
+      {name: "login", type: "string", required: true, desc: "connected GitHub account"},
+      {name: "request", type: "string", required: true, desc: "JSON object with source, state, filters and optional cursor"},
+    ],
+    json: true,
+    read: true,
+  },
   // ---- gdgraph ----------------------------------------------------------
   {
     module: "gdgraph",

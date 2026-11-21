@@ -21,3 +21,5 @@
 - 2026-11-21T20:59:54.623Z - task-done: T5: Define issue identity, viewer scope and launch contracts
 - 2026-11-21T20:59:55.288Z - task-attempt: T6: started (attempt 1) — Account-scoped GitHub issue reader and CLI.
 - 2026-11-21T20:59:55.771Z - task-attempt: T7: started (attempt 1) — Resolve the checkout and durable session identity.
+- 2026-11-21T21:03:49.691Z - task-done: T6: Implement account-scoped issue listing, detail and sync
+- 2026-11-21T21:03:50.308Z - task-attempt: T9: started (attempt 1) — Desktop board, list and resizable issue detail

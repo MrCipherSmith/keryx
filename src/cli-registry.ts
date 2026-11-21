@@ -125,6 +125,7 @@ export const VERSION = packageJson.version;
  * the failure that actually happened twice, not every possible one.
  */
 export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void> = {
+  issues: (rest) => import("./commands/issues").then((mod) => mod.issuesCommand(rest)),
   init: initCommand,
   hub: hubCommand,
   // Flow 303 (AC10): grouped command help by task. `--help`/`-h`/bare `keryx`
@@ -265,6 +266,7 @@ export function groupsWithKnownSubcommands(): readonly string[] {
  * actually read.
  */
 export const USAGE_BODY = `Usage:
+  keryx issues <list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json
   keryx hub <serve|connect|import|sync|submit|pull|fetch> Team Hub prototype (--help for arguments)
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)

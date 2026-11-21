@@ -1,0 +1,135 @@
+import { expect, test } from "bun:test";
+import { issueComments, issueDetail, listIssuePage } from "./issues-board";
+import { authenticatedAccount, IssueGithub, type FetchIssues } from "./issues-github";
+import { issueKey, type IssueRef } from "./issues-contract";
+
+function json(value: unknown, init?: ResponseInit) {
+  return Response.json(value, init);
+}
+function row(repo: string, node: string) {
+  return {
+    node_id: node,
+    html_url: `https://github.com/org/${repo}/issues/8`,
+    number: 8,
+    title: "Equal issue numbers",
+    state: "open",
+    user: { login: "owner" },
+    assignees: [],
+    labels: ["bug"],
+    created_at: "2026-01-01",
+    updated_at: "2026-01-02",
+    repository: { node_id: "R_" + repo, name: repo, owner: { login: "org" } },
+  };
+}
+const ref: IssueRef = {
+  host: "github.com",
+  nodeId: "I_a",
+  repositoryId: "R_a",
+  owner: "org",
+  repo: "a",
+  number: 8,
+  url: "https://github.com/org/a/issues/8",
+};
+const graphIssue = {
+  __typename: "Issue",
+  id: ref.nodeId,
+  number: ref.number,
+  repository: { id: ref.repositoryId, name: "a", owner: { login: "org" } },
+  url: ref.url,
+  title: "Example",
+  state: "OPEN",
+  createdAt: "2026-01-01",
+  updatedAt: "2026-01-02",
+  author: null,
+  assignees: { nodes: [] },
+  labels: { nodes: [] },
+  body: "",
+  stateReason: null,
+};
+
+async function account(fetcher: FetchIssues) {
+  const api = new IssueGithub("test-selected", async (url, options) => {
+    expect(url.origin).toBe("https://api.github.com");
+    expect(new Headers(options.headers).get("authorization")).toBe("Bearer test-selected");
+    expect(options.redirect).toBe("error");
+    return url.pathname === "/user" ? json({ login: "viewer", node_id: "U_v" }) : fetcher(url, options);
+  });
+  return authenticatedAccount("viewer", api);
+}
+
+test("AC1 all four account sources preserve repository identities and exclude pull requests", async () => {
+  const filters: string[] = [];
+  const auth = await account(async (url) => {
+    filters.push(url.searchParams.get("filter")!);
+    return json([row("one", "I_1"), row("two", "I_2"), { ...row("three", "P_3"), pull_request: {} }]);
+  });
+  for (const source of ["assigned", "created", "mentioned", "subscribed"] as const) {
+    const page = await listIssuePage(auth, { source });
+    expect(page.viewer.nodeId).toBe("U_v");
+    expect(page.items.map((i) => [i.ref.repo, i.ref.number])).toEqual([
+      ["one", 8],
+      ["two", 8],
+    ]);
+    expect(new Set(page.items.map((i) => issueKey(i.ref))).size).toBe(2);
+  }
+  expect(filters).toEqual(["assigned", "created", "mentioned", "subscribed"]);
+});
+
+test("AC2 three pages load on demand with query-bound continuations and no discussion requests", async () => {
+  const paths: string[] = [];
+  const auth = await account(async (url) => {
+    paths.push(url.pathname);
+    const n = Number(url.searchParams.get("page") ?? 1);
+    expect(url.searchParams.get("since")).toBe("2026-01-01T00:00:00.000Z");
+    return json(
+      [row("a", "I_" + n), row("a", "I_" + n)],
+      n < 3 ? { headers: { link: `<https://api.github.com/issues?page=${n + 1}>; rel="next"` } } : {},
+    );
+  });
+  const request = { source: "created", updatedSince: "2026-01-01", sort: "asc" } as const;
+  let cursor: string | null = null;
+  for (let n = 1; n <= 3; n++) {
+    const page = await listIssuePage(auth, { ...request, cursor });
+    expect(page.items.map((i) => i.ref.nodeId)).toEqual(["I_" + n]);
+    expect(paths).toHaveLength(n);
+    cursor = page.nextCursor;
+    if (n === 1)
+      await expect(listIssuePage(auth, { ...request, sort: "desc", cursor })).rejects.toThrow("Refresh");
+  }
+  expect(cursor).toBeNull();
+  expect(paths).toEqual(["/issues", "/issues", "/issues"]);
+});
+
+test("AC3 denied, offline, empty and rate limited requests are distinguishable", async () => {
+  for (const [status, kind] of [
+    [403, "access:"],
+    [404, "access:"],
+    [429, "rate-limit:"],
+  ] as const) {
+    const auth = await account(async () => new Response("", { status }));
+    await expect(listIssuePage(auth, { source: "assigned" })).rejects.toThrow(kind);
+  }
+  const offline = await account(async () => {
+    throw new TypeError("offline");
+  });
+  await expect(listIssuePage(offline, { source: "assigned" })).rejects.toThrow("offline:");
+  const empty = await listIssuePage(await account(async () => json([])), { source: "assigned" });
+  expect(empty.items).toEqual([]);
+  expect(empty.nextCursor).toBeNull();
+});
+
+test("AC6 authenticated empty descriptions are distinct from access errors and untrusted link destinations", async () => {
+  const auth = await account(async (url, opts) => {
+    if (url.pathname === "/issues")
+      return json([], { headers: { link: '<https://invalid.example/issues?page=2>; rel="next"' } });
+    const payload = JSON.parse(String(opts.body));
+    expect(payload.variables.id).toBe(ref.nodeId);
+    return json({ data: { node: graphIssue } });
+  });
+  expect((await issueDetail(auth, ref)).issue.body).toBe("");
+  await expect(issueDetail(auth, { ...ref, repositoryId: "other" })).rejects.toThrow("access:");
+  await expect(listIssuePage(auth, { source: "assigned" })).rejects.toThrow("configuration:");
+  await expect(issueComments(auth, { ...ref, url: "file:///private/demo" })).rejects.toThrow("configuration:");
+  const badAccount = new IssueGithub("test-other", async () => json({ login: "other", node_id: "U_other" }));
+  await expect(authenticatedAccount("viewer", badAccount)).rejects.toThrow("access:");
+});

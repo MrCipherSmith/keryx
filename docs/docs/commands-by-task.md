@@ -94,6 +94,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 
 | CLI command | Summary |
 |---|---|
+| `keryx issues` | Browse GitHub issues and projects, open linked sessions and prepare issue flows. |
 | `keryx flow` | Agent-first flow lifecycle (Task Manager). |
 | `keryx job` | Agent-first job packages (job-orchestrator state, steps, documents). |
 | `keryx review` | Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands. |
