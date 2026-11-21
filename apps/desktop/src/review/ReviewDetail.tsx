@@ -3,7 +3,7 @@ import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
 import { Sheet, Spinner } from "../components/ui";
 import { absoluteTime, errMessage, relativeTime } from "../lib/format";
-import type { FlowCard } from "../platform/commands";
+import { openExternal, openPullRequest, type FlowCard } from "../platform/commands";
 import { reviewRun } from "../platform/reviewRuns";
 import { PullRequestAutomation } from "./PullRequestAutomation";
 import type { reviewRules } from "../platform/reviewRules";
@@ -18,8 +18,7 @@ import type { ReviewDetailSnapshot, ReviewMessage } from "./ReviewDetailTypes";
 import type { ReviewCard } from "./types";
 import { markRepliesRead, readReplies, subscribeReviewReads } from "./reviewReadState";
 import { DiscussionMarkdown } from "./DiscussionMarkdown";
-import { browserOpen } from "../platform/panels";
-import { setPrefs } from "../lib/prefs";
+import { githubPrUrl } from "../lib/githubPr";
 import { ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
 import { ReviewChecks } from "./ReviewChecks";
 import { ReviewLaunchDialog, type ReviewLaunchModel } from "./ReviewLaunchDialog";
@@ -41,7 +40,8 @@ interface Props {
   onClose: () => void;
   onAccessLost?: (reason: string) => void;
   load?: typeof fetchReviewDetail;
-  openBrowser?: typeof browserOpen;
+  openBrowser?: typeof openExternal;
+  onOpenSession?: (() => void) | undefined;
   runCommand?: typeof reviewRun;
   publishCommand?: typeof reviewPublish;
   onRunSnapshot?: RunObserver;
@@ -116,7 +116,7 @@ export function ReviewDetail(props: Props) {
   return <ReviewDetailSheet key={JSON.stringify([props.cwd, props.repo, props.repositoryId, props.viewer, props.card.number])} {...props} />;
 }
 
-function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser = browserOpen, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
+function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser, onOpenSession, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
   const toast = useToast();
   const openingLink = useRef(false);
   const mounted = useRef(false);
@@ -133,13 +133,9 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
     const url = reviewUrl(link.getAttribute("href"));
     if (!url || openingLink.current) return;
     openingLink.current = true;
-    void openBrowser(cwd, url).then(() => {
-      // WebKit hides child views under modal sheets. Reveal the tab once it exists.
-      if (!mounted.current) return;
-      setPrefs({ sidePanel: "browser" });
-      onClose();
-    }).catch(cause => {
-      if (mounted.current) toast({ level: "error", title: "Could not open the project browser", detail: errMessage(cause) });
+    const open = openBrowser ?? (githubPrUrl(url) ? openPullRequest : openExternal);
+    void open(url).catch(cause => {
+      if (mounted.current) toast({ level: "error", title: "Could not open link", detail: errMessage(cause) });
     }).finally(() => { openingLink.current = false; });
   }
   const [data, setData] = useState<ReviewDetailSnapshot | null>(null);
@@ -247,6 +243,8 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
         <div className="review-action-row">
           <button className="btn review-icon-action" type="button" disabled={busy} aria-label="Refresh details"
             title="Refresh details" onClick={() => setRefresh(n => n + 1)}><Icon name="refresh" /></button>
+          {onOpenSession && <button className="btn review-icon-action" type="button" aria-label="Open in Sessions"
+            title="Open in Sessions" onClick={onOpenSession}><Icon name="chat" /></button>}
           <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request"><Icon name="external" /></ReviewBrowserLink>
         </div>
       </div>

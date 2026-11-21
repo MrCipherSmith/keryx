@@ -33,6 +33,7 @@ interface Props {
   flows: FlowCard[];
   reviewModels?: readonly ReviewLaunchModel[];
   onOpenFlow: (dir: string) => void;
+  onOpenSession?: ((card: ReviewCard) => void) | undefined;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
@@ -65,7 +66,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, onOpenFlow, onOpenSession, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -345,9 +346,9 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
 
-  return <section className="flows review-board" hidden={!tabActive} aria-label="Review">
+  return <section className="flows review-board" hidden={!tabActive} aria-label="Pull requests">
     <div className="flows-toolbar">
-      <div className="flows-heading"><h1>Review</h1>{snapshot && <span className="count-label">
+      <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
         {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
       </span>}</div>
       <label className="search-field"><Icon name="search" size={14} />
@@ -407,7 +408,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} /> :
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
@@ -417,7 +418,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
-      reviewModels={reviewModels}
+      reviewModels={reviewModels} onOpenSession={onOpenSession && (() => onOpenSession(card))}
       projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </section>;

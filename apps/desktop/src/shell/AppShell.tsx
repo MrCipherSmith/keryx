@@ -18,7 +18,7 @@ export type View = "session" | "flows" | "review" | "settings";
 export const PROJECT_VIEWS = [
   { id: "session", label: "Sessions", icon: "chat", shortcut: `${MOD}1` },
   { id: "flows", label: "Flows", icon: "board", shortcut: `${MOD}2` },
-  { id: "review", label: "Review", icon: "pr", shortcut: `${MOD}3` },
+  { id: "review", label: "Pull requests", icon: "pr", shortcut: `${MOD}3` },
 ] as const;
 
 /**

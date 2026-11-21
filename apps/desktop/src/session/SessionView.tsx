@@ -24,7 +24,7 @@ import { textWithLineComments, type LineComment } from "./lineComments";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { userPromptContext, type UserPromptContext } from "./userPrompt";
 import { findCommand } from "../acp/commands";
-import { commitChatAttachments, discardChatAttachment, gitRepository, openExternal, pickFolder, projectFiles, saveChatFile, saveChatImage } from "../platform/commands";
+import { commitChatAttachments, discardChatAttachment, gitRepository, openPullRequest, pickFolder, projectFiles, saveChatFile, saveChatImage } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { browserOpen } from "../platform/panels";
 import type { PrLinks } from "../components/prLinks";
@@ -180,7 +180,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   useEffect(() => lookupWithRetry(() => gitRepository(cwd), (name) => setRepo({ cwd, name })), [cwd]);
   const prLinks = useMemo<PrLinks>(() => ({
     repository: repo?.cwd === cwd ? repo.name ?? undefined : undefined,
-    openExternal: (url) => void openExternal(url).catch((e) =>
+    openExternal: (url) => void openPullRequest(url).catch((e) =>
       toast({ level: "error", title: "Could not open pull request", body: errMessage(e) })),
     openInternal: isTauri() ? (url) => void browserOpen(cwd, url).then(
       () => setPrefs({ sidePanel: "browser" }),

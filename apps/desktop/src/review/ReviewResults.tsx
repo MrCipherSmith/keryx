@@ -1,5 +1,9 @@
 import { memo, useState } from "react";
 import { CardReviewProgress } from "./ReviewProgress";
+import { openPullRequest } from "../platform/commands";
+import { useToast } from "../components/Toasts";
+import { errMessage } from "../lib/format";
+import { reviewUrl } from "./ReviewBrowserLink";
 import { Icon } from "../components/Icon";
 import { absoluteTime, relativeTime } from "../lib/format";
 import { CI_LABEL, DECISION_LABEL, LANES, STATE_LABEL, laneReason, prState, reviewLane, type Lane } from "./model";
@@ -8,6 +12,7 @@ import type { ReviewCard } from "./types";
 interface ReviewActions {
   onOpen: (number: number) => void;
   onReview: (card: ReviewCard) => void;
+  onOpenSession?: (card: ReviewCard) => void;
 }
 
 function ReviewTags({ card }: { card: ReviewCard }) {
@@ -20,16 +25,30 @@ function ReviewTags({ card }: { card: ReviewCard }) {
   </span>;
 }
 
-function ReviewAction({ card, onReview }: Pick<ReviewActions, "onReview"> & { card: ReviewCard }) {
-  if (card.state !== "open" && !card.localReview?.runState) return null;
+function ReviewAction({ card, onReview, onOpenSession }: Omit<ReviewActions, "onOpen"> & { card: ReviewCard }) {
+  const toast = useToast();
+  const href = reviewUrl(card.url);
+  const showReview = card.state === "open" || card.localReview?.runState;
   const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
     card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
     card.localReview?.runState ? "View review result" : "Run review";
-  return <button type="button" className="btn btn-sm review-row-action" aria-label={`${label} for #${card.number}`}
-    onClick={() => onReview(card)}>{label}</button>;
+  const browserLabel = `Open PR #${card.number} in browser`;
+  const sessionLabel = `Open PR #${card.number} in Sessions`;
+  return <div className="card-actions">
+    {showReview && <button type="button" className="icon-btn" title={label} aria-label={`${label} for #${card.number}`}
+      onClick={() => onReview(card)}><Icon name={card.localReview?.runState ? "checklist" : "play"} size={15} /></button>}
+    {onOpenSession && <button type="button" className="icon-btn" aria-label={sessionLabel} title={sessionLabel} onClick={() => onOpenSession(card)}>
+      <Icon name="chat" size={15} />
+    </button>}
+    {href && <a className="icon-btn" href={href} rel="noreferrer" title={browserLabel} aria-label={browserLabel}
+      onClick={event => {
+        event.preventDefault();
+        void openPullRequest(href).catch(error => toast({ level: "error", title: "Could not open pull request", body: errMessage(error) }));
+      }}><Icon name="external" size={15} /></a>}
+  </div>;
 }
 
-function ReviewTile({ card, onOpen, onReview }: ReviewActions & { card: ReviewCard }) {
+function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: ReviewCard }) {
   const reason = laneReason(card);
   return <article className="flow-card">
     <button className="review-card" onClick={() => onOpen(card.number)}>
@@ -48,7 +67,7 @@ function ReviewTile({ card, onOpen, onReview }: ReviewActions & { card: ReviewCa
       {card.assignees.length > 0 && <span className="review-request">Assigned to {card.assignees.join(", ")}</span>}
       {card.reviewers.length > 0 && <span className="review-request">Requested from {card.reviewers.join(", ")}</span>}
     </button>
-    <ReviewAction card={card} onReview={onReview} />
+    <ReviewAction card={card} {...actions} />
   </article>;
 }
 
@@ -64,22 +83,22 @@ function ReviewLane({ lane, cards, ...actions }: ReviewActions & { lane: Lane; c
   </section>;
 }
 
-export const ReviewResults = memo(function ReviewResults({ cards, view, onOpen, onReview }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list" }) {
+export const ReviewResults = memo(function ReviewResults({ cards, view, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list" }) {
   const [limit, setLimit] = useState(150);
   if (view === "board") {
     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
     for (const card of cards) lanes[reviewLane(card)].push(card);
     return <div className="board review-lanes">{(Object.keys(LANES) as Lane[]).map((lane) =>
-      <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} onReview={onReview} />)}</div>;
+      <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
   }
   return <div className="flow-list-wrap">
     <table className="flow-list review-table"><thead><tr>
-      <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Review</th>
+      <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
     </tr></thead><tbody>{cards.slice(0, limit).map((c) => <tr key={c.number}>
       <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
       <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={laneReason(c)}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{laneReason(c)}</span>
         <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
-      <td><ReviewAction card={c} onReview={onReview} /></td>
+      <td><ReviewAction card={c} {...actions} /></td>
     </tr>)}</tbody></table>
     {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({cards.length - limit})</button>}
   </div>;
