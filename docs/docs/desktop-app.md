@@ -26,7 +26,9 @@ Subagents use the requested tier and default to Middle. Review orchestrator
 launches use the saved tier lists when the run does not supply its own
 models. The coordinator still follows the selected session model or a
 trusted project override. Existing personal model assignments are offered
-in the dialog as starting values when no class is configured.
+in the dialog as starting values when no class is configured. Existing personal
+routing overrides keep their priority unless you select **Replace previous
+personal routing overrides with these tiers** when saving.
 
 ## Set up GitHub for a project
 

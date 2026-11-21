@@ -117,15 +117,21 @@ describe("/routing", () => {
     const read = async (): Promise<TierSettingsSnapshot> => JSON.parse((await run(host, "routing", "tiers")).text);
     const { revision } = await read();
     const models = [{ provider: "openrouter", model: "vendor/one" }, { provider: "openai", model: "two" }];
-    const save = `tiers ${revision} ${JSON.stringify({ strong: [], middle: models, light: [] }, null, 1)}`;
+    const modelPools = { strong: [], middle: models, light: [] };
+    const save = `tiers ${revision} ${JSON.stringify({ modelPools, replaceOverrides: false }, null, 1)}`;
     expect((await run(host, "routing", save)).refused).toBeUndefined();
     expect((await read()).tiers.find(row => row.tier === "middle")?.user).toEqual([
       { providerId: "openrouter", modelId: "vendor/one" }, { providerId: "openai", modelId: "two" },
     ]);
     const config = loadRouting(host.cwd, host.configDir);
-    expect(config.categories.subagents).toEqual({ mode: "auto" });
+    expect(config.categories.subagents).toEqual({ mode: "baseline" });
     expect(config.classes.standard.candidates.map(candidate => candidate.target.modelId)).toEqual(["vendor/one", "two"]);
     expect(await run(host, "routing", save)).toMatchObject({ refused: true, text: expect.stringContaining("revision conflict") });
+    const old = await read();
+    expect(old.personalOverrides).toBe(true);
+    expect((await run(host, "routing", `tiers ${old.revision} ${JSON.stringify({ modelPools, replaceOverrides: true })}`)).refused).toBeUndefined();
+    expect((await read()).personalOverrides).toBe(false);
+    expect(loadRouting(host.cwd, host.configDir).categories.subagents).toEqual({ mode: "auto" });
   });
 
   test("one row per category with its source, a set action, and a form for a model pick", async () => {

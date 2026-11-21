@@ -104,9 +104,11 @@ function assignmentFor(request: RoutingRequest, config: NormalizedRoutingConfig)
   if (config.tierRouting && source === "builtin" &&
       (request.recommendation !== undefined || config.classifier.chain.length === 0)) {
     const suggested = request.recommendation?.modelClass;
-    const modelClass = suggested === "frontier" ? "expert" : suggested ??
+    const modelClass = suggested === "frontier" && !config.classes.frontier.candidates.some(candidate => candidate.enabled)
+      ? "expert" : suggested ??
       (request.category === "quick" ? "light" : request.category === "planning" ? "expert" : "standard");
-    const hasCandidates = config.classes[modelClass].candidates.some(candidate => candidate.enabled);
+    const { candidates, fallbackClasses } = config.classes[modelClass];
+    const hasCandidates = candidates.some(candidate => candidate.enabled) || fallbackClasses.length > 0;
     return {
       assignment: hasCandidates ? { mode: "class", modelClass } : { mode: "baseline" },
       source,

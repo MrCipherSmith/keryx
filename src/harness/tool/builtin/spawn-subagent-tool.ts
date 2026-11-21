@@ -1513,17 +1513,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // Inner paths retain ownership of reservation/slate cleanup.
       try {
       const parent = deps.getParentModel();
-      if (!isExternalRuntimeRequest) await deps.refreshRoutingProviders?.();
-      const detected = deps.getDetectedProviders();
       const session = { providerId: parent.providerId, modelId: parent.modelId };
-      // The candidate set for tier resolution: whatever runtime detection
-      // reported, passed through verbatim. No table of model ids exists on this
-      // path — a provider that reported no models simply contributes none, and
-      // its tiers resolve to the session model.
-      const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map((p) => ({
-        ...p,
-        models: p.models ?? [],
-      }));
       let routingConfig: ReturnType<typeof loadRouting>;
       try {
         routingConfig = loadRouting(deps.routingProjectRoot ?? deps.cwd, deps.routingConfigDir);
@@ -1598,6 +1588,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           isError: true,
         };
       }
+
+      const maySwitchModel = deskOverride !== undefined || assignment.mode !== "baseline" || assignment.fallbackClass !== undefined;
+      if (!isExternalRuntimeRequest && maySwitchModel) await deps.refreshRoutingProviders?.();
+      const detected = deps.getDetectedProviders();
+      const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map(p => ({ ...p, models: p.models ?? [] }));
 
       // The relative tier is never translated into an absolute class; an agent
       // class is a recommendation only and cannot populate RoutingRequest.userOverride.

@@ -1,4 +1,3 @@
-import type { FlatPickerProvider } from "../harness/routing/table";
 // The ACP agent server loop (flow 285, T7/T8): wires the framer + dispatcher
 // + keryx session/turn handlers over one stdio connection.
 //
@@ -144,6 +143,8 @@ import {
 } from "./profile";
 import { buildAcpShellSessionTools, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
 import type { ShellConfirmAction, ShellView } from "./shell-views";
+import type { FlatPickerProvider } from "../harness/routing/table";
+import { ROUTING_AVAILABILITY_TTL_MS } from "../harness/routing/snapshot-adapter";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
@@ -1756,12 +1757,22 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   let routingProviders: readonly FlatPickerProvider[] = [];
   let routingRefresh: Promise<void> | undefined;
   let routingRefreshNeeded = false;
+  let routingRefreshFinishedAt: number | undefined;
   function refreshRoutingProviders(): Promise<void> {
     const load = options.routingProviders;
     if (!load) return Promise.resolve();
     if (routingRefresh) {
       return routingRefreshNeeded ? routingRefresh.then(refreshRoutingProviders) : routingRefresh;
     }
+    const now = Date.now();
+    const retryAge = routingRefreshFinishedAt === undefined ? Infinity : now - routingRefreshFinishedAt;
+    if (!routingRefreshNeeded && (
+      (retryAge >= 0 && retryAge < 10_000) ||
+      (routingProviders.length > 0 && routingProviders.every(provider => {
+        const age = now - Date.parse(provider.observedAt ?? "");
+        return age >= 0 && age < ROUTING_AVAILABILITY_TTL_MS;
+      }))
+    )) return Promise.resolve();
     const force = routingRefreshNeeded;
     routingRefreshNeeded = false;
     return routingRefresh = Promise.resolve().then(() => load(force)).then(providers => {
@@ -1769,7 +1780,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }, () => {
       routingProviders = [];
       options.logError("acp: could not refresh the provider catalogue for model routing");
-    }).finally(() => { routingRefresh = undefined; });
+    }).finally(() => {
+      routingRefreshFinishedAt = Date.now();
+      routingRefresh = undefined;
+    });
   }
 
   /** Each session's MCP trust grants (`trustedMcpTools`), never persisted; dropped with the session. */

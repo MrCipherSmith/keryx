@@ -36,6 +36,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
   const [pools, setPools] = useState<Pools>(emptyPools);
   const [open, setOpen] = useState<DeskReviewPool>();
   const [error, setError] = useState("");
+  const [replaceOverrides, setReplaceOverrides] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reload, setReload] = useState(0);
   const savingRef = useRef(false);
@@ -46,6 +47,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
     active.current = true;
     setSettings(undefined);
     setOpen(undefined);
+    setReplaceOverrides(false);
     setError("");
     void routingRequest(rpc, sessionId, "tiers").then(text => {
       let snapshot: TierSettingsSnapshot;
@@ -70,7 +72,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
     setSaving(true);
     setError("");
     try {
-      await routingRequest(rpc, sessionId, `tiers ${settings.revision} ${JSON.stringify(pools)}`);
+      await routingRequest(rpc, sessionId, `tiers ${settings.revision} ${JSON.stringify({ modelPools: pools, replaceOverrides })}`);
       if (active.current) onClose();
     } catch (reason) {
       if (active.current) setError(errMessage(reason));
@@ -90,6 +92,11 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
       <div className="review-launch-body">
         {settings ? <>
           <p className="field-hint">These are your defaults across projects. Add models in preference order. Empty tiers use the session model.</p>
+          {settings.personalOverrides && <label className="review-launch-adaptive">
+            <input type="checkbox" checked={replaceOverrides} disabled={saving}
+              onChange={event => setReplaceOverrides(event.currentTarget.checked)} />
+            Replace previous personal routing overrides with these tiers
+          </label>}
           {settings.projectOverrides && <p className="field-hint">This project has approved routing settings. Project overrides take precedence.</p>}
           {settings.notices.map(notice => <p className="field-hint" key={notice}>{notice}</p>)}
           {!available.size && <p className="field-hint">Connect a provider in Keryx to add models.</p>}

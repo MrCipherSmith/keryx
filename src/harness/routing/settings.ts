@@ -202,12 +202,10 @@ export async function setRoutingCategory(
   category: RoutingCategory,
   assignment: RoutingAssignment,
 ): Promise<void> {
-  await writeScope(scope, location, new Set([category]), (base) => {
-    if (scope === "user" && base.tierRouting) {
-      throw new Error("Personal routing uses model tiers. Edit the tiers in Keryx Desktop or use a project routing override.");
-    }
-    return { ...base, categories: { ...(base.categories ?? {}), [category]: assignment } };
-  });
+  await writeScope(scope, location, new Set([category]), (base) => ({
+    ...base,
+    categories: { ...(base.categories ?? {}), [category]: assignment },
+  }));
 }
 
 /** Clear one category in a scope; it falls through to the next layer, then the baseline. */

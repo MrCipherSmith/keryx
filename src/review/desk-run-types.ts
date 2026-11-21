@@ -122,6 +122,8 @@ export interface DeskRun extends DeskRevision {
   source: "manual" | "scheduled" | "existing";
   schedule?: DeskSchedule;
   options?: DeskReviewOptions;
+  /** Effective options used to produce this run’s evidence. */
+  effectiveOptionsKey?: string;
   /** Counts automatic dispatches of this range, including confirmed pre-spend failures. */
   preflightAttempt?: number;
   usage?: ReviewRunUsage;

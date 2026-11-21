@@ -65,7 +65,7 @@ export async function resolveDeskReviewModel(cwd: string, configDir?: string, en
 export function resolveDeskReviewOptions(cwd: string, options?: DeskReviewOptions): DeskReviewOptions | undefined {
   if (options?.orchestrator === false) return options;
   const routing = loadRouting(cwd);
-  if (!routing.tierRouting || routing.categorySources.review === "project") return options;
+  if (!routing.tierRouting || routing.categorySources.review !== "builtin") return options;
   const modelPools: DeskReviewOptions["modelPools"] = { strong: [], middle: [], light: [] };
   for (const tier of DESK_REVIEW_POOLS) {
     const configured = routing.classes[ROUTING_TIERS[tier]].candidates;

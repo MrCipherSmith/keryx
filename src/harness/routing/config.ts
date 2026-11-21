@@ -433,7 +433,7 @@ export function normalizeRoutingConfig(layers: RoutingConfigLayers, options: Rou
     if (layers.project?.categories?.[category] !== undefined) {
       categories[category] = copyAssignment(layers.project.categories[category]);
       categorySources[category] = "project";
-    } else if (!tierRouting && layers.user?.categories?.[category] !== undefined) {
+    } else if (layers.user?.categories?.[category] !== undefined) {
       categories[category] = copyAssignment(layers.user.categories[category]);
       categorySources[category] = "user";
     } else {

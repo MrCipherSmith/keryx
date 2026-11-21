@@ -348,16 +348,25 @@ export async function runDeskWorker(
         }
       }, 500);
       const options = resolveOptions(cwd, run.options);
-      const optionsMatch = deskOptionsKey(options) === deskOptionsKey(run.options);
-      const previous = optionsMatch ? store
+      const effectiveOptionsKey = deskOptionsKey(options);
+      store.atomic(() => {
+        const active = store.byId(id);
+        if (!active || active.pid !== process.pid || active.run.state !== "running") {
+          abort();
+          throw new Error("Review cancelled before routing options were recorded.");
+        }
+        active.run.effectiveOptionsKey = effectiveOptionsKey;
+        store.save(active);
+      });
+      const previous = store
         .history(key)
         .runs.find(
           (item) =>
             item.source !== "existing" &&
-            item.scope === DESK_RUN_SCOPE && deskOptionsKey(item.options) === deskOptionsKey(run.options) &&
+            item.scope === DESK_RUN_SCOPE && (item.effectiveOptionsKey ?? deskOptionsKey(item.options)) === effectiveOptionsKey &&
             item.state === "completed" &&
             item.result?.coverage === "complete",
-        ) : undefined;
+        );
       const context = await collectPrContext(cwd, key, pr, store, undefined, run.options?.flowId);
       const workerRoster = createWorkerRoster(runDir, key, run);
       const out = await executeDeskReview({

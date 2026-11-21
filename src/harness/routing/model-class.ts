@@ -38,6 +38,7 @@ export interface TierSettingsSnapshot {
   readonly revision: string;
   readonly notices: readonly string[];
   readonly projectOverrides: boolean;
+  readonly personalOverrides: boolean;
   readonly tiers: readonly {
     readonly tier: RoutingTier;
     readonly user: readonly ModelRef[];
