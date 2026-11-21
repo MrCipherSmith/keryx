@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TierSettingsSnapshot } from "../../../../src/harness/routing/model-class";
-import { DESK_REVIEW_POOLS, type DeskReviewOptions, type DeskReviewPool } from "../../../../src/review/desk-run-options";
+import { ROUTING_TIER_IDS, type RoutingTier, type TierSettingsSnapshot } from "../../../../src/harness/routing/model-class";
 import { COMMAND_METHOD } from "../acp/commands";
 import type { CommandResult } from "../acp/types";
 import { Dialog, Spinner } from "../components/ui";
 import { errMessage } from "../lib/format";
 import { ModelTier, type ReviewLaunchModel } from "../review/ReviewLaunchDialog";
 
-type Pools = DeskReviewOptions["modelPools"];
+type Pools = Record<RoutingTier, Pick<ReviewLaunchModel, "provider" | "model">[]>;
 type Props = {
   sessionId: string;
   models: readonly ReviewLaunchModel[];
@@ -22,9 +21,6 @@ const modelChoices = (entries: TierSettingsSnapshot["tiers"][number]["user"]) =>
 async function routingRequest(rpc: Props["rpc"], sessionId: string, args: string): Promise<string> {
   const result = await rpc<CommandResult>(COMMAND_METHOD, { name: "routing", sessionId, args });
   if (result._meta?.keryx?.refused) {
-    if (result.text?.startsWith("Unknown /routing argument")) {
-      throw new Error("This Keryx CLI does not support routing tiers. Update the CLI and reopen Routing.");
-    }
     throw new Error(result.text);
   }
   if (typeof result.text !== "string") throw new Error("Keryx did not return routing settings.");
@@ -34,7 +30,7 @@ async function routingRequest(rpc: Props["rpc"], sessionId: string, args: string
 export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
   const [settings, setSettings] = useState<TierSettingsSnapshot>();
   const [pools, setPools] = useState<Pools>(emptyPools);
-  const [open, setOpen] = useState<DeskReviewPool>();
+  const [open, setOpen] = useState<RoutingTier>();
   const [error, setError] = useState("");
   const [replaceOverrides, setReplaceOverrides] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -55,7 +51,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
         snapshot = JSON.parse(text);
         if (typeof snapshot.revision !== "string" || !Array.isArray(Reflect.get(snapshot, "tiers"))) throw new Error();
       } catch {
-        throw new Error("This Keryx CLI does not support routing tiers. Update the CLI and reopen Routing.");
+        throw new Error("Keryx returned invalid routing settings.");
       }
       if (cancelled) return;
       const next = emptyPools();
@@ -99,8 +95,9 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
           </label>}
           {settings.projectOverrides && <p className="field-hint">This project has approved routing settings. Project overrides take precedence.</p>}
           {settings.notices.map(notice => <p className="field-hint" key={notice}>{notice}</p>)}
+          {settings.projectTrustRequired && <p className="field-hint">Use <code>/routing status</code> to inspect project routing and approve changes.</p>}
           {!available.size && <p className="field-hint">Connect a provider in Keryx to add models.</p>}
-          {DESK_REVIEW_POOLS.map(tier => {
+          {ROUTING_TIER_IDS.map(tier => {
             const project = settings.tiers.find(row => row.tier === tier)?.project;
             return <ModelTier key={tier} label={project ? `${tierLabel[tier]} · Project` : tierLabel[tier]}
               picked={project ? modelChoices(project) : pools[tier]} models={available} readOnly={Boolean(project) || saving} emptyLabel="Use session model"

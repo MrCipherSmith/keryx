@@ -84,14 +84,33 @@ function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknow
 
 const cards = (r: Rig) => r.win().convs.s1!.items.filter((i): i is CommandItem => i.kind === "command");
 
-test("Desktop /routing opens its dialog while explicit subcommands still go to ACP", async () => {
-  const r = rig({ commands: [...COMMANDS, cmd("routing", "view")] });
+const routingTiers: AvailableCommand = {
+  ...cmd("routing", "view"), _meta: { keryx: { surface: "view", busy: "run", routingTiers: true } },
+};
+
+test("Desktop /routing opens its advertised dialog while explicit subcommands still go to ACP", async () => {
+  const r = rig({ commands: [...COMMANDS, routingTiers] });
   r.deps.ui.openRouting = () => r.log.push("routing");
   expect(await runCommandLine("/routing", r.deps)).toBe(true);
   expect(r.log).toEqual(["routing"]);
   expect(r.calls).toHaveLength(0);
   await runCommandLine("/routing trust", r.deps);
   expect(r.calls).toEqual([{ method: "_keryx/command", params: { sessionId: "s1", name: "routing", args: "trust" } }]);
+});
+
+test("Desktop preserves the server routing view and text fallback on older hosts", async () => {
+  const older = rig({ commands: [cmd("routing", "view")] });
+  older.deps.ui.openRouting = () => { older.log.push("routing"); };
+  expect(await runCommandLine("/routing", older.deps)).toBe(true);
+  expect(older.calls).toEqual([{ method: "_keryx/command", params: { sessionId: "s1", name: "routing", args: "" } }]);
+  expect(older.log).toEqual([]);
+
+  const noCommand = rig({ commands: [routingTiers], hasCommandMethod: false });
+  noCommand.deps.ui.openRouting = () => { noCommand.log.push("routing"); };
+  expect(await runCommandLine("/routing", noCommand.deps)).toBe(true);
+  expect(noCommand.sent).toEqual(["/routing"]);
+  expect(noCommand.log).toEqual([]);
+  expect(noCommand.calls).toEqual([]);
 });
 
 describe("commands in flight", () => {

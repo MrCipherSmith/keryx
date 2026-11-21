@@ -140,6 +140,7 @@ describe("/routing", () => {
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"));
     const view = viewOf(await run(host, "routing"));
     expect(view.title).toBe("Routing");
+    expect(viewOf(await run(host, "routing", "status"))).toEqual(view);
     expect(view.rows.map((row) => row.id)).toEqual([...ROUTING_CATEGORIES]);
     for (const row of view.rows) {
       expect(row.status).toBeDefined();

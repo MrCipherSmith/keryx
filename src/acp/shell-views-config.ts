@@ -71,7 +71,7 @@ async function routingView(host: ShellCommandHost): Promise<ShellView> {
 export async function runRouting(host: ShellCommandHost, args: string): Promise<ShellCommandOutcome> {
   const [sub, ...rest] = args.trim().split(/\s+/);
   const location = { cwd: host.cwd, ...(host.configDir !== undefined ? { configDir: host.configDir } : {}) };
-  if (args.trim().length === 0) return viewOutcome(await routingView(host));
+  if (!sub || (sub === "status" && rest.length === 0)) return viewOutcome(await routingView(host));
   if (sub === "tiers") {
     try {
       const input = args.trim().slice(sub.length).trim();

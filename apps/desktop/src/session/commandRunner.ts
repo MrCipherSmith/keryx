@@ -13,8 +13,8 @@ export interface UiActions {
   /** Open the mode picker, or set the mode when `arg` names one. */
   mode(arg: string): void;
   model(arg: string): void;
-  /** The Providers dialog (`/connect`, `/search-provider`). */
   openRouting?(): void;
+  /** The Providers dialog (`/connect`, `/search-provider`). */
   openProviders(name: string, args: string): void;
   /** Move text into the composer (never sends). */
   fillComposer(text: string): void;
@@ -99,10 +99,6 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
       return true;
     }
   }
-  if (deps.sessionId && deps.ui.openRouting && /^\/routing\s*$/i.test(line.trim())) {
-    deps.ui.openRouting();
-    return true;
-  }
   const found = findCommand(deps.prepareReview ? desktopReviewCommands(deps.commands) : deps.commands, line);
   // Not an advertised command: ordinary text for the model.
   if (!found) return sendOrQueue(line, deps);
@@ -122,10 +118,13 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
     return refuse(`/${command.name} is not available while keryx is working. Stop the turn first (Esc), then run it again.`);
   }
 
-  switch (commandSurface(command)) {
+  const name = command.name.toLowerCase();
+  const routingDialog = name === "routing" && !parsed.args && meta.routingTiers
+    && deps.hasCommandMethod && deps.client && deps.ui.openRouting;
+  switch (routingDialog ? "dialog" : commandSurface(command)) {
     case "client":
     case "dialog":
-      return runClient(command.name.toLowerCase(), parsed.args, deps, card, refuse);
+      return runClient(name, parsed.args, deps, card, refuse);
     default:
       break;
   }
@@ -204,6 +203,10 @@ function runClient(name: string, args: string, deps: RunDeps, card: CardFn, refu
       return true;
     case "model":
       deps.ui.model(args);
+      return true;
+    case "routing":
+      if (!deps.ui.openRouting) return false;
+      deps.ui.openRouting();
       return true;
     case "connect":
     case "search-provider":

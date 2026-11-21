@@ -20,7 +20,8 @@ model** to choose a connected provider and a model for **Strong**, **Middle**,
 or **Light**. Each tier can contain multiple models, listed in preference
 order. Save to apply your defaults across projects. Approved project
 settings take precedence. An empty tier uses the session model unless the
-project has its own routing settings for that operation.
+project has its own routing settings for that operation. Use `/routing status`
+to inspect project routing and review any pending approval.
 
 Subagents use the requested tier and default to Middle. Review orchestrator
 launches use the saved tier lists when the run does not supply its own

@@ -610,11 +610,7 @@ export function useAcpSession(cwd: string) {
   }, [archiveIdle]);
 
   const shown = useMemo(() => shownView(win), [win]);
-  const commands = useMemo(() => desktopReviewCommands(shown.commands).map(command =>
-    command.name.toLowerCase() === "routing"
-      ? { ...command, description: "Configure models for the Strong, Middle and Light tiers", input: undefined }
-      : command
-  ), [shown.commands]);
+  const commands = useMemo(() => desktopReviewCommands(shown.commands), [shown.commands]);
   const state = useMemo(() => ({ ...shown, commands }), [shown, commands]);
   const shownDialogs = useMemo(
     () => dialogs.forSession(win.shownId),

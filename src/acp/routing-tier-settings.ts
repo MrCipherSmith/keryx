@@ -1,9 +1,8 @@
 import type { ModelClassConfig, RoutingConfigLayer } from "../harness/routing/config";
-import { ROUTING_TIERS, modelRefKey, type ModelRef, type RoutingTier, type TierSettingsSnapshot } from "../harness/routing/model-class";
+import { ROUTING_TIER_IDS, ROUTING_TIERS, modelRefKey, type ModelRef, type RoutingTier, type TierSettingsSnapshot } from "../harness/routing/model-class";
 import { readRoutingSettings, updateRoutingLayer, type RoutingLocation, type RoutingSettings } from "../harness/routing/settings";
 import { ROUTING_CATEGORIES, ROUTING_CATEGORY_TIERS } from "../harness/routing/table";
 
-const tiers = ["strong", "middle", "light"] as const satisfies readonly RoutingTier[];
 const MAX_TIER_MODELS = 32;
 const modelId = /^[a-z\d][a-z\d_./:@+%-]{0,159}$/i;
 
@@ -29,7 +28,8 @@ export function describeTierSettings(settings: RoutingSettings): TierSettingsSna
     notices: settings.notices,
     personalOverrides: Object.keys(settings.user.layer?.categories ?? {}).length > 0,
     projectOverrides: settings.layers.project !== undefined,
-    tiers: tiers.map(tier => {
+    projectTrustRequired: !settings.project.trusted,
+    tiers: ROUTING_TIER_IDS.map(tier => {
       const modelClass = ROUTING_TIERS[tier];
       const userClass = settings.user.layer?.classes?.[modelClass];
       const projectClass = settings.layers.project?.classes?.[modelClass];
@@ -47,14 +47,14 @@ export async function saveTierSettings(location: RoutingLocation, revision: stri
     throw new Error("Invalid routing tiers request.");
   }
   const modelPools: unknown = Reflect.get(raw, "modelPools");
-  if (!modelPools || typeof modelPools !== "object" || Object.keys(modelPools).some(tier => !tiers.some(value => value === tier))) {
+  if (!modelPools || typeof modelPools !== "object" || Object.keys(modelPools).some(tier => !ROUTING_TIER_IDS.some(value => value === tier))) {
     throw new Error("Invalid routing model pools.");
   }
   const replaceOverrides = Reflect.get(raw, "replaceOverrides") === true;
   const current = readRoutingSettings(location);
   const user = current.user.layer;
   const classes = { ...user?.classes };
-  for (const tier of tiers) {
+  for (const tier of ROUTING_TIER_IDS) {
     const modelClass = ROUTING_TIERS[tier];
     const existing = classes[modelClass];
     // Preserve policy, explicit disables, and priorities on untouched tiers.
