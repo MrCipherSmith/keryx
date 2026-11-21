@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService, flowsRoot, githubAdapter, readFlow } from "../flow/service";
-import { shellHarness, textRound } from "../acp/shell-profile.test-helpers";
+import { shellHarness, textRound, toolRound } from "../acp/shell-profile.test-helpers";
 import { listSessions, openSession, persistHistory, sessionDir } from "../session";
 import { readSessionFlags } from "../session/organize";
 import { issueWorkspace, issueWorkspaceStages, type IssueWorkAction, type IssueWorkPorts, type IssueWorkRequest } from "./issues-launch";
@@ -112,6 +112,53 @@ test("AC10 a durable coordinator question survives reconnect and its answer is r
   expect((await run("workspace")).question).toBeUndefined();
   expect(rememberIssueQuestion(dir, { ...bound,updatedAt:"2026-03-02" }, ask).answer).toBeUndefined();
 });
+
+test("AC10 cold ACP restores outstanding questions through an admitted prompt and continues the same conversation once", async () => {
+  const work = await run("prepare-flow");
+  const { launchId, text } = work.initialTurn!;
+  const id = work.session!.sessionId;
+  const dir = sessionDir(project.cwd, id, dataDir);
+  const opts = { clientCapabilities:{ _meta:{keryx:{askUser:true}} }, serverOptions:{dataDir} };
+  const options = [{ id:"yes",label:"Yes",description:"Include it" },{ id:"no",label:"No",description:"Leave it out" }];
+  const askDate = {question:"Should dates be UTC?", options};
+  const askAudience = {question:"Should contractors see the preview?", options};
+  const old = shellHarness({ ...opts, rounds:[toolRound("q-date","ask_user",askDate),textRound("waiting")] });
+  try {
+    await old.initialize();
+    const load = old.request("session/load",{cwd:project.cwd, sessionId:id, mcpServers:[]});
+    await old.waitFor(f => f.id === load);
+    old.request("session/prompt",{sessionId:id,prompt:[{type:"text",text}],_meta:{keryx:{issueLaunchId:launchId}}});
+    await old.waitFor(f => f.method === "_keryx/ask_user");
+    // A second worker asks while the coordinator's first dialog is still outstanding.
+    rememberIssueQuestion(dir, issueContextForSession(dir,dataDir)!, askAudience);
+  } finally { await old.end(); }
+  const resumed = shellHarness({ ...opts, rounds:[textRound("I will apply both decisions.")] });
+  try {
+    await resumed.initialize();
+    const load = () => resumed.request("session/load",{cwd:project.cwd, sessionId:id, mcpServers:[]});
+    const firstLoad = load();
+    expect((await resumed.waitFor(f => f.id === firstLoad)).result?.["_meta"]).toEqual({keryx:{pendingIssueQuestions:true}});
+    expect(resumed.frames.filter(f => f.method === "_keryx/ask_user")).toHaveLength(0);
+    const params = {sessionId:id,prompt:[{type:"text",text:"Resume the pending issue questions."}],_meta:{keryx:{resumeIssueQuestions:true}}};
+    const turn = resumed.request("session/prompt",params);
+    const first = await resumed.waitFor(f => f.method === "_keryx/ask_user");
+    expect(first.params).toMatchObject({question:askDate.question});
+    resumed.respond(first.id,{result:{outcome:"answered",answers:["Yes"]}});
+    const next = await resumed.waitFor(f => f.method === "_keryx/ask_user" && f.id !== first.id);
+    expect(next.params).toMatchObject({question:askAudience.question});
+    resumed.respond(next.id,{result:{outcome:"answered",answers:["No"]}});
+    expect((await resumed.waitFor(f => f.id === turn)).result?.["stopReason"]).toBe("end_turn");
+    const replay = resumed.request("session/prompt",params);
+    await resumed.waitFor(f => f.id === replay);
+    const reopened = load();
+    expect((await resumed.waitFor(f => f.id === reopened)).result?.["_meta"]).toBeUndefined();
+    const handoffs = openSession({cwd:project.cwd,dataDir,resumeId:id}).history.filter(m => m.role === "user" && m.content.includes("keryx:issue-questions/"));
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.content).toContain(askAudience.question);
+    expect(handoffs[0]?.content).toContain(askDate.question);
+    expect((await run("workspace")).question).toBeUndefined();
+  } finally { await resumed.end(); }
+}, 15_000);
 
 test("AC11 concurrent callers and lost package/turn replies recover the same real session, Flow and first turn", async () => {
   const failAfterInit: IssueWorkPorts = { ...ports, init: async (target, detail) => {

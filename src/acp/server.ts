@@ -106,7 +106,7 @@ import {
   type AcpSetSessionConfigOptionResponse,
   type AcpStopReason,
 } from "./protocol";
-import { acceptIssueTurn, answerIssueQuestion, issueContextForSession, issueQuestion, rememberIssueQuestion, settleIssueTurn } from "../integrations/issue-session/service";
+import { acceptIssueTurn, answerIssueQuestion, issueContextForSession, issueQuestionsToRestore, finishIssueQuestionRecovery, rememberIssueQuestion, settleIssueTurn } from "../integrations/issue-session/service";
 import { renderAcpPrompt } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
 import { SessionMcpGrants } from "./mcp-grants";
@@ -603,13 +603,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   };
 
   /** `_keryx/ask_user` for one session; every non-answer is a declined question. */
-  const askUserFor = (sessionId: string): AskUserFn => async (request) => {
+  const askClientFor = (sessionId: string): AskUserFn => async (request) => {
     const turn = activeTurns.get(sessionId);
     if (turn?.cancelled === true) return ASK_USER_CANCEL;
-    const state = registry.get(sessionId);
-    const bound = state && issueContextForSession(state.handle.dir, options.dataDir);
-    const saved = state && bound?.launch.flow ? rememberIssueQuestion(state.handle.dir, bound, request) : undefined;
-    if (saved?.answer !== undefined && !request.irreversible && !request.untrustedContent) return saved.answer;
     let requestId: string | undefined;
     const outcome = await clientRequests.request(KERYX_ACP_EXTENSION_METHODS.askUser, askUserParams(sessionId, request), (id) => {
       requestId = id;
@@ -628,9 +624,26 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       options.logError(`acp: ${KERYX_ACP_EXTENSION_METHODS.askUser} went unanswered (${outcome.reason}); the question counts as declined`);
       return ASK_USER_CANCEL;
     }
-    const answer = askUserAnswerFromResult(outcome.result, request);
-    if (state && saved && registry.canPersist(sessionId)) answerIssueQuestion(state.handle.dir, saved, answer);
-    return answer;
+    return askUserAnswerFromResult(outcome.result, request);
+  };
+
+  const openIssueAsks = new Map<string, ReturnType<AskUserFn>>();
+  const askUserFor = (sessionId: string): AskUserFn => async (request) => {
+    const state = registry.get(sessionId);
+    const bound = state && issueContextForSession(state.handle.dir, options.dataDir);
+    if (!state || !bound?.launch.flow) return askClientFor(sessionId)(request);
+    const saved = rememberIssueQuestion(state.handle.dir, bound, request);
+    if (saved.answer !== undefined) return saved.answer;
+    const key = sessionId + "/" + saved.id;
+    const waiting = openIssueAsks.get(key);
+    if (waiting) return waiting;
+    const ask = askClientFor(sessionId)(request);
+    openIssueAsks.set(key, ask);
+    try {
+      const answer = await ask;
+      if (registry.canPersist(sessionId)) answerIssueQuestion(state.handle.dir, saved, answer);
+      return answer;
+    } finally { openIssueAsks.delete(key); }
   };
 
   const reviewDraftFor = (sessionId: string): RequestReviewDraft => async hints => {
@@ -648,22 +661,44 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
   };
 
-  const restoringIssueQuestion = new Set<string>();
-  async function restoreIssueQuestion(state: AcpSessionState): Promise<void> {
+  function recoveryMeta(state: AcpSessionState): Pick<AcpLoadSessionResponse, "_meta"> {
+    if (shellProfile && clientAnswersAskUser(state.clientCapabilities) && issueContextForSession(state.handle.dir, options.dataDir)?.launch.flow
+      && issueQuestionsToRestore(state.handle.dir).length) return { _meta: { keryx: { pendingIssueQuestions: true } } };
+    return {};
+  }
+
+  /** Entered only by a client-owned prompt after the load reply and session admission. */
+  async function resumeIssueQuestions(state: AcpSessionState): Promise<AcpPromptResponse> {
     const { sessionId } = state;
-    if (stopping || activeTurns.has(sessionId) || restoringIssueQuestion.has(sessionId) || !clientAnswersAskUser(state.clientCapabilities)) return;
-    const pending = issueQuestion(state.handle.dir);
-    if (!pending || pending.answer !== undefined || !issueContextForSession(state.handle.dir, options.dataDir)?.launch.flow) return;
-    restoringIssueQuestion.add(sessionId);
+    if (!shellProfile || !clientAnswersAskUser(state.clientCapabilities) || !issueContextForSession(state.handle.dir, options.dataDir)?.launch.flow)
+      throw new Error("This session cannot resume issue questions.");
+    const questions = issueQuestionsToRestore(state.handle.dir);
+    if (!questions.length) return { stopReason: "end_turn" };
+    const slot: AcpActiveTurn = { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() };
+    activeTurns.set(sessionId, slot);
+    const answers = [];
     try {
-      const answer = await askUserFor(sessionId)(pending.request);
-      if (answer === ASK_USER_CANCEL || stopping || !registry.canPersist(sessionId) || activeTurns.has(sessionId)) return;
-      await handleSessionPrompt({ sessionId, prompt: [
-        textBlock("Continue preparing the existing issue Flow using my saved answer. Check existing artifacts before resuming work."),
-        { type: "resource", _meta: { keryx: { untrusted: true } },
-          resource: { uri: "keryx:issue-question/" + pending.id, text: JSON.stringify({ question: pending.request.question, answer }) } },
-      ] });
-    } finally { restoringIssueQuestion.delete(sessionId); }
+      for (const q of questions) {
+        const answer = q.answer ?? await askClientFor(sessionId)(q.request);
+        if (answer === ASK_USER_CANCEL || slot.cancelled || stopping || !registry.canPersist(sessionId)) return { stopReason: "cancelled" };
+        if (q.answer === undefined) answerIssueQuestion(state.handle.dir, q, answer, true);
+        answers.push({ question: q.request.question, answer });
+      }
+    } finally { if (activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId); }
+    const ids = new Set(questions.map(q => q.id));
+    const uri = "keryx:issue-questions/" + [...ids].join("/");
+    // If the process stopped after the conversation persisted this handoff, the existing turn owns the answers.
+    if (state.history.some(message => message.role === "user" && message.content.includes(uri))) {
+      finishIssueQuestionRecovery(state.handle.dir, ids);
+      return { stopReason: "end_turn" };
+    }
+    const response = await handleSessionPrompt({ sessionId, prompt: [
+      textBlock("Continue preparing the existing issue Flow using my saved answers. Check existing artifacts before resuming work."),
+      { type: "resource", _meta: { keryx: { untrusted: true } }, resource: { uri, text: JSON.stringify(answers) } },
+    ] });
+    if (registry.canPersist(sessionId) && state.history.some(message => message.role === "user" && message.content.includes(uri)))
+      finishIssueQuestionRecovery(state.handle.dir, ids);
+    return response;
   }
 
   /** Token totals per session, for `usage_update`. */
@@ -885,7 +920,6 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const dir = state.handle.dir;
     planDirSessions.set(dir, sessionId);
     onReplied(requestId, () => {
-      void restoreIssueQuestion(state).catch(() => options.logError("acp: Could not resume the pending issue question; reopen the linked session."));
       const title = state.handle.summary.title;
       if (typeof title === "string" && title.length > 0) {
         sendUpdate(sessionId, { sessionUpdate: "session_info_update", title, updatedAt: state.handle.summary.updatedAt });
@@ -2256,6 +2290,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     touch(sessionId);
     // Read ONCE, here: this turn runs with this model to its end, whatever a
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
+    if ((obj["_meta"] as { keryx?: { resumeIssueQuestions?: unknown } } | undefined)?.keryx?.resumeIssueQuestions === true)
+      return resumeIssueQuestions(state);
     const model = sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
 
     // A slash command (flow 288, AC4) is keryx's to answer; it never reaches
@@ -2868,7 +2904,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         const configOptions = await configOptionsFor(sessionId, method);
         refuseIfStopping(method);
         enforceIdleCap();
-        return { ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}), configOptions };
+        return { ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}), configOptions, ...recoveryMeta(loaded) };
       } catch (error) {
         abandonOpen(sessionId);
         throw error;
@@ -2904,7 +2940,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       bindShellSession(state, requestId);
       const configOptions = await configOptionsFor(sessionId, method);
       refuseIfStopping(method);
-      return { modes: acpModeState(modeOf(sessionId)), configOptions };
+      return { modes: acpModeState(modeOf(sessionId)), configOptions, ...recoveryMeta(state) };
     });
   }
 

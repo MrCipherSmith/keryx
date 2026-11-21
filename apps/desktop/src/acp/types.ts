@@ -290,6 +290,7 @@ export interface NewSessionResult {
 }
 
 export interface LoadSessionResult {
+  _meta?: { keryx?: { pendingIssueQuestions?: boolean } };
   modes?: SessionModeState | null;
   configOptions?: ConfigOption[] | null;
 }

@@ -6,7 +6,7 @@ import { issueDigest } from "./issue-key";
 import { privateJson, type BoundIssue } from "./issue-session";
 
 interface Receipt { launchId: string; turnId: string; prompt: string; settled?: boolean }
-interface Question { id: string; request: AskUserRequest; answer?: AskUserAnswer }
+export interface IssueQuestion { id: string; request: AskUserRequest; answer?: AskUserAnswer; awaitingDelivery?: true }
 
 export function issuePreparationPrompt(bound: BoundIssue): string {
   if (bound.preparationPrompt) return bound.preparationPrompt;
@@ -49,26 +49,51 @@ export function settleIssueTurn(dir: string): void {
   if (receipt?.launchId && !receipt.settled) writeOwnerOnlyFileAtomic(path.join(dir, "issue-preparation-turn.json"), JSON.stringify({ ...receipt, settled: true }));
 }
 
-export function issueQuestion(dir: string): Question | undefined {
-  return privateJson<Question>(path.join(dir, "issue-question.json"));
+function questionQueue(dir: string): IssueQuestion[] {
+  const queue = privateJson<IssueQuestion[]>(path.join(dir, "issue-questions.json"));
+  if (queue !== undefined) return queue;
+  const legacy = privateJson<IssueQuestion>(path.join(dir, "issue-question.json"));
+  return legacy ? [legacy] : [];
 }
 
-export function rememberIssueQuestion(dir: string, bound: BoundIssue, request: AskUserRequest): Question {
+function saveQuestions(dir: string, questions: IssueQuestion[]): void {
+  writeOwnerOnlyFileAtomic(path.join(dir, "issue-questions.json"), JSON.stringify(questions));
+}
+
+export function issueQuestion(dir: string): IssueQuestion | undefined {
+  return questionQueue(dir).find(q => q.answer === undefined);
+}
+
+export function issueQuestionsToRestore(dir: string): IssueQuestion[] {
+  return questionQueue(dir).filter(q => q.answer === undefined || q.awaitingDelivery);
+}
+
+export function finishIssueQuestionRecovery(dir: string, delivered: ReadonlySet<string>): void {
+  saveQuestions(dir, questionQueue(dir).filter(q => !(q.awaitingDelivery && delivered.has(q.id))));
+}
+
+export function rememberIssueQuestion(dir: string, bound: BoundIssue, request: AskUserRequest): IssueQuestion {
   const id = issueDigest(JSON.stringify([bound.launch.launchId, bound.updatedAt, request.question.trim(), request.options, request.action,
     request.irreversible, request.untrustedContent, request.allowFreeform]));
+  const queue = questionQueue(dir);
   const reusable = !request.irreversible && !request.untrustedContent;
-  const old = issueQuestion(dir);
-  if (old?.id === id && (old.answer === undefined || reusable)) return old;
+  const old = queue.find(q => q.id === id);
+  if (old && (old.answer === undefined || reusable)) return old;
   const remembered = reusable ? privateJson<{ answer: AskUserAnswer }>(path.join(dir, `issue-answer-${id}.json`)) : undefined;
-  const question: Question = { id, request, ...remembered };
-  writeOwnerOnlyFileAtomic(path.join(dir, "issue-question.json"), JSON.stringify(question));
+  if (remembered) return { id, request, ...remembered };
+  const question: IssueQuestion = { id, request };
+  saveQuestions(dir, [...queue.filter(q => q.id !== id && (q.answer === undefined || q.awaitingDelivery)), question]);
   return question;
 }
 
-export function answerIssueQuestion(dir: string, question: Question, answer: AskUserAnswer): void {
-  if (answer === ASK_USER_CANCEL || issueQuestion(dir)?.id !== question.id) return;
+export function answerIssueQuestion(dir: string, question: IssueQuestion, answer: AskUserAnswer, awaitingDelivery = false): void {
+  if (answer === ASK_USER_CANCEL) return;
+  const queue = questionQueue(dir);
+  const index = queue.findIndex(q => q.id === question.id);
+  if (index === -1) return;
   if (!question.request.irreversible && !question.request.untrustedContent) {
     writeOwnerOnlyFileAtomic(path.join(dir, `issue-answer-${question.id}.json`), JSON.stringify({ answer }));
   }
-  writeOwnerOnlyFileAtomic(path.join(dir, "issue-question.json"), JSON.stringify({ ...question, answer }));
+  queue[index] = { id: question.id, request: question.request, answer, ...(awaitingDelivery ? { awaitingDelivery: true } : {}) };
+  saveQuestions(dir, queue);
 }

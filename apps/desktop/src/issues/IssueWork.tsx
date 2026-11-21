@@ -13,7 +13,7 @@ interface Host {
   cwd: string;
   ready: boolean;
   canPrepare: boolean;
-  showSession: (id: string, turn?: {launchId: string; text: string}) => Promise<void>;
+  showSession: (id: string, turn?: {launchId: string; text: string}, pendingQuestions?: boolean) => Promise<void>;
   showFlow: (dir: string) => void;
   notifyError: (error: string) => void;
 }
@@ -62,7 +62,7 @@ export function useIssueWork(host: Host) {
       await invoke("issues_transfer", {target:result.session.project.cwd, intent});
       return;
     }
-    await showSession(result.session.sessionId, intent.action === "prepare-flow" ? result.initialTurn : undefined);
+    await showSession(result.session.sessionId, intent.action === "prepare-flow" ? result.initialTurn : undefined, !!result.question);
   }, []);
 
   useEffect(() => {

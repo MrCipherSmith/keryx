@@ -84,3 +84,8 @@ test("App preserves tab state and starts a background review from the originatin
   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });
+
+test("AC10 a cold-loaded issue session admits every restored question on one coordinator turn", () => {
+  const fixture = fileURLToPath(new URL("../test/issue-question-resume.fixture.tsx", import.meta.url));
+  execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+});

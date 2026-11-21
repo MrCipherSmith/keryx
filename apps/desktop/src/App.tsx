@@ -465,7 +465,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const issueWork = useIssueWork({
     cwd, ready: state.phase === "ready", canPrepare: s.canPrepareIssue,
-    showSession: async (id, turn) => { await s.openIssueSession(id, turn); setView("session"); },
+    showSession: async (id, turn, pendingQuestions) => { await s.openIssueSession(id, turn, pendingQuestions); setView("session"); },
     showFlow: dir => { setLinkedFlow(dir); setView("flows"); },
     notifyError: message => s.notify("error", message),
   });
