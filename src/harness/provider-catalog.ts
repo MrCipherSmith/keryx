@@ -194,7 +194,8 @@ async function buildCatalogEntry(
  */
 export async function refreshProviderCatalog(deps: ProviderCatalogDeps): Promise<ProviderCatalog> {
   const detectDeps: DetectProvidersDeps = {
-    fetch: deps.fetch,
+    fetch: ((input: string | URL | Request, init?: RequestInit) =>
+      deps.fetch(input, { ...init, signal: AbortSignal.timeout(deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS) })) as typeof fetch,
     env: deps.env,
     ...(deps.dir !== undefined ? { configDir: deps.dir } : {}),
     ...(deps.baseUrl !== undefined ? { baseUrl: deps.baseUrl } : {}),

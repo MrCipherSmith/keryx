@@ -115,7 +115,9 @@ describe("/routing", () => {
     const host = fakeHost(project(), tempDir("keryx-acp-tier-settings-"));
     await run(host, "routing", "set subagents baseline");
     const read = async (): Promise<TierSettingsSnapshot> => JSON.parse((await run(host, "routing", "tiers")).text);
-    const { revision } = await read();
+    const { revision, enabled, projectEnabled } = await read();
+    expect(enabled).toBe(false);
+    expect(projectEnabled).toBeNull();
     const models = [{ provider: "openrouter", model: "vendor/one" }, { provider: "openai", model: "two" }];
     const modelPools = { strong: [], middle: models, light: [] };
     const save = `tiers ${revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: false }, null, 1)}`;

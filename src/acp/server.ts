@@ -1762,6 +1762,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   let routingRefreshNeeded = false;
   let routingForceRetry = false;
   let routingRefreshFinishedAt: number | undefined;
+  function freshRoutingProvider(provider: FlatPickerProvider, now: number): boolean {
+    const age = now - Date.parse(provider.observedAt ?? "");
+    return age >= 0 && age < ROUTING_AVAILABILITY_TTL_MS;
+  }
   function refreshRoutingProviders(): Promise<void> {
     const load = options.routingProviders;
     if (!load) return Promise.resolve();
@@ -1770,10 +1774,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const retryAge = routingRefreshFinishedAt === undefined ? Infinity : now - routingRefreshFinishedAt;
     if (!routingRefreshNeeded && (
       (retryAge >= 0 && retryAge < 10_000) ||
-      (routingProviders && routingProviders.length > 0 && routingProviders.every(provider => {
-        const age = now - Date.parse(provider.observedAt ?? "");
-        return age >= 0 && age < ROUTING_AVAILABILITY_TTL_MS;
-      }))
+      (routingProviders && routingProviders.length > 0 && routingProviders.every(provider => freshRoutingProvider(provider, now)))
     )) return Promise.resolve();
     const force = routingRefreshNeeded || routingForceRetry;
     routingRefreshNeeded = false;
@@ -1820,11 +1821,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       },
       ...(options.routingProviders ? { refreshRoutingProviders } : {}),
       getDetectedProviders: () => {
-        if (routingProviders !== undefined) {
+        const now = Date.now();
+        const verified = routingProviders?.filter(provider => freshRoutingProvider(provider, now)) ?? [];
+        if (verified.length > 0) {
           const providerId = parent().providerId;
-          return routingProviders.some(entry => entry.name === providerId)
-            ? routingProviders
-            : [{ name: providerId, models: [] }, ...routingProviders];
+          return verified.some(entry => entry.name === providerId)
+            ? verified
+            : [{ name: providerId, models: [] }, ...verified];
         }
         const byProvider = new Map<string, string[]>();
         for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);

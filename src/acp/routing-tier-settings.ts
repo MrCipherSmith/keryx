@@ -25,7 +25,8 @@ function models(config: ModelClassConfig): ModelRef[] {
 export function describeTierSettings(settings: RoutingSettings): TierSettingsSnapshot {
   return {
     revision: settings.revision,
-    enabled: settings.user.layer?.tierRouting ?? true,
+    enabled: settings.user.layer?.tierRouting ?? false,
+    projectEnabled: settings.layers.project?.tierRouting ?? null,
     notices: settings.notices,
     personalOverrides: Object.keys(settings.user.layer?.categories ?? {}).length > 0,
     projectOverrides: settings.layers.project !== undefined,

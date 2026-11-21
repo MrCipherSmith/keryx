@@ -65,6 +65,8 @@ export type StrengthTier = "light" | "standard" | "deep";
 export type NumericProfileField = { readonly value: number; readonly source: ProfileSource } | { readonly value: "unknown"; readonly source: "unknown" };
 
 export interface ModelProfile {
+  /** Synthetic metadata (curated or manually created) has no live availability observation. */
+  readonly availabilityUnverified?: true;
   readonly providerId: string;
   readonly modelId: string;
   readonly strengthTier: { readonly value: StrengthTier; readonly source: ProfileSource };
@@ -287,6 +289,7 @@ assertCuratedCoverage("gemini", GEMINI_MODELS);
 function curatedProfile(providerId: string, modelId: string, entry: CuratedEntry, now: string): ModelProfile {
   const priceInputPerMillion: NumericProfileField = { value: entry.priceInputPerMillion, source: "curated" };
   return {
+    availabilityUnverified: true,
     providerId,
     modelId,
     strengthTier: { value: entry.tier, source: "curated" },
@@ -464,6 +467,7 @@ function sanitizeStoredProfile(value: unknown): ModelProfile | undefined {
     contextLength,
     priority: { value: priority.value, source: priority.source as PrioritySource },
     available: record.available,
+    ...(record.availabilityUnverified === true && { availabilityUnverified: true }),
     chatCapable,
     lastSeenAt: record.lastSeenAt,
     refreshedAt: record.refreshedAt,
@@ -687,8 +691,9 @@ function updateProfile(existing: ModelProfile, parsed: ParsedModelProfileFields 
     existing.priceOutputPerMillion.source === "operator" ? existing.priceOutputPerMillion : buildField(parsed?.priceOutputPerMillion, undefined);
   const contextLength = existing.contextLength.source === "operator" ? existing.contextLength : buildField(parsed?.contextLength, undefined);
   const priority = existing.priority.source === "operator" ? existing.priority : { value: computeAutoPriority(priceInputPerMillion), source: "auto" as const };
+  const { availabilityUnverified: _unverified, ...observed } = existing;
   return {
-    ...existing,
+    ...observed,
     strengthTier: tier,
     priceInputPerMillion,
     priceOutputPerMillion,
@@ -764,7 +769,8 @@ export async function refreshModelProfiles(
         if (profile.providerId !== providerId) continue;
         if (liveSet.has(profile.modelId)) continue;
         if (profile.available === false) continue; // already marked; not a new "went unavailable"
-        next[key] = { ...profile, available: false, refreshedAt: nowIso };
+        const { availabilityUnverified: _unverified, ...observed } = profile;
+        next[key] = { ...observed, available: false, refreshedAt: nowIso };
         unavailable += 1;
       }
 
@@ -826,6 +832,7 @@ export async function setModelProfileField(providerId: string, modelId: string, 
     }
   };
   const fallbackBase: ModelProfile = {
+    availabilityUnverified: true,
     providerId,
     modelId,
     strengthTier: guessStrengthTier(modelId),

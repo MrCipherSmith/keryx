@@ -91,8 +91,11 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
         {settings ? <>
           <p className="field-hint">These are your defaults across projects. Add models in preference order. Empty tiers use the session model.</p>
           <label className="review-launch-adaptive">
-            <input type="checkbox" checked={enabled} disabled={saving} onChange={event => setEnabled(event.currentTarget.checked)} />
-            Use model tiers for tasks without an explicit routing rule
+            <input type="checkbox" checked={settings.projectEnabled ?? enabled} disabled={saving || settings.projectEnabled !== null}
+              onChange={event => setEnabled(event.currentTarget.checked)} />
+            {settings.projectEnabled === null
+              ? "Use model tiers for tasks without an explicit routing rule"
+              : "Use model tiers for tasks without an explicit routing rule (set by project)"}
           </label>
           {settings.personalOverrides && <label className="review-launch-adaptive">
             <input type="checkbox" checked={enabled && replaceOverrides} disabled={saving || !enabled}
