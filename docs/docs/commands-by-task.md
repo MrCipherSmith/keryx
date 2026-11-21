@@ -97,6 +97,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx flow` | Agent-first flow lifecycle (Task Manager). |
 | `keryx job` | Agent-first job packages (job-orchestrator state, steps, documents). |
 | `keryx review` | Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands. |
+| `keryx worktree` | Ready a linked git worktree (env files, dependencies, ports, memory index) and carry its findings out before removal. |
 
 | Shell command | Summary |
 |---|---|

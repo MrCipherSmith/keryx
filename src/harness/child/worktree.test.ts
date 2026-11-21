@@ -128,6 +128,22 @@ describe("lifecycle via fake WorktreePort (AC4)", () => {
     expect(calls.slice(2)).toEqual([`merge:${worktreeIdFor("a")}->main`, `merge:${worktreeIdFor("c")}->main`]);
   });
 
+  test("each created worktree gets its indexes prepared (spec 5.3); a failing prepare never fails provisioning", async () => {
+    const plan = planWorktrees(tasks);
+    if (!plan.ok) throw new Error(plan.reason);
+    const prepared: string[] = [];
+    await provisionWorktrees(plan.assignments, makeFakePort().port, {
+      prepareIndexes: async (worktreePath) => {
+        prepared.push(worktreePath);
+      },
+    });
+    expect(prepared).toEqual([`/wt/${worktreeIdFor("a")}`, `/wt/${worktreeIdFor("c")}`]);
+
+    // The default (real) preparer swallows its own failure: the fake paths are not git worktrees.
+    const paths = await provisionWorktrees(plan.assignments, makeFakePort().port);
+    expect(paths.size).toBe(2);
+  });
+
   test("resolveChildCwd fail-closed: an unprovisioned worktree throws (no shared fallback)", () => {
     const assignment = { taskId: "z", mode: "worktree", worktreeId: worktreeIdFor("z") } as const;
     expect(() => resolveChildCwd(assignment, "/repo", new Map())).toThrow();

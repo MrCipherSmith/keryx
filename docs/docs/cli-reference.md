@@ -8054,6 +8054,59 @@ trail is read whether or not this verb is typed.
 
 ---
 
+## worktree
+
+Get a linked git worktree ready to work in, and carry what it learned out
+before it is removed. Every command refuses outside a git repository, and none
+runs `git stash`, `git add`, a commit or a push.
+
+```bash
+keryx worktree create <name> [--base <ref>] [--branch <b>] [--path <dir>] [--json]
+keryx worktree prepare [--only env,deps,ports,indexes] [--json] [--force]
+keryx worktree promote [--store memory,learning] [--dry-run] [--entry <id-or-path>]... [--json]
+keryx worktree env
+keryx worktree exec -- <command> [args...]
+keryx worktree status [--json]
+keryx worktree remove <name> [--keep-branch] [--force]
+```
+
+`create` runs `git worktree add` on a new branch (default name: `<name>`, default
+start point: `origin/main`, default path: `<main checkout>/.claude/worktrees/<name>`)
+and then `prepare`. If prepare fails the worktree is kept and the failure is
+reported; fix the cause and run `prepare` inside it.
+
+`prepare` is idempotent and refuses the main checkout. It copies the configured
+`.env` files from the main checkout (only files git ignores in the worktree; an
+existing file is kept unless `--force`), prepares each dependency directory
+(skip when the lock files are unchanged, otherwise a copy-on-write clone and
+then install only if needed), allocates one port per configured name, and
+rebuilds the memory index from the worktree's own files. It reports names, never
+file contents. Everything it records about the worktree lives in the worktree's
+own git directory, so the working copy stays clean.
+
+`promote` lists the worktree's uncommitted memory entries and its accepted
+project-scope learning entries; `--dry-run` only lists. Without a terminal only
+`--dry-run` works. Memory entries are copied into the user memory area under a
+file lock and tagged with the source project and branch; learning entries go
+through `keryx learn promote`, which still asks for a typed confirmation.
+
+`env` prints `export` lines for the worktree's ports (`eval "$(keryx worktree env)"`),
+and `exec` runs one command, without a shell, with those ports in its
+environment.
+
+`status` shows the checkout label, ports, dependency state, the names of the
+env files present, the last prepare, and unpromoted entries.
+
+`remove` finds the worktree by directory name, branch or path. It refuses, unless
+`--force`, when the worktree holds unpromoted entries or uncommitted changes. It
+frees the worktree's ports, runs `git worktree remove`, and deletes the branch
+with `git branch -d` unless `--keep-branch` (with `--force`, `-D`).
+
+Settings live in `.metaproject/worktree.config.json` (optional): `envFiles`,
+`dependencies`, `ports`, `prepare.rebuildIndexes`.
+
+---
+
 ## workspace
 
 Shared Agent Context operator surface. Thin argv adapter over `src/sac/`

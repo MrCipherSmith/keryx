@@ -24,7 +24,7 @@ import { textWithLineComments, type LineComment } from "./lineComments";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { userPromptContext, type UserPromptContext } from "./userPrompt";
 import { findCommand } from "../acp/commands";
-import { commitChatAttachments, discardChatAttachment, gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
+import { commitChatAttachments, discardChatAttachment, gitRepository, openExternal, pickFolder, projectFiles, saveChatFile, saveChatImage } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { browserOpen } from "../platform/panels";
 import type { PrLinks } from "../components/prLinks";
@@ -447,6 +447,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onAttachmentsSent={(paths) => void commitChatAttachments([...paths]).catch(() =>
               toast({ level: "error", title: "Attachments may not be kept", body: "Sent files could not be saved for later; previews may disappear after you close this window." }))}
             pickAttachmentFolder={() => pickFolder("Add folder to message")}
+            searchFiles={(q) => projectFiles(cwd, q).then((r) => r.files.slice(0, 200))}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}
             onStop={s.cancel}

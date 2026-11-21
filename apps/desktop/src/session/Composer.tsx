@@ -42,6 +42,8 @@ interface Props {
   onAttachmentsSent?: (paths: readonly string[]) => void;
   loadImage?: (path: string) => Promise<string>;
   pickAttachmentFolder?: () => Promise<string | null>;
+  /** Ranked project-relative paths for an `@` mention query (the caller caps the list; a bare `@` is a query too). Without it `@` does nothing. */
+  searchFiles?: (query: string) => Promise<string[]>;
   onStop: () => void;
   onMode: (id: string) => void;
   onModel: (configId: string, value: string) => void;
@@ -103,7 +105,7 @@ export function modelChoices(option: ConfigOption | undefined): ConfigSelectOpti
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment, usage, onCompact, onDetails },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, searchFiles, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment, usage, onCompact, onDetails },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -180,7 +182,45 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if (dismissed || !text.startsWith("/") || /\s/.test(text)) return [];
     return groupCommands(commands, text.slice(1));
   }, [text, commands, dismissed, disabled, menu, showAllCommands]);
-  const matches = useMemo(() => flattenGroups(groups), [groups]);
+  const commandMatches = useMemo(() => flattenGroups(groups), [groups]);
+
+  // `@word` ending at the caret (at the start or after whitespace) opens a file picker over the same popup.
+  const [caret, setCaret] = useState(0);
+  // Results are tagged with the query they answer, so a stale list is never shown or selectable.
+  const [found, setFound] = useState<{ query: string; files: string[] } | null>(null);
+  const pendingCaret = useRef<number | null>(null);
+  const searchRef = useRef(searchFiles);
+  useEffect(() => {
+    searchRef.current = searchFiles;
+  });
+  const slashMode = text.startsWith("/") && !/\s/.test(text);
+  const mention = useMemo(() => {
+    if (!searchFiles || disabled || menu === "add" || showAllCommands || slashMode || dismissed) return null;
+    const m = /(^|\s)@(\S*)$/.exec(text.slice(0, Math.min(caret, text.length)));
+    return m ? { start: m.index + (m[1] ?? "").length, query: m[2] ?? "" } : null;
+  }, [text, caret, searchFiles, disabled, menu, showAllCommands, slashMode, dismissed]);
+  const mentionQuery = mention ? mention.query : null;
+  useEffect(() => {
+    if (mentionQuery === null) {
+      setFound((f) => (f ? null : f));
+      return;
+    }
+    let stale = false;
+    const timer = setTimeout(() => {
+      const search = searchRef.current;
+      if (!search) return;
+      search(mentionQuery).then(
+        (r) => { if (!stale) setFound({ query: mentionQuery, files: r }); },
+        () => { if (!stale) setFound(null); },
+      );
+    }, 120);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [mentionQuery]);
+  const mentionFiles = mention && commandMatches.length === 0 && found?.query === mention.query ? found.files : [];
+  const matches: ReadonlyArray<AvailableCommand | string> = mentionFiles.length > 0 ? mentionFiles : commandMatches;
   const active = Math.min(sel, matches.length - 1);
 
   useEffect(() => setSel(0), [text]);
@@ -206,6 +246,24 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useEffect(() => {
     if (!disabled) area.current?.focus();
   }, [disabled]);
+
+  useLayoutEffect(() => {
+    const at = pendingCaret.current;
+    if (at === null) return;
+    pendingCaret.current = null;
+    area.current?.setSelectionRange(at, at);
+  }, [text]);
+
+  const completeMention = (path: string) => {
+    if (!mention) return;
+    const before = text.slice(0, mention.start);
+    const after = text.slice(Math.min(caret, text.length));
+    const insert = `@${path} `;
+    pendingCaret.current = before.length + insert.length;
+    setText(`${before}${insert}${after}`);
+    setCaret(before.length + insert.length);
+    area.current?.focus();
+  };
 
   const complete = (c: AvailableCommand) => {
     const suffix = showAllCommands ? (text.startsWith("/") ? text.match(/\s[\s\S]*/)?.[0] ?? " " : ` ${text}`) : " ";
@@ -264,10 +322,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         return;
       }
       const chosen = matches[active];
-      const exact = matches.some((c) => `/${c.name}` === text);
-      if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && (showAllCommands || !exact)))) {
+      const exact = commandMatches.some((c) => `/${c.name}` === text);
+      const isFile = typeof chosen === "string";
+      if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && (isFile || showAllCommands || !exact)))) {
         e.preventDefault();
-        complete(chosen);
+        if (typeof chosen === "string") completeMention(chosen);
+        else complete(chosen);
         return;
       }
       if (e.key === "Escape") {
@@ -344,14 +404,43 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   return (
     <div className={`composer${disabled ? " is-disabled" : ""}${busy ? " is-busy" : ""}`}>
-      {matches.length > 0 ? (
+      {mentionFiles.length > 0 ? (
+        <ul id={listId} className="slash-pop" role="listbox" aria-label="File mentions">
+          <li role="presentation" className="slash-group-wrap">
+            <div className="slash-group">Files</div>
+            <ul role="presentation">
+              {mentionFiles.map((path, i) => {
+                const cut = path.lastIndexOf("/") + 1;
+                return (
+                  <li
+                    key={path}
+                    id={`${listId}-opt-${i}`}
+                    role="option"
+                    aria-selected={i === active}
+                    className={i === active ? "is-sel" : ""}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      completeMention(path);
+                    }}
+                    onMouseMove={() => i !== active && setSel(i)}
+                  >
+                    <span className="slash-name truncate" title={path}>
+                      @<span style={{ opacity: 0.6, fontWeight: 400 }}>{path.slice(0, cut)}</span>{path.slice(cut)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        </ul>
+      ) : commandMatches.length > 0 ? (
         <ul id={listId} className="slash-pop" role="listbox" aria-label="Slash commands">
           {groups.map((g) => (
             <li key={g.group} role="presentation" className="slash-group-wrap">
               <div className="slash-group">{g.group}</div>
               <ul role="presentation">
                 {g.items.map((c) => {
-                  const i = matches.indexOf(c);
+                  const i = commandMatches.indexOf(c);
                   return (
                     <li
                       key={c.name}
@@ -428,6 +517,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         placeholder={disabledReason ?? (busy ? `keryx is working. ${sendKey === "enter" ? "Enter" : `${MOD}Return`} queues your next message` : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);
+          setCaret(e.target.selectionStart ?? e.target.value.length);
           setSlashSession(null);
           setDismissed(false);
         }}
@@ -439,6 +529,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           void localDraft.addFiles(files, true);
         }}
         onKeyDown={onKeyDown}
+        onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+        onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
       />
       <input key={sessionId} ref={fileInput} type="file" multiple hidden
         aria-label="Choose files or images" accept={saveFile ? undefined : "image/*"}

@@ -257,6 +257,19 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx app status [--json] | install | update [--pre] [--dir <folder>] [--wait-pid <pid>] [--relaunch] | build\n",
     "                                               Install, update or build the Keryx desktop app (macOS) from GitHub Releases\n",
     "  app       Install, update, build or check the Keryx desktop app (macOS)\n",
+    // Worktree readiness (flow 506): `keryx worktree`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    "  keryx worktree create <name> [--base <ref>] [--branch <b>] [--path <dir>] [--json]\n",
+    "                                               git worktree add on a new branch, then prepare\n",
+    "  keryx worktree prepare [--only env,deps,ports,indexes] [--json] [--force]\n",
+    "                                               Ready this worktree: .env files, dependencies, ports, memory index\n",
+    "  keryx worktree promote [--store memory,learning] [--dry-run] [--entry <id-or-path>]... [--json]\n",
+    "                                               Carry uncommitted memory and accepted learning to the user area\n",
+    "  keryx worktree env                            Print export lines for this worktree's ports\n",
+    "  keryx worktree exec -- <command> [args...]    Run a command with this worktree's ports\n",
+    "  keryx worktree status [--json]                Label, ports, dependencies, env file names, unpromoted entries\n",
+    "  keryx worktree remove <name> [--keep-branch] [--force]\n",
+    "                                               Free the ports and remove the worktree; refuses unpromoted or dirty without --force\n",
+    "  worktree  Ready a linked git worktree (env files, dependencies, ports, memory index) and carry its findings out before removal\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

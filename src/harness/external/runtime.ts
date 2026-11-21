@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, normalizeContractName, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
+import { worktreeAgentBlock } from "../../worktree/agent-lines";
 import { codecWriteVersionRefusal, validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { dropOptionalNulls, toStrictOutputSchema } from "./strict-schema";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
@@ -465,6 +466,10 @@ export async function runExternalChild(
     }
 
     const created = await deps.worktree.create(input.worktreeId);
+    // Spec 5.3: tell the child its absolute worktree root and index path. Empty for a
+    // directory that is not a linked worktree (a fake port in tests, a clone port).
+    const worktreeBlock = await worktreeAgentBlock(created.path);
+    const childPrompt = worktreeBlock.length === 0 ? assembled.prompt : `${assembled.prompt}\n\n${worktreeBlock}`;
     try {
       if (codec === undefined) {
         return await runAcpBranch({
@@ -473,12 +478,12 @@ export async function runExternalChild(
           entry,
           write: sandbox === "worktree-write",
           worktreePath: created.path,
-          prompt: assembled.prompt,
+          prompt: childPrompt,
           validate: (built) => validateStructuredResult(built, resultSchema, normalize),
         });
       }
       const runInput = {
-        prompt: assembled.prompt,
+        prompt: childPrompt,
         cwd: created.path,
         sandbox,
         ...(input.runtime.model === undefined || input.runtime.model === null ? {} : { model: input.runtime.model }),
@@ -532,7 +537,7 @@ export async function runExternalChild(
           argv,
           cwd: created.path,
           env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth, runtimeId: entry.id }),
-          prompt: assembled.prompt,
+          prompt: childPrompt,
           timeoutMs: input.timeoutMs,
           // Per-agent override of the shared line-stream default (flow 298
           // T14); absent for both shipped codec agents today.
@@ -544,7 +549,7 @@ export async function runExternalChild(
           ...(streaming
             ? {
                 initialStdin: [
-                  (codec.encodeStdinMessage as NonNullable<typeof codec.encodeStdinMessage>)(assembled.prompt),
+                  (codec.encodeStdinMessage as NonNullable<typeof codec.encodeStdinMessage>)(childPrompt),
                 ],
               }
             : {}),

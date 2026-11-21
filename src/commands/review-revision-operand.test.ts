@@ -194,7 +194,7 @@ const ALLOWED: Readonly<Record<string, readonly [sites: number, reason: string]>
   "commands/research-sync.ts": [1, "git archive writes keryx's own temp file; the revision is the literal HEAD"],
   "commands/review-jev-comments.ts": [1, "ref defaults to HEAD; no caller passes a typed value"],
   "commands/review-jev-edit-guard.ts": [2, "HEAD followed by --, or --no-index with fixed paths"],
-  "commands/trigger-dispatch.ts": [5, "operand is refs/heads/<branch>, never dash-leading"],
+  "commands/trigger-dispatch.ts": [3, "operand is refs/heads/<branch>, never dash-leading"],
   "decisions/blind.ts": [2, "a word list of blocked git subcommands, not git"],
   "flow/folder-committed.ts": [1, "HEAD, paths follow --"],
   "flow/remote-flows.ts": [1, "ref is built from a remote name git listed"],
@@ -226,6 +226,9 @@ const ALLOWED: Readonly<Record<string, readonly [sites: number, reason: string]>
   "tui/jev-rules-command.ts": [1, "no revision operand"],
   "wiki/freshness/page-freshness.ts": [3, "verifiedAt is probed by cat-file -e (which fails on a dash-leading value) before log and diff run"],
   "wiki/freshness/run.ts": [2, "operands are <rev>:<path> after collectChanges passed rev through revisionOperand, or HEAD:<path>"],
+  "worktree/create.ts": [2, "the base and branch pass assertGitRevision first; operands follow -- or --end-of-options"],
+  "worktree/remove.ts": [2, "operands are a worktree path after -- and refs/heads/<branch> after --end-of-options"],
+  "worktree/test-support.ts": [2, "test fixtures run git with fixed arguments in temp repositories"],
 };
 
 function sourceFiles(dir: string, out: string[]): string[] {
