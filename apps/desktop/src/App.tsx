@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
 import { isTauri } from "./platform/backend";
 import {
   acpStop,
@@ -446,16 +447,6 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     return items;
   }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject]);
 
-  // The title bar names the project and the view; the page below keeps only its own toolbar.
-  const title =
-    view === "session" ? (
-      <span className="truncate">{state.title?.trim() || "New session"}</span>
-    ) : (
-      <span className="truncate">
-        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : "Pull requests"}`}
-      </span>
-    );
-
   const topPermission = s.permissions[0];
   const topAsk = s.asks[0];
   const workView = view === "settings" ? settingsReturn.current : view;
@@ -465,6 +456,18 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
   const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
+  const openReviewWorkspace = useCallback(async (key: DeskRunKey, run: DeskRun) => {
+    const prior = readSessionReviewLinks(cwd).find(link => link.id === run.id && link.key.repositoryId === key.repositoryId &&
+      link.key.viewer.toLowerCase() === key.viewer.toLowerCase() && state.sessions.some(session =>
+        session.sessionId === link.sessionId && !sessionFlags(session).archivedAt));
+    const id = prior ? prior.sessionId : await s.newSession();
+    if (!id) throw new Error("Could not create the review session.");
+    if (prior) await s.loadSession(id);
+    else setReviewLinks(rememberSessionReview(cwd, {
+      id: run.id, sessionId: id, key, revision: { baseSha: run.baseSha, headSha: run.headSha },
+    }));
+    setView("session");
+  }, [cwd, s, state.sessions]);
   const draftReview = s.reviewDraftRequest;
   const sessionFlow = state.sessions.find(session => session.sessionId === state.sessionId);
   const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
@@ -472,6 +475,16 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const sessionReviews = useMemo(() => reviewLinks.filter(link => link.sessionId === state.sessionId &&
     (!viewer || viewer.toLowerCase() === link.key.viewer.toLowerCase())), [reviewLinks, state.sessionId, viewer]);
   const sessionTitle = reviewSessionTitle(state.title?.trim(), sessionReviews.at(-1)) || "New session";
+  // The title bar names the project and the view; the page below keeps only its own toolbar.
+  const title =
+    view === "session" ? (
+      <span className="truncate">{sessionTitle}</span>
+    ) : (
+      <span className="truncate">
+        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : "Pull requests"}`}
+      </span>
+    );
+
   useEffect(() => { void setWindowTitle(`${sessionTitle} — ${basename(cwd)}`); }, [sessionTitle, cwd]);
   const loadReviewTargets = useCallback((hint?: string, signal?: AbortSignal) => {
     if (reviewDisconnected) return Promise.reject(new Error("Choose the project's GitHub account in Project Settings."));
@@ -512,7 +525,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <div className="view" hidden={view !== "session"}>
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders}
           reviewLinks={reviewLinks}
-          reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"} /> : undefined}
+          reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
+            onContinuation={link => setReviewLinks(rememberSessionReview(cwd, link))} /> : undefined}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
       {workView === "flows" ? (
@@ -526,7 +540,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
               flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
             setLinkedFlow(dir);
             setView("flows");

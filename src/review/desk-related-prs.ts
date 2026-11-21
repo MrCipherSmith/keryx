@@ -4,12 +4,12 @@ import { parseProjectPr } from "./pr-context";
 export const DESK_RELATED_PRS = "KERYX_DESK_RELATED_PRS";
 
 type PullLink = { repo: string; number: number };
-export type RelatedReviewPull = PullLink & ({ head: string } | { unavailable: true });
+export type RelatedReviewPull = PullLink & ({ head: string } | { unavailable: true; reason?: "access" | "lookup" | "identity" | "fetch" });
 
 export function linkedReviewPulls(body: string, subject: PullLink): PullLink[] {
   const owner = subject.repo.split("/")[0]?.toLowerCase();
   const found = new Map<string, PullLink>();
-  // Read explicit pull request links from the description only. Do not follow a
+  // Read explicit pull request links from the description and operator guidance. Do not follow a
   // link to another organization, or recursively follow a dependency's links.
   const links = /https:\/\/github\.com\/([\w-]+\/[\w.-]+)\/pull\/([1-9]\d*)(?=$|[\s).#?\]>,;\x60])|(?<![\w./-])([\w-]+\/[\w.-]+)#([1-9]\d*)\b/gi;
   for (const link of body.matchAll(links)) {

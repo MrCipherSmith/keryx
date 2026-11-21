@@ -1563,8 +1563,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           deskAlternatives = (pools?.[0] ?? []).filter(candidate => candidate !== configured &&
             pools?.every(pool => pool.some(item => item.provider === candidate.provider && item.model === candidate.model)))
             .map(candidate => ({ providerId: candidate.provider, modelId: candidate.model }));
-        } else if (provider !== session.providerId || model !== session.modelId ||
-            (assignment.mode !== "baseline" && (assignment.mode !== "model" || modelRefKey(assignment.target) !== modelRefKey(session)))) {
+        } else if (!(options?.adaptive && assignment.mode === "auto" && typeof provider === "string" && typeof model === "string") &&
+            (provider !== session.providerId || model !== session.modelId ||
+              (assignment.mode !== "baseline" && (assignment.mode !== "model" || modelRefKey(assignment.target) !== modelRefKey(session))))) {
           emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
           return { status: "Denied", isError: true, output: "spawn_subagent: the Desktop review plan no longer matches the host-authorized Review model. Start a new review to apply routing changes." };
         }
@@ -1743,12 +1744,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             kind: "dispatch",
           },
         });
+        const unavailable = (receipt: RoutingDecisionReceipt) => receipt.decision.status === "blocked" &&
+          ["candidate-unverified", "context-insufficient", "model-unavailable", "credentials-missing"].includes(receipt.decision.reason);
         routingReceipt = route(request);
         for (const candidate of deskAlternatives) {
-          if (routingReceipt.decision.status !== "blocked" ||
-              !["candidate-unverified", "context-insufficient", "model-unavailable", "credentials-missing"].includes(routingReceipt.decision.reason)) break;
+          if (!unavailable(routingReceipt)) break;
           routingReceipt = route({ ...request, requestId: `subagent:${workerId}:${randomUUID()}`,
             userOverride: { mode: "model", target: candidate } });
+        }
+        if (desktopReviewer && deskOverride && deps.deskOptions?.adaptive && unavailable(routingReceipt)) {
+          const { userOverride: _override, ...fallbackRequest } = request;
+          const fallback = route({ ...fallbackRequest, requestId: `subagent:${workerId}:${randomUUID()}` });
+          if (fallback.decision.status === "selected") {
+            routingReceipt = fallback;
+            emitFleetEvent({ kind: "log", id: workerId,
+              entry: { kind: "system", text: "Selected review tier unavailable. Using the project's authorized Review route." } });
+          }
         }
         const decision = routingReceipt.decision;
         if (decision.status !== "selected") {

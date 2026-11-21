@@ -6,3 +6,19 @@
 .session-review-item summary { cursor: pointer; color: var(--accent); }
 .session-review-message { color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .session-review-message[role="alert"] { display: block; }
+
+.session-review-resume {
+  display: grid;
+  gap: var(--space-2, 8px);
+}
+.session-review-resume label {
+  display: grid;
+  gap: var(--space-1, 4px);
+}
+.session-review-resume textarea {
+  width: 100%;
+  resize: vertical;
+}
+.session-review-resume button {
+  justify-self: end;
+}

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DeskRun } from "../../../../src/review/desk-run-types";
+import { canContinueDeskRun, type DeskRun } from "../../../../src/review/desk-run-types";
 import { errMessage } from "../lib/format";
 import { Icon } from "../components/Icon";
 import { publishSessionReview, reviewRun, type ReviewRunAction } from "../platform/reviewRuns";
 import { pendingManualQuestions, ReviewProgress, runStatusLabel } from "./ReviewProgress";
 import { ReviewRunDialog } from "./ReviewRunDialog";
+import { ReviewQuestion } from "./ReviewQuestion";
 import { ReviewTranscript } from "./ReviewTranscript";
 import { ReviewOutcome } from "./ReviewOutcome";
 import { readRunStatus } from "./runPolling";
@@ -16,21 +17,29 @@ import "./SessionReviewActivity.css";
 
 const PASSIVE_FOLLOW = () => () => {};
 
-export function SessionReviewActivity({ cwd, links, visible }: {
+export function SessionReviewActivity({ cwd, links, visible, onContinuation }: {
   cwd: string; links: readonly SessionReviewLink[]; visible: boolean;
+  onContinuation: (link: SessionReviewLink) => void;
 }) {
   const [limit, setLimit] = useState(5);
   return <section className="session-review-activity" aria-label="Review activity">
     {links.length > limit && <button className="btn btn-sm" onClick={() => setLimit(value => value + 5)}>Show earlier reviews</button>}
-    {links.slice(0, limit).reverse().map(link => <FollowedReview cwd={cwd} link={link} visible={visible} key={link.id} />)}
+    {links.slice(0, limit).map((link, index) => <FollowedReview cwd={cwd} link={link} visible={visible} key={link.id}
+      canContinue={!links.slice(0, index).some(next => next.key.repositoryId === link.key.repositoryId && next.key.number === link.key.number &&
+        next.key.viewer.toLowerCase() === link.key.viewer.toLowerCase() && next.revision.headSha === link.revision.headSha && next.revision.baseSha === link.revision.baseSha)}
+      onContinuation={onContinuation} />).reverse()}
   </section>;
 }
 
-function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionReviewLink; visible: boolean }) {
+function FollowedReview({ cwd, link, visible, canContinue, onContinuation }: {
+  cwd: string; link: SessionReviewLink; visible: boolean; canContinue: boolean;
+  onContinuation: (link: SessionReviewLink) => void;
+}) {
   const [run, setRun] = useState<DeskRun | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
+  const [guidance, setGuidance] = useState("");
   const inFlight = useRef(false);
   const writing = useRef(false);
   const generation = useRef(0);
@@ -97,6 +106,29 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
     } finally { writing.current = false; setWorking(false); }
     await refresh();
   }
+  async function continueReview() {
+    if (working || writing.current) return;
+    writing.current = true;
+    const current = ++generation.current;
+    setWorking(true);
+    setError("");
+    try {
+      const note = guidance.trim();
+      const result = await reviewRun(cwd, link.key, { kind: "continue", id: link.id, ...(note && { guidance: note }) });
+      const next = result.runs.find(item => item.id === result.startedRunId);
+      if (!next || next.continuation?.previousId !== link.id)
+        throw new Error("Could not confirm the continuation. Refresh the review before trying again.");
+      onContinuation({ ...link, id: next.id, prompt: note || "Continue review" });
+      publishSessionReview(cwd, link.key, result);
+      if (current === generation.current) setGuidance("");
+    } catch (failure) {
+      if (current === generation.current) setError(errMessage(failure));
+    } finally {
+      writing.current = false;
+      setWorking(false);
+    }
+  }
+
   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
     const snapshot = await reviewRun(cwd, link.key, action);
     if (action.kind === "decide") {
@@ -111,9 +143,11 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
 
   const prefix = `[Review #${link.key.number}]`;
   const status = run ? runStatusLabel(run) : "Checking review status…";
-  const awaitAnswer = run && pendingManualQuestions(run).length > 0;
+  const questions = run ? pendingManualQuestions(run) : [];
+  const awaitAnswer = questions.length > 0;
   const terminal = !!run && !runActive(run);
   const needsPublication = run?.publication === "pending";
+  const canResume = run && canContinue && canContinueDeskRun(run);
   const sessionLabel = awaitAnswer ? "Answer review question" : needsPublication ? "Review publication" : terminal ? "View review result" : "Open review session";
   const latest = run?.coordinatorActivity?.filter(item => item.kind === "status" || item.kind === "message" || item.kind === "error").at(-1);
   return <>
@@ -121,7 +155,7 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
   <article className="session-review-item">
     <header>
       <strong role="status">{prefix} {status}</strong>
-      {needsPublication && <span className="badge review-publication-pending">Action required</span>}
+      {(needsPublication || canResume || awaitAnswer) && <span className="badge review-publication-pending">Action required</span>}
       {run && <div className="review-action-row">
         <button className="btn review-icon-action" type="button" aria-label={sessionLabel} title={sessionLabel}
           aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name={terminal ? "file" : "chat"} /></button>
@@ -132,6 +166,14 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
       {run.options?.orchestrator !== false && <ReviewProgress state={run.state} progress={run.reviewerProgress} />}
       {terminal && <ReviewOutcome run={run} />}
       {needsPublication && <p className="session-review-message">Choose whether to publish on GitHub.</p>}
+      {questions.map(question => <ReviewQuestion key={question.id} question={question} working={working}
+        legend={question.reviewer ? question.reviewer + " needs your input" : "Coordinator needs your input"}
+        onAnswer={answer => void mutate({ kind: "answer", id: run.id, questionId: question.id, answer })} />)}
+      {canResume && <form className="session-review-resume" onSubmit={event => { event.preventDefault(); void continueReview(); }}>
+        <label>Guidance for the coordinator <textarea value={guidance} maxLength={2000} rows={3} disabled={working}
+          placeholder="Add missing context or a related PR link" onChange={event => setGuidance(event.currentTarget.value)} /></label>
+        <button type="submit" className="btn btn-primary" disabled={working}>Continue review</button>
+      </form>}
       {latest && run.state !== "completed" && <p className="session-review-message">{prefix} {latest.text}</p>}
       {!terminal && !latest && (run.reason || run.phase) && <p className="session-review-message">{prefix} {run.reason || run.phase}</p>}
       {!!run.coordinatorActivity?.length && <details>

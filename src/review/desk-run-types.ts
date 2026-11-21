@@ -97,7 +97,14 @@ export const DESK_REVIEW_ACTIONS = ["complete", "close", "archive", "restore", "
 export type DeskReviewAction = typeof DESK_REVIEW_ACTIONS[number];
 export type DeskReviewDecision = { action: DeskReviewAction; reason: string; at: string };
 export type DeskReviewCheck = { id: string; title: string; evidence: string; canWaive: boolean };
+export function canContinueDeskRun(run: DeskRun): boolean {
+  return run.source !== "existing" && !run.closure &&
+    !(run.options?.orchestrator === false && run.state === "partial" && run.result?.findingsKnown) && (!run.decision || run.decision.action === "restore") &&
+    (run.state === "partial" || run.state === "blocked" || run.state === "budget" || run.state === "failed" || run.state === "cancelled");
+}
+
 export interface DeskRun extends DeskRevision {
+  continuation?: { previousId: string; guidance?: string };
   publication?: import("./desk-publication-types").PublicationOutcome;
   decision?: DeskReviewDecision;
   closure?: "completed" | "closed";

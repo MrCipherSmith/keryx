@@ -1812,13 +1812,23 @@ async function applyReviewRoutingCategory(
   routingTask: string,
   routingRequirements: RoutingRequirements,
   pool: readonly DeskReviewModel[] = [],
+  adaptiveFallback = false,
 ): Promise<ReviewRoutingResult> {
   const resolve = (candidate?: DeskReviewModel) => resolveReviewRouting(
     cwd, catalog, session, routingConfig, routingTask, routingRequirements, undefined, candidate,
   );
   let receipt = await resolve(pool[0]);
   for (let i = 1; i < pool.length && receipt.decision.status !== "selected"; i++) receipt = await resolve(pool[i]);
-  const contextLines = contextUnknownLines(receipt.decision, "review");
+  let fallbackNotice: string | undefined;
+  if (adaptiveFallback && pool.length && receipt.decision.status === "blocked" &&
+      ["candidate-unverified", "context-insufficient", "model-unavailable", "credentials-missing"].includes(receipt.decision.reason)) {
+    const fallback = await resolve();
+    if (fallback.decision.status === "selected") {
+      fallbackNotice = `The selected tier could not be verified (${receipt.decision.reason}). Using the project's authorized Review route.`;
+      receipt = fallback;
+    }
+  }
+  const contextLines = [...(fallbackNotice ? [fallbackNotice] : []), ...contextUnknownLines(receipt.decision, "review")];
   if (receipt.decision.status !== "selected") {
     const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
     return {
@@ -1880,6 +1890,7 @@ async function runTier(args: string[], discover = tierCatalog): Promise<void> {
       outputTokensReserved: 4_096,
     },
     pool,
+    options?.adaptive === true,
   );
   const notices = [...settings.notices, ...routeNotices];
   // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
@@ -2082,7 +2093,14 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
   const env = envWithSavedApiKeys();
   const detected = await detectProviders({ fetch, env });
   const hasKey = typeof env.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.length > 0;
-  return await withLiveCodexModels(detected.filter((d) => d.name !== "anthropic" || hasKey));
+  const catalog = detected.filter(d => d.name !== "anthropic" || hasKey);
+  // A Desktop coordinator already authenticated on its own model. Its router
+  // still checks credentials, capabilities and project policy for every request.
+  if (deskReviewRoutingRoot() && session.providerId === "openai-codex" &&
+      !catalog.some(entry => entry.name === session.providerId) && hasCredential(session.providerId, env)) {
+    return await withLiveCodexModels([...catalog, { name: session.providerId }]);
+  }
+  return await withLiveCodexModels(catalog);
 }
 
 /**

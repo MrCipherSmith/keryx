@@ -21,13 +21,17 @@ import type { ManagedReviewManifest } from "./types";
 import { DESK_OPTIONS_ENV, deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
-import { DESK_REPORT_OVERLAY_FILE, DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
+import { DESK_REPORT_OVERLAY_FILE, DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_RESUME_PACKAGE, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
 import { DESK_RELATED_PRS, linkedReviewPulls, relatedPullGitDir, type RelatedReviewPull } from "./desk-related-prs";
 import { finishAutoDesktopReview } from "./desk-auto-finalize";
 import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay,
   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, reviewReportDisclosure, scopedFile } from "./desk-review-report";
 import { readRoundNumber } from "./round-record";
+import { askDesktopOperator } from "./desk-questions";
+import { estimatePlan, planConfirmed, recordPlanConfirmation } from "./plan-confirmation";
+import { DEFAULT_MAX_PASSES } from "./chunks-estimate";
+import { REVIEW_WAVE_MAX_CHILDREN } from "./wave-limits";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
 
 interface DeskExecutionOptions {
@@ -41,6 +45,8 @@ interface DeskExecutionOptions {
   headSha: string;
   runDir: string;
   previousRunDir?: string | undefined;
+  resumeRunDir?: string;
+  guidance?: string;
   operatorRunId?: string;
   isWaitingForOperator?: () => boolean;
   signal: AbortSignal;
@@ -218,25 +224,34 @@ async function prepareRelatedPulls(options: DeskExecutionOptions, checkout: stri
   return Promise.all(links.map(async link => {
     const { signal } = options;
     const dir = relatedPullGitDir(checkout, link);
-    try {
+    const unavailable = (reason: "access" | "lookup" | "identity" | "fetch") => ({ ...link, unavailable: true as const, reason });
+    signal.throwIfAborted();
+    const response = await boardGh(options.cwd, ["api", "--hostname", "github.com", "--method", "GET",
+      `repos/${link.repo}/pulls/${link.number}`], auth, 18_000).catch((error: unknown) => error);
+    if (typeof response !== "string") {
       signal.throwIfAborted();
-      const response = await boardGh(options.cwd, ["api", "--hostname", "github.com", "--method", "GET",
-        `repos/${link.repo}/pulls/${link.number}`], auth, 15000);
-      const pull = JSON.parse(response) as { number?: number; base?: { repo?: { full_name?: string } }; head?: { sha?: string } };
-      const head = recordedSha(pull.head?.sha);
-      if (pull.number !== link.number || pull.base?.repo?.full_name?.toLowerCase() !== link.repo || !head) {
-        return { ...link, unavailable: true };
-      }
+      return unavailable(response instanceof Error && response.message.startsWith("access:") ? "access" : "lookup");
+    }
+    let pull: { number?: number; base?: { repo?: { full_name?: string } }; head?: { sha?: string } };
+    try { pull = JSON.parse(response); }
+    catch { return unavailable("lookup"); }
+    const head = recordedSha(pull?.head?.sha);
+    if (pull?.number !== link.number || pull.base?.repo?.full_name?.toLowerCase() !== link.repo || !head)
+      return unavailable("identity");
+    try {
       await mkdir(dir, { recursive: true, mode: 0o700 });
       await git(dir, ["init", "--bare", "--template="], signal);
-      await git(dir, ["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
-        "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "--end-of-options", `https://github.com/${link.repo}.git`, head],
-      signal, auth.login ? auth.env.GH_TOKEN : undefined);
-      if (await git(dir, ["rev-parse", "FETCH_HEAD"], signal) === head) return { ...link, head };
-    } catch {
-      signal.throwIfAborted();
-    }
-    return { ...link, unavailable: true };
+      const target = `https://github.com/${link.repo}.git`;
+      for (const ref of [`refs/pull/${link.number}/head`, head]) {
+        try {
+          await git(dir, ["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
+            "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "--end-of-options", target, ref],
+            signal, auth.login ? auth.env.GH_TOKEN : undefined);
+          if (await git(dir, ["rev-parse", "FETCH_HEAD"], signal) === head) return { ...link, head };
+        } catch { signal.throwIfAborted(); }
+      }
+    } catch { signal.throwIfAborted(); }
+    return unavailable("fetch");
   }));
 }
 
@@ -259,6 +274,47 @@ async function regularPackage(dir: string) {
   if (!(await lstat(dir)).isDirectory()) return false;
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
   return entries.every(entry => entry.isFile() || entry.isDirectory());
+}
+
+async function requestPlanApproval(
+  dir: string, checkout: string, subject: string, options: DeskExecutionOptions, summary: AutonomousSummary,
+): Promise<{ approved: boolean; reason: string } | undefined> {
+  if (!isReviewPackageDir(dir, checkout) || !(await regularPackage(dir))) return undefined;
+  const saved = await readJson<{ overThreshold?: boolean; next?: string; planKey?: string }>(path.join(dir, "plan.json"));
+  if (saved?.overThreshold !== true || typeof saved.next !== "string" || !saved.next.startsWith("confirm plan")) return undefined;
+  const manifest = await readJson<ManagedReviewManifest>(path.join(dir, "manifest.json"));
+  if (manifest?.status !== "draft" || manifest.reviewId !== path.basename(dir) ||
+      manifest.target?.ref !== subject || manifest.target.base !== options.baseSha || manifest.target.head !== options.headSha) return undefined;
+  const estimate = await estimatePlan(dir);
+  if (!estimate.overThreshold || estimate.planKey !== saved.planKey) {
+    return { approved: false, reason: "The saved review plan changed. Prepare a new plan before confirming it." };
+  }
+  if (await planConfirmed(dir, estimate)) return { approved: true, reason: "" };
+  const size = `${estimate.dispatches.toLocaleString("en-US")} reviewer assignments, estimated ${estimate.minutes.min}–${estimate.minutes.max} minutes`;
+  const ceiling = DEFAULT_MAX_PASSES * REVIEW_WAVE_MAX_CHILDREN;
+  if (estimate.dispatches > ceiling) {
+    return { approved: false, reason: `Review plan exceeds Desktop capacity (${size}; maximum ${ceiling} assignments). Split the review before continuing.` };
+  }
+  if (!options.operatorRunId) {
+    return { approved: false, reason: `The review plan requires operator approval (${size}). Continue from a review session to decide.` };
+  }
+  options.onProgress({ phase: "Awaiting your answer", rounds: summary.rounds, tokens: summary.tokens,
+    ...(summary.usage ? { usage: summary.usage } : {}), packageId: manifest.reviewId });
+  const question = `Run the expanded review plan? It calls for ${size}. ${estimate.overReasons.join(". ")}`;
+  const approve = "Approve expanded plan";
+  const answer = await askDesktopOperator(options.operatorRunId, { question, options: [
+    { id: "keep", label: "Keep review paused", description: "Keep the prepared review for later.", recommended: true },
+    { id: "approve", label: approve, description: "Allow the assignments in this exact plan within the review’s existing run limits." },
+  ] }, undefined, options.signal);
+  if (answer !== "approve") return { approved: false, reason: `The expanded review plan was left paused (${size}).` };
+  await options.verifyBeforeExecution?.();
+  options.signal.throwIfAborted();
+  const at = new Date().toISOString();
+  await recordPlanConfirmation(dir, estimate, {
+    confirmedVia: "host-question", quote: `${question} — ${approve}`, at,
+    hostQuestion: { source: "keryx-shell", ref: options.operatorRunId, questionText: question, answerText: approve, time: at },
+  });
+  return { approved: true, reason: "" };
 }
 
 // Only expose known artifact names from a package created in this attempt.
@@ -384,7 +440,10 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
     if (!prepared) {
       result = { ...EMPTY, outcome: "blocked", reason: "The PR closed or its base/head changed. Refresh the card before starting another review." };
     } else {
-      if (options.context) writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(options.context), { flag: "wx", mode: 0o600 });
+      if (options.context) {
+        const context = { ...options.context, ...(options.guidance && { operatorGuidance: options.guidance }) };
+        writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(context), { flag: "wx", mode: 0o600 });
+      }
       const { overlay, overlayWarning } = await projectReviewOverlay(options.cwd);
       if (options.options?.autoPublish && !overlayWarning) {
         await writeFileAtomic(path.join(runDir, DESK_TEMPLATE_SELECTION), JSON.stringify(reportTemplateFingerprint(overlay)), { mode: 0o600 });
@@ -392,14 +451,26 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       if (overlay?.kind === "slots") {
         writeFileSync(path.join(checkout, DESK_REPORT_OVERLAY_FILE), overlay.source, { flag: "wx", mode: 0o600 });
       }
-      const related = options.options?.mode === "auto" && typeof prepared.body === "string"
-        ? await prepareRelatedPulls(options, checkout, prepared.body, auth) : [];
+      const relatedText = [options.guidance, prepared.body].filter(Boolean).join("\n");
+      const related = options.options?.mode === "auto" && relatedText
+        ? await prepareRelatedPulls(options, checkout, relatedText, auth) : [];
       if (related.length) {
         await mkdir(runnerDir, { recursive: true, mode: 0o700 });
         await writeFileAtomic(path.join(runnerDir, "related-pulls.json"), JSON.stringify(related), { mode: 0o600 });
       }
       const previous = options.previousRunDir && path.join(options.previousRunDir, "package");
-      if (previous) {
+      let resumePackage: string | undefined;
+      if (options.resumeRunDir) {
+        const dir = path.join(options.resumeRunDir, "package");
+        const manifest = await readJson<ManagedReviewManifest>(path.join(dir, "manifest.json"));
+        if (manifest?.status === "draft" && manifest.target?.ref === subject &&
+            manifest.target.base === options.baseSha && manifest.target.head === options.headSha &&
+            /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(dir)) {
+          await cp(dir, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
+          resumePackage = manifest.reviewId;
+        }
+      }
+      if (previous && !resumePackage) {
         const manifest = await readJson<ManagedReviewManifest>(path.join(previous, "manifest.json"));
         if (manifest?.status === "closed" && await regularPackage(previous) && manifest.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId)) {
           await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
@@ -418,13 +489,17 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       signal.throwIfAborted();
       const selection = await ports.selectModel(options.cwd);
       signal.throwIfAborted();
-      const execution = await runAutonomousReview({
+      const maxMinutes = options.budgetMinutes ?? 30;
+      const maxTokens = options.options?.maxTokens ?? options.budgetTokens ?? undefined;
+      const execute = (preservedPackage: string | undefined, budgetMinutes = maxMinutes, budgetTokens = maxTokens) => runAutonomousReview({
         ...selection,
         ...(options.options ? { deskOptions: options.options } : {}),
         ...(options.operatorRunId ? { operatorRunId: options.operatorRunId } : {}),
+        ...(preservedPackage && { resumePackage: preservedPackage }),
+        ...(options.guidance && { guidance: options.guidance }),
         ...(options.isWaitingForOperator ? { isWaitingForOperator: options.isWaitingForOperator } : {}),
         cwd: checkout, ref: subject, fixedBase: options.baseSha, out: runnerDir, signal,
-        resolveHead: async () => options.headSha, budgetMinutes: options.budgetMinutes ?? 30, budgetTokens: options.options?.maxTokens ?? options.budgetTokens ?? undefined,
+        resolveHead: async () => options.headSha, budgetMinutes, budgetTokens,
         onProgress: options.onProgress,
         spawn(spec) {
           let attempted = false;
@@ -432,7 +507,7 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
             // Commit the PID guard inside the policy fence: this is when the reviewer
             // shell is released to spend budget, even if its parent crashes next.
             attempted = true;
-            const child = launch.child = spawn({ ...spec, env: { ...spec.env, PATH: searchPath, KERYX_UNATTENDED: "1", [DESK_REVIEW_SHELL]: "1", [DESK_REVIEW_HEAD]: options.headSha, [DESK_RELATED_PRS]: JSON.stringify(related), [DESK_OPTIONS_ENV]: deskOptionsKey(options.options), [DESK_REVIEW_PROJECT_ROOT]: path.resolve(options.cwd) } });
+            const child = launch.child = spawn({ ...spec, env: { ...spec.env, PATH: searchPath, KERYX_UNATTENDED: "1", [DESK_REVIEW_SHELL]: "1", [DESK_REVIEW_RESUME_PACKAGE]: preservedPackage ?? "", [DESK_REVIEW_HEAD]: options.headSha, [DESK_RELATED_PRS]: JSON.stringify(related), [DESK_OPTIONS_ENV]: deskOptionsKey(options.options), [DESK_REVIEW_PROJECT_ROOT]: path.resolve(options.cwd) } });
             if (child.pid) {
               try {
                 const identity = readProcessIdentity(child.pid);
@@ -452,9 +527,25 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
           }
         },
       });
-      let summary = execution.summary;
+      let { summary } = await execute(resumePackage);
       const packageDir = summary.package && path.resolve(checkout, summary.package.path);
-      if (!ports.spawn && options.options?.mode === "auto" && options.options.orchestrator !== false && !signal.aborted && summary.status === "incomplete" &&
+      const pending = !ports.spawn && !signal.aborted && summary.status === "incomplete" && summary.floorRefusals === 0 &&
+        summary.package?.status === "draft" && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews")
+        ? await requestPlanApproval(packageDir, checkout, subject, options, summary)
+        : undefined;
+      if (pending?.approved) {
+        const minutesLeft = maxMinutes - summary.durationSeconds / 60;
+        const tokensLeft = maxTokens === undefined ? undefined : maxTokens - summary.tokens;
+        if (minutesLeft <= 0 || (tokensLeft !== undefined && tokensLeft <= 0)) {
+          summary = { ...summary, status: "budget", exitCode: exitCodeFor("budget"),
+            reason: "The review budget was used while preparing the expanded plan." };
+        } else {
+          ({ summary } = await execute(summary.package!.id, minutesLeft, tokensLeft));
+        }
+      } else if (pending) {
+        summary = { ...summary, phase: "Review plan paused", reason: pending.reason };
+      }
+      if ((!pending || pending.approved) && !ports.spawn && options.options?.mode === "auto" && options.options.orchestrator !== false && !signal.aborted && summary.status === "incomplete" &&
           summary.floorRefusals === 0 && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews") &&
           isReviewPackageDir(packageDir, checkout) && await regularPackage(packageDir)) {
         const [bin, ...argv] = invocationArgv(resolveKeryxInvocation());

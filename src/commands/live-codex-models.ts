@@ -34,19 +34,21 @@ export function createLiveCodexModels(configDir?: string, deps: LiveCodexModelsD
     deps.fetchModels ?? (() => fetchOpenAiCodexModels(fetch, configDir === undefined ? {} : { configDir }));
   let live: readonly string[] | undefined;
   let observedAt: string | undefined;
-  return {
-    async start() {
-      try {
-        if (!hasGrant()) return;
-        const result = await fetchModels();
-        if (result.source === "live" && result.models.length > 0) {
-          live = [...result.models];
-          observedAt = new Date().toISOString();
-        }
-      } catch {
-        // keep the curated list
+  let started: Promise<void> | undefined;
+  async function discover() {
+    try {
+      if (!hasGrant()) return;
+      const result = await fetchModels();
+      if (result.source === "live" && result.models.length > 0) {
+        live = [...result.models];
+        observedAt = new Date().toISOString();
       }
-    },
+    } catch {
+      // keep the curated list
+    }
+  }
+  return {
+    start: () => (started ??= discover()),
     models: () => live,
     observedAt: () => observedAt,
   };

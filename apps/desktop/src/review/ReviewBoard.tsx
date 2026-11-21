@@ -22,6 +22,7 @@ import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
 import { EMPTY_FILTERS, filterReviews, stateQuery, type Filters } from "./model";
+import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewBoardState, ReviewCard } from "./types";
 
 export type ReviewTabIndicator = "attention" | "watching" | null;
@@ -35,6 +36,7 @@ interface Props {
   reviewModels?: readonly ReviewLaunchModel[];
   currentRepairModel?: ReviewLaunchModel | undefined;
   onOpenFlow: (dir: string) => void;
+  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
   onOpenSession?: ((card: ReviewCard) => void) | undefined;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
@@ -68,7 +70,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -444,7 +446,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
-      reviewModels={reviewModels} onOpenSession={onOpenSession && (() => onOpenSession(card))}
+      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={onOpenSession && (() => onOpenSession(card))}
       projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </section>;

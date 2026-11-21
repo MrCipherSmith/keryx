@@ -47,6 +47,21 @@ const finish: DeskFinish = {
   },
 };
 
+test("continuing a stopped review preserves its history and keeps private guidance on the new attempt", () => {
+  const old = started();
+  store.end(old, { ...finish, state: "partial", result: null });
+  expect(() => store.continuationSource(other, old.run.id)).toThrow("access:");
+  const nextId = store.atomic(() => store.requestContinuation("/project", key, old.run.id, "Review related PR #21"))!;
+  expect(nextId).not.toBe(old.run.id);
+  expect(store.byId(old.run.id)?.run.state).toBe("partial");
+  expect(store.byId(nextId)?.run).toMatchObject({
+    ...revision, source: "manual", state: "queued",
+    continuation: { previousId: old.run.id, guidance: "Review related PR #21" },
+  });
+  expect(store.history(key, nextId).runs[0]?.continuation).toEqual({ previousId: old.run.id });
+  expect(() => store.requestContinuation("/project", key, old.run.id)).toThrow("stale:");
+});
+
 test("another worktree sees the same active ID; a duplicate never removes a different waiting revision", () => {
   const active = started();
   const otherWindow = new DeskRunStore(directory);

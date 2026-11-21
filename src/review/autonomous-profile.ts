@@ -10,6 +10,7 @@ import { DEFAULT_REVIEW_PARALLEL } from "./wave-limits";
 import { shellWord } from "../lib/shell-quote";
 import { REFUSED_EARLIER } from "./review-system";
 
+export const DESK_REVIEW_RESUME_PACKAGE = "KERYX_DESK_REVIEW_RESUME_PACKAGE";
 export const DESK_REVIEW_SHELL = "KERYX_DESK_REVIEW_SHELL";
 export const DESK_REVIEW_HEAD = "KERYX_DESK_REVIEW_HEAD";
 export const DESK_REPORT_OVERLAY_FILE = ".keryx-review-report-overlay.md";
@@ -154,6 +155,7 @@ export function buildAutonomousPrompt(input: {
   readonly ref: string;
   readonly resumePackage?: string | undefined;
   readonly desktopOperator?: boolean;
+  readonly guidance?: string;
   readonly deskOptions?: DeskReviewOptions;
   readonly fixedBase?: string | undefined;
   /** The pull request's head commit as the host reports it; null when it could not be read. */
@@ -163,6 +165,9 @@ export function buildAutonomousPrompt(input: {
   /** This run's own scope file ({@link autonomousScopeFile}); the shared attended path only when none is given. */
   readonly scopeFile?: string | undefined;
 }): string {
+  const guidance = input.guidance
+    ? "Operator guidance for this review. Use it within the pinned PR scope and the existing tool permissions: " + JSON.stringify(input.guidance)
+    : "";
   if (input.deskOptions?.orchestrator === false && input.fixedBase && input.head) {
     const { ref, fixedBase: base, head } = input;
     return [
@@ -175,14 +180,15 @@ export function buildAutonomousPrompt(input: {
       desktopReportLanguage,
       desktopReportOverlay,
       `Record the result with keryx review ingest --target pr --target-ref ${shellWord(ref)} --base ${base} --head ${head} --review-id desktop-single-${head} --reviewers review-single --report desktop-single-review.md. Run this as a single command and finish after ingest succeeds. Do not run the review plan, ledger, reviewer dispatch, or complete commands.`,
-    ].join("\n\n");
+      guidance,
+    ].filter(Boolean).join("\n\n");
   }
   const scopeFile = shellWord(input.scopeFile ?? AUTONOMOUS_SCOPE_FILE);
   const scopeRef = input.fixedBase ? ` --ref ${input.fixedBase}` : "";
   const subject = input.base === undefined ? input.ref : `the local range ${input.ref} (start the package with \`keryx review start --target branch --ref ${input.base}\`)`;
   const lines = [
     input.fixedBase && input.head
-      ? `Your first shell call is exactly this one command: keryx review plan --target ${input.ref} --ref ${input.fixedBase} --head ${input.head} --host keryx-shell. The worker already bound unattended mode. The command creates the package, scope, PR context, reviewer roster, validated dispatch payloads and ledger. When it says dispatch, read the desktop-dispatch.json path it prints with read_file. Call spawn_subagent once per path in assignments (save_result_to in older queues), with assignment as its only argument, in waves of at most ${input.deskOptions?.maxParallel ?? REVIEW_WAVE_SIZE}. The host loads the original payload. For each blocked driver, report its reason and leave its coverage incomplete. Do not regenerate scope, drivers or payloads. If the command refuses, report the exact error.`
+      ? `Your first shell call is exactly this one command: keryx review plan --target ${input.ref} --ref ${input.fixedBase} --head ${input.head} --host keryx-shell. The worker already bound unattended mode. The command creates the package, scope, PR context, reviewer roster, validated dispatch payloads and ledger. If it says confirm plan, report that the prepared plan requires operator confirmation and stop so the Desktop worker can ask. When it says dispatch, read the desktop-dispatch.json path it prints with read_file. Call spawn_subagent once per path in assignments (save_result_to in older queues), with assignment as its only argument, in waves of at most ${input.deskOptions?.maxParallel ?? REVIEW_WAVE_SIZE}. The host loads the original payload. For each blocked driver, report its reason and leave its coverage incomplete. Do not regenerate scope, drivers or payloads. If the command refuses, report the exact error.`
       : `Run a full managed code review of ${subject} and finish it yourself: keryx review start, the reviewer waves, keryx review ingest, then keryx review complete.`,
     input.desktopOperator
       ? "A person can answer ordinary clarification questions through ask_user in the Desktop review. Ask only when their input is needed. Tool permissions and unattended review limits still apply; report a blocked action and choose another allowed path."
@@ -233,8 +239,9 @@ export function buildAutonomousPrompt(input: {
     );
   }
   if (input.resumePackage !== undefined) {
-    lines.push(`A package for this pull request request already exists: ${input.resumePackage}. Resume it and continue from where it stopped instead of starting a new one.`);
+    lines.push(`The preserved package is ${input.resumePackage}. Continue inside it, reconcile its recorded results and prioritize the missing coverage.`);
   }
+  if (guidance) lines.push(guidance);
   return lines.join("\n");
 }
 

@@ -60,6 +60,8 @@ export interface AutonomousRunOptions {
   /** Immutable PR base for a Desktop attempt. The detached checkout supplies the fixed head. */
   readonly fixedBase?: string;
   readonly operatorRunId?: string;
+  readonly resumePackage?: string;
+  readonly guidance?: string;
   readonly isWaitingForOperator?: () => boolean;
   /** Flow 457: an already parsed target (a local range); default: `ref` parsed as a pull request URL. */
   readonly target?: AutonomousTarget | undefined;
@@ -326,7 +328,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     : { head, ...(options.fixedBase ? { fixedBase: options.fixedBase } : {}), attempts: 1, packageId: null, tokens: 0, rounds: 0 };
 
   const before = new Set(listPackages(cwd, target).map((p) => p.id));
-  let resumePackage: string | undefined;
+  let resumePackage = options.resumePackage;
   if (sameHead && state.packageId !== null) {
     const known = listPackages(cwd, target).find((p) => p.id === state.packageId);
     if (known !== undefined && known.status !== "closed") resumePackage = known.id;
@@ -341,7 +343,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ ...(options.deskOptions ? { deskOptions: options.deskOptions } : {}), desktopOperator: !!options.operatorRunId, fixedBase: options.fixedBase, ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
+      prompt: buildAutonomousPrompt({ ...(options.deskOptions ? { deskOptions: options.deskOptions } : {}), desktopOperator: !!options.operatorRunId, fixedBase: options.fixedBase, ref: target.ref, resumePackage, ...(options.guidance && { guidance: options.guidance }), head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
       eventsFile,
       provider: options.provider,
       model: options.model,

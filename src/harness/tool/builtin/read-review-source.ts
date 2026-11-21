@@ -21,11 +21,24 @@ export function reviewSourceTool(cwd: string, head: string): InteractiveTool {
       const query = typeof input.find === "string" ? input.find.trim() : "";
       const requested = typeof input.related_pr === "string" ? input.related_pr.trim().toLowerCase() : "";
       const operation = input.operation ?? (file ? "read" : query ? "find" : "list");
-      if (operation === "list")
-        return { output: JSON.stringify(related.map(pr => ({ pull: relatedPullKey(pr), head: "head" in pr ? pr.head : null }))), isError: false };
+      if (operation === "list") {
+        return { output: JSON.stringify(related.map(pr => ({
+          pull: relatedPullKey(pr), head: "head" in pr ? pr.head : null,
+          ...("unavailable" in pr && pr.reason ? { reason: pr.reason } : {}),
+        }))), isError: false };
+      }
       const match = requested ? related.find(pr => relatedPullKey(pr) === requested) : undefined;
-      if (requested && (!match || !("head" in match)))
-        return { output: "This linked pull request has no pinned sources available in this review.", isError: true };
+      if (requested && (!match || !("head" in match))) {
+        const reason = match?.reason;
+        const notes = {
+          access: "The project GitHub account has no access to that pull request.",
+          lookup: "GitHub did not return pull request metadata.",
+          identity: "The linked pull request repository and head could not be verified.",
+          fetch: "Git could not fetch the verified pull request head.",
+        } as const;
+        return { output: "This linked pull request has no pinned sources available in this review." +
+          (reason && Object.hasOwn(notes, reason) ? " " + notes[reason] : ""), isError: true };
+      }
       const sourceDir = match ? relatedPullGitDir(cwd, match) : cwd;
       const revision = match && "head" in match ? match.head : head;
       try {
