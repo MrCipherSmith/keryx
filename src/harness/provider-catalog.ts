@@ -281,7 +281,7 @@ async function loadOrRefreshWith(
     if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
     else await clearProviderCatalogCache(deps.dir);
     return fresh;
-  }, now);
+  });
 }
 
 /**

@@ -21,7 +21,7 @@
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
-import { isLockHeld, withFileLock } from "../lib/fs";
+import { withFileLock } from "../lib/fs";
 import type { ModelsResolveResult, ProviderBalance } from "../commands/providers";
 
 /**
@@ -68,23 +68,22 @@ function catalogFile(dir?: string): string {
 export async function withCatalogRefreshLock(
   dir: string | undefined,
   refresh: () => Promise<ProviderCatalog>,
-  now: () => number,
 ): Promise<ProviderCatalog> {
-  const lockPath = `${catalogFile(dir)}.refresh.lock`;
+  ensureKeryxConfigDir(dir);
   let acquired = false;
   try {
-    ensureKeryxConfigDir(dir);
-    return await withFileLock(lockPath, () => {
+    // Detection and model listing are sequential and can each take eight seconds.
+    return await withFileLock(`${catalogFile(dir)}.refresh.lock`, () => {
       acquired = true;
       return refresh();
-    }, { timeoutMs: 12_000, retryMs: 50 });
+    }, { timeoutMs: 25_000, retryMs: 50 });
   } catch (error) {
-    if (acquired) throw error;
-    if (await isLockHeld(lockPath)) {
-      return loadProviderCatalogCache(dir) ?? { fetchedAt: new Date(now()).toISOString(), providers: {} };
+    // A read-only config directory still permits live detection. A contended
+    // lock must never trigger another probe or supply expired routing facts.
+    if (!acquired && error instanceof Error && "code" in error && ["EACCES", "EPERM", "EROFS"].some(code => code === error.code)) {
+      return refresh();
     }
-    // A read-only config directory still permits live detection.
-    return refresh();
+    throw error;
   }
 }
 

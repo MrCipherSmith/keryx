@@ -1316,6 +1316,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const source = options.models;
     if (source === undefined || stopping) return;
     routingRefreshNeeded = true;
+    routingProviders = [];
     listingGeneration += 1;
     listedChoices = undefined;
     listing = undefined;
@@ -1754,7 +1755,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
-  let routingProviders: readonly FlatPickerProvider[] = [];
+  let routingProviders: readonly FlatPickerProvider[] | undefined;
   let routingRefresh: Promise<void> | undefined;
   let routingRefreshNeeded = false;
   let routingRefreshFinishedAt: number | undefined;
@@ -1768,7 +1769,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const retryAge = routingRefreshFinishedAt === undefined ? Infinity : now - routingRefreshFinishedAt;
     if (!routingRefreshNeeded && (
       (retryAge >= 0 && retryAge < 10_000) ||
-      (routingProviders.length > 0 && routingProviders.every(provider => {
+      (routingProviders && routingProviders.length > 0 && routingProviders.every(provider => {
         const age = now - Date.parse(provider.observedAt ?? "");
         return age >= 0 && age < ROUTING_AVAILABILITY_TTL_MS;
       }))
@@ -1776,9 +1777,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const force = routingRefreshNeeded;
     routingRefreshNeeded = false;
     return routingRefresh = Promise.resolve().then(() => load(force)).then(providers => {
-      routingProviders = providers;
+      if (!routingRefreshNeeded) routingProviders = providers;
     }, () => {
-      routingProviders = [];
+      routingProviders ??= [];
       options.logError("acp: could not refresh the provider catalogue for model routing");
     }).finally(() => {
       routingRefreshFinishedAt = Date.now();
@@ -1815,7 +1816,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       },
       ...(options.routingProviders ? { refreshRoutingProviders } : {}),
       getDetectedProviders: () => {
-        if (options.routingProviders) {
+        if (routingProviders !== undefined) {
           const providerId = parent().providerId;
           return routingProviders.some(entry => entry.name === providerId)
             ? routingProviders
