@@ -97,16 +97,22 @@ async function finishRepair(context: RepairSubject, id: string, plan: RepairPlan
 async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, id: string, task: RepairTask) {
   const { store, grant, key, card } = context;
   const signal = AbortSignal.timeout(maxSeconds * 1000);
-  const checkout = await RepairCheckout.create(subject, key, card.number, signal);
+  let stage = "preparing the checkout";
+  let checkout: RepairCheckout | undefined;
   let drafted = false;
   try {
+    checkout = await RepairCheckout.create(subject, key, card.number, signal);
+    stage = "verifying the current PR revision";
     const beforeRepair = await readCurrent(context, card.headSha);
     if (grant.settings.draftWhileRepairing) {
+      stage = "moving the PR to Draft";
       drafted = await setRepairDraft(beforeRepair, true, act => store.authorized(grant, beforeRepair.auth, act));
       if (drafted) store.event(card.headSha, "Moved the pull request to Draft for the automatic repair.");
     }
+    stage = "preparing the repair inputs";
     const conflicts = task.kind === "conflict" ? await checkout.mergeBase() : [];
     if (conflicts.length || task.kind !== "conflict") {
+      stage = "waiting for the selected model to complete the repair";
       const { runPrRepairAgent } = await import("../commands/pr-repair-agent");
       await runPrRepairAgent({
         cwd: checkout.cwd, model: grant.settings.model, task: task.prompt,
@@ -114,19 +120,29 @@ async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, 
         authorize: () => store.authorized(grant, subject.auth, () => undefined),
       });
     }
+    stage = "validating the model changes";
     const commit = await checkout.commit(task.commitMessage, conflicts);
     if (!commit) throw new Error("There were no repair changes to push.");
+    stage = "verifying the revision before push";
     const current = await readCurrent(context, card.headSha);
     const plan = { commit, ready: drafted && grant.settings.readyAfterPush, ...(task.reply && { reply: task.reply }) };
     store.plan(id, plan);
+    stage = "pushing the validated commit";
     await checkout.push(commit, act => store.authorized(grant, current.auth, act));
+    stage = "confirming the push and completing GitHub follow-up";
     await finishRepair(context, id, plan, task.complete);
-  } catch (error) {
-    if (drafted && store.active(grant)?.id === id && store.active(grant)?.state === "working")
-      store.event(card.headSha, "The pull request remains in Draft because the automatic repair was not pushed.");
-    throw error;
+  } catch {
+    // Provider and subprocess diagnostics can expose untrusted code, logs or credentials.
+    // A prepared receipt stays pending so a later tick can recover a successful push.
+    const current = store.active(grant);
+    if (current?.id === id) {
+      const message = `Automatic repair stopped while ${stage}.`;
+      if (current.state !== "prepared") store.event(card.headSha,
+        message + (drafted ? " The pull request remains in Draft." : ""), id, "failed");
+      else store.event(card.headSha, message);
+    }
   } finally {
-    await checkout.dispose();
+    await checkout?.dispose();
   }
 }
 
@@ -167,15 +183,7 @@ export async function repairWatchedPullRequests(project: string, key: WatcherKey
       const id = store.claim(grant, task.cause, card.headSha);
       if (!id) continue;
       store.event(card.headSha, task.starting);
-      try {
-        await executeRepair(context, subject, id, task);
-      } catch {
-        // Subprocess/provider failures may contain untrusted code, logs or credentials.
-        // The plan is retained if a push happened but its receipt was lost.
-        const pending = store.active(grant);
-        if (pending?.id === id && pending.state !== "prepared")
-          store.event(card.headSha, "Automatic repair stopped before a verified push.", id, "failed");
-      }
+      await executeRepair(context, subject, id, task);
       // One model turn per watcher tick leaves the remaining PRs for later polls.
       return;
     } catch {

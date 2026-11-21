@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewBoardSnapshot, ReviewCard } from "./board-types";
@@ -210,6 +210,25 @@ test("PR subscriptions record only selected topics and preserve independent watc
   expect(readWatcher(cwd, key).events.some(event => event.number === 3)).toBe(true);
   expect(applyReviewRuleAction(cwd, { ...key, viewer: "other" }, { kind: "status" }).subscriptions).toEqual([]);
   expect(applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: [] }).subscriptions).toEqual([]);
+});
+
+test("existing PR subscriptions retain their topics when the watcher schema adds rebase", async () => {
+  const { Database } = await import("bun:sqlite");
+  const dir = join(cwd, "desktop-review");
+  mkdirSync(dir);
+  const db = new Database(join(dir, "watchers.sqlite"));
+  try {
+    db.exec(`CREATE TABLE review_pr_subscriptions (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, topics TEXT NOT NULL, PRIMARY KEY(watcher, number)
+    )`);
+    db.run('INSERT INTO review_pr_subscriptions VALUES (?, ?, ?)', [watcherScope(cwd, key), 2, '["checks"]']);
+  } finally {
+    db.close();
+  }
+  const subscriptions = () => applyReviewRuleAction(cwd, key, { kind: "status", number: 2 }).subscriptions;
+  expect(subscriptions()).toEqual([{ number: 2, topics: ["checks"], activity: [] }]);
+  applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: ["checks"], rebase: true });
+  expect(subscriptions()).toEqual([{ number: 2, topics: ["checks"], rebase: true, activity: [] }]);
 });
 
 test("automatic rebase claims a current owned revision once and never writes through a pause", async () => {
