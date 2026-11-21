@@ -1,1 +1,1 @@
-Initial greeting
+Hello from the base branch
