@@ -240,3 +240,69 @@ test("AC3 switching viewer while opening a private issue invalidates the workspa
   await act(async () => { release({ ...workspace, session:{sessionId:"private-session", project:{cwd:"/fixture"}} }); });
   expect(opened).toEqual([]);
 });
+
+test("AC4 discussion pages retain chronological order through an overlapping page and a retry", async () => {
+  const cursors: (string | null)[] = [];
+  const comment = (id: number, body = "Comment " + id) => ({
+    id: String(id), author: "fixture-user", body, url: issue.ref.url + "#issuecomment-" + id,
+    createdAt: new Date(Date.UTC(2026, 10, 1, 0, id)).toISOString(),
+  });
+  const firstPage = Array.from({length: 40}, (_, index) => comment(index + 1));
+  await render(async (_login, action, args) => {
+    if (action === "list") return page([issue]);
+    if (action === "detail") return {viewer, issue: {...issue, body: "The description comes first."}};
+    if (action !== "comments") throw new Error("Unexpected " + action);
+    const { cursor } = args as { cursor: string | null };
+    cursors.push(cursor);
+    if (cursor === null) return page(firstPage, "comments-page-two");
+    if (cursors.length === 2) throw new Error("offline: connection interrupted");
+    return page([comment(40, "Updated comment 40"), comment(41), comment(42)]);
+  });
+  await click(host.querySelector<HTMLButtonElement>(".flow-card-main")!);
+  const bodies = () => Array.from(host.querySelectorAll("aside article .discussion-markdown"), el => el.textContent?.trim());
+  expect(bodies()).toEqual(firstPage.map(c => c.body));
+  expect(cursors).toEqual([null]);
+  await click(button("Load more comments"));
+  expect(host.textContent).toContain("connection interrupted");
+  expect(bodies()).toEqual(firstPage.map(c => c.body));
+  await click(button("Retry comments"));
+  expect(cursors).toEqual([null, "comments-page-two", "comments-page-two"]);
+  expect(bodies()).toEqual([...firstPage.slice(0, 39).map(c => c.body), "Updated comment 40", "Comment 41", "Comment 42"]);
+  expect(host.textContent).not.toContain("Load more comments");
+});
+
+test("AC4 Escape from a narrow Board and List detail returns focus to the exact issue trigger", async () => {
+  const proto = HTMLDivElement.prototype;
+  const original = Object.getOwnPropertyDescriptor(proto, "clientWidth");
+  Object.defineProperty(proto, "clientWidth", {configurable: true, get: () => 440});
+  try {
+    const other = {...issue, ref: {...issue.ref, nodeId:"I_b", number:4, url:issue.ref.url.replace(/3$/, "4")}, title:"Second ticket"};
+    await render(async (_login, action, args) => {
+      if (action === "list") return page([issue, other]);
+      if (action === "comments") return page([]);
+      const request = args as {ref: typeof issue.ref};
+      return {viewer, issue:{...(request.ref.nodeId === other.ref.nodeId ? other : issue), body:"Fixture"}};
+    });
+    for (const layout of ["Board", "List"]) {
+      await click(button(layout));
+      const selector = layout === "Board" ? ".flow-card-main" : "tbody .review-list-link";
+      const trigger = Array.from(host.querySelectorAll<HTMLButtonElement>(selector)).find(el => el.textContent?.includes(other.title))!;
+      trigger.focus();
+      await click(trigger);
+      const dialog = host.querySelector<HTMLElement>('aside[role="dialog"][aria-modal="true"]')!;
+      expect(dialog?.textContent).toContain(other.title);
+      expect(host.querySelector<HTMLElement>(".issues-main")?.hidden).toBe(true);
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      await act(async () => {
+        document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape", bubbles:true, cancelable:true}));
+      });
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      expect(host.querySelector("aside")).toBeNull();
+      expect(host.querySelector<HTMLElement>(".issues-main")?.hidden).toBe(false);
+      expect(document.activeElement === trigger).toBe(true);
+    }
+  } finally {
+    if (original) Object.defineProperty(proto, "clientWidth", original);
+    else Reflect.deleteProperty(proto, "clientWidth");
+  }
+});
