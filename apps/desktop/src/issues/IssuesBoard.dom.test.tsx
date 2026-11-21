@@ -212,7 +212,7 @@ test("AC3 switching viewer while opening a private issue invalidates the workspa
   const workspace = { projects: [{ cwd: "/fixture" }], flows: [] };
   const request: typeof requestIssues = async <T,>(_cwd: string, _login: string, action: IssuesAction) => {
     calls.push(action);
-    return (action === delay ? await new Promise(resolve => { release = resolve; }) : workspace) as T;
+    return (action === delay ? await new Promise<unknown>(resolve => { release = resolve; }) : workspace) as T;
   };
   function Host({login}: {login: string}) {
     const work = useIssueWork({
