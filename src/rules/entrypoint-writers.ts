@@ -8,7 +8,7 @@
 // `writeEntrypointBlocks` is the one writer `syncAgentRules` calls, so `init`,
 // `update`, `rules sync` and `rules distill` cannot disagree about it.
 
-import { readFile } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { removeContained, writeContained } from "../lib/contained-write";
 import { pathExists } from "../lib/fs";
@@ -16,7 +16,8 @@ import { indexHoldsFile, readHeadBlob, readIndexBlob, restoreWorktreeFileFromHea
 import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
-import { ensureMetaprojectReference, renderManagedIndexBlock } from "./agent-entrypoints";
+import { renderAgentEntrypoint } from "../lib/templates";
+import { ensureMetaprojectReference, findAgentEntrypoints, renderManagedIndexBlock, renderMetaprojectReference } from "./agent-entrypoints";
 import { overrideRulesSlot, overrideSourceHash, parseCodexOverrideProvenance, renderCodexOverride } from "./codex-override";
 import { resolveLegacyEntrypointTargets, type ResolvedLegacyEntrypointTargets } from "./entrypoint-migration";
 import {
@@ -24,6 +25,7 @@ import {
   normalizeEntrypointTargets,
   rulesExportTeamFile,
   ruleImportSources,
+  sharedRootEntry,
   unusedLocalTarget,
   type ClaudeSettingsTarget,
   type CodexLocalRootEntry,
@@ -91,11 +93,17 @@ export type ProjectEntrypoints = {
  * it is and everything else becomes local; a manifest already in entry form
  * is taken at its word. Reads git, writes nothing.
  */
-export async function resolveProjectEntrypoints(projectRoot: string, agentEntrypoints: unknown): Promise<ProjectEntrypoints> {
+export async function resolveProjectEntrypoints(
+  projectRoot: string,
+  agentEntrypoints: unknown,
+  options: { sharedAgents?: boolean } = {},
+): Promise<ProjectEntrypoints> {
   const normalized = normalizeEntrypointTargets(agentEntrypoints);
   const resolved = await resolveLegacyEntrypointTargets(projectRoot, normalized);
   const targets: EntrypointTargets = {
-    root: resolved.targets.root.map(keepLocalEntryOffTeamFile),
+    root: resolved.targets.root.map((entry) => options.sharedAgents && entry.runtime === "codex"
+      ? sharedRootEntry("codex")
+      : keepLocalEntryOffTeamFile(entry)),
     claudeSettings: resolved.targets.claudeSettings,
   };
   const notices: string[] = [];
@@ -152,6 +160,230 @@ export type WriteEntrypointBlocksOptions = {
   sources: readonly string[];
   onNotice?: (line: string) => void;
 };
+
+export type EntrypointEdit = {
+  path: string;
+  action: "create" | "update" | "unchanged" | "skip" | "conflict" | "remove";
+  before?: string;
+  after?: string;
+  detail?: string;
+};
+
+function describeEntrypointEdit(relativePath: string, before: string | undefined, after: string | undefined, detail?: string): EntrypointEdit {
+  return {
+    path: relativePath,
+    action: before === after ? "unchanged" : before === undefined ? "create" : after === undefined ? "remove" : "update",
+    ...(before === undefined ? {} : { before }),
+    ...(after === undefined ? {} : { after }),
+    ...(detail === undefined ? {} : { detail }),
+  };
+}
+
+/**
+ * Predicts the managed Markdown written by init/update at the effective
+ * targets. The virtual contents let Codex see the team file after the same
+ * index-block moves that happen in the writer.
+ */
+export async function previewEntrypointEdits(
+  projectRoot: string,
+  agentEntrypoints: unknown,
+  options: { enableTasks?: boolean; sharedAgents?: boolean } = {},
+): Promise<EntrypointEdit[]> {
+  const { targets, importSources } = await resolveProjectEntrypoints(projectRoot, agentEntrypoints, options);
+  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
+  const candidates = [...ruleImportSources(targets), ...importSources];
+  const sources = await findAgentEntrypoints(projectRoot, candidates).catch((error: unknown) => {
+    if (!(error instanceof Error)) throw error;
+    return error;
+  });
+  if (sources instanceof Error) {
+    const failedPath = sources.message.slice(0, sources.message.indexOf(": "));
+    return [{ path: path.relative(projectRoot, failedPath), action: "conflict", detail: sources.message }];
+  }
+
+  const edits = new Map<string, EntrypointEdit>();
+  const virtual = new Map<string, string | undefined>();
+  const identities = new Map<string, string>();
+  async function readTarget(relativePath: string): Promise<string | undefined> {
+    const filePath = path.join(projectRoot, relativePath);
+    const refusal = await refuseEscapingSymlink(projectRoot, relativePath);
+    if (refusal !== undefined) throw new Error(refusal);
+    let identity = identities.get(relativePath);
+    if (identity === undefined) {
+      identity = filePath;
+      try {
+        const metadata = await stat(filePath);
+        if (!metadata.isFile()) throw new Error(`${relativePath}: expected a regular Markdown file`);
+        identity = await realpath(filePath);
+        if ((TEAM_FILE_NAMES.includes(relativePath.toLowerCase()) || LOCAL_FILE_NAMES.includes(relativePath.toLowerCase())) &&
+          path.extname(identity).toLowerCase() !== ".md") {
+          throw new Error(`${relativePath}: the target resolves to a non-Markdown file`);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      identities.set(relativePath, identity);
+    }
+    if (virtual.has(identity)) return virtual.get(identity);
+    try {
+      const content = await readFile(filePath, "utf8");
+      virtual.set(identity, content);
+      return content;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      virtual.set(identity, undefined);
+      return undefined;
+    }
+  }
+  function setEdit(relativePath: string, before: string | undefined, after: string | undefined, detail?: string): void {
+    const identity = identities.get(relativePath) ?? relativePath;
+    const previous = edits.get(identity);
+    virtual.set(identity, after);
+    edits.set(identity, describeEntrypointEdit(previous?.path ?? relativePath, previous === undefined ? before : previous.before, after, detail));
+  }
+  function annotate(relativePath: string, action: "skip" | "conflict", detail: string): void {
+    const identity = identities.get(relativePath) ?? relativePath;
+    edits.set(identity, { path: relativePath, action, detail });
+  }
+
+  const sharedTargets = targets.root.filter((entry) => entry.scope === "shared");
+  const sharedPaths = new Set(sharedTargets.map((entry) => entry.path.toLowerCase()));
+  const createdSources = sharedTargets.map((entry) => entry.path).filter((relativePath) => !sources.includes(relativePath));
+  // syncAgentRules re-runs discovery after creating defaults, so any seeded
+  // file participates in Claude's fallback and is available as a source.
+  const effectiveSources = createdSources.length === 0 ? sources : [...new Set([
+    ...candidates, "AGENTS.md", "agents.md", "CLAUDE.md", "claude.md",
+  ])].filter((candidate) => sources.includes(candidate) || createdSources.includes(candidate));
+  for (const relativePath of new Set([...effectiveSources, ...targets.root.flatMap((entry) =>
+    entry.scope === "shared" || entry.runtime === "claude" ? [entry.path] : [],
+  )])) {
+    try {
+      const content = await readTarget(relativePath);
+      if (content !== undefined && hasManagedIndexBlock(content)) {
+        stripManagedIndexBlock(content, path.join(projectRoot, relativePath));
+      }
+    } catch (error) {
+      annotate(relativePath, "conflict", error instanceof Error ? error.message : String(error));
+    }
+  }
+  // syncAgentRules refuses a broken source before writing managed blocks.
+  if (edits.size > 0) return [...edits.values()];
+
+  const block = await renderManagedIndexBlock({ ...options, root: projectRoot });
+  const deferred = new Map<string, string>();
+  const deferRules = (relativePath: string) => {
+    deferred.set(relativePath, "The rules-export surface is reinstalled during setup, so the final Markdown cannot be previewed.");
+  };
+  if (inGit) {
+    for (const entry of targets.root) {
+      if (entry.scope !== "local") continue;
+      const teamFile = rulesExportTeamFile(entry);
+      const refusal = await refuseEscapingSymlink(projectRoot, teamFile);
+      if (refusal !== undefined) continue;
+      const content = await readTarget(teamFile);
+      if (content === undefined || !hasManagedRulesBlock(content)) continue;
+      // The gap predicate checks an existing override's provenance; validate
+      // its path before permitting that read.
+      if (entry.runtime === "codex" && entry.mode === "override" &&
+        !(await readTarget(entry.path).then(() => true, () => false))) continue;
+      if ((await rulesBlockLocalTargetGap(projectRoot, entry)) !== undefined) continue;
+      const head = await readHeadBlob(projectRoot, teamFile);
+      if (head === undefined ? !(await indexHoldsFile(projectRoot, teamFile)) : hasManagedRulesBlock(head)) continue;
+      deferRules(teamFile);
+      deferRules(entry.path);
+    }
+  }
+
+  for (const entry of targets.root) {
+    const relativePath = entry.path;
+    if (entry.scope === "local" && entry.runtime !== "claude") continue;
+    const before = await readTarget(relativePath);
+    if (entry.scope === "local" && inGit && (await trackedInGit(projectRoot, relativePath))) {
+      annotate(relativePath, "skip", "Tracked in Git. Keryx leaves this local Claude file to the team.");
+      continue;
+    }
+    const seed = before ?? (entry.scope === "shared"
+      ? renderAgentEntrypoint({ source: relativePath })
+      : await renderClaudeLocalSeed(projectRoot, effectiveSources));
+    setEdit(relativePath, before, renderMetaprojectReference(seed, path.join(projectRoot, relativePath), block));
+  }
+
+  for (const leftover of await planLocalLeftovers(projectRoot, targets)) {
+    if (leftover.action === "keep") {
+      annotate(leftover.path, "skip", leftover.reason);
+      continue;
+    }
+    const before = await readTarget(leftover.path);
+    const active = sharedTargets.find((entry) => entry.runtime === leftover.runtime);
+    if (before !== undefined && active !== undefined &&
+      (leftover.runtime === "codex" ? overrideSlotHoldsBlock(before) : hasManagedRulesBlock(before))) {
+      deferRules(active.path);
+    }
+    setEdit(leftover.path, before, leftover.action === "strip" ? leftover.next : undefined);
+  }
+
+  const codexSources = new Set(targets.root.flatMap((entry) => entry.runtime === "codex" && entry.scope === "local" ? [entry.source] : []));
+  for (const source of effectiveSources) {
+    if (sharedPaths.has(source.toLowerCase()) || deferred.has(source)) continue;
+    const content = await readTarget(source);
+    if (content === undefined || !hasManagedIndexBlock(content)) continue;
+    const filePath = path.join(projectRoot, source);
+    const head = inGit ? await readHeadBlob(projectRoot, source) : undefined;
+    const teamFile = TEAM_FILE_NAMES.includes(source.toLowerCase()) || codexSources.has(source);
+    const move = planTeamIndexMove(content, filePath, head, teamFile);
+    if (move === undefined) continue;
+    if (!teamFile) {
+      annotate(source, "skip", "Keryx removes its managed index block from this custom rule source during setup.");
+    } else if (move.kind === "restore" && await checkoutCanChangeBytes(projectRoot, source, filePath)) {
+      deferred.set(source, "Git checkout conversion determines the file contents during setup.");
+    } else {
+      setEdit(source, content, move.next);
+    }
+  }
+
+  for (const entry of targets.root) {
+    if (entry.runtime !== "codex" || entry.scope !== "local") continue;
+    if (entry.mode === "skip") {
+      if (!edits.has(identities.get(entry.path) ?? entry.path)) annotate(entry.path, "skip", "Codex is configured to skip its local override.");
+      continue;
+    }
+    try {
+      const sourceContent = await readTarget(entry.source);
+      const before = await readTarget(entry.path);
+      if (deferred.has(entry.source)) {
+        deferred.set(entry.path, "The override is generated from a file whose final Markdown cannot be previewed.");
+      } else if (sourceContent === undefined) {
+        if (before !== undefined && (await canRemoveOrphanedOverride(projectRoot, entry.path, before))) {
+          setEdit(entry.path, before, undefined, `Its source ${entry.source} is missing.`);
+        } else {
+          annotate(entry.path, "skip", `Its source ${entry.source} is missing. Keryx does not generate an override.`);
+        }
+      } else if (before !== undefined && parseCodexOverrideProvenance(before) === undefined) {
+        annotate(entry.path, "skip", "The existing override was created outside Keryx.");
+      } else {
+        setEdit(entry.path, before, renderOverrideTarget(projectRoot, entry, sourceContent, before, block));
+      }
+    } catch (error) {
+      annotate(entry.path, "conflict", error instanceof Error ? error.message : String(error));
+    }
+  }
+  for (const [relativePath, detail] of deferred) annotate(relativePath, "skip", detail);
+  return [...edits.values()];
+}
+
+/** Comparing to the HEAD blob is exact only when checkout does not transform it. */
+async function checkoutCanChangeBytes(projectRoot: string, relativePath: string, filePath: string): Promise<boolean> {
+  if (await realpath(filePath) !== filePath) return true;
+  const attributes = Bun.spawn(["git", "--literal-pathspecs", "check-attr", "-z", "filter", "text", "eol", "working-tree-encoding", "ident", "--", relativePath], {
+    cwd: projectRoot, stdout: "pipe", stderr: "ignore",
+  });
+  const configured = Bun.spawn(["git", "config", "--get-regexp", "^core\\.(autocrlf|eol)$"], {
+    cwd: projectRoot, stdout: "pipe", stderr: "ignore",
+  });
+  const [attr, config] = await Promise.all([new Response(attributes.stdout).text(), new Response(configured.stdout).text()]);
+  return (await attributes.exited) !== 0 || (await configured.exited) > 1 || config.trim() !== "" ||
+    attr.split("\0").some((value, index) => index % 3 === 2 && value !== "unspecified" && value !== "unset");
+}
 
 /**
  * Puts the block where `targets` says and nowhere else. Order matters: the
@@ -255,13 +487,10 @@ export async function writeCodexLocalTargets(
     }
     let next: string;
     try {
-      next = renderCodexOverride({
-        source: entry.source,
-        sourceContent: await readFile(sourcePath, "utf8"),
-        block: await renderManagedIndexBlock({ ...(options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks }), root: projectRoot }),
-        sourcePath,
-        ...(existing === undefined ? {} : { previous: existing }),
-      });
+      next = renderOverrideTarget(
+        projectRoot, entry, await readFile(sourcePath, "utf8"), existing,
+        await renderManagedIndexBlock({ ...(options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks }), root: projectRoot }),
+      );
     } catch (error) {
       // Only the carried `keryx:rules` block can be unterminated here — the
       // source was checked before any write. Regenerating without it would
@@ -281,6 +510,16 @@ export async function writeCodexLocalTargets(
   }
 }
 
+function renderOverrideTarget(projectRoot: string, entry: CodexLocalRootEntry, sourceContent: string, existing: string | undefined, block: string): string {
+  return renderCodexOverride({
+    source: entry.source,
+    sourcePath: path.join(projectRoot, entry.source),
+    sourceContent,
+    block,
+    ...(existing === undefined ? {} : { previous: existing }),
+  });
+}
+
 /**
  * Removes the override `entry` names when its source is gone and keryx made
  * it: it carries keryx's provenance line, is not tracked, and is not reached
@@ -292,10 +531,13 @@ async function removeOrphanedOverride(projectRoot: string, entry: CodexLocalRoot
   const overridePath = path.join(projectRoot, entry.path);
   if (!(await pathExists(overridePath))) return false;
   if ((await refuseEscapingSymlink(projectRoot, entry.path)) !== undefined) return false;
-  if (parseCodexOverrideProvenance(await readFile(overridePath, "utf8")) === undefined) return false;
-  if (await trackedInGit(projectRoot, entry.path)) return false;
+  if (!(await canRemoveOrphanedOverride(projectRoot, entry.path, await readFile(overridePath, "utf8")))) return false;
   await removeContained(projectRoot, entry.path);
   return true;
+}
+
+async function canRemoveOrphanedOverride(projectRoot: string, relativePath: string, content: string): Promise<boolean> {
+  return parseCodexOverrideProvenance(content) !== undefined && !(await trackedInGit(projectRoot, relativePath));
 }
 
 /** True when git tracks `relativePath` — committed in `HEAD`, or staged. No git counts as not tracked. */
@@ -374,21 +616,28 @@ async function writeClaudeLocalTarget(
   const filePath = path.join(projectRoot, relativePath);
   const created = !(await pathExists(filePath));
   if (created) {
-    const agentsFile = sources.find((source) => source.toLowerCase() === "agents.md");
-    const hasClaudeFile =
-      sources.some((source) => source.toLowerCase() === "claude.md") ||
-      (await pathExists(path.join(projectRoot, ".claude", "CLAUDE.md")));
-    const agentsImport =
-      agentsFile !== undefined && !hasClaudeFile
-        ? `\n<!-- keryx: this file stops Claude Code from falling back to ${agentsFile}; the import keeps the team instructions loaded. -->\n@${agentsFile}\n`
-        : "";
-    await writeContained(projectRoot, relativePath, `# Local Claude Instructions\n${agentsImport}`);
+    const seed = await renderClaudeLocalSeed(projectRoot, sources);
+    const next = renderMetaprojectReference(seed, filePath, await renderManagedIndexBlock(blockOptions));
+    await writeContained(projectRoot, relativePath, next);
+  } else {
+    await ensureMetaprojectReference(filePath, blockOptions);
   }
-  await ensureMetaprojectReference(filePath, blockOptions);
   return created;
 }
 
 const LOCAL_CLAUDE_HEADING = "# Local Claude Instructions";
+async function renderClaudeLocalSeed(projectRoot: string, sources: readonly string[]): Promise<string> {
+  const agentsFile = sources.find((source) => source.toLowerCase() === "agents.md");
+  const hasClaudeFile =
+    sources.some((source) => source.toLowerCase() === "claude.md") ||
+    (await pathExists(path.join(projectRoot, ".claude", "CLAUDE.md")));
+  const agentsImport =
+    agentsFile !== undefined && !hasClaudeFile
+      ? `\n<!-- keryx: this file stops Claude Code from falling back to ${agentsFile}; the import keeps the team instructions loaded. -->\n@${agentsFile}\n`
+      : "";
+  return `${LOCAL_CLAUDE_HEADING}\n${agentsImport}`;
+}
+
 /** The comment `writeClaudeLocalTarget` puts above the `@AGENTS.md` import it adds; it is what proves keryx added the import. */
 const KERYX_AGENTS_IMPORT_COMMENT = /^<!-- keryx: this file stops Claude Code from falling back to (.+); the import keeps the team instructions loaded\. -->$/;
 
@@ -440,15 +689,21 @@ export async function planLocalLeftovers(
     const unused = unusedLocalTarget(entry);
     if (unused === undefined || TEAM_FILE_NAMES.includes(unused.path.toLowerCase())) continue;
     const filePath = path.join(projectRoot, unused.path);
-    if (!(await pathExists(filePath))) continue;
-    const content = await readFile(filePath, "utf8");
     const refusal = await refuseEscapingSymlink(projectRoot, unused.path);
+    if (refusal !== undefined) {
+      leftovers.push({ ...unused, action: "keep", reason: refusal });
+      continue;
+    }
+    if (!(await pathExists(filePath))) continue;
+    if (!(await stat(filePath)).isFile()) {
+      leftovers.push({ ...unused, action: "keep", reason: "the target is not a regular file" });
+      continue;
+    }
+    const content = await readFile(filePath, "utf8");
 
     if (unused.runtime === "codex") {
       if (parseCodexOverrideProvenance(content) === undefined) {
         leftovers.push({ ...unused, action: "keep", reason: `it was not generated by keryx, so it is left untouched — Codex reads it instead of ${unused.instead}` });
-      } else if (refusal !== undefined) {
-        leftovers.push({ ...unused, action: "keep", reason: refusal });
       } else if (await tracked(unused.path)) {
         leftovers.push({ ...unused, action: "keep", reason: "keryx generated it, but it is tracked in git, so removing it is the team's change to make (git rm)" });
       } else {
@@ -467,9 +722,7 @@ export async function planLocalLeftovers(
       continue;
     }
     if (next === content) continue;
-    if (refusal !== undefined) {
-      leftovers.push({ ...unused, action: "keep", reason: refusal });
-    } else if (holdsOnlyLocalHeading(next) && !(await tracked(unused.path))) {
+    if (holdsOnlyLocalHeading(next) && !(await tracked(unused.path))) {
       leftovers.push({ ...unused, action: "remove" });
     } else {
       leftovers.push({ ...unused, action: "strip", next });
@@ -549,8 +802,10 @@ async function moveBlockOutOfTeamFile(
   if (!hasManagedIndexBlock(content)) return;
 
   const head = context.inGit ? await readHeadBlob(projectRoot, relativePath) : undefined;
-  if (head === undefined) {
-    await writeContained(projectRoot, relativePath, removeBlock(content, filePath, undefined));
+  const move = planTeamIndexMove(content, filePath, head, context.teamFile);
+  if (move === undefined) return;
+  if (move.kind === "uncommitted") {
+    await writeContained(projectRoot, relativePath, move.next);
     const staged = context.inGit ? await readIndexBlob(projectRoot, relativePath) : undefined;
     if (!context.inGit) {
       context.notice(`${relativePath}: removed the managed keryx block. Not a git repository, so there is no HEAD to restore the file to — only the block was stripped.`);
@@ -566,15 +821,14 @@ async function moveBlockOutOfTeamFile(
     }
     return;
   }
-  if (hasManagedIndexBlock(head)) {
-    if (!context.teamFile) return;
-    await writeContained(projectRoot, relativePath, removeBlock(content, filePath, head));
+  if (move.kind === "committed") {
+    await writeContained(projectRoot, relativePath, move.next);
     context.notice(`${relativePath}: removed the managed keryx block, which is committed in HEAD — commit this removal to finish the switch to local scope.`);
     return;
   }
-  if (sameApartFromBlankLines(stripManagedIndexBlock(content, filePath), head)) {
+  if (move.kind === "restore") {
     if (!(await restoreWorktreeFileFromHead(projectRoot, relativePath))) {
-      await writeContained(projectRoot, relativePath, head);
+      await writeContained(projectRoot, relativePath, move.next);
     }
     context.notice(
       (await worktreeFileIsClean(projectRoot, relativePath))
@@ -583,7 +837,7 @@ async function moveBlockOutOfTeamFile(
     );
     return;
   }
-  await writeContained(projectRoot, relativePath, removeBlock(content, filePath, head));
+  await writeContained(projectRoot, relativePath, move.next);
   const staged = await readIndexBlob(projectRoot, relativePath);
   context.notice(
     `${relativePath}: removed the managed keryx block; your other uncommitted edits in ${relativePath} are kept as they were.` +
@@ -591,6 +845,17 @@ async function moveBlockOutOfTeamFile(
         ? ` A staged copy still carries the block — \`git restore --staged ${relativePath}\` drops it from the index (or \`git add ${relativePath}\` stages this version).`
         : ""),
   );
+}
+
+function planTeamIndexMove(
+  content: string, filePath: string, head: string | undefined, teamFile: boolean,
+): { kind: "uncommitted" | "committed" | "restore" | "dirty"; next: string } | undefined {
+  if (head === undefined) return { kind: "uncommitted", next: removeBlock(content, filePath, undefined) };
+  if (hasManagedIndexBlock(head)) {
+    return teamFile ? { kind: "committed", next: removeBlock(content, filePath, head) } : undefined;
+  }
+  if (sameApartFromBlankLines(stripManagedIndexBlock(content, filePath), head)) return { kind: "restore", next: head };
+  return { kind: "dirty", next: removeBlock(content, filePath, head) };
 }
 
 /** One kind of keryx-managed markdown block: its start marker line and how to strip every such block. */

@@ -214,8 +214,7 @@ implementation of any one check.
 
 ## setup
 
-Print the Metaproject preparation guide. Read-only: it does not run `init`,
-`update`, `sync`, or wiki enrichment.
+Print the Metaproject preparation guide, or inspect, plan and apply project setup as JSON.
 
 ```
 keryx setup [init|refresh|repair]
@@ -265,8 +264,42 @@ divergence ends the run and tells you to rerun that step by hand with
 `--accept-version` or `--keep-existing`; the run never picks one. Killing a step's
 job (Background Jobs, `/interrupt`) stops the run and says so. A second Run while
 one is active is refused. The steps start through the session's job registry, so the
-same OS sandbox posture as `shell_exec` applies. `keryx setup` and the readline form
-never run anything.
+same OS sandbox posture as `shell_exec` applies. The guide and its readline form print instructions.
+
+
+### Project setup JSON
+
+Run the commands with the selected project directory as the working directory.
+
+```sh
+keryx setup inspect --json
+keryx setup plan --request '{"schemaVersion":1,"modules":{"gdwiki":true},"graph":"check"}' --json
+keryx setup apply --request '{"schemaVersion":1,"modules":{"gdwiki":true},"graph":"check"}' --plan-id <id> --json
+```
+
+- `inspect` reports the canonical root, initialization state, CLI and project writer versions, module catalog and local findings. It also reports the latest Apply receipt when one exists.
+- `plan` reports module selections, managed file digests, agent entrypoint previews, Git ignore changes, and step availability. Review its `status` and `blocked` items before passing the returned `planId` to Apply. A `skip` entrypoint can describe a migration whose final Markdown depends on Git or on the rules installer.
+- `apply` requires the approved plan ID and the same request. It serializes setup for the selected project and linked worktrees, then regenerates the plan before writing. A stale plan requires a new preview. If an operation fails, the response lists completed, failed and skipped work. Inspect can show the last receipt after an interruption. Replan and select, as needed, the remaining follow-up actions.
+
+Request schema version 1 supports these fields:
+
+| Field | Accepted values |
+|---|---|
+| `schemaVersion` | Required. Use `1`. |
+| `modules` | Partial object keyed by catalog module names with Boolean values. Omitted selections use defaults on Init and detected state on Update or Repair. |
+| `gdskillsProfile` | `minimal`, `recommended`, or `full`. An omitted profile retains the detected setting. |
+| `sharedAgents` | Explicitly create or update a shared `AGENTS.md` for Codex. Omit or use `false` to retain the configured scope. |
+| `gitignore` | Add a shared `/.metaproject/` rule to `.gitignore`, preserving existing text. Already tracked files stay tracked. Default is `false`. |
+| `graph` | `none`, `check`, `rebuild`, or `check-and-rebuild`. Default is `none`. |
+| `maintenanceOnly` | Apply only the selected graph or module actions on an initialized project. Defaults to `false`. |
+| `actions` | Any of `health`, `testingContext`, `projectChecks`, `wikiCollect`, `wikiIndex`, `wikiValidate` and `wikiFreshness`. Keryx executes them in that order. Health and project checks can run project commands. |
+
+Inspect and Plan are read-only. Apply skips runtime fetches, custom post-update
+hooks and worktree pruning. The lifecycle can reconcile Keryx-managed hooks
+according to the project configuration. Each call emits one JSON object with
+`schemaVersion` and `operation`. Exit 0 indicates a returned inspection, plan
+(including `blocked`), or completed Apply. Exit 1 indicates a refused or partial
+operation. Exit 75 indicates another setup holds the lock.
 
 ---
 

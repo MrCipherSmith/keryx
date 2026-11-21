@@ -211,19 +211,17 @@ export async function ensureMetaprojectReference(
   }
 
   const content = await readFile(filePath, "utf8");
+  const next = renderMetaprojectReference(content, filePath, await renderManagedIndexBlock(options));
+  if (next !== content) await writeManagedFile(filePath, next, options.root);
+}
+
+/** Replaces or inserts the managed index block without reading or writing the file. */
+export function renderMetaprojectReference(content: string, filePath: string, block: string): string {
   const marker = METAPROJECT_REFERENCE_MARKER;
   const endMarker = METAPROJECT_REFERENCE_END_MARKER;
-  const block = await renderManagedIndexBlock(options);
-  if (hasMarkerLine(content, marker)) {
-    const next = replaceManagedBlock(content, filePath, marker, endMarker, block);
-    if (next !== content) {
-      await writeManagedFile(filePath, next, options.root);
-    }
-
-    return;
-  }
-
-  await writeManagedFile(filePath, insertMetaprojectBlockNearTop(content, block), options.root);
+  return hasMarkerLine(content, marker)
+    ? replaceManagedBlock(content, filePath, marker, endMarker, block)
+    : insertMetaprojectBlockNearTop(content, block);
 }
 
 /**
@@ -248,7 +246,7 @@ export function ruleFileNameFor(source: string): string {
   return `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
 }
 
-async function findAgentEntrypoints(projectRoot: string, manifestSources: string[]): Promise<string[]> {
+export async function findAgentEntrypoints(projectRoot: string, manifestSources: string[]): Promise<string[]> {
   const candidates = [...new Set([...manifestSources, "AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"])];
   let files: Set<string>;
   try {

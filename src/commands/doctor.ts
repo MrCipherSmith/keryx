@@ -710,7 +710,12 @@ export async function buildDoctorReport(
     return { checks: [...globalChecks, NOT_A_KERYX_PROJECT_CHECK] };
   }
 
-  const projectChecks = await Promise.all([
+  return { checks: [...globalChecks, ...await projectDoctorChecks(cwd)] };
+}
+
+/** Local diagnostics shared with project setup. Never checks for CLI releases. */
+export async function projectDoctorChecks(cwd: string): Promise<DoctorCheck[]> {
+  return await Promise.all([
     Promise.resolve(checkMcp(cwd)),
     checkIntegrations(cwd),
     checkStandard(cwd),
@@ -720,7 +725,6 @@ export async function buildDoctorReport(
     checkGraphFreshness(cwd),
     checkWikiFreshness(cwd),
   ]);
-  return { checks: [...globalChecks, ...projectChecks] };
 }
 
 /** Exit-code predicate, extracted so it is testable against a synthetic report without needing a real environment to produce a genuine "fail". */

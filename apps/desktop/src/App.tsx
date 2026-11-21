@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
 import { isTauri } from "./platform/backend";
 import {
@@ -13,10 +13,10 @@ import {
 } from "./platform/commands";
 import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename, errMessage } from "./lib/format";
-import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+import { Dialog, EmptyState, overlayOpen, Spinner } from "./components/ui";
 import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
-import { SettingsView } from "./shell/SettingsView";
+import { SettingsView, type SettingsTab } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
@@ -37,24 +37,39 @@ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./sessio
 import { SessionView } from "./session/SessionView";
 import { modelOption, useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
+import { ProjectSetupDialog } from "./project/ProjectSetupDialog";
+import { ProjectNotifications } from "./project/ProjectNotifications";
+import { useProjectDiagnostics, type ProjectNotice } from "./platform/projectDiagnostics";
+import { inspectProjectSetup, shouldOfferProjectSetup, type SetupInspection, type SetupResult } from "./platform/projectSetup";
 import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
 import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
 import { PROJECT_COMMANDS } from "./project/projectCommands";
 import { useProjectRunner } from "./project/useProjectRunner";
 import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
 import { supportsProviders } from "./acp/providers";
-import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
+import { onProjectsState, onProjectSetupRequest, projectRegister, projectsState, projectSwitch, reportProjectActivity, takeProjectSetupRequest, type LiveProject } from "./platform/projects";
 import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
 
 export function App() {
   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
-  const [welcomeSettings, setWelcomeSettings] = useState(false);
+  const [welcomeSettings, setWelcomeSettings] = useState<SettingsTab | null>(null);
+  const [setupFinding, setSetupFinding] = useState<string>();
+  const [desktopSettingsRequest, setDesktopSettingsRequest] = useState(0);
+  const diagnostics = useProjectDiagnostics(cwd);
+  const scan = diagnostics.scan;
+  const refreshDiagnostics = useCallback(() => { void scan("afterApply"); }, [scan]);
   const [prompt, setPrompt] = useState<{ title: string; resolve: (v: string | null) => void } | null>(null);
 
   useEffect(() => {
     applyTheme();
     void windowInitialCwd()
-      .then((c) => setCwd(c ?? null))
+      .then(async (c) => {
+        if (c) {
+          const finding = await takeProjectSetupRequest().catch(() => null);
+          if (finding) setSetupFinding(finding);
+        }
+        setCwd(c ?? null);
+      })
       .catch(() => setCwd(null));
     if (!isTauri()) setFolderPrompter((title) => new Promise((resolve) => setPrompt({ title, resolve })));
     return () => setFolderPrompter(null);
@@ -70,23 +85,47 @@ export function App() {
     }
   }, [cwd]);
 
+  useEffect(() => {
+    if (!cwd) return;
+    let active = true;
+    let off: (() => void) | undefined;
+    void onProjectSetupRequest((finding) => { if (active) setSetupFinding(finding); }).then((stop) => {
+      if (active) off = stop;
+      else stop();
+    }).catch(() => {});
+    return () => { active = false; off?.(); };
+  }, [cwd]);
+
+  const openNotice = async (notice: ProjectNotice) => {
+    if (notice.target === "desktop") {
+      if (cwd) setDesktopSettingsRequest((n) => n + 1);
+      else setWelcomeSettings("desktop");
+    } else if (notice.target === "setup") {
+      await projectSwitch(notice.cwd, notice.finding);
+    }
+  };
+  const notifications = isTauri() ? <ProjectNotifications diagnostics={diagnostics} onOpen={openNotice} /> : undefined;
+
   if (cwd === undefined) return null;
   return (
     <>
       {cwd ? (
         // Keyed by folder so switching folders gets a fresh keryx process.
-        <ProjectWindow key={cwd} cwd={cwd} onOpenProject={setCwd} onCloseProject={() => setCwd(null)} />
+        <ProjectOpening key={cwd} cwd={cwd} onOpenProject={setCwd} onCloseProject={() => { setSetupFinding(undefined); setDesktopSettingsRequest(0); setCwd(null); }}
+          notifications={notifications} setupFinding={setupFinding} clearSetupFinding={() => setSetupFinding(undefined)}
+          desktopSettingsRequest={desktopSettingsRequest} refreshDiagnostics={refreshDiagnostics} />
       ) : welcomeSettings ? (
         <div className="standalone">
           <div className="welcome-drag" data-tauri-drag-region />
-          <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} />
+          <SettingsView key={welcomeSettings} initialTab={welcomeSettings} onBack={() => setWelcomeSettings(null)} integrations={<GitHubIntegrations />} />
         </div>
       ) : (
         <Welcome onOpen={async (folder) => {
           if (isTauri()) await projectSwitch(folder);
           else setCwd(folder);
-        }} onSettings={() => setWelcomeSettings(true)} />
+        }} onSettings={() => setWelcomeSettings("appearance")} />
       )}
+      {!cwd && notifications ? <div className="welcome-notifications">{notifications}</div> : null}
       <UpdateBanner />
       {prompt ? (
         <PathPrompt
@@ -150,7 +189,56 @@ function useNarrow(px: number): boolean {
 
 type Status = { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
 
-function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; onOpenProject: (cwd: string) => void; onCloseProject: () => void }) {
+interface ProjectWindowProps {
+  cwd: string;
+  onOpenProject: (cwd: string) => void;
+  onCloseProject: () => void;
+  notifications?: ReactNode;
+  setupFinding?: string;
+  clearSetupFinding: () => void;
+  desktopSettingsRequest: number;
+  refreshDiagnostics: () => void;
+}
+
+function ProjectOpening(props: ProjectWindowProps) {
+  const { cwd } = props;
+  const [opening, setOpening] = useState<
+    { phase: "checking" | "ready" } | { phase: "offer"; inspection: SetupInspection | null; error: string }
+  >(() => ({ phase: isTauri() ? "checking" : "ready" }));
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    void projectRegister(cwd).then(() => inspectProjectSetup(cwd)).then((inspection) => {
+      if (!active) return;
+      setOpening((current) => current.phase !== "checking" ? current : shouldOfferProjectSetup(inspection)
+        ? { phase: "offer", inspection, error: "" }
+        : { phase: "ready" });
+    }).catch((failure: unknown) => {
+      if (active) setOpening((current) => current.phase === "checking"
+        ? { phase: "offer", inspection: null, error: errMessage(failure) } : current);
+    });
+    return () => { active = false; };
+  }, [cwd]);
+
+  if (opening.phase === "ready") return <ProjectWindow {...props} />;
+  const open = () => { props.clearSetupFinding(); setOpening({ phase: "ready" }); };
+  return (
+    <div className="standalone">
+      <div className="welcome-drag" data-tauri-drag-region />
+      {opening.phase === "offer" ? (
+        <ProjectSetupDialog cwd={cwd} opening finding={props.setupFinding} initialInspection={opening.inspection} initialError={opening.error}
+          onResult={props.refreshDiagnostics} onClose={open} />
+      ) : (
+        <Dialog title="Checking Metaproject" icon="settings" onClose={open} focusRoot
+          footer={<button className="btn" onClick={open}>Open without setup</button>}>
+          <div className="loading-row" role="status"><Spinner /> Checking {basename(cwd)}…</div>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+function ProjectWindow({ cwd, onOpenProject, onCloseProject, notifications, setupFinding, clearSetupFinding, desktopSettingsRequest, refreshDiagnostics }: ProjectWindowProps) {
   const s = useAcpSession(cwd);
   const flows = useFlows(cwd);
   const providers = useProvidersDialog();
@@ -159,7 +247,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const settingsReturn = useRef<Exclude<View, "settings">>("session");
   const settingsFocus = useRef<HTMLElement | null>(null);
   const settingsProjectReturn = useRef(false);
-  const [settingsTab, setSettingsTab] = useState<"appearance" | "integrations">("appearance");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("appearance");
   const [githubAccount, setGitHubAccount] = useState<ProjectGitHubAccount | null>(null);
   const reviewViewer = githubAccount?.login ?? undefined;
   const [reviewNotice, setReviewNotice] = useState<{ binding?: string; viewer?: string; indicator: ReviewTabIndicator }>();
@@ -168,6 +256,16 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   }, [reviewViewer]);
   const [githubAccountError, setGitHubAccountError] = useState("");
   const [projectSettings, setProjectSettings] = useState(false);
+  const [localSetupOpen, setSetupOpen] = useState(false);
+  const setupOpen = localSetupOpen || !!setupFinding;
+  const openSetup = useCallback(() => setSetupOpen(true), []);
+  const closeSetup = () => { setSetupOpen(false); clearSetupFinding(); };
+  const refreshConfiguredProject = useCallback((result: SetupResult) => {
+    refreshDiagnostics();
+    if (result.steps.some((step) => step.status === "completed" && ["init", "configure", "update"].includes(step.id))) {
+      void flows.refresh();
+    }
+  }, [flows.refresh, refreshDiagnostics]);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const accountRevision = useRef(0);
   const registration = useRef<Promise<void> | null>(null);
@@ -256,7 +354,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     [cwd, onOpenProject, s],
   );
 
-  const openSettings = useCallback((tab: "appearance" | "integrations" = "appearance") => {
+  const openSettings = useCallback((tab: SettingsTab = "appearance") => {
     if (view !== "settings") {
       settingsReturn.current = view;
       settingsFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -264,6 +362,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     setSettingsTab(tab);
     setView("settings");
   }, [view]);
+
+  const handledDesktopSettings = useRef(0);
+  useEffect(() => {
+    if (desktopSettingsRequest <= handledDesktopSettings.current) return;
+    handledDesktopSettings.current = desktopSettingsRequest;
+    openSettings("desktop");
+  }, [desktopSettingsRequest, openSettings]);
 
   const closeSettings = useCallback(() => {
     setView(settingsReturn.current);
@@ -433,6 +538,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     for (const c of PROJECT_COMMANDS) {
       items.push({ id: `k-${c.id}`, group: "Run", label: `keryx ${c.args.join(" ")}`, detail: c.description, icon: "play", run: () => void runProject(c.args, `keryx ${c.args.join(" ")}`) });
     }
+    items.push({ id: "k-project-setup", group: "Project", label: "Set up Metaproject…", icon: "settings", run: openSetup });
     items.push({ id: "k-wiki-enrich", group: "Run", label: "keryx wiki enrich…", detail: "Fill draft pages with a model: one job or waves", icon: "wand", run: () => setEnrich(true) });
     items.push({ id: "p-open", group: "Projects", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, run: () => void openFolder() });
     for (const r of recents) {
@@ -445,13 +551,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       { id: "t-dark", group: "Appearance", label: "Theme: Dark", icon: "moon", run: () => setPrefs({ theme: "dark" }) },
     );
     return items;
-  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject]);
+  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject, openSetup]);
 
   const topPermission = s.permissions[0];
   const topAsk = s.asks[0];
   const workView = view === "settings" ? settingsReturn.current : view;
   const offerGitHub = githubAccount?.eligible && !githubAccount.configured && !onboardingDismissed
-    && view !== "settings" && !s.fatal && !topAsk && !topPermission && !providers.request && !enrich && palette === null;
+    && view !== "settings" && !s.fatal && !topAsk && !topPermission && !providers.request && !enrich && !setupOpen && palette === null;
   const reviewDisconnected = githubAccount?.configured && !githubAccount.login;
 
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
@@ -510,6 +616,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       view={view}
       onView={go}
       onProjectSettings={openProjectSettings}
+      onProjectSetup={openSetup}
+      notifications={notifications}
       title={view === "session" ? <span className="truncate">{sessionTitle}</span> : title}
       hasSession={state.sessionId !== null}
       status={status}
@@ -523,8 +631,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onSwitchProject={switchProject}
       onNewWindow={(p) => void windowOpenProject(p)}
       onCloseProject={onCloseProject}
-      onPalette={() => setPalette("")}
-      actions={<ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />}
+      onPalette={() => { if (!setupOpen) setPalette(""); }}
+      actions={<ProjectMenu run={runProject} onSetup={openSetup} onEnrich={() => setEnrich(true)} />}
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
@@ -555,11 +663,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {view === "settings" ? (
         <div className="view">
-          <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} />
+          <SettingsView key={desktopSettingsRequest} agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} />
         </div>
       ) : null}
 
-      {view === "session" && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+      {view === "session" && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub && !setupOpen &&
         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
           initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
           onApply={async (key, revision, options) => {
@@ -572,9 +680,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           }}
           onClose={() => s.dismissReviewDraftRequest(draftReview.nonce)} />}
 
-      {projectSettings || offerGitHub ? (
+      {!setupOpen && (projectSettings || offerGitHub) ? (
         <ProjectGitHubSettings cwd={cwd} account={githubAccount} accountError={githubAccountError} onRetryAccount={() => void refreshGitHubAccount()}
           onboarding={!projectSettings}
+          onSetup={openSetup}
           onSaved={(account) => {
             accountRevision.current += 1;
             setGitHubAccount(account);
@@ -592,11 +701,12 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           }} />
       ) : null}
 
-      {providers.request ? <ProvidersDialog request={providers.request} api={providersApi} onClose={providers.close} /> : null}
+      {setupOpen ? <ProjectSetupDialog cwd={cwd} finding={setupFinding} onClose={closeSetup} onResult={refreshConfiguredProject} /> : null}
+      {!setupOpen && providers.request ? <ProvidersDialog request={providers.request} api={providersApi} onClose={providers.close} /> : null}
       {enrich ? <WikiEnrichDialog listProviders={listProviders} onRun={(args, title) => void runProject(args, title)} onClose={() => setEnrich(false)} /> : null}
       {palette !== null ? <CommandPalette items={paletteItems} initialQuery={palette} onClose={() => setPalette(null)} /> : null}
 
-      {s.fatal && !(s.fatalHidden && (s.fatal.kind === "incompatible" || s.fatal.kind === "noShell")) ? (
+      {!setupOpen && s.fatal && !(s.fatalHidden && (s.fatal.kind === "incompatible" || s.fatal.kind === "noShell")) ? (
         <FatalDialog
           fatal={s.fatal}
           agentVersion={state.agentVersion}
@@ -614,7 +724,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           }}
         />
       ) : null}
-      {!s.fatal && topPermission ? (
+      {!setupOpen && !s.fatal && topPermission ? (
         <PermissionDialog
           key={topPermission.id}
           pending={topPermission}
@@ -623,7 +733,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           onAnswer={s.answerPermission}
         />
       ) : null}
-      {!s.fatal && !topPermission && topAsk ? <AskUserDialog key={topAsk.id} pending={topAsk} onAnswer={s.answerAsk} /> : null}
+      {!setupOpen && !s.fatal && !topPermission && topAsk ? <AskUserDialog key={topAsk.id} pending={topAsk} onAnswer={s.answerAsk} /> : null}
     </AppShell>
   );
 }

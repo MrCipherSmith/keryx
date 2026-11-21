@@ -23,9 +23,9 @@ export function reportProjectActivity(activity: ProjectActivity): Promise<void> 
 }
 
 /** Switch this window to `cwd`, keeping the current project running in the background. False when the host cannot (browser dev mode). */
-export async function projectSwitch(cwd: string): Promise<boolean> {
+export async function projectSwitch(cwd: string, setupFinding?: string): Promise<boolean> {
   if (!isTauri()) return false;
-  await invoke<void>("project_switch", { cwd });
+  await invoke<void>("project_switch", { cwd, setupFinding });
   return true;
 }
 
@@ -35,4 +35,22 @@ export function projectsState(): Promise<LiveProject[]> {
 
 export function onProjectsState(handler: (projects: LiveProject[]) => void): Promise<Unlisten> {
   return isTauri() ? listen<LiveProject[]>("projects://state", handler, "app") : Promise.resolve(() => {});
+}
+
+/** The handoff lives in the native target view until it subscribes. */
+export async function onProjectSetupRequest(listener: (finding: string) => void): Promise<Unlisten> {
+  if (!isTauri()) return () => {};
+  let active = true;
+  const read = async () => {
+    const finding = await takeProjectSetupRequest();
+    if (active && typeof finding === "string") listener(finding);
+  };
+  const off = await listen("projects://setup-requested", () => void read().catch(() => {}));
+  void read().catch(() => {});
+  return () => { active = false; off(); };
+}
+
+
+export function takeProjectSetupRequest(): Promise<string | null> {
+  return isTauri() ? invoke<string | null>("project_take_setup") : Promise.resolve(null);
 }

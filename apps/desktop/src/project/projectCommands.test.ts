@@ -73,11 +73,13 @@ test("commandLine shows the argv as a shell would read it", () => {
   expect(commandLine(["a b", "it's"])).toBe(`keryx 'a b' 'it'\\''s'`);
 });
 
-test("the menu covers init, update and the wiki commands, each with unique ids", () => {
+test("the terminal menu covers wiki maintenance with unique ids", () => {
   const ids = PROJECT_COMMANDS.map((c) => c.id);
   expect(new Set(ids).size).toBe(ids.length);
   const lines = PROJECT_COMMANDS.map((c) => c.args.join(" "));
-  for (const want of ["init", "update", "wiki status", "wiki validate", "wiki index"]) expect(lines.includes(want)).toBe(true);
+  for (const want of ["wiki status", "wiki validate", "wiki index"]) expect(lines.includes(want)).toBe(true);
+  expect(lines).not.toContain("init");
+  expect(lines).not.toContain("update");
   // Enrich has its own dialog, not a bare menu entry.
   expect(PROJECT_COMMANDS.some((c) => c.args.includes("enrich"))).toBe(false);
 });

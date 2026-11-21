@@ -23,6 +23,7 @@ import {
   manifestAgentEntrypoints,
   parseCodexOverrideProvenance,
   planLocalLeftovers,
+  previewEntrypointEdits,
   renderCodexOverride,
   resolveProjectEntrypoints,
   writeCodexLocalTargets,
@@ -65,6 +66,48 @@ test("renderCodexOverride: provenance line, then the block, then the source with
 test("parseCodexOverrideProvenance returns nothing for a file keryx did not generate", () => {
   expect(parseCodexOverrideProvenance("# My own override\n")).toBeUndefined();
   expect(parseCodexOverrideProvenance(`intro\n<!-- keryx:override source="AGENTS.md" sha256=${"a".repeat(64)} -->\n`)).toBeUndefined();
+});
+
+test("preview predicts the applied Claude and Codex files without writing them", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-entrypoint-preview");
+  try {
+    await mkdir(root, { recursive: true });
+    const team = `# Team\n\n${BLOCK}\nRules.\n`;
+    await writeFile(path.join(root, "AGENTS.md"), team);
+    const targets = defaultEntrypointTargets();
+    const edits = await previewEntrypointEdits(root, targets, { enableTasks: false });
+
+    expect(edits.find((edit) => edit.path === "CLAUDE.local.md")?.after).toContain("@AGENTS.md");
+    expect(edits.find((edit) => edit.path === "AGENTS.md")?.action).toBe("update");
+    expect(edits.find((edit) => edit.path === "AGENTS.override.md")?.action).toBe("create");
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(team);
+    expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    expect(existsSync(path.join(root, ".metaproject"))).toBe(false);
+
+    await syncAgentRules(root, path.join(root, ".metaproject"), { targets, enableTasks: false });
+    for (const edit of edits) {
+      if (edit.after === undefined) throw new Error(`Missing predicted contents for ${edit.path}`);
+      expect(await readFile(path.join(root, edit.path), "utf8")).toBe(edit.after);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("preview leaves tracked local Claude files and a missing Codex source alone", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-entrypoint-preview-tracked");
+  try {
+    await initRepo(root, { "CLAUDE.local.md": "# Team-owned\n" });
+    const edits = await previewEntrypointEdits(root, defaultEntrypointTargets());
+    expect(edits).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "CLAUDE.local.md", action: "skip", detail: expect.stringContaining("Tracked in Git") }),
+      expect.objectContaining({ path: "AGENTS.override.md", action: "skip", detail: expect.stringContaining("Its source AGENTS.md is missing") }),
+    ]));
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toBe("# Team-owned\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("manifestAgentEntrypoints writes the entry form and keeps pointer fields and key order", async () => {

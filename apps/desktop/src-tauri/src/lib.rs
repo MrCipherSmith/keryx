@@ -15,10 +15,12 @@ pub mod panel_mcp;
 pub mod panels;
 pub mod process;
 pub mod projects;
+pub mod project_diagnostics;
 pub mod pullrequest;
 pub mod review;
 pub mod pty;
 pub mod settings;
+pub mod setup;
 pub mod shellenv;
 mod slots;
 pub mod version;
@@ -47,6 +49,7 @@ pub fn run() {
         .manage(chromium::consent::Consents::default())
         .manage(panel_mcp::PanelMcp::default())
         .manage(projects::ProjectWindows::default())
+        .manage(project_diagnostics::Diagnostics::default())
         .setup(|app| {
             // The main window is declared in tauri.conf.json with `create: false`
             // and built here as a bare host window with one project view (the
@@ -112,8 +115,11 @@ pub fn run() {
             projects::project_register,
             projects::project_activity,
             projects::project_switch,
+            projects::project_take_setup,
+            project_diagnostics::project_diagnostics,
             projects::project_title,
             projects::projects_state,
+            setup::project_setup,
             flows::flows_list,
             flows::flows_get,
             flows::flows_action,

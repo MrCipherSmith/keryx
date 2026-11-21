@@ -102,13 +102,14 @@ interface ProjectSettingsProps {
   account: ProjectGitHubAccount | null;
   accountError: string;
   onRetryAccount: () => void;
+  onSetup: () => void;
   onboarding: boolean;
   onSaved: (account: ProjectGitHubAccount) => void;
   onClose: () => void;
   onIntegrations: () => void;
 }
 
-export function ProjectGitHubSettings({ cwd, account, accountError, onRetryAccount, onboarding, onSaved, onClose, onIntegrations }: ProjectSettingsProps) {
+export function ProjectGitHubSettings({ cwd, account, accountError, onRetryAccount, onboarding, onSaved, onClose, onIntegrations, onSetup }: ProjectSettingsProps) {
   const { accounts, error, reload } = useGitHubAccounts();
   const [selection, setSelection] = useState<string | null>(null);
   const selectedLogin = selection ?? account?.login ?? "";
@@ -148,6 +149,10 @@ export function ProjectGitHubSettings({ cwd, account, accountError, onRetryAccou
         </>
       }
     >
+      {!onboarding ? <div className="settings-row">
+        <div><strong>Metaproject</strong><p className="settings-row-help">Configure modules and preview project file changes.</p></div>
+        <button className="btn" disabled={saving} onClick={onSetup}>Set up Metaproject…</button>
+      </div> : null}
       {canSelect ? (
         <>
           <label className="field">
