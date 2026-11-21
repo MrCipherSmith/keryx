@@ -15,3 +15,9 @@
 - 2026-11-21T20:13:45.605Z - task-done: T2: Implement per plan
 - 2026-11-21T20:13:45.858Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-11-21T20:13:46.106Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-21T20:56:50.787Z - frozen: 16 criteria; checksum recorded
+- 2026-11-21T20:57:24.575Z - started
+- 2026-11-21T20:57:32.611Z - task-attempt: T5: started (attempt 1) — Define shared contracts, fixtures and compatibility for issue launch.
+- 2026-11-21T20:59:54.623Z - task-done: T5: Define issue identity, viewer scope and launch contracts
+- 2026-11-21T20:59:55.288Z - task-attempt: T6: started (attempt 1) — Account-scoped GitHub issue reader and CLI.
+- 2026-11-21T20:59:55.771Z - task-attempt: T7: started (attempt 1) — Resolve the checkout and durable session identity.

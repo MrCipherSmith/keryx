@@ -9,14 +9,14 @@
   "id": "511",
   "slug": "desktop-issues-board",
   "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-11-21T20:10:01.247Z",
-  "updatedAt": "2026-11-21T20:13:46.106Z",
+  "updatedAt": "2026-11-21T20:59:55.771Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -100,15 +100,22 @@
       "id": "T5",
       "title": "Define issue identity, viewer scope and launch contracts",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T20:57:32.611Z",
+            "outcome": "started",
+            "detail": "Define shared contracts, fixtures and compatibility for issue launch."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -119,8 +126,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T20:59:55.288Z",
+            "outcome": "started",
+            "detail": "Account-scoped GitHub issue reader and CLI."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -135,8 +148,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T20:59:55.771Z",
+            "outcome": "started",
+            "detail": "Resolve the checkout and durable session identity."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -335,6 +354,102 @@
       "at": "2026-11-21T20:13:46.106Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-21T20:56:50.787Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-21T20:57:24.575Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-21T20:57:32.611Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Define shared contracts, fixtures and compatibility for issue launch."
+    },
+    {
+      "at": "2026-11-21T20:59:54.623Z",
+      "event": "task-done",
+      "detail": "T5: Define issue identity, viewer scope and launch contracts"
+    },
+    {
+      "at": "2026-11-21T20:59:55.288Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Account-scoped GitHub issue reader and CLI."
+    },
+    {
+      "at": "2026-11-21T20:59:55.771Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — Resolve the checkout and durable session identity."
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC1"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC2"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC3",
+      "sensitivity": "failure-scenario"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC5"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC6",
+      "sensitivity": "failure-scenario"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC7"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC8"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC9"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC10"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC11",
+      "sensitivity": "failure-scenario"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC12"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC13"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "python3 .metaproject/flows/511-2026-11-21-desktop-issues-board/verify.py AC14",
+      "sensitivity": "failure-scenario"
+    },
+    "AC15": {
+      "kind": "judged"
+    },
+    "AC16": {
+      "kind": "judged"
+    }
+  }
 }
