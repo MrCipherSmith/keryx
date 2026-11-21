@@ -91,7 +91,7 @@ beforeEach(() => {
     { id: "F-002", global_id: "fixture#F-002", severity: "minor", reviewer: "review-logic", problem: "A label is ambiguous.",
       premise: { verdict: "challenged", question: "Is this label intentional?" } },
   ]);
-  writeFileSync(path.join(pkg, "report.md"), "Fixture review.\n\nNot verified: 1\n");
+  writeFileSync(path.join(pkg, "report.md"), "Fixture review.\nEvidence level: static only — did not run: tests\n\nNot verified: 1\n");
   mkdirSync(path.join(project, ".metaproject"));
   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## Team review\n\n{{review}}\n");
 });
@@ -111,9 +111,14 @@ test("draft questions, template and saved settings are local until one explicit 
   expect(preview.questions).toMatchObject([{ id: "fixture#F-002", text: "Is this label intentional?", recommendation: "dismiss" }]);
   expect(preview.canSubmit).toBe(false);
   expect(preview.overlayAvailable).toBe(true);
+  expect(preview.body).toContain("## Team review\n\n**Changes requested — 1 Major.**");
+  expect(preview.body).toContain("Evidence level: static only — did not run: tests");
+  expect(preview.body).toContain("### Major");
+  expect(preview.body).toContain(`/blob/${revision.headSha}/src/a.ts#L1`);
   const draft = await requestDeskPublication(project, key, { kind: "save", id,
-    settings: { ...preview.settings, inline: true, overlay: true, answers: { "fixture#F-002": "dismiss" } } });
+    settings: { ...preview.settings, inline: true, overlay: false, keryxTemplate: false, answers: { "fixture#F-002": "dismiss" } } });
   expect(draft.savedAt).toBeDefined();
+  expect(draft.settings).toMatchObject({ keryxTemplate: true, overlay: true });
   expect(draft.body).toContain("## Team review");
   expect(draft.body).not.toContain("A label is ambiguous");
   expect(draft.inlineCount).toBe(1);
@@ -145,6 +150,15 @@ test("partial approval and a moved revision cannot send a review", async () => {
   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }))
     .rejects.toThrow("revision moved");
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("uses the standard report when a project overlay is invalid", async () => {
+  writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## No insertion point");
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(preview.body).toStartWith("**Changes requested — 1 Major.**");
+  expect(preview.body).not.toContain("No insertion point");
+  expect(preview.settings).toMatchObject({ keryxTemplate: true, overlay: false });
+  expect(preview.overlayWarning).toContain("{{review}}");
 });
 
 test("editing answers recomputes an automatic verdict and preserves only an explicit override", async () => {

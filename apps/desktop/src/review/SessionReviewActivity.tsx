@@ -125,7 +125,7 @@ function FollowedReview({ cwd, link, visible }: { cwd: string; link: SessionRevi
     </header>
     {error && <div className="session-review-message" role="alert">{prefix} {error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry status</button></div>}
     {run && <>
-      <ReviewProgress state={run.state} progress={run.reviewerProgress} />
+      {run.options?.orchestrator !== false && <ReviewProgress state={run.state} progress={run.reviewerProgress} />}
       {terminal && <ReviewOutcome run={run} />}
       {latest && run.state !== "completed" && <p className="session-review-message">{prefix} {latest.text}</p>}
       {!terminal && !latest && (run.reason || run.phase) && <p className="session-review-message">{prefix} {run.reason || run.phase}</p>}

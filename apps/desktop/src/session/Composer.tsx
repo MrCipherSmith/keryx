@@ -7,6 +7,7 @@ import { Menu, type MenuItem } from "../components/Menu";
 import { flattenGroups, groupCommands } from "../acp/commands";
 import { ContextMeter } from "./ContextMeter";
 import type { Usage } from "./reducer";
+import { lineCommentRange, type LineComment } from "./lineComments";
 import { useChatAttachments, type LocalAttachment, type SaveChatFile, type SaveChatImage } from "./chatImages";
 import { adoptNoSessionDraft, draftOf, withDraft, type Drafts } from "./drafts";
 
@@ -15,6 +16,8 @@ export interface ComposerHandle {
   setText(text: string): void;
   /** Open the mode or model picker (the /mode and /model commands). */
   openMenu(kind: "mode" | "model"): void;
+  /** Attach a remark on a changed line to the next message (the Changes tab). False when it was not added. */
+  addLineComment(comment: LineComment): boolean;
 }
 
 interface Props {
@@ -31,7 +34,7 @@ interface Props {
    * Everything the user submits: a command line, plain text, or text for the queue while a turn runs.
    * True when it was handled; the draft is cleared only then (a refused command keeps it).
    */
-  onSend: (text: string, imagePaths: readonly string[], localAttachments: readonly LocalAttachment[]) => boolean | Promise<boolean>;
+  onSend: (text: string, imagePaths: readonly string[], localAttachments: readonly LocalAttachment[], lineComments?: readonly LineComment[]) => boolean | Promise<boolean>;
   saveImage?: SaveChatImage;
   saveFile?: SaveChatFile;
   discardFile?: (path: string) => Promise<void>;
@@ -148,7 +151,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       for (const item of items) {
         const sent = sentPaths.current.has(item.path);
         sentPaths.current.delete(item.path);
-        if (item.kind === "folder" || sent) continue;
+        if (item.kind === "folder" || item.kind === "line-comment" || sent) continue;
         void discardRef.current?.(item.path)?.catch(() => {});
       }
       dropDraft(sessionId);
@@ -167,6 +170,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       });
     },
     openMenu: (kind) => setMenu(kind),
+    addLineComment: localDraft.addLineComment,
   }));
 
   // `/` opens the palette over every advertised command, grouped; a space ends the name and closes it.
@@ -220,13 +224,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       return;
     }
     const images = localDraft.items.flatMap((item) => item.kind === "image" ? [item.path] : []);
-    const local = localDraft.items.filter((item) => item.kind !== "image");
-    const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
+    const local = localDraft.items.flatMap((item) => item.kind === "file" || item.kind === "folder" ? [item] : []);
+    const comments = localDraft.items.flatMap((item) => item.kind === "line-comment" ? [item.comment] : []);
+    const sentFiles = localDraft.items.filter((item) => item.kind === "image" || item.kind === "file").map((item) => item.path);
     for (const p of sentFiles) sentPaths.current.add(p);
     const gen = draftGen.current;
     let ok = false;
     try {
-      ok = await onSend(t, images, local);
+      // The comments argument is only passed when there are some, so a send without them looks as it always did.
+      ok = await (comments.length > 0 ? onSend(t, images, local, comments) : onSend(t, images, local));
     } finally {
       if (!ok) {
         for (const p of sentFiles) sentPaths.current.delete(p);
@@ -388,14 +394,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       {localDraft.items.length > 0 ? (
         <ul className="composer-attachments" aria-label="Local attachments">
           {localDraft.items.map((item, i) => (
-            <li className={`attach-chip${item.kind === "image" ? " image-chip" : ""}`} key={item.path}
-              title={item.kind === "image" ? undefined : item.path}>
-              {item.kind === "image" ? <AttachmentImage path={item.path} alt={`Attached image ${i + 1}`} eager load={loadImage} /> : <>
+            <li className={`attach-chip${item.kind === "image" ? " image-chip" : ""}${item.kind === "line-comment" ? " comment-chip" : ""}`} key={item.path}
+              title={item.kind === "image" ? undefined : item.kind === "line-comment" ? item.comment.text : item.path}>
+              {item.kind === "image" ? <AttachmentImage path={item.path} alt={`Attached image ${i + 1}`} eager load={loadImage} /> : item.kind === "line-comment" ? <>
+                <Icon name="comment" size={12} />
+                <span className="truncate">{lineCommentRange(item.comment)} {item.comment.text}</span>
+              </> : <>
                 <Icon name={item.kind === "folder" ? "folder" : "file"} size={12} />
                 <span className="truncate">{item.label}</span>
               </>}
               <button type="button" className="icon-btn icon-btn-sm" disabled={localDraft.pending} onClick={() => void localDraft.discard(item)}
-                aria-label={`Remove ${item.kind === "image" ? `image ${i + 1}` : item.label}`} title="Remove attachment"><Icon name="x" size={12} /></button>
+                aria-label={`Remove ${item.kind === "image" ? `image ${i + 1}` : item.kind === "line-comment" ? `comment on ${lineCommentRange(item.comment)}` : item.label}`} title="Remove attachment"><Icon name="x" size={12} /></button>
             </li>
           ))}
         </ul>

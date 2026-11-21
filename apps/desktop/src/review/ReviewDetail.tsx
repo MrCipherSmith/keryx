@@ -22,6 +22,7 @@ import { browserOpen } from "../platform/panels";
 import { setPrefs } from "../lib/prefs";
 import { ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
 import { ReviewChecks } from "./ReviewChecks";
+import { ReviewLaunchDialog, type ReviewLaunchModel } from "./ReviewLaunchDialog";
 import "./ReviewDetail.css";
 
 export interface ReviewIntent { kind: "start" | "view" | "answer"; baseSha: string; headSha: string }
@@ -35,6 +36,7 @@ interface Props {
   card: ReviewCard;
   flow?: FlowCard | undefined;
   projectFlows?: readonly FlowCard[];
+  reviewModels?: readonly ReviewLaunchModel[];
   onOpenFlow?: (dir: string) => void;
   onClose: () => void;
   onAccessLost?: (reason: string) => void;
@@ -114,7 +116,7 @@ export function ReviewDetail(props: Props) {
   return <ReviewDetailSheet key={JSON.stringify([props.cwd, props.repo, props.repositoryId, props.viewer, props.card.number])} {...props} />;
 }
 
-function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser = browserOpen, flow, projectFlows, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
+function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser = browserOpen, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
   const toast = useToast();
   const openingLink = useRef(false);
   const mounted = useRef(false);
@@ -141,6 +143,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
     }).finally(() => { openingLink.current = false; });
   }
   const [data, setData] = useState<ReviewDetailSnapshot | null>(null);
+  const [launchCard, setLaunchCard] = useState<ReviewCard | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
   const [refresh, setRefresh] = useState(0);
@@ -172,6 +175,10 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
     ? projectFlows?.find(candidate => candidate.id === associatedFlowId)
     : flow;
   const revisionChanged = (data && data.headSha !== card.headSha) || local.staleRange;
+  const start = useCallback(() => {
+    if (reviewModels) setLaunchCard(card);
+    else void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });
+  }, [reviewModels, card, local.request]);
   // A board action is tied to the clicked revision, and consumed once after status resolves.
   // The backend validates this same range again before admitting the run.
   useEffect(() => {
@@ -187,9 +194,9 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
     if (next.kind === "answer" && action.sessionId && local.runs.some(run => run.id === action.sessionId && pendingManualQuestions(run).length > 0)) {
       setSessionId(action.sessionId);
     } else if (next.kind === "start" && !action.open) {
-      void local.request({ kind: "start", baseSha: next.baseSha, headSha: next.headSha });
+      start();
     }
-  }, [action.open, action.sessionId, local.runs, card.state, card.baseSha, card.headSha, tab, local.error, local.loaded, local.request, revisionChanged]);
+  }, [action.open, action.sessionId, local.runs, card.state, card.baseSha, card.headSha, tab, local.error, local.loaded, start, revisionChanged]);
 
   function answerQuestion(id: string, questionId: string, answer: string) {
     void local.request({ kind: "answer", id, questionId, answer });
@@ -198,7 +205,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
   function launch() {
     setTab("review");
     if (action.sessionId) setSessionId(action.sessionId);
-    else if (!action.open) void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });
+    else if (!action.open) start();
   }
   useEffect(() => {
     let live = true;
@@ -288,5 +295,19 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
       onLifecycle={lifecycle}
       onRefresh={() => void local.request({ kind: "status" })}
       onAnswer={answerQuestion} />}
+    {launchCard && reviewModels && <ReviewLaunchDialog models={reviewModels} flows={projectFlows ?? []}
+      defaultFlow={associatedFlow?.id} fixedTarget={{ repo, repositoryId, viewer, card: launchCard }}
+      onApply={async (key, revision, options) => {
+        if (card.state !== "open" || revisionChanged || !sameRange(card, revision)) {
+          throw new Error("The PR revision changed. Refresh the board and open the launch form again.");
+        }
+        const snapshot = await runCommand(cwd, key, { kind: "start", ...revision, options });
+        if (!snapshot.startedRunId || !snapshot.runs.some(run => run.id === snapshot.startedRunId)) {
+          throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
+        }
+        onRunSnapshot?.(key, revision, snapshot);
+        await local.request({ kind: "status" });
+      }}
+      onClose={() => setLaunchCard(null)} />}
   </Sheet>;
 }

@@ -6,6 +6,7 @@ export interface DeskReviewModel { provider: string; model: string }
 export type DeskReviewPool = "strong" | "middle" | "light";
 export interface DeskReviewOptions {
   mode: "auto" | "manual";
+  orchestrator?: boolean;
   adaptive: boolean;
   maxWaves?: number;
   maxParallel?: number;
@@ -29,16 +30,21 @@ function modelName(value: unknown, label: string): string {
   return value;
 }
 export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {
-  const input = object(value, ["mode", "adaptive", "maxWaves", "maxParallel", "maxTokens", "flowId", "modelPools"], "launch settings");
+  const input = object(value, ["mode", "orchestrator", "adaptive", "maxWaves", "maxParallel", "maxTokens", "flowId", "modelPools"], "launch settings");
   if (input.mode !== "auto" && input.mode !== "manual") invalid("mode");
   if (typeof input.adaptive !== "boolean") invalid("adaptive");
+  if (input.orchestrator !== undefined && typeof input.orchestrator !== "boolean") invalid("orchestrator");
   const pools = object(input.modelPools, DESK_REVIEW_POOLS, "modelPools");
   const out: DeskReviewOptions = { mode: input.mode, adaptive: input.adaptive, modelPools: { strong: [], middle: [], light: [] } };
+  if (input.orchestrator === false) {
+    out.orchestrator = false;
+    out.adaptive = false;
+  }
   for (const key of ["maxWaves", "maxParallel", "maxTokens"] as const) {
     const n = input[key];
     if (n === undefined) continue;
     if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 1 || (key === "maxParallel" && n > DESK_MAX_PARALLEL)) invalid(key);
-    out[key] = n;
+    if (out.orchestrator !== false || key === "maxTokens") out[key] = n;
   }
   if (input.flowId !== undefined) {
     if (typeof input.flowId !== "string" || !/^\d{1,12}$/.test(input.flowId)) invalid("flowId");
@@ -48,7 +54,7 @@ export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {
     const rows = pools[key];
     if (!Array.isArray(rows) || rows.length > DESK_MAX_POOL_MODELS) invalid(key);
     const seen = new Set<string>();
-    out.modelPools[key] = rows.map(raw => {
+    const models = rows.map(raw => {
       const row = object(raw, ["provider", "model"], key);
       const provider = modelName(row.provider, "provider"), model = modelName(row.model, "model");
       const id = JSON.stringify([provider, model]);
@@ -56,6 +62,7 @@ export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {
       seen.add(id);
       return { provider, model };
     });
+    if (out.orchestrator !== false) out.modelPools[key] = models;
   }
   return out;
 }

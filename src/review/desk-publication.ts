@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, realpath, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
-import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
+import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { boardGh, projectGithubConnection, verifyGithubBindingUnchanged, withCurrentGithubBinding, type GithubConnection } from "./board-github";
 import { parseDiffHunks, type ReviewComment } from "./bot/post";
 import { screenCommentBody } from "./bot/redaction";
@@ -9,6 +9,8 @@ import { verifyDeskSubject } from "./desk-run-service";
 import { DeskRunStore } from "./desk-run-store";
 import { PUBLICATION_REQUEST_LIMIT, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
 import type { DeskRunKey } from "./desk-run-types";
+import { applyReviewOverlay, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReviewOverlay, renderDeskFinding,
+  renderDeskReviewReport, reportFindingMetadata, scopedFile, type DeskReportFinding } from "./desk-review-report";
 import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
 import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
 import { premiseHoldState } from "./premise";
@@ -20,12 +22,9 @@ import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
 
 const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const sha = /^[a-f\d]{40}$/i;
-const overlayPath = ".metaproject/review-publish-template.md";
-const placeholder = "{{review}}";
 const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
-type Finding = { id: string; severity: VerdictFinding["severity"]; problem: string; file: string | null; line: number | null; impact: string; suggested_fix: string; selectedAnswer?: string };
 type Draft = { settings: PublicationSettings; savedAt: string };
 type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string };
@@ -38,32 +37,10 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 const object = (v: unknown): Record<string, unknown> | undefined =>
   v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
 const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
-const escapedLocation = (v: string) => v.replace(/[\p{Cc}`<>]/gu, "");
-
-async function scopedFile(root: string, relative: string, limit: number): Promise<string | undefined> {
-  const target = path.join(root, relative);
-  try {
-    const stat = await lstat(target);
-    if (!stat.isFile() || stat.size > limit || await realpath(target) !== path.join(await realpath(root), relative)) return;
-    return await readFile(target, "utf8");
-  } catch (error) {
-    if (!isNotFound(error)) throw error;
-  }
-}
 
 async function json<T>(root: string, relative: string, limit: number): Promise<T | undefined> {
   const content = await scopedFile(root, relative, limit);
   return content === undefined ? undefined : JSON.parse(content) as T;
-}
-
-async function projectOverlay(cwd: string): Promise<{ overlay?: string; overlayWarning?: string }> {
-  try {
-    const overlay = await scopedFile(cwd, overlayPath, 8192);
-    if (overlay?.split(placeholder).length === 2) return { overlay };
-    return overlay === undefined ? {} : { overlayWarning: "The project template must contain one {{review}} placeholder." };
-  } catch {
-    return { overlayWarning: "The project template could not be read. The standard draft is available." };
-  }
 }
 
 async function previewSubject(cwd: string, directory: string, key: DeskRunKey, auth: GithubConnection,
@@ -79,31 +56,6 @@ async function previewSubject(cwd: string, directory: string, key: DeskRunKey, a
     return { ...previous, subject };
   }
   return { key: cacheKey, expires: Date.now() + 15_000, subject };
-}
-
-function findingOf(entry: VerdictFinding, raw: Record<string, unknown> | undefined): Finding {
-  const file = text(raw?.file ?? raw?.path);
-  const line = raw?.line ?? raw?.start_line;
-  return {
-    id: entry.id, severity: entry.severity, problem: text(raw?.problem) || entry.problem,
-    file: file || null, line: typeof line === "number" && Number.isSafeInteger(line) && line > 0 ? line : null,
-    impact: text(raw?.impact), suggested_fix: text(raw?.suggested_fix),
-  };
-}
-
-function markdown(finding: Finding) {
-  const location = finding.file && escapedLocation(finding.file);
-  return [
-    `**${finding.severity.toUpperCase()} · ${escapedLocation(finding.id)}**${location ? ` · \`${location}${finding.line ? `:${finding.line}` : ""}\`` : ""}`,
-    finding.problem, finding.impact && `Impact: ${finding.impact}`, finding.suggested_fix && `Suggested fix: ${finding.suggested_fix}`,
-    finding.selectedAnswer && `**Selected answer:** ${finding.selectedAnswer}`,
-  ].filter(Boolean).join("\n\n");
-}
-
-function recommendation(coverage: boolean, findings: Finding[]): PublicationSettings["verdict"] {
-  if (findings.some(finding => finding.severity === "blocker" || finding.severity === "major")) return "changes";
-  if (!coverage) return "comment";
-  return findings.length ? "suggestions" : "approve";
 }
 
 function publicationLink(key: DeskRunKey, id: unknown): string | undefined {
@@ -134,11 +86,11 @@ async function prepare(input: {
       manifest.target.base !== run.baseSha || manifest.target.head !== run.headSha) {
     throw new Error("configuration: This review has no matching local package to publish.");
   }
-  const [recorded, verdict, draft, receipt, { overlay, overlayWarning }, readiness] = await Promise.all([
+  const [recorded, verdict, draft, receipt, { overlay, overlayWarning }, readiness, report] = await Promise.all([
     premiseRecords(packageDir), computeVerdict(packageDir),
     json<Draft>(directory, "publication-draft.json", draftLimit),
     json<Receipt>(directory, "publication-receipt.json", 4096),
-    projectOverlay(cwd), computeReadiness(packageDir),
+    projectReviewOverlay(cwd), computeReadiness(packageDir), scopedFile(directory, "package/report.md", 2 * 1024 * 1024),
   ]);
   const recordFor = (entry: VerdictFinding) => recorded.records.find(row =>
     row.id === entry.id && (!row.reviewer || row.reviewer === entry.reviewer));
@@ -171,14 +123,17 @@ async function prepare(input: {
     } else if (answer === "uphold" || answer === "dismiss") selections.set(question.id, answer);
   }
   const answers = Object.fromEntries(selections);
-  const findings = [...verdict.open, ...verdict.minors].map(entry => findingOf(entry, recordFor(entry)));
+  const metadata = reportFindingMetadata(report);
+  const forReport = (entry: VerdictFinding) => deskReportFinding(entry, recordFor(entry), metadata.get(entry.id));
+  const findings = [...verdict.open, ...verdict.minors, ...(verdict.info ?? [])].map(forReport);
   for (const entry of verdict.held) {
     const id = questionId(entry);
     const selectedAnswer = selectedLabels.get(id);
     if (selectedAnswer || selections.get(id) === "uphold") findings.push({
-      ...findingOf(entry, recordFor(entry)), ...(selectedAnswer && { selectedAnswer }),
+      ...forReport(entry), ...(selectedAnswer && { selectedAnswer }),
     });
   }
+  const publishable = findings.filter(finding => finding.severity !== "info" || finding.question || finding.locationClass === "pr-process");
   const answered = questions.every(question => Object.hasOwn(answers, question.id));
   const failing = failingItems(readiness).filter(item =>
     item.id !== "premise-decisions" || !answered ||
@@ -186,17 +141,18 @@ async function prepare(input: {
   const complete = run.result?.coverage === "complete" && failing.length === 0;
   const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
   const settings: PublicationSettings = {
-    inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: saved?.keryxTemplate ?? true,
-    overlay: !!overlay && saved?.overlay === true, verdict: verdictOverride ?? recommendation(complete, findings), verdictOverride, answers,
+    inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
+    overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers,
   };
   const largestAnswers = Object.fromEntries(questions.map(question => [question.id, question.options?.[0]?.id ?? "dismiss"]));
   const answerLimitExceeded = Buffer.byteLength(JSON.stringify({
     kind: "submit", id: request.id, settings: { ...settings, answers: largestAnswers }, digest: "0".repeat(64),
   })) > PUBLICATION_REQUEST_LIMIT;
   const comments: ReviewComment[] = [];
-  const inBody: Finding[] = [];
+  const inBody: DeskReportFinding[] = [];
+  const revision = { repo: key.repo, head: run.headSha };
   let inlineUnavailable = false;
-  if (settings.inline && current && findings.some(finding => finding.file && finding.line)) {
+  if (settings.inline && current && publishable.some(finding => finding.file && finding.line)) {
     try {
       let hunks: Map<string, Set<number>>;
       if (Array.isArray(cache.placements) && cache.placements.every(entry =>
@@ -209,42 +165,53 @@ async function prepare(input: {
         hunks = parseDiffHunks(diff);
         if (request.kind === "preview") cache.placements = [...hunks].map(([file, lines]) => [file, [...lines]]);
       }
-      for (const finding of findings) {
-        if (finding.file && finding.line && hunks.get(finding.file)?.has(finding.line)) {
+      for (const finding of publishable) {
+        if (finding.file && finding.line && !finding.question && finding.locationClass !== "pre-existing" && finding.locationClass !== "pr-process" &&
+            hunks.get(finding.file)?.has(finding.line)) {
           comments.push({ path: finding.file, line: finding.line, side: "RIGHT",
-            body: markdown(finding) });
+            body: renderDeskFinding({ ...finding, locationClass: "in-diff" }, revision) });
         } else inBody.push(finding);
       }
     } catch (error) {
       if (!(error instanceof Error && error.message.startsWith("unavailable:"))) throw error;
       inlineUnavailable = true;
-      inBody.push(...findings);
+      inBody.push(...publishable);
     }
-  } else inBody.push(...findings);
+  } else inBody.push(...publishable);
   if (request.kind === "preview") {
     const encoded = JSON.stringify(cache);
     if (Buffer.byteLength(encoded) <= previewCacheLimit) {
       await writeFileAtomic(path.join(directory, previewCacheFile), encoded, { mode: 0o600 }).catch(() => undefined);
     }
   }
-  const reviewLabels = { approve: "Approved", suggestions: "Approved with suggestions", changes: "Changes requested", comment: "Review comments" };
-  const header = `Reviewed \`${run.headSha.slice(0, 12)}\` against \`${run.baseSha.slice(0, 12)}\`.`;
-  const status = !complete
-    ? `**Partial review.** Reviewer coverage or readiness is incomplete.${failing.length ? ` Open checks: ${failing.map(item => item.id).join(", ")}.` : ""}`
-    : "";
-  const summary = [
-    settings.keryxTemplate ? `## ${reviewLabels[settings.verdict]}` : "", status, header,
-    ...(settings.general ? [
-      settings.keryxTemplate && (inBody.length || comments.length) ? "### Findings" : "",
-      ...inBody.map(markdown),
-      comments.length ? `${comments.length} inline comment(s).` : inBody.length ? "" : "No findings selected for publication.",
-    ] : inBody.length ? [`${inBody.length} finding(s) without an inline location omitted from this review.`] : []),
-  ].filter(Boolean).join("\n\n");
-  let body = settings.overlay && overlay ? overlay.replace(placeholder, () => summary) : summary;
+  const roundNumber = readRoundNumber(packageDir) ?? 1;
+  const solo = run.options?.orchestrator === false;
+  const coverageNote = complete ? "" : solo
+    ? "**Single-reviewer coverage.**"
+    : `**Partial review.** Reviewer coverage or readiness is incomplete.${failing.length ? ` Open checks: ${failing.map(item => item.id).join(", ")}.` : ""}`;
+  const reported = verdict.reportedReviewers.length ? ` Reviewers: ${verdict.reportedReviewers.join(", ")}.` : "";
+  const refuted = recorded.records.flatMap(row => {
+    const verification = object(row.verification);
+    const evidence = text(verification?.evidence);
+    return verification?.verdict === "refuted" && evidence && typeof row.id === "string"
+      ? [{ id: row.id, decision: `Refuted — ${evidence}` }] : [];
+  });
+  for (const entry of verdict.held) {
+    if (selections.get(questionId(entry)) === "dismiss") refuted.push({ id: entry.id, decision: "Dismissed by the operator." });
+  }
+  const summary = renderDeskReviewReport({
+    ...revision, base: run.baseSha, round: roundNumber, verdict: settings.verdict,
+    findings: settings.general ? publishable : publishable.filter(finding => !inBody.includes(finding)),
+    bodyFindings: settings.general ? inBody : [], inlineCount: comments.length, omittedCount: settings.general ? 0 : inBody.length,
+    evidenceLevel: deskReportEvidence(report), coverageNote,
+    ...(settings.general && { refuted }),
+    howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${run.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
+  });
+  let body = applyReviewOverlay(summary, overlay);
   const visibleBody = body;
-  const round = buildRoundBlock({ body, round: readRoundNumber(packageDir) ?? 1,
-    reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: inBody });
-  if (settings.keryxTemplate) body += `\n\n${renderRoundBlock(round)}`;
+  const round = buildRoundBlock({ body, round: roundNumber,
+    reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: settings.general ? inBody : [] });
+  body += `\n\n${renderRoundBlock(round)}`;
   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
   body += `\n\n${marker}`;
   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));

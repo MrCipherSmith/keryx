@@ -20,6 +20,8 @@ import { SessionSidebar } from "./SessionSidebar";
 import { SubagentArchive } from "./SubagentArchive";
 import { Transcript } from "./Transcript";
 import type { LocalAttachment } from "./chatImages";
+import { textWithLineComments, type LineComment } from "./lineComments";
+import { ChangesPanel } from "../panels/ChangesPanel";
 import { userPromptContext, type UserPromptContext } from "./userPrompt";
 import { findCommand } from "../acp/commands";
 import { commitChatAttachments, discardChatAttachment, gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
@@ -73,6 +75,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const openActivity = useCallback(() => setPrefs({ sidePanel: "activity" }), []);
   const activitySlot = useSlot("activity");
   const infoSlot = useSlot("info");
+  const changesSlot = useSlot("changes");
   const sessionControls = useSlot("sessionControls");
   // A sidebar click on another session's subagent loads that session first; the panel opens on it once it is shown.
   const pendingSubagent = useRef<{ sessionId: string; id: string } | null>(null);
@@ -187,8 +190,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   // Page elements picked in the browser panel go out with the next message (not with a command line).
   const picks = useSyncExternalStore(onPicksChange, () => picksOf(cwd));
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
-  const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[]) => {
-    const hasLocal = imagePaths.length > 0 || local.length > 0;
+  const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[], lineComments: readonly LineComment[] = []) => {
+    const hasLocal = imagePaths.length > 0 || local.length > 0 || lineComments.length > 0;
     // An unrecognized slash line never sends and never clears staged page picks.
     const reviewRequest = desktopReviewRequest(text);
     if ((text.startsWith("/") || reviewRequest) && !hasLocal) return run(text);
@@ -201,8 +204,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
     // runs this returns false and the draft and picks stay for the next send.
     const sent = picks;
+    // Line comments are plain text of the message itself: no resource block, nothing marked untrusted.
     const context = userPromptContext(imagePaths, local, sent.length ? { count: sent.length, block: picksBlock(sent) } : undefined);
-    const ok = s.sendPrompt(text, undefined, context, true);
+    const ok = s.sendPrompt(textWithLineComments(text, lineComments), undefined, context, true);
     if (ok && sent.length) clearPicks(cwd, sent);
     else if (!ok && state.busy) toast({ level: "info", title: "Attachments wait for this turn", body: "Send again when keryx finishes; your draft is kept." });
     return ok;
@@ -494,6 +498,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             activitySlot,
           )
         : null}
+      {prefs.sidePanel === "changes" && changesSlot ? createPortal(
+        <ChangesPanel cwd={cwd} busy={state.busy} canComment={ready} onComment={(c) => handle()?.addLineComment(c) ?? false} />, changesSlot) : null}
       {prefs.sidePanel === "info" && infoSlot ? createPortal(<SessionInfoPanel state={state} cwd={cwd} projectName={projectName} />, infoSlot) : null}
     </div>
   );

@@ -521,6 +521,9 @@ button { font: inherit; }
 .git-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
 .git-worktree { color: var(--fg-muted); white-space: nowrap; }
 .git-worktree::before { content: "· "; }
+.git-dirty { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; padding: 0; font: inherit; color: var(--fg-muted); cursor: pointer; font-variant-numeric: tabular-nums; }
+.git-dirty:hover { color: var(--fg); text-decoration: underline; }
+.attach-chip.comment-chip > .icon { color: var(--accent); }
 .git-pr { border: 0; background: none; padding: 0; font: inherit; color: var(--fg-muted); cursor: pointer; }
 .git-pr:hover { color: var(--fg); text-decoration: underline; }
 .git-ci { width: 7px; height: 7px; border-radius: 50%; flex: none; }
