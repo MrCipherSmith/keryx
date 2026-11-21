@@ -13,6 +13,8 @@ interface ReviewActions {
   onOpen: (number: number) => void;
   onReview: (card: ReviewCard) => void;
   onOpenSession?: (card: ReviewCard) => void;
+  onSubscribe?: (card: ReviewCard) => void;
+  subscriptions?: ReadonlySet<number>;
 }
 
 function ReviewTags({ card }: { card: ReviewCard }) {
@@ -25,7 +27,7 @@ function ReviewTags({ card }: { card: ReviewCard }) {
   </span>;
 }
 
-function ReviewAction({ card, onReview, onOpenSession }: Omit<ReviewActions, "onOpen"> & { card: ReviewCard }) {
+function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscriptions }: Omit<ReviewActions, "onOpen"> & { card: ReviewCard }) {
   const toast = useToast();
   const href = reviewUrl(card.url);
   const showReview = card.state === "open" || card.localReview?.runState;
@@ -34,6 +36,8 @@ function ReviewAction({ card, onReview, onOpenSession }: Omit<ReviewActions, "on
     card.localReview?.runState ? "View review result" : "Run review";
   const browserLabel = `Open PR #${card.number} in browser`;
   const sessionLabel = `Open PR #${card.number} in Sessions`;
+  const following = subscriptions?.has(card.number) ?? false;
+  const watchLabel = `${following ? "Edit subscription for" : "Subscribe to"} PR #${card.number}`;
   return <div className="card-actions">
     {showReview && <button type="button" className="icon-btn" title={label} aria-label={`${label} for #${card.number}`}
       onClick={() => onReview(card)}><Icon name={card.localReview?.runState ? "checklist" : "play"} size={15} /></button>}
@@ -45,6 +49,8 @@ function ReviewAction({ card, onReview, onOpenSession }: Omit<ReviewActions, "on
         event.preventDefault();
         void openPullRequest(href).catch(error => toast({ level: "error", title: "Could not open pull request", body: errMessage(error) }));
       }}><Icon name="external" size={15} /></a>}
+    {onSubscribe && <button type="button" className={`icon-btn${following ? " is-following" : ""}`} aria-haspopup="dialog"
+      aria-label={watchLabel} title={watchLabel} onClick={() => onSubscribe(card)}><Icon name="bell" size={15} /></button>}
   </div>;
 }
 

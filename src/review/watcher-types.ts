@@ -12,6 +12,8 @@ export interface WatcherEvent {
     | "push"
     | "review_requested"
     | "review_request_removed"
+    | "review_submitted"
+    | "draft_changed"
     | "decision"
     | "ci"
     | "updated";
@@ -20,6 +22,15 @@ export interface WatcherEvent {
   headSha: string;
   description: string;
   reviewer?: string;
+}
+
+export const PR_WATCH_TOPICS = ["reviews", "requests", "status", "checks"] as const;
+export type PrWatchTopic = typeof PR_WATCH_TOPICS[number];
+
+export interface PrSubscription {
+  number: number;
+  topics: PrWatchTopic[];
+  activity?: WatcherEvent[];
 }
 
 export interface WatcherSnapshot {

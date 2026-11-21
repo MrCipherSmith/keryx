@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewBoardSnapshot, ReviewCard } from "./board-types";
+import { applyReviewRuleAction } from "./review-rules";
 import { watcherScope, watcherTransaction } from "./watcher-db";
 import { configureWatcher, listConfiguredWatchers, pauseWatcher, pollWatcher, readWatcher } from "./watcher";
 
@@ -192,4 +193,20 @@ test("unverified head CI and partial reviewer pages cannot remove requests or re
   expect(partial.lastSuccessAt).toEqual(success.lastSuccessAt);
   expect(partial.events).toEqual([]);
   expect((await tick(stable)).events).toEqual([]);
+});
+
+test("PR subscriptions record only selected topics and preserve independent watcher history", async () => {
+  configureWatcher(cwd, key, 5);
+  const save = () => applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: ["requests", "reviews"] });
+  const activity = () => applyReviewRuleAction(cwd, key, { kind: "status", number: 2 }).subscriptions?.[0]?.activity;
+  expect(save().subscriptions).toEqual([{ number: 2, topics: ["requests", "reviews"], activity: [] }]);
+  await tick(board(card({ watcherReviews: [] }), card({ number: 3 })));
+  const changed = board(card({ decision: "APPROVED", ci: "passed", reviewers: ["teammate"],
+    watcherReviews: [{ id: "one", login: "teammate", state: "APPROVED" }] }), card({ number: 3, reviewers: ["team"] }));
+  await tick(changed);
+  await tick(changed);
+  expect(activity()?.map(event => event.kind)).toEqual(["review_submitted", "review_requested"]);
+  expect(readWatcher(cwd, key).events.some(event => event.number === 3)).toBe(true);
+  expect(applyReviewRuleAction(cwd, { ...key, viewer: "other" }, { kind: "status" }).subscriptions).toEqual([]);
+  expect(applyReviewRuleAction(cwd, key, { kind: "subscription", number: 2, topics: [] }).subscriptions).toEqual([]);
 });

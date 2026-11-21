@@ -10,6 +10,7 @@ import { boardGraphql, projectGithubConnection } from "./board-github";
 import { projectGithubBinding, saveProjectGithubBinding, verifyProjectGithubAccountIntent } from "./github-account-store";
 import { resolveWatcherCheckout } from "./watcher-project";
 import type { ReviewBoardSnapshot } from "./board-types";
+import { recordPrSubscriptionEvents } from "./watcher-subscriptions";
 import { observedCards, watcherChanges, type WatchedCard } from "./watcher-events";
 import {
   DEFAULT_WATCHER_MINUTES,
@@ -268,6 +269,7 @@ export async function pollWatcher(
       const changes =
         row.baseline === null ? [] : watcherChanges(JSON.parse(row.baseline) as WatchedCard[], cards, at);
       observeRules(db, id, cards, changes, at, settled);
+      recordPrSubscriptionEvents(db, id, changes);
       if (changes.length) {
         const insert = db.prepare("INSERT INTO watcher_events (watcher,event) VALUES (?,?)");
         for (const event of changes.slice(-historyLimit)) insert.run(id, JSON.stringify(event));

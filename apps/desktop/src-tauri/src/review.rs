@@ -516,7 +516,7 @@ impl WatcherTarget {
 }
 
 fn rule_args(target: WatcherTarget, action: Value) -> Result<Vec<String>, String> {
-    if !matches!(action["kind"].as_str(), Some("status" | "save" | "delete" | "mode")) {
+    if !matches!(action["kind"].as_str(), Some("status" | "save" | "delete" | "mode" | "subscription")) {
         return Err("Unknown review rule operation.".into());
     }
     let request = action.to_string();

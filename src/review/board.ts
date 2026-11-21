@@ -20,6 +20,7 @@ interface RawCard {
   number: number; title: string; state: "OPEN" | "CLOSED" | "MERGED"; isDraft: boolean;
   author: Person | null; updatedAt: string; headRefOid: string; baseRefOid: string;
   reviewDecision: ReviewCard["decision"];
+  recentReviews?: { nodes: ({ id: string; author: Person | null; state: string } | null)[] };
   changedFiles?: number; additions?: number; deletions?: number;
   assignees: Connection<Person>; reviewRequests: Connection<Reviewer>;
   commits: { nodes: { commit: { oid: string; statusCheckRollup: { state: string; contexts: { totalCount: number } } | null } }[] };
@@ -30,7 +31,7 @@ interface BoardPage {
 }
 
 const states = { open: "[OPEN]", closed: "[CLOSED]", merged: "[MERGED]", all: "[OPEN, CLOSED, MERGED]" } as const;
-const listQuery = (state: ReviewBoardState, reviewerFields: string, first: number) => `query($owner: String!, $name: String!, $cursor: String) {
+const listQuery = (state: ReviewBoardState, reviewerFields: string, first: number, watcher: boolean) => `query($owner: String!, $name: String!, $cursor: String) {
   viewer { login }
   repository(owner:$owner, name:$name) {
     id nameWithOwner
@@ -40,6 +41,7 @@ const listQuery = (state: ReviewBoardState, reviewerFields: string, first: numbe
         number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision changedFiles additions deletions
         ${connection("assignees", person)}
         ${connection("reviewRequests", reviewerFields)}
+        ${watcher ? "recentReviews: reviews(last:25, states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]) { nodes { id author { login } state } }" : ""}
         commits(last:1) { nodes { commit { oid statusCheckRollup { state contexts(first:1) { totalCount } } } } }
       }
     }
@@ -124,7 +126,7 @@ export async function listReviewCards(repo: string, repositories: string[], stat
   let nextCursor: string | null = null;
   for (;;) {
     try {
-      const result: BoardPage = await query<BoardPage>(listQuery(state, reviewerFields, page?.size ?? 100), cursor ? { ...params, cursor } : params);
+      const result: BoardPage = await query<BoardPage>(listQuery(state, reviewerFields, page?.size ?? 100, trackRequestIds), cursor ? { ...params, cursor } : params);
       if (!result.repository?.id || !result.viewer?.login) throw new Error("access: GitHub repository or account is unavailable.");
       if (repositoryId && (repositoryId !== result.repository.id || viewer !== result.viewer.login)) {
         throw new Error("access: GitHub account or repository changed. Refresh the board.");
@@ -157,7 +159,11 @@ export async function listReviewCards(repo: string, repositories: string[], stat
           number: pr.number, title: pr.title, url: `https://github.com/${canonical}/pull/${pr.number}`,
           state: pr.state.toLowerCase() as ReviewCard["state"], draft: pr.isDraft, author: pr.author?.login ?? "",
           assignees: assignees.names, reviewers: reviewers.names, assigneesComplete: assignees.complete, reviewersComplete: reviewers.complete,
-          ...(trackRequestIds ? { reviewRequestIds: Object.fromEntries(requestIds) } : {}),
+          ...(trackRequestIds ? { reviewRequestIds: Object.fromEntries(requestIds),
+            ...(Array.isArray(pr.recentReviews?.nodes) && { watcherReviews: pr.recentReviews.nodes.flatMap(review =>
+              review?.id && review.author?.login && review.state
+                ? [{ id: review.id, login: review.author.login, state: review.state }] : []) }),
+          } : {}),
           decision: pr.reviewDecision, ci: checkState(pr), headSha: pr.headRefOid, baseSha: pr.baseRefOid, updatedAt: pr.updatedAt,
         };
       }, { stopOnError: true });

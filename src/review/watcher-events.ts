@@ -10,6 +10,8 @@ export type WatchedCard = Pick<
   | "headSha"
   | "decision"
   | "ci"
+  | "draft"
+  | "watcherReviews"
   | "updatedAt"
   | "reviewers"
   | "reviewRequestIds"
@@ -25,6 +27,8 @@ export function observedCards(cards: ReviewCard[]): WatchedCard[] {
       assignees,
       headSha,
       decision,
+      draft,
+      watcherReviews,
       ci,
       updatedAt,
       reviewers,
@@ -36,9 +40,11 @@ export function observedCards(cards: ReviewCard[]): WatchedCard[] {
       assignees,
       headSha,
       decision,
+      draft,
       ci,
       updatedAt,
       reviewers,
+      ...(watcherReviews ? { watcherReviews } : {}),
       ...(reviewRequestIds ? { reviewRequestIds } : {}),
     }),
   );
@@ -75,6 +81,15 @@ export function watcherChanges(previous: WatchedCard[], current: WatchedCard[], 
     for (const name of prior.values())
       event("review_request_removed", `Review request for ${name} is no longer pending`, name);
     if (!last) continue;
+    if (pr.draft !== last.draft && last.draft !== undefined) event("draft_changed", pr.draft ? "Converted to draft" : "Ready for review");
+    if (pr.watcherReviews && last.watcherReviews) {
+      const priorReviews = new Map(last.watcherReviews.map(review => [review.id, review.state]));
+      for (const review of pr.watcherReviews) {
+        if (review.login.toLowerCase() === pr.author.toLowerCase() || priorReviews.get(review.id) === review.state) continue;
+        const action = review.state.toLowerCase().replaceAll("_", " ");
+        event("review_submitted", `${review.login}: ${action}`, review.login);
+      }
+    }
     if (pr.decision !== last.decision) event("decision", `Review decision: ${pr.decision ?? "none"}`);
     if (pr.ci !== last.ci && pr.ci !== "unknown") event("ci", `CI: ${pr.ci}`);
     if (events.length === initialCount && pr.updatedAt !== last.updatedAt) event("updated", "PR updated");

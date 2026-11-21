@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { z } from "zod";
+import { PR_WATCH_TOPICS } from "../review/watcher-types";
 import { applyReviewRuleAction } from "../review/review-rules";
 import type { ReviewRuleAction } from "../review/review-rule-types";
 import { mainCheckout, parseWatcherKey, verifyIdentity } from "../review/watcher-project";
@@ -42,6 +43,7 @@ const choice = z.discriminatedUnion("mode", [
 const actions = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("status"), number: number.optional() }),
   z.strictObject({ kind: z.literal("mode"), number, choice }),
+  z.strictObject({ kind: z.literal("subscription"), number, topics: z.array(z.enum(PR_WATCH_TOPICS)).max(PR_WATCH_TOPICS.length) }),
   z.strictObject({ kind: z.literal("save"), rule, expected: rule.nullable().optional(), number: number.optional() }),
   z.strictObject({ kind: z.literal("delete"), id, expected: rule.optional(), number: number.optional() }),
 ]);

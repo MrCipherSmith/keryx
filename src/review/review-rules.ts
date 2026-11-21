@@ -7,6 +7,7 @@ import type {
   ReviewRuleActivity,
   ReviewRuleSnapshot,
 } from "./review-rule-types";
+import { readPrSubscriptions, savePrSubscription } from "./watcher-subscriptions";
 import type { WatcherKey } from "./watcher-types";
 import { watcherScope, watcherTransaction } from "./watcher-db";
 
@@ -91,6 +92,8 @@ export function applyReviewRuleAction(
         );
         db.run("DELETE FROM review_rules WHERE watcher=? AND id=?", [scope, action.id]);
       }
+    } else if (action.kind === "subscription") {
+      savePrSubscription(db, scope, action.number, action.topics);
     } else if (action.kind === "mode") {
       if (action.choice.mode === "auto") {
         const rule = db
@@ -125,6 +128,7 @@ export function applyReviewRuleAction(
       rules: ruleRows(db, scope).map((row) => JSON.parse(row.rule) as ReviewRule),
       choice: number === null ? { mode: "project" } : modeFor(db, scope, number),
       activity,
+      subscriptions: readPrSubscriptions(db, scope, number),
     };
   });
 }
