@@ -275,8 +275,11 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
             }} onDragEnd={() => { dragItem.current = null; }}>
             <button className="flow-card-main" onClick={e => show(r, e.currentTarget)}>
               <span className="flow-id">{issueName(r.issue)}</span><span className="flow-title">{r.issue.title}</span>
-              <span className="flow-meta"><span className="badge">{r.issue.state}</span>{project && STAGES[r.issue.work?.stage ?? "none"]}
-                {r.issue.assignees.join(", ") || "Unassigned"}</span>
+              <span className="flow-meta">
+                <span className="badge">{r.issue.state}</span>
+                {project && <span>{STAGES[r.issue.work?.stage ?? "none"]}</span>}
+                <span>{r.issue.assignees.join(", ") || "Unassigned"}</span>
+              </span>
               {r.issue.labels.length > 0 && <span className="issue-labels" title={r.issue.labels.join(", ")}>{r.issue.labels.join(" · ")}</span>}
               {r.issue.work?.reason && <span className="issue-labels">{r.issue.work.reason}</span>}
             </button>{workActions(r)}</article>)}
