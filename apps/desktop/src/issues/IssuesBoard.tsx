@@ -10,7 +10,7 @@ import { isAccessError, useIssueCollection } from "./useIssueCollection";
 import "./IssuesBoard.css";
 
 interface Props extends WorkProps {
-  cwd: string; login: string; onSettings: () => void; request?: typeof requestIssues;
+  cwd: string; login: string; onAccessDenied?: () => void; onSettings: () => void; request?: typeof requestIssues;
 }
 type Source = keyof typeof SOURCES;
 
@@ -82,7 +82,9 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
     </form>}
   </div>;
   const key = account + ".filters." + JSON.stringify([source, source === "project" ? target : null]);
+  const { onAccessDenied } = props;
   const clear = useCallback((reason: string) => {
+    onAccessDenied?.();
     // Private repository names can occur in filters for more than one source.
     try {
       for (const k of Object.keys(localStorage)) {
@@ -91,7 +93,7 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
     } catch { /* Storage unavailable. */ }
     save(account + ".project", null);
     setOwner(""); setNumber(""); setTarget(null); setDenied(reason);
-  }, [account]);
+  }, [account, onAccessDenied]);
   const remember = useCallback((project: ProjectBoard) => {
     save(account + ".project", JSON.stringify({ owner: project.owner, number: project.number }));
   }, [account]);

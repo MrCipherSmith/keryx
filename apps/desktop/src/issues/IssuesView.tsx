@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import type { IssueRef } from "../../../../src/integrations/issues-contract";
 import { errMessage } from "../lib/format";
 import { listGitHubAccounts, type GitHubAccount } from "../platform/githubAccounts";
@@ -6,9 +6,10 @@ import { IssueOriginDetail, type IssueOriginRequest } from "./IssueOriginDetail"
 import { IssuesBoard } from "./IssuesBoard";
 import type { WorkAction } from "./IssueWork";
 
-export function IssuesView({cwd, preferred, onWork, onSettings, origin, onCloseOrigin}: {
+export function IssuesView({cwd, preferred, onWork, onViewerChange, onSettings, origin, onCloseOrigin}: {
   origin?: IssueOriginRequest | null; onCloseOrigin?: () => void;
   cwd: string; preferred?: string; onSettings: () => void;
+  onViewerChange: (login?: string) => void;
   onWork: (login: string, action: WorkAction, issue: IssueRef, flowDir?: string) => Promise<void>;
 }) {
   const [accounts, setAccounts] = useState<GitHubAccount[]>([]);
@@ -29,14 +30,19 @@ export function IssuesView({cwd, preferred, onWork, onSettings, origin, onCloseO
   }, [attempt, preferred]);
   const login = accounts.find(a => a.login === chosen)?.login
     ?? accounts.find(a => a.login === preferred)?.login ?? accounts.find(a => a.active)?.login ?? accounts[0]?.login;
+  const invalidateWork = useCallback(() => onViewerChange(login), [login, onViewerChange]);
+  useLayoutEffect(() => {
+    onViewerChange(loaded ? login : "");
+    return () => onViewerChange();
+  }, [cwd, login, loaded, onViewerChange]);
   return <div className="issues-view">
     {loaded && login && <><label className="issues-account">GitHub account <select value={login} onChange={event => choose(event.target.value)}>
       {accounts.map(account => <option key={account.login}>{account.login}</option>)}
     </select></label>
       {origin && onCloseOrigin
-        ? <IssueOriginDetail key={JSON.stringify([cwd,login,origin])} cwd={cwd} login={login} origin={origin} close={onCloseOrigin}
+        ? <IssueOriginDetail key={JSON.stringify([cwd,login,origin])} cwd={cwd} login={login} origin={origin} close={onCloseOrigin} onAccessDenied={invalidateWork}
             onWork={(action, issue, flowDir) => onWork(login, action, issue, flowDir)} />
-        : <IssuesBoard key={JSON.stringify([cwd,login])} cwd={cwd} login={login} onSettings={onSettings}
+        : <IssuesBoard key={JSON.stringify([cwd,login])} cwd={cwd} login={login} onSettings={onSettings} onAccessDenied={invalidateWork}
         onWork={(action, issue, flowDir) => onWork(login, action, issue, flowDir)} />}</>}
     {!loaded && <p role="status">Loading GitHub accounts…</p>}
     {loaded && !login && <div role="status"><p>{error || "Connect a GitHub account to view issues."}</p>

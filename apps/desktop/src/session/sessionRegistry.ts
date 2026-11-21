@@ -30,7 +30,7 @@ export class SessionRegistry<Turn = unknown> {
   shown: string | null = null;
 
   private intent = 0;
-  private readonly loadIntents = new Map<string, number>();
+  private readonly loadIntents = new Map<string, { intent: number; scope?: AbortSignal }>();
   private orphans: RoutedUpdate[] = [];
 
   constructor(private readonly orphanLimit = 1000) {}
@@ -72,20 +72,21 @@ export class SessionRegistry<Turn = unknown> {
   }
 
   /** A session/load starts, or the user asks again for one already loading: it is shown when it lands, unless the user moves on. */
-  wantLoad(sessionId: string): void {
-    this.loadIntents.set(sessionId, this.nextIntent());
+  wantLoad(sessionId: string, scope?: AbortSignal): void {
+    this.loadIntents.set(sessionId, { intent: this.nextIntent(), scope });
   }
 
-  beginLoad(sessionId: string): void {
+  beginLoad(sessionId: string, scope?: AbortSignal): void {
     this.loading.add(sessionId);
-    this.wantLoad(sessionId);
+    this.wantLoad(sessionId, scope);
   }
 
   /** The load succeeded: the session is held. Returns whether it should be shown. */
   loadDone(sessionId: string): boolean {
     this.loading.delete(sessionId);
     this.held.add(sessionId);
-    const show = this.isLatest(this.loadIntents.get(sessionId) ?? -1);
+    const request = this.loadIntents.get(sessionId);
+    const show = !!request && !request.scope?.aborted && this.isLatest(request.intent);
     this.loadIntents.delete(sessionId);
     if (show) this.shown = sessionId;
     return show;

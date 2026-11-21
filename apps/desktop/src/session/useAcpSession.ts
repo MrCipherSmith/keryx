@@ -388,8 +388,9 @@ export function useAcpSession(cwd: string) {
    * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
    */
   const openLoad = useCallback(
-    async (client: AcpClient, gen: number, sessionId: string): Promise<boolean> => {
+    async (client: AcpClient, gen: number, sessionId: string, issueScope?: AbortSignal): Promise<boolean> => {
       const l = live.current;
+      if (issueScope?.aborted) return false;
       const plan = l.reg.planSwitch(sessionId);
       if (plan === "show") {
         l.reg.showLocal(sessionId);
@@ -397,10 +398,10 @@ export function useAcpSession(cwd: string) {
         return true;
       }
       if (plan === "pending") {
-        l.reg.wantLoad(sessionId);
+        l.reg.wantLoad(sessionId, issueScope);
         return true;
       }
-      l.reg.beginLoad(sessionId);
+      l.reg.beginLoad(sessionId, issueScope);
       dispatch({ t: "loadStart", sessionId });
       try {
         const [r, archive] = await Promise.all([
@@ -410,12 +411,13 @@ export function useAcpSession(cwd: string) {
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
         dispatch({ t: "loadDone", sessionId, archive, modes: r?.modes, configOptions: r?.configOptions, show });
-        if (r?._meta?.keryx?.pendingIssueQuestions) resumeIssueQuestions(sessionId);
+        if (!issueScope?.aborted && r?._meta?.keryx?.pendingIssueQuestions) resumeIssueQuestions(sessionId);
         return true;
       } catch (e) {
         if (l.gen !== gen) return false;
         l.reg.loadFailed(sessionId);
         dispatch({ t: "loadFailed", sessionId });
+        if (issueScope?.aborted) return false;
         if (isLeaseError(e)) setFatal({ kind: "leased", sessionId });
         else dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
         return false;
@@ -942,10 +944,11 @@ export function useAcpSession(cwd: string) {
     hideFatal: () => setFatalHidden(true),
     sendPrompt,
     canPrepareIssue,
-    openIssueSession: async (sessionId: string, initialTurn?: { launchId: string; text: string }, pendingQuestions = false) => {
+    openIssueSession: async (sessionId: string, initialTurn?: { launchId: string; text: string }, pendingQuestions = false, issueScope?: AbortSignal) => {
       const l = live.current;
       const alreadyHeld = l.reg.held.has(sessionId);
-      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId)) throw new Error("Could not open the linked session.");
+      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope)) throw new Error("Could not open the linked session.");
+      if (issueScope?.aborted) return;
       if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId)) resumeIssueQuestions(sessionId);
       if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, { issueLaunchId: initialTurn.launchId })) {
         if (!l.reg.turns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");

@@ -465,7 +465,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const issueWork = useIssueWork({
     cwd, ready: state.phase === "ready", canPrepare: s.canPrepareIssue,
-    showSession: async (id, turn, pendingQuestions) => { await s.openIssueSession(id, turn, pendingQuestions); setView("session"); },
+    showSession: async (id, turn, pendingQuestions, signal) => {
+      await s.openIssueSession(id, turn, pendingQuestions, signal);
+      if (!signal?.aborted) setView("session");
+    },
     showFlow: dir => { setLinkedFlow(dir); setView("flows"); },
     notifyError: message => s.notify("error", message),
   });
@@ -560,7 +563,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       ) : null}
       {issueWork.chooser}
       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
-        <IssuesView origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+        <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
       </div>}
       <div className="view" hidden={view !== "review"}>

@@ -11,18 +11,22 @@ interface Props extends WorkProps {
   login: string;
   origin: IssueOriginRequest;
   close: () => void;
+  onAccessDenied?: () => void;
   request?: typeof requestIssues;
 }
 interface Result { viewer: IssueViewer; issue: Detail | null }
 
 /** Deep link independently of the current board's source, filters, and paginated window. */
-export function IssueOriginDetail({ cwd, login, origin, close, onWork, request = requestIssues }: Props) {
+export function IssueOriginDetail({ cwd, login, origin, close, onWork, onAccessDenied, request = requestIssues }: Props) {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [workError, setWorkError] = useState("");
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
-  const loseAccess = useCallback((reason: string) => { setResult(null); setWorkError(""); setError(reason); }, []);
+  const loseAccess = useCallback((reason: string) => {
+    if (isAccessError(reason)) onAccessDenied?.();
+    setResult(null); setWorkError(""); setError(reason);
+  }, [onAccessDenied]);
   useEffect(() => {
     let live = true;
     setResult(null);

@@ -201,3 +201,42 @@ test("AC11 source issue can resume the same package and removes the action after
   expect(host.textContent).not.toContain("Resume preparation");
   expect(button("Open Flow")).not.toBeUndefined();
 });
+
+test("AC3 switching viewer while opening a private issue invalidates the workspace and the admitted navigation", async () => {
+  const { useLayoutEffect } = await import("react");
+  const { useIssueWork } = await import("./IssueWork");
+  const calls: IssuesAction[] = [];
+  const opened: string[] = [];
+  let delay: IssuesAction = "workspace";
+  let release!: (value: unknown) => void;
+  const workspace = { projects: [{ cwd: "/fixture" }], flows: [] };
+  const request: typeof requestIssues = async <T,>(_cwd: string, _login: string, action: IssuesAction) => {
+    calls.push(action);
+    return (action === delay ? await new Promise(resolve => { release = resolve; }) : workspace) as T;
+  };
+  function Host({login}: {login: string}) {
+    const work = useIssueWork({
+      cwd: "/fixture", ready: false, canPrepare: true, notifyError: () => {},
+      showFlow: dir => opened.push(dir), showSession: async id => { opened.push(id); },
+    }, request);
+    useLayoutEffect(() => { work.setViewer(login); }, [work.setViewer, login]);
+    return createElement("div", null, work.chooser, createElement("button", {
+      onClick: () => { void work.run({ action: "prepare-flow", login, ref: issue.ref }); },
+    }, "Prepare fixture"));
+  }
+  const selectViewer = (login: string) => act(() => root.render(createElement(Host, { login })));
+  await selectViewer("alice");
+  await click(button("Prepare fixture"));
+  await selectViewer("bob");
+  await selectViewer("alice");
+  await act(async () => { release({projects:[{cwd:"/private/alice"},{cwd:"/private/checkout"}], flows:[]}); });
+  expect(host.textContent).not.toContain("/private/alice");
+  expect(calls).toEqual(["workspace"]);
+
+  delay = "prepare-flow";
+  await click(button("Prepare fixture"));
+  expect(calls).toEqual(["workspace","workspace","prepare-flow"]);
+  await selectViewer("bob");
+  await act(async () => { release({ ...workspace, session:{sessionId:"private-session", project:{cwd:"/fixture"}} }); });
+  expect(opened).toEqual([]);
+});
