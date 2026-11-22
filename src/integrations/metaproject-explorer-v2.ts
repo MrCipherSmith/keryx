@@ -86,7 +86,9 @@ function graphRequest(request: DataRequest): MetaprojectRequest {
   switch (request.action) {
     case "detail": return { action: request.action, id: request.id };
     case "neighbors": return { action: request.action, id: request.id, depth: request.depth, direction: request.direction, kinds: request.kinds };
-    case "search": return { action: request.action, query: request.query.normalize("NFC") };
+    case "search": return request.scopes?.every(isOpenSpecKind)
+      ? { action: "catalog" }
+      : { action: request.action, query: request.query.normalize("NFC") };
     default: return { action: "catalog" };
   }
 }
@@ -367,9 +369,11 @@ export async function metaprojectExplorerV2(
   if (request.action === "capabilities") return { schemaVersion: METAPROJECT_SCHEMA_V2, actions: METAPROJECT_CAPABILITIES };
   try {
     const root = await realpath(projectRoot);
-    const { graph: loaded, confirm, track } = await load(root, graphRequest(request));
+    const [{ graph: loaded, confirm, track }, source] = await Promise.all([
+      load(root, graphRequest(request)),
+      readOpenSpec(root),
+    ]);
     const graph = { ...loaded, nodes: loaded.nodes.filter(safeGraphNode) };
-    const source = await readOpenSpec(root);
     const { edges, diagnostics } = await buildRelationships(source, graph, root, track);
     await confirm();
     const response = new V2Read(graph, source, edges, diagnostics).read(request);
