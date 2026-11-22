@@ -49,7 +49,7 @@ impl OperationLock {
         let dir = base.join("keryx");
         fs::create_dir_all(&dir).map_err(|_| "Cannot access the local configuration directory.")?;
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).map_err(|_| "Cannot secure the local configuration directory.")?;
-        let file = OpenOptions::new().read(true).write(true).create(true).mode(0o600).open(dir.join("desktop-serve.lock")).map_err(|_| "Cannot open the serve operation lock.")?;
+        let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).mode(0o600).open(dir.join("desktop-serve.lock")).map_err(|_| "Cannot open the serve operation lock.")?;
         loop {
             if Instant::now() >= until { return Err("Another Desktop serve operation is still running.".into()); }
             if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 { return Ok(Self(file)); }

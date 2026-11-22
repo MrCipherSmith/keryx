@@ -33,6 +33,7 @@ import { INTAKE_SERVICE_TOPIC, isIntakeCallbackData, type MessageState } from ".
 import { type PollerStatus, UpdatePoller } from "./poller";
 import { ServiceTopics } from "./service-topics";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
+import { telegramTopicUrl } from "./topic-url";
 import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
 /** How much of a replied-to message's text is kept: enough to recognise a reply box by its opening. */
@@ -614,9 +615,7 @@ export class RemoteHub {
   topicUrl(sessionId: string, owner: DesktopOwner): string | undefined {
     if (!this.matchesOwner(sessionId, owner)) return undefined;
     const record = this.registry.bySession(sessionId);
-    if (record === undefined || !Number.isSafeInteger(record.chatId) || !Number.isSafeInteger(record.threadId) || record.threadId <= 0) return undefined;
-    const match = /^-100([1-9][0-9]*)$/.exec(String(record.chatId));
-    return match?.[1] === undefined ? undefined : `https://t.me/c/${match[1]}/${record.threadId}`;
+    return record === undefined ? undefined : telegramTopicUrl(record.chatId, record.threadId);
   }
 
   hasSession(sessionId: string): boolean {

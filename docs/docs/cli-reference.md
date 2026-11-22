@@ -2132,6 +2132,12 @@ keryx serve config init | set | show
 | `token issue \| rotate \| revoke` | — | Bearer-token lifecycle. Only a **salted hash** is persisted; the plaintext token is printed once, at issue, and cannot be recovered afterwards. |
 | `config init \| set \| show` | — | Create, modify, and print the listener configuration. Without a config, `serve` does not listen. |
 
+Desktop uses two internal JSON commands. `desktop-control status` probes the
+configured loopback listener. `desktop-control bootstrap [--complete-setup]`
+prepares configuration and credentials for the Desktop supervisor. The
+`desktop-channel` command reads a single versioned channel request from stdin
+and returns its result as JSON. See the [Desktop Telegram module](desktop-telegram-module.md).
+
 ### Routes
 
 The routes below take the serve bearer token. The `/v1/remote/*` routes, listed
