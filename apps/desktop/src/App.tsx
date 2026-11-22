@@ -43,6 +43,7 @@ import { modelOption, useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
 import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
 import { TelegramServeSettings } from "./project/TelegramServeSettings";
+import { TelegramBotSettings } from "./project/TelegramBotSettings";
 import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
 import { PROJECT_COMMANDS } from "./project/projectCommands";
 import { useProjectRunner } from "./project/useProjectRunner";
@@ -84,7 +85,7 @@ export function App() {
       ) : welcomeSettings ? (
         <div className="standalone">
           <div className="welcome-drag" data-tauri-drag-region />
-        <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings />} />
+        <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings><TelegramBotSettings /></TelegramServeSettings>} />
         </div>
       ) : (
         <Welcome onOpen={async (folder) => {
@@ -587,7 +588,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {view === "settings" ? (
         <div className="view">
-          <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings />} />
+          <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings><TelegramBotSettings /></TelegramServeSettings>} />
         </div>
       ) : null}
 
