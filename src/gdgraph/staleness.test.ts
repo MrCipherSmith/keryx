@@ -75,6 +75,26 @@ test("AFC-10 control — a clean tree right after build reports fresh", async ()
   expect(result.reasons).toEqual([]);
 });
 
+test("an untracked linked worktree does not stale the parent graph", async () => {
+  git(root, ["worktree", "add", "--detach", ".review-checkout"]);
+  expect(await checkGraphStaleness(root)).toMatchObject({ status: "fresh", reasons: [] });
+
+  await writeFile(path.join(root, "src", "untracked.ts"), "export const u = 1;\n");
+  const result = await checkGraphStaleness(root);
+  expect(result.status).toBe("stale");
+  expect(result.reasons.join(" ")).toContain("src/untracked.ts");
+  expect(result.reasons.join(" ")).not.toContain(".review-checkout");
+});
+
+test("an existing graph containing a linked worktree still requests a rebuild", async () => {
+  git(root, ["worktree", "add", "--detach", ".review-checkout"]);
+  await writeFile(path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+    JSON.stringify({ id: ".review-checkout/src/a.ts", kind: "file", path: ".review-checkout/src/a.ts" }) + "\n");
+  const result = await checkGraphStaleness(root);
+  expect(result.status).toBe("stale");
+  expect(result.reasons.join(" ")).toContain(".review-checkout/");
+});
+
 test("AFC-10 trigger 1/5 — a new commit since the build invalidates the snapshot", async () => {
   await writeFile(path.join(root, "src", "b.ts"), "export const b = 1;\n");
   git(root, ["add", "-A"]);
