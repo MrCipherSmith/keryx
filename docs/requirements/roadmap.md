@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.35
+Version: 0.29.36
 
 ## Status
 
@@ -14,6 +14,8 @@ carrying the measurement that found it and the reason it was not done then.
 > **Changelog**
 >
 > - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
+>
+> - **0.29.36** — [Keryx Desktop Telegram](keryx-desktop-telegram/README.md). Spec ready for local service setup and management from Integrations, QR or manual bot pairing, token replacement and explicit sharing of a live Desktop ACP session with Telegram. Scope includes revision-checked bot changes, poller readiness and recovery, turn arbitration, delegated approvals, and live-bot acceptance. Desktop runtime implementation is planned.
 >
 > - **0.29.35** — [Keryx Desktop: рабочие панели и внимание](keryx-desktop-workspace-panels/README.md) и [Готовность worktree](keryx-worktree-readiness/README.md). Draft requirements: attention tracked in Rust across all project views and windows (notifications, Dock badge, a Needs attention group), Changes and Files side tabs with path-and-line comments and `@path`, a context meter with compact, native image input once keryx accepts images (built on open PRs #1254 and #1256 and flow 493); worktree preparation (env files, copy-on-write dependencies, ports, local index rebuild), the worktree root and index for agents, `promote` of worktree findings to the user scope, a merge-conflict preview, and a report-only test baseline and flaky retry. Nothing implemented.
 >

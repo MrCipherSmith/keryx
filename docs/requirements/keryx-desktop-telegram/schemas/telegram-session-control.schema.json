@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Keryx Desktop Telegram session control (proposed v1)",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/state" }
+  ],
+  "$defs": {
+    "sessionId": { "type": "string", "minLength": 1 },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "sessionId"],
+      "properties": {
+        "operation": { "enum": ["status", "attach", "detach"] },
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "topicName": { "type": "string", "minLength": 1, "maxLength": 100 }
+      },
+      "allOf": [{
+        "if": { "required": ["topicName"] },
+        "then": { "properties": { "operation": { "const": "attach" } } }
+      }]
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "state"],
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "state": { "enum": ["detached", "attaching", "active", "reconnecting", "unavailable"] },
+        "topicUrl": { "type": "string", "pattern": "^https://t\\.me/" },
+        "reason": { "enum": ["serve-unavailable", "connection-lost", "pairing-required", "capability-unavailable", "lease-lost", "topic-archived", "operation-failed"] }
+      },
+      "allOf": [{
+        "if": { "required": ["topicUrl"] },
+        "then": { "properties": { "state": { "const": "active" } } }
+      }]
+    }
+  }
+}

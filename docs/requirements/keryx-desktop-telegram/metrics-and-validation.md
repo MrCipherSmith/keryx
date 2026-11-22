@@ -1,0 +1,38 @@
+# Keryx Desktop Telegram Validation
+Version: 0.4.0
+
+**Status: spec ready.** These are planned tests and evidence. No Desktop Telegram implementation has been exercised by this package.
+
+## Controlled scenarios for GitHub CI
+
+Use the existing fake Bot API and a real loopback `serve`/ACP boundary where feasible. Test the Desktop projection with a controlled ACP client and simulate time with clocks or explicit events. Capture counts, source and state in evidence. Redact chat content and credentials.
+
+| ID | Scenario | Required evidence |
+| --- | --- | --- |
+| V1 | Clean machine from Settings, repeated or partial bootstrap, Start/Stop/Restart, startup and shutdown timeouts, app quit, concurrent launches, compatible external loopback service, non-loopback configuration, incompatible service and occupied port. Pair, reopen pending pairing, expire code, send test and disconnect. | One owned process. Prove readiness before Running. A timeout is visible and a replacement waits for confirmed exit. An external service survives app quit. No non-loopback activation, external termination, credential rotation, configuration overwrite or secret in output. Stop and Restart preserve bot settings. Only verified pairing supplies IDs. |
+| V2 | Attach twice, attach chats A and B in the same project, switch the visible chat, send input to each topic in turn, try a same-name inactive terminal topic with pending input, and attempt terminal registration against a same-name inactive Desktop topic | One binding per session. A foreign or old-generation topic is never reused or drained into the new session. Terminal registration cannot reclaim a Desktop-owned topic. Each accepted event reaches only the topic's held session. Desktop shows the correct topic link and existing history remains local. |
+| V3 | Send text from both devices, replay the same Telegram update, and race two sources while the slot is occupied | One accepted turn per slot, one transcript user message per accepted input, source label correct, one logical final reply. Busy returns an explicit refusal, and a rejected Desktop draft is recoverable. |
+| V4 | Inspect progress, then invoke `/stop` for an active Telegram-origin turn. Repeat during a Desktop-origin turn | Progress omits raw payloads. Only the intended Telegram-origin turn is stopped and both interfaces leave the matching busy state. |
+| V5 | Race allow and deny from opposite devices, let a request expire, and replay a prior button on a new turn or another topic. Include a multi-option agent question | At most one accepted answer, matching request and operation. Stale or ineligible callbacks cause zero executions. Detach or machine disconnect invalidates pending Telegram-origin questions and preserves a locally originated question on Desktop. Desktop-only actions have no Telegram approval button. |
+| V6 | Send from the wrong sender/chat/topic, omit verified sender identity at admission, try to present Telegram provenance through ordinary ACP, and return synthetic sensitive content from tools and assistant | Zero turns from unauthorized updates. No policy escalation. Only allowed, redacted projections leave the machine for Telegram. |
+| V7 | Interrupt and restore serve, replay old events after detach, disconnect the machine while multiple bindings are open, then quit and reopen Desktop | Recovery needs proof of the same live binding. Detach or disconnect cancels only the affected Telegram-origin turns and pending decisions. A Desktop-origin turn can continue. No stale event starts a turn. ACP quit ends control, and reopening never automatically attaches. Other terminal or Desktop bindings are unaffected by session detach. |
+| V9 | Scan the QR or submit the code manually, regenerate, replay and expire it. Cover same-bot and different-bot activation, failure recovery and concurrent mutations using the cases below. | Both paths consume the same short-lived challenge without exposing the token. Desktop confirms the claimed account. Rejected or cancelled changes preserve valid settings. Same-bot replacement preserves topic bindings without overlapping pollers. A different bot requires new pairing and can only use fresh bindings. The losing writer refreshes without changing the winning revision. |
+
+### V9 cutover cases
+
+- Let `getMe` pass, then block the first runtime update response. Check that success is still withheld. Repeat with HTTP 409 and with a timeout. Verify recovery with a valid old token and a retryable failure with a revoked old token.
+- Hold an active Telegram-origin turn and a pending callback during same-bot rotation. Check the same topic resumes after readiness, old callbacks are invalidated, and duplicate input cannot start a second turn.
+- Pair a different bot while the old channel is live. Check that candidate messages cannot dispatch before commit and its runtime poller waits for the pairing poller to exit. Confirm the switch with active old turns and queued input, including two bots in the same forum. Check cancellation of the old Telegram-origin turns, immunity of Desktop-origin work and isolation of callbacks and queues. Repeat with an unknown old bot identity and verify the candidate waits for the old poller to stop.
+- Race Desktop token replacement with terminal pairing or disconnect on one revision. Replay a stale completion, then simulate a crash before and after the commit boundary. Only the committed state can restart after verified readiness, and stale rollback or a legacy file write cannot replace it.
+- Migrate an existing terminal setup with non-default policy, limits and rendering. Confirm terminal changes and live formatting use the committed revision. Disconnect, leave legacy files present and restart. Reuse of the stale token or group must be refused.
+- Capture diagnostics and exported evidence in all cases. Neither bot credentials nor the QR challenge and link may appear.
+
+## Live acceptance on macOS
+
+**V8.** On the published candidate, start from a fresh test profile and use Set up and start in Desktop Settings without opening Terminal. Verify live status. Stop, start and restart from Settings. Pair a disposable bot/group from the phone using the QR, confirm the claimed account in Desktop and send a test message. Verify the manual fallback with a second pending pairing in an isolated profile. Try an invalid replacement token and verify the current connection still works. Restart and check that pairing persists. Attach a Desktop chat. Send one prompt from each device, check the correct topic, and approve one eligible action on the phone. Rotate the disposable bot token in BotFather, save the new token in Desktop and verify a new message reaches the existing Desktop chat from the same topic. Answer one eligible question on Desktop and check that Telegram closes its buttons. Exercise one busy rejection, a safe cancellation, session detach, then close Desktop while a second chat is attached. Confirm the managed service exits on normal quit, the attached topic cannot dispatch after the ACP owner exits, and opening the original chat preserves its local history without restoring the old binding.
+
+Record the app/CLI versions, exact candidate revision, V1–V9 verdicts, and any scenario skipped or inconclusive. Keep bot credentials, group IDs, access URLs and conversation text out of shared evidence.
+
+## Observation after release
+
+A week after acceptance, ask the operator whether a Desktop-started task was continued and finished from a real phone. Record the minimal workflow steps and friction. Product adoption is outside this package's measurement.
