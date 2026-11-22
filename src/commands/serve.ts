@@ -32,6 +32,8 @@
 // damaged file quotes a field name that came off disk.
 
 import { randomUUID } from "node:crypto";
+import { bootstrapDesktopServe } from "../lib/desktop-serve-bootstrap";
+import { desktopServeStatus } from "../lib/desktop-serve-status";
 import { loadRemoteConfig } from "../remote/config";
 import { formatPolicyDuration, loadPosture } from "./remote-policy-command";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -160,6 +162,17 @@ export async function serveCommand(args: string[] = []): Promise<void> {
   }
 
   const sub = args[0];
+  if (sub === "desktop-control") {
+    const action = args[1];
+    if ((action !== "status" && action !== "bootstrap") || args.slice(2).some((arg) => arg !== "--complete-setup") || (action === "status" && args.length !== 2) || args.length > 3) {
+      console.error("Invalid desktop-control request");
+      process.exitCode = 1;
+      return;
+    }
+    const result = action === "status" ? await desktopServeStatus() : await bootstrapDesktopServe({ completeSetup: args[2] === "--complete-setup" });
+    console.log(JSON.stringify({ schemaVersion: 1, ...result }));
+    return;
+  }
   if (sub === undefined || sub.startsWith("-")) {
     await runServe(args);
     return;

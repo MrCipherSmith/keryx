@@ -1,0 +1,35 @@
+import { ChannelsClient } from "../remote/channels-client";
+import { readEndpoint } from "../remote/endpoint";
+import { desktopServePortAvailable } from "./desktop-serve-bootstrap";
+import { isLoopbackAddress, loadServeConfig, serveConfigState } from "./serve-config";
+import { readServeCredential } from "./serve-credential";
+
+export interface DesktopServeStatus { state: "not_configured" | "stopped" | "running" | "blocked"; reason?: string; pid?: number }
+
+/** Probe only the configured listener and trust only a signed compatible response. */
+export async function desktopServeStatus(dir?: string): Promise<DesktopServeStatus> {
+  const state = serveConfigState(dir);
+  if (state === "absent") return { state: "not_configured" };
+  const config = loadServeConfig(dir);
+  if (config === null || !config.enabled || !isLoopbackAddress(config.bind.address)) return { state: "blocked", reason: "The serve configuration is invalid, disabled, or not loopback." };
+  const endpoint = readEndpoint(dir);
+  const configuredAddress = config.bind.address.toLowerCase().replace(/^\[|\]$/g, "");
+  const endpointAddress = endpoint.ok ? endpoint.value.address.toLowerCase().replace(/^\[|\]$/g, "") : "";
+  const sameAddress = configuredAddress === endpointAddress || (configuredAddress === "localhost" && isLoopbackAddress(endpointAddress));
+  if (endpoint.ok && sameAddress && endpoint.value.port === config.bind.port) {
+    const result = await new ChannelsClient({ dir, requestTimeoutMs: 1500 }).status();
+    if (result.ok) {
+      const confirmed = readEndpoint(dir);
+      if (!confirmed.ok || confirmed.value.pid !== endpoint.value.pid || confirmed.value.address !== endpoint.value.address || confirmed.value.port !== endpoint.value.port) {
+        return { state: "blocked", reason: "The serve endpoint changed during verification; retry." };
+      }
+      const value = result.value as unknown as { capabilities?: { desktopTelegram?: number } };
+      return value.capabilities?.desktopTelegram === 1 ? { state: "running", pid: endpoint.value.pid } : { state: "blocked", reason: "The running serve is incompatible with Desktop Telegram. Update it before connecting." };
+    }
+  }
+  if (!(await desktopServePortAvailable(config.bind.address, config.bind.port))) return { state: "blocked", reason: "The configured serve port is occupied by an unverified process." };
+  const credential = readServeCredential(dir);
+  if (credential.status === "unreadable") return { state: "blocked", reason: "The local API credential is unreadable." };
+  if (credential.status === "ok" && (config.credentialRef.store !== "auth-json" || config.credentialRef.id !== credential.record.id)) return { state: "blocked", reason: "The local API credential does not match the configuration." };
+  return { state: "stopped" };
+}
