@@ -313,6 +313,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   { kind: "cli", name: "metaproject-explorer", group: "Project knowledge", summary: "Read the project graph and wiki for Desktop." },
   { kind: "cli", name: "gdgraph", group: "Project knowledge", summary: "Build and query the code dependency graph." },
   { kind: "cli", name: "ctx", group: "Project knowledge", summary: "Run compact context commands and save raw output." },
+  { kind: "cli", name: "openspec", group: "Project knowledge", summary: "Browse OpenSpec requirements, changes and archive." },
   { kind: "cli", name: "wiki", group: "Project knowledge", summary: "Manage the local project knowledge base." },
   { kind: "cli", name: "memory", group: "Project knowledge", summary: "Store and search long-term project memory." },
   {

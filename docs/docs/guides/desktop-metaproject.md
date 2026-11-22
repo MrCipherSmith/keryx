@@ -6,6 +6,21 @@ selected page. Both views keep the same search and selection. The explorer
 reads the open checkout locally and works without a GitHub account or a model
 provider.
 
+## Browse OpenSpec
+
+Select **OpenSpec** to browse **Specs**, **Changes** and **Archive** from the
+open checkout. Requirements and scenarios show their source; archived changes
+provide historical context. Search can include Archive explicitly. Missing or
+partial OpenSpec data does not prevent using Graph and Wiki.
+
+The same checkout-local reader is available in a terminal or Keryx Shell:
+
+```bash
+keryx openspec list --kind spec --json
+keryx openspec search "review" --scope all --json
+keryx openspec show openspec/specs/review/spec.md --json
+```
+
 ## Set up the project
 
 1. Install [Keryx Desktop and its matching CLI](../desktop-app.md#install).

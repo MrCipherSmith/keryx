@@ -154,6 +154,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
   "metaproject-explorer": (rest) => import("./commands/metaproject-explorer").then((mod) => mod.metaprojectExplorerCommand(rest)),
+  openspec: (rest) => import("./commands/openspec").then((mod) => mod.openspecCommand(rest)),
   gdgraph: gdgraphCommand,
   ctx: ctxCommand,
   wiki: wikiCommand,
@@ -345,6 +346,9 @@ export const USAGE_BODY = `Usage:
   keryx gdgraph query <cycles|orphans>
   keryx gdgraph affected <file>
   keryx ctx status
+  keryx openspec list --kind <spec|change|archive> [--cursor <cursor>] [--json]
+  keryx openspec show <path> [--artifact <path>] [--section <id>] [--json]
+  keryx openspec search <query> [--scope <all|spec|change|archive>] [--cursor <cursor>] [--json]
   keryx wiki status
   keryx wiki new <type> <slug> --title "<title>"
   keryx wiki collect [--force] [--limit <n>]

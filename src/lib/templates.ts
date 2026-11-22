@@ -169,6 +169,7 @@ export function renderIndexMarkdown({
   ].map((item) => `- ${item}`).join("\n");
 
   const intentRows = [
+    "| Browse OpenSpec requirements, changes, archive | `openspec` | `skills/gdskills/quality/openspec-read/SKILL.md` | Read the selected checkout without modifying it. |",
     enableGdskills
       ? "| Any repository task / unclear request | `metaproject-router` | `skills/gdskills/core/metaproject-router/SKILL.md` | Classify the intent first, then route to the narrowest capability. |"
       : "",
@@ -394,6 +395,7 @@ export function renderIndexGateMarkdown({
   enableSecurity = false,
 }: RoutingModuleFlags): string {
   const rows = [
+    "| OpenSpec requirements, changes and archive | `skills/gdskills/quality/openspec-read/SKILL.md`; `keryx openspec list/show/search` |",
     enableGdgraph
       ? "| where is X, what depends on it, what breaks | `keryx gdgraph affected <file>` |"
       : "",

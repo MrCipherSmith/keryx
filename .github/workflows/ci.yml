@@ -101,7 +101,7 @@ jobs:
           bun install --frozen-lockfile
           (cd apps/desktop && bun install --frozen-lockfile)
       - name: Verify the Core catalog and Wiki reader
-        run: bun test src/integrations/metaproject-explorer.test.ts
+        run: bun test src/openspec/ src/commands/openspec.test.ts src/integrations/metaproject-explorer.test.ts
       - name: Build Desktop and verify shared Graph and Wiki navigation
         working-directory: apps/desktop
         run: |
