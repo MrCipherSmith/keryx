@@ -1,6 +1,7 @@
 import type { ModelClassConfig, RoutingConfigLayer } from "../harness/routing/config";
 import { ROUTING_TIER_IDS, ROUTING_TIERS, modelRefKey, type ModelRef, type RoutingTier, type TierSettingsSnapshot } from "../harness/routing/model-class";
 import { readRoutingSettings, updateRoutingLayer, type RoutingLocation, type RoutingSettings } from "../harness/routing/settings";
+import { PROJECT_SCOPED_USER_NOTICE } from "../harness/routing/legacy-migration";
 import { ROUTING_CATEGORIES, ROUTING_CATEGORY_TIERS } from "../harness/routing/table";
 
 const MAX_TIER_MODELS = 32;
@@ -23,11 +24,13 @@ function models(config: ModelClassConfig): ModelRef[] {
 }
 
 export function describeTierSettings(settings: RoutingSettings): TierSettingsSnapshot {
+  const saveBlocked = settings.user.source === "opt-in";
   return {
     revision: settings.revision,
+    saveBlocked,
     enabled: settings.user.layer?.tierRouting ?? false,
     projectEnabled: settings.layers.project?.tierRouting ?? null,
-    notices: settings.notices,
+    notices: saveBlocked ? [...settings.notices, PROJECT_SCOPED_USER_NOTICE] : settings.notices,
     personalOverrides: Object.keys(settings.user.layer?.categories ?? {}).length > 0,
     projectOverrides: settings.layers.project !== undefined,
     projectTrustRequired: !settings.project.trusted,
@@ -56,25 +59,31 @@ export async function saveTierSettings(location: RoutingLocation, revision: stri
     throw new Error("Invalid routing model pools.");
   }
   const current = readRoutingSettings(location);
+  if (current.user.source === "opt-in") throw new Error(PROJECT_SCOPED_USER_NOTICE);
   const user = current.user.layer;
   const classes = { ...user?.classes };
   for (const tier of ROUTING_TIER_IDS) {
     const modelClass = ROUTING_TIERS[tier];
+    if (current.layers.project?.classes?.[modelClass]) continue;
     const existing = classes[modelClass];
+    const enabledModels = existing ? models(existing) : [];
     // Preserve policy, explicit disables, and priorities on untouched tiers.
     const entries: unknown = Reflect.get(modelPools, tier);
-    if (!Array.isArray(entries) || entries.length > MAX_TIER_MODELS) throw new Error(`Invalid ${tier} routing pool.`);
+    if (!Array.isArray(entries) || entries.length > Math.max(MAX_TIER_MODELS, enabledModels.length)) throw new Error(`Invalid ${tier} routing pool.`);
     const selected = entries.map((entry: unknown) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Invalid model in ${tier} routing pool.`);
       const providerId: unknown = Reflect.get(entry, "provider");
       const targetModelId: unknown = Reflect.get(entry, "model");
-      if (typeof providerId !== "string" || !modelId.test(providerId) || typeof targetModelId !== "string" || !modelId.test(targetModelId)) {
+      if (typeof providerId !== "string" || !providerId || typeof targetModelId !== "string" || !targetModelId) {
         throw new Error(`Invalid model in ${tier} routing pool.`);
       }
       return { providerId, modelId: targetModelId };
     });
-    if (current.layers.project?.classes?.[modelClass] && !replaceOverrides) continue;
-    if (existing && JSON.stringify(models(existing)) === JSON.stringify(selected)) continue;
+    if (existing && JSON.stringify(enabledModels) === JSON.stringify(selected)) continue;
+    const known = new Set(existing?.candidates.map(candidate => modelRefKey(candidate.target)));
+    if (selected.some(target => !known.has(modelRefKey(target)) && (!modelId.test(target.providerId) || !modelId.test(target.modelId)))) {
+      throw new Error(`Invalid model in ${tier} routing pool.`);
+    }
     const enabled = new Set(selected.map(modelRefKey));
     classes[modelClass] = {
       selection: existing?.selection ?? "priority",
@@ -86,7 +95,7 @@ export async function saveTierSettings(location: RoutingLocation, revision: stri
     };
   }
   return updateRoutingLayer({
-    ...location, scope: "user", expectedRevision: revision,
+    ...location, scope: "user", expectedRevision: revision, preserveLegacyScope: true,
     next: { ...user, schemaVersion: 2, tierRouting: enabled, classes, ...(replaceOverrides ? { categories: {} } : {}) },
   });
 }

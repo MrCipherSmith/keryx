@@ -143,6 +143,23 @@ describe("/routing", () => {
     expect(loadRouting(host.cwd, host.configDir).classes.standard.candidates).toHaveLength(2);
   });
 
+  test("Desktop preserves existing pools outside the dialog's limits", async () => {
+    const configDir = tempDir("keryx-acp-tier-large-pool-");
+    const host = fakeHost(project(), configDir);
+    const strong = Array.from({ length: 33 }, (_, i) => ({ provider: "openai", model: `existing ${i}` }));
+    const candidates = strong.map(({ provider, model }, i) => ({
+      target: { providerId: provider, modelId: model }, priority: strong.length - i, enabled: true,
+    }));
+    writeFileSync(path.join(configDir, "auth.json"), JSON.stringify({
+      modelRouting: { schemaVersion: 2, classes: { expert: { candidates, selection: "priority", fallbackClasses: [] } } },
+    }), { mode: 0o600 });
+    const { revision }: TierSettingsSnapshot = JSON.parse((await run(host, "routing", "tiers")).text);
+    const modelPools = { strong, middle: [], light: [{ provider: "openai", model: "new-model" }] };
+    const saved = await run(host, "routing", `tiers ${revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: false })}`);
+    expect(saved.refused).toBeUndefined();
+    expect(loadRouting(host.cwd, configDir).classes.expert.candidates).toEqual(candidates);
+  });
+
   test("one row per category with its source, a set action, and a form for a model pick", async () => {
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"));
     const view = viewOf(await run(host, "routing"));

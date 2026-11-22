@@ -723,7 +723,7 @@ export interface SpawnSubagentToolDeps {
    * one, so a caller holding a `detectProviders()` result must pass its `models`
    * through rather than mapping it down to bare names.
    */
-  getDetectedProviders: () => readonly FlatPickerProvider[];
+  getDetectedProviders: (options?: { forActiveRoute: true }) => readonly FlatPickerProvider[];
   /** Refresh live availability when the host catalogue has aged out. */
   refreshRoutingProviders?: () => Promise<void>;
   /**
@@ -1792,7 +1792,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           receipt: routingReceipt,
           selectionTimeoutMs: routingConfig.execution.selectionTimeoutMs,
           beforeIo: async (target, _decisionId, context) => {
-            const currentDetected = deps.getDetectedProviders();
+            const currentDetected = deps.getDetectedProviders({ forActiveRoute: true });
             const currentCredentialedProviders = new Set(currentDetected.map((entry) => entry.name));
             const currentProvider = currentDetected.find((entry) => entry.name === target.providerId);
             const currentEnv = envWithSavedApiKeys(process.env, deps.routingConfigDir);

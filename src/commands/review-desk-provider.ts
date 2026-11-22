@@ -2,7 +2,7 @@
 // Selection never requires a terminal, nor does constructing an adapter send a model request.
 import { connectionProviderByName, customCompatProviders, isProviderPlatformSupported, providerByName } from "./providers";
 import { ROUTING_TIERS } from "../harness/routing/model-class";
-import { DESK_MAX_POOL_MODELS, DESK_REVIEW_POOLS, parseDeskReviewOptions, type DeskReviewOptions } from "../review/desk-run-options";
+import { DESK_MAX_POOL_MODELS, DESK_REVIEW_POOLS, isDeskReviewModelName, parseDeskReviewOptions, type DeskReviewOptions } from "../review/desk-run-options";
 import { loadRouting } from "../harness/routing/settings";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import { makeProvider } from "../harness/provider/make-provider";
@@ -70,7 +70,9 @@ export function resolveDeskReviewOptions(cwd: string, options?: DeskReviewOption
   for (const tier of DESK_REVIEW_POOLS) {
     const configured = routing.classes[ROUTING_TIERS[tier]].candidates;
     modelPools[tier] = options?.modelPools[tier].length ? options.modelPools[tier] :
-      configured.filter(candidate => candidate.enabled).sort((a, b) => b.priority - a.priority)
+      configured.filter(({ enabled, target }) => enabled
+        && isDeskReviewModelName(target.providerId) && isDeskReviewModelName(target.modelId))
+        .sort((a, b) => b.priority - a.priority)
         .slice(0, DESK_MAX_POOL_MODELS).map(({ target }) => ({ provider: target.providerId, model: target.modelId }));
   }
   return parseDeskReviewOptions({ mode: "manual", adaptive: true, ...options, modelPools });

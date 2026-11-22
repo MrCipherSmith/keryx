@@ -1820,9 +1820,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         throw new Error(`keryx acp has no provider factory for ${providerId}/${modelId}; a subagent runs on its parent's model here`);
       },
       ...(options.routingProviders ? { refreshRoutingProviders } : {}),
-      getDetectedProviders: () => {
+      getDetectedProviders: (lookup) => {
         const now = Date.now();
-        const verified = routingProviders?.filter(provider => freshRoutingProvider(provider, now)) ?? [];
+        // Expiry triggers refresh for new routes. Active routes still respect
+        // newer probe results and explicit credential invalidation.
+        const verified = (lookup?.forActiveRoute
+          ? routingProviders
+          : routingProviders?.filter(provider => freshRoutingProvider(provider, now))) ?? [];
         if (verified.length > 0) {
           const providerId = parent().providerId;
           return verified.some(entry => entry.name === providerId)

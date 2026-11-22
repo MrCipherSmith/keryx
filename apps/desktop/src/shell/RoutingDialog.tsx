@@ -65,7 +65,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
   }, [rpc, sessionId, reload]);
 
   async function save() {
-    if (!settings || savingRef.current) return;
+    if (!settings || settings.saveBlocked || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -83,7 +83,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
   return <div className="review-launch-overlay">
     <Dialog title="Model routing" width={680} onClose={saving ? null : onClose} footer={<>
       <button className="btn" type="button" disabled={saving} onClick={onClose}>Cancel</button>
-      <button className="btn btn-primary" type="button" disabled={!settings || saving} onClick={() => void save()}>
+      <button className="btn btn-primary" type="button" disabled={!settings || settings.saveBlocked || saving} onClick={() => void save()}>
         {saving ? "Saving…" : "Save routing"}
       </button>
     </>}>

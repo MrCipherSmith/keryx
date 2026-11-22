@@ -32,6 +32,9 @@ trusted project override. Existing personal model assignments are offered
 in the dialog as starting values when no class is configured. Existing personal
 routing overrides keep their priority unless you select **Replace previous
 personal routing overrides with these tiers** when saving.
+If an earlier Keryx release activated your routing settings for this project
+only, the dialog shows the migration command. Global saving becomes available
+after you explicitly adopt or replace those settings.
 
 ## Set up GitHub for a project
 
