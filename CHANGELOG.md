@@ -5,6 +5,16 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.49] - 2026-11-22
+
+**Keryx Desktop 0.2.12** requires Keryx 0.4.49 or newer.
+
+### Added
+
+- Explore a checkout's Graph and Wiki from the Desktop Metaproject tab, with shared search and relationship navigation. (#1283)
+- Browse OpenSpec specifications, active changes and archive entries in Metaproject. Search requirements and scenarios, inspect source evidence, and follow links between OpenSpec, Wiki and code.
+- Read the same checkout-local data from Shell and external harnesses with `keryx openspec list`, `show`, and `search`.
+
 ## [0.4.48] - 2026-11-22
 
 **Keryx Desktop 0.2.11** requires Keryx 0.4.48 or newer.
