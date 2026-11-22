@@ -12,6 +12,7 @@
 // Plus the artifact-parity invariant: `summary.md` must describe the very graph
 // that was written to `storage/nodes.jsonl` in the same build.
 
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -59,6 +60,44 @@ test("buildGraph never indexes a nested checkout under .worktrees", async () => 
   const graph = await loadGraph(root);
 
   expect(graph.nodes.map((node) => node.path)).toEqual(["src/lib/fs.ts"]);
+});
+
+test("buildGraph stops at Git boundaries anywhere below the indexed checkout", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-nested-checkout");
+  await reset(root);
+  const git = (args: string[], cwd = root) => execFileSync("git", args, { cwd, stdio: "ignore" });
+  try {
+    git(["init", "-q"]);
+    await writeFile(path.join(root, "app.ts"), [
+      'import "./review/scratch/package.json";',
+      'import "./.worktrees/ignored/package.json";',
+      'import "./public/logo.svg";',
+    ].join("\n"));
+    git(["add", "app.ts"]);
+    git(["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"]);
+    await mkdir(path.join(root, "review"), { recursive: true });
+    git(["worktree", "add", "--detach", "review/scratch"]);
+    await writeFile(path.join(root, "review", "scratch", "package.json"), "{}");
+    await writeFile(path.join(root, "review", "keep.ts"), "export const keep = true;\n");
+    await mkdir(path.join(root, ".worktrees"), { recursive: true });
+    git(["worktree", "add", "--detach", ".worktrees/ignored"]);
+    await writeFile(path.join(root, ".worktrees", "ignored", "package.json"), "{}");
+    await mkdir(path.join(root, "public"));
+    await writeFile(path.join(root, "public", "logo.svg"), "<svg />");
+    await mkdir(path.join(root, "vendor"), { recursive: true });
+    git(["init", "-q"], path.join(root, "vendor"));
+    await writeFile(path.join(root, "vendor", "foreign.ts"), "export const foreign = true;\n");
+
+    await buildGraph(root);
+    const graph = await loadGraph(root);
+    expect(graph.nodes.map(({ path: source }) => source).sort()).toEqual(["app.ts", "public/logo.svg", "review/keep.ts"]);
+
+    const checkout = path.join(root, "review", "scratch");
+    await buildGraph(checkout);
+    expect((await loadGraph(checkout)).nodes.map(({ path: source }) => source)).toContain("app.ts");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 // --- 2. target resolution ----------------------------------------------------

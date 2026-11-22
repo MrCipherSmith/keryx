@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { constants, type BigIntStats, type Dir } from "node:fs";
-import { access, lstat, opendir, realpath } from "node:fs/promises";
+import { accessSync, constants, lstatSync, opendirSync, type BigIntStats, type Dir } from "node:fs";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 
-import { ContainedReadError, readContainedFile } from "../lib/contained-read";
+import { DescriptorReadError, readDescriptorChain } from "../lib/descriptor-read";
 
 export type OpenSpecKind = "spec" | "change" | "archive";
 export type OpenSpecAvailability = "missing" | "empty" | "ready" | "partial" | "unavailable";
@@ -66,6 +67,7 @@ const MAX_TOTAL_BYTES = 64 * MAX_FILE_BYTES;
 const MAX_DEPTH = 12;
 const MAX_DIAGNOSTICS = 200;
 const MAX_LINK_ROWS = 2000;
+const METADATA_YIELD_INTERVAL = 128;
 const DIAGNOSTIC_LIMIT = "diagnostic-limit";
 
 class SourceChanged extends Error {
@@ -116,9 +118,9 @@ function hasErrorCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
-async function statOrMissing(absolutePath: string): Promise<BigIntStats | undefined> {
+function statOrMissing(absolutePath: string): BigIntStats | undefined {
   try {
-    return await lstat(absolutePath, { bigint: true });
+    return lstatSync(absolutePath, { bigint: true });
   } catch (error) {
     if (hasErrorCode(error, "ENOENT")) return undefined;
     throw error;
@@ -152,12 +154,12 @@ export async function scanOpenSpec(root: string, options: OpenSpecScanOptions = 
   let canonicalRoot: string;
   let rootIdentity: BigIntStats;
   try {
-    rootIdentity = await lstat(requestedRoot, { bigint: true });
+    rootIdentity = lstatSync(requestedRoot, { bigint: true });
     if (!rootIdentity.isDirectory()) {
       return snapshot(requestedRoot, "unavailable", [], [rootUnavailable()]);
     }
     canonicalRoot = await realpath(requestedRoot);
-    const canonicalIdentity = await lstat(canonicalRoot, { bigint: true });
+    const canonicalIdentity = lstatSync(canonicalRoot, { bigint: true });
     if (!sameNode(rootIdentity, canonicalIdentity)) {
       return snapshot(requestedRoot, "unavailable", [], [rootUnavailable()]);
     }
@@ -194,6 +196,7 @@ class CheckoutScan {
   private readonly checked = new Map<string, BigIntStats | undefined>();
   private readonly diagnostics: OpenSpecDiagnostic[] = [];
   private remainingDiscoveryEntries = MAX_DISCOVERY_ENTRIES;
+  private metadataProbes = 0;
   private admittedBytes = 0;
   private linkDigest?: string;
   private truncated = false;
@@ -209,7 +212,7 @@ class CheckoutScan {
   async run(): Promise<OpenSpecCatalog> {
     const source = await this.directory("openspec");
     if (!source) {
-      await this.assertCoherent();
+      this.assertCoherent();
       return snapshot(this.rootKey, this.diagnostics.length ? "unavailable" : "missing", [], this.diagnostics);
     }
     const entries = [
@@ -218,7 +221,7 @@ class CheckoutScan {
       ...await this.changes("archive", ARCHIVE_ROOT),
     ];
     const links = await this.declaredLinks(entries);
-    await this.assertCoherent();
+    this.assertCoherent();
     const availability = this.diagnostics.length ? "partial" : entries.length ? "ready" : "empty";
     return snapshot(this.rootKey, availability, entries, this.diagnostics, {
       links, ...(this.linkDigest && { linkDigest: this.linkDigest }), truncated: this.truncated,
@@ -248,14 +251,14 @@ class CheckoutScan {
       if (kind === "change" && name === "archive") continue;
       const entryPath = `${collectionPath}/${name}`;
       if (!await this.directory(entryPath, "listed")) continue;
-      entries.push(entry(kind, name, entryPath, await this.artifacts(entryPath, budget)));
+      entries.push(entry(kind, name, entryPath, await this.artifacts(entryPath, budget, true)));
     }
     return kind === "archive" ? entries.sort(compareArchives) : entries;
   }
 
-  private async artifacts(directory: string, budget: CollectionBudget): Promise<OpenSpecArtifact[]> {
+  private async artifacts(directory: string, budget: CollectionBudget, directoryChecked = false): Promise<OpenSpecArtifact[]> {
     const artifacts: OpenSpecArtifact[] = [];
-    for (const name of await this.children(directory, budget)) {
+    for (const name of await this.children(directory, budget, directoryChecked)) {
       const relativePath = `${directory}/${name}`;
       const source = await this.inspect(relativePath, "listed");
       if (!source) continue;
@@ -265,7 +268,7 @@ class CheckoutScan {
         artifacts.push(...await this.artifacts(relativePath, budget));
       } else if (source.isFile()) {
         if (/\.md$/i.test(name)) {
-          const artifact = await this.artifact(relativePath);
+          const artifact = await this.artifact(relativePath, source);
           if (artifact) artifacts.push(artifact);
         }
       } else {
@@ -275,8 +278,8 @@ class CheckoutScan {
     return artifacts;
   }
 
-  private async artifact(relativePath: string): Promise<OpenSpecArtifact | undefined> {
-    const bytes = await this.read(relativePath);
+  private async artifact(relativePath: string, source?: BigIntStats): Promise<OpenSpecArtifact | undefined> {
+    const bytes = await this.read(relativePath, source);
     return bytes && { path: relativePath, markdown: bytes.toString("utf8"), digest: digest(bytes) };
   }
 
@@ -289,6 +292,9 @@ class CheckoutScan {
   }
 
   private async inspect(relativePath: string, existence?: "listed"): Promise<BigIntStats | undefined> {
+    // Metadata and descriptor reads are local syscalls. Yield periodically
+    // without scheduling a separate filesystem promise for every path component.
+    if (++this.metadataProbes % METADATA_YIELD_INTERVAL === 0) await yieldToEventLoop();
     this.options.signal?.throwIfAborted();
     if (!checkedPath(relativePath)) {
       this.warn("invalid-source-path", undefined, "An OpenSpec source path is invalid.");
@@ -296,7 +302,7 @@ class CheckoutScan {
     }
     let source: BigIntStats | undefined;
     try {
-      source = await statOrMissing(path.join(this.root, relativePath));
+      source = statOrMissing(path.join(this.root, relativePath));
     } catch {
       this.warn("source-read-failed", relativePath, "OpenSpec source metadata is unavailable.");
       return undefined;
@@ -321,7 +327,7 @@ class CheckoutScan {
       return false;
     }
     try {
-      await access(path.join(this.root, relativePath), constants.R_OK | constants.X_OK);
+      accessSync(path.join(this.root, relativePath), constants.R_OK | constants.X_OK);
       return true;
     } catch {
       this.warn("source-read-failed", relativePath, "OpenSpec directory is unreadable.");
@@ -329,16 +335,16 @@ class CheckoutScan {
     }
   }
 
-  private async children(relativePath: string, budget: CollectionBudget): Promise<string[]> {
+  private async children(relativePath: string, budget: CollectionBudget, directoryChecked = false): Promise<string[]> {
     if (budget.remaining === 0) {
       this.reportEntryLimit(relativePath, budget);
       return [];
     }
-    if (!await this.directory(relativePath)) return [];
+    if (!directoryChecked && !await this.directory(relativePath)) return [];
     let directory: Dir;
     try {
-      await this.assertPath(relativePath);
-      directory = await opendir(path.join(this.root, relativePath), { bufferSize: 1 });
+      this.assertUnchanged(relativePath);
+      directory = opendirSync(path.join(this.root, relativePath));
     } catch (error) {
       if (error instanceof SourceChanged) throw error;
       this.warn("source-read-failed", relativePath, "OpenSpec directory is unreadable.");
@@ -347,14 +353,13 @@ class CheckoutScan {
     return this.directoryNames(directory, relativePath, budget);
   }
 
-  private async directoryNames(directory: Dir, relativePath: string, budget: CollectionBudget): Promise<string[]> {
+  private directoryNames(directory: Dir, relativePath: string, budget: CollectionBudget): string[] {
     const names: string[] = [];
     try {
-      await this.assertPath(relativePath);
       // Refuse an over-budget directory as a unit so OS enumeration order cannot affect admission.
       for (;;) {
         this.options.signal?.throwIfAborted();
-        const child = await directory.read();
+        const child = directory.readSync();
         if (!child) return names.sort(comparePaths);
         if (!this.takeEntry(relativePath, budget)) return [];
         names.push(child.name);
@@ -365,7 +370,7 @@ class CheckoutScan {
       this.warn("source-read-failed", relativePath, "OpenSpec directory could not be enumerated.");
       return [];
     } finally {
-      await directory.close();
+      directory.closeSync();
     }
   }
 
@@ -387,8 +392,8 @@ class CheckoutScan {
     }
   }
 
-  private async read(relativePath: string): Promise<Buffer | undefined> {
-    const source = await this.inspect(relativePath);
+  private async read(relativePath: string, observed?: BigIntStats): Promise<Buffer | undefined> {
+    const source = observed ?? await this.inspect(relativePath);
     if (!source) return undefined;
     if (!source.isFile()) {
       this.warn("source-not-regular", relativePath, "OpenSpec source is not a regular file.");
@@ -403,59 +408,64 @@ class CheckoutScan {
       return undefined;
     }
     try {
-      await this.assertPath(relativePath);
-      const bytes = await readContainedFile(this.root, path.join(this.root, relativePath), {
+      await this.options.hooks?.beforeOpen?.(relativePath);
+      // The descriptor walk pins the root and leaf and refuses symlinks in
+      // every component. The final observation checks the ancestor versions
+      // together with the rest of the snapshot before admitting any results.
+      const bytes = readDescriptorChain(this.root, path.join(this.root, relativePath), {
         maxBytes: Number(source.size),
-        hooks: { beforeOpen: async () => {
-          await this.options.hooks?.beforeOpen?.(relativePath);
-          await this.assertPath(relativePath);
-        } },
+        requireRegularFile: true,
+        expectedRootIdentity: this.rootIdentity,
+        expectedTargetIdentity: source,
       });
-      await this.assertPath(relativePath);
       if (bytes.length !== Number(source.size)) throw new SourceChanged(relativePath);
       this.admittedBytes += bytes.length;
       return bytes;
     } catch (error) {
       this.options.signal?.throwIfAborted();
-      await this.assertPath(relativePath);
+      this.assertPath(relativePath);
       if (error instanceof SourceChanged) throw error;
-      if (error instanceof ContainedReadError && (
-        error.code === "CONTAINED_READ_RACE" || error.code === "CONTAINED_READ_OUTSIDE"
-        || error.code === "CONTAINED_READ_TOO_LARGE"
-      )) throw new SourceChanged(relativePath);
+      if (error instanceof DescriptorReadError && (error.code === "race" || error.code === "too-large")) throw new SourceChanged(relativePath);
       this.warn("source-read-failed", relativePath, "OpenSpec text could not be read safely.");
       return undefined;
     }
   }
 
-  private async assertPath(relativePath: string): Promise<void> {
-    await this.assertRoot();
+  private assertPath(relativePath: string): void {
+    this.assertRoot();
     const components = relativePath.split("/");
     for (let index = 1; index <= components.length; index++) {
       const ancestor = components.slice(0, index).join("/");
-      await this.assertUnchanged(ancestor);
+      this.assertUnchanged(ancestor);
     }
   }
 
-  private async assertCoherent(): Promise<void> {
-    await this.assertRoot();
-    for (const relativePath of this.checked.keys()) await this.assertUnchanged(relativePath);
-    await this.assertRoot();
+  private assertCoherent(): void {
+    this.assertRoot();
+    for (const relativePath of this.checked.keys()) this.assertUnchanged(relativePath);
+    this.assertRoot();
   }
 
-  private async assertRoot(): Promise<void> {
+  private assertRoot(): void {
     this.options.signal?.throwIfAborted();
-    const root = await lstat(this.root, { bigint: true }).catch(() => undefined);
+    const root = this.observedStat("");
     if (!root || !sameNode(this.rootIdentity, root)) throw new SourceChanged("");
   }
 
-  private async assertUnchanged(relativePath: string): Promise<void> {
+  private assertUnchanged(relativePath: string): void {
     this.options.signal?.throwIfAborted();
     if (!this.checked.has(relativePath)) return;
-    const source = await statOrMissing(path.join(this.root, relativePath)).catch(() => {
+    if (!sameVersion(this.checked.get(relativePath), this.observedStat(relativePath))) {
       throw new SourceChanged(relativePath);
-    });
-    if (!sameVersion(this.checked.get(relativePath), source)) throw new SourceChanged(relativePath);
+    }
+  }
+
+  private observedStat(relativePath: string): BigIntStats | undefined {
+    try {
+      return statOrMissing(path.join(this.root, relativePath));
+    } catch {
+      throw new SourceChanged(relativePath);
+    }
   }
 
   private limit(code: string, relativePath: string, message: string): void {

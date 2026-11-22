@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import path from "node:path";
 import { gdgraphArtifactsDir, gdgraphStorageDir } from "./data-dir";
 import type { GraphData, GraphEdge, GraphNode, ImportKind, TranspilerImportKind } from "./types";
@@ -67,6 +67,7 @@ type BuildResult = {
 type SourceCollection = {
   files: string[];
   skippedDirectories: string[];
+  checkoutBoundaries: Map<string, boolean>;
 };
 
 type PathMapping = {
@@ -136,7 +137,7 @@ export async function buildGraph(projectRoot: string, options: { dataDir?: strin
 
     for (const { specifier, kind: importKind } of records) {
       const resolved = resolveImport(projectRoot, file, specifier, fileSet, resolver);
-      const asset = resolved ? null : resolveAssetImport(projectRoot, file, specifier, resolver);
+      const asset = resolved ? null : resolveAssetImport(projectRoot, file, specifier, resolver, collection.checkoutBoundaries);
       const shouldTrackUnresolved =
         specifier.startsWith(".") || resolver.matchesAlias(specifier) || isLanguageAware;
       if (!resolved && !asset && !shouldTrackUnresolved) {
@@ -201,10 +202,20 @@ export async function buildGraph(projectRoot: string, options: { dataDir?: strin
 async function collectSourceFiles(projectRoot: string): Promise<SourceCollection> {
   const result: string[] = [];
   const skippedDirectories: string[] = [];
+  const checkoutBoundaries = new Map<string, boolean>();
 
   async function walk(relativeDir: string): Promise<void> {
     const absoluteDir = path.join(projectRoot, relativeDir);
     const entries = await readdir(absoluteDir, { withFileTypes: true });
+    // A linked worktree or submodule has a .git file. An independent
+    // checkout usually has a .git directory. The selected root owns its marker.
+    const nestedCheckout = relativeDir !== "."
+      && entries.some((entry) => entry.name === ".git" && (entry.isFile() || entry.isDirectory()));
+    checkoutBoundaries.set(relativeDir, nestedCheckout);
+    if (nestedCheckout) {
+      skippedDirectories.push(relativeDir);
+      return;
+    }
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
@@ -231,7 +242,7 @@ async function collectSourceFiles(projectRoot: string): Promise<SourceCollection
   }
 
   await walk(".");
-  return { files: result.sort(), skippedDirectories: skippedDirectories.sort() };
+  return { files: result.sort(), skippedDirectories: skippedDirectories.sort(), checkoutBoundaries };
 }
 
 type ImportRecord = { specifier: string; kind: ImportKind };
@@ -416,14 +427,36 @@ function resolveAssetImport(
   fromFile: string,
   specifier: string,
   resolver: ImportResolver,
+  checkoutBoundaries: Map<string, boolean>,
 ): string | null {
   for (const candidate of importCandidateBases(projectRoot, fromFile, specifier, resolver)) {
     const extension = path.posix.extname(candidate);
-    if (ASSET_EXTENSIONS.includes(extension) && existsSync(path.join(projectRoot, candidate))) {
+    if (ASSET_EXTENSIONS.includes(extension) && existsSync(path.join(projectRoot, candidate))
+      && !inNestedCheckout(projectRoot, candidate, checkoutBoundaries)) {
       return candidate;
     }
   }
   return null;
+}
+
+function inNestedCheckout(projectRoot: string, candidate: string, boundaries: Map<string, boolean>): boolean {
+  let parent = path.posix.dirname(candidate);
+  while (parent !== "." && parent !== ".." && !parent.startsWith("../") && parent !== "/") {
+    let isCheckout = boundaries.get(parent);
+    if (isCheckout === undefined) {
+      // An asset may live in a directory ignored by the source-file walk.
+      try {
+        const marker = lstatSync(path.join(projectRoot, parent, ".git"), { throwIfNoEntry: false });
+        isCheckout = marker?.isFile() === true || marker?.isDirectory() === true;
+        boundaries.set(parent, isCheckout);
+      } catch {
+        return true;
+      }
+    }
+    if (isCheckout) return true;
+    parent = path.posix.dirname(parent);
+  }
+  return false;
 }
 
 function importCandidateBases(

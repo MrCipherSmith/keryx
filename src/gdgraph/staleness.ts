@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { revisionOperand } from "../lib/git-revision";
 import { gitCmd, readProvenance } from "../sync/provenance";
@@ -206,6 +206,26 @@ function categorizeStatusEntries(
   return { added, deleted, renamed, modified };
 }
 
+/** Keep a contaminated legacy snapshot stale until it has been rebuilt. */
+async function graphAdditions(cwd: string, rootPrefix: string, added: string[]): Promise<string[]> {
+  let nodes: string | undefined;
+  const relevant: string[] = [];
+  for (const candidate of added) {
+    if (candidate.endsWith("/") && candidate.startsWith(rootPrefix)) {
+      const relative = candidate.slice(rootPrefix.length);
+      const marker = await lstat(path.join(cwd, relative, ".git")).catch(() => undefined);
+      if (marker?.isFile() || marker?.isDirectory()) {
+        nodes ??= await readFile(nodesJsonlPath(cwd), "utf8").catch(() => undefined);
+        // JSON-escape the prefix the same way as the graph emitter.
+        const prefix = `"path":${JSON.stringify(relative).slice(0, -1)}`;
+        if (nodes !== undefined && !nodes.includes(prefix)) continue;
+      }
+    }
+    relevant.push(candidate);
+  }
+  return relevant;
+}
+
 const REASON_FILE_DISPLAY_LIMIT = 5;
 
 function nameFiles(message: string, files: string[]): string {
@@ -369,8 +389,9 @@ export async function checkGraphStaleness(
     // can itself contain "\n"), so entries are split on "\0", not "\n".
     const entries = porcelain.split("\0").filter((entry) => entry.length > 0);
     const { added, deleted, renamed, modified } = categorizeStatusEntries(entries, rootPrefix);
-    if (added.length > 0) {
-      reasons.push(nameFiles("an untracked or newly added file exists in the working tree", added));
+    const relevantAdditions = await graphAdditions(cwd, rootPrefix, added);
+    if (relevantAdditions.length > 0) {
+      reasons.push(nameFiles("an untracked or newly added file exists in the working tree", relevantAdditions));
     }
     if (deleted.length > 0) {
       reasons.push(nameFiles("a tracked file was deleted in the working tree", deleted));
