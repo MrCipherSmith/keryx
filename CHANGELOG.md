@@ -5,6 +5,16 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.51] - 2026-11-23
+
+**Keryx Desktop 0.2.14** bundles Keryx 0.4.51 and supports Keryx 0.4.50 or newer.
+
+### Fixed
+
+- Explore Graph nodes in a resizable Wiki and OpenSpec panel. Open linked documents directly and use Back to return to the previous selection and search. (#1288)
+- Open current requirements directly from an archived change. Find confirmed GitHub links and concise artifact controls in active changes. (#1288)
+- Show when OpenSpec search is in progress and prevent duplicate pages on repeated Load more clicks. (#1288)
+
 ## [0.4.50] - 2026-11-22
 
 **Keryx Desktop 0.2.13** requires Keryx 0.4.50 or newer.
