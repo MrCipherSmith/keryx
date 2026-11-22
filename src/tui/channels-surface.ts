@@ -11,6 +11,7 @@
 // never put in a notice, a status line or an error.
 
 import type { PairingResponse } from "../remote/protocol";
+import type { RevisionedChannelResponse } from "../remote/channels-client";
 import { smallActionButton } from "./action-button";
 import { openModal, type ModalHandle } from "./modal-host";
 import { CONFIRM_MIN_GAP_MS } from "./settings-modal";
@@ -36,6 +37,7 @@ export type ChannelsView =
   | { kind: "token"; error?: string }
   | { kind: "working"; text: string }
   | { kind: "pairing"; pairing: PairingResponse }
+  | { kind: "activation" }
   | { kind: "connected"; group?: string; test: Notice }
   | { kind: "failed"; title: string; reason: string }
   | { kind: "confirm-disconnect" };
@@ -92,6 +94,20 @@ export function channelsViewLines(
     case "pairing": {
       const { pairing } = view;
       const bot = pairing.botUsername === undefined ? "the bot" : `@${pairing.botUsername}`;
+      if ((pairing.state === "waiting-for-user" || pairing.state === "waiting-for-confirmation" || pairing.state === "waiting-for-group") && pairing.expiresAt <= ctx.now) return [
+        { text: "The pairing code expired", tone: "heading" },
+        { text: "Cancel this pairing and start again.", tone: "attention" },
+      ];
+      if (pairing.state === "waiting-for-confirmation") return [
+        { text: "Confirm your Telegram account", tone: "heading" },
+        { text: `Telegram account ID: ${pairing.userId ?? "unavailable"}`, tone: "text" },
+        { text: "Confirm only if this is your account. Group pairing starts after confirmation.", tone: "attention" },
+      ];
+      if (pairing.state === "ready") return [
+        { text: "Confirm the Telegram connection", tone: "heading" },
+        ...(pairing.chatTitle === undefined ? [] : [{ text: `Group: ${pairing.chatTitle}`, tone: "text" as const }]),
+        { text: "A different bot interrupts existing remote sessions; chats need fresh topics.", tone: "attention" },
+      ];
       if (pairing.state === "waiting-for-user") {
         return [
           { text: "Step 2 of 4 · Send the code to the bot", tone: "heading" },
@@ -112,6 +128,10 @@ export function channelsViewLines(
           : [{ text: "Still missing:", tone: "attention" as const }, ...pairing.problems.map((text): ViewLine => ({ text: `  - ${text}`, tone: "attention" }))]),
       ];
     }
+    case "activation": return [
+      { text: "Confirm the bot token change", tone: "heading" },
+      { text: "Telegram verified the same bot. Confirm to replace its token and keep the connection.", tone: "text" },
+    ];
     case "connected":
       return [
         { text: "Step 4 of 4 · Connected", tone: "heading" },
@@ -124,12 +144,12 @@ export function channelsViewLines(
       return [
         { text: view.title, tone: "error" },
         { text: view.reason, tone: "text" },
-        { text: "Nothing was kept on this machine for the attempt that failed.", tone: "muted" },
+        { text: "Refresh the channel state before retrying; an existing connection may still be active.", tone: "muted" },
       ];
     case "confirm-disconnect":
       return [
         { text: "Disconnect Telegram from this machine?", tone: "heading" },
-        { text: "This deletes every keryx topic in the group, stops polling, and erases the bot token and the config.", tone: "attention" },
+        { text: snapshot?.revisioned ? "This deletes keryx topics, stops polling, and removes the bot token for all chats on this machine." : "This deletes every keryx topic in the group, stops polling, and erases the bot token and the config.", tone: "attention" },
         { text: "The group itself and the bot stay in Telegram.", tone: "muted" },
       ];
   }
@@ -205,12 +225,15 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
   let confirmArmedAt = 0;
   let stopPolling: () => void = () => {};
   let polling = false;
+  let activeOperation: { operationId: string; revision: number | null } | undefined;
+  let revisionedSeen = snapshot?.revisioned !== undefined;
   let body: Box | undefined;
   let blocks: unknown[] = [];
 
   const blocked = (): boolean => closed || options.inputBlocked?.() === true;
 
   const learn = (next: ChannelsSnapshot): void => {
+    if (next.revisioned) revisionedSeen = true;
     snapshot = next;
     options.onChanged?.(next);
   };
@@ -236,12 +259,12 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
               { id: "cancel-pairing", label: "Cancel pairing", tone: "danger", run: () => void cancelPairing() },
             ];
           case "connected":
-            return [{ id: "test", label: "Test", tone: "primary", run: () => void runTest(false) }, disconnectButton];
+            return [{ id: "test", label: "Test", tone: "primary", run: () => void runTest(false) }, ...(snapshot.revisioned ? [{ id: "connect", label: "Change token", tone: "plain" as const, run: () => void beginConnect() }] : []), disconnectButton];
           case "not-connected":
             // Leftover files (a crash between the two writes) can only be erased by Disconnect.
             return [{ id: "connect", label: "Connect", tone: "primary", run: () => void beginConnect() }, ...(snapshot.configured ? [disconnectButton] : [])];
           case "off":
-            return [{ id: "retry-start", label: "Retry", tone: "primary", run: () => void retryStart() }, disconnectButton];
+            return revisionedSeen ? [{ id: "connect", label: "Change token", tone: "primary", run: () => void beginConnect() }, disconnectButton] : [{ id: "retry-start", label: "Retry", tone: "primary", run: () => void retryStart() }, disconnectButton];
           default:
             // serve down, error: Connect and Test cannot work, but what is on disk can still be erased.
             return snapshot.configured ? [disconnectButton] : [];
@@ -254,9 +277,15 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
         ];
       case "pairing":
         return [
+          ...(activeOperation && view.pairing.state === "waiting-for-confirmation" && view.pairing.expiresAt > now() && view.pairing.userId !== undefined ? [{ id: "confirm-account", label: "This is my account", tone: "primary" as const, run: () => void confirmRevisioned("confirm-account") }] : []),
+          ...(activeOperation && view.pairing.state === "ready" ? [{ id: "confirm-activation", label: "Confirm connection", tone: "primary" as const, run: () => void confirmRevisioned("confirm") }] : []),
           { id: "cancel-pairing", label: "Cancel pairing", tone: "danger", run: () => void cancelPairing() },
           { id: "back", label: "Back", tone: "plain", run: () => backToList() },
         ];
+      case "activation": return [
+        { id: "confirm-activation", label: "Confirm connection", tone: "primary", run: () => void confirmRevisioned("confirm") },
+        { id: "cancel-pairing", label: "Cancel", tone: "plain", run: () => void cancelPairing() },
+      ];
       case "connected":
         return [
           { id: "test", label: "Test again", tone: "primary", run: () => void runTest(true) },
@@ -264,7 +293,7 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
         ];
       case "failed":
         return [
-          { id: "retry", label: "Try again", tone: "primary", run: () => void beginConnect() },
+          ...(revisionedSeen && activeOperation ? [{ id: "cancel-pairing", label: "Cancel pairing", tone: "danger" as const, run: () => void cancelPairing() }] : [{ id: "retry", label: "Try again", tone: "primary" as const, run: () => void beginConnect() }]),
           { id: "back", label: "Back", tone: "plain", run: () => backToList() },
         ];
       case "confirm-disconnect":
@@ -331,6 +360,7 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
   }
 
   function go(next: ChannelsView, selection = 0): void {
+    if ((next.kind === "pairing" && (next.pairing.state === "waiting-for-confirmation" || next.pairing.state === "ready") && (view.kind !== "pairing" || view.pairing.state !== next.pairing.state)) || (next.kind === "activation" && view.kind !== "activation")) confirmArmedAt = now();
     epoch += 1;
     stopPolling();
     stopPolling = () => {};
@@ -345,13 +375,14 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
 
   function backToList(notice?: Notice): void {
     secret = "";
+    if (activeOperation && snapshot?.revisioned) learn({ ...snapshot, state: "pairing", revisioned: { ...snapshot.revisioned, pendingOperation: activeOperation } });
     go(notice === undefined ? { kind: "list" } : { kind: "list", notice });
   }
 
   function press(viaKey: boolean): void {
     const action = actions()[selected];
     if (action === undefined) return;
-    if (view.kind === "confirm-disconnect" && action.id === "confirm-disconnect" && viaKey && now() - confirmArmedAt < CONFIRM_MIN_GAP_MS) {
+    if ((action.id === "confirm-disconnect" || action.id === "confirm-account" || action.id === "confirm-activation") && viaKey && now() - confirmArmedAt < CONFIRM_MIN_GAP_MS) {
       // The Enter that opened this view is still auto-repeating: it is not a decision.
       return;
     }
@@ -372,13 +403,21 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
         backToList({ tone: "attention", text: snapshot.reason ?? "keryx serve is not reachable; start it with `keryx serve`." });
         return;
       }
-      if (snapshot?.state === "connected" || snapshot?.state === "off") {
+      if (revisionedSeen && !snapshot?.revisioned) {
+        backToList({ tone: "error", text: "Revisioned channel status is unavailable. Refresh before making changes." });
+        return;
+      }
+      if ((snapshot?.state === "connected" || snapshot?.state === "off") && !snapshot.revisioned) {
         backToList({ tone: "attention", text: "Telegram is already configured on this machine. Disconnect it first to connect a different bot." });
         return;
       }
       if (snapshot?.state === "pairing") {
         busy = false;
         await resume();
+        return;
+      }
+      if (snapshot?.revisioned && snapshot.revisioned.revision === undefined) {
+        backToList({ tone: "error", text: "The channel revision is unavailable. Refresh before making changes." });
         return;
       }
       secret = "";
@@ -397,6 +436,15 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     go({ kind: "working", text: "Checking the token with Telegram…" });
     const mine = epoch;
     try {
+      if (snapshot?.revisioned) {
+        const revision = snapshot.revisioned.revision;
+        if (revision === undefined || !client.beginRevisioned) { backToList({ tone: "error", text: "Revisioned channel control is unavailable; update keryx." }); return; }
+        const result = await client.beginRevisioned(token, revision);
+        if (closed || epoch !== mine) return;
+        if (!result.ok) { await reload(); if (!closed && epoch === mine) backToList({ tone: "error", text: result.reason }); return; }
+        await settleRevisioned(result.value);
+        return;
+      }
       const result = await client.startPairing(token);
       if (closed || epoch !== mine) return;
       if (!result.ok) {
@@ -417,6 +465,15 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     const mine = epoch + 1;
     go({ kind: "working", text: "Reading the pairing…" });
     try {
+      if (snapshot?.revisioned) {
+        activeOperation = snapshot.revisioned.pendingOperation;
+        if (!activeOperation || !client.revisionedOperation) { backToList({ tone: "attention", text: "The pending operation is unavailable. Refresh and try again." }); return; }
+        const result = await client.revisionedOperation("status", activeOperation.operationId, activeOperation.revision);
+        if (closed || epoch !== mine) return;
+        if (!result.ok) { activeOperation = undefined; await reload(); if (!closed && epoch === mine) backToList({ tone: "attention", text: result.reason }); return; }
+        await settleRevisioned(result.value);
+        return;
+      }
       const result = await client.pairingStatus();
       if (closed || epoch !== mine) return;
       if (!result.ok) {
@@ -431,6 +488,41 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     } finally {
       busy = false;
     }
+  }
+
+  async function settleRevisioned(result: RevisionedChannelResponse): Promise<void> {
+    activeOperation = { operationId: result.operationId, revision: result.revision };
+    if (result.state === "same-bot-ready") { go({ kind: "activation" }); return; }
+    if (result.state === "connected") {
+      activeOperation = undefined;
+      const mine = epoch;
+      await reload();
+      if (!closed && epoch === mine) go({ kind: "connected", test: { tone: "ok", text: "Telegram connected. Test sends a message to the General topic." } });
+      return;
+    }
+    if (result.pairing) {
+      const { code, ...rest } = result.pairing;
+      const pairing: PairingResponse = { schemaVersion: "1", ...rest, ...(rest.state === "waiting-for-user" && rest.expiresAt > now() && code !== undefined ? { code } : {}) };
+      if (pairing.state === "ready" && (!Number.isSafeInteger(pairing.userId) || !Number.isSafeInteger(pairing.chatId))) { go({ kind: "failed", title: "Pairing is incomplete", reason: "Telegram did not verify the account and group. Cancel and try again." }); return; }
+      if (["waiting-for-user", "waiting-for-confirmation", "waiting-for-group", "ready"].includes(pairing.state)) { go({ kind: "pairing", pairing }); return; }
+      go({ kind: "failed", title: pairing.state === "expired" ? "The pairing code expired" : "Pairing ended", reason: "Cancel this pairing before starting again." });
+      return;
+    }
+    go({ kind: "failed", title: "Pairing unavailable", reason: "Refresh the channel status before retrying." });
+  }
+
+  async function confirmRevisioned(action: "confirm-account" | "confirm"): Promise<void> {
+    if (busy || !activeOperation || !client.revisionedOperation) return;
+    busy = true;
+    const operation = activeOperation;
+    go({ kind: "working", text: action === "confirm-account" ? "Confirming your account…" : "Connecting Telegram…" });
+    const mine = epoch;
+    try {
+      const result = await client.revisionedOperation(action, operation.operationId, operation.revision);
+      if (closed || epoch !== mine) return;
+      if (!result.ok) { activeOperation = undefined; await reload(); if (!closed && epoch === mine) backToList({ tone: "error", text: `${result.reason} Refresh the channel before retrying.` }); return; }
+      await settleRevisioned(result.value);
+    } finally { busy = false; }
   }
 
   async function settlePairing(pairing: PairingResponse): Promise<void> {
@@ -464,9 +556,22 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
 
   async function pollPairing(): Promise<void> {
     if (polling || closed || view.kind !== "pairing" || busy) return;
+    if (view.pairing.state === "waiting-for-user" && view.pairing.expiresAt <= now()) {
+      const { code: _code, ...expired } = view.pairing;
+      view = { kind: "pairing", pairing: { ...expired, state: "expired" } };
+      paint();
+    }
     polling = true;
     const mine = epoch;
     try {
+      if (activeOperation || snapshot?.revisioned) {
+        if (!activeOperation || !client.revisionedOperation) { backToList({ tone: "error", text: "The pending operation is unavailable." }); return; }
+        const result = await client.revisionedOperation("status", activeOperation.operationId, activeOperation.revision);
+        if (closed || epoch !== mine) return;
+        if (!result.ok) { activeOperation = undefined; await reload(); if (!closed && epoch === mine) backToList({ tone: "attention", text: result.reason }); return; }
+        await settleRevisioned(result.value);
+        return;
+      }
       const result = await client.pairingStatus();
       if (closed || epoch !== mine) return;
       if (!result.ok && result.code === "no-pairing") {
@@ -529,7 +634,7 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     go({ kind: "connected", ...(group === undefined ? {} : { group }), test: testNotice(test) });
   }
 
-  function testNotice(result: Awaited<ReturnType<ChannelsApi["test"]>>): Notice {
+  function testNotice(result: { ok: true; value: { machine: string } } | { ok: false; reason: string }): Notice {
     return result.ok
       ? { tone: "ok", text: `Test message delivered to the General topic (machine: ${result.value.machine}).` }
       : { tone: "error", text: `Test message not delivered: ${result.reason}` };
@@ -542,7 +647,8 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     go({ kind: "working", text: "Sending a test message…" });
     const mine = epoch;
     try {
-      const result = await client.test();
+      const revisioned = snapshot?.revisioned;
+      const result = revisionedSeen ? (revisioned && revisioned.revision !== undefined && client.testRevisioned ? await client.testRevisioned(revisioned.revision) : { ok: false as const, code: "unavailable", reason: "Revisioned channel control is unavailable; refresh or update keryx." }) : await client.test();
       if (closed || epoch !== mine) return;
       const notice = testNotice(result);
       await reload();
@@ -579,10 +685,13 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     go({ kind: "working", text: "Cancelling the pairing…" });
     const mine = epoch;
     try {
-      const result = await client.cancelPairing();
+      const revisioned = snapshot?.revisioned;
+      const operation = activeOperation ?? revisioned?.pendingOperation;
+      const result = revisionedSeen ? (operation && client.revisionedOperation ? await client.revisionedOperation("cancel", operation.operationId, operation.revision) : { ok: false as const, code: "unavailable", reason: "The pending operation is unavailable; refresh the channel." }) : await client.cancelPairing();
+      if (result.ok || result.code === "conflict") activeOperation = undefined;
       await reload();
       if (closed || epoch !== mine) return;
-      backToList(result.ok ? { tone: "ok", text: "Pairing cancelled. The token was erased." } : { tone: "attention", text: result.reason });
+      backToList(result.ok ? { tone: "ok", text: revisionedSeen ? "Pairing cancelled. The staged token was discarded; any existing connection is unchanged." : "Pairing cancelled. The token was erased." } : { tone: "attention", text: result.reason });
     } finally {
       busy = false;
     }
@@ -599,6 +708,14 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     go({ kind: "working", text: "Deleting the topics and erasing the token…" });
     const mine = epoch;
     try {
+      const revisioned = snapshot?.revisioned;
+      if (revisionedSeen) {
+        const result = revisioned && revisioned.revision !== undefined && client.disconnectRevisioned ? await client.disconnectRevisioned(revisioned.revision) : { ok: false as const, code: "unavailable", reason: "Revisioned channel control is unavailable; refresh or update keryx." };
+        await reload();
+        if (closed || epoch !== mine) return;
+        backToList(result.ok ? { tone: result.value.remaining === 0 ? "ok" : "attention", text: `Telegram disconnected. ${result.value.deleted} topics deleted; ${result.value.remaining} remain.` } : { tone: "error", text: `Not disconnected: ${result.reason}` });
+        return;
+      }
       const result = await client.disconnect();
       await reload();
       if (closed || epoch !== mine) return;
@@ -703,6 +820,7 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     onClose: () => {
       closed = true;
       secret = "";
+      view = { kind: "list" };
       stopPolling();
       unsubscribeKeys();
       unsubscribePaste?.();

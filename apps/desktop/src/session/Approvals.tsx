@@ -303,7 +303,17 @@ export function PermissionDialog({
   );
 }
 
-export function AskUserDialog({ pending, onAnswer }: { pending: PendingAsk; onAnswer: (p: PendingAsk, r: AskUserResult) => void }) {
+export function AskUserDialog({ pending, onAnswer, onSendToTelegram }: {
+  pending: PendingAsk;
+  onAnswer: (p: PendingAsk, r: AskUserResult) => void;
+  onSendToTelegram?: (p: PendingAsk) => Promise<boolean>;
+}) {
+  const [projection, setProjection] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const sendToTelegram = async () => {
+    setProjection("sending");
+    try { setProjection(await onSendToTelegram?.(pending) ? "sent" : "failed"); }
+    catch { setProjection("failed"); }
+  };
   const { req } = pending;
   const meta = req._meta?.keryx;
   const options = req.options ?? [];
@@ -363,6 +373,14 @@ export function AskUserDialog({ pending, onAnswer }: { pending: PendingAsk; onAn
       <p className="ask-question is-prose" dir="auto">
         {visibleProse(req.question)}
       </p>
+      {onSendToTelegram && req._meta?.keryx?.telegramProjectable === true ? (
+        <div className="settings-actions">
+          <button type="button" className="btn" disabled={projection === "sending" || projection === "sent"} onClick={() => void sendToTelegram()}>
+            {projection === "sending" ? "Sending…" : projection === "sent" ? "Sent to Telegram" : "Send to Telegram"}
+          </button>
+          {projection === "failed" ? <span role="status">Telegram could not receive this question. You can answer here.</span> : null}
+        </div>
+      ) : null}
       {meta?.irreversible ? (
         <div className="inline-banner tone-warn">
           <Icon name="alert" size={14} />

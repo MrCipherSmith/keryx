@@ -4,7 +4,8 @@ import { ChannelsClient } from "../remote/channels-client";
 export type DesktopChannelRequest =
   | { action: "status" }
   | { action: "begin"; token: string; expectedRevision: number | null }
-  | { action: "operation-status" | "cancel" | "confirm"; operationId: string; expectedRevision: number | null };
+  | { action: "operation-status" | "cancel" | "confirm" | "confirm-account"; operationId: string; expectedRevision: number | null }
+  | { action: "test" | "disconnect"; expectedRevision: number | null };
 
 export async function desktopTelegramChannel(value: unknown, client = new ChannelsClient()): Promise<unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return { ok: false, code: "invalid" };
@@ -17,8 +18,12 @@ export async function desktopTelegramChannel(value: unknown, client = new Channe
     const result = await client.beginRevisioned(request.token, revision);
     return result.ok ? result : { ok: false, code: result.code };
   }
-  if ((request.action === "operation-status" || request.action === "cancel" || request.action === "confirm") && keys.every((key) => ["action", "operationId", "expectedRevision"].includes(key)) && typeof request.operationId === "string") {
+  if ((request.action === "operation-status" || request.action === "cancel" || request.action === "confirm" || request.action === "confirm-account") && keys.every((key) => ["action", "operationId", "expectedRevision"].includes(key)) && typeof request.operationId === "string") {
     const result = await client.revisionedOperation(request.action === "operation-status" ? "status" : request.action, request.operationId, revision);
+    return result.ok ? result : { ok: false, code: result.code };
+  }
+  if ((request.action === "test" || request.action === "disconnect") && keys.length === 2) {
+    const result = await (request.action === "test" ? client.testRevisioned(revision) : client.disconnectRevisioned(revision));
     return result.ok ? result : { ok: false, code: result.code };
   }
   return { ok: false, code: "invalid" };

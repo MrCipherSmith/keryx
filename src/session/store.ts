@@ -94,6 +94,7 @@ export interface OpenSessionOptions {
 interface TranscriptLine {
   role: NormalizedMessage["role"];
   content: string;
+  source?: NormalizedMessage["source"];
   provenance?: NormalizedMessage["provenance"];
   /** Flow 387 T8: harness-injected `role: "user"` message (not operator input). */
   injected?: true;
@@ -472,6 +473,7 @@ function serializeJsonl(history: readonly NormalizedMessage[], checkpointTs: str
       content: m.content,
       ts: m.ts ?? checkpointTs,
       kind: "message",
+      ...(m.role === "user" && m.source === "telegram" ? { source: m.source } : {}),
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
       ...(m.injected === true ? { injected: true as const } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
@@ -602,6 +604,7 @@ function readJsonl(file: string): NormalizedMessage[] {
       out.push({
         role: o.role,
         content: o.content,
+        ...(o.role === "user" && o.source === "telegram" ? { source: o.source } : {}),
         ...(o.provenance === "trusted" ||
         o.provenance === "project" ||
         o.provenance === "model" ||

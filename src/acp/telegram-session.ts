@@ -1,4 +1,4 @@
-import type { InboundMeta } from "../remote/client";
+import type { ApprovalAnswer, ChoiceAnswer, ClientStatus, InboundMeta, PressedApproval } from "../remote/client";
 /** Desktop Telegram session-control contract. The server must not advertise this
  * capability until delegated actor, turn, and decision handling are implemented. */
 export const ACP_TELEGRAM_SESSION_METHOD = "_keryx/telegram/session";
@@ -38,9 +38,11 @@ export function unavailableTelegramSession(sessionId: string): TelegramSessionSt
 }
 
 export interface TelegramBindingClient {
-  start(): Promise<{ ok: true; threadId: number } | { ok: false; message: string }>;
+  start(): Promise<{ ok: true; threadId: number; topicUrl?: string } | { ok: false; message: string }>;
   close(): Promise<void>;
   reply(text: string): Promise<boolean>;
+  askApproval?(prompt: string, timeoutMs: number, options: { signal: AbortSignal; claim: (answer: PressedApproval) => boolean }): Promise<ApprovalAnswer>;
+  askChoice?(text: string, rows: string[][], timeoutMs: number, options: { signal: AbortSignal; claim: (index: number, fromId: number) => boolean }): Promise<ChoiceAnswer>;
 }
 
 export interface TelegramBindingDependencies {
@@ -48,8 +50,9 @@ export interface TelegramBindingDependencies {
   held(sessionId: string): { project: string; lease: object } | undefined;
   /** Checks that this exact hold still owns its lease. */
   owns(sessionId: string, lease: object): boolean;
-  create(input: { sessionId: string; project: string; topicName?: string; owner: { kind: "desktop"; incarnation: string; generation: string }; onLine: (text: string, meta: InboundMeta) => Promise<void> }): TelegramBindingClient;
+  create(input: { sessionId: string; project: string; topicName?: string; owner: { kind: "desktop"; incarnation: string; generation: string }; onLine: (text: string, meta: InboundMeta) => Promise<void>; onStatus: (status: ClientStatus) => void; onChannelRevoked: (cutoverId: string) => boolean }): TelegramBindingClient;
   onStop(sessionId: string, generation: string): boolean;
+  isBusy?(sessionId: string): boolean;
   onInput(input: { sessionId: string; generation: string; text: string; actorId: number; updateId: number }): Promise<"accepted" | "busy" | "refused">;
   generation(): string;
   incarnation: string;
@@ -63,6 +66,7 @@ interface Binding {
   state: TelegramSessionState;
   pending?: Promise<TelegramSessionState>;
   threadId?: number;
+  topicUrl?: string;
   seen: Set<number>;
 }
 
@@ -90,6 +94,8 @@ export class TelegramSessionBindings {
     const generation = this.deps.generation();
     const client = this.deps.create({ sessionId, project: held.project, ...(topicName === undefined ? {} : { topicName }), owner: { kind: "desktop", incarnation: this.deps.incarnation, generation },
       onLine: (text, meta) => this.receive(sessionId, generation, text, meta),
+      onStatus: (status) => this.connectionChanged(sessionId, generation, status),
+      onChannelRevoked: () => this.revoke(sessionId, generation),
     });
     const binding: Binding = { lease: held.lease, generation, client, state: { sessionId, state: "attaching" }, seen: new Set() };
     this.bindings.set(sessionId, binding);
@@ -114,10 +120,47 @@ export class TelegramSessionBindings {
       return failed;
     }
     binding.threadId = started.threadId;
-    binding.state = { sessionId, state: "active" };
+    if (started.topicUrl !== undefined) binding.topicUrl = started.topicUrl;
+    binding.state = { sessionId, state: "active", ...(started.topicUrl === undefined ? {} : { topicUrl: started.topicUrl }) };
     delete binding.pending;
     this.deps.onState?.(binding.state);
     return binding.state;
+  }
+
+  /** Called before the transport acknowledges a different-bot cutover. */
+  private revoke(sessionId: string, generation: string): boolean {
+    const binding = this.bindings.get(sessionId);
+    if (binding === undefined || binding.generation !== generation || !this.deps.owns(sessionId, binding.lease)) return false;
+    this.bindings.delete(sessionId);
+    this.deps.onStop(sessionId, generation);
+    this.deps.onState?.({ sessionId, state: "detached" });
+    return true;
+  }
+
+  private connectionChanged(sessionId: string, generation: string, status: ClientStatus): void {
+    const binding = this.bindings.get(sessionId);
+    if (binding === undefined || binding.generation !== generation || binding.state.state === "attaching" || !this.deps.owns(sessionId, binding.lease)) return;
+    if (status.state === "disconnected" || status.state === "stopped") {
+      binding.state = { sessionId, state: status.state === "stopped" ? "unavailable" : "reconnecting", reason: "connection-lost" };
+      this.deps.onState?.(binding.state);
+    } else if (status.state === "connected" && binding.threadId !== undefined && binding.state.state === "reconnecting") {
+      binding.state = { sessionId, state: "active", ...(binding.topicUrl === undefined ? {} : { topicUrl: binding.topicUrl }) };
+      this.deps.onState?.(binding.state);
+    }
+  }
+
+  projectChoice(sessionId: string, generation: string, signal: AbortSignal, claim: (index: number, fromId: number) => boolean): boolean {
+    const binding = this.bindings.get(sessionId);
+    if (binding === undefined || !this.isCurrent(sessionId, generation) || binding.client.askChoice === undefined) return false;
+    void binding.client.askChoice("Which response format do you prefer?", [["Concise"], ["Detailed"]], 300_000, { signal, claim }).catch(() => undefined);
+    return true;
+  }
+
+  projectApproval(sessionId: string, generation: string, prompt: string, timeoutMs: number, signal: AbortSignal, claim: (answer: PressedApproval) => boolean): boolean {
+    const binding = this.bindings.get(sessionId);
+    if (binding === undefined || !this.isCurrent(sessionId, generation) || binding.client.askApproval === undefined) return false;
+    void binding.client.askApproval(prompt, timeoutMs, { signal, claim }).catch(() => undefined);
+    return true;
   }
 
   async send(sessionId: string, generation: string, text: string): Promise<boolean> {
@@ -151,6 +194,10 @@ export class TelegramSessionBindings {
     binding.seen.add(meta.updateId);
     if (binding.seen.size > 1000) binding.seen.delete(binding.seen.values().next().value as number);
     const command = text.trim().toLowerCase();
+    if (command === "/status") {
+      await binding.client.reply(this.deps.isBusy?.(sessionId) === true ? "Connected. A turn is running." : "Connected. The session is idle.");
+      return;
+    }
     if (command === "/stop") {
       const stopped = this.deps.onStop(sessionId, generation);
       await binding.client.reply(stopped ? "Stopping the Telegram turn." : "No Telegram turn is running for this attachment.");

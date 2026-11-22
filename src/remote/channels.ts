@@ -37,6 +37,8 @@ export interface ChannelsHost {
   openApi(): OpenBotApiResult;
   activateCandidate?: ChannelControlOptions["activate"];
   openCandidate?: ChannelControlOptions["openCandidate"];
+  channelAction?: ChannelControlOptions["channelAction"];
+  updateConfig?: ChannelControlOptions["updateConfig"];
 }
 
 export interface ChannelsOptions {
@@ -66,10 +68,13 @@ export class ChannelsController {
   }
 
   handle(route: ChannelsRoute, _request: Request): Promise<Response> {
+    if (this.options.experimentalControl === true && ["channels-pair", "channels-cancel", "channels-reload", "channels-disconnect"].includes(route)) {
+      return Promise.resolve(fail(409, "upgrade-required", "Update this client to change the revisioned Telegram channel."));
+    }
     switch (route) {
       case "channels-control":
         if (this.options.experimentalControl !== true) return Promise.resolve(fail(503, "activation-unavailable", "Revisioned channel control is not available yet."));
-        this.control ??= new ChannelControl({ dir: this.host.dir, hasActiveHub: () => this.host.hub() !== undefined, ...(this.host.openCandidate === undefined ? {} : { openCandidate: this.host.openCandidate }), ...(this.host.activateCandidate === undefined ? {} : { activate: this.host.activateCandidate }), ...(this.options.pairing === undefined ? {} : { pairing: this.options.pairing }) });
+        this.control ??= new ChannelControl({ dir: this.host.dir, hasActiveHub: () => this.host.hub() !== undefined, ...(this.host.updateConfig === undefined ? {} : { updateConfig: this.host.updateConfig }), ...(this.host.channelAction === undefined ? {} : { channelAction: this.host.channelAction }), ...(this.host.openCandidate === undefined ? {} : { openCandidate: this.host.openCandidate }), ...(this.host.activateCandidate === undefined ? {} : { activate: this.host.activateCandidate }), ...(this.options.pairing === undefined ? {} : { pairing: this.options.pairing }) });
         return this.control.handle(_request);
       case "channels-status":
         return Promise.resolve(this.status());
@@ -147,7 +152,7 @@ export class ChannelsController {
     const pendingOperation = this.control?.pendingOperation();
     return ok({
       machine: this.host.machine,
-      ...(record?.ok === true ? { revision: record.value?.revision ?? null } : {}),
+      ...(record?.ok === true ? { capabilities: { desktopTelegram: 1 }, revision: record.value?.revision ?? null } : {}),
       ...(record !== undefined && pendingOperation !== undefined ? { pendingOperation } : {}),
       telegram: {
         state,

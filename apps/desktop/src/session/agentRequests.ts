@@ -19,6 +19,7 @@ export async function answerAgentRequest(
   reg: Pick<SessionRegistry, "admit">,
   dialogs: Pick<DialogQueue, "permission" | "ask">,
   prepareReview?: (sessionId: string, hints: ReviewDraftHints) => void,
+  requestId?: string | number,
 ): Promise<unknown> {
   if (method === PREPARE_REVIEW_METHOD && prepareReview) {
     const sid = reg.admit(params);
@@ -32,12 +33,12 @@ export async function answerAgentRequest(
   if (method === "session/request_permission") {
     const sid = reg.admit(params);
     if (!sid) return { outcome: CANCELLED };
-    return { outcome: await dialogs.permission(sid, params as PermissionRequest) };
+    return { outcome: await dialogs.permission(sid, params as PermissionRequest, requestId) };
   }
   if (method === "_keryx/ask_user") {
     const sid = reg.admit(params);
     if (!sid) return { outcome: "cancelled" } satisfies AskUserResult;
-    return dialogs.ask(sid, params as AskUserRequest);
+    return dialogs.ask(sid, params as AskUserRequest, requestId);
   }
   throw new RpcError(-32601, `Method not found: ${method}`);
 }

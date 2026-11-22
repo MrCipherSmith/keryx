@@ -395,7 +395,7 @@ otuiTest("pairing: an expired code says so and offers Try again", async () => {
   const h = await mountChrome(OTUI!, { height: 40 });
   const { api, fake } = fakeClient();
   const timer = ticker();
-  const modal = await openModalFor(h, api, { schedule: timer.schedule });
+  const modal = await openModalFor(h, api, { schedule: timer.schedule, now: () => T0 });
   try {
     await h.mockInput.typeText("c");
     await settle(h, 6);
@@ -505,7 +505,7 @@ otuiTest("pairing: serve answering no-pairing means the code is dead (serve rest
   const h = await mountChrome(OTUI!, { height: 40 });
   const { api, fake } = fakeClient();
   const timer = ticker();
-  const modal = await openModalFor(h, api, { schedule: timer.schedule });
+  const modal = await openModalFor(h, api, { schedule: timer.schedule, now: () => T0 });
   try {
     await h.mockInput.typeText("c");
     await settle(h, 6);
@@ -802,4 +802,97 @@ test("loadChannelsSnapshot without a reported mode has none, and the lines stay 
   const snapshot = await loadChannelsSnapshot({ status: async () => ok(status("connected")), localFiles: () => ({ tokenFile: true, configFile: true }) });
   expect(snapshot.rendering).toBeUndefined();
   expect(readlineChannelsText("/channels", snapshot)).not.toContain("Rendering:");
+});
+
+test("revisioned snapshot preserves a pending operation and signed revision", async () => {
+  const pendingOperation = { operationId: "00000000-0000-4000-8000-000000000001", revision: 3 };
+  const current: ChannelsStatusResponse = { ...status("connected"), capabilities: { desktopTelegram: 1 }, revision: 3, pendingOperation };
+  const snapshot = await loadChannelsSnapshot({ status: async () => ok(current), localFiles: () => ({ tokenFile: false, configFile: false }) });
+  expect(snapshot.state).toBe("pairing");
+  expect(snapshot.revisioned).toEqual({ revision: 3, pendingOperation });
+});
+
+otuiTest("revisioned pairing requires account and activation confirmation", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok({ ...status("not-connected"), capabilities: { desktopTelegram: 1 }, revision: null }) });
+  const id = "00000000-0000-4000-8000-000000000001";
+  const seen: string[] = [];
+  const revisioned: ChannelsApi = { ...api,
+    beginRevisioned: async () => { seen.push("begin"); return ok({ schemaVersion: "1", operationId: id, revision: null, pairing: { state: "waiting-for-confirmation", userId: 42, expiresAt: T0 + 100000, problems: [] } }); },
+    revisionedOperation: async (action) => { seen.push(action); return ok({ schemaVersion: "1", operationId: id, revision: null, ...(action === "confirm-account" ? { pairing: { state: "ready" as const, userId: 42, chatId: -100, expiresAt: T0 + 100000, problems: [] } } : { state: "connected" }) }); },
+  };
+  let clock = T0;
+  const modal = await openModalFor(h, revisioned, { now: () => clock });
+  try {
+    await h.mockInput.typeText("c"); await settle(h, 6);
+    await h.mockInput.typeText("token"); await h.mockInput.pressEnter(); await settle(h, 8);
+    expect(h.captureCharFrame()).toContain("42");
+    expect(seen).toEqual(["begin"]);
+    clock += CONFIRM_MIN_GAP_MS;
+    await h.mockInput.pressEnter(); await settle(h, 8);
+    expect(seen).toEqual(["begin", "confirm-account"]);
+    expect(h.captureCharFrame()).toContain("Confirm connection");
+    clock += CONFIRM_MIN_GAP_MS;
+    await h.mockInput.pressEnter(); await settle(h, 8);
+    expect(seen).toEqual(["begin", "confirm-account", "confirm"]);
+    expect(fake.calls.connectFinish).toEqual([]);
+  } finally { modal?.close(); h.destroy(); }
+});
+
+otuiTest("revisioned test and disconnect carry the signed revision", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok({ ...status("connected"), capabilities: { desktopTelegram: 1 }, revision: 4 }) });
+  const seen: string[] = [];
+  const revisioned: ChannelsApi = { ...api,
+    testRevisioned: async (revision) => { seen.push(`test:${revision}`); return ok({ delivered: true, machine: "devbox" }); },
+    disconnectRevisioned: async (revision) => { seen.push(`disconnect:${revision}`); return ok({ deleted: 1, remaining: 0, revision: 5, hubWasRunning: true }); },
+  };
+  let clock = T0;
+  const modal = await openModalFor(h, revisioned, { now: () => clock });
+  try {
+    await h.mockInput.typeText("t"); await settle(h, 8);
+    expect(seen).toEqual(["test:4"]);
+    await h.mockInput.typeText("d"); await settle(h, 6);
+    await h.mockInput.pressKey("ARROW_RIGHT"); clock += CONFIRM_MIN_GAP_MS;
+    await h.mockInput.pressEnter(); await settle(h, 8);
+    expect(seen).toEqual(["test:4", "disconnect:4"]);
+    expect(fake.calls.test).toBe(0);
+    expect(fake.calls.disconnect).toBe(0);
+  } finally { modal?.close(); h.destroy(); }
+});
+
+otuiTest("revisioned pending same-bot rotation resumes and requires confirmation", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const id = "00000000-0000-4000-8000-000000000001";
+  const { api, fake } = fakeClient({ status: ok({ ...status("connected"), capabilities: { desktopTelegram: 1 }, revision: 4, pendingOperation: { operationId: id, revision: 4 } }) });
+  const seen: string[] = [];
+  const revisioned: ChannelsApi = { ...api, revisionedOperation: async (action, operationId, revision) => {
+    seen.push(`${action}:${operationId}:${revision}`);
+    return ok({ schemaVersion: "1", operationId: id, revision: 4, state: action === "status" ? "same-bot-ready" : "connected" });
+  } };
+  let clock = T0;
+  const modal = await openModalFor(h, revisioned, { now: () => clock });
+  try {
+    expect(h.captureCharFrame()).toContain("Resume");
+    await h.mockInput.typeText("c"); await settle(h, 8);
+    expect(h.captureCharFrame()).toContain("same bot");
+    expect(seen).toEqual([`status:${id}:4`]);
+    clock += CONFIRM_MIN_GAP_MS;
+    await h.mockInput.pressEnter(); await settle(h, 8);
+    expect(seen).toEqual([`status:${id}:4`, `confirm:${id}:4`]);
+    expect(fake.calls.connectFinish).toEqual([]);
+  } finally { modal?.close(); h.destroy(); }
+});
+
+test("expired pairing never renders its old challenge", () => {
+  const lines = channelsViewLines({ kind: "pairing", pairing: pairing({ state: "waiting-for-user", code: "ABCDEFGH", expiresAt: T0 }) }, undefined, { tokenLength: 0, now: T0 });
+  expect(lines.map((line) => line.text).join(" ")).not.toContain("ABCDEFGH");
+  expect(lines.map((line) => line.text).join(" ")).toContain("expired");
+});
+
+test("advertised revisioned capability with no usable revision fails closed", async () => {
+  const reported: ChannelsStatusResponse = { ...status("not-connected"), capabilities: { desktopTelegram: 1 } };
+  const snapshot = await loadChannelsSnapshot({ status: async () => ok(reported), localFiles: () => ({ tokenFile: false, configFile: false }) });
+  expect(snapshot.state).toBe("error");
+  expect(snapshot.revisioned).toEqual({ revision: undefined });
 });

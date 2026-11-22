@@ -15,6 +15,9 @@ pub enum ChannelRequest {
     OperationStatus { #[serde(rename = "operationId")] operation_id: String, #[serde(rename = "expectedRevision", deserialize_with = "deserialize_revision")] expected_revision: Option<u64> },
     Cancel { #[serde(rename = "operationId")] operation_id: String, #[serde(rename = "expectedRevision", deserialize_with = "deserialize_revision")] expected_revision: Option<u64> },
     Confirm { #[serde(rename = "operationId")] operation_id: String, #[serde(rename = "expectedRevision", deserialize_with = "deserialize_revision")] expected_revision: Option<u64> },
+    ConfirmAccount { #[serde(rename = "operationId")] operation_id: String, #[serde(rename = "expectedRevision", deserialize_with = "deserialize_revision")] expected_revision: Option<u64> },
+    Test { #[serde(rename = "expectedRevision", deserialize_with = "deserialize_revision")] expected_revision: Option<u64> },
+    Disconnect { #[serde(rename = "expectedRevision", deserialize_with = "deserialize_revision")] expected_revision: Option<u64> },
 }
 
 fn deserialize_revision<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {

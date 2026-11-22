@@ -15,6 +15,15 @@ export type ChannelMutationResult = Loaded<ChannelRecord> | { ok: false; code: "
 
 export function channelRecordPath(dir?: string): string { return path.join(remoteDirPath(dir), "channel.json"); }
 
+/** Readers use the committed revision when present, including its disconnected marker. */
+export function loadActiveRemoteConfig(dir?: string): Loaded<RemoteConfig> {
+  const record = loadChannelRecord(dir);
+  if (!record.ok) return record;
+  if (record.value === null) return loadRemoteConfig(dir);
+  if (record.value.state === "disconnected") return { ok: false, reason: "Telegram is disconnected." };
+  return { ok: true, value: record.value.config };
+}
+
 export function loadChannelRecord(dir?: string): Loaded<ChannelRecord | null> {
   const file = channelRecordPath(dir);
   const read = readConfigFile(file);

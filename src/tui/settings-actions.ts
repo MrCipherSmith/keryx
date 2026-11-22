@@ -17,12 +17,12 @@ export interface SettingsActionHandlers {
   /** `/external-agents [on|off]`: the text to show. */
   externalAgents: (arg: string) => Promise<string>;
   /** `/rendering [mode]` (flow 395): the text to show. */
-  rendering: (arg: string) => string;
+  rendering: (arg: string) => string | Promise<string>;
   reasoning: (arg: string) => void;
   think: (arg: string) => void;
   theme: (arg: string) => void;
   /** `/remote-policy <args>` (flow 396): the saved Telegram defaults; the text it returns is shown. */
-  remotePolicy?: (arg: string) => string;
+  remotePolicy?: (arg: string) => string | Promise<string>;
   onSystem: (text: string) => void;
 }
 
@@ -67,7 +67,7 @@ export async function runSettingsCommand(command: string, handlers: SettingsActi
         handlers.onSystem(await handlers.externalAgents(arg));
         return;
       case "/rendering":
-        handlers.onSystem(handlers.rendering(arg));
+        handlers.onSystem(await handlers.rendering(arg));
         return;
       case "/reasoning":
         handlers.reasoning(arg);
@@ -79,7 +79,7 @@ export async function runSettingsCommand(command: string, handlers: SettingsActi
         handlers.theme(arg);
         return;
       case "/remote-policy":
-        if (handlers.remotePolicy !== undefined) handlers.onSystem(handlers.remotePolicy(arg));
+        if (handlers.remotePolicy !== undefined) handlers.onSystem(await handlers.remotePolicy(arg));
         return;
     }
   } catch (error) {

@@ -29,11 +29,15 @@ import {
   DEFAULT_ORPHAN_MS,
   DEFAULT_RUN_TIMEOUT_MS,
   REMOTE_CONFIG_SCHEMA_VERSION,
+  parseRemoteConfig,
+  type RemoteConfig,
+  type RemotePolicyPatch,
   removeBotToken,
   removeRemoteConfig,
   saveBotToken,
   saveRemoteConfig,
 } from "./config";
+import type { RenderMode } from "./rendering-mode";
 import { readEndpoint } from "./endpoint";
 import { botTokenPath, ensureRemoteDir, remoteConfigPath, remoteDirPath } from "./paths";
 import {
@@ -55,6 +59,9 @@ export interface RevisionedChannelResponse {
   state?: string;
   pairing?: PairingSnapshot;
 }
+
+export type RevisionedChannelTest = { delivered: true; machine: string };
+export type RevisionedChannelDisconnect = { deleted: number; remaining: number; revision: number; hubWasRunning: boolean };
 
 export interface ChannelsClientOptions {
   /** User-global directory override (the test seam). */
@@ -342,18 +349,46 @@ export class ChannelsClient {
     return result;
   }
 
-  async revisionedOperation(action: "status" | "cancel" | "confirm", operationId: string, expectedRevision: number | null): Promise<ChannelsResult<RevisionedChannelResponse>> {
+  async revisionedOperation(action: "status" | "cancel" | "confirm" | "confirm-account", operationId: string, expectedRevision: number | null): Promise<ChannelsResult<RevisionedChannelResponse>> {
     if (!/^[0-9a-f-]{36}$/.test(operationId) || !(expectedRevision === null || (Number.isSafeInteger(expectedRevision) && expectedRevision > 0))) return { ok: false, code: "invalid", reason: "Invalid channel operation." };
     const capability = await this.revisionedCapability();
     if (!capability.ok) return capability;
     return this.control({ version: 1, action, expectedRevision, operationId });
   }
 
+  async testRevisioned(expectedRevision: number | null): Promise<ChannelsResult<RevisionedChannelTest>> {
+    const capability = await this.revisionedCapability();
+    if (!capability.ok) return capability;
+    return this.call<RevisionedChannelTest>("channels-control", (body) => body.delivered === true && typeof body.machine === "string",
+      { version: 1, action: "test", expectedRevision });
+  }
+
+  async disconnectRevisioned(expectedRevision: number | null): Promise<ChannelsResult<RevisionedChannelDisconnect>> {
+    const capability = await this.revisionedCapability();
+    if (!capability.ok) return capability;
+    return this.call<RevisionedChannelDisconnect>("channels-control", (body) =>
+      typeof body.revision === "number" && Number.isSafeInteger(body.revision) && body.revision > (expectedRevision ?? 0) &&
+      typeof body.deleted === "number" && Number.isSafeInteger(body.deleted) && body.deleted >= 0 &&
+      typeof body.remaining === "number" && Number.isSafeInteger(body.remaining) && body.remaining >= 0 &&
+      typeof body.hubWasRunning === "boolean",
+    { version: 1, action: "disconnect", expectedRevision });
+  }
+
+  async updateRevisionedSettings(
+    settings: { action: "policy"; patch: RemotePolicyPatch } | { action: "rendering"; mode: RenderMode },
+    expectedRevision: number,
+  ): Promise<ChannelsResult<{ revision: number; config: RemoteConfig }>> {
+    const capability = await this.revisionedCapability();
+    if (!capability.ok) return capability;
+    return this.call("channels-control", (body) =>
+      body.revision === expectedRevision + 1 && isObject(body.config) && parseRemoteConfig(body.config).ok,
+    { ...settings, version: 1, expectedRevision });
+  }
+
   private async revisionedCapability(): Promise<ChannelsResult<true>> {
     const status = await this.status();
     if (!status.ok) return status;
-    const capabilities = (status.value as unknown as { capabilities?: { desktopTelegram?: unknown } }).capabilities;
-    if (capabilities?.desktopTelegram !== 1) return { ok: false, code: "unsupported", reason: "This serve does not support revisioned Telegram control." };
+    if (status.value.capabilities?.desktopTelegram !== 1) return { ok: false, code: "unsupported", reason: "This serve does not support revisioned Telegram control." };
     return { ok: true, value: true };
   }
 
@@ -477,6 +512,25 @@ export class ChannelsClient {
       // Nothing more can be done from here; the reason already tells the operator what failed.
     }
   }
+}
+
+/** Keep legacy writes serialized with migration; committed channels must go through serve's CAS. */
+export async function writeChannelSettings(
+  settings: Parameters<ChannelsClient["updateRevisionedSettings"]>[0],
+  dir: string | undefined,
+  writeLegacy: () => import("./config").Loaded<RemoteConfig>,
+): Promise<import("./config").Loaded<RemoteConfig>> {
+  ensureRemoteDir(dir);
+  const observed = await withFileLock(path.join(remoteDirPath(dir), "channel.lock"), async () => {
+    const record = loadChannelRecord(dir);
+    return record.ok && record.value === null ? { legacy: writeLegacy() } : { record };
+  });
+  if ("legacy" in observed) return observed.legacy;
+  if (!observed.record.ok) return observed.record;
+  if (observed.record.value?.state !== "connected") return { ok: false, reason: "Telegram is disconnected." };
+  const client = new ChannelsClient(dir === undefined ? {} : { dir });
+  const result = await client.updateRevisionedSettings(settings, observed.record.value.revision);
+  return result.ok ? { ok: true, value: result.value.config } : result;
 }
 
 /** A failure that happened before any byte reached serve: nothing was sent, so nothing was done. */

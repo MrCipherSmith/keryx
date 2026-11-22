@@ -171,7 +171,8 @@ export async function main(): Promise<void> {
     // undefined below, unaffected.
     const known = knownSubcommandsFor(command);
     const sub = args[1];
-    if (known !== undefined && sub !== undefined && !sub.startsWith("-") && !known.includes(sub)) {
+    const privateServeCommand = command === "serve" && (sub === "desktop-control" || sub === "desktop-channel");
+    if (known !== undefined && sub !== undefined && !sub.startsWith("-") && !known.includes(sub) && !privateServeCommand) {
       console.error(formatUnknownCommandMessage(sub, known, `keryx ${command} --help`));
       process.exitCode = 1;
       return;

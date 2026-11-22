@@ -8335,7 +8335,7 @@ export async function launchTuiAgentShell(opts: {
     });
     const telegramPosture = () => loadPosture({ running: runningTelegramPolicy, inForce: telegramModeInForce });
     const runRemotePolicyCommand = (line: string): void => {
-      io.onSystem?.(remotePolicyText(line.trim().slice(REMOTE_POLICY_COMMAND.length), remotePolicyDeps()));
+      trackCommandWork(async () => io.onSystem?.(await remotePolicyText(line.trim().slice(REMOTE_POLICY_COMMAND.length), remotePolicyDeps())));
     };
     const showReviews = (): void => {
       void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
@@ -10577,7 +10577,7 @@ export async function launchTuiAgentShell(opts: {
           // flow 395: how Telegram replies are written. Bare prints the mode and what each does;
           // with a mode it saves it, and serve reads it before the next message part.
           const arg = line.trim().split(/\s+/).slice(1).join(" ");
-          io.onSystem?.(runRenderingCommand(arg));
+          trackCommandWork(async () => io.onSystem?.(await runRenderingCommand(arg)));
           return;
         }
         if (isTrailCommand(command.name) || isNotesCommand(command.name)) {

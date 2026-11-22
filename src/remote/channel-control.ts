@@ -1,10 +1,11 @@
 // Disabled until activation, rollback and compatible clients are implemented.
 import { createHttpBotApi } from "./bot-api-http";
 import { DEFAULT_APPROVAL_WAIT_MS, DEFAULT_ORPHAN_MS, DEFAULT_REMOTE_PERMISSION_MODE, DEFAULT_RUN_TIMEOUT_MS, REMOTE_CONFIG_SCHEMA_VERSION, type RemoteConfig } from "./config";
-import { loadChannelRecord, type ChannelBotIdentity } from "./channel-record";
+import { loadChannelRecord, migrateLegacyChannelRecord, type ChannelBotIdentity } from "./channel-record";
 import { ChannelOperationFence } from "./channel-operation";
 import { consumeChannelToken } from "./channel-staging";
 import { fail, ok, readJsonBody } from "./http-surface";
+import { isRenderMode } from "./rendering-mode";
 import { Pairing, type PairingOptions } from "./pairing";
 import type { BotApi } from "./types";
 
@@ -12,6 +13,8 @@ export interface ChannelControlOptions {
   dir?: string | undefined;
   hasActiveHub: () => boolean;
   openCandidate?: (token: string) => BotApi;
+  updateConfig?: (expectedRevision: number | null, patch: Record<string, unknown>) => Promise<{ ok: true; revision: number; config: RemoteConfig } | { ok: false; code: "conflict" | "unavailable" | "invalid"; reason: string }>;
+  channelAction?: (action: "test" | "disconnect", expectedRevision: number | null) => Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; code: "conflict" | "unavailable"; reason: string }>;
   activate?: (candidate: { token: string; api: BotApi; bot: ChannelBotIdentity; config: RemoteConfig; expectedRevision: number | null; stillOwned: () => boolean; stillActive: () => boolean }) => Promise<{ ok: true; revision: number } | { ok: false; reason: string }>;
   pairing?: Pick<PairingOptions, "ttlMs" | "code" | "timers" | "pollTimeoutSec" | "pollBackoffMs" | "pollSleep">;
 }
@@ -31,15 +34,40 @@ export class ChannelControl {
     const doc = body.value;
     const revision = doc.expectedRevision;
     if (doc.version !== 1 || !(revision === null || (typeof revision === "number" && Number.isSafeInteger(revision) && revision > 0))) return fail(400, "invalid-request", "A version and expected revision are required.");
+    if (doc.action === "policy" || doc.action === "rendering") {
+      if (this.pending !== undefined) return fail(409, "conflict", "A channel operation is active.");
+      if (this.options.updateConfig === undefined) return fail(503, "unavailable", "Channel settings are unavailable.");
+      let patch: Record<string, unknown>;
+      if (doc.action === "policy") {
+        if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision", "patch"].includes(key)) || typeof doc.patch !== "object" || doc.patch === null || Array.isArray(doc.patch)) return fail(400, "invalid-request", "A policy patch is required.");
+        patch = doc.patch as Record<string, unknown>;
+        if (Object.keys(patch).length === 0 || Object.keys(patch).some((key) => !["permissionMode", "runTimeoutMs", "approvalTimeoutMs"].includes(key))) return fail(400, "invalid-request", "Invalid policy patch.");
+      } else {
+        if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision", "mode"].includes(key))) return fail(400, "invalid-request", "Invalid rendering request.");
+        if (!isRenderMode(doc.mode)) return fail(422, "invalid", "Invalid rendering mode.");
+        patch = { rendering: doc.mode };
+      }
+      const result = await this.options.updateConfig(revision, patch);
+      return result.ok ? ok({ revision: result.revision, config: result.config }) : fail(result.code === "conflict" ? 409 : result.code === "invalid" ? 422 : 503, result.code, result.reason);
+    }
+    if (doc.action === "test" || doc.action === "disconnect") {
+      if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision"].includes(key))) return fail(400, "invalid-request", "Unexpected channel action field.");
+      if (this.pending !== undefined) return fail(409, "conflict", "A channel operation is active.");
+      if (this.options.channelAction === undefined) return fail(503, "unavailable", "Channel action is unavailable.");
+      const result = await this.options.channelAction(doc.action, revision);
+      return result.ok ? ok(result.body) : fail(result.code === "conflict" ? 409 : 503, result.code, result.reason);
+    }
     if (doc.action === "begin") {
       if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision", "stagingId"].includes(key)) || typeof doc.stagingId !== "string") return fail(400, "invalid-request", "A staging id is required.");
+      const migration = await migrateLegacyChannelRecord(this.options.dir);
+      if (!migration.ok) return fail(503, "unavailable", migration.reason);
       const opened = this.fence.begin(revision);
       if (!opened.ok) return fail(409, opened.code, opened.reason);
       this.pending = { id: opened.operationId, revision };
       const token = consumeChannelToken(doc.stagingId, this.options.dir);
       if (!token.ok) { this.clear(opened.operationId); return fail(422, "invalid-staging", token.reason); }
       const api = this.options.openCandidate?.(token.value) ?? createHttpBotApi({ token: token.value });
-      const prepared = await Pairing.prepare({ api, ...this.options.pairing });
+      const prepared = await Pairing.prepare({ api, ...this.options.pairing, requireConfirmation: true });
       const stillOwned = this.fence.check(opened.operationId, revision);
       if (!stillOwned.ok || this.pending?.id !== opened.operationId) {
         this.clear(opened.operationId);
@@ -55,6 +83,23 @@ export class ChannelControl {
           return fail(409, "identity-unknown", "The active bot identity must be verified before starting another poller.");
         }
         this.pending.sameBot = active.bot.id === prepared.pairing.identity().id;
+        if (this.pending.sameBot) {
+          try {
+            const chat = await api.getChat({ chatId: active.config.chatId });
+            const member = await api.getChatMember({ chatId: active.config.chatId, userId: active.bot.id });
+            if (chat.is_forum !== true || (member.status !== "creator" && (member.status !== "administrator" || member.can_manage_topics !== true))) {
+              this.clear(opened.operationId);
+              return fail(422, "forum-rights", "The bot must be an administrator with Manage Topics in the forum.");
+            }
+          } catch {
+            this.clear(opened.operationId);
+            return fail(502, "forum-unavailable", "Could not verify the bot's forum access.");
+          }
+          if (!this.fence.check(opened.operationId, revision).ok || this.pending?.id !== opened.operationId) {
+            this.clear(opened.operationId);
+            return fail(409, "conflict", "Channel operation is stale.");
+          }
+        }
       }
       this.pending.pairing = prepared.pairing;
       this.pending.token = token.value;
@@ -62,7 +107,7 @@ export class ChannelControl {
       if (!this.pending.sameBot) prepared.pairing.begin();
       return ok({ operationId: opened.operationId, revision, ...(this.pending.sameBot ? { state: "same-bot-ready" } : { pairing: prepared.pairing.snapshot() }) });
     }
-    if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision", "operationId"].includes(key)) || typeof doc.operationId !== "string" || !["status", "cancel", "confirm"].includes(String(doc.action))) return fail(400, "invalid-request", "A channel operation is required.");
+    if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision", "operationId"].includes(key)) || typeof doc.operationId !== "string" || !["status", "cancel", "confirm-account", "confirm"].includes(String(doc.action))) return fail(400, "invalid-request", "A channel operation is required.");
     const owned = this.fence.check(doc.operationId, revision);
     if (!owned.ok || this.pending?.id !== doc.operationId) return fail(409, "conflict", "Channel operation is stale.");
     if (this.pending.activating) return fail(409, "activation-in-progress", "Channel activation is in progress.");
@@ -74,6 +119,11 @@ export class ChannelControl {
     }
     const pairing = this.pending.pairing;
     if (pairing === undefined) return fail(409, "preparing", "Channel preparation is still in progress.");
+    if (doc.action === "confirm-account") {
+      if (!await pairing.confirmAccount()) return fail(409, "confirmation-unavailable", "No account claim is awaiting confirmation.");
+      if (!this.fence.check(doc.operationId, revision).ok || this.pending?.pairing !== pairing) return fail(409, "conflict", "Channel operation is stale.");
+      return ok({ operationId: doc.operationId, revision, pairing: pairing.snapshot() });
+    }
     if (doc.action === "confirm") {
       if (this.options.activate === undefined) return fail(503, "activation-unavailable", "Channel activation is not available yet.");
       const sameBot = this.pending.sameBot === true;
@@ -86,7 +136,9 @@ export class ChannelControl {
       const existing = loadChannelRecord(this.options.dir);
       if (!existing.ok) { this.clear(doc.operationId); return fail(503, "unavailable", existing.reason); }
       if (sameBot && (existing.value?.state !== "connected" || existing.value.bot?.id !== pairing.identity().id)) { this.clear(doc.operationId); return fail(409, "conflict", "Channel identity changed."); }
-      const config: RemoteConfig = sameBot && existing.value?.state === "connected" ? existing.value.config : { schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!], orphanMs: DEFAULT_ORPHAN_MS, runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS, permissionMode: DEFAULT_REMOTE_PERMISSION_MODE, approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS };
+      const config: RemoteConfig = existing.value?.state === "connected"
+        ? (sameBot ? existing.value.config : { ...existing.value.config, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!] })
+        : { schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!], orphanMs: DEFAULT_ORPHAN_MS, runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS, permissionMode: DEFAULT_REMOTE_PERMISSION_MODE, approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS };
       const result = await this.options.activate({ token, api, bot: pairing.identity(), config, expectedRevision: revision, stillOwned: () => this.fence.check(doc.operationId as string, revision).ok && this.pending?.pairing === pairing, stillActive: () => this.pending?.id === doc.operationId && this.pending?.pairing === pairing });
       this.clear(doc.operationId);
       if (!result.ok) return fail(503, "activation-failed", result.reason);

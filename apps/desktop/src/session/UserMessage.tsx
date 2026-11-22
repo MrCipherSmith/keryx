@@ -9,9 +9,10 @@ const NO_IMAGES: readonly string[] = [];
 /** The one wording for "this replayed message cannot be resent": the button title is this alone, the note adds the reason. */
 const CANNOT_RESEND = "Cannot resend";
 
-export const UserMessage = memo(function UserMessage({ message: text, context, onEdit, failed, itemId }: {
+export const UserMessage = memo(function UserMessage({ message: text, context, onEdit, failed, itemId, source }: {
   message: string;
   failed?: boolean;
+  source?: "telegram" | undefined;
   /** The transcript item this row shows: an edit names it, so only its "not sent" flag clears. */
   itemId?: number;
   context?: UserPromptContext;
@@ -41,6 +42,7 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
   return (
     <div ref={row} tabIndex={-1} className="turn-user with-actions">
       <div className="user-msg">
+        {source === "telegram" && <div className="sent-image-label">Via Telegram</div>}
         {paths.length ? <div className="sent-images">{paths.map((path, i) => <AttachmentImage key={`${i}:${path}`} path={path} alt="Attached image" />)}</div> : null}
         {context?.local.map((item) => <div className="sent-image-label" key={item.path} title={item.path}>{item.kind === "folder" ? "Folder" : "File"}: {item.label}</div>)}
         {pickedLabel ? <div className="sent-image-label">{pickedLabel}</div> : null}

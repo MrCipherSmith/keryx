@@ -169,7 +169,7 @@ export function TelegramBotSettings() {
       {pairing?.state === "failed" ? <p className="field-error">Pairing failed. Cancel it and try again.</p> : null}
       {pairing?.state === "ready" && channel.telegram.state === "connected" ? <p className="settings-row-help">Connecting a different bot will interrupt existing remote sessions. Each chat must be attached to a new topic.</p> : null}
       <div className="settings-actions">
-        {operation.state === "same-bot-ready" || pairing?.state === "ready" ? <button className="btn btn-primary" disabled={busy || needsRefresh} onClick={() => runOperation("confirm")}>Confirm connection</button> : null}
+        {operation.state === "same-bot-ready" || (pairing?.state === "ready" && pairing.userId !== undefined && pairing.chatId !== undefined) ? <button className="btn btn-primary" disabled={busy || needsRefresh} onClick={() => runOperation("confirm")}>Confirm connection</button> : null}
         <button className="btn" disabled={busy} onClick={() => runOperation("operation-status")}>Check pairing</button>
         <button className="btn btn-ghost" disabled={busy} onClick={() => runOperation("cancel")}>Cancel pairing</button>
       </div>

@@ -242,6 +242,8 @@ async function runServe(args: string[]): Promise<void> {
   const remoteService = openRemoteService({
     machine: localMachineName(),
     nameTopicsByMachine: true,
+    ...(config && isLoopbackAddress(config.bind.address) && process.env.KERYX_DESKTOP_TELEGRAM_PREVIEW === "1"
+      ? { experimentalChannelControl: true } : {}),
     onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
   });
 

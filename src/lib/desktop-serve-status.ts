@@ -23,7 +23,7 @@ export async function desktopServeStatus(dir?: string): Promise<DesktopServeStat
       if (!confirmed.ok || confirmed.value.pid !== endpoint.value.pid || confirmed.value.address !== endpoint.value.address || confirmed.value.port !== endpoint.value.port) {
         return { state: "blocked", reason: "The serve endpoint changed during verification; retry." };
       }
-      const value = result.value as unknown as { capabilities?: { desktopTelegram?: number }; telegram: { sessions: number } };
+      const value = result.value;
       if (value.capabilities?.desktopTelegram !== 1) return { state: "blocked", reason: "The running serve is incompatible with Desktop Telegram. Update it before connecting." };
       const sessions = value.telegram.sessions;
       return { state: "running", pid: endpoint.value.pid, ...(Number.isSafeInteger(sessions) && sessions >= 0 ? { activeSessions: sessions } : {}) };

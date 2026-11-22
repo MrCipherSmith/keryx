@@ -401,7 +401,7 @@ export function Transcript({ items, busy, replaying, empty, reviewActivity, onRu
             const isLast = i === blocks.length - 1;
             switch (b.type) {
               case "user":
-                return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} onEdit={onEditMessage} />;
+          return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} source={b.item.source} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <AgentMessage key={b.item.id} first={b.first} text={b.item.text} prLinks={prLinks}

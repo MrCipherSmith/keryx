@@ -49,3 +49,12 @@ test("HTTP rejects terminal and older generation access to a Desktop binding", a
     await rig.cleanup();
   }
 });
+
+test("only the exact Desktop owner gets a valid private-supergroup topic link", async () => {
+  h = makeHarness({ config: { chatId: -1001234567890 } });
+  const hub = h.makeHub();
+  const result = await hub.register({ sessionId: "desktop-link", project: "/w/app", name: "desktop-link", owner });
+  if (!result.ok) throw new Error("registration failed");
+  expect(hub.topicUrl("desktop-link", owner)).toBe(`https://t.me/c/1234567890/${result.threadId}`);
+  expect(hub.topicUrl("desktop-link", { ...owner, generation: "gen2" })).toBeUndefined();
+});

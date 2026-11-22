@@ -137,6 +137,7 @@ export interface RemoteHubOptions extends RemoteConsumer {
   config: RemoteConfig;
   /** Prepare a candidate without dispatch or durable side effects. */
   staged?: boolean;
+  currentConfig?: () => RemoteConfig | undefined;
   /** This machine's name; when set, default topic names start with it so two machines never collide. */
   machine?: string;
   /** User-global directory override (the test seam). */
@@ -228,6 +229,7 @@ export class RemoteHub {
   private readonly api: BotApi;
   private readonly forwardingApi: ForwardingBotApi;
   private readonly config: RemoteConfig;
+  private readonly currentConfig: () => RemoteConfig;
   private readonly machine: string | undefined;
   private readonly consumer: RemoteConsumer;
   private readonly now: () => number;
@@ -257,6 +259,7 @@ export class RemoteHub {
   private handoffInProgress = false;
   private lifecycleGeneration = 0;
   private staged: boolean;
+  private releaseStagedPoll: (() => void) | undefined;
   private readonly recent: RemoteEvent[] = [];
   private readonly dispatching = new Map<string, Promise<void>>();
   private readonly redispatch = new Set<string>();
@@ -277,6 +280,7 @@ export class RemoteHub {
     this.forwardingApi = new ForwardingBotApi(options.api);
     this.api = this.forwardingApi.api;
     this.config = options.config;
+    this.currentConfig = () => options.currentConfig?.() ?? this.config;
     this.machine = options.machine;
     this.consumer = { deliver: options.deliver, ...(options.deliverCallback === undefined ? {} : { deliverCallback: options.deliverCallback }) };
     this.now = options.now ?? Date.now;
@@ -299,6 +303,7 @@ export class RemoteHub {
       mode:
         options.renderingMode ??
         ((): RenderMode => {
+          if (options.currentConfig !== undefined) return this.currentConfig().rendering ?? DEFAULT_RENDER_MODE;
           const fresh = loadRemoteConfig(options.dir);
           return (fresh.ok ? fresh.value.rendering : undefined) ?? options.config.rendering ?? DEFAULT_RENDER_MODE;
         }),
@@ -340,7 +345,13 @@ export class RemoteHub {
         if (!this.handoffInProgress) onPollerStatus(status);
       },
     });
-    this.poller = this.createPoller(options.api);
+    const holdStaged = options.staged === true ? (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+      const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+      this.releaseStagedPoll = release;
+      signal.addEventListener("abort", release, { once: true });
+      if (signal.aborted || !this.staged) release();
+    }) : undefined;
+    this.poller = this.createPoller(options.api, holdStaged);
   }
 
   /** Records left by a channel connected to another group are not ours: reusing one would answer into the old group. */
@@ -386,6 +397,7 @@ export class RemoteHub {
     if (!this.staged) return;
     this.forgetOtherGroups();
     this.staged = false;
+    this.releaseStagedPoll?.();
     await this.start();
   }
 
@@ -499,6 +511,45 @@ export class RemoteHub {
     }
   }
 
+  /** Stop admission without destroying live binding state, for a distinct-bot cutover. */
+  async pauseForCutover(): Promise<boolean> {
+    if (this.stopped || this.staged || this.handoffInProgress || this.poller.status().state !== "running") return false;
+    this.handoffInProgress = true;
+    this.handoffPaused = true;
+    this.forwardingApi.pause();
+    await this.poller.stop();
+    return !this.stopped;
+  }
+
+  /** Restore the original poller only after its first successful response. */
+  async recoverCutover(timeoutMs: number): Promise<boolean> {
+    if (!this.handoffInProgress || this.stopped) return false;
+    this.poller = this.createPoller(this.forwardingApi.current());
+    this.poller.start();
+    const ready = await this.poller.waitForReady(timeoutMs);
+    if (!ready || this.stopped) {
+      await this.poller.stop();
+      this.forwardingApi.resume(false);
+      this.handoffInProgress = false;
+      return false;
+    }
+    this.handoffPaused = false;
+    this.handoffInProgress = false;
+    this.forwardingApi.resume(true);
+    return true;
+  }
+
+  /** Permit cleanup calls after revocation while incoming Telegram remains paused. */
+  allowCutoverCleanup(): void { this.forwardingApi.resume(true); }
+
+  /** Retire all old topic bindings without deleting their Telegram history. */
+  async retireCutoverBindings(): Promise<void> {
+    this.forwardingApi.resume(true);
+    await this.serial(async () => {
+      for (const record of this.registry.records()) await this.archive(record, "The Telegram channel changed.");
+    });
+  }
+
   pollerStatus(): PollerStatus {
     return this.poller.status();
   }
@@ -527,11 +578,12 @@ export class RemoteHub {
 
   /** What a shell needs to know about this hub's limits (the run guard reads `runTimeoutMs`). */
   limits(): { runTimeoutMs: number; orphanMs: number; permissionMode: RemoteConfig["permissionMode"]; approvalTimeoutMs: number } {
+    const config = this.currentConfig();
     return {
-      runTimeoutMs: this.config.runTimeoutMs,
-      orphanMs: this.config.orphanMs,
-      permissionMode: this.config.permissionMode,
-      approvalTimeoutMs: this.config.approvalTimeoutMs,
+      runTimeoutMs: config.runTimeoutMs,
+      orphanMs: config.orphanMs,
+      permissionMode: config.permissionMode,
+      approvalTimeoutMs: config.approvalTimeoutMs,
     };
   }
 
@@ -540,6 +592,14 @@ export class RemoteHub {
     if (record === undefined) return false;
     if (record.owner === undefined) return owner === undefined;
     return owner !== undefined && record.owner.incarnation === owner.incarnation && record.owner.generation === owner.generation;
+  }
+
+  topicUrl(sessionId: string, owner: DesktopOwner): string | undefined {
+    if (!this.matchesOwner(sessionId, owner)) return undefined;
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined || !Number.isSafeInteger(record.chatId) || !Number.isSafeInteger(record.threadId) || record.threadId <= 0) return undefined;
+    const match = /^-100([1-9][0-9]*)$/.exec(String(record.chatId));
+    return match?.[1] === undefined ? undefined : `https://t.me/c/${match[1]}/${record.threadId}`;
   }
 
   hasSession(sessionId: string): boolean {

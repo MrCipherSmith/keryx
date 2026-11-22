@@ -56,6 +56,7 @@ export interface PairingSnapshot {
 
 export interface PairingOptions {
   api: BotApi;
+  requireConfirmation?: boolean;
   now?: () => number;
   ttlMs?: number;
   timers?: HubTimers;
@@ -200,6 +201,20 @@ export class Pairing {
     return this.state === "ready";
   }
 
+  /** Accept the authenticated account claim before accepting any group event. */
+  async confirmAccount(): Promise<boolean> {
+    let confirmed = false;
+    await this.enqueue(async () => {
+      this.expireIfDue();
+      if (this.state !== "waiting-for-confirmation" || this.userId === undefined) return;
+      this.state = "waiting-for-group";
+      this.expiresAt = this.now() + this.ttlMs;
+      this.armExpiryTimer();
+      confirmed = true;
+    });
+    return confirmed;
+  }
+
   /** Look at the group again (the operator has just changed its settings). */
   async recheck(): Promise<void> {
     if (this.state === "waiting-for-group" && this.candidate !== undefined) {
@@ -275,7 +290,7 @@ export class Pairing {
           return;
         }
         if (this.state === "waiting-for-user") {
-          this.rememberGroupEvent(update);
+          if (this.options.requireConfirmation !== true) this.rememberGroupEvent(update);
           await this.takeCode(update);
         } else if (this.state === "waiting-for-group") {
           await this.takeGroup(update);
@@ -301,6 +316,12 @@ export class Pairing {
     }
     this.userId = message.from.id;
     this.code = undefined;
+    if (this.options.requireConfirmation === true) {
+      this.state = "waiting-for-confirmation";
+      this.earlyGroups.clear();
+      this.earlyMigrations = [];
+      return;
+    }
     this.state = "waiting-for-group";
     // The code's ten minutes are spent; the group step gets its own.
     this.expiresAt = this.now() + this.ttlMs;

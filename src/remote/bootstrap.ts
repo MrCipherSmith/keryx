@@ -27,6 +27,8 @@ export interface OpenRemoteHubOptions
     | "onPollerStatus"
     | "beforeAck"
     | "machine"
+    | "currentConfig"
+    | "staged"
   > {
   /** Explicit committed values, only for the gated revisioned service. */
   committed?: { token: string; config: RemoteConfig };

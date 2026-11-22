@@ -19,6 +19,7 @@ export type RemoteRoute =
   | "approval"
   | "approval-result"
   | "approval-ack"
+  | "channel-revoke-ack"
   | "prompt"
   | "prompt-close"
   | "state"
@@ -37,6 +38,7 @@ export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">>
   state: "POST",
   ack: "POST",
   "approval-ack": "POST",
+  "channel-revoke-ack": "POST",
   stream: "GET",
 };
 
@@ -105,6 +107,7 @@ export interface ChannelsStatusResponse {
   schemaVersion: string;
   /** This machine's name (the hostname), as it appears in the Test message and in topic names. */
   machine: string;
+  capabilities?: { desktopTelegram: 1 };
   /** Present only on the gated revisioned controller. */
   revision?: number | null;
   pendingOperation?: { operationId: string; revision: number | null };
@@ -118,7 +121,7 @@ export interface ChannelsStatusResponse {
   };
 }
 
-export type PairingState = "waiting-for-user" | "waiting-for-group" | "ready" | "failed" | "expired" | "cancelled";
+export type PairingState = "waiting-for-user" | "waiting-for-confirmation" | "waiting-for-group" | "ready" | "failed" | "expired" | "cancelled";
 
 export interface PairingResponse {
   schemaVersion: string;
@@ -442,6 +445,7 @@ export interface StateBody {
 // ---- responses ----------------------------------------------------------------
 
 export interface RegisterResponse {
+  topicUrl?: string;
   exactOwner?: boolean;
   schemaVersion: string;
   name: string;
@@ -526,10 +530,11 @@ export interface CallbackEvent {
   messageId?: number;
 }
 
-export type StatusKind = "ready" | "superseded" | "closing";
+export type StatusKind = "ready" | "superseded" | "closing" | "channel-revoked";
 
 export interface StatusEvent {
   kind: StatusKind;
+  cutoverId?: string;
   name?: string;
   threadId?: number;
 }
