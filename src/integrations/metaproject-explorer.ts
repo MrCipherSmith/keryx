@@ -70,7 +70,7 @@ async function wikiPages(root: string): Promise<Array<{ node: MetaprojectNode; c
 export async function metaprojectExplorer(projectRoot: string, request: MetaprojectRequest): Promise<MetaprojectResponse> {
   const root = await realpath(projectRoot);
   const storage = path.relative(root, gdgraphStorageDir(root));
-  let graphPresent = false;
+  let graphPresent: boolean;
   let graphError: string | undefined;
   let files: GraphNode[] = [];
   let imports: GraphEdge[] = [];
