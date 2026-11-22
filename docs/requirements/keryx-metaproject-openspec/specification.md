@@ -1,7 +1,7 @@
 # Specification — OpenSpec in Keryx Metaproject
-Version: 0.1.0
+Version: 0.1.1
 
-Status: Spec ready for owner review. Runtime planned.
+Status: Contract for Flow 514. Verification status lives in the Flow journal.
 
 ## 1. Ownership and implementation seams
 
@@ -91,10 +91,10 @@ The following commands are proposed. They resolve the current working directory 
 | Command | Result |
 |---|---|
 | `keryx openspec list --kind <spec\|change\|archive> [--cursor <cursor>] [--json]` | Paged entries, availability and diagnostics |
-| `keryx openspec show <relative-path> [--artifact <relative-path>] [--section <section-id>] [--json]` | Entry or contained artifact detail, source refs and relevant operations |
+| `keryx openspec show <relative-path> [--artifact <relative-path>] [--section <section-id> --expected-digest <sha256>] [--json]` | Entry or contained artifact detail, source refs and relevant operations |
 | `keryx openspec search <query> [--scope <all\|spec\|change\|archive>] [--cursor <cursor>] [--json]` | Ranked hits with snippets and references. The default includes spec and change. Explicit `all` includes archives. |
 
-JSON emits one versioned response on stdout. Invalid input, unknown identifiers and unreadable authorized roots get distinct errors rather than an empty success. Missing directory and zero matching results are valid empty states. The project-local Metaproject routing index and a portable read skill route spec questions to these commands. Keryx Shell and other harnesses can invoke the same CLI from a project session. No provider-specific bootstrap is required.
+JSON emits one versioned response on stdout. Use the source digest from search when opening an exact section so duplicate headings cannot silently redirect an old locator. Invalid input, unknown identifiers and unreadable authorized roots get distinct errors rather than an empty success. Missing directory and zero matching results are valid empty states. The project-local Metaproject routing index and a portable read skill route spec questions to these commands. Keryx Shell and other harnesses can invoke the same CLI from a project session. No provider-specific bootstrap is required.
 
 Keep existing unversioned Explorer requests and v1 responses unchanged. Check each new request against a closed allowlist in Rust and TypeScript. A fixed, read-only `capabilities` probe with `version: 2` returns supported actions without scanning the checkout. Cache the outcome only for the selected executable and authorized project. A legacy CLI's generic `Invalid request` from that fixed probe permits v1 fallback only after a successful, schema-valid v1 catalog handshake. A typed unsupported-version error from a newer CLI uses the same v1 handshake. Missing executable, timeout, invalid responses and normal data-request errors render errors. Once the probe succeeds, a v2 error never silently downgrades a read. Older Desktop with a newer CLI keeps v1.
 

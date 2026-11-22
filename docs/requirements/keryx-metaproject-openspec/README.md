@@ -1,5 +1,5 @@
 # OpenSpec in Keryx Metaproject
-Version: 0.1.0
+Version: 0.1.1
 
 ## Purpose
 
@@ -7,7 +7,7 @@ Make OpenSpec a first-class knowledge source in the Keryx project. Explore inten
 
 ## Status
 
-Spec ready for owner review. The OpenSpec catalog, Desktop tab, search, graph projection and Flow bridge are planned. This package creates no Flow, freeze or release.
+Read-only delivery is in progress under [Flow 514](../../../.metaproject/flows/514-2026-11-22-metaproject-openspec/plan.md), with frozen criteria for P0–P2. The Flow journal records implementation and verification evidence. Draft Flow intake remains planned as P3.
 
 The baseline is Keryx main at `b3dd71b88`. Desktop already projects Graph and Wiki. Team Hub already imports OpenSpec Markdown from explicitly connected projects as documents. The local explorer and Hub import are separate entry points.
 

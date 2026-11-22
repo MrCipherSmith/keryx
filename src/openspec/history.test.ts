@@ -54,6 +54,10 @@ describe("OpenSpec service history", () => {
 
       const changePath = "openspec/changes/update-review";
       const detail = snapshot.detail({ path: changePath, artifactPath: changePath + "/specs/review/spec.md" });
+      const summary = snapshot.detail({ path: changePath });
+      expect(summary.artifact?.source.path).toBe(changePath + "/proposal.md");
+      expect(summary.deltas.map(({ specPath }) => specPath)).toEqual(["openspec/specs/new-capability/spec.md", "openspec/specs/review/spec.md"]);
+      expect(summary.deltas[1]?.requirements.find(({ operation }) => operation === "modified")?.source.path).toBe(changePath + "/specs/review/spec.md");
       const requirements = detail.artifact?.requirements;
       expect(requirements?.find((item) => item.operation === "modified")?.baseline?.state).toBe("unresolved");
       expect(requirements?.find((item) => item.operation === "renamed")?.baseline?.state).toBe("matched");
@@ -66,6 +70,7 @@ describe("OpenSpec service history", () => {
       const retired = snapshot.detail({ path: retiredPath, artifactPath: retiredPath + "/specs/retired/spec.md" });
       expect(retired.artifact?.requirements[0]?.operation).toBe("removed");
       expect(retired.relatedSpecs).toEqual([]);
+      expect(snapshot.detail({ path: retiredPath }).deltas[0]?.specPath).toBe("openspec/specs/retired/spec.md");
     } finally {
       fixture.cleanup();
     }

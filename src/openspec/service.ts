@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   scanOpenSpec, type OpenSpecArtifact, type OpenSpecCatalog, type OpenSpecDiagnostic,
-  type OpenSpecEntry, type OpenSpecKind, type OpenSpecLink,
+  type OpenSpecEntry, type OpenSpecKind, type OpenSpecLink, type OpenSpecScanOptions,
 } from "./catalog";
 import { parseOpenSpecMarkdown, type OpenSpecDeltaOperation, type OpenSpecMarkdownRequirement } from "./markdown";
 
@@ -34,6 +34,12 @@ export interface OpenSpecDeltaRelationship {
   source: OpenSpecSourceRef;
 }
 
+export interface OpenSpecEntryDelta {
+  specPath: string;
+  source: OpenSpecSourceRef;
+  requirements: OpenSpecRequirement[];
+}
+
 export interface OpenSpecHistoryItem {
   entry: OpenSpecEntrySummary;
   source: OpenSpecSourceRef;
@@ -46,7 +52,7 @@ export interface OpenSpecSearchHit {
   matchType: "title" | "path" | "heading" | "body";
   snippet: string;
   section?: string;
-  source: OpenSpecSourceRef;
+  source?: OpenSpecSourceRef;
 }
 
 export interface OpenSpecArtifactDetail {
@@ -68,6 +74,7 @@ export interface OpenSpecDetail {
   artifact?: OpenSpecArtifactDetail;
   diagnostics: ServiceDiagnostic[];
   relatedSpecs: OpenSpecDeltaRelationship[];
+  deltas: OpenSpecEntryDelta[];
   partial: boolean;
 }
 
@@ -97,10 +104,10 @@ interface DetailOptions {
   expectedSnapshotId?: string;
 }
 
-type ReadErrorCode = "invalid-input" | "stale-snapshot" | "stale-section" | "not-found";
+type ReadErrorCode = "invalid-input" | "stale-snapshot" | "stale-section" | "not-found" | "source-changed";
 
 export class OpenSpecReadError extends Error {
-  constructor(readonly code: ReadErrorCode, message: string) {
+  constructor(readonly code: ReadErrorCode, message: string, readonly retryable = false) {
     super(message);
     this.name = "OpenSpecReadError";
   }
@@ -122,6 +129,8 @@ const PAGE_SIZE = 100;
 const MAX_PAGE_BYTES = 900 * 1024;
 const MAX_ARTIFACT_MARKDOWN_BYTES = 400 * 1024;
 const MAX_DETAIL_METADATA_BYTES = 450 * 1024;
+const MAX_DETAIL_DELTA_BYTES = 96 * 1024;
+const MAX_DELTA_REQUIREMENTS_BYTES = 32 * 1024;
 const MAX_HISTORY_ITEM_BYTES = 200 * 1024;
 const MAX_HITS_PER_KIND = 12_000;
 const MAX_QUERY_LENGTH = 512;
@@ -268,11 +277,15 @@ function indexSections(
   return sections;
 }
 
+export function normalizeOpenSpecSearchText(text: string): string {
+  return text.normalize("NFC").toLowerCase();
+}
+
 function normalizeQuery(query: string): string {
   if (typeof query !== "string" || query.length > MAX_QUERY_LENGTH || !query.trim()) {
     throw new OpenSpecReadError("invalid-input", "Provide a nonempty OpenSpec search query of at most 512 characters.");
   }
-  return query.trim().toLowerCase();
+  return normalizeOpenSpecSearchText(query.trim());
 }
 
 function normalizeScope(scope: readonly OpenSpecKind[] = DEFAULT_SCOPE): OpenSpecKind[] {
@@ -283,7 +296,7 @@ function normalizeScope(scope: readonly OpenSpecKind[] = DEFAULT_SCOPE): OpenSpe
 }
 
 function plainSnippet(text: string, query: string): string {
-  const offset = text.toLowerCase().indexOf(query);
+  const offset = normalizeOpenSpecSearchText(text).indexOf(query);
   const start = Math.max(0, offset - 40);
   // eslint-disable-next-line no-control-regex -- keep search excerpts on one line
   return text.slice(start, start + 200).replace(/[\x00-\x1f\x7f]/g, " ").trim();
@@ -303,8 +316,8 @@ function* searchArtifact(
     if (next) current = next;
     if (current && lineNumber > current.end) current = undefined;
 
-    const headingMatch = next && next.title.toLowerCase().includes(query) ? next : undefined;
-    if (!headingMatch && !line.toLowerCase().includes(query)) continue;
+    const headingMatch = next && normalizeOpenSpecSearchText(next.title).includes(query) ? next : undefined;
+    if (!headingMatch && !normalizeOpenSpecSearchText(line).includes(query)) continue;
     const key = current?.section ?? "";
     if (hits.has(key) || (!current && omitArtifactHit)) continue;
     hits.add(key);
@@ -319,8 +332,8 @@ function* searchArtifact(
 
 function compareHits(left: OpenSpecSearchHit, right: OpenSpecSearchHit): number {
   return left.rank - right.rank || compareText(left.entry.kind, right.entry.kind)
-    || compareText(left.entry.path, right.entry.path) || compareText(left.source.path, right.source.path)
-    || (left.source.startLine ?? 0) - (right.source.startLine ?? 0);
+    || compareText(left.entry.path, right.entry.path) || compareText(left.source?.path ?? "", right.source?.path ?? "")
+    || (left.source?.startLine ?? 0) - (right.source?.startLine ?? 0);
 }
 
 function boundedMarkdown(artifact: OpenSpecArtifact, selected?: IndexedSection): { markdown: string; truncated: boolean } {
@@ -366,7 +379,7 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
   private readonly archived = new Map<string, { entry: OpenSpecEntry; artifact: OpenSpecArtifact }[]>();
   private readonly related = new Map<string, OpenSpecDeltaRelationship[]>();
 
-  constructor(readonly catalog: OpenSpecCatalog) {
+  constructor(readonly catalog: OpenSpecCatalog, private readonly sourceChanged?: OpenSpecDiagnostic) {
     for (const entry of catalog.entries) {
       this.byId.set(entry.id, entry);
       this.byPath.set(entry.path, entry);
@@ -384,7 +397,7 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
 
   list(options: PageOptions & { kind: OpenSpecKind }): OpenSpecPage<OpenSpecEntrySummary> {
     if (!KINDS.includes(options.kind)) throw new OpenSpecReadError("invalid-input", "The OpenSpec collection is invalid.");
-    checkSnapshot(this.catalog.snapshotId, options.expectedSnapshotId);
+    this.checkSnapshot(options.expectedSnapshotId);
     const items = this.catalog.entries.filter((entry) => entry.kind === options.kind).map(summary);
     const key = hash(["list", options.kind]);
     const offset = openPage(this.catalog, key, items.length, options);
@@ -393,7 +406,7 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
   }
 
   detail(options: DetailOptions): OpenSpecDetail {
-    checkSnapshot(this.catalog.snapshotId, options.expectedSnapshotId);
+    this.checkSnapshot(options.expectedSnapshotId);
     const entry = chooseEntry(this.byId, this.byPath, options);
     const artifact = chooseArtifact(entry, options);
     const artifactResult = artifact ? this.detailArtifact(entry, artifact, options) : undefined;
@@ -402,17 +415,18 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
     }
     const artifacts = boundedItems(entry.artifacts.map((item) => sourceRef(item)), MAX_DETAIL_METADATA_BYTES / 4);
     const related = boundedItems(this.related.get(entry.id) ?? [], MAX_DETAIL_METADATA_BYTES / 4);
+    const deltas = this.entryDeltas(entry);
     return {
-      snapshotId: this.catalog.snapshotId, entry: summary(entry), artifacts: artifacts.items, relatedSpecs: related.items,
+      snapshotId: this.catalog.snapshotId, entry: summary(entry), artifacts: artifacts.items, relatedSpecs: related.items, deltas: deltas.items,
       diagnostics: artifactResult?.diagnostics ?? [],
       ...(artifactResult && { artifact: artifactResult.artifact }),
       partial: this.catalog.availability === "partial" || this.catalog.truncated || artifacts.truncated
-        || related.truncated || (artifactResult?.partial ?? false),
+        || related.truncated || deltas.truncated || (artifactResult?.partial ?? false),
     };
   }
 
   history(options: PageOptions & { id: string }): OpenSpecPage<OpenSpecHistoryItem> {
-    checkSnapshot(this.catalog.snapshotId, options.expectedSnapshotId);
+    this.checkSnapshot(options.expectedSnapshotId);
     const spec = this.byId.get(options.id);
     if (spec?.kind !== "spec") throw new OpenSpecReadError("not-found", "The current OpenSpec specification was not found.");
 
@@ -434,7 +448,7 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
   }
 
   search(options: SearchOptions & PageOptions): OpenSpecPage<OpenSpecSearchHit> {
-    checkSnapshot(this.catalog.snapshotId, options.expectedSnapshotId);
+    this.checkSnapshot(options.expectedSnapshotId);
     const scope = normalizeScope(options.scope);
     const query = normalizeQuery(options.query);
     const key = hash(["search", query, scope]);
@@ -446,6 +460,7 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
   }
 
   searchHits(options: SearchOptions): { items: OpenSpecSearchHit[]; partial: boolean } {
+    this.checkSnapshot();
     const query = normalizeQuery(options.query);
     const scope = normalizeScope(options.scope);
     const hits = new Map<OpenSpecKind, OpenSpecSearchHit[][]>();
@@ -472,22 +487,22 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
 
   private *entryHits(entry: OpenSpecEntry, query: string): Iterable<OpenSpecSearchHit> {
     const metadata = summary(entry);
-    const title = entry.title.toLowerCase();
-    const path = entry.path.toLowerCase();
+    const title = normalizeOpenSpecSearchText(entry.title);
+    const path = normalizeOpenSpecSearchText(entry.path);
     const titleMatch = title.includes(query);
     const pathMatch = path.includes(query);
     const first = entry.artifacts[0];
     const entryMatch = titleMatch || pathMatch;
-    if (first && entryMatch) {
+    if (entryMatch) {
       const usePath = path === query || !titleMatch;
       yield {
         entry: metadata, rank: title === query || path === query ? 0 : 1,
         matchType: usePath ? "path" : "title",
-        snippet: plainSnippet(usePath ? entry.path : entry.title, query), source: sourceRef(first),
+        snippet: plainSnippet(usePath ? entry.path : entry.title, query), ...(first && { source: sourceRef(first) }),
       };
     }
     for (const artifact of entry.artifacts) {
-      const artifactPath = artifact.path.toLowerCase();
+      const artifactPath = normalizeOpenSpecSearchText(artifact.path);
       const artifactMatch = artifactPath.includes(query) && !(artifact === first && entryMatch);
       if (artifactMatch) {
         yield {
@@ -495,13 +510,35 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
           snippet: plainSnippet(artifact.path, query), source: sourceRef(artifact),
         };
       }
-      if (!artifact.markdown.toLowerCase().includes(query)) continue;
+      if (!normalizeOpenSpecSearchText(artifact.markdown).includes(query)) continue;
       const parsed = parseOpenSpecMarkdown(artifact.markdown, { delta: deltaTarget(entry, artifact) !== undefined });
       const sections = indexSections(artifact, parsed, artifact.markdown.split(/\r\n?|\n/).length);
       yield* searchArtifact(artifact, sections, {
         entry: metadata, query, omitArtifactHit: artifactMatch || (artifact === first && entryMatch),
       });
     }
+  }
+
+  private checkSnapshot(expected?: string): void {
+    if (this.sourceChanged) throw new OpenSpecReadError("source-changed", this.sourceChanged.message, true);
+    checkSnapshot(this.catalog.snapshotId, expected);
+  }
+
+  private entryDeltas(entry: OpenSpecEntry) {
+    let truncated = false;
+    const parse = this.parse.bind(this);
+    function* candidates(): Iterable<OpenSpecEntryDelta> {
+      for (const artifact of entry.artifacts) {
+        const specPath = deltaTarget(entry, artifact);
+        if (!specPath) continue;
+        const { requirements } = parse(entry, artifact);
+        const limited = boundedItems(requirements, MAX_DELTA_REQUIREMENTS_BYTES);
+        truncated ||= limited.truncated;
+        yield { specPath, source: sourceRef(artifact), requirements: limited.items };
+      }
+    }
+    const deltas = boundedItems(candidates(), MAX_DETAIL_DELTA_BYTES);
+    return { items: deltas.items, truncated: truncated || deltas.truncated };
   }
 
   private indexDeltaPaths(entry: OpenSpecEntry): OpenSpecDeltaRelationship[] {
@@ -596,8 +633,9 @@ class CheckoutOpenSpec implements OpenSpecSnapshot {
   }
 }
 
-export async function readOpenSpec(root: string): Promise<OpenSpecSnapshot> {
-  const initial = await scanOpenSpec(root);
+export async function readOpenSpec(root: string, options?: OpenSpecScanOptions): Promise<OpenSpecSnapshot> {
+  const initial = await scanOpenSpec(root, options);
   const changed = initial.diagnostics.some((diagnostic) => diagnostic.code === "source-changed");
-  return new CheckoutOpenSpec(changed ? await scanOpenSpec(root) : initial);
+  const catalog = changed ? await scanOpenSpec(root, options) : initial;
+  return new CheckoutOpenSpec(catalog, catalog.diagnostics.find((diagnostic) => diagnostic.code === "source-changed"));
 }
