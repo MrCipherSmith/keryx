@@ -1,6 +1,6 @@
 # Metaproject Index
 
-See [`routing.md`](routing.md) for other intents.
+Routing pointers. See [`routing.md`](routing.md) for other intents.
 
 | need | use |
 |---|---|

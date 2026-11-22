@@ -1,5 +1,4 @@
-import { MetaprojectRequestError } from "../integrations/metaproject-explorer-contract";
-import { metaprojectExplorer, parseExplorerRequest } from "../integrations/service";
+import { MetaprojectRequestError, metaprojectExplorer, parseExplorerRequest } from "../integrations/service";
 
 export async function metaprojectExplorerCommand(args: string[]): Promise<void> {
   if (args.length !== 2 || args[0] !== "--request" || !args[1] || args[1].length > 32_768) throw new Error("Usage: keryx metaproject-explorer --request '<json>'");

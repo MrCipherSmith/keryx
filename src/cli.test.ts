@@ -263,6 +263,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // Flow 512 adds the Metaproject explorer command used by Desktop.
     "  keryx metaproject-explorer --request <json>\n",
     "  metaproject-explorer  Read the project graph and wiki for Desktop\n",
+    // Flow 514 adds read-only OpenSpec commands.
+    "  keryx openspec list --kind <spec|change|archive> [--cursor <cursor>] [--json]\n",
+    "  keryx openspec show <path> [--artifact <path>] [--section <id> --expected-digest <sha256>] [--json]\n",
+    "  keryx openspec search <query> [--scope <all|spec|change|archive>] [--cursor <cursor>] [--json]\n",
     // Worktree readiness (flow 506): `keryx worktree`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
     "  keryx worktree create <name> [--base <ref>] [--branch <b>] [--path <dir>] [--json]\n",
     "                                               git worktree add on a new branch, then prepare\n",

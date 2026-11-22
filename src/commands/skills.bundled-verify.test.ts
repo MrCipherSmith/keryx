@@ -37,7 +37,8 @@ async function runCli(args: string[]): Promise<{ code: number; out: string; err:
 describe("keryx skills verify --bundled", () => {
   test("the shipped tree passes, over a non-zero denominator, and exits 0", async () => {
     const result = await runCli(["skills", "verify", "--bundled"]);
-    // 70: flow 489 replaced `commit`, `push` and `pr` with the one `git-publish`
+    // 71: flow 514 added the OpenSpec reader. 70: flow 489 replaced
+    // `commit`, `push` and `pr` with the one `git-publish`
     // (72 - 3 + 1). 72: flow 488 then removed the three code-* review profiles whose checks
     // review-frontend, review-style and the other reviewers already carry
     // (.metaproject/flows/488-*/code-profile-coverage.md). 75: flow 488 removed nine
@@ -45,7 +46,7 @@ describe("keryx skills verify --bundled", () => {
     // review-jev-risk/review-jev-scenarios, flow 333 added
     // review-jev-docs/review-jev-comments, and flow 335 added
     // review-jev-contract.
-    expect(result.out).toContain("skills_evaluated: 70");
+    expect(result.out).toContain("skills_evaluated: 71");
     expect(result.out).toContain("findings: 0");
     expect(result.code).toBe(0);
   });
@@ -59,7 +60,8 @@ describe("keryx skills verify --bundled", () => {
       findings: unknown[];
       skillNames: string[];
     };
-    expect(parsed.skills).toBe(70);
+    expect(parsed.skills).toBe(71);
+    expect(parsed.skillNames).toContain("openspec-read");
     // The harness builds are read too, and the count says so. `skills` alone
     // read as full coverage while 100-odd builds went unopened.
     expect(parsed.documents).toBeGreaterThan(parsed.skills);

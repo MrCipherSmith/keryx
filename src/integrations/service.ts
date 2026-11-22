@@ -216,4 +216,4 @@ export {
 } from "./matrix";
 export type { CapabilityMatrixDocument } from "./matrix";
 export { metaprojectExplorer } from "./metaproject-explorer";
-export { parseExplorerRequest } from "./metaproject-explorer-contract";
+export { MetaprojectRequestError, parseExplorerRequest } from "./metaproject-explorer-contract";

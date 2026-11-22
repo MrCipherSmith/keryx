@@ -432,7 +432,7 @@ export function renderIndexGateMarkdown({
 
   return `# Metaproject Index
 
-See [\`${ROUTING_FILENAME}\`](${ROUTING_FILENAME}) for other intents.
+Routing pointers. See [\`${ROUTING_FILENAME}\`](${ROUTING_FILENAME}) for other intents.
 
 | need | use |
 |---|---|
