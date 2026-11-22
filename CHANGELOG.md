@@ -5,6 +5,19 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.48] - 2026-11-22
+
+**Keryx Desktop 0.2.11** requires Keryx 0.4.48 or newer.
+
+### Added
+
+- Configure Strong, Middle, and Light model pools from `/routing` in Desktop. Each tier can contain several provider and model pairs in preference order. Review and subagent runs can use saved tiers while honoring explicit routing settings. (#1279)
+
+### Fixed
+
+- Refresh expired provider catalogues before starting a routed subagent, and keep already verified reviewers running when catalogue evidence ages. (#1279)
+- Keep project-activated legacy routing scoped to its project and use the effective model pools when deciding whether a Review run can reuse a prior result. (#1279)
+
 ## [0.4.47] - 2026-11-22
 
 **Keryx Desktop 0.2.10** requires Keryx 0.4.47 or newer.
