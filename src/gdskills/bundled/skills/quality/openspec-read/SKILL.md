@@ -4,6 +4,11 @@ description: |
   Use when browsing OpenSpec requirements, active changes, archived changes,
   or their source evidence in the current checkout.
   NOT for authoring, applying, or archiving OpenSpec changes.
+triggers:
+  - "browse OpenSpec specs"
+  - "search OpenSpec requirements"
+  - "read an archived OpenSpec change"
+  - "найди требование в OpenSpec"
 metadata:
   version: "1.0.0"
   category: "quality"

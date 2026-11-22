@@ -135,7 +135,7 @@ const CEILINGS_BY_KEY = {
   "quality/fresh-eyes": 190,
   "quality/git-publish": 60,
   "quality/metaproject-security": 124,
-  "quality/openspec-read": 31,
+  "quality/openspec-read": 36,
   "quality/perf-check": 104,
   "quality/pr-issue-documenter": 401,
   "quality/root-cause": 204,
