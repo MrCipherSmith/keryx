@@ -38,21 +38,26 @@ test("wiki stays readable without a graph and rebuild is explicit", async () => 
   let rebuilds = 0;
   await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => { rebuilds++; return false; } })); });
   expect(host.textContent).toContain("Graph missing");
+  await act(async () => { button("Wiki").click(); });
   expect(host.textContent).toContain("Readable guide");
   expect(rebuilds).toBe(0);
   await act(async () => { button("Rebuild graph").click(); });
   expect(rebuilds).toBe(1);
 });
 
-test("selection and search survive switching between graph and wiki", async () => {
+test("manual Wiki switching uses its own selection and Back restores the graph query", async () => {
   await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => false })); });
   const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]');
   if (!search) throw new Error("Missing search");
   await act(async () => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(search, "client"); search.dispatchEvent(new Event("input", { bubbles: true })); });
   const client = [...host.querySelectorAll("button")].find(item => item.textContent?.includes("Client"));
   if (!client) throw new Error("Missing client result");
-  await act(async () => { client.click(); button("Wiki").click(); });
-  expect(host.textContent).toContain("src/client.ts");
+  await act(async () => { client.click(); });
+  await act(async () => { button("Wiki").click(); });
+  expect(host.querySelector('[aria-label="Wiki article"]')?.textContent).toContain("Readable guide");
+  expect(search.value).toBe("");
+  await act(async () => { button("Back").click(); });
+  expect(host.querySelector('[aria-label="Graph node details"]')?.textContent).toContain("src/client.ts");
   expect(search.value).toBe("client");
 });
 
@@ -79,7 +84,7 @@ test("direction, depth and type controls filter the accessible relationship list
   expect(host.textContent).not.toContain("Guide → describes → Client");
   await act(async () => { selects[0]!.value = "outgoing"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
   await act(async () => { button("Open Server").click(); });
-  expect(host.querySelector("article h2")?.textContent).toBe("Server");
+  expect(host.querySelector('[aria-label="Graph node details"] h2')?.textContent).toBe("Server");
 });
 
 test("full-text hits stay visible when local matches fill the result limit", async () => {
@@ -111,11 +116,13 @@ test("snapshot mismatch offers a refresh and drops a selection absent from the r
     return Promise.resolve({ schemaVersion: 1, snapshotId: "two", hits: [] });
   };
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await act(async () => { button("Wiki").click(); });
   expect(host.textContent).toContain("Project knowledge changed while loading");
   expect(host.textContent).not.toContain("Fresh detail");
   version = 1;
   await act(async () => { button("Refresh catalog").click(); });
   expect(host.textContent).not.toContain("Project knowledge changed while loading");
+  await act(async () => { button("Graph").click(); });
   expect(host.textContent).toContain("src/client.ts");
 });
 
@@ -186,6 +193,7 @@ test("a wiki fragment scrolls only to a heading inside the current article", asy
   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "detail"
     ? Promise.resolve({ ...snapshot, node: page, markdown: "[Jump](#installation)\n\n## Installation" }) : request(cwd, input);
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await act(async () => { button("Wiki").click(); });
   const heading = host.querySelector<HTMLElement>("article .md h2");
   if (!heading) throw new Error("Missing heading");
   let scrolled = false;
@@ -291,21 +299,21 @@ test("shared search loads the next page pinned to its snapshot", async () => {
   const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
     seen.push(input);
     if (input.action === "catalog") return catalogRequest;
-    if (input.action === "search") return { schemaVersion: 2, snapshotId: "one", hits: [{ node: input.cursor ? file : page, scope: input.cursor ? "graph" : "wiki" }], ...(input.cursor ? {} : { nextCursor: "next" }), partial: false };
+    if (input.action === "search") return { schemaVersion: 2, snapshotId: "one", hits: [{ node: input.cursor ? { ...page, id: "second-page", title: "Second Wiki page" } : page, scope: "wiki" }], ...(input.cursor ? {} : { nextCursor: "next" }), partial: false };
     if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
     return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
   };
   try {
     await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<import("react").ComponentProps<typeof View>["requestV2"]>, onRebuild: async () => false })); });
-    // Search is shared by Graph and Wiki. Wiki does not require a canvas in this DOM test.
+    // A Wiki search must preserve its scope when following the cursor.
     await act(async () => { button("Wiki").click(); resolveCatalog(wikiCatalog); });
     const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]');
     if (!search) throw new Error("Missing search");
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "query"); search.dispatchEvent(new Event("input", { bubbles: true })); });
     await act(async () => { runTimer(); });
     await act(async () => { button("Load more results").click(); });
-    expect(seen.some(input => input.action === "search" && input.cursor === "next" && input.query === "query" && input.expectedSnapshotId === "one")).toBe(true);
-    expect(host.textContent).toContain("Client");
+    expect(seen.some(input => input.action === "search" && input.cursor === "next" && input.query === "query" && input.expectedSnapshotId === "one" && JSON.stringify(input.scopes) === '["wiki"]')).toBe(true);
+    expect(host.textContent).toContain("Second Wiki page");
   } finally { window.setTimeout = originalTimeout; }
 });
 
@@ -330,4 +338,64 @@ test("a cross-change artifact link resolves its indexed owner and fragment", asy
   expect(seen.some(input => input.action === "search" && input.query === other.path && input.expectedSnapshotId === "s")).toBe(true);
   expect(seen.some(input => input.action === "detail" && input.id === other.id && input.artifact === target.path)).toBe(true);
   expect(document.activeElement?.textContent).toBe("Details");
+});
+
+test("a graph node opens its linked Wiki in place and Back restores the graph selection", async () => {
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, edges: [{ from: page.id, to: file.id, kind: "describes" }] })
+    : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  const client = host.querySelector<HTMLButtonElement>('button[title="src/client.ts"]')
+    ?? [...host.querySelectorAll("button")].find(item => item.textContent?.startsWith("Client"));
+  if (!client) throw new Error("Missing Client graph result");
+  await act(async () => { client!.click(); });
+  const panel = host.querySelector('aside[aria-label="Graph node details"]');
+  expect(panel?.textContent).toContain("Client");
+  expect(host.querySelector('.metaproject-content article')).toBeNull();
+  await act(async () => { button("Open in Wiki").click(); });
+  expect(host.querySelector('[aria-label="Wiki article"]')?.textContent).toContain("Readable guide");
+  await act(async () => { button("Back").click(); });
+  expect(host.querySelector('aside[aria-label="Graph node details"]')?.textContent).toContain("Client");
+});
+
+test("an archive result opens its current spec directly and Back restores the archive search", async () => {
+  const old = { id: "old", kind: "archive" as const, title: "Archived picker change", path: "openspec/changes/archive/2025-01-01-picker" };
+  const current = { id: "current", kind: "spec" as const, title: "Current picker", path: "openspec/specs/picker/spec.md" };
+  const openSpec = { availability: "ready", diagnostics: [], truncated: false };
+  const seen: Record<string, unknown>[] = [];
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    seen.push(input);
+    const base = { schemaVersion: 2, snapshotId: "one" };
+    if (input.action === "catalog") return { ...catalog, ...base, nodes: [] };
+    if (input.action === "openspec-list") return { ...base, entries: input.collection === "archive" ? [old] : [current], openSpec };
+    if (input.action === "openspec-history") return { ...base, entries: [] };
+    if (input.action === "search") return { ...base, hits: [{ node: old, scope: "archive" }] };
+    const entry = input.id === old.id ? old : current;
+    const source = { path: entry.kind === "archive" ? `${entry.path}/proposal.md` : entry.path, digest: "a".repeat(64) };
+    return {
+      ...base, node: entry,
+      openSpec: { entry, artifacts: [source], artifact: { source, markdown: "Reader document", requirements: [] } },
+      relationships: entry.id === old.id ? [{ node: current, edge: { kind: "changes-spec" } }] : [],
+    };
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<import("react").ComponentProps<typeof View>["requestV2"]>, onRebuild: async () => false })); });
+  await act(async () => { button("OpenSpec").click(); });
+  await act(async () => { button("Archive").click(); });
+  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "picker change");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const result = host.querySelector<HTMLButtonElement>('[aria-label="OpenSpec results"] li button')!;
+  await act(async () => { result.click(); });
+  await act(async () => { button("Open current spec: Current picker").click(); });
+  expect(button("OpenSpec").getAttribute("aria-pressed")).toBe("true");
+  expect(button("Specs").getAttribute("aria-pressed")).toBe("true");
+  expect(search.value).toBe("");
+  expect(host.querySelector('[aria-label="OpenSpec detail"] h2')?.textContent).toBe(current.title);
+  await act(async () => { button("Back").click(); });
+  expect(button("Archive").getAttribute("aria-pressed")).toBe("true");
+  expect(search.value).toBe("picker change");
+  expect(host.querySelector('[aria-label="OpenSpec detail"] h2')?.textContent).toBe(old.title);
+  expect(seen.filter(input => input.action === "search").map(input => input.scopes)).toEqual([["archive"]]);
 });
