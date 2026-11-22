@@ -415,16 +415,11 @@ when the window gets focus.
 
 ### Explore Metaproject
 
-Open **Metaproject** in a project window. Use the same search in **Graph**
-and **Wiki** to find a page, module, file or indexed symbol. Selecting a
-result shows its neighbors and relationship types. Use the relationship
-list to follow the same links with the keyboard. Switch direction or depth
-to see a smaller or wider neighborhood.
-
-Wiki pages stay readable when there is no code graph. Use **Build graph**
-to create or refresh the index for the open checkout. The terminal panel
-shows the build progress. If the CLI on your PATH predates this view,
-update it or choose the bundled CLI in Desktop Settings.
+Open **Metaproject** in a project window or press **⌘5**. Search wiki text and
+indexed names or paths, read a page in **Wiki**, and use **Graph** to trace
+its connections. The [Desktop Metaproject guide](guides/desktop-metaproject.md)
+walks through setup, optional symbol indexing, graph filters, keyboard
+navigation, and recovery when an index is stale or missing.
 
 ### Keyboard shortcuts
 
