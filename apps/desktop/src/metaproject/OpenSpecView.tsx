@@ -141,6 +141,29 @@ export function OpenSpecView({ cwd, query, location, onLocation, nodes = [], onN
       return;
     }
     const path = parts.join("/");
+    const ownerLength = parts[0] === "openspec" && parts[1] === "changes"
+      ? (parts[2] === "archive" ? 4 : 3) : 0;
+    if (ownerLength && parts.length > ownerLength && list) {
+      const ownerPath = parts.slice(0, ownerLength).join("/");
+      const ownerKind = parts[2] === "archive" ? "archive" : "change";
+      const indexed = nodes.find(item => item.path === ownerPath && item.kind === ownerKind)
+        ?? list.entries.find(item => item.path === ownerPath && item.kind === ownerKind);
+      const openOwner = (id: string) => {
+        setCollection(ownerKind);
+        choose({ id, collection: ownerKind, artifact: path, ...(fragment && { fragment }) });
+      };
+      if (indexed) { openOwner(indexed.id); return; }
+      const currentGeneration = generation.current;
+      const currentSelection = latest.current.serial;
+      void request(cwd, { version: 2, action: "search", query: ownerPath, scopes: [ownerKind], expectedSnapshotId: list.snapshotId }).then(value => {
+        if (currentGeneration !== generation.current || currentSelection !== latest.current.serial || !("hits" in value) || value.snapshotId !== list.snapshotId) return;
+        const exact = value.hits.find(hit => hit.node.kind === ownerKind && hit.node.path === ownerPath);
+        if (exact) openOwner(exact.node.id);
+      }).catch(cause => {
+        if (currentGeneration === generation.current && currentSelection === latest.current.serial) setError(errMessage(cause));
+      });
+      return;
+    }
     const node = nodes.find(item => item.path === path) ?? list?.entries.find(item => item.path === path);
     if (!node) return;
     if (node.kind === "spec" || node.kind === "change" || node.kind === "archive") {

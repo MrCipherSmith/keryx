@@ -302,3 +302,26 @@ test("shared search loads the next page pinned to its snapshot", async () => {
     expect(host.textContent).toContain("Client");
   } finally { window.setTimeout = originalTimeout; }
 });
+
+test("a cross-change artifact link resolves its indexed owner and fragment", async () => {
+  const { OpenSpecView } = await import("./OpenSpecView");
+  const current = { id: "first", kind: "change" as const, title: "First", path: "openspec/changes/first" };
+  const other = { id: "other", kind: "change" as const, title: "Other", path: "openspec/changes/other" };
+  const source = { path: `${current.path}/proposal.md`, digest: "a".repeat(64) };
+  const target = { path: `${other.path}/proposal.md`, digest: "b".repeat(64) };
+  const seen: Record<string, unknown>[] = [];
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    seen.push(input);
+    if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [current], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+    if (input.action === "search") return { schemaVersion: 2, snapshotId: "s", hits: [{ node: other, scope: "change" }], partial: false };
+    const entry = input.id === other.id ? other : current;
+    return { schemaVersion: 2, snapshotId: "s", node: entry, openSpec: { entry, artifacts: [input.id === other.id ? target : source], artifact: { source: input.id === other.id ? target : source, markdown: input.id === other.id ? "## Details" : "[Other](../other/proposal.md#details)", requirements: [] }, diagnostics: [], partial: false } };
+  };
+  await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "", location: { id: current.id, collection: "change" }, request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+  const link = [...host.querySelectorAll<HTMLElement>(".md a")].find(item => item.textContent === "Other");
+  if (!link) throw new Error("Missing cross-change link");
+  await act(async () => { link.click(); });
+  expect(seen.some(input => input.action === "search" && input.query === other.path && input.expectedSnapshotId === "s")).toBe(true);
+  expect(seen.some(input => input.action === "detail" && input.id === other.id && input.artifact === target.path)).toBe(true);
+  expect(document.activeElement?.textContent).toBe("Details");
+});
