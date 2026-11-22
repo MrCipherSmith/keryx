@@ -94,6 +94,20 @@ test("tier routing uses the next eligible reviewer model and inherits when the t
   }, snapshot, config))).toEqual(baseline);
 });
 
+test("tier routing preserves an explicitly configured Frontier fallback", () => {
+  const fallback = ref("beta", "standard-fallback");
+  const layer: RoutingConfigLayer = {
+    schemaVersion: 2, tierRouting: true,
+    classes: {
+      frontier: { selection: "priority", candidates: [], fallbackClasses: ["standard"] },
+      standard: { selection: "priority", candidates: [{ target: fallback, enabled: true, priority: 1 }], fallbackClasses: [] },
+    },
+  };
+  const req = request({ category: "subagents", origin: "subagent", recommendation: { source: "agent", modelClass: "frontier" } });
+  const { config, snapshot } = setup(layer, [facts(baseline), facts(fallback)], req);
+  expect(selectionOf(resolveRoutingDecision(req, snapshot, config))).toEqual(fallback);
+});
+
 test("user override beats project configuration and an agent recommendation", () => {
   const chosen = ref("beta", "pinned");
   const config = normalizeRoutingConfig({

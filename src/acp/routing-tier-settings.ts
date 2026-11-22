@@ -1,10 +1,9 @@
 import type { ModelClassConfig, RoutingConfigLayer } from "../harness/routing/config";
-import { ROUTING_TIER_IDS, ROUTING_TIERS, modelRefKey, type ModelRef, type RoutingTier, type TierSettingsSnapshot } from "../harness/routing/model-class";
+import { ROUTING_MAX_TIER_MODELS, ROUTING_TIER_IDS, ROUTING_TIERS, modelRefKey, type ModelRef, type RoutingTier, type TierSettingsSnapshot } from "../harness/routing/model-class";
 import { readRoutingSettings, updateRoutingLayer, type RoutingLocation, type RoutingSettings } from "../harness/routing/settings";
 import { PROJECT_SCOPED_USER_NOTICE } from "../harness/routing/legacy-migration";
 import { ROUTING_CATEGORIES, ROUTING_CATEGORY_TIERS } from "../harness/routing/table";
 
-const MAX_TIER_MODELS = 32;
 const modelId = /^[a-z\d][a-z\d_./:@+%-]{0,159}$/i;
 
 function legacyModels(layer: RoutingConfigLayer | undefined, tier: RoutingTier): ModelRef[] {
@@ -69,7 +68,7 @@ export async function saveTierSettings(location: RoutingLocation, revision: stri
     const enabledModels = existing ? models(existing) : [];
     // Preserve policy, explicit disables, and priorities on untouched tiers.
     const entries: unknown = Reflect.get(modelPools, tier);
-    if (!Array.isArray(entries) || entries.length > Math.max(MAX_TIER_MODELS, enabledModels.length)) throw new Error(`Invalid ${tier} routing pool.`);
+    if (!Array.isArray(entries) || entries.length > Math.max(ROUTING_MAX_TIER_MODELS, enabledModels.length)) throw new Error(`Invalid ${tier} routing pool.`);
     const selected = entries.map((entry: unknown) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Invalid model in ${tier} routing pool.`);
       const providerId: unknown = Reflect.get(entry, "provider");
@@ -80,7 +79,7 @@ export async function saveTierSettings(location: RoutingLocation, revision: stri
       return { providerId, modelId: targetModelId };
     });
     if (existing && JSON.stringify(enabledModels) === JSON.stringify(selected)) continue;
-    const known = new Set(existing?.candidates.map(candidate => modelRefKey(candidate.target)));
+    const known = new Set((existing?.candidates.map(candidate => candidate.target) ?? legacyModels(user, tier)).map(modelRefKey));
     if (selected.some(target => !known.has(modelRefKey(target)) && (!modelId.test(target.providerId) || !modelId.test(target.modelId)))) {
       throw new Error(`Invalid model in ${tier} routing pool.`);
     }

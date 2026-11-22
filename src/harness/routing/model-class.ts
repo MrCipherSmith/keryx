@@ -31,6 +31,7 @@ export function modelRefKey(ref: ModelRef): string {
 }
 
 /** The three operator-facing tiers, mapped to the resolver's model classes. */
+export const ROUTING_MAX_TIER_MODELS = 32;
 export const ROUTING_TIER_IDS = ["strong", "middle", "light"] as const;
 export type RoutingTier = (typeof ROUTING_TIER_IDS)[number];
 export const ROUTING_TIERS = {

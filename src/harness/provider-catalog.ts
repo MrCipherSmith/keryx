@@ -28,6 +28,7 @@ import { fetchOpenAiCodexCatalog } from "../commands/subscription-models";
 import { detectProviders, type DetectedProvider, type DetectProvidersDeps } from "../commands/select";
 import {
   balanceCapableProvider,
+  fetchAnthropicModels,
   fetchOpenAiCompatModelsDetailed,
   fetchProviderBalance,
   providerApiKey,
@@ -122,16 +123,21 @@ async function buildCatalogEntry(
     return { name: detected.name, status: classifyModelsStatus(result), models: result.models, fallbackModels: [...detected.models], fetchedAt, label: detected.label ?? "ChatGPT / Codex" };
   }
   const registry = providerByName(detected.name, deps.dir);
+  if (registry === undefined && detected.name === "anthropic") {
+    const key = envWithSavedApiKeys(deps.env, deps.dir)[detected.envKey ?? "ANTHROPIC_API_KEY"];
+    if (!key) return undefined;
+    const result = await fetchAnthropicModels(deps.fetch, key, { timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    return {
+      name: detected.name,
+      status: classifyModelsStatus(result),
+      models: result.models,
+      fallbackModels: [...detected.models],
+      fetchedAt,
+      ...(detected.label !== undefined ? { label: detected.label } : {}),
+    };
+  }
   if (registry === undefined) {
-    // Native anthropic/gemini: `detectProviders()` includes one only
-    // when its API key is present in `deps.env` (the connectedness check for
-    // a provider with no live listing endpoint — `describe().modelListing`
-    // is false for these providers, see `select.ts`), so `detected.models` here IS
-    // the curated fallback a caller should show.
-    if (detected.name === "anthropic") {
-      const key = envWithSavedApiKeys(deps.env, deps.dir)[detected.envKey ?? "ANTHROPIC_API_KEY"];
-      if (key === undefined || key.length === 0) return undefined;
-    }
+    // Native providers without an implemented listing use curated picker rows.
     return {
       name: detected.name,
       status: "not-supported",

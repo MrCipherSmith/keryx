@@ -247,6 +247,7 @@ export async function requestDeskRun(
   cwd: string,
   key: DeskRunKey,
   input: DeskAction,
+  resolveManualOptions?: (cwd: string, options?: DeskReviewOptions) => DeskReviewOptions | undefined,
 ): Promise<DeskRunSnapshot> {
   const store = new DeskRunStore();
   try {
@@ -267,8 +268,12 @@ export async function requestDeskRun(
       return { ...store.history(key), ...(completion ? { completion } : {}) };
     }
     let startedRunId: string | null = null;
+    const options = input.action === "start" && input.options ? parseDeskReviewOptions(input.options) : undefined;
+    const effectiveKey = input.action === "start" && resolveManualOptions
+      ? deskOptionsKey(resolveManualOptions(cwd, options))
+      : undefined;
     store.atomic(() => {
-      if (input.action === "start") startedRunId = store.requestManual(cwd, key, input.revision, observedAdmission, input.options && parseDeskReviewOptions(input.options));
+      if (input.action === "start") startedRunId = store.requestManual(cwd, key, input.revision, observedAdmission, options, effectiveKey);
       if (input.action === "continue") startedRunId = store.requestContinuation(cwd, key, input.id, input.guidance);
       if (input.action === "answer") store.answerQuestion(key, input.id, input.questionId, input.answer);
       if (input.action === "cancel") store.cancel(key, input.id);
@@ -349,6 +354,9 @@ export async function runDeskWorker(
       }, 500);
       const options = resolveOptions(cwd, run.options);
       const effectiveOptionsKey = deskOptionsKey(options);
+      if (run.effectiveOptionsKey !== undefined && run.effectiveOptionsKey !== effectiveOptionsKey) {
+        throw new Error("configuration: Routing settings changed while Review was waiting. Start the review again to use the new settings.");
+      }
       store.atomic(() => {
         const active = store.byId(id);
         if (!active || active.pid !== process.pid || active.run.state !== "running") {

@@ -193,17 +193,18 @@ test("refreshProviderCatalog (AC5): a documented balance endpoint is read and ne
   expect(catalog.providers.groq?.balance).toBeUndefined();
 });
 
-test("refreshProviderCatalog: a native provider with no live listing endpoint (anthropic) is not-supported, key presence alone gates it", async () => {
-  const fetchFn = (async (url: string) => {
+test("refreshProviderCatalog verifies Anthropic with its authenticated native listing", async () => {
+  const fetchFn = (async (url: string, init?: RequestInit) => {
     if (ollamaRefused(url)) return { ok: false } as Response;
-    throw new Error(`unexpected fetch: ${url}`); // never probed — no endpoint exists
+    expect(url).toBe("https://api.anthropic.com/v1/models?limit=1000");
+    expect(new Headers(init?.headers).get("x-api-key")).toBe("test-key");
+    return Response.json({ data: [{ id: "claude-live" }] });
   }) as unknown as typeof fetch;
-
-  const catalog = await refreshProviderCatalog({ fetch: fetchFn, env: { ANTHROPIC_API_KEY: "sk-ant" }, platform: "linux", dir: emptyCustomProvidersDir() });
-  const entry = catalog.providers.anthropic;
-  expect(entry?.status).toBe("not-supported");
-  expect(entry?.models).toEqual([]);
-  expect(entry?.fallbackModels.length).toBeGreaterThan(0);
+  const catalog = await refreshProviderCatalog({
+    fetch: fetchFn, env: { ANTHROPIC_API_KEY: "test-key" }, platform: "linux", dir: emptyCustomProvidersDir(),
+  });
+  expect(catalog.providers.anthropic).toMatchObject({ status: "ok", models: ["claude-live"] });
+  expect(catalog.providers.anthropic?.fallbackModels.length).toBeGreaterThan(0);
 });
 
 test("refreshProviderCatalog: the synthetic fake provider is excluded from the user-facing catalog", async () => {

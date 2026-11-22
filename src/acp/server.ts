@@ -1761,7 +1761,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   let routingRefresh: Promise<void> | undefined;
   let routingRefreshNeeded = false;
   let routingForceRetry = false;
-  let routingRefreshFinishedAt: number | undefined;
+  let routingRefreshFailedAt: number | undefined;
   function freshRoutingProvider(provider: FlatPickerProvider, now: number): boolean {
     const age = now - Date.parse(provider.observedAt ?? "");
     return age >= 0 && age < ROUTING_AVAILABILITY_TTL_MS;
@@ -1771,7 +1771,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     if (!load) return Promise.resolve();
     if (routingRefresh) return routingRefresh;
     const now = Date.now();
-    const retryAge = routingRefreshFinishedAt === undefined ? Infinity : now - routingRefreshFinishedAt;
+    const retryAge = routingRefreshFailedAt === undefined ? Infinity : now - routingRefreshFailedAt;
     if (!routingRefreshNeeded && (
       (retryAge >= 0 && retryAge < 10_000) ||
       (routingProviders && routingProviders.length > 0 && routingProviders.every(provider => freshRoutingProvider(provider, now)))
@@ -1779,13 +1779,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const force = routingRefreshNeeded || routingForceRetry;
     routingRefreshNeeded = false;
     return routingRefresh = Promise.resolve().then(() => load(force)).then(providers => {
+      routingRefreshFailedAt = providers.length === 0 ? Date.now() : undefined;
       routingForceRetry = false;
       if (!routingRefreshNeeded) routingProviders = providers;
     }, () => {
+      routingRefreshFailedAt = Date.now();
       routingForceRetry = force;
       options.logError("acp: could not refresh the provider catalogue for model routing");
     }).finally(() => {
-      routingRefreshFinishedAt = Date.now();
       routingRefresh = undefined;
       // Existing waiters must also wait for changes that arrived mid-refresh.
       if (routingRefreshNeeded) return refreshRoutingProviders();

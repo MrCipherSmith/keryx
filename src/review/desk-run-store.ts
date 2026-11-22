@@ -227,19 +227,19 @@ export class DeskRunStore {
   }
 
   /** Hold the dispatch transaction while comparing the admission journal. */
-  requestManual(cwd: string, key: DeskRunKey, revision: DeskRevision, observedAdmission: string | null, options?: DeskReviewOptions) {
+  requestManual(cwd: string, key: DeskRunKey, revision: DeskRevision, observedAdmission: string | null, options?: DeskReviewOptions, effectiveOptionsKey?: string) {
     const latest = this.latestAdmission(key);
     if (latest !== observedAdmission) {
       const existing = [this.active(key), this.queued(key)].find(attempt => attempt &&
         attempt.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
         attempt.run.baseSha === revision.baseSha && attempt.run.headSha === revision.headSha &&
-        deskOptionsKey(attempt.run.options) === deskOptionsKey(options));
+        this.matchesManualOptions(attempt.run, options, effectiveOptionsKey));
       if (existing) return existing.run.id;
-      const previous = this.previousAttempt(key, revision, options);
+      const previous = this.previousAttempt(key, revision, options, false, effectiveOptionsKey);
       if (previous?.id === latest && previous.state === "completed" && previous.complete) return previous.id;
       throw new Error("stale: Another review was requested during validation. Refresh the board and try again.");
     }
-    return this.requestAttempt(cwd, key, revision, undefined, options)?.id ?? null;
+    return this.requestAttempt(cwd, key, revision, undefined, options, undefined, effectiveOptionsKey)?.id ?? null;
   }
 
   continuationSource(key: DeskRunKey, id: string) {
@@ -454,7 +454,16 @@ export class DeskRunStore {
     `).all(repositoryId, viewer).map(({ pr }) => pr);
   }
 
-  private previousAttempt(key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, anyOptions = false) {
+  private matchesManualOptions(run: DeskRun, options?: DeskReviewOptions, effectiveOptionsKey?: string): boolean {
+    return effectiveOptionsKey === undefined
+      ? deskOptionsKey(run.options) === deskOptionsKey(options)
+      : (run.effectiveOptionsKey ?? deskOptionsKey(run.options)) === effectiveOptionsKey;
+  }
+
+  private previousAttempt(key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, anyOptions = false, effectiveOptionsKey?: string) {
+    const storedKey = effectiveOptionsKey === undefined
+      ? "coalesce(json_extract(details,'$.options'),'')"
+      : "coalesce(json_extract(details,'$.effectiveOptionsKey'),json_extract(details,'$.options'),'')";
     return this.db
       .query<
         { id: string; state: string; complete: number; retryable: number | null; attempt: number | null },
@@ -466,14 +475,14 @@ export class DeskRunStore {
           AND json_extract(details,'$.result.reviewed.baseSha')=json_extract(details,'$.baseSha')
           AND json_extract(details,'$.result.reviewed.headSha')=json_extract(details,'$.headSha')) AS complete
        FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
-         AND json_extract(details,'$.headSha')=? AND (coalesce(json_extract(details,'$.options'),'')=? OR ?=1) AND json_extract(details,'$.source') IN ('manual','scheduled')
+         AND json_extract(details,'$.headSha')=? AND (${storedKey}=? OR ?=1) AND json_extract(details,'$.source') IN ('manual','scheduled')
          AND (?=1 OR coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete'))
          AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
            AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
            AND json_extract(details,'$.usage') IS NULL)
        ORDER BY rowid DESC LIMIT 1`,
       )
-      .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha, deskOptionsKey(options), anyOptions ? 1 : 0, anyOptions ? 1 : 0);
+      .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha, effectiveOptionsKey ?? deskOptionsKey(options), anyOptions ? 1 : 0, anyOptions ? 1 : 0);
   }
 
   /** Check only local scheduler occupancy, without reading private review output. */
@@ -506,18 +515,19 @@ export class DeskRunStore {
     schedule?: DeskSchedule,
     options?: DeskReviewOptions,
     continuation?: DeskRun["continuation"],
+    effectiveOptionsKey?: string,
   ): { id: string; reused: boolean } | null {
     const match = (a: Attempt) =>
       a.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
       a.run.baseSha === revision.baseSha &&
-      a.run.headSha === revision.headSha && (schedule !== undefined || deskOptionsKey(a.run.options) === deskOptionsKey(options));
+      a.run.headSha === revision.headSha && (schedule !== undefined || this.matchesManualOptions(a.run, options, effectiveOptionsKey));
     this.releaseDeadForeignSlot(key);
     const active = this.active(key);
     const queued = this.queued(key);
     if (active && match(active)) return { id: active.run.id, reused: true };
     if (queued && match(queued)) return { id: queued.run.id, reused: true };
     if (schedule && (active || queued)) return null;
-    const previous = this.previousAttempt(key, revision, options, schedule !== undefined);
+    const previous = this.previousAttempt(key, revision, options, schedule !== undefined, effectiveOptionsKey);
     // Failures, cancellations and partial results may already have consumed budget.
     // Only an explicit manual request may buy another attempt for this same range.
     if (
@@ -542,6 +552,7 @@ export class DeskRunStore {
       source: schedule ? "scheduled" : "manual",
       ...(schedule ? { schedule, preflightAttempt: (previous?.attempt ?? 0) + 1 } : {}),
       ...(options ? { options: parseDeskReviewOptions(options) } : {}),
+      ...(effectiveOptionsKey === undefined ? {} : { effectiveOptionsKey }),
       ...(continuation && { continuation }),
       scope: DESK_RUN_SCOPE,
       ...revision,

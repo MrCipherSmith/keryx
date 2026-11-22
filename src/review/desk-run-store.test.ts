@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
+import { deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
 import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
 import type { DeskFinish } from "./desk-run-types";
 import { applyDeskLifecycle } from "./desk-run-lifecycle";
@@ -599,6 +600,23 @@ test("same revision reuses only the matching settings before and after completio
   expect(store.request("/a", key, revision, scheduled)).toBe(second);
   store.end(store.queued(key)!, finish);
   expect(store.request("/a", key, revision, scheduled)).toBe(second);
+});
+
+test("manual review identity includes resolved default model pools", () => {
+  const options: DeskReviewOptions = { mode: "manual", adaptive: true, modelPools: { strong: [], middle: [], light: [] } };
+  const effective = (model: string) => deskOptionsKey({
+    ...options, modelPools: { ...options.modelPools, strong: [{ provider: "openai", model }] },
+  });
+  const firstKey = effective("first-model");
+  const secondKey = effective("second-model");
+  const first = store.requestManual("/project", key, revision, null, options, firstKey);
+  expect(store.requestManual("/project", key, revision, null, options, firstKey)).toBe(first);
+  expect(() => store.requestManual("/project", key, revision, null, options, secondKey)).toThrow("stale:");
+  store.end(store.queued(key)!, finish);
+  expect(store.requestManual("/project", key, revision, store.latestAdmission(key), options, firstKey)).toBe(first);
+  const second = store.requestManual("/project", key, revision, store.latestAdmission(key), options, secondKey);
+  expect(second).not.toBe(first);
+  expect(store.queued(key)?.run.effectiveOptionsKey).toBe(secondKey);
 });
 
 test("operator decisions preserve partial evidence until explicit deletion", async () => {

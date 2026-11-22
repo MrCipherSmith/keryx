@@ -120,10 +120,11 @@ export function ModelPicker({ tier, choices, onSelect, onClose }: {
   </div>;
 }
 
-export function ModelTier({ label, picked, models, open, setOpen, onChange, readOnly = false, emptyLabel }: {
+export function ModelTier({ label, picked, models, open, setOpen, onChange, readOnly = false, emptyLabel, maxModels = DESK_MAX_POOL_MODELS }: {
   label: string; picked: DeskReviewModel[]; models: ReadonlyMap<string, ReviewLaunchModel>;
   readOnly?: boolean;
   emptyLabel?: string;
+  maxModels?: number;
   open: boolean; setOpen: (open: boolean) => void; onChange: (models: DeskReviewModel[]) => void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -139,7 +140,7 @@ export function ModelTier({ label, picked, models, open, setOpen, onChange, read
     <header className="review-launch-tier-head">
       <strong>{label}</strong>
       {!readOnly && <button ref={trigger} className="btn btn-sm" type="button" aria-label={`Add model to ${label} tier`}
-        aria-expanded={open} aria-controls={id} disabled={!choices.length || picked.length >= DESK_MAX_POOL_MODELS}
+        aria-expanded={open} aria-controls={id} disabled={!choices.length || picked.length >= maxModels}
         onClick={() => open ? close() : setOpen(true)}><Icon name="plus" size={13} /> Add model</button>}
     </header>
     <div id={id} hidden={!open}>{open && <ModelPicker tier={label} choices={choices} onClose={close}

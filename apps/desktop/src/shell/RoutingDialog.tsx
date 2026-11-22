@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ROUTING_TIER_IDS, type RoutingTier, type TierSettingsSnapshot } from "../../../../src/harness/routing/model-class";
+import { ROUTING_MAX_TIER_MODELS, ROUTING_TIER_IDS, type RoutingTier, type TierSettingsSnapshot } from "../../../../src/harness/routing/model-class";
 import { COMMAND_METHOD } from "../acp/commands";
 import type { CommandResult } from "../acp/types";
 import { Dialog, Spinner } from "../components/ui";
@@ -109,7 +109,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
           {ROUTING_TIER_IDS.map(tier => {
             const project = settings.tiers.find(row => row.tier === tier)?.project;
             return <ModelTier key={tier} label={project ? `${tierLabel[tier]} · Project` : tierLabel[tier]}
-              picked={project ? modelChoices(project) : pools[tier]} models={available} readOnly={Boolean(project) || saving} emptyLabel="Use session model"
+              picked={project ? modelChoices(project) : pools[tier]} models={available} readOnly={Boolean(project) || saving} emptyLabel="Use session model" maxModels={ROUTING_MAX_TIER_MODELS}
               open={open === tier && !saving} setOpen={expanded => setOpen(expanded ? tier : undefined)}
               onChange={selected => setPools(previous => ({ ...previous, [tier]: selected }))} />;
           })}

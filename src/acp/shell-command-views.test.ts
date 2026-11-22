@@ -160,6 +160,21 @@ describe("/routing", () => {
     expect(loadRouting(host.cwd, configDir).classes.expert.candidates).toEqual(candidates);
   });
 
+  test("Desktop can save models projected from a canonical category assignment", async () => {
+    const configDir = tempDir("keryx-acp-tier-category-pool-");
+    const host = fakeHost(project(), configDir);
+    const target = { providerId: "openai", modelId: "older model" };
+    writeFileSync(path.join(configDir, "auth.json"), JSON.stringify({
+      modelRouting: { schemaVersion: 2, categories: { quick: { mode: "model", target } } },
+    }), { mode: 0o600 });
+    const settings: TierSettingsSnapshot = JSON.parse((await run(host, "routing", "tiers")).text);
+    expect(settings.tiers.find(t => t.tier === "light")?.user).toEqual([target]);
+    const modelPools = { strong: [], middle: [], light: [{ provider: target.providerId, model: target.modelId }] };
+    const saved = await run(host, "routing", `tiers ${settings.revision} ${JSON.stringify({ modelPools, enabled: false, replaceOverrides: false })}`);
+    expect(saved.refused).toBeUndefined();
+    expect(loadRouting(host.cwd, configDir).categories.quick).toEqual({ mode: "model", target });
+  });
+
   test("one row per category with its source, a set action, and a form for a model pick", async () => {
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"));
     const view = viewOf(await run(host, "routing"));

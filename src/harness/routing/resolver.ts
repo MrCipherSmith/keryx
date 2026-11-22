@@ -105,6 +105,7 @@ function assignmentFor(request: RoutingRequest, config: NormalizedRoutingConfig)
       (request.recommendation !== undefined || config.classifier.chain.length === 0)) {
     const suggested = request.recommendation?.modelClass;
     const modelClass = suggested === "frontier" && !config.classes.frontier.candidates.some(candidate => candidate.enabled)
+      && config.classes.frontier.fallbackClasses.length === 0
       ? "expert" : suggested ??
       ROUTING_TIERS[ROUTING_CATEGORY_TIERS[request.category]];
     const { candidates, fallbackClasses } = config.classes[modelClass];
