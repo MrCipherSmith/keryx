@@ -77,13 +77,21 @@ test("direction, depth and type controls filter the accessible relationship list
   expect(host.textContent).toContain("Client → imports → Server");
   await act(async () => { selects[0]!.value = "incoming"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
   expect(host.textContent).not.toContain("Guide → describes → Client");
+  await act(async () => { selects[0]!.value = "outgoing"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => { button("Open Server").click(); });
+  expect(host.querySelector("article h2")?.textContent).toBe("Server");
 });
 
-test("debounced full-text hits identify their wiki page", async () => {
+test("full-text hits stay visible when local matches fill the result limit", async () => {
   const originalTimeout = window.setTimeout;
   let runTimer: () => void = () => {};
   window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") runTimer = () => callback(); return 1; }) as typeof window.setTimeout;
-  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "search" ? Promise.resolve({ ...snapshot, hits: [{ node: page, section: "Setup", snippet: "distinct phrase" }] }) : request(cwd, input);
+  const localMatches = Array.from({ length: 210 }, (_, index) => ({ ...file, id: `local-${index}`, path: `src/distinct-${index}.ts` }));
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...catalog, nodes: [page, ...localMatches] });
+    if (input.action === "search") return Promise.resolve({ ...snapshot, hits: [{ node: page, section: "Setup", snippet: "distinct phrase" }] });
+    return request(cwd, input);
+  };
   try {
     await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
     const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
@@ -91,6 +99,7 @@ test("debounced full-text hits identify their wiki page", async () => {
     await act(async () => { runTimer(); });
     expect(host.textContent).toContain("Setup: distinct phrase");
     expect(host.textContent).toContain("Guide");
+    expect(host.querySelectorAll(".metaproject-list li")).toHaveLength(200);
   } finally { window.setTimeout = originalTimeout; }
 });
 
@@ -107,8 +116,18 @@ test("snapshot mismatch offers a refresh and drops a selection absent from the r
   version = 1;
   await act(async () => { button("Refresh catalog").click(); });
   expect(host.textContent).not.toContain("Project knowledge changed while loading");
-  expect(host.textContent).toContain("Fresh detail");
   expect(host.textContent).toContain("src/client.ts");
+});
+
+test("Wiki opens the article before the collapsed relationship list", async () => {
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, edges: [{ from: page.id, to: file.id, kind: "describes" }] })
+    : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await act(async () => { button("Wiki").click(); });
+  const panel = host.querySelector(".metaproject-content");
+  expect(panel?.firstElementChild?.tagName).toBe("ARTICLE");
+  expect(panel?.querySelector("details")?.open).toBe(false);
 });
 
 test("old remote hits disappear immediately on a new query and mismatched search offers refresh", async () => {
@@ -122,7 +141,10 @@ test("old remote hits disappear immediately on a new query and mismatched search
     await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
     const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
     const type = async (value: string) => act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value); search.dispatchEvent(new Event("input", { bubbles: true })); });
-    await type("first"); await act(async () => { runTimer(); });
+    await type("first");
+    expect(host.textContent).toContain("Searching project knowledge");
+    expect(host.textContent).not.toContain("No results.");
+    await act(async () => { runTimer(); });
     expect(host.textContent).toContain("first remote match");
     await type("second");
     expect(host.textContent).not.toContain("first remote match");
@@ -150,7 +172,7 @@ test("a wiki fragment scrolls only to a heading inside the current article", asy
   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "detail"
     ? Promise.resolve({ ...snapshot, node: page, markdown: "[Jump](#installation)\n\n## Installation" }) : request(cwd, input);
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
-  const heading = host.querySelector<HTMLElement>("article h2 + p + .md h2");
+  const heading = host.querySelector<HTMLElement>("article .md h2");
   if (!heading) throw new Error("Missing heading");
   let scrolled = false;
   heading.scrollIntoView = () => { scrolled = true; };

@@ -1,18 +1,20 @@
 import cytoscape from "cytoscape";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  MetaprojectCatalog,
-  MetaprojectDetail,
-  MetaprojectDirection,
-  MetaprojectEdge,
-  MetaprojectEdgeKind,
-  MetaprojectHit,
-  MetaprojectNeighbors,
-  MetaprojectNode,
-  MetaprojectRequest,
-  MetaprojectResponse,
-  MetaprojectSearch,
+import {
+  METAPROJECT_NODE_LIMIT,
+  type MetaprojectCatalog,
+  type MetaprojectDetail,
+  type MetaprojectDirection,
+  type MetaprojectEdgeKind,
+  type MetaprojectHit,
+  type MetaprojectNeighbors,
+  type MetaprojectNode,
+  type MetaprojectRequest,
+  type MetaprojectResponse,
+  type MetaprojectSearch,
 } from "../../../../src/integrations/metaproject-explorer-contract";
+import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
+import { Icon } from "../components/Icon";
 import { renderRepositoryMarkdown } from "../components/Markdown";
 import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
@@ -25,12 +27,15 @@ type Request = (
 ) => Promise<MetaprojectResponse>;
 const KINDS: MetaprojectEdgeKind[] = [
   "imports",
+  "asset",
   "describes",
   "links",
   "contains",
   "defines",
   "calls",
 ];
+const EMPTY_HITS: readonly MetaprojectHit[] = [];
+const GRAPH_PADDING = 36;
 
 function Graph({
   projection,
@@ -43,14 +48,15 @@ function Graph({
 }) {
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!container.current) return;
-    const theme = getComputedStyle(container.current);
+    const viewport = container.current;
+    if (!viewport) return;
+    const theme = getComputedStyle(viewport);
     const color = (token: string, fallback: string) =>
       theme.getPropertyValue(token).trim() || fallback;
     const neighbors = projection.nodes.filter((node) => node.id !== selected);
     const positions = new Map(neighbors.map((node, index) => [node.id, index]));
     const graph = cytoscape({
-      container: container.current,
+      container: viewport,
       elements: [
         ...projection.nodes.map((node) => {
           const index = positions.get(node.id) ?? 0;
@@ -59,8 +65,8 @@ function Graph({
             data: {
               id: node.id,
               label: node.title,
-              selected: node.id === selected,
             },
+            classes: node.id === selected ? "root-node" : undefined,
             position:
               node.id === selected
                 ? { x: 0, y: 0 }
@@ -89,9 +95,11 @@ function Graph({
           },
         },
         {
-          selector: 'node[selected = "true"]',
+          selector: "node.root-node",
           style: {
             "background-color": color("--accent", "#67b5a4"),
+            "border-color": color("--fg", "#aebbc9"),
+            "border-width": 2,
             width: 38,
             height: 38,
           },
@@ -100,17 +108,24 @@ function Graph({
           selector: "edge",
           style: {
             width: 1,
-            "line-color": color("--border", "#738798"),
-            "target-arrow-color": color("--border", "#738798"),
+            "line-color": color("--fg-subtle", "#738798"),
+            "target-arrow-color": color("--fg-subtle", "#738798"),
             "target-arrow-shape": "triangle",
             "curve-style": "bezier",
           },
         },
       ],
-      layout: { name: "preset", fit: true, padding: 36 },
+      layout: { name: "preset", fit: true, padding: GRAPH_PADDING },
     });
     graph.on("tap", "node", (event) => select(event.target.id()));
-    return () => graph.destroy();
+    const observer = new ResizeObserver(() => {
+      if (viewport.clientWidth && viewport.clientHeight) graph.resize().fit(undefined, GRAPH_PADDING);
+    });
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+      graph.destroy();
+    };
   }, [projection, selected, select]);
   return (
     <div className="metaproject-graph" ref={container} aria-hidden="true" />
@@ -187,6 +202,53 @@ function RepositoryMarkdown({
   );
 }
 
+function RelationshipList({
+  projection,
+  select,
+}: {
+  projection: MetaprojectNeighbors;
+  select: (id: string) => void;
+}) {
+  const nodes = new Map(projection.nodes.map(node => [node.id, node]));
+  return (
+    <>
+      {projection.truncated && <p role="status">Relationship projection is limited.</p>}
+      {projection.edges.length === 0 && <p>No relationships for these filters.</p>}
+      <ul className="metaproject-relations">
+        {projection.edges.map((edge, index) => {
+          const from = nodes.get(edge.from);
+          const to = nodes.get(edge.to);
+          if (!from || !to) return null;
+          const label = `${from.title} → ${edge.kind} → ${to.title}`;
+          const evidence = edge.evidence?.join(" · ");
+          const adjacent = from.id === projection.root ? to : to.id === projection.root ? from : null;
+          return (
+            <li key={`${edge.from}-${edge.to}-${edge.kind}-${index}`}>
+              {adjacent ? (
+                <button className="metaproject-row" onClick={() => select(adjacent.id)} title={adjacent.path}>
+                  {label}
+                  {evidence && <span className="metaproject-meta">{evidence}</span>}
+                </button>
+              ) : (
+                <div className="metaproject-row">
+                  {label}
+                  {evidence && <span className="metaproject-meta">{evidence}</span>}
+                  <div className="metaproject-relation-actions">
+                    <button className="btn" onClick={() => select(from.id)} title={from.path}>Open {from.title}</button>
+                    {to.id !== from.id && (
+                      <button className="btn" onClick={() => select(to.id)} title={to.path}>Open {to.title}</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
 export function MetaprojectView(props: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
@@ -225,12 +287,20 @@ function Explorer({
   );
   const [error, setError] = useState("");
   const [detailError, setDetailError] = useState("");
-  const [searchError, setSearchError] = useState("");
+  const [searchError, setSearchError] = useState<{ query: string; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [rebuilding, setRebuilding] = useState(false);
   const [revision, setRevision] = useState(0);
   const project = useRef(0);
   const loaded = useRef(false);
+  const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
+  const content = useRef<HTMLElement>(null);
+  const graphIndex = useMemo(
+    () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
+    [catalog],
+  );
+  const selectedNode = graphIndex?.byId.get(selection);
+  const searchQuery = query.trim();
   useEffect(() => {
     const generation = ++project.current;
     setError("");
@@ -260,35 +330,42 @@ function Explorer({
     };
   }, [cwd, request, revision]);
   useEffect(() => {
-    if (!catalog || !query.trim()) {
+    if (!catalog || !searchQuery) {
       setSearchResult(null);
-      setSearchError("");
+      setSearchError(null);
       return;
     }
     setSearchResult(null);
-    setSearchError("");
+    setSearchError(null);
     let active = true;
     const timer = window.setTimeout(() => {
       void (async () => {
-        try {
-          const result = (await request(cwd, {
+        const previous = searchInFlight.current;
+        if (previous) await previous.catch(() => {});
+        if (!active) return;
+        const pending = Promise.resolve().then(() => request(cwd, {
             action: "search",
-            query: query.trim(),
-          })) as MetaprojectSearch;
+            query: searchQuery,
+        }));
+        searchInFlight.current = pending;
+        try {
+          const result = (await pending) as MetaprojectSearch;
           if (active) {
             if (result.snapshotId !== catalog.snapshotId)
               setSnapshotMismatch(true);
             else {
               setSearchResult({
-                query: query.trim(),
+                query: searchQuery,
                 snapshotId: result.snapshotId,
                 hits: result.hits,
               });
-              setSearchError("");
+              setSearchError(null);
             }
           }
         } catch (cause) {
-          if (active) setSearchError(errMessage(cause));
+          if (active) setSearchError({ query: searchQuery, message: errMessage(cause) });
+        } finally {
+          if (searchInFlight.current === pending) searchInFlight.current = null;
         }
       })();
     }, 250);
@@ -296,12 +373,19 @@ function Explorer({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [catalog, cwd, query, request]);
+  }, [catalog, cwd, request, searchQuery]);
+  useEffect(() => {
+    if (content.current) content.current.scrollTop = 0;
+  }, [mode, selection]);
   useEffect(() => {
     setDetail(null);
     setProjection(null);
     setDetailError("");
     if (!catalog || !selection) return;
+    if (selectedNode && selectedNode.kind !== "wiki" && selectedNode.kind !== "symbol") {
+      setDetail({ schemaVersion: catalog.schemaVersion, snapshotId: catalog.snapshotId, node: selectedNode });
+      return;
+    }
     let active = true;
     void (async () => {
       try {
@@ -321,74 +405,26 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [catalog, cwd, request, selection]);
-  const adjacency = useMemo(() => {
-    const index = new Map<string, MetaprojectEdge[]>();
-    for (const edge of catalog?.edges ?? [])
-      for (const id of [edge.from, edge.to]) {
-        const adjacent = index.get(id);
-        if (adjacent) adjacent.push(edge);
-        else index.set(id, [edge]);
-      }
-    return index;
-  }, [catalog]);
+  }, [catalog, cwd, request, selectedNode, selection]);
   useEffect(() => {
     setProjection(null);
     if (!catalog || !selection) return;
-    const selectedNode = catalog.nodes.find((node) => node.id === selection);
+    const neighborsRequest = { action: "neighbors", id: selection, depth, direction, kinds } as const;
     if (
-      selectedNode &&
+      graphIndex && selectedNode &&
       !catalog.truncated &&
       selectedNode.kind !== "symbol" &&
       !kinds.includes("calls") &&
       !kinds.includes("defines")
     ) {
-      const ids = new Set([selection]);
-      const edges = new Set<(typeof catalog.edges)[number]>();
-      let frontier = [selection];
-      for (let step = 0; step < depth; step++) {
-        const next: string[] = [];
-        for (const id of frontier)
-          for (const edge of adjacency.get(id) ?? []) {
-            if (
-              !kinds.includes(edge.kind) ||
-              (direction === "incoming" && edge.to !== id) ||
-              (direction === "outgoing" && edge.from !== id)
-            )
-              continue;
-            edges.add(edge);
-            const other = edge.from === id ? edge.to : edge.from;
-            if (!ids.has(other) && ids.size < 200) {
-              ids.add(other);
-              next.push(other);
-            }
-          }
-        frontier = next;
-      }
-      const boundedEdges = [...edges].filter(
-        (edge) => ids.has(edge.from) && ids.has(edge.to),
-      );
-      setProjection({
-        schemaVersion: catalog.schemaVersion,
-        snapshotId: catalog.snapshotId,
-        root: selection,
-        nodes: catalog.nodes.filter((node) => ids.has(node.id)),
-        edges: boundedEdges.slice(0, 400),
-        truncated: ids.size >= 200 || boundedEdges.length > 400,
-      });
+      setProjection(projectMetaprojectGraph(graphIndex, catalog, neighborsRequest));
       return;
     }
     if (catalog.graph === "missing") return;
     let active = true;
     void (async () => {
       try {
-        const result = (await request(cwd, {
-          action: "neighbors",
-          id: selection,
-          depth,
-          direction,
-          kinds,
-        })) as MetaprojectNeighbors;
+        const result = (await request(cwd, neighborsRequest)) as MetaprojectNeighbors;
         if (active) {
           if (result.snapshotId !== catalog.snapshotId)
             setSnapshotMismatch(true);
@@ -401,12 +437,15 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [adjacency, catalog, cwd, request, selection, depth, direction, kinds]);
-  const hits =
-    searchResult?.query === query.trim() &&
+  }, [graphIndex, selectedNode, catalog, cwd, request, selection, depth, direction, kinds]);
+  const resolvedSearch =
+    searchResult?.query === searchQuery &&
     searchResult.snapshotId === catalog?.snapshotId
-      ? searchResult.hits
-      : [];
+      ? searchResult
+      : null;
+  const hits = resolvedSearch?.hits ?? EMPTY_HITS;
+  const searchFailure = searchError?.query === searchQuery ? searchError.message : "";
+  const searching = Boolean(searchQuery && !resolvedSearch && !searchFailure && !snapshotMismatch);
   const nodes = useMemo(
     () => [
       ...new Map(
@@ -420,18 +459,25 @@ function Explorer({
     [catalog, hits, projection],
   );
   const results = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const local = (catalog?.nodes ?? [])
-      .filter(
-        (node) =>
-          !needle ||
-          `${node.title} ${node.path}`.toLowerCase().includes(needle),
-      )
-      .map((node) => ({ node }) as MetaprojectHit);
-    return [
-      ...new Map([...local, ...hits].map((hit) => [hit.node.id, hit])).values(),
-    ].slice(0, 200);
-  }, [catalog, hits, query]);
+    const needle = searchQuery.toLowerCase();
+    const exact: MetaprojectHit[] = [];
+    const local: MetaprojectHit[] = [];
+    for (const node of catalog?.nodes ?? []) {
+      const title = node.title.toLowerCase();
+      const path = node.path.toLowerCase();
+      if (needle && (title === needle || path === needle)) exact.push({ node });
+      else if (title.includes(needle) || path.includes(needle)) local.push({ node });
+    }
+    const remote = new Map(hits.map(hit => [hit.node.id, hit]));
+    const ranked = new Map<string, MetaprojectHit>();
+    for (const batch of [exact, hits, local]) {
+      for (const hit of batch) {
+        if (!ranked.has(hit.node.id)) ranked.set(hit.node.id, remote.get(hit.node.id) ?? hit);
+        if (ranked.size === METAPROJECT_NODE_LIMIT) return [...ranked.values()];
+      }
+    }
+    return [...ranked.values()];
+  }, [catalog, hits, searchQuery]);
   const select = useMemo(() => (id: string) => setSelection(id), []);
   const rebuild = async () => {
     const generation = project.current;
@@ -446,63 +492,83 @@ function Explorer({
       if (generation === project.current) setRebuilding(false);
     }
   };
+  const currentProjection = projection?.root === selection ? projection : null;
+  const detailPanel = detail?.node.id === selection && (
+    <article className="metaproject-article">
+      <header className="metaproject-article-header">
+        <h2>{detail.node.title}</h2>
+        <p className="metaproject-meta">
+          {[detail.node.kind, detail.node.pageType, detail.node.status, detail.node.path]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      </header>
+      {detail.markdown && (
+        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path} select={select} />
+      )}
+    </article>
+  );
   return (
-    <section className="metaproject" aria-label="Metaproject explorer">
-      <header className="metaproject-header">
-        <h2>Metaproject</h2>
-        <input
-          aria-label="Search project knowledge"
-          placeholder="Search names, paths and wiki text"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <div role="group" aria-label="View">
+    <section className="flows metaproject" aria-label="Metaproject explorer">
+      <header className="flows-toolbar metaproject-header">
+        <div className="flows-heading"><h1>Metaproject</h1></div>
+        <label className="search-field">
+          <Icon name="search" size={14} />
+          <input
+            type="search"
+            aria-label="Search project knowledge"
+            placeholder="Search names, paths and wiki text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <div className="segmented" role="group" aria-label="View">
           <button
-            className="btn btn-sm"
             aria-pressed={mode === "graph"}
             onClick={() => setMode("graph")}
           >
+            <Icon name="branch" size={14} />
             Graph
           </button>
           <button
-            className="btn btn-sm"
             aria-pressed={mode === "wiki"}
             onClick={() => setMode("wiki")}
           >
+            <Icon name="file" size={14} />
             Wiki
           </button>
         </div>
       </header>
-      {loading && <p role="status">Loading project knowledge…</p>}
+      {loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
       {error && (
-        <p role="alert">
-          {error}{" "}
+        <div className="inline-banner tone-warn" role="alert">
+          <span>{error}</span>
           <button
             className="btn btn-sm"
             onClick={() => setRevision((value) => value + 1)}
           >
             Retry
           </button>
-        </p>
+        </div>
       )}
       {snapshotMismatch && (
-        <p role="alert">
-          Project knowledge changed while loading.{" "}
+        <div className="inline-banner tone-warn" role="alert">
+          <span>Project knowledge changed while loading.</span>
           <button
             className="btn btn-sm"
             onClick={() => setRevision((value) => value + 1)}
           >
             Refresh catalog
           </button>
-        </p>
+        </div>
       )}
       {catalog && (
         <>
           {catalog.graph !== "ready" && (
-            <div className="metaproject-notice" role="status">
-              Graph {catalog.graph}. {catalog.graphReason}{" "}
+            <div className="inline-banner tone-warn" role="status">
+              <span>Graph {catalog.graph}. {catalog.graphReason}</span>
               <button
-                className="btn btn-sm"
+                className="btn metaproject-rebuild"
                 disabled={rebuilding}
                 onClick={() => void rebuild()}
               >
@@ -511,27 +577,28 @@ function Explorer({
             </div>
           )}
           {catalog.truncated && (
-            <p>Catalog is limited; search for more results.</p>
+            <div className="inline-banner tone-neutral" role="status">Catalog is limited. Search for more results.</div>
           )}
           <div className="metaproject-panes">
             <nav className="metaproject-list" aria-label="Search results">
-              <h3>{query ? "Results" : "Catalog"}</h3>
-              {searchError && <p role="alert">Search: {searchError}</p>}
+              <h2>{searchQuery ? "Results" : "Catalog"}</h2>
+              {searchFailure && <p role="alert">Search failed. {searchFailure}</p>}
               <ul>
                 {results.map((hit) => (
                   <li key={hit.node.id}>
                     <button
+                      className="metaproject-row"
                       aria-current={
                         selection === hit.node.id ? "true" : undefined
                       }
                       onClick={() => select(hit.node.id)}
                     >
                       <strong>{hit.node.title}</strong>
-                      <span>
+                      <span className="metaproject-meta">
                         {hit.node.kind} · {hit.node.path}
                       </span>
                       {hit.snippet && (
-                        <small>
+                        <small className="metaproject-snippet">
                           {hit.section ? `${hit.section}: ` : ""}
                           {hit.snippet}
                         </small>
@@ -540,26 +607,32 @@ function Explorer({
                   </li>
                 ))}
               </ul>
-              {!results.length && <p>No results.</p>}
+              {!results.length && (
+                searching
+                  ? <p role="status">Searching project knowledge…</p>
+                  : !searchFailure && !snapshotMismatch && <p>{searchQuery ? "No results." : "No indexed project knowledge."}</p>
+              )}
             </nav>
-            <main className="metaproject-content">
+            <section className="metaproject-content" ref={content} aria-label={mode === "wiki" ? "Wiki article" : "Relationship graph"}>
               {detailError && (
-                <p role="alert">
-                  {detailError}{" "}
+                <div className="inline-banner tone-warn" role="alert">
+                  <span>{detailError}</span>
                   <button
                     className="btn btn-sm"
                     onClick={() => setRevision((value) => value + 1)}
                   >
                     Retry
                   </button>
-                </p>
+                </div>
               )}
+              {mode === "wiki" && detailPanel}
               {mode === "graph" && (
                 <>
                   <div className="metaproject-controls">
                     <label>
                       Direction{" "}
                       <select
+                        className="select-compact"
                         value={direction}
                         onChange={(event) =>
                           setDirection(
@@ -575,6 +648,7 @@ function Explorer({
                     <label>
                       Depth{" "}
                       <select
+                        className="select-compact"
                         value={depth}
                         onChange={(event) =>
                           setDepth(event.target.value === "2" ? 2 : 1)
@@ -604,73 +678,30 @@ function Explorer({
                       ))}
                     </fieldset>
                   </div>
-                  {projection && catalog.graph !== "missing" && (
+                  {currentProjection && catalog.graph !== "missing" && (
                     <Graph
-                      projection={projection}
+                      projection={currentProjection}
                       selected={selection}
                       select={select}
                     />
                   )}
                 </>
               )}
-              {projection && (
-                <>
-                  {projection.truncated && (
-                    <p>Relationship projection is limited.</p>
-                  )}
-                  <h3>Relationships</h3>
-                  <ul className="metaproject-relations">
-                    {projection.edges.map((edge, index) => {
-                      const from = nodes.find((item) => item.id === edge.from);
-                      const to = nodes.find((item) => item.id === edge.to);
-                      return from && to ? (
-                        <li
-                          key={`${edge.from}-${edge.to}-${edge.kind}-${index}`}
-                        >
-                          <button
-                            onClick={() =>
-                              select(edge.from === selection ? to.id : from.id)
-                            }
-                          >
-                            {from.title} → {edge.kind} → {to.title}
-                            <span>{edge.evidence?.join(" · ")}</span>
-                          </button>
-                        </li>
-                      ) : null;
-                    })}
-                  </ul>
-                  {!projection.edges.length && (
-                    <p>No relationships for these filters.</p>
-                  )}
-                </>
+              {currentProjection && mode === "graph" && (
+                <section className="metaproject-relationship-section">
+                  <h2>Relationships</h2>
+                  <RelationshipList projection={currentProjection} select={select} />
+                </section>
               )}
-              {detail && (
-                <article>
-                  <h2>{detail.node.title}</h2>
-                  <p>
-                    {[
-                      detail.node.kind,
-                      detail.node.pageType,
-                      detail.node.status,
-                      detail.node.path,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  {detail.markdown ? (
-                    <RepositoryMarkdown
-                      text={detail.markdown}
-                      nodes={nodes}
-                      source={detail.node.path}
-                      select={select}
-                    />
-                  ) : (
-                    <p>No wiki content for this item.</p>
-                  )}
-                </article>
+              {currentProjection && mode === "wiki" && currentProjection.edges.length > 0 && (
+                <details className="metaproject-relationship-section" key={selection}>
+                  <summary>Relationships <span className="count-label">{currentProjection.edges.length}</span></summary>
+                  <RelationshipList projection={currentProjection} select={select} />
+                </details>
               )}
+              {mode === "graph" && detailPanel}
               {!selection && <p>Select an item to explore it.</p>}
-            </main>
+            </section>
           </div>
         </>
       )}
