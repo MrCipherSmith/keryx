@@ -8,6 +8,7 @@ let connected = false;
 let nextError: string | null = null;
 let copyFails = true;
 let openFails = true;
+let onOpen: (() => void) | undefined;
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 Object.defineProperty(navigator, "clipboard", {
   configurable: true,
@@ -25,6 +26,7 @@ let nextStatus: Promise<ReturnType<typeof currentChannelStatus>> | undefined;
 mockIPC((command, args) => {
   calls.push({ command, args });
   if (command === "plugin:opener|open_url") {
+    onOpen?.();
     if (openFails) throw new Error("Opener unavailable");
     return;
   }
@@ -54,6 +56,14 @@ const root = createRoot(host);
 const { act } = React;
 function button(label: string) { return [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === label); }
 async function mount() { await act(() => root.render(null)); await act(async () => { root.render(<TelegramBotSettings />); }); await act(async () => { await telegramChannelStatus(); }); }
+async function clickOpen(open: HTMLButtonElement) {
+  await act(async () => {
+    const invoked = new Promise<void>((resolve) => { onOpen = resolve; });
+    open.click();
+    await invoked;
+    onOpen = undefined;
+  });
+}
 try {
   await mount();
   assert.equal(host.querySelector('input[type="password"]'), null);
@@ -78,7 +88,7 @@ try {
   assert.ok(open);
   await act(async () => { copy.click(); });
   assert.match(host.textContent ?? "", /Could not copy the code/);
-  await act(async () => { open.click(); });
+  await clickOpen(open);
   assert.match(host.textContent ?? "", /Could not open Telegram/);
   assert.match(host.textContent ?? "", /Could not copy the code/);
   copyFails = false;
@@ -86,7 +96,7 @@ try {
   assert.doesNotMatch(host.textContent ?? "", /Could not copy the code/);
   assert.match(host.textContent ?? "", /Could not open Telegram/);
   openFails = false;
-  await act(async () => { open.click(); });
+  await clickOpen(open);
   assert.doesNotMatch(host.textContent ?? "", /Could not open Telegram/);
   await mount();
   assert.ok(host.querySelector('svg[aria-label="Pairing QR code"]'), "pending pairing resumes after reopening Settings");

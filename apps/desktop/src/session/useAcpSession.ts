@@ -1001,8 +1001,8 @@ export function useAcpSession(cwd: string) {
       const alreadyHeld = l.reg.held.has(sessionId);
       if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope)) throw new Error("Could not open the linked session.");
       if (issueScope?.aborted) return;
-      if (alreadyHeld && pendingQuestions && !resumeIssueQuestions(sessionId)) {
-        if (l.reg.turns.has(sessionId) || l.reg.telegramTurns.has(sessionId)) dispatch({ t: "queueAdd", sessionId, text: "Resume the pending issue questions.", resumeIssueQuestions: true });
+      if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId) && !resumeIssueQuestions(sessionId)) {
+        if (l.reg.telegramTurns.has(sessionId)) dispatch({ t: "queueAdd", sessionId, text: "Resume the pending issue questions.", resumeIssueQuestions: true });
         else throw new Error("Reopen the linked session and resume Flow preparation.");
       }
       if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, { issueLaunchId: initialTurn.launchId })) {
