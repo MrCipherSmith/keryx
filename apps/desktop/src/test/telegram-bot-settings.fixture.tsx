@@ -61,6 +61,15 @@ try {
   assert.match(host.textContent ?? "", /ABCDEFGH/);
   await mount();
   assert.ok(host.querySelector('svg[aria-label="Pairing QR code"]'), "pending pairing resumes after reopening Settings");
+  const beforeCheck = calls.filter(({ command }) => command === "telegram_channel_status").length;
+  const pendingStatus = currentChannelStatus();
+  let resolvePendingStatus!: (value: typeof pendingStatus) => void;
+  nextStatus = new Promise((resolve) => { resolvePendingStatus = resolve; });
+  await act(() => root.render(<TelegramBotSettings refreshKey={1} />));
+  await act(async () => { button("Check pairing")?.click(); });
+  assert.equal(calls.filter(({ command }) => command === "telegram_channel_status").length, beforeCheck + 1);
+  await act(async () => { resolvePendingStatus(pendingStatus); });
+  assert.equal(calls.filter(({ command }) => command === "telegram_channel_status").length, beforeCheck + 2);
   pairing = { state: "waiting-for-confirmation", userId: 42, expiresAt: Date.now() + 600_000, problems: [] };
   await act(async () => { button("Check pairing")?.click(); });
   assert.equal(host.querySelector('svg[aria-label="Pairing QR code"]'), null);

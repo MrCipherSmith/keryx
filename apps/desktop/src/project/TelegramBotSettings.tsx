@@ -47,6 +47,8 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [openFailed, setOpenFailed] = useState(false);
   const [notice, setNotice] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -57,6 +59,7 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
   const refreshing = useRef(false);
   const refreshPending = useRef(false);
   const version = useRef(0);
+  const utilityRequests = useRef({ copy: 0, open: 0 });
 
   const refresh = useCallback(async () => {
     refreshPending.current = true;
@@ -105,6 +108,13 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
 
   const pairing = operation?.pairing;
   useEffect(() => {
+    utilityRequests.current.copy++;
+    utilityRequests.current.open++;
+    setCopyFailed(false);
+    setOpenFailed(false);
+  }, [operation?.operationId, pairing?.code]);
+
+  useEffect(() => {
     setExpired(false);
     if (!pairing || (pairing.state !== "waiting-for-user" && pairing.state !== "waiting-for-confirmation" && pairing.state !== "waiting-for-group")) return;
     const delay = Math.max(0, pairing.expiresAt - Date.now());
@@ -119,6 +129,8 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
   const perform = async (request: TelegramChannelRequest) => {
     if (mutating.current) return;
     mutating.current = true;
+    // The new revision invalidates the in-flight read. Reconcile it after the action.
+    if (refreshing.current) refreshPending.current = true;
     const requestVersion = ++version.current;
     setBusy(true);
     setActionError("");
@@ -154,7 +166,22 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
     if (operation) void perform({ action, operationId: operation.operationId, expectedRevision: operation.revision });
   };
   const copyCode = async (code: string) => {
-    try { await navigator.clipboard.writeText(code); } catch { setActionError("Could not copy the code. Enter it manually."); }
+    const request = ++utilityRequests.current.copy;
+    try {
+      await navigator.clipboard.writeText(code);
+      if (alive.current && utilityRequests.current.copy === request) setCopyFailed(false);
+    } catch {
+      if (alive.current && utilityRequests.current.copy === request) setCopyFailed(true);
+    }
+  };
+  const openPairingLink = async (link: string) => {
+    const request = ++utilityRequests.current.open;
+    try {
+      await openExternal(link);
+      if (alive.current && utilityRequests.current.open === request) setOpenFailed(false);
+    } catch {
+      if (alive.current && utilityRequests.current.open === request) setOpenFailed(true);
+    }
   };
   const link = pairing?.state === "waiting-for-user" && !expired && pairing.expiresAt > Date.now() ? pairingLink(pairing.botUsername, pairing.code) : null;
   const available = channel?.capabilities?.desktopTelegram === 1;
@@ -181,8 +208,10 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
       {operation.state === "same-bot-ready" ? <p>Telegram verified the same bot. Confirm to replace its token and keep the current connection.</p> : null}
       {pairing?.state === "waiting-for-user" && !expired ? <>
         <p className="settings-row-help">Send this one-time code to the bot in a private chat. It expires in ten minutes.</p>
-        {link ? <><PairingQr link={link} /><div className="settings-actions"><button className="btn" onClick={() => void openExternal(link).catch(() => setActionError("Could not open Telegram. Send the code manually."))}>Open in Telegram</button></div></> : <p className="settings-row-help">Open the bot in Telegram and send the code manually.</p>}
+        {link ? <><PairingQr link={link} /><div className="settings-actions"><button className="btn" onClick={() => void openPairingLink(link)}>Open in Telegram</button></div></> : <p className="settings-row-help">Open the bot in Telegram and send the code manually.</p>}
         {pairing.code ? <><p><strong>{pairing.code}</strong></p><button className="btn" onClick={() => void copyCode(pairing.code ?? "")}>Copy code</button></> : null}
+        {link && openFailed ? <p className="field-error" role="alert">Could not open Telegram. Send the code manually.</p> : null}
+        {pairing.code && copyFailed ? <p className="field-error" role="alert">Could not copy the code. Enter it manually.</p> : null}
       </> : null}
       {pairing?.state === "waiting-for-confirmation" && pairing.userId !== undefined && !expired ? <><p>Telegram account ID: {pairing.userId}. Confirm that this is your account before connecting the group.</p><button className="btn" disabled={busy} onClick={() => runOperation("confirm-account")}>This is my account</button></> : null}
       {pairing?.state === "waiting-for-group" || pairing?.state === "ready" ? <><p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>{pairing.chatTitle ? <p style={{ overflowWrap: "anywhere" }}>Forum: {pairing.chatTitle}</p> : null}{pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}</> : null}
