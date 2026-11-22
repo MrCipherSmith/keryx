@@ -62,6 +62,7 @@ Resolution order:
 | fresh-eyes | quality | Doubt work still in flight from a reader who was never told why it works. | gdskills/quality/fresh-eyes/SKILL.md |
 | git-publish | quality | Write commits, push branches and open pull requests with explicit staging, hook, upstream, force and PR-body rules. | gdskills/quality/git-publish/SKILL.md |
 | metaproject-security | quality | Check Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection, and data exfiltration. | gdskills/quality/metaproject-security/SKILL.md |
+| openspec-read | quality | Browse OpenSpec requirements, changes, and source evidence in the current checkout. | gdskills/quality/openspec-read/SKILL.md |
 | perf-check | quality | Run or summarize performance, bundle, and complexity checks. | gdskills/quality/perf-check/SKILL.md |
 | pr-issue-documenter | quality | Create PR descriptions and linked issue documentation from branch changes. | gdskills/quality/pr-issue-documenter/SKILL.md |
 | root-cause | quality | Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair. | gdskills/quality/root-cause/SKILL.md |

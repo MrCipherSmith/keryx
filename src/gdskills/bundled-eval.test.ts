@@ -123,9 +123,9 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Minus the three `code-*` review profiles (`code-ai-review`,
     // `code-style-review`, `code-mobx-store-review`; flow 488): 75 - 3 = 72.
     // Minus `commit`, `push` and `pr`, plus the one `git-publish` that replaces
-    // them (flow 489): 72 - 3 + 1 = 70.
+    // them (flow 489): 72 - 3 + 1 = 70. Plus the OpenSpec reader (flow 514).
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(70);
+    expect(files.length).toBe(71);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);

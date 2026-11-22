@@ -169,6 +169,7 @@ export function renderIndexMarkdown({
   ].map((item) => `- ${item}`).join("\n");
 
   const intentRows = [
+    "| Browse OpenSpec requirements, changes, archive | `openspec` | `skills/gdskills/quality/openspec-read/SKILL.md`; `keryx openspec list/show/search` | Read the selected checkout without modifying it. |",
     enableGdskills
       ? "| Any repository task / unclear request | `metaproject-router` | `skills/gdskills/core/metaproject-router/SKILL.md` | Classify the intent first, then route to the narrowest capability. |"
       : "",
@@ -399,6 +400,7 @@ export function renderIndexGateMarkdown({
       : "",
     enableGdctx ? "| search code | `keryx ctx rg \"<pattern>\" [path]` |" : "",
     enableGdctx ? "| run a command with long output | `keryx ctx run -- <cmd>` |" : "",
+    "| OpenSpec | `keryx openspec list/show/search` |",
     enableGdwiki ? "| architecture, domain, decisions, why | `wiki/index.md`, `keryx wiki ask` |" : "",
     enableMemory ? "| past decisions, lessons, constraints | `keryx memory search \"<query>\"` |" : "",
     enableTesting ? "| what tests to run, test context | `keryx test related <file>` |" : "",
@@ -430,7 +432,7 @@ export function renderIndexGateMarkdown({
 
   return `# Metaproject Index
 
-Routing pointers. Everything else is in [\`${ROUTING_FILENAME}\`](${ROUTING_FILENAME}) — read it only if what you need is not below.
+Routing pointers. See [\`${ROUTING_FILENAME}\`](${ROUTING_FILENAME}) for other intents.
 
 | need | use |
 |---|---|

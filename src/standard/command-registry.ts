@@ -96,6 +96,21 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  {
+    module: "openspec", command: "openspec list", summary: "List OpenSpec entries in the current checkout.",
+    intent: ["list OpenSpec requirements", "list OpenSpec changes"],
+    args: [{ name: "kind", type: "enum", required: true, values: ["spec", "change", "archive"], desc: "collection" }, { name: "cursor", type: "string", desc: "page cursor" }, { name: "json", type: "bool", desc: "structured output" }], json: true, read: true,
+  },
+  {
+    module: "openspec", command: "openspec show", summary: "Read an OpenSpec entry and source evidence.",
+    intent: ["show OpenSpec requirement"],
+    args: [{ name: "<path>", type: "path", required: true, desc: "entry path" }, { name: "artifact", type: "path", desc: "contained artifact" }, { name: "section", type: "string", desc: "section identifier" }, { name: "json", type: "bool", desc: "structured output" }], json: true, read: true,
+  },
+  {
+    module: "openspec", command: "openspec search", summary: "Search OpenSpec entries and sections.",
+    intent: ["search OpenSpec"],
+    args: [{ name: "<query>", type: "string", required: true, desc: "search query" }, { name: "scope", type: "enum", values: ["all", "spec", "change", "archive"], desc: "collection scope" }, { name: "cursor", type: "string", desc: "page cursor" }, { name: "json", type: "bool", desc: "structured output" }], json: true, read: true,
+  },
   // ---- gdgraph ----------------------------------------------------------
   {
     module: "gdgraph",

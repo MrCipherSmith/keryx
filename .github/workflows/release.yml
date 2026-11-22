@@ -16,7 +16,7 @@ permissions:
 jobs:
   release:
     name: verify, publish, announce
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Same image as the core test suite.
     steps:
       - uses: actions/checkout@v4
         with:

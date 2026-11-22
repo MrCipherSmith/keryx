@@ -257,11 +257,13 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * collision that no longer exists: 285/288 -> 286/288. The two misses left are
  * `reviewer-skill-creator` and `review-pr-contract`. Nothing regressed.
  *
+ * Flow 514 adds three first-place OpenSpec reader prompts: 286/288 -> 289/291.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 286;
-export const RANK1_TOTAL = 288;
+export const RANK1_FIRST = 289;
+export const RANK1_TOTAL = 291;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -840,6 +842,18 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "security audit", owner: "security-audit" },
       { prompt: "security review of the auth changes", owner: "review-security-code" },
+    ],
+  },
+  {
+    skill: "openspec-read",
+    positives: [
+      "In OpenSpec, which requirements are current for this capability?",
+      "Show me the old requirement in the OpenSpec archive",
+      "Покажи, какое требование сейчас действует в OpenSpec",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "создай фло на эту задачу", owner: "flow-orchestrator" },
     ],
   },
   {

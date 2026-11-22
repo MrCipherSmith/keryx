@@ -3,11 +3,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   rankMetaprojectSearchHits,
   METAPROJECT_EDGE_KINDS,
+  METAPROJECT_EDGE_KINDS_V2,
   type MetaprojectCatalog,
   type MetaprojectDetail,
+  type MetaprojectDetailV2,
   type MetaprojectDirection,
   type MetaprojectEdgeKind,
   type MetaprojectHit,
+  type MetaprojectHitV2,
+  type MetaprojectSearchV2,
+  type MetaprojectRequestV2,
+  type MetaprojectV2Response,
   type MetaprojectNeighbors,
   type MetaprojectNode,
   type MetaprojectRequest,
@@ -19,7 +25,8 @@ import { Icon } from "../components/Icon";
 import { renderRepositoryMarkdown } from "../components/Markdown";
 import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
-import { requestMetaproject } from "../platform/metaproject";
+import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
+import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
 import "./metaproject.css";
 
 type Request = (
@@ -129,16 +136,32 @@ function RepositoryMarkdown({
   nodes,
   source,
   select,
+  fragment,
 }: {
   text: string;
   nodes: MetaprojectNode[];
   source: string;
   select: (id: string) => void;
+  fragment?: string;
 }) {
   const html = useMemo(() => renderRepositoryMarkdown(text), [text]);
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!fragment) return;
+    let decoded: string;
+    try { decoded = decodeURIComponent(fragment); } catch { return; }
+    const seen = new Map<string, number>();
+    for (const heading of container.current?.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6") ?? []) {
+      const base = (heading.textContent ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+      const count = seen.get(base) ?? 0;
+      seen.set(base, count + 1);
+      if ((count ? `${base}-${count}` : base) === decoded) { heading.tabIndex = -1; heading.focus(); heading.scrollIntoView?.({ block: "nearest" }); break; }
+    }
+  }, [html, fragment]);
   return (
     <div
       className="md"
+      ref={container}
       dangerouslySetInnerHTML={{ __html: html }}
       onClick={(event) => {
         const link = (event.target as Element).closest("a");
@@ -194,7 +217,7 @@ function RepositoryMarkdown({
   );
 }
 
-function RelationshipList({
+export function RelationshipList({
   projection,
   select,
 }: {
@@ -212,7 +235,10 @@ function RelationshipList({
           const to = nodes.get(edge.to);
           if (!from || !to) return null;
           const label = `${from.title} → ${edge.kind} → ${to.title}`;
-          const evidence = edge.evidence?.join(" · ");
+          const evidence = [
+            ...(edge.evidence ?? []),
+            ...(edge.provenance ?? []).map(item => `${item.path}${item.index === undefined ? "" : ` (link ${item.index})`} · ${item.digest}`),
+          ].join(" · ");
           const adjacent = from.id === projection.root ? to : to.id === projection.root ? from : null;
           return (
             <li key={`${edge.from}-${edge.to}-${edge.kind}-${index}`}>
@@ -245,6 +271,7 @@ export function MetaprojectView(props: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
   request?: Request;
+  requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
 }) {
   return <Explorer key={props.cwd} {...props} />;
 }
@@ -253,24 +280,45 @@ function Explorer({
   cwd,
   onRebuild,
   request = requestMetaproject,
+  requestV2,
 }: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
   request?: Request;
+  requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
 }) {
   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
   const [selection, setSelection] = useState("");
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"graph" | "wiki">("graph");
+  const [mode, setMode] = useState<"graph" | "wiki" | "openspec">("graph");
+  const [protocol, setProtocol] = useState<1 | 2 | null>(requestV2 ? 2 : request === requestMetaproject ? null : 1);
+  const archiveSelection = useRef(false);
+  const [protocolError, setProtocolError] = useState("");
+  useEffect(() => {
+    if (requestV2 || request !== requestMetaproject) return;
+    let active = true;
+    void negotiateMetaproject(cwd).then(value => { if (active) setProtocol(value); }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
+    return () => { active = false; };
+  }, [cwd, request, requestV2]);
+  const read: Request = useMemo(() => protocol === 2
+    ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
+    : request, [protocol, request, requestV2]);
+  const [openLocation, setOpenLocation] = useState<OpenSpecLocation | null>(null);
+  const [wikiFragment, setWikiFragment] = useState<string | undefined>();
+  archiveSelection.current = openLocation?.collection === "archive" && openLocation.id === selection;
   const [direction, setDirection] = useState<MetaprojectDirection>("both");
   const [depth, setDepth] = useState<1 | 2>(1);
   const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(
     METAPROJECT_EDGE_KINDS.filter((kind) => kind !== "calls" && kind !== "defines"),
   );
+  useEffect(() => {
+    if (protocol === 2) setKinds(current => [...new Set<MetaprojectEdgeKind>([...current, "changes-spec", "spec-context"])]);
+  }, [protocol]);
   const [searchResult, setSearchResult] = useState<{
     query: string;
     snapshotId: string;
     hits: MetaprojectHit[];
+    nextCursor?: string;
   } | null>(null);
   const [snapshotMismatch, setSnapshotMismatch] = useState(false);
   const [detail, setDetail] = useState<MetaprojectDetail | null>(null);
@@ -290,6 +338,8 @@ function Explorer({
   const project = useRef(0);
   const loaded = useRef(false);
   const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
+  const pageInFlight = useRef(false);
+  const latestSearch = useRef({ query: "", snapshot: "", generation: 0 });
   const content = useRef<HTMLElement>(null);
   const graphIndex = useMemo(
     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
@@ -297,13 +347,17 @@ function Explorer({
   );
   const selectedNode = graphIndex?.byId.get(selection);
   const searchQuery = query.trim();
+  if (latestSearch.current.query !== searchQuery || latestSearch.current.snapshot !== catalog?.snapshotId) {
+    latestSearch.current = { query: searchQuery, snapshot: catalog?.snapshotId ?? "", generation: latestSearch.current.generation + 1 };
+  }
   useEffect(() => {
+    if (protocol === null) return;
     const generation = ++project.current;
     setError("");
     if (!loaded.current) setLoading(true);
     void (async () => {
       try {
-        const result = (await request(cwd, {
+        const result = (await read(cwd, {
           action: "catalog",
         })) as MetaprojectCatalog;
         if (generation !== project.current) return;
@@ -324,7 +378,7 @@ function Explorer({
     return () => {
       project.current++;
     };
-  }, [cwd, request, revision]);
+  }, [cwd, read, revision, protocol]);
   useEffect(() => {
     if (!catalog || !searchQuery) {
       setSearchResult(null);
@@ -339,7 +393,7 @@ function Explorer({
         const previous = searchInFlight.current;
         if (previous) await previous.catch(() => {});
         if (!active) return;
-        const pending = Promise.resolve().then(() => request(cwd, {
+        const pending = Promise.resolve().then(() => read(cwd, {
             action: "search",
             query: searchQuery,
         }));
@@ -354,6 +408,7 @@ function Explorer({
                 query: searchQuery,
                 snapshotId: result.snapshotId,
                 hits: result.hits,
+                ...((result as unknown as MetaprojectSearchV2).nextCursor && { nextCursor: (result as unknown as MetaprojectSearchV2).nextCursor }),
               });
               setSearchError(null);
             }
@@ -369,7 +424,7 @@ function Explorer({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [catalog, cwd, request, searchQuery, searchAttempt]);
+  }, [catalog, cwd, read, searchQuery, searchAttempt]);
   useEffect(() => {
     if (content.current) content.current.scrollTop = 0;
   }, [mode, selection]);
@@ -378,7 +433,7 @@ function Explorer({
     setLoadingDetail(false);
     setDetailError("");
     if (!catalog || !selection) return;
-    if (selectedNode && selectedNode.kind !== "wiki" && selectedNode.kind !== "symbol") {
+    if (selectedNode && selectedNode.kind !== "wiki" && selectedNode.kind !== "symbol" && selectedNode.kind !== "spec" && selectedNode.kind !== "change" && selectedNode.kind !== "archive") {
       setDetail({ schemaVersion: catalog.schemaVersion, snapshotId: catalog.snapshotId, node: selectedNode });
       return;
     }
@@ -386,7 +441,7 @@ function Explorer({
     setLoadingDetail(true);
     void (async () => {
       try {
-        const result = (await request(cwd, {
+        const result = (await read(cwd, {
           action: "detail",
           id: selection,
         })) as MetaprojectDetail;
@@ -404,7 +459,7 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [catalog, cwd, request, selectedNode, selection]);
+  }, [catalog, cwd, read, selectedNode, selection]);
   useEffect(() => {
     setProjection(null);
     setRelationshipError("");
@@ -412,7 +467,7 @@ function Explorer({
     if (!catalog || !selection) return;
     const neighborsRequest = { action: "neighbors", id: selection, depth, direction, kinds } as const;
     if (
-      graphIndex && selectedNode &&
+      protocol !== 2 && graphIndex && selectedNode &&
       !catalog.truncated &&
       selectedNode.kind !== "symbol" &&
       !kinds.includes("calls") &&
@@ -421,12 +476,12 @@ function Explorer({
       setProjection(projectMetaprojectGraph(graphIndex, catalog, neighborsRequest));
       return;
     }
-    if (catalog.graph === "missing") return;
+    if (catalog.graph === "missing" && protocol !== 2) return;
     let active = true;
     setLoadingRelationships(true);
     void (async () => {
       try {
-        const result = (await request(cwd, neighborsRequest)) as MetaprojectNeighbors;
+        const result = (await read(cwd, neighborsRequest)) as MetaprojectNeighbors;
         if (active) {
           if (result.snapshotId !== catalog.snapshotId)
             setSnapshotMismatch(true);
@@ -441,7 +496,7 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [graphIndex, selectedNode, catalog, cwd, request, selection, depth, direction, kinds]);
+  }, [graphIndex, selectedNode, catalog, cwd, read, selection, depth, direction, kinds, protocol]);
   const resolvedSearch =
     searchResult?.query === searchQuery &&
     searchResult.snapshotId === catalog?.snapshotId
@@ -463,10 +518,37 @@ function Explorer({
     [catalog, hits, projection],
   );
   const results = useMemo(
-    () => rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits),
-    [catalog, hits, searchQuery],
+    () => protocol === 2 && searchQuery ? hits : rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits),
+    [catalog, hits, searchQuery, protocol],
   );
   const select = useMemo(() => (id: string) => setSelection(id), []);
+  const openHit = (hit: MetaprojectHit) => {
+    const v2 = protocol === 2 ? hit as MetaprojectHitV2 : null;
+    if (v2 && (v2.scope === "spec" || v2.scope === "change" || v2.scope === "archive")) {
+      setOpenLocation({ id: hit.node.id, collection: v2.scope, ...(v2.source && { artifact: v2.source.path, digest: v2.source.digest }), ...(v2.section && { section: v2.section }) });
+      setSelection(hit.node.id); setMode("openspec");
+    } else select(hit.node.id);
+  };
+  const loadMoreSearch = async () => {
+    if (protocol !== 2 || !resolvedSearch?.nextCursor || pageInFlight.current) return;
+    const cursor = resolvedSearch.nextCursor;
+    const generation = latestSearch.current.generation;
+    const projectGeneration = project.current;
+    pageInFlight.current = true;
+    try {
+      const page = await (requestV2 ?? requestMetaprojectV2)(cwd, {
+        version: 2, action: "search", query: searchQuery, cursor, expectedSnapshotId: resolvedSearch.snapshotId,
+      });
+      if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current) return;
+      if (page.snapshotId !== resolvedSearch.snapshotId) { setSnapshotMismatch(true); return; }
+      setSearchResult(current => current?.nextCursor === cursor && current.snapshotId === page.snapshotId
+        ? { query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
+        : current);
+    } catch (cause) {
+      if (generation === latestSearch.current.generation && projectGeneration === project.current)
+        setSearchError({ query: searchQuery, message: errMessage(cause) });
+    } finally { pageInFlight.current = false; }
+  };
   const rebuild = async () => {
     const generation = project.current;
     setRebuilding(true);
@@ -491,8 +573,12 @@ function Explorer({
             .join(" · ")}
         </p>
       </header>
+      {protocol === 2 && (detail.node.kind === "spec" || detail.node.kind === "change" || detail.node.kind === "archive") && <button className="btn" onClick={() => { setOpenLocation(openLocation?.id === detail.node.id ? openLocation : { id: detail.node.id, collection: detail.node.kind as "spec" | "change" | "archive" }); setMode("openspec"); }}>Open in OpenSpec</button>}
+      {(detail as unknown as MetaprojectDetailV2).openSpec?.artifact && (
+        <RepositoryMarkdown text={(detail as unknown as MetaprojectDetailV2).openSpec?.artifact?.markdown ?? ""} nodes={nodes} source={(detail as unknown as MetaprojectDetailV2).openSpec?.artifact?.source.path ?? detail.node.path} select={select} />
+      )}
       {detail.markdown && (
-        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path} select={select} />
+        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path} select={select} fragment={wikiFragment} />
       )}
     </article>
   );
@@ -525,9 +611,12 @@ function Explorer({
             <Icon name="file" size={14} />
             Wiki
           </button>
+          <button aria-pressed={mode === "openspec"} onClick={() => setMode("openspec")}><Icon name="file" size={14} />OpenSpec</button>
         </div>
       </header>
-      {loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
+      {protocolError && <div className="inline-banner tone-warn" role="alert">{protocolError}</div>}
+      {mode === "openspec" && (protocol === 2 ? <OpenSpecView cwd={cwd} query={query} location={openLocation} onLocation={setOpenLocation} {...(requestV2 && { request: requestV2 })} nodes={nodes} onNavigate={(node, fragment) => { setSelection(node.id); setWikiFragment(fragment); setMode(node.kind === "wiki" ? "wiki" : "graph"); }} onGraph={id => { setSelection(id); setMode("graph"); }} /> : protocol === 1 ? <p role="status">This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings.</p> : <p role="status">Checking OpenSpec support…</p>)}
+      {mode !== "openspec" && loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
       {error && (
         <div className="inline-banner tone-warn" role="alert">
           <span>{error}</span>
@@ -550,7 +639,7 @@ function Explorer({
           </button>
         </div>
       )}
-      {catalog && (
+      {mode !== "openspec" && catalog && (
         <>
           {catalog.graph !== "ready" && (
             <div className="inline-banner tone-warn" role="status">
@@ -580,13 +669,13 @@ function Explorer({
               )}
               <ul>
                 {results.map((hit) => (
-                  <li key={hit.node.id}>
+                  <li key={`${hit.node.id}-${hit.section ?? ""}`}>
                     <button
                       className="metaproject-row"
                       aria-current={
                         selection === hit.node.id ? "true" : undefined
                       }
-                      onClick={() => select(hit.node.id)}
+                      onClick={() => openHit(hit)}
                     >
                       <strong>{hit.node.title}</strong>
                       <span className="metaproject-meta">
@@ -602,6 +691,7 @@ function Explorer({
                   </li>
                 ))}
               </ul>
+              {resolvedSearch?.nextCursor && <button className="btn" onClick={() => void loadMoreSearch()}>Load more results</button>}
               {!results.length && (
                 searching
                   ? <p role="status">Searching project knowledge…</p>
@@ -656,7 +746,7 @@ function Explorer({
                     </label>
                     <fieldset>
                       <legend>Relationship types</legend>
-                      {METAPROJECT_EDGE_KINDS.map((kind) => (
+                      {(protocol === 2 ? METAPROJECT_EDGE_KINDS_V2 : METAPROJECT_EDGE_KINDS).map((kind) => (
                         <label key={kind}>
                           <input
                             type="checkbox"
@@ -675,7 +765,7 @@ function Explorer({
                     </fieldset>
                   </div>
                   {loadingRelationships && <p role="status">Loading relationships…</p>}
-                  {currentProjection && catalog.graph !== "missing" && (
+                  {currentProjection && (catalog.graph !== "missing" || protocol === 2) && (
                     <Graph
                       projection={currentProjection}
                       selected={selection}

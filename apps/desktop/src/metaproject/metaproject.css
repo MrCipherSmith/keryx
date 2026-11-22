@@ -127,3 +127,7 @@ button.metaproject-row[aria-current="true"] {
   .metaproject-list { flex: none; max-block-size: min(180px, 28vh); }
   .metaproject-content { flex: none; overflow: visible; }
 }
+
+.openspec-view { display: flex; flex: 1; min-block-size: 0; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); }
+.openspec-view .metaproject-panes { padding: 0; }
+.openspec-view .metaproject-controls [aria-pressed="true"] { background: var(--bg-selected); border-color: var(--accent); }

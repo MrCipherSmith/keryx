@@ -21,7 +21,8 @@ jobs:
   # leaks and checks the partition inventory against Bun's own discovery.
   ac8-full-suite:
     name: ${{ matrix.part == 'all' && 'AC8 serial (main)' || matrix.part == 'remaining' && 'AC8 remaining tests' || format('Core tests ({0}/4, offline)', matrix.part) }}
-    runs-on: ubuntu-latest
+    # Keep apt's ripgrep source stable across ubuntu-latest image rollouts.
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
@@ -101,7 +102,7 @@ jobs:
           bun install --frozen-lockfile
           (cd apps/desktop && bun install --frozen-lockfile)
       - name: Verify the Core catalog and Wiki reader
-        run: bun test src/integrations/metaproject-explorer.test.ts
+        run: bun test src/openspec/ src/commands/openspec.test.ts src/integrations/metaproject-explorer.test.ts
       - name: Build Desktop and verify shared Graph and Wiki navigation
         working-directory: apps/desktop
         run: |
