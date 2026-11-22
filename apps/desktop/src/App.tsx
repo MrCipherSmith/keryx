@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
 import { isTauri } from "./platform/backend";
 import {
@@ -49,6 +49,8 @@ import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
 import { supportsProviders } from "./acp/providers";
 import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
 import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
+
+const MetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
 
 export function App() {
   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
@@ -181,6 +183,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const [palette, setPalette] = useState<string | null>(null);
   const [enrich, setEnrich] = useState(false);
   const runProject = useProjectRunner(cwd, s.keryxPath);
+  const rebuildGraph = useCallback(() => new Promise<boolean>(resolve => {
+    void runProject(["gdgraph", "build"], "Build Metaproject graph", code => resolve(code === 0))
+      .then(started => { if (!started) resolve(false); });
+  }), [runProject]);
   const listProviders = useMemo(() => (supportsProviders(s.extensions) ? providersLister(s.rpc) : null), [s.extensions, s.rpc]);
   const [recents, setRecents] = useState<string[]>([]);
   const composer = useRef<ComposerHandle>(null);
@@ -363,6 +369,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       } else if (k === "4") {
         e.preventDefault();
         go("issues");
+      } else if (k === "5") {
+        e.preventDefault();
+        go("metaproject");
       } else if (k === ",") {
         e.preventDefault();
         go("settings");
@@ -510,7 +519,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <span className="truncate">{sessionTitle}</span>
     ) : (
       <span className="truncate">
-        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : view === "issues" ? "Issues" : "Pull requests"}`}
+        {view === "settings" ? "Settings" : `${basename(cwd)} · ${PROJECT_VIEWS.find(item => item.id === view)?.label}`}
       </span>
     );
 
@@ -570,6 +579,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+      </div>}
+      {workView === "metaproject" && <div className="view" hidden={view !== "metaproject"}>
+        <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
+          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} />
+        </Suspense>
       </div>}
       <div className="view" hidden={view !== "review"}>
         {reviewDisconnected ? (

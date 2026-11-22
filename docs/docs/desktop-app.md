@@ -413,12 +413,26 @@ session (`flags.json`).
 The board refreshes when a `flow.json` changes (checked every 2 seconds) and
 when the window gets focus.
 
+### Explore Metaproject
+
+Open **Metaproject** in a project window. Use the same search in **Graph**
+and **Wiki** to find a page, module, file or indexed symbol. Selecting a
+result shows its neighbors and relationship types. Use the relationship
+list to follow the same links with the keyboard. Switch direction or depth
+to see a smaller or wider neighborhood.
+
+Wiki pages stay readable when there is no code graph. Use **Build graph**
+to create or refresh the index for the open checkout. The terminal panel
+shows the build progress. If the CLI on your PATH predates this view,
+update it or choose the bundled CLI in Desktop Settings.
+
 ### Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
 | ⌘K | Command palette: commands, sessions, views |
 | ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Review in the current project |
+| ⌘4 / ⌘5 | Issues / Metaproject in the current project |
 | ⌘, | Settings |
 | ⌘N | New session |
 | ⌘O | Open folder |
