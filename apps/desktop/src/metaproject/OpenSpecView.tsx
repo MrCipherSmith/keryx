@@ -4,7 +4,7 @@ import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
 import { requestMetaprojectV2 } from "../platform/metaproject";
 
-import type { MetaprojectRequestV2, MetaprojectV2Response, MetaprojectOpenSpecList, MetaprojectDetailV2, MetaprojectSearchV2, MetaprojectOpenSpecHistory, MetaprojectOpenSpecKind, MetaprojectOpenSpecEntry, MetaprojectSourceRef } from "../../../../src/integrations/metaproject-explorer-contract";
+import type { MetaprojectRequestV2, MetaprojectV2Response, MetaprojectOpenSpecList, MetaprojectDetailV2, MetaprojectSearchV2, MetaprojectOpenSpecHistory, MetaprojectOpenSpecKind, MetaprojectOpenSpecEntry, MetaprojectSourceRef, MetaprojectNode } from "../../../../src/integrations/metaproject-explorer-contract";
 
 type Collection = MetaprojectOpenSpecKind;
 type Entry = Pick<MetaprojectOpenSpecEntry, "id">;
@@ -14,9 +14,9 @@ type Detail = MetaprojectDetailV2;
 type Search = MetaprojectSearchV2;
 type History = MetaprojectOpenSpecHistory;
 type V2Request = (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
-export type OpenSpecLocation = { id: string; collection: Collection; artifact?: string; section?: string; digest?: string };
+export type OpenSpecLocation = { id: string; collection: Collection; artifact?: string; section?: string; digest?: string; fragment?: string };
 
-export function OpenSpecView({ cwd, query, location, onLocation, request = requestMetaprojectV2, onGraph }: { cwd: string; query: string; location?: OpenSpecLocation | null; onLocation?: (location: OpenSpecLocation | null) => void; request?: V2Request; onGraph: (id: string) => void }) {
+export function OpenSpecView({ cwd, query, location, onLocation, nodes = [], onNavigate, request = requestMetaprojectV2, onGraph }: { cwd: string; query: string; location?: OpenSpecLocation | null; onLocation?: (location: OpenSpecLocation | null) => void; nodes?: MetaprojectNode[]; onNavigate?: (node: MetaprojectNode, fragment?: string) => void; request?: V2Request; onGraph: (id: string) => void }) {
   const [collection, setCollection] = useState<Collection>(location?.collection ?? "spec");
   const [list, setList] = useState<List | null>(null);
   const [hits, setHits] = useState<Search | null>(null);
@@ -30,6 +30,7 @@ export function OpenSpecView({ cwd, query, location, onLocation, request = reque
   const latest = useRef({ query, selected, serial: 0 });
   if (latest.current.query !== query || latest.current.selected !== selected) latest.current = { query, selected, serial: latest.current.serial + 1 };
   const sectionList = useRef<HTMLElement>(null);
+  const markdown = useRef<HTMLDivElement>(null);
   useEffect(() => { if (location) { setCollection(location.collection); setSelected(location); } }, [location]);
   const choose = (next: OpenSpecLocation | null) => { setSelected(next); onLocation?.(next); };
   const select = (entry: Entry, source?: Source, section?: string, targetCollection = collection) => choose({ id: entry.id, collection: targetCollection, ...(source && { artifact: source.path, digest: source.digest }), ...(section && { section }) });
@@ -100,6 +101,20 @@ export function OpenSpecView({ cwd, query, location, onLocation, request = reque
     const target = [...sectionList.current.querySelectorAll<HTMLElement>("[data-section]")].find(element => element.dataset.section === selected.section);
     if (target) { const parent = target.closest("details"); if (parent) parent.open = true; target.focus(); target.scrollIntoView?.({ block: "nearest" }); }
   }, [artifact, selected?.section]);
+  function focusFragment(fragment: string) {
+    let decoded: string;
+    try { decoded = decodeURIComponent(fragment); } catch { return; }
+    const seen = new Map<string, number>();
+    for (const heading of markdown.current?.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6") ?? []) {
+      const slug = (heading.textContent ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+      const count = seen.get(slug) ?? 0;
+      seen.set(slug, count + 1);
+      if ((count ? `${slug}-${count}` : slug) === decoded) {
+        heading.tabIndex = -1; heading.focus(); heading.scrollIntoView?.({ block: "nearest" }); return;
+      }
+    }
+  }
+  useEffect(() => { if (artifact && selected?.fragment) focusFragment(selected.fragment); }, [artifact, selected?.fragment]);
   const entries = query.trim() ? (hits?.hits ?? []).map(hit => ({ entry: hit.node, hit })) : (list?.entries ?? []).map(entry => ({ entry, hit: undefined }));
   function followMarkdownLink(event: MouseEvent<HTMLDivElement>) {
     const link = (event.target as Element).closest("a");
@@ -110,8 +125,9 @@ export function OpenSpecView({ cwd, query, location, onLocation, request = reque
       void openExternal(href).catch(() => {});
       return;
     }
-    const relative = href.split("#")[0];
-    if (!relative || relative.startsWith("/") || relative.includes("\\")) return;
+    const [relative, fragment] = href.split("#", 2);
+    if (!relative) { if (fragment) focusFragment(fragment); return; }
+    if (relative.startsWith("/") || relative.includes("\\") || relative.includes("?") || /^[a-z][a-z0-9+.-]*:/i.test(relative)) return;
     const parts = artifact.source.path.split("/").slice(0, -1);
     for (const part of relative.split("/")) {
       if (part === "..") {
@@ -120,7 +136,17 @@ export function OpenSpecView({ cwd, query, location, onLocation, request = reque
       } else if (part && part !== ".") parts.push(part);
     }
     const target = detail.openSpec.artifacts.find(item => item.path === parts.join("/"));
-    if (target) choose({ id: detail.openSpec.entry.id, collection, artifact: target.path, digest: target.digest });
+    if (target) {
+      choose({ id: detail.openSpec.entry.id, collection, artifact: target.path, digest: target.digest, ...(fragment && { fragment }) });
+      return;
+    }
+    const path = parts.join("/");
+    const node = nodes.find(item => item.path === path) ?? list?.entries.find(item => item.path === path);
+    if (!node) return;
+    if (node.kind === "spec" || node.kind === "change" || node.kind === "archive") {
+      setCollection(node.kind);
+      choose({ id: node.id, collection: node.kind, ...(fragment && { fragment }) });
+    } else onNavigate?.(node, fragment);
   }
 
   return (
@@ -168,7 +194,7 @@ export function OpenSpecView({ cwd, query, location, onLocation, request = reque
               {artifact && (
                 <>
                   <p className="metaproject-meta">{artifact.source.path}{artifact.source.startLine ? `:${artifact.source.startLine}${artifact.source.endLine ? `–${artifact.source.endLine}` : ""}` : ""}</p>
-                  <div className="md" dangerouslySetInnerHTML={{ __html: renderRepositoryMarkdown(artifact.markdown) }} onClick={followMarkdownLink} onAuxClick={event => { if ((event.target as Element).closest("a")) event.preventDefault(); }} />
+                  <div ref={markdown} className="md" dangerouslySetInnerHTML={{ __html: renderRepositoryMarkdown(artifact.markdown) }} onClick={followMarkdownLink} onAuxClick={event => { if ((event.target as Element).closest("a")) event.preventDefault(); }} />
                 </>
               )}
               {detail.openSpec.deltas?.length ? (

@@ -11,6 +11,9 @@ import {
   type MetaprojectEdgeKind,
   type MetaprojectHit,
   type MetaprojectHitV2,
+  type MetaprojectSearchV2,
+  type MetaprojectRequestV2,
+  type MetaprojectV2Response,
   type MetaprojectNeighbors,
   type MetaprojectNode,
   type MetaprojectRequest,
@@ -133,16 +136,32 @@ function RepositoryMarkdown({
   nodes,
   source,
   select,
+  fragment,
 }: {
   text: string;
   nodes: MetaprojectNode[];
   source: string;
   select: (id: string) => void;
+  fragment?: string;
 }) {
   const html = useMemo(() => renderRepositoryMarkdown(text), [text]);
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!fragment) return;
+    let decoded: string;
+    try { decoded = decodeURIComponent(fragment); } catch { return; }
+    const seen = new Map<string, number>();
+    for (const heading of container.current?.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6") ?? []) {
+      const base = (heading.textContent ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+      const count = seen.get(base) ?? 0;
+      seen.set(base, count + 1);
+      if ((count ? `${base}-${count}` : base) === decoded) { heading.tabIndex = -1; heading.focus(); heading.scrollIntoView?.({ block: "nearest" }); break; }
+    }
+  }, [html, fragment]);
   return (
     <div
       className="md"
+      ref={container}
       dangerouslySetInnerHTML={{ __html: html }}
       onClick={(event) => {
         const link = (event.target as Element).closest("a");
@@ -252,6 +271,7 @@ export function MetaprojectView(props: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
   request?: Request;
+  requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
 }) {
   return <Explorer key={props.cwd} {...props} />;
 }
@@ -260,28 +280,31 @@ function Explorer({
   cwd,
   onRebuild,
   request = requestMetaproject,
+  requestV2,
 }: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
   request?: Request;
+  requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
 }) {
   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
   const [selection, setSelection] = useState("");
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"graph" | "wiki" | "openspec">("graph");
-  const [protocol, setProtocol] = useState<1 | 2 | null>(request === requestMetaproject ? null : 1);
+  const [protocol, setProtocol] = useState<1 | 2 | null>(requestV2 ? 2 : request === requestMetaproject ? null : 1);
   const archiveSelection = useRef(false);
   const [protocolError, setProtocolError] = useState("");
   useEffect(() => {
-    if (request !== requestMetaproject) return;
+    if (requestV2 || request !== requestMetaproject) return;
     let active = true;
     void negotiateMetaproject(cwd).then(value => { if (active) setProtocol(value); }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
     return () => { active = false; };
-  }, [cwd, request]);
+  }, [cwd, request, requestV2]);
   const read: Request = useMemo(() => protocol === 2
-    ? ((root, input) => requestMetaprojectV2(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
-    : request, [protocol, request]);
+    ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
+    : request, [protocol, request, requestV2]);
   const [openLocation, setOpenLocation] = useState<OpenSpecLocation | null>(null);
+  const [wikiFragment, setWikiFragment] = useState<string | undefined>();
   archiveSelection.current = openLocation?.collection === "archive" && openLocation.id === selection;
   const [direction, setDirection] = useState<MetaprojectDirection>("both");
   const [depth, setDepth] = useState<1 | 2>(1);
@@ -295,6 +318,7 @@ function Explorer({
     query: string;
     snapshotId: string;
     hits: MetaprojectHit[];
+    nextCursor?: string;
   } | null>(null);
   const [snapshotMismatch, setSnapshotMismatch] = useState(false);
   const [detail, setDetail] = useState<MetaprojectDetail | null>(null);
@@ -314,6 +338,8 @@ function Explorer({
   const project = useRef(0);
   const loaded = useRef(false);
   const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
+  const pageInFlight = useRef(false);
+  const latestSearch = useRef({ query: "", snapshot: "", generation: 0 });
   const content = useRef<HTMLElement>(null);
   const graphIndex = useMemo(
     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
@@ -321,6 +347,9 @@ function Explorer({
   );
   const selectedNode = graphIndex?.byId.get(selection);
   const searchQuery = query.trim();
+  if (latestSearch.current.query !== searchQuery || latestSearch.current.snapshot !== catalog?.snapshotId) {
+    latestSearch.current = { query: searchQuery, snapshot: catalog?.snapshotId ?? "", generation: latestSearch.current.generation + 1 };
+  }
   useEffect(() => {
     if (protocol === null) return;
     const generation = ++project.current;
@@ -379,6 +408,7 @@ function Explorer({
                 query: searchQuery,
                 snapshotId: result.snapshotId,
                 hits: result.hits,
+                ...((result as unknown as MetaprojectSearchV2).nextCursor && { nextCursor: (result as unknown as MetaprojectSearchV2).nextCursor }),
               });
               setSearchError(null);
             }
@@ -499,6 +529,26 @@ function Explorer({
       setSelection(hit.node.id); setMode("openspec");
     } else select(hit.node.id);
   };
+  const loadMoreSearch = async () => {
+    if (protocol !== 2 || !resolvedSearch?.nextCursor || pageInFlight.current) return;
+    const cursor = resolvedSearch.nextCursor;
+    const generation = latestSearch.current.generation;
+    const projectGeneration = project.current;
+    pageInFlight.current = true;
+    try {
+      const page = await (requestV2 ?? requestMetaprojectV2)(cwd, {
+        version: 2, action: "search", query: searchQuery, cursor, expectedSnapshotId: resolvedSearch.snapshotId,
+      });
+      if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current) return;
+      if (page.snapshotId !== resolvedSearch.snapshotId) { setSnapshotMismatch(true); return; }
+      setSearchResult(current => current?.nextCursor === cursor && current.snapshotId === page.snapshotId
+        ? { query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
+        : current);
+    } catch (cause) {
+      if (generation === latestSearch.current.generation && projectGeneration === project.current)
+        setSearchError({ query: searchQuery, message: errMessage(cause) });
+    } finally { pageInFlight.current = false; }
+  };
   const rebuild = async () => {
     const generation = project.current;
     setRebuilding(true);
@@ -528,7 +578,7 @@ function Explorer({
         <RepositoryMarkdown text={(detail as unknown as MetaprojectDetailV2).openSpec?.artifact?.markdown ?? ""} nodes={nodes} source={(detail as unknown as MetaprojectDetailV2).openSpec?.artifact?.source.path ?? detail.node.path} select={select} />
       )}
       {detail.markdown && (
-        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path} select={select} />
+        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path} select={select} fragment={wikiFragment} />
       )}
     </article>
   );
@@ -565,7 +615,7 @@ function Explorer({
         </div>
       </header>
       {protocolError && <div className="inline-banner tone-warn" role="alert">{protocolError}</div>}
-      {mode === "openspec" && (protocol === 2 ? <OpenSpecView cwd={cwd} query={query} location={openLocation} onLocation={setOpenLocation} onGraph={id => { setSelection(id); setMode("graph"); }} /> : protocol === 1 ? <p role="status">This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings.</p> : <p role="status">Checking OpenSpec support…</p>)}
+      {mode === "openspec" && (protocol === 2 ? <OpenSpecView cwd={cwd} query={query} location={openLocation} onLocation={setOpenLocation} {...(requestV2 && { request: requestV2 })} nodes={nodes} onNavigate={(node, fragment) => { setSelection(node.id); setWikiFragment(fragment); setMode(node.kind === "wiki" ? "wiki" : "graph"); }} onGraph={id => { setSelection(id); setMode("graph"); }} /> : protocol === 1 ? <p role="status">This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings.</p> : <p role="status">Checking OpenSpec support…</p>)}
       {mode !== "openspec" && loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
       {error && (
         <div className="inline-banner tone-warn" role="alert">
@@ -641,6 +691,7 @@ function Explorer({
                   </li>
                 ))}
               </ul>
+              {resolvedSearch?.nextCursor && <button className="btn" onClick={() => void loadMoreSearch()}>Load more results</button>}
               {!results.length && (
                 searching
                   ? <p role="status">Searching project knowledge…</p>

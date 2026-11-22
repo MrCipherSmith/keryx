@@ -258,3 +258,47 @@ test("relationship list shows OpenSpec edge provenance", async () => {
   expect(host.textContent).toContain(".metaproject/openspec/links.json (link 2)");
   expect(host.textContent).toContain(digest);
 });
+
+test("OpenSpec Markdown follows fragments and only known project links", async () => {
+  const { OpenSpecView } = await import("./OpenSpecView");
+  const entry = { id: "spec", kind: "spec" as const, title: "Review", path: "openspec/specs/review/spec.md" };
+  const source = { path: entry.path, digest: "a".repeat(64) };
+  const linked = { id: "guide", kind: "wiki" as const, title: "Guide", path: "openspec/specs/guide.md" };
+  const visited: string[] = [];
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [entry], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+    if (input.action === "openspec-history") return { schemaVersion: 2, snapshotId: "s", entries: [] };
+    return { schemaVersion: 2, snapshotId: "s", node: entry, openSpec: { entry, artifacts: [source], artifact: { source, markdown: "## Target\n[Jump](#target) [Guide](../guide.md#intro) [Unknown](../private.md)", requirements: [] }, diagnostics: [], partial: false } };
+  };
+  await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "", location: { id: entry.id, collection: "spec" }, nodes: [linked], onNavigate: (node: { id: string }, fragment?: string) => visited.push(`${node.id}#${fragment}`), request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+  const links = [...host.querySelectorAll(".md a")];
+  await act(async () => { (links.find(link => link.textContent === "Jump") as HTMLElement).click(); });
+  expect(document.activeElement?.textContent).toBe("Target");
+  await act(async () => { (links.find(link => link.textContent === "Guide") as HTMLElement).click(); });
+  await act(async () => { (links.find(link => link.textContent === "Unknown") as HTMLElement).click(); });
+  expect(visited).toEqual(["guide#intro"]);
+});
+
+test("shared search loads the next page pinned to its snapshot", async () => {
+  const originalTimeout = window.setTimeout;
+  let runTimer: () => void = () => {};
+  window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") runTimer = () => callback(); return 1; }) as typeof window.setTimeout;
+  const seen: Record<string, unknown>[] = [];
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    seen.push(input);
+    if (input.action === "catalog") return { ...catalog, schemaVersion: 2 };
+    if (input.action === "search") return { schemaVersion: 2, snapshotId: "one", hits: [{ node: input.cursor ? file : page, scope: input.cursor ? "graph" : "wiki" }], ...(input.cursor ? {} : { nextCursor: "next" }), partial: false };
+    if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
+    return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
+  };
+  try {
+    await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<import("react").ComponentProps<typeof View>["requestV2"]>, onRebuild: async () => false })); });
+    const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]');
+    if (!search) throw new Error("Missing search");
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "query"); search.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { runTimer(); });
+    await act(async () => { button("Load more results").click(); });
+    expect(seen.some(input => input.action === "search" && input.cursor === "next" && input.query === "query" && input.expectedSnapshotId === "one")).toBe(true);
+    expect(host.textContent).toContain("Client");
+  } finally { window.setTimeout = originalTimeout; }
+});
