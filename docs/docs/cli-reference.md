@@ -8264,6 +8264,18 @@ keryx hub machine unpair [--hub <hub-id>]
 
 Every action except `inspect` and `release-stale-daemon` needs `--request-id`, a new id you keep: repeating it returns the recorded result, and reusing it with other flags is `payload-conflict`. The pins and every refusal code are in the [recovery runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/hub-remote-sessions/recovery-runbook.md).
 
+## openspec
+
+Browse OpenSpec in the current checkout. Specs show current requirements and scenarios. Changes and archives show proposals, supporting artifacts, and requirement deltas.
+
+```bash
+keryx openspec list --kind <spec|change|archive> [--cursor <cursor>] [--json]
+keryx openspec show <path> [--artifact <path>] [--section <id> --expected-digest <sha256>] [--json]
+keryx openspec search <query> [--scope <all|spec|change|archive>] [--cursor <cursor>] [--json]
+```
+
+Use a repository-relative entry path returned by `list` or `search`. For a section, pass its ID and source digest from the search result. Use the returned cursor to continue a list or search against the same snapshot. JSON output carries `schemaVersion: 2`. Exit code 1 indicates invalid input, a missing entry, or a stale section or snapshot. Exit code 2 indicates the source could not be read.
+
 ## metaproject-explorer
 
 Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop. The command returns a versioned JSON object and does not rebuild the graph. Its snapshot ID is a change detector, not an atomic snapshot while graph or wiki files are being written.

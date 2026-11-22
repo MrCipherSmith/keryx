@@ -176,8 +176,14 @@ const MAX_PROBES: usize = 32;
 struct ReadPermit;
 impl ReadPermit {
     fn acquire() -> Result<Self, String> {
-        ACTIVE.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| (count < MAX_ACTIVE).then_some(count + 1))
-            .map(|_| Self).map_err(|_| "unavailable: Too many Metaproject reads. Retry shortly.".into())
+        let mut count = ACTIVE.load(Ordering::Relaxed);
+        while count < MAX_ACTIVE {
+            match ACTIVE.compare_exchange_weak(count, count + 1, Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => return Ok(Self),
+                Err(current) => count = current,
+            }
+        }
+        Err("unavailable: Too many Metaproject reads. Retry shortly.".into())
     }
 }
 impl Drop for ReadPermit {

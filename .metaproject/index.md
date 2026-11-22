@@ -1,13 +1,13 @@
 # Metaproject Index
 
-Routing pointers. Everything else is in [`routing.md`](routing.md) — read it only if what you need is not below.
+See [`routing.md`](routing.md) for other intents.
 
 | need | use |
 |---|---|
 | where is X, what depends on it, what breaks | `keryx gdgraph affected <file>` |
 | search code | `keryx ctx rg "<pattern>" [path]` |
 | run a command with long output | `keryx ctx run -- <cmd>` |
-| OpenSpec requirements, changes and archive | `skills/gdskills/quality/openspec-read/SKILL.md`; `keryx openspec list/show/search` |
+| OpenSpec | `keryx openspec list/show/search` |
 | architecture, domain, decisions, why | `wiki/index.md`, `keryx wiki ask` |
 | past decisions, lessons, constraints | `keryx memory search "<query>"` |
 | what tests to run, test context | `keryx test related <file>` |

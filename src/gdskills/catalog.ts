@@ -334,6 +334,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Stop your own tree emitting and teaching the old name before anyone argues a removal date.",
     "Remove by refusing the name with the reason; move the schemaVersion when a payload field goes; identify a retired shipped file by content hash, not by name.",
   ]),
+  skill("openspec-read", "quality", ["recommended", "full"], "Browse OpenSpec requirements, changes, and source evidence in the current checkout.", [
+    "List current specs, active changes, or archived changes by collection.",
+    "Search the current checkout and open source sections with the reported digest.",
+    "Cite repository-relative source paths and report incomplete results.",
+  ]),
   skill("test-gen", "quality", ["recommended", "full"], "Generate tests for a file or module using local patterns and existing test stack.", [
     "Discover test framework and nearby test examples.",
     "Generate tests that cover behavior, edge cases, and errors.",

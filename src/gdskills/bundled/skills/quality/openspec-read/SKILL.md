@@ -1,6 +1,14 @@
 ---
 name: openspec-read
-description: Use when browsing OpenSpec requirements, active changes, archived changes, or their source evidence in the current checkout.
+description: |
+  Use when browsing OpenSpec requirements, active changes, archived changes,
+  or their source evidence in the current checkout.
+  NOT for authoring, applying, or archiving OpenSpec changes.
+metadata:
+  version: "1.0.0"
+  category: "quality"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
+license: "MIT"
 ---
 
 # Read OpenSpec
@@ -12,9 +20,12 @@ local and read-only; it does not execute OpenSpec tools or modify source files.
 2. Find a requirement or section with `keryx openspec search "<query>" --json`.
    Use `--scope archive` or `--scope all` to include archived changes.
 3. Open an entry with `keryx openspec show <relative-path> --json`; add
-   `--artifact <relative-path>` and `--section <id>` for exact evidence.
+   `--artifact <relative-path>`, `--section <id>` and
+   `--expected-digest <sha256>` from the search result for exact evidence.
 4. Follow `nextCursor` with `--cursor` for additional list or search pages.
    If a cursor is stale, repeat the query from the beginning.
-5. Cite the returned checkout-relative source paths and line ranges. Treat
-   unresolved syntax and missing or partial sources as reported, not as proof
-   that a requirement or change never existed.
+
+## Verification
+
+Cite the returned checkout-relative source paths and line ranges. Report any
+unresolved syntax, missing sources or partial results that limit the answer.

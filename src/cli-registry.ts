@@ -347,7 +347,7 @@ export const USAGE_BODY = `Usage:
   keryx gdgraph affected <file>
   keryx ctx status
   keryx openspec list --kind <spec|change|archive> [--cursor <cursor>] [--json]
-  keryx openspec show <path> [--artifact <path>] [--section <id>] [--json]
+  keryx openspec show <path> [--artifact <path>] [--section <id> --expected-digest <sha256>] [--json]
   keryx openspec search <query> [--scope <all|spec|change|archive>] [--cursor <cursor>] [--json]
   keryx wiki status
   keryx wiki new <type> <slug> --title "<title>"

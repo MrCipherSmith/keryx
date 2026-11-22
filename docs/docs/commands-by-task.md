@@ -84,6 +84,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx metaproject-explorer` | Read the project graph and wiki for Desktop. |
 | `keryx gdgraph` | Build and query the code dependency graph. |
 | `keryx ctx` | Run compact context commands and save raw output. |
+| `keryx openspec` | Browse OpenSpec requirements, changes and archive. |
 | `keryx wiki` | Manage the local project knowledge base. |
 | `keryx memory` | Store and search long-term project memory. |
 | `keryx orient` | Emit a bounded graph + wiki startup block, or install it as a turn-start hook. |
