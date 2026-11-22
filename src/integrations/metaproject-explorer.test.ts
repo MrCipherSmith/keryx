@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { MetaprojectCatalog } from "./metaproject-explorer-contract";
 import { metaprojectExplorer } from "./metaproject-explorer";
-import { parseExplorerRequest } from "../commands/metaproject-explorer";
+import { parseExplorerRequest } from "./service";
 
 const roots: string[] = [];
 async function fixture(): Promise<string> {
@@ -93,6 +93,25 @@ describe("metaproject explorer", () => {
     const search = await metaprojectExplorer(root, { action: "search", query: "searchable" });
     if (!("hits" in search)) throw new Error("Expected search");
     expect(search.hits.some((hit) => hit.node.id === "wiki:components/first.md")).toBe(true);
+  });
+
+  test("keeps exact filenames and symbols when wiki text fills the result limit", async () => {
+    const root = await fixture();
+    const dir = path.join(root, ".metaproject/data/gdgraph/storage");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "nodes.jsonl"), JSON.stringify({ path: "src/searchable" }));
+    await writeFile(path.join(dir, "edges.jsonl"), "");
+    await writeFile(path.join(dir, "symbols.jsonl"), JSON.stringify({ id: "src/searchable#run", path: "src/searchable", name: "searchable", startLine: 1 }));
+    await writeFile(path.join(dir, "calls.jsonl"), "");
+    await Promise.all(Array.from({ length: 205 }, (_, index) =>
+      writeFile(path.join(root, `.metaproject/wiki/components/other-${index}.md`), `# Other ${index}\n\nsearchable\n`),
+    ));
+    const search = await metaprojectExplorer(root, { action: "search", query: "searchable" });
+    if (!("hits" in search)) throw new Error("Expected search");
+    expect(search.hits).toHaveLength(200);
+    expect(search.hits.filter(hit => hit.node.kind !== "wiki").map(hit => hit.node.id))
+      .toEqual(["file:src/searchable", "symbol:src/searchable#run"]);
+    expect(search.hits.some(hit => hit.node.kind === "wiki" && hit.snippet?.includes("searchable"))).toBe(true);
   });
 
   test("aggregates directed imports between modules", async () => {

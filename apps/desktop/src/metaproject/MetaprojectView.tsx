@@ -1,9 +1,8 @@
 import cytoscape from "cytoscape";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  isExactMetaprojectSearchMatch,
+  rankMetaprojectSearchHits,
   METAPROJECT_EDGE_KINDS,
-  METAPROJECT_NODE_LIMIT,
   type MetaprojectCatalog,
   type MetaprojectDetail,
   type MetaprojectDirection,
@@ -463,26 +462,10 @@ function Explorer({
     ],
     [catalog, hits, projection],
   );
-  const results = useMemo(() => {
-    const needle = searchQuery.toLowerCase();
-    const exact: MetaprojectHit[] = [];
-    const local: MetaprojectHit[] = [];
-    for (const node of catalog?.nodes ?? []) {
-      const title = node.title.toLowerCase();
-      const path = node.path.toLowerCase();
-      if (needle && isExactMetaprojectSearchMatch(node, needle)) exact.push({ node });
-      else if (title.includes(needle) || path.includes(needle)) local.push({ node });
-    }
-    const remote = new Map(hits.map(hit => [hit.node.id, hit]));
-    const ranked = new Map<string, MetaprojectHit>();
-    for (const batch of [exact, hits, local]) {
-      for (const hit of batch) {
-        if (!ranked.has(hit.node.id)) ranked.set(hit.node.id, remote.get(hit.node.id) ?? hit);
-        if (ranked.size === METAPROJECT_NODE_LIMIT) return [...ranked.values()];
-      }
-    }
-    return [...ranked.values()];
-  }, [catalog, hits, searchQuery]);
+  const results = useMemo(
+    () => rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits),
+    [catalog, hits, searchQuery],
+  );
   const select = useMemo(() => (id: string) => setSelection(id), []);
   const rebuild = async () => {
     const generation = project.current;

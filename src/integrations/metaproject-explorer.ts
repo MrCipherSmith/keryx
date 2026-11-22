@@ -7,7 +7,7 @@ import type { CallEdge, DescribesEdge, GraphEdge, GraphNode, SymbolNode } from "
 import { readContainedFile } from "../lib/contained-read";
 import { WIKI_PAGE_TYPES } from "../wiki/types";
 import { unwrapFencedPage } from "../wiki/page-invariants";
-import { isExactMetaprojectSearchMatch, METAPROJECT_NODE_LIMIT, METAPROJECT_SCHEMA } from "./metaproject-explorer-contract";
+import { rankMetaprojectSearchHits, METAPROJECT_SCHEMA } from "./metaproject-explorer-contract";
 import { indexMetaprojectGraph, projectMetaprojectGraph } from "./metaproject-projection";
 import type { MetaprojectCatalog, MetaprojectEdge, MetaprojectNode, MetaprojectRequest, MetaprojectResponse } from "./metaproject-explorer-contract";
 
@@ -201,16 +201,9 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
     }
   }
   if (request.action === "search") {
-    const query = request.query.trim().toLowerCase();
-    const exact = query ? nodes.filter((node) => isExactMetaprojectSearchMatch(node, query)).map((node) => ({ node })) : [];
-    const bodyHits: Array<{ node: MetaprojectNode; snippet: string }> = [];
-    for (const page of pages) {
-      if (page.snippet !== undefined && !exact.some((hit) => hit.node.id === page.node.id)) bodyHits.push({ node: page.node, snippet: page.snippet });
-    }
-    const seen = new Set([...exact, ...bodyHits].map((hit) => hit.node.id));
-    const broad = query ? nodes.filter((node) => !seen.has(node.id) && `${node.title} ${node.path}`.toLowerCase().includes(query)).map((node) => ({ node })) : [];
-    const hits = [...exact, ...bodyHits, ...broad];
-    return { ...base, hits: hits.slice(0, METAPROJECT_NODE_LIMIT) };
+    if (!request.query.trim()) return { ...base, hits: [] };
+    const wikiText = pages.flatMap(({ node, snippet }) => snippet !== undefined ? [{ node, snippet }] : []);
+    return { ...base, hits: rankMetaprojectSearchHits(request.query, nodes, wikiText) };
   }
   const node = nodes.find((item) => item.id === request.id);
   if (!node) throw new Error("Unknown Metaproject node");
