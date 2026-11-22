@@ -5,6 +5,18 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.52] - 2026-11-23
+
+**Keryx Desktop 0.2.15** bundles Keryx 0.4.52 and supports Keryx 0.4.50 or newer.
+
+### Fixed
+
+- Keep nested Git worktrees and checkouts out of Metaproject graphs, including assets imported from them. Rebuild an existing graph to refresh the snapshot. (#1290)
+
+### Performance
+
+- Load and search large OpenSpec archives faster by reusing filesystem observations and avoiding Wiki text matching for OpenSpec-only searches. (#1290)
+
 ## [0.4.51] - 2026-11-23
 
 **Keryx Desktop 0.2.14** bundles Keryx 0.4.51 and supports Keryx 0.4.50 or newer.
