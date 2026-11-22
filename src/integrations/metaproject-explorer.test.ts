@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { MetaprojectCatalog } from "./metaproject-explorer-contract";
 import { metaprojectExplorer } from "./metaproject-explorer";
+import { parseExplorerRequest } from "../commands/metaproject-explorer";
 
 const roots: string[] = [];
 async function fixture(): Promise<string> {
@@ -103,6 +104,51 @@ describe("metaproject explorer", () => {
     const catalog = await metaprojectExplorer(root, { action: "catalog" });
     if (!("edges" in catalog)) throw new Error("Expected catalog");
     expect(catalog.edges).toContainEqual({ from: "module:src/one", to: "module:src/two", kind: "imports", count: 1, evidence: ["src/one/a.ts → src/two/b.ts"] });
+  });
+
+  test("normalizes wiki metadata and legacy wrapped pages for detail", async () => {
+    const root = await fixture();
+    const file = path.join(root, ".metaproject/wiki/components/first.md");
+    await writeFile(file, "---\nTitle: First\nType: component\n---\n```markdown\n---\nTitle: First\n---\n# First\n\nBody\n```\n");
+    const wrapped = await metaprojectExplorer(root, { action: "detail", id: "wiki:components/first.md" });
+    expect("markdown" in wrapped && wrapped.markdown).toBe("# First\n\nBody\n");
+    await writeFile(file, "---\nTitle: First\n---\n# First\n\n```markdown\nExample\n```\n");
+    const ordinary = await metaprojectExplorer(root, { action: "detail", id: "wiki:components/first.md" });
+    expect("markdown" in ordinary && ordinary.markdown).toContain("```markdown\nExample\n```");
+  });
+
+  test("preserves assets without counting them as module imports", async () => {
+    const root = await fixture();
+    const dir = path.join(root, ".metaproject/data/gdgraph/storage");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "nodes.jsonl"), ["src/one/a.ts", "src/two/image.png"].map((file) => JSON.stringify({ path: file })).join("\n"));
+    await writeFile(path.join(dir, "edges.jsonl"), JSON.stringify({ from: "src/one/a.ts", to: "src/two/image.png", kind: "asset" }));
+    const catalog = await metaprojectExplorer(root, { action: "catalog" });
+    if (!("edges" in catalog)) throw new Error("Expected catalog");
+    expect(catalog.edges).toContainEqual({ from: "file:src/one/a.ts", to: "file:src/two/image.png", kind: "asset" });
+    expect(catalog.edges.some((edge) => edge.kind === "imports")).toBe(false);
+  });
+
+  test("fails requested broken symbol relationships but skips calls when disabled", async () => {
+    const root = await fixture();
+    const dir = path.join(root, ".metaproject/data/gdgraph/storage");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "nodes.jsonl"), JSON.stringify({ path: "src/a.ts" }));
+    await writeFile(path.join(dir, "edges.jsonl"), "");
+    await writeFile(path.join(dir, "symbols.jsonl"), JSON.stringify({ id: "s", path: "src/a.ts", name: "run", startLine: 1 }));
+    await writeFile(path.join(dir, "calls.jsonl"), "{bad");
+    await expect(metaprojectExplorer(root, { action: "neighbors", id: "file:src/a.ts", depth: 1, direction: "both", kinds: ["defines"] })).rejects.toThrow("Symbol layer");
+    const result = await metaprojectExplorer(root, { action: "neighbors", id: "symbol:s", depth: 1, direction: "both", kinds: ["imports"] });
+    expect("root" in result && result.root).toBe("symbol:s");
+    await rm(path.join(dir, "calls.jsonl"));
+    await expect(metaprojectExplorer(root, { action: "neighbors", id: "file:src/a.ts", depth: 1, direction: "both", kinds: ["defines"] })).rejects.toThrow("Symbol layer");
+  });
+
+  test("validates Core requests independently", () => {
+    for (const invalid of [null, { action: "write" }, { action: "catalog", extra: true }, { action: "neighbors", id: "x", depth: 3, direction: "both", kinds: [] }, { action: "neighbors", id: "x", depth: 1, direction: "sideways", kinds: [] }, { action: "neighbors", id: "x", depth: 1, direction: "both", kinds: ["write"] }]) {
+      expect(() => parseExplorerRequest(invalid)).toThrow("Invalid request");
+    }
+    expect(parseExplorerRequest({ action: "neighbors", id: "x", depth: 1, direction: "both", kinds: ["asset"] })).toMatchObject({ kinds: ["asset"] });
   });
 
   test("writes a catalog larger than the pipe buffer as one complete CLI response", async () => {

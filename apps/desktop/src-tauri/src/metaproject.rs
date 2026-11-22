@@ -17,7 +17,7 @@ enum Request {
 enum Direction { Both, Incoming, Outgoing }
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
-enum Kind { Imports, Describes, Links, Contains, Defines, Calls }
+enum Kind { Imports, Asset, Describes, Links, Contains, Defines, Calls }
 
 fn metaproject_args(request: &Value) -> Result<Vec<String>, String> {
     let payload = request.to_string();
@@ -31,7 +31,7 @@ fn metaproject_args(request: &Value) -> Result<Vec<String>, String> {
         Request::Search { query } => query.len() <= 4096,
         Request::Neighbors { id, depth, direction, kinds } => {
             let _ = direction;
-            valid_text(&id) && (1..=2).contains(&depth) && kinds.len() <= 6
+            valid_text(&id) && (1..=2).contains(&depth) && kinds.len() <= 7
         }
     };
     if !valid { return Err("configuration: Invalid Metaproject request.".into()); }

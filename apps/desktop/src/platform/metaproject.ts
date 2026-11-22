@@ -16,7 +16,7 @@ function validNode(value: unknown): boolean {
 
 function validEdge(value: unknown): boolean {
   return object(value) && typeof value.from === "string" && typeof value.to === "string"
-    && typeof value.kind === "string" && ["imports", "describes", "links", "contains", "defines", "calls"].includes(value.kind)
+    && typeof value.kind === "string" && ["imports", "asset", "describes", "links", "contains", "defines", "calls"].includes(value.kind)
     && (value.evidence === undefined || (Array.isArray(value.evidence) && value.evidence.length <= 400 && value.evidence.every((item: unknown) => typeof item === "string")))
     && (value.count === undefined || nonnegativeInteger(value.count));
 }

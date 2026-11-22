@@ -1,7 +1,7 @@
 import type { MetaprojectEdgeKind, MetaprojectRequest } from "../integrations/metaproject-explorer-contract";
 import { metaprojectExplorer } from "../integrations/service";
 
-const EDGE_KINDS: MetaprojectEdgeKind[] = ["imports", "describes", "links", "contains", "defines", "calls"];
+const EDGE_KINDS: MetaprojectEdgeKind[] = ["imports", "asset", "describes", "links", "contains", "defines", "calls"];
 
 export function parseExplorerRequest(value: unknown): MetaprojectRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid request");

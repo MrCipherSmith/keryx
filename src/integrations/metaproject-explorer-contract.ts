@@ -4,7 +4,7 @@ export const METAPROJECT_NODE_LIMIT = 200;
 export const METAPROJECT_EDGE_LIMIT = 400;
 
 export type MetaprojectNodeKind = "wiki" | "module" | "file" | "symbol";
-export type MetaprojectEdgeKind = "imports" | "describes" | "links" | "contains" | "defines" | "calls";
+export type MetaprojectEdgeKind = "imports" | "asset" | "describes" | "links" | "contains" | "defines" | "calls";
 export type MetaprojectDirection = "both" | "incoming" | "outgoing";
 
 export interface MetaprojectNode {

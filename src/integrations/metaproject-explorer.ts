@@ -6,7 +6,9 @@ import { checkGraphStaleness } from "../gdgraph/staleness";
 import type { CallEdge, DescribesEdge, GraphEdge, GraphNode, SymbolNode } from "../gdgraph/types";
 import { readContainedFile } from "../lib/contained-read";
 import { WIKI_PAGE_TYPES } from "../wiki/types";
-import { METAPROJECT_EDGE_LIMIT, METAPROJECT_NODE_LIMIT, METAPROJECT_SCHEMA } from "./metaproject-explorer-contract";
+import { unwrapFencedPage } from "../wiki/page-invariants";
+import { METAPROJECT_NODE_LIMIT, METAPROJECT_SCHEMA } from "./metaproject-explorer-contract";
+import { indexMetaprojectGraph, projectMetaprojectGraph } from "./metaproject-projection";
 import type { MetaprojectCatalog, MetaprojectEdge, MetaprojectNode, MetaprojectRequest, MetaprojectResponse } from "./metaproject-explorer-contract";
 
 const CATALOG_NODES = 12_000;
@@ -20,10 +22,10 @@ async function safeRead(root: string, relative: string, maxBytes = MAX_FILE_BYTE
   return (await readContainedFile(root, path.resolve(root, relative), { maxBytes })).toString("utf8");
 }
 
-async function jsonl<T>(root: string, relative: string): Promise<T[]> {
+async function jsonl<T>(root: string, relative: string, required = false): Promise<T[]> {
   let text: string;
   try { text = await safeRead(root, relative); } catch (error) {
-    if ((error as { code?: string }).code === "CONTAINED_READ_NOT_FOUND") return [];
+    if (!required && (error as { code?: string }).code === "CONTAINED_READ_NOT_FOUND") return [];
     throw error;
   }
   const records: T[] = [];
@@ -46,8 +48,16 @@ async function exists(root: string, relative: string): Promise<boolean> {
   }
 }
 
-async function wikiPages(root: string): Promise<Array<{ node: MetaprojectNode; content: string }>> {
-  const result: Array<{ node: MetaprojectNode; content: string }> = [];
+function wikiDetail(content: string): string {
+  const unwrapped = unwrapFencedPage(content);
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(unwrapped);
+  if (!match || !/^(?:Title|Type|Status):/im.test(match[1] ?? "")) return unwrapped;
+  return unwrapped.slice(match[0].length).replace(/^(?:\r?\n)+/, "");
+}
+
+async function wikiPages(root: string, request: MetaprojectRequest): Promise<Array<{ node: MetaprojectNode; links: string[]; digest: string; snippet?: string; markdown?: string }>> {
+  const result: Array<{ node: MetaprojectNode; links: string[]; digest: string; snippet?: string; markdown?: string }> = [];
+  let retainedBytes = 0;
   for (const { folder, type } of WIKI_PAGE_TYPES) {
     const dir = `.metaproject/wiki/${folder}`;
     if (!(await exists(root, dir))) continue;
@@ -61,7 +71,14 @@ async function wikiPages(root: string): Promise<Array<{ node: MetaprojectNode; c
       }
       const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? relative;
       const status = content.match(/^Status:\s*(.+)$/im)?.[1]?.trim();
-      result.push({ node: { id: wikiId(relative), kind: "wiki", title, path: `.metaproject/wiki/${relative}`, pageType: type, ...(status ? { status } : {}) }, content });
+      const node: MetaprojectNode = { id: wikiId(relative), kind: "wiki", title, path: `.metaproject/wiki/${relative}`, pageType: type, ...(status ? { status } : {}) };
+      const links = [...content.matchAll(/\]\(([^)#?]+)(?:#[^)]*)?\)/g)].map((match) => match[1]).filter((target): target is string => !!target && !/^(?:[a-z]+:|\/)/i.test(target)).map((target) => path.posix.normalize(path.posix.join(path.posix.dirname(node.path), target)));
+      const query = request.action === "search" ? request.query.trim().toLowerCase() : "";
+      const index = query ? content.toLowerCase().indexOf(query) : -1;
+      const snippet = index >= 0 ? content.slice(Math.max(0, index - 80), index + query.length + 120) : undefined;
+      retainedBytes += Buffer.byteLength(JSON.stringify({ node, links, snippet })) + 64;
+      if (result.length >= CATALOG_NODES || retainedBytes > 16 * 1024 * 1024) throw new Error("Wiki catalog exceeds explorer limits");
+      result.push({ node, links, digest: createHash("sha256").update(content).digest("hex"), ...(snippet !== undefined ? { snippet } : {}), ...(request.action === "detail" && request.id === node.id ? { markdown: wikiDetail(content) } : {}) });
     }
   }
   return result;
@@ -75,7 +92,7 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
   let files: GraphNode[] = [];
   let imports: GraphEdge[] = [];
   let describes: DescribesEdge[] = [];
-  const pages = await wikiPages(root);
+  const pages = await wikiPages(root, request);
   try {
     graphPresent = await exists(root, `${storage}/nodes.jsonl`) && await exists(root, `${storage}/edges.jsonl`);
     if (graphPresent) {
@@ -112,7 +129,7 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
   const filePaths = new Set(files.map((file) => file.path));
   const moduleImports = new Map<string, { from: string; to: string; count: number; evidence: string[] }>();
   for (const edge of imports) {
-    if (edge.kind === "unresolved" || !filePaths.has(edge.from) || !filePaths.has(edge.to)) continue;
+    if (edge.kind !== "imports" || !filePaths.has(edge.from) || !filePaths.has(edge.to)) continue;
     const from = path.posix.dirname(edge.from);
     const to = path.posix.dirname(edge.to);
     if (from === to) continue;
@@ -125,16 +142,12 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
   // Module relationships precede file edges so they survive a capped catalog.
   const moduleEdges: MetaprojectEdge[] = [...moduleImports.values()].map((edge) => ({ ...edge, kind: "imports" }));
   edges = moduleEdges.concat(edges);
-  for (const edge of imports) if (edge.kind !== "unresolved") edges.push({ from: fileId(edge.from), to: fileId(edge.to), kind: "imports" });
+  for (const edge of imports) if (edge.kind === "imports" || edge.kind === "asset") edges.push({ from: fileId(edge.from), to: fileId(edge.to), kind: edge.kind });
   for (const edge of describes) edges.push({ from: edge.from, to: fileId(edge.to), kind: "describes", evidence: [edge.origin, edge.pattern] });
   const pagesByPath = new Map(pages.map((page) => [page.node.path, page.node]));
   for (const page of pages) {
-    const base = page.node.path;
-    for (const match of page.content.matchAll(/\]\(([^)#?]+)(?:#[^)]*)?\)/g)) {
-      const target = match[1];
-      if (!target || /^(?:[a-z]+:|\/)/i.test(target)) continue;
-      const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(base), target));
-      const found = pagesByPath.get(resolved);
+    for (const target of page.links) {
+      const found = pagesByPath.get(target);
       if (found) edges.push({ from: page.node.id, to: found.id, kind: "links" });
     }
   }
@@ -157,7 +170,7 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
       return [info.size, info.mtimeMs, info.ctimeMs, info.ino];
     } catch { return null; }
   }));
-  const snapshotId = createHash("sha256").update(JSON.stringify({ nodes, edges, pages: pages.map(({ content }) => content), layerStats })).digest("hex");
+  const snapshotId = createHash("sha256").update(JSON.stringify({ nodes, edges, pages: pages.map(({ digest }) => digest), layerStats })).digest("hex");
   const base = { schemaVersion: METAPROJECT_SCHEMA, snapshotId } as const;
   const hasSymbolLayer = layerStats[0] !== null && layerStats[1] !== null;
   const hasWikiLayer = layerStats[2] !== null;
@@ -168,19 +181,23 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
     const catalog: MetaprojectCatalog = { ...base, nodes: boundedNodes, edges: eligible.slice(0, CATALOG_EDGES), truncated: nodes.length > CATALOG_NODES || eligible.length > CATALOG_EDGES, graph: graphError ? "unknown" : freshness ? freshness.status === "fresh" ? "ready" : freshness.status : "missing", ...((graphError || freshness?.reasons.length) ? { graphReason: graphError ?? freshness?.reasons.join("; ") ?? "" } : {}), hasWikiLayer, hasSymbolLayer, counts: { files: files.length, wiki: pages.length, modules: modules.size } };
     return catalog;
   }
+  const wantsRelationships = request.action === "neighbors" && request.kinds.some((kind) => kind === "calls" || kind === "defines");
+  const requiresSymbols = request.action !== "search" && (request.id.startsWith("symbol:") || wantsRelationships);
+  if (requiresSymbols && !hasSymbolLayer) throw new Error("Symbol layer could not be read; rebuild the graph");
   if (hasSymbolLayer && (request.action === "search" || (request.action === "detail" && request.id.startsWith("symbol:")) || (request.action === "neighbors" && (request.id.startsWith("symbol:") || request.kinds.some((kind) => kind === "calls" || kind === "defines"))))) {
     try {
-      const symbols = await jsonl<SymbolNode>(root, `${storage}/symbols.jsonl`);
+      const symbols = await jsonl<SymbolNode>(root, `${storage}/symbols.jsonl`, true);
       if (symbols.some((symbol) => typeof symbol.id !== "string" || typeof symbol.path !== "string" || typeof symbol.name !== "string")) throw new Error("Invalid symbol record");
       for (const symbol of symbols) nodes.push({ id: symbolId(symbol.id), kind: "symbol", title: symbol.name, path: symbol.path, line: symbol.startLine });
-      if (request.action === "neighbors") {
-        const calls = await jsonl<CallEdge>(root, `${storage}/calls.jsonl`);
+      if (request.action === "neighbors" && wantsRelationships) {
+        const calls = await jsonl<CallEdge>(root, `${storage}/calls.jsonl`, true);
         const symbolIds = new Set(symbols.map((symbol) => symbol.id));
+        if (calls.some((call) => typeof call.from !== "string" || typeof call.to !== "string" || !["calls", "defines", "unresolved-call"].includes(call.kind))) throw new Error("Invalid call record");
         for (const call of calls) if (call.kind !== "unresolved-call") edges.push({ from: symbolIds.has(call.from) ? symbolId(call.from) : fileId(call.from), to: symbolId(call.to), kind: call.kind });
       }
     } catch {
       // A broken optional symbol layer must not hide the graph or wiki search.
-      if (request.action !== "search" && request.id.startsWith("symbol:")) throw new Error("Symbol layer could not be read; rebuild the graph");
+      if (requiresSymbols) throw new Error("Symbol layer could not be read; rebuild the graph");
     }
   }
   if (request.action === "search") {
@@ -188,8 +205,7 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
     const exact = query ? nodes.filter((node) => node.title.toLowerCase() === query || node.path.toLowerCase() === query).map((node) => ({ node })) : [];
     const bodyHits: Array<{ node: MetaprojectNode; snippet: string }> = [];
     for (const page of pages) {
-      const index = page.content.toLowerCase().indexOf(query);
-      if (query && index >= 0 && !exact.some((hit) => hit.node.id === page.node.id)) bodyHits.push({ node: page.node, snippet: page.content.slice(Math.max(0, index - 80), index + query.length + 120) });
+      if (page.snippet !== undefined && !exact.some((hit) => hit.node.id === page.node.id)) bodyHits.push({ node: page.node, snippet: page.snippet });
     }
     const seen = new Set([...exact, ...bodyHits].map((hit) => hit.node.id));
     const broad = query ? nodes.filter((node) => !seen.has(node.id) && `${node.title} ${node.path}`.toLowerCase().includes(query)).map((node) => ({ node })) : [];
@@ -200,27 +216,9 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
   if (!node) throw new Error("Unknown Metaproject node");
   if (request.action === "detail") {
     const page = pages.find((item) => item.node.id === node.id);
-    return { ...base, node, ...(page ? { markdown: page.content } : {}) };
+    return { ...base, node, ...(page?.markdown !== undefined ? { markdown: page.markdown } : {}) };
   }
-  const visited = new Set([node.id]);
-  let frontier = new Set([node.id]);
-  const selected: MetaprojectEdge[] = [];
-  for (let step = 0; step < request.depth; step++) {
-    const next = new Set<string>();
-    for (const edge of edges) {
-      if (!request.kinds.includes(edge.kind)) continue;
-      if ((request.direction !== "incoming" && frontier.has(edge.from)) || (request.direction !== "outgoing" && frontier.has(edge.to))) {
-        selected.push(edge);
-        if (!visited.has(edge.from)) next.add(edge.from);
-        if (!visited.has(edge.to)) next.add(edge.to);
-      }
-    }
-    for (const id of next) visited.add(id);
-    frontier = next;
-  }
-  const selectedNodes = [node, ...nodes.filter((item) => item.id !== node.id && visited.has(item.id))];
-  const bounded = selectedNodes.slice(0, METAPROJECT_NODE_LIMIT);
-  const ids = new Set(bounded.map((item) => item.id));
-  const eligible = [...new Map(selected.filter((edge) => ids.has(edge.from) && ids.has(edge.to)).map((edge) => [JSON.stringify(edge), edge])).values()];
-  return { ...base, root: node.id, nodes: bounded, edges: eligible.slice(0, METAPROJECT_EDGE_LIMIT), truncated: selectedNodes.length > bounded.length || eligible.length > METAPROJECT_EDGE_LIMIT };
+  const projection = projectMetaprojectGraph(indexMetaprojectGraph(nodes, edges), base, request);
+  if (!projection) throw new Error("Unknown Metaproject node");
+  return projection;
 }
