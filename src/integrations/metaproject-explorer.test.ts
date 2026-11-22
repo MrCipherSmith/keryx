@@ -83,11 +83,11 @@ describe("metaproject explorer", () => {
     expect(neighbors.edges).toEqual([]);
   });
 
-  test("keeps wiki body hits ahead of broad file matches", async () => {
+  test("keeps wiki body hits visible even with hundreds of exact filename matches", async () => {
     const root = await fixture();
     const dir = path.join(root, ".metaproject/data/gdgraph/storage");
     await mkdir(dir, { recursive: true });
-    const files = Array.from({ length: 250 }, (_, index) => ({ id: String(index), kind: "file", path: `src/searchable-${index}.ts`, language: "typescript" }));
+    const files = Array.from({ length: 250 }, (_, index) => ({ id: String(index), kind: "file", path: `src/${index}/searchable`, language: "typescript" }));
     await writeFile(path.join(dir, "nodes.jsonl"), files.map((file) => JSON.stringify(file)).join("\n"));
     await writeFile(path.join(dir, "edges.jsonl"), "");
     const search = await metaprojectExplorer(root, { action: "search", query: "searchable" });

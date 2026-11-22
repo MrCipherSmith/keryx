@@ -7,7 +7,7 @@ import type { CallEdge, DescribesEdge, GraphEdge, GraphNode, SymbolNode } from "
 import { readContainedFile } from "../lib/contained-read";
 import { WIKI_PAGE_TYPES } from "../wiki/types";
 import { unwrapFencedPage } from "../wiki/page-invariants";
-import { METAPROJECT_NODE_LIMIT, METAPROJECT_SCHEMA } from "./metaproject-explorer-contract";
+import { isExactMetaprojectSearchMatch, METAPROJECT_NODE_LIMIT, METAPROJECT_SCHEMA } from "./metaproject-explorer-contract";
 import { indexMetaprojectGraph, projectMetaprojectGraph } from "./metaproject-projection";
 import type { MetaprojectCatalog, MetaprojectEdge, MetaprojectNode, MetaprojectRequest, MetaprojectResponse } from "./metaproject-explorer-contract";
 
@@ -202,7 +202,7 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
   }
   if (request.action === "search") {
     const query = request.query.trim().toLowerCase();
-    const exact = query ? nodes.filter((node) => node.title.toLowerCase() === query || node.path.toLowerCase() === query).map((node) => ({ node })) : [];
+    const exact = query ? nodes.filter((node) => isExactMetaprojectSearchMatch(node, query)).map((node) => ({ node })) : [];
     const bodyHits: Array<{ node: MetaprojectNode; snippet: string }> = [];
     for (const page of pages) {
       if (page.snippet !== undefined && !exact.some((hit) => hit.node.id === page.node.id)) bodyHits.push({ node: page.node, snippet: page.snippet });

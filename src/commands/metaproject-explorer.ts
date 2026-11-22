@@ -1,7 +1,5 @@
-import type { MetaprojectEdgeKind, MetaprojectRequest } from "../integrations/metaproject-explorer-contract";
+import { isMetaprojectEdgeKind, METAPROJECT_EDGE_KINDS, type MetaprojectRequest } from "../integrations/metaproject-explorer-contract";
 import { metaprojectExplorer } from "../integrations/service";
-
-const EDGE_KINDS: MetaprojectEdgeKind[] = ["imports", "asset", "describes", "links", "contains", "defines", "calls"];
 
 export function parseExplorerRequest(value: unknown): MetaprojectRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid request");
@@ -11,7 +9,7 @@ export function parseExplorerRequest(value: unknown): MetaprojectRequest {
   if (input.action === "catalog" && exact("action")) return { action: "catalog" };
   if (input.action === "detail" && exact("action", "id") && typeof input.id === "string" && input.id.length <= 4096) return { action: "detail", id: input.id };
   if (input.action === "search" && exact("action", "query") && typeof input.query === "string" && input.query.length <= 4096) return { action: "search", query: input.query };
-  if (input.action === "neighbors" && exact("action", "id", "depth", "direction", "kinds") && typeof input.id === "string" && input.id.length <= 4096 && (input.depth === 1 || input.depth === 2) && (input.direction === "both" || input.direction === "incoming" || input.direction === "outgoing") && Array.isArray(input.kinds) && input.kinds.every((kind) => EDGE_KINDS.includes(kind))) {
+  if (input.action === "neighbors" && exact("action", "id", "depth", "direction", "kinds") && typeof input.id === "string" && input.id.length <= 4096 && (input.depth === 1 || input.depth === 2) && (input.direction === "both" || input.direction === "incoming" || input.direction === "outgoing") && Array.isArray(input.kinds) && input.kinds.length <= METAPROJECT_EDGE_KINDS.length && input.kinds.every(isMetaprojectEdgeKind)) {
     return { action: "neighbors", id: input.id, depth: input.depth, direction: input.direction, kinds: input.kinds };
   }
   throw new Error("Invalid request");

@@ -1,6 +1,8 @@
 import cytoscape from "cytoscape";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  isExactMetaprojectSearchMatch,
+  METAPROJECT_EDGE_KINDS,
   METAPROJECT_NODE_LIMIT,
   type MetaprojectCatalog,
   type MetaprojectDetail,
@@ -25,15 +27,6 @@ type Request = (
   cwd: string,
   request: MetaprojectRequest,
 ) => Promise<MetaprojectResponse>;
-const KINDS: MetaprojectEdgeKind[] = [
-  "imports",
-  "asset",
-  "describes",
-  "links",
-  "contains",
-  "defines",
-  "calls",
-];
 const EMPTY_HITS: readonly MetaprojectHit[] = [];
 const GRAPH_PADDING = 36;
 
@@ -273,7 +266,7 @@ function Explorer({
   const [direction, setDirection] = useState<MetaprojectDirection>("both");
   const [depth, setDepth] = useState<1 | 2>(1);
   const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(
-    KINDS.filter((kind) => kind !== "calls" && kind !== "defines"),
+    METAPROJECT_EDGE_KINDS.filter((kind) => kind !== "calls" && kind !== "defines"),
   );
   const [searchResult, setSearchResult] = useState<{
     query: string;
@@ -287,8 +280,12 @@ function Explorer({
   );
   const [error, setError] = useState("");
   const [detailError, setDetailError] = useState("");
+  const [relationshipError, setRelationshipError] = useState("");
   const [searchError, setSearchError] = useState<{ query: string; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingRelationships, setLoadingRelationships] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
   const [revision, setRevision] = useState(0);
   const project = useRef(0);
@@ -373,13 +370,13 @@ function Explorer({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [catalog, cwd, request, searchQuery]);
+  }, [catalog, cwd, request, searchQuery, searchAttempt]);
   useEffect(() => {
     if (content.current) content.current.scrollTop = 0;
   }, [mode, selection]);
   useEffect(() => {
     setDetail(null);
-    setProjection(null);
+    setLoadingDetail(false);
     setDetailError("");
     if (!catalog || !selection) return;
     if (selectedNode && selectedNode.kind !== "wiki" && selectedNode.kind !== "symbol") {
@@ -387,6 +384,7 @@ function Explorer({
       return;
     }
     let active = true;
+    setLoadingDetail(true);
     void (async () => {
       try {
         const result = (await request(cwd, {
@@ -400,6 +398,8 @@ function Explorer({
         }
       } catch (cause) {
         if (active) setDetailError(errMessage(cause));
+      } finally {
+        if (active) setLoadingDetail(false);
       }
     })();
     return () => {
@@ -408,6 +408,8 @@ function Explorer({
   }, [catalog, cwd, request, selectedNode, selection]);
   useEffect(() => {
     setProjection(null);
+    setRelationshipError("");
+    setLoadingRelationships(false);
     if (!catalog || !selection) return;
     const neighborsRequest = { action: "neighbors", id: selection, depth, direction, kinds } as const;
     if (
@@ -422,6 +424,7 @@ function Explorer({
     }
     if (catalog.graph === "missing") return;
     let active = true;
+    setLoadingRelationships(true);
     void (async () => {
       try {
         const result = (await request(cwd, neighborsRequest)) as MetaprojectNeighbors;
@@ -431,7 +434,9 @@ function Explorer({
           else if (result.root === selection) setProjection(result);
         }
       } catch (cause) {
-        if (active) setDetailError(errMessage(cause));
+        if (active) setRelationshipError(errMessage(cause));
+      } finally {
+        if (active) setLoadingRelationships(false);
       }
     })();
     return () => {
@@ -465,7 +470,7 @@ function Explorer({
     for (const node of catalog?.nodes ?? []) {
       const title = node.title.toLowerCase();
       const path = node.path.toLowerCase();
-      if (needle && (title === needle || path === needle)) exact.push({ node });
+      if (needle && isExactMetaprojectSearchMatch(node, needle)) exact.push({ node });
       else if (title.includes(needle) || path.includes(needle)) local.push({ node });
     }
     const remote = new Map(hits.map(hit => [hit.node.id, hit]));
@@ -582,7 +587,14 @@ function Explorer({
           <div className="metaproject-panes">
             <nav className="metaproject-list" aria-label="Search results">
               <h2>{searchQuery ? "Results" : "Catalog"}</h2>
-              {searchFailure && <p role="alert">Search failed. {searchFailure}</p>}
+              {searchFailure && (
+                <div className="inline-banner tone-warn" role="alert">
+                  <span>Search failed. {searchFailure}</span>
+                  <button className="btn btn-sm" onClick={() => setSearchAttempt(value => value + 1)}>
+                    Retry search
+                  </button>
+                </div>
+              )}
               <ul>
                 {results.map((hit) => (
                   <li key={hit.node.id}>
@@ -614,9 +626,9 @@ function Explorer({
               )}
             </nav>
             <section className="metaproject-content" ref={content} aria-label={mode === "wiki" ? "Wiki article" : "Relationship graph"}>
-              {detailError && (
+              {(detailError || relationshipError) && (
                 <div className="inline-banner tone-warn" role="alert">
-                  <span>{detailError}</span>
+                  <span>{[detailError, relationshipError].filter(Boolean).join(" · ")}</span>
                   <button
                     className="btn btn-sm"
                     onClick={() => setRevision((value) => value + 1)}
@@ -626,6 +638,7 @@ function Explorer({
                 </div>
               )}
               {mode === "wiki" && detailPanel}
+              {mode === "wiki" && loadingDetail && <p role="status">Loading item…</p>}
               {mode === "graph" && (
                 <>
                   <div className="metaproject-controls">
@@ -660,7 +673,7 @@ function Explorer({
                     </label>
                     <fieldset>
                       <legend>Relationship types</legend>
-                      {KINDS.map((kind) => (
+                      {METAPROJECT_EDGE_KINDS.map((kind) => (
                         <label key={kind}>
                           <input
                             type="checkbox"
@@ -678,6 +691,7 @@ function Explorer({
                       ))}
                     </fieldset>
                   </div>
+                  {loadingRelationships && <p role="status">Loading relationships…</p>}
                   {currentProjection && catalog.graph !== "missing" && (
                     <Graph
                       projection={currentProjection}
@@ -699,7 +713,9 @@ function Explorer({
                   <RelationshipList projection={currentProjection} select={select} />
                 </details>
               )}
+              {mode === "wiki" && loadingRelationships && <p role="status">Loading relationships…</p>}
               {mode === "graph" && detailPanel}
+              {mode === "graph" && loadingDetail && <p role="status">Loading item…</p>}
               {!selection && <p>Select an item to explore it.</p>}
             </section>
           </div>

@@ -29,6 +29,7 @@ import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
 import { reviewRunArgs } from "./reviewRun";
 import { parsePublicationRequest, publicationArgs } from "../../../src/commands/review-desk-publish";
 import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
+import { isMetaprojectEdgeKind, METAPROJECT_EDGE_KINDS } from "../../../src/integrations/metaproject-explorer-contract";
 
 const runFile = promisify(execFile);
 const PORT = 1421;
@@ -737,8 +738,8 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
         || (value.action === "search" && keys === "action,query" && typeof value.query === "string" && value.query.length <= 4096)
         || (value.action === "neighbors" && keys === "action,depth,direction,id,kinds" && text(value.id)
           && (value.depth === 1 || value.depth === 2) && ["both", "incoming", "outgoing"].includes(String(value.direction))
-          && Array.isArray(value.kinds) && value.kinds.length <= 6
-          && value.kinds.every((kind: unknown) => typeof kind === "string" && ["imports", "describes", "links", "contains", "defines", "calls"].includes(kind)));
+          && Array.isArray(value.kinds) && value.kinds.length <= METAPROJECT_EDGE_KINDS.length
+          && value.kinds.every(isMetaprojectEdgeKind));
       const payload = JSON.stringify(request);
       if (!valid || new TextEncoder().encode(payload).length > 16 * 1024) throw new Error("configuration: Invalid Metaproject request.");
       return runReviewCli(await projectCwd(ws.data, cwd), ["metaproject-explorer", "--request", payload], true);

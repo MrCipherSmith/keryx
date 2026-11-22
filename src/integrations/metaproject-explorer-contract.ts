@@ -4,7 +4,12 @@ export const METAPROJECT_NODE_LIMIT = 200;
 export const METAPROJECT_EDGE_LIMIT = 400;
 
 export type MetaprojectNodeKind = "wiki" | "module" | "file" | "symbol";
-export type MetaprojectEdgeKind = "imports" | "asset" | "describes" | "links" | "contains" | "defines" | "calls";
+export const METAPROJECT_EDGE_KINDS = ["imports", "asset", "describes", "links", "contains", "defines", "calls"] as const;
+export type MetaprojectEdgeKind = typeof METAPROJECT_EDGE_KINDS[number];
+
+export function isMetaprojectEdgeKind(value: unknown): value is MetaprojectEdgeKind {
+  return METAPROJECT_EDGE_KINDS.some(kind => kind === value);
+}
 export type MetaprojectDirection = "both" | "incoming" | "outgoing";
 
 export interface MetaprojectNode {
@@ -18,6 +23,11 @@ export interface MetaprojectNode {
   pageType?: string;
   status?: string;
   line?: number;
+}
+
+export function isExactMetaprojectSearchMatch(node: MetaprojectNode, query: string): boolean {
+  return node.path.toLowerCase() === query
+    || ((node.kind === "wiki" || node.kind === "module") && node.title.toLowerCase() === query);
 }
 
 export interface MetaprojectEdge {

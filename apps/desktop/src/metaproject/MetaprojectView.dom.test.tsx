@@ -86,7 +86,7 @@ test("full-text hits stay visible when local matches fill the result limit", asy
   const originalTimeout = window.setTimeout;
   let runTimer: () => void = () => {};
   window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") runTimer = () => callback(); return 1; }) as typeof window.setTimeout;
-  const localMatches = Array.from({ length: 210 }, (_, index) => ({ ...file, id: `local-${index}`, path: `src/distinct-${index}.ts` }));
+  const localMatches = Array.from({ length: 210 }, (_, index) => ({ ...file, id: `local-${index}`, title: "distinct", path: `src/${index}/distinct` }));
   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
     if (input.action === "catalog") return Promise.resolve({ ...catalog, nodes: [page, ...localMatches] });
     if (input.action === "search") return Promise.resolve({ ...snapshot, hits: [{ node: page, section: "Setup", snippet: "distinct phrase" }] });
@@ -117,6 +117,20 @@ test("snapshot mismatch offers a refresh and drops a selection absent from the r
   await act(async () => { button("Refresh catalog").click(); });
   expect(host.textContent).not.toContain("Project knowledge changed while loading");
   expect(host.textContent).toContain("src/client.ts");
+});
+
+test("Wiki shows a pending status while the selected page loads", async () => {
+  let resolveDetail: ((result: MetaprojectResponse) => void) | undefined;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "detail"
+    ? new Promise(resolve => { resolveDetail = resolve; })
+    : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await act(async () => { button("Wiki").click(); });
+  const panel = host.querySelector(".metaproject-content");
+  expect(panel?.querySelector('[role="status"]')?.textContent).toBe("Loading item…");
+  await act(async () => { resolveDetail?.({ ...snapshot, node: page, markdown: "Loaded article" }); });
+  expect(panel?.querySelector('[role="status"]')).toBeNull();
+  expect(panel?.textContent).toContain("Loaded article");
 });
 
 test("Wiki opens the article before the collapsed relationship list", async () => {
