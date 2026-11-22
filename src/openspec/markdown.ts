@@ -213,7 +213,7 @@ function scenarios(source: MarkdownSource, requirement: Block, end: number): Ope
   return result;
 }
 
-function requirements(source: MarkdownSource, section: Section, delta: boolean): OpenSpecMarkdownRequirement[] {
+function requirementsInSection(source: MarkdownSource, section: Section, delta: boolean): OpenSpecMarkdownRequirement[] {
   const result: OpenSpecMarkdownRequirement[] = [];
   const { operation } = section;
   let current: Block | undefined;
@@ -280,14 +280,29 @@ function renames(source: MarkdownSource, section: Section): OpenSpecMarkdownRequ
   return result;
 }
 
+export interface OpenSpecMarkdownHeading {
+  title: string;
+  level: number;
+  line: number;
+}
+
 export function parseOpenSpecMarkdown(
   markdown: string,
   { delta }: { delta: boolean },
-): { requirements: OpenSpecMarkdownRequirement[]; diagnostics: OpenSpecMarkdownDiagnostic[] } {
+): {
+  requirements: OpenSpecMarkdownRequirement[];
+  diagnostics: OpenSpecMarkdownDiagnostic[];
+  headings: OpenSpecMarkdownHeading[];
+} {
   const source = readMarkdown(markdown);
+  const requirements = sections(source, delta).flatMap((section) =>
+    section.operation === "renamed" ? renames(source, section) : requirementsInSection(source, section, delta));
   return {
-    requirements: sections(source, delta).flatMap((section) =>
-      section.operation === "renamed" ? renames(source, section) : requirements(source, section, delta)),
+    requirements,
     diagnostics: source.diagnostics.sort((a, b) => a.line - b.line),
+    headings: source.visible.flatMap((line, index) => {
+      const parsed = heading(line);
+      return parsed?.text ? [{ title: parsed.text, level: parsed.level, line: index + 1 }] : [];
+    }),
   };
 }
