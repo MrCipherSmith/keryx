@@ -27,3 +27,14 @@ T7 supplies a shared test fixture factory and eligibility coverage for the catal
 | Missing or empty | Graph and Wiki still selectable. Distinct OpenSpec source message (AC1, AC6) | Scope state to new root (AC6) | Rediscover without writing the project (AC1) |
 | Partial or stale graph | Display available records and omissions with graph freshness separately (AC1, AC4, AC6) | Discard stale results (AC6) | Preserve usable content with retry feedback. Never silently mix snapshots (AC6) |
 | Source failed or old CLI | Route Graph/Wiki through established transport when supported. Show OpenSpec-specific message (AC5, AC6) | Hide previous failure and start new root load (AC6) | Retry only the current root and selected executable (AC5, AC6) |
+
+## Shared service and transport
+
+T8 supplies a local service in src/openspec/service.ts with an async `readOpenSpec(root)` entry point. The returned snapshot provides:
+- `catalog` from T5 and the parsed entry evidence used by detail and relationships.
+- `list({kind,cursor?})`, `detail({id?,path?,artifactPath?,section?,expectedDigest?})`, `history({id,cursor?})`, `search({query,scope?,cursor?})`.
+- Scoped, page-bounded outputs with nextCursor and partial status. Search hits carry entry metadata, rank, snippet and section evidence. Keep artifact bodies out of list/search.
+- `relationships` with canonical target spec path, change id, evidence and declared link rows. Delta relations derive from actual canonical paths and do not depend on the presence of Graph. Only expose deltas for current target specs in the projected graph.
+- Service uses one in-memory scan result per operation. Validate cursor root, snapshot, view/search parameters and offset. The digest pin for a changed source rejects the old section and allows the caller to return to its parent.
+
+T9 composes the source with legacy data. Keep both action-specific validators explicit and test the existing v1 roster using a fixed v2 capabilities request. Preserve Graph/Wiki behavior if there is no OpenSpec. A scope-aware shared search must map OpenSpec sections and rank across sources without losing all matches of either side. The Desktop transport must include selected binary and root in its capability cache, and v1 fallback is narrowly scoped to the negotiation step.

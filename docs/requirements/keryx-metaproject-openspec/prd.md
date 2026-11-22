@@ -1,7 +1,7 @@
 # PRD — OpenSpec in Keryx Metaproject
-Version: 0.1.0
+Version: 0.1.1
 
-Status: Spec ready for owner review. Runtime planned.
+Status: Contract for Flow 514. The Flow journal records implementation and verification progress.
 
 ## Problem
 
