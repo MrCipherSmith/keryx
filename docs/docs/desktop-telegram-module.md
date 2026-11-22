@@ -47,7 +47,7 @@ The listener configuration and credentials are profile-wide, separate from each 
 1. An attachment belongs to the session lease and its current binding generation. The listener creates a topic for that owner. An inbound update must match the configured account, forum and exact topic. ACP also checks the current lease and generation before admitting work. Duplicate update IDs are dropped within the attachment's recent update window.
 2. An accepted text message starts a turn in Ask mode. Desktop renders it with **Via Telegram** and shows its busy state. If the session is already working, the service replies that it is busy. The operator can resend after the turn.
 3. `/status` reports session availability. `/stop` targets the Telegram-origin turn for the attachment. Other shell slash commands do not run through the Desktop topic.
-4. The topic receives final replies and limited progress. The service does not mirror internal reasoning, tool inputs, tool results or old history. The conversation is saved in the normal session store. Telegram delivery can fail after that local state commits; the preview can still show the turn as completed. Compare the Desktop transcript with the topic before resending.
+4. The topic receives final replies and limited progress. The service does not mirror internal reasoning, tool inputs, tool results or old history. The conversation is saved in the normal session store. Mirrored replies are queued in order after the transcript is saved. The ACP turn slot is released while the service accepts the reply. Desktop shows a session notice when queue acceptance cannot be confirmed. An accepted reply is queued for delivery to Telegram.
 5. ACP owns the decision and determines eligibility using trusted tool or question metadata. Desktop remains the decision surface for privileged actions. Supported projections use one shared pending decision with deadline, choice validation and a first-valid-answer rule. A stale topic callback cannot settle a new operation.
 6. Detaching or losing the ACP session's ownership tears down its binding and stops new input. When the Telegram API accepts the topic closure, previous messages remain readable. An external listener may still serve other sessions.
 
@@ -57,7 +57,7 @@ The [Desktop Telegram specification and validation plan](https://github.com/MrCi
 
 | Concern | Focused coverage |
 | --- | --- |
-| Bootstrap and compatible listener detection | CLI coverage under `src/lib/desktop-serve-*` and owned-child cases in `apps/desktop/src-tauri/src/telegram_serve.rs` |
+| Bootstrap and compatible listener detection | CLI coverage in `src/lib/desktop-serve-bootstrap.test.ts` and `src/remote/desktop-serve-status.test.ts` and owned-child cases in `apps/desktop/src-tauri/src/telegram_serve.rs` |
 | Pairing, secrets, concurrent changes and recovery | `src/remote/channel-activation.test.ts`, `channel-control.test.ts`, `channel-staging.test.ts`, `channels-revisioned-client.test.ts`, `poller-readiness.test.ts` |
 | Owning session, inbound messages and projected decisions | `src/acp/telegram-session.server.test.ts`, `telegram-approval.test.ts`, `telegram-decision.test.ts`, `src/remote/exact-owner.test.ts` |
 

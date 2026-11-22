@@ -41,7 +41,7 @@ function PairingQr({ link }: { link: string }) {
 }
 
 /** Revisioned channel operations are kept in memory; secrets are never stored. */
-export function TelegramBotSettings() {
+export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number }) {
   const [channel, setChannel] = useState<TelegramChannelStatus | null>(null);
   const [operation, setOperation] = useState<TelegramChannelOperation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,6 +65,7 @@ export function TelegramBotSettings() {
       if (!alive.current || requestVersion !== version.current) return;
       if (!result.ok) { setChannel(null); setOperation(null); setError(failureMessage(result.code)); return; }
       setChannel(result.value);
+      setError("");
       if (result.value.capabilities?.desktopTelegram !== 1) { setOperation(null); setNeedsRefresh(false); return; }
       const pending = result.value.pendingOperation;
       if (!pending) { setOperation(null); setNeedsRefresh(false); return; }
@@ -80,10 +81,16 @@ export function TelegramBotSettings() {
 
   useEffect(() => {
     alive.current = true;
-    void refresh();
+    return () => { alive.current = false; version.current += 1; };
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh, refreshKey]);
+
+  useEffect(() => {
+    if (!operation && !channel?.pendingOperation) return;
     const timer = window.setInterval(() => void refresh(), POLL_MS);
-    return () => { alive.current = false; version.current += 1; window.clearInterval(timer); };
-  }, [refresh]);
+    return () => window.clearInterval(timer);
+  }, [channel?.pendingOperation, operation, refresh]);
 
   const pairing = operation?.pairing;
   useEffect(() => {
@@ -164,7 +171,7 @@ export function TelegramBotSettings() {
         {pairing.code ? <><p><strong>{pairing.code}</strong></p><button className="btn" onClick={() => void copyCode(pairing.code ?? "")}>Copy code</button></> : null}
       </> : null}
       {pairing?.state === "waiting-for-confirmation" && pairing.userId !== undefined && !expired ? <><p>Telegram account ID: {pairing.userId}. Confirm that this is your account before connecting the group.</p><button className="btn" disabled={busy} onClick={() => runOperation("confirm-account")}>This is my account</button></> : null}
-      {pairing?.state === "waiting-for-group" || pairing?.state === "ready" ? <><p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>{pairing.chatTitle ? <p>Forum: {pairing.chatTitle}</p> : null}{pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}</> : null}
+      {pairing?.state === "waiting-for-group" || pairing?.state === "ready" ? <><p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>{pairing.chatTitle ? <p style={{ overflowWrap: "anywhere" }}>Forum: {pairing.chatTitle}</p> : null}{pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}</> : null}
       {pairing?.state === "expired" || expired ? <p className="field-error">The pairing expired. Cancel it and start again.</p> : null}
       {pairing?.state === "failed" ? <p className="field-error">Pairing failed. Cancel it and try again.</p> : null}
       {pairing?.state === "ready" && channel.telegram.state === "connected" ? <p className="settings-row-help">Connecting a different bot will interrupt existing remote sessions. Each chat must be attached to a new topic.</p> : null}

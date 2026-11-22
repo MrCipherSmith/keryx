@@ -12,6 +12,7 @@ export async function raceTelegramApproval(options: {
   turnSignal: AbortSignal;
   choices: readonly AcpPermissionOption[];
   timeoutMs: number;
+  now?: () => number;
 }): Promise<AcpRequestPermissionResponse | undefined> {
   if (options.turnSignal.aborted) return undefined;
   const projection = new AbortController();
@@ -22,8 +23,10 @@ export async function raceTelegramApproval(options: {
     const candidate = outcome as { outcome?: unknown; optionId?: unknown };
     return candidate.outcome === "cancelled" || (candidate.outcome === "selected" && options.choices.some((choice) => choice.optionId === candidate.optionId));
   };
+  const now = options.now ?? Date.now;
   const decision = new ProjectedDecision<AcpRequestPermissionResponse>({
-    deadline: Date.now() + options.timeoutMs,
+    deadline: now() + options.timeoutMs,
+    now,
     current: options.current,
     validate: isResponse,
     onSettled: (outcome) => {

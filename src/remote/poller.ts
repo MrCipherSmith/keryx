@@ -49,7 +49,7 @@ export interface UpdatePollerOptions {
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   /** Delays between retries after a failed cycle; the last one repeats. */
   backoffMs?: number[];
-  /** Hold after the first successful batch is accepted, until a handoff is decided. */
+  /** Hold the first response before admission until a handoff is decided. */
   holdAfterFirstResponse?: (signal: AbortSignal) => Promise<void>;
   /** Called when the status changes. */
   onStatus?: (status: PollerStatus) => void;
@@ -181,9 +181,10 @@ export class UpdatePoller {
         await this.sleep(this.backoffMs[Math.min(failures, this.backoffMs.length) - 1] ?? 1_000, signal);
         continue;
       }
+      if (firstSuccess) await this.holdAfterFirstResponse?.(signal);
+      if (signal.aborted) return;
       if (updates.length === 0) {
         failures = 0;
-        if (firstSuccess) await this.holdAfterFirstResponse?.(signal);
         if (this.timeoutSec <= 0) {
           // A short poll answers at once: without a pause this would spin.
           await this.sleep(SHORT_POLL_PAUSE_MS, signal);
@@ -203,7 +204,6 @@ export class UpdatePoller {
         this.set({ state: "running", reason: describe(error) });
         await this.sleep(this.backoffMs[Math.min(failures, this.backoffMs.length) - 1] ?? 1_000, signal);
       }
-      if (firstSuccess) await this.holdAfterFirstResponse?.(signal);
     }
   }
 }

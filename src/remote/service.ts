@@ -138,7 +138,7 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
       ...(options.pollBackoffMs === undefined ? {} : { pollBackoffMs: options.pollBackoffMs }),
       ...(options.pollSleep === undefined ? {} : { pollSleep: options.pollSleep }),
       onPollerStatus: (status) => {
-        if (status.state !== "conflict" || hub !== restored) return;
+        if (status.state !== "conflict") return;
         void exclusive(async () => {
           if (hub === restored) await stopHubNow(status.reason ?? "another poller owns this bot token");
         });
@@ -352,6 +352,12 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
               ...(options.pollSleep === undefined ? {} : { pollSleep: options.pollSleep }),
               deliver: surface.consumer.deliver,
               ...(surface.consumer.deliverCallback === undefined ? {} : { deliverCallback: surface.consumer.deliverCallback }),
+              onPollerStatus: (status) => {
+                if (status.state !== "conflict") return;
+                void exclusive(async () => {
+                  if (hub === staged) await stopHubNow(status.reason ?? "another poller owns this bot token");
+                });
+              },
             });
             let paused = false;
             let revocationAttempted = false;
@@ -439,6 +445,12 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
           ...(options.pollSleep === undefined ? {} : { pollSleep: options.pollSleep }),
           deliver: surface.consumer.deliver,
           ...(surface.consumer.deliverCallback === undefined ? {} : { deliverCallback: surface.consumer.deliverCallback }),
+          onPollerStatus: (status) => {
+            if (status.state !== "conflict") return;
+            void exclusive(async () => {
+              if (hub === staged) await stopHubNow(status.reason ?? "another poller owns this bot token");
+            });
+          },
         });
         try {
           await staged.start();

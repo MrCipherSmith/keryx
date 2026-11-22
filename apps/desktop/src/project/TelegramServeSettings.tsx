@@ -19,8 +19,9 @@ function serviceLabel(status: TelegramServeStatus): string {
 }
 
 /** Machine-level service controls. Children extend the section with channel controls. */
-export function TelegramServeSettings({ children }: { children?: ReactNode }) {
+export function TelegramServeSettings({ children }: { children?: (channelRefreshKey: number) => ReactNode }) {
   const [status, setStatus] = useState<TelegramServeStatus | null>(null);
+  const [channelRefreshKey, setChannelRefreshKey] = useState(0);
   const [busy, setBusy] = useState<ServiceAction | null>(null);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<"stop" | "restart" | null>(null);
@@ -37,6 +38,7 @@ export function TelegramServeSettings({ children }: { children?: ReactNode }) {
       const next = await telegramServeStatus();
       if (alive.current && revision.current === request) {
         setStatus((current) => current?.state === "needs_setup" && next.state === "stopped" ? current : next);
+        setChannelRefreshKey((key) => key + 1);
         setError("");
       }
     } catch {
@@ -49,9 +51,14 @@ export function TelegramServeSettings({ children }: { children?: ReactNode }) {
   useEffect(() => {
     alive.current = true;
     void refresh();
-    const timer = window.setInterval(() => void refresh(), STATUS_POLL_MS);
-    return () => { alive.current = false; revision.current += 1; window.clearInterval(timer); };
+    return () => { alive.current = false; revision.current += 1; };
   }, [refresh]);
+
+  useEffect(() => {
+    if (status?.state !== "starting" && status?.state !== "stopping") return;
+    const timer = window.setInterval(() => void refresh(), STATUS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [status?.state, refresh]);
 
   const run = async (action: ServiceAction, completeSetup = false) => {
     if (busyRef.current) return;
@@ -62,7 +69,10 @@ export function TelegramServeSettings({ children }: { children?: ReactNode }) {
     setConfirm(null);
     try {
       const next = action === "start" ? await telegramServeStart(completeSetup) : action === "stop" ? await telegramServeStop() : await telegramServeRestart();
-      if (alive.current && revision.current === request) setStatus(next);
+      if (alive.current && revision.current === request) {
+        setStatus(next);
+        setChannelRefreshKey((key) => key + 1);
+      }
     } catch {
       if (alive.current && revision.current === request) setError("The service action could not be completed. Check its status and retry.");
     } finally {
@@ -102,7 +112,7 @@ export function TelegramServeSettings({ children }: { children?: ReactNode }) {
         {owned && status?.state === "running" ? <button className="btn" disabled={transitioning} onClick={() => requestAction("restart")}>Restart</button> : null}
         <button className="btn btn-ghost" disabled={transitioning} onClick={() => void refresh()}>{error || status?.state === "blocked" || status?.state === "failed" ? "Retry" : "Refresh"}</button>
       </div>
-      {children}
+      {status || error ? children?.(channelRefreshKey) : null}
       {confirm ? (
         <Dialog title={confirm === "stop" ? "Stop local service?" : "Restart local service?"} onClose={() => setConfirm(null)} footer={<>
           <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>

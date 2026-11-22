@@ -336,7 +336,9 @@ export class RemoteHub {
     this.createPoller = (api, hold) => new UpdatePoller({
       api,
       ...(hold === undefined ? {} : { holdAfterFirstResponse: hold }),
-      sink: { accept: (updates) => this.staged || this.handoffPaused ? Promise.resolve() : this.receive(updates) },
+      sink: { accept: (updates) => this.staged || this.handoffPaused
+        ? Promise.reject(new Error("Telegram admission is paused"))
+        : this.receive(updates) },
       ...(options.pollTimeoutSec === undefined ? {} : { timeoutSec: options.pollTimeoutSec }),
       ...(options.pollSleep === undefined ? {} : { sleep: options.pollSleep }),
       ...(options.pollBackoffMs === undefined ? {} : { backoffMs: options.pollBackoffMs }),
@@ -392,7 +394,7 @@ export class RemoteHub {
     return this.poller.waitForReady(timeoutMs);
   }
 
-  /** Called only after the revisioned commit; candidate updates before this point were discarded. */
+  /** Called only after the revisioned commit; admit the pending first response. */
   async activatePrepared(): Promise<void> {
     if (!this.staged) return;
     this.forgetOtherGroups();
@@ -456,7 +458,7 @@ export class RemoteHub {
 
   /**
    * Swap the polling credential without replacing this hub or its bindings. Incoming
-   * updates are discarded during readiness; callers must fence approvals and serialize
+   * updates are held during readiness; callers must fence approvals and serialize
    * persistence separately. A failed candidate is stopped before recovery is attempted.
    */
   async handoffPoller(candidate: BotApi, timeoutMs: number, beforePublish: () => Promise<boolean> = async () => true): Promise<{ ok: true } | { ok: false; recovered: boolean }> {
@@ -492,10 +494,16 @@ export class RemoteHub {
         releaseCandidate();
         return { ok: true };
       }
-      releaseCandidate();
       await this.poller.stop();
       if (this.lifecycleGeneration !== generation) return { ok: false, recovered: false };
-      this.poller = this.createPoller(previous);
+      let releaseRecovery: (() => void) | undefined;
+      const holdRecovery = (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+        const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+        releaseRecovery = release;
+        signal.addEventListener("abort", release, { once: true });
+        if (signal.aborted) release();
+      });
+      this.poller = this.createPoller(previous, holdRecovery);
       this.poller.start();
       const recovered = await this.poller.waitForReady(timeoutMs);
       if (!recovered || this.lifecycleGeneration !== generation) {
@@ -504,6 +512,7 @@ export class RemoteHub {
       }
       this.handoffPaused = false;
       this.forwardingApi.resume(true);
+      releaseRecovery?.();
       return { ok: false, recovered: true };
     } finally {
       if (this.handoffPaused) this.forwardingApi.resume(false);
@@ -524,7 +533,14 @@ export class RemoteHub {
   /** Restore the original poller only after its first successful response. */
   async recoverCutover(timeoutMs: number): Promise<boolean> {
     if (!this.handoffInProgress || this.stopped) return false;
-    this.poller = this.createPoller(this.forwardingApi.current());
+    let releaseRecovery: (() => void) | undefined;
+    const holdRecovery = (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+      const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+      releaseRecovery = release;
+      signal.addEventListener("abort", release, { once: true });
+      if (signal.aborted) release();
+    });
+    this.poller = this.createPoller(this.forwardingApi.current(), holdRecovery);
     this.poller.start();
     const ready = await this.poller.waitForReady(timeoutMs);
     if (!ready || this.stopped) {
@@ -536,6 +552,7 @@ export class RemoteHub {
     this.handoffPaused = false;
     this.handoffInProgress = false;
     this.forwardingApi.resume(true);
+    releaseRecovery?.();
     return true;
   }
 

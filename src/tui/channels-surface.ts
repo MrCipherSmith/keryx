@@ -239,7 +239,9 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
   };
   const reload = async (): Promise<void> => {
     try {
-      learn(await loadChannelsSnapshot(client));
+      const next = await loadChannelsSnapshot(client);
+      if (next.revisioned?.revision !== undefined) activeOperation = next.revisioned.pendingOperation;
+      learn(next);
     } catch {
       // The old snapshot stays; the next action reads it again.
     }
@@ -713,7 +715,10 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
         const result = revisioned && revisioned.revision !== undefined && client.disconnectRevisioned ? await client.disconnectRevisioned(revisioned.revision) : { ok: false as const, code: "unavailable", reason: "Revisioned channel control is unavailable; refresh or update keryx." };
         await reload();
         if (closed || epoch !== mine) return;
-        backToList(result.ok ? { tone: result.value.remaining === 0 ? "ok" : "attention", text: `Telegram disconnected. ${result.value.deleted} topics deleted; ${result.value.remaining} remain.` } : { tone: "error", text: `Not disconnected: ${result.reason}` });
+        backToList(result.ok ? result.value.hubWasRunning
+          ? { tone: result.value.remaining === 0 ? "ok" : "attention", text: `Telegram disconnected. ${result.value.deleted} topics deleted; ${result.value.remaining} remain.` }
+          : { tone: "attention", text: "Telegram disconnected. The hub was not running, so topics could not be deleted and may remain." }
+          : { tone: "error", text: `Not disconnected: ${result.reason}` });
         return;
       }
       const result = await client.disconnect();

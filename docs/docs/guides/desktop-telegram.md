@@ -85,7 +85,7 @@ Keryx checks that Telegram accepts the new token's polling connection before act
 | The pairing is waiting for the forum | Use the confirmed Telegram account, enable Topics in the group, and give the bot **Manage Topics**. Check that its membership or permissions update appears, then choose **Check pairing**. |
 | A revision conflict or uncertain outcome | Refresh the status first. Another Settings window or `/channels` may have changed the connection while you were looking at it. |
 | **Test connection** works, but the bot ignores a session prompt | **General** is used for the connection test. Send the prompt to the session's own topic from the paired account. Check the session is still attached and Desktop is running. |
-| A turn ended without a reply in Telegram | Open the same session in Desktop and check the transcript before resending. The preview may show completion even when Telegram delivery failed. |
+| **Telegram reply delivery could not be confirmed** | The turn has finished and its reply is available in Desktop. Check the topic before resending. An unconfirmed request may still have reached the service. |
 | The bot is set up in another local profile | Open Desktop and start the listener with that profile. Settings and credentials are profile-wide, so opening a different project alone does not switch profiles. |
 
 For the existing terminal workflow, use `/channels` to manage the connection and `/remote-control` inside a shell session to attach it. `/remote-policy` and `/rendering` manage terminal Telegram defaults. For terminal setup and the local HTTP API, see [Drive Keryx remotely](drive-keryx-remotely.md). For component ownership and verification, see the [Desktop Telegram module](../desktop-telegram-module.md).

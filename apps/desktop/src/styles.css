@@ -689,7 +689,7 @@ button { font: inherit; }
 .settings-row-help { color: var(--fg-muted); font-size: var(--fs-sm); }
 .field-row { display: flex; align-items: flex-end; gap: var(--sp-2); }
 .field-row .field { margin: 0; }
-.settings-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); }
+.settings-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-3); }
 .about-list { margin: 0; display: grid; gap: 0; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
 .about-list > div { display: flex; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--border); }
 .about-list > div:last-child { border-bottom: 0; }

@@ -84,6 +84,7 @@ export interface CommandItem {
 /** A prompt typed while the turn runs; sent in order when it ends. */
 export interface QueuedPrompt {
   issueLaunchId?: string;
+  resumeIssueQuestions?: true;
   id: number;
   text: string;
 }
@@ -513,7 +514,7 @@ export type Action =
   /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
   | { t: "delegateResult"; sessionId: string; runId: string; agentId: string; turn: number; text: string }
   | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
-  | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string }
+  | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string; resumeIssueQuestions?: true }
   | { t: "queueRemove"; sessionId: string; index: number }
   /** The prompt at the front was sent. */
   | { t: "queueShift"; sessionId: string }
@@ -640,8 +641,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
       }));
     case "queueAdd":
       return withConv(state, a.sessionId, c => {
-        if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId))) return c;
-        const prompt: QueuedPrompt = { id: c.nextId, text: a.text, ...(a.issueLaunchId ? { issueLaunchId: a.issueLaunchId } : {}) };
+        if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId)) || (a.resumeIssueQuestions && c.queue.some(prompt => prompt.resumeIssueQuestions))) return c;
+        const prompt: QueuedPrompt = { id: c.nextId, text: a.text, ...(a.issueLaunchId ? { issueLaunchId: a.issueLaunchId } : {}), ...(a.resumeIssueQuestions ? { resumeIssueQuestions: true as const } : {}) };
         return { ...c, nextId: c.nextId + 1, queue: [...c.queue, prompt] };
       });
     case "queueRemove":

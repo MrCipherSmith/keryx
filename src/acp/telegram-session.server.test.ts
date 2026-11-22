@@ -188,24 +188,51 @@ test("Telegram stop and detach leave a Desktop-origin turn running", async () =>
   } finally { finish(); await h.end(); }
 });
 
-test("a Desktop turn mirrors its final answer to the binding captured at admission", async () => {
+test("Desktop turns finish while Telegram replies queue in order and report unconfirmed delivery", async () => {
   const replies: string[] = [];
+  let replyStarted!: () => void;
+  const firstStarted = new Promise<void>((resolve) => { replyStarted = resolve; });
+  let secondReplyStarted!: () => void;
+  const secondStarted = new Promise<void>((resolve) => { secondReplyStarted = resolve; });
+  let finishReply!: (accepted: boolean) => void;
+  const firstReply = new Promise<boolean>((resolve) => { finishReply = resolve; });
+  let turn = 0;
   const provider = {
     describe: () => ({ capabilities: { streaming: true, toolCalls: false, parallelToolCalls: false, structuredOutput: false, reasoningMetadata: false, promptCaching: false, vision: false, tokenCounting: false, modelListing: false }, descriptor: { providerId: "test" } }),
     stream: (_request: unknown, opts: { attemptId: string }) => (async function* () {
-      yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text: "desktop answer" };
+      yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text: `desktop answer ${++turn}` };
       yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" };
     })(),
   } as unknown as ProviderPort;
-  const h = harness({ profile: "shell", provider, telegramBindingTestOnly: { create: () => ({ start: async () => ({ ok: true, threadId: 123 }), close: async () => {}, reply: async (text) => { replies.push(text); return true; } }) } });
+  const h = harness({ profile: "shell", provider, telegramBindingTestOnly: { create: () => ({
+    start: async () => ({ ok: true, threadId: 123 }),
+    close: async () => {},
+    reply: async (text) => {
+      replies.push(text);
+      if (replies.length === 1) {
+        replyStarted();
+        return firstReply;
+      }
+      secondReplyStarted();
+      return true;
+    },
+  }) } });
   try {
     const sessionId = await open(h);
     const attach = h.request(ACP_TELEGRAM_SESSION_METHOD, { operation: "attach", sessionId });
     await h.waitFor((f) => f.id === attach);
     const prompt = h.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "local" }] });
+    await firstStarted;
     expect((await h.waitFor((f) => f.id === prompt)).result?.stopReason).toBe("end_turn");
-    expect(replies).toEqual(["desktop answer"]);
-  } finally { await h.end(); }
+    const next = h.request("session/prompt", { sessionId, prompt: [{ type: "text", text: "next" }] });
+    expect((await h.waitFor((f) => f.id === next)).result?.stopReason).toBe("end_turn");
+    expect(replies).toEqual(["desktop answer 1"]);
+    finishReply(false);
+    const delivery = await h.waitFor((f) => f.params?.update?.sessionUpdate === "_keryx/telegram/delivery");
+    expect(delivery.params).toMatchObject({ sessionId, update: { status: "unconfirmed" } });
+    await secondStarted;
+    expect(replies).toEqual(["desktop answer 1", "desktop answer 2"]);
+  } finally { finishReply(false); await h.end(); }
 });
 
 test("production composition requires explicit Desktop opt-in and verified serve", async () => {

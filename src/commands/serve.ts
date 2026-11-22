@@ -33,8 +33,8 @@
 
 import { randomUUID } from "node:crypto";
 import { bootstrapDesktopServe } from "../lib/desktop-serve-bootstrap";
-import { desktopServeStatus } from "../lib/desktop-serve-status";
-import { desktopTelegramChannel, readDesktopChannelRequest } from "../lib/desktop-telegram-channel";
+import { desktopServeStatus } from "../remote/desktop-serve-status";
+import { desktopTelegramChannel, readDesktopChannelRequest } from "../remote/desktop-telegram-channel";
 import { loadRemoteConfig } from "../remote/config";
 import { formatPolicyDuration, loadPosture } from "./remote-policy-command";
 import { sanitizeForDisplay } from "../lib/project-registry";

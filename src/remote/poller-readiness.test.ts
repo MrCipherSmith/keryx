@@ -24,3 +24,41 @@ test("a failed first poll cannot later be mistaken for readiness", async () => {
   expect(await poller.waitForReady(1000)).toBe(false);
   await poller.stop();
 });
+test("the first batch is held until admission, and abandoned batches are never accepted", async () => {
+  for (const activate of [true, false]) {
+    const api = new FakeBotApi();
+    const accepted: number[] = [];
+    let release: (() => void) | undefined;
+    let confirm!: (offset: number | undefined) => void;
+    const confirmation = new Promise<number | undefined>((resolve) => { confirm = resolve; });
+    let calls = 0;
+    api.getUpdates = async ({ offset, signal }) => {
+      calls += 1;
+      if (calls === 1) return [{ update_id: 42 }];
+      confirm(offset);
+      return await new Promise((resolve) => { signal?.addEventListener("abort", () => resolve([]), { once: true }); });
+    };
+    const poller = new UpdatePoller({ api, sink: { accept: async (updates) => { accepted.push(...updates.map((update) => update.update_id)); } },
+      holdAfterFirstResponse: (signal) => new Promise<void>((resolve) => {
+        release = resolve;
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      }),
+    });
+    poller.start();
+    try {
+      expect(await poller.waitForReady(1000)).toBe(true);
+      expect(accepted).toEqual([]);
+      if (activate) {
+        release?.();
+        expect(await confirmation).toBe(43);
+        expect(accepted).toEqual([42]);
+      }
+    } finally {
+      await poller.stop();
+    }
+    if (!activate) {
+      expect(calls).toBe(1);
+      expect(accepted).toEqual([]);
+    }
+  }
+});

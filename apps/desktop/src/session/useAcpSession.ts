@@ -276,7 +276,7 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable || !l.extensions.includes(SESSION_FLAGS)) return;
-      const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys()]);
+      const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys(), ...l.reg.telegramTurns.keys()]);
       const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
       for (const sessionId of ids) {
         try {
@@ -321,10 +321,13 @@ export function useAcpSession(cwd: string) {
       }
       if (u.update.sessionUpdate === "_keryx/telegram/decision" && u.update.phase === "closed" &&
         typeof u.update.requestId === "string") dialogs.dropRequest(u.sessionId, u.update.requestId);
+      if (u.update.sessionUpdate === "_keryx/telegram/delivery" && u.update.status === "unconfirmed") {
+        dispatch({ t: "notice", sessionId: u.sessionId, level: "warn", text: "Telegram reply delivery could not be confirmed. The reply is available in Desktop." });
+      }
       enqueueUpdate(u);
       if (u.update.sessionUpdate === "session_info_update") void refreshSessions();
     },
-    [dialogs, enqueueUpdate, refreshSessions],
+    [dialogs, dispatch, enqueueUpdate, refreshSessions],
   );
 
   /** Every session/update goes to the session it names, shown or not. */
@@ -797,8 +800,8 @@ export function useAcpSession(cwd: string) {
   useEffect(() => {
     const l = live.current;
     for (const c of Object.values(win.convs)) {
-      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId));
-      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId));
+      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : next.resumeIssueQuestions ? { resumeIssueQuestions: true } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
   }, [win.convs, sendPrompt, dispatch]);
 
@@ -853,9 +856,13 @@ export function useAcpSession(cwd: string) {
   }, [dispatch]);
   useEffect(() => {
     if (shown.phase === "ready" && shown.held && shown.sessionId && extensions.includes(TELEGRAM_SESSION)) {
-      void telegramSession(shown.sessionId, "status").catch(() => undefined);
+      const sessionId = shown.sessionId;
+      const previous = winRef.current.convs[sessionId]?.telegram ?? null;
+      void telegramSession(sessionId, "status").catch(() => {
+        if (live.current.reg.held.has(sessionId)) dispatch({ t: "telegramStatus", sessionId, previous, value: { state: "unavailable", reason: "serve-unavailable" } });
+      });
     }
-  }, [extensions, shown.phase, shown.held, shown.sessionId, telegramSession]);
+  }, [dispatch, extensions, shown.phase, shown.held, shown.sessionId, telegramSession]);
   const onLoginChallenge = useCallback((f: (c: LoginChallenge) => void) => {
     challengeListeners.current.add(f);
     return () => void challengeListeners.current.delete(f);
@@ -994,9 +1001,12 @@ export function useAcpSession(cwd: string) {
       const alreadyHeld = l.reg.held.has(sessionId);
       if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope)) throw new Error("Could not open the linked session.");
       if (issueScope?.aborted) return;
-      if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId)) resumeIssueQuestions(sessionId);
+      if (alreadyHeld && pendingQuestions && !resumeIssueQuestions(sessionId)) {
+        if (l.reg.turns.has(sessionId) || l.reg.telegramTurns.has(sessionId)) dispatch({ t: "queueAdd", sessionId, text: "Resume the pending issue questions.", resumeIssueQuestions: true });
+        else throw new Error("Reopen the linked session and resume Flow preparation.");
+      }
       if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, { issueLaunchId: initialTurn.launchId })) {
-        if (!l.reg.turns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
+        if (!l.reg.turns.has(sessionId) && !l.reg.telegramTurns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
         dispatch({ t: "queueAdd", sessionId, text: initialTurn.text, issueLaunchId: initialTurn.launchId });
       }
       void refreshSessions();

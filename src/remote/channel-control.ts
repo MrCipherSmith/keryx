@@ -61,6 +61,7 @@ export class ChannelControl {
       if (Object.keys(doc).some((key) => !["version", "action", "expectedRevision", "stagingId"].includes(key)) || typeof doc.stagingId !== "string") return fail(400, "invalid-request", "A staging id is required.");
       const migration = await migrateLegacyChannelRecord(this.options.dir);
       if (!migration.ok) return fail(503, "unavailable", migration.reason);
+      if (this.pending?.activating) return fail(409, "conflict", "A channel operation is active.");
       const opened = this.fence.begin(revision);
       if (!opened.ok) return fail(409, opened.code, opened.reason);
       this.pending = { id: opened.operationId, revision };
@@ -113,8 +114,8 @@ export class ChannelControl {
     if (this.pending.activating) return fail(409, "activation-in-progress", "Channel activation is in progress.");
     if (doc.action === "cancel") {
       const pairing = this.pending.pairing;
-      this.clear(doc.operationId);
-      await pairing?.cancel();
+      this.pending.activating = true;
+      try { await pairing?.cancel(); } finally { this.clear(doc.operationId); }
       return ok({ operationId: doc.operationId, revision, state: "cancelled" });
     }
     const pairing = this.pending.pairing;
@@ -153,8 +154,8 @@ export class ChannelControl {
   async stop(): Promise<void> {
     const pending = this.pending;
     if (pending === undefined) return;
-    this.clear(pending.id);
-    await pending.pairing?.cancel();
+    pending.activating = true;
+    try { await pending.pairing?.cancel(); } finally { this.clear(pending.id); }
   }
 
   private clear(id: string): void {

@@ -190,7 +190,7 @@ impl TelegramServe {
         }
         if action != "start" {
             let status = Self::status_locked(&mut child, &exe, until);
-            if child.is_none() && status.state == "running" { return ServeStatus::new("blocked", Some("This serve is owned outside Desktop; stop it from its owning process.".into())); }
+            if child.is_none() && status.state == "running" { *held = None; return ServeStatus::new("blocked", Some("This serve is owned outside Desktop; stop it from its owning process.".into())); }
             let stopped = Self::stop_locked(&mut child);
             if action == "stop" || stopped.state != "stopped" { if child.is_none() { *held = None; } return stopped; }
             self.phase.store(1, Ordering::Release);

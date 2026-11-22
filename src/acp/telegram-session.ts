@@ -2,6 +2,7 @@ import type { ApprovalAnswer, ChoiceAnswer, ClientStatus, InboundMeta, PressedAp
 /** Desktop Telegram session-control contract. The server must not advertise this
  * capability until delegated actor, turn, and decision handling are implemented. */
 export const ACP_TELEGRAM_SESSION_METHOD = "_keryx/telegram/session";
+const MAX_PENDING_MIRROR_REPLIES = 16;
 
 export type TelegramSessionRequest =
   | { operation: "status"; sessionId: string }
@@ -68,6 +69,8 @@ interface Binding {
   threadId?: number;
   topicUrl?: string;
   seen: Set<number>;
+  mirrorTail: Promise<boolean>;
+  pendingMirrors: number;
 }
 
 /** Manages only binding lifetimes; it does not admit turns or advertise ACP capability. */
@@ -97,7 +100,10 @@ export class TelegramSessionBindings {
       onStatus: (status) => this.connectionChanged(sessionId, generation, status),
       onChannelRevoked: () => this.revoke(sessionId, generation),
     });
-    const binding: Binding = { lease: held.lease, generation, client, state: { sessionId, state: "attaching" }, seen: new Set() };
+    const binding: Binding = {
+      lease: held.lease, generation, client, state: { sessionId, state: "attaching" }, seen: new Set(),
+      mirrorTail: Promise.resolve(true), pendingMirrors: 0,
+    };
     this.bindings.set(sessionId, binding);
     this.deps.onState?.(binding.state);
     binding.pending = this.finishAttach(sessionId, binding);
@@ -167,6 +173,21 @@ export class TelegramSessionBindings {
     const binding = this.bindings.get(sessionId);
     if (binding === undefined || !this.isCurrent(sessionId, generation)) return false;
     return binding.client.reply(text);
+  }
+
+  /** Order mirrored messages across turns without holding the ACP turn slot. */
+  async enqueueMirror(sessionId: string, generation: string, text: string): Promise<boolean> {
+    const binding = this.bindings.get(sessionId);
+    if (binding === undefined || !this.isCurrent(sessionId, generation) ||
+        binding.pendingMirrors >= MAX_PENDING_MIRROR_REPLIES) return false;
+    binding.pendingMirrors++;
+    const queued = binding.mirrorTail.then(() => this.send(sessionId, generation, text)).catch(() => false);
+    binding.mirrorTail = queued;
+    try {
+      return await queued;
+    } finally {
+      binding.pendingMirrors--;
+    }
   }
 
   currentGeneration(sessionId: string): string | undefined {

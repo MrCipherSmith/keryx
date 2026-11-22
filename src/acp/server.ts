@@ -2632,12 +2632,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (bound?.launch.flow) finishIssueActivity = startIssueSessionActivity(state.handle.dir, options.dataDir);
       let finalText = "";
       let progressSent = false;
-      let outbound = Promise.resolve();
-      const mirror = (text: string): void => {
+      const mirror = (text: string, final = false): void => {
         if (outputGeneration === undefined) return;
         const safe = redactSensitiveText(text).trim();
         if (safe.length === 0) return;
-        outbound = outbound.then(async () => { await telegramBindings.send(sessionId, outputGeneration, safe); }).catch(() => undefined);
+        void telegramBindings.enqueueMirror(sessionId, outputGeneration, safe).then((accepted) => {
+          if (final && !accepted && !stopping && registry.get(sessionId)?.lease === state.lease && registry.canPersist(sessionId)) {
+            sendUpdate(sessionId, { sessionUpdate: "_keryx/telegram/delivery", status: "unconfirmed" });
+          }
+        }).catch(() => undefined);
       };
       const turnUpdates = (id: string, update: AcpSessionUpdate): void => {
         sendUpdate(id, update);
@@ -2759,8 +2762,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         archive: archive.messages,
       });
       registry.updateHandle(sessionId, updatedHandle);
-      if (outputGeneration !== undefined && !turn.cancelled && finalText.trim()) mirror(finalText);
-      await outbound;
+      if (!turn.cancelled && finalText.trim()) mirror(finalText, true);
       if (bound?.launch.flow) settleIssueTurn(state.handle.dir);
       if (shellProfile && updatedHandle.summary.title !== state.handle.summary.title) {
         sendUpdate(sessionId, {

@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { writeOwnerOnlyFileAtomic } from "./config-dir";
-import { defaultServeConfig, saveServeConfig } from "./serve-config";
+import { writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { defaultServeConfig, saveServeConfig } from "../lib/serve-config";
 import { desktopServeStatus } from "./desktop-serve-status";
-import { endpointPath } from "../remote/endpoint";
-import { mintShellToken, derivedBearerNonce, serveResponseProof } from "../remote/shell-token";
+import { endpointPath } from "./endpoint";
+import { mintShellToken, derivedBearerNonce, serveResponseProof } from "./shell-token";
 
 test("accepts only a proven server advertising the Desktop capability", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "keryx-desktop-status-"));

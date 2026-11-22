@@ -1,4 +1,4 @@
-import { ChannelsClient } from "../remote/channels-client";
+import { ChannelsClient } from "./channels-client";
 
 /** Private stdin contract for the bundled native bridge. Credentials never enter argv or HTTP. */
 export type DesktopChannelRequest =

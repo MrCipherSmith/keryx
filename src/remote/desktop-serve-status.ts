@@ -1,8 +1,8 @@
-import { ChannelsClient } from "../remote/channels-client";
-import { readEndpoint } from "../remote/endpoint";
-import { desktopServePortAvailable } from "./desktop-serve-bootstrap";
-import { isLoopbackAddress, loadServeConfig, serveConfigState } from "./serve-config";
-import { readServeCredential } from "./serve-credential";
+import { ChannelsClient } from "./channels-client";
+import { readEndpoint } from "./endpoint";
+import { desktopServePortAvailable } from "../lib/desktop-serve-bootstrap";
+import { isLoopbackAddress, loadServeConfig, serveConfigState } from "../lib/serve-config";
+import { readServeCredential } from "../lib/serve-credential";
 
 export interface DesktopServeStatus { state: "not_configured" | "stopped" | "running" | "blocked"; reason?: string; pid?: number; activeSessions?: number }
 

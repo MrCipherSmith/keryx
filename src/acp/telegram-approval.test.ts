@@ -53,9 +53,12 @@ test("turn cancellation settles both sides closed", async () => {
 test("deadline expires the shared decision and refuses later callbacks", async () => {
   let claim!: (answer: PressedApproval) => boolean;
   let closed = 0;
+  let now = 100;
   const result = raceTelegramApproval({ desktop: () => new Promise(() => {}), cancelDesktop: () => { closed++; },
     project: (_signal, accept) => { claim = accept; return true; }, current: () => true,
-    choices, turnSignal: new AbortController().signal, timeoutMs: 1 });
+    choices, turnSignal: new AbortController().signal, timeoutMs: 1000, now: () => now });
+  now += 1000;
+  expect(claim({ decision: "allow", fromId: 42 })).toBe(false);
   expect(await result).toBeUndefined();
   expect(claim({ decision: "allow", fromId: 42 })).toBe(false);
   expect(closed).toBe(1);
