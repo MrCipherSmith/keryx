@@ -1,0 +1,17 @@
+.metaproject { display: flex; flex-direction: column; min-height: 0; height: 100%; padding: 20px; gap: 12px; }
+.metaproject-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.metaproject-header h2 { margin: 0; }
+.metaproject-header input { flex: 1; min-width: 220px; }
+.metaproject-header [aria-pressed="true"] { outline: 2px solid currentColor; }
+.metaproject-notice { padding: 10px; border: 1px solid currentColor; border-radius: 6px; }
+.metaproject-panes { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); min-height: 0; flex: 1; gap: 16px; }
+.metaproject-list, .metaproject-content { overflow: auto; min-width: 0; }
+.metaproject-list ul, .metaproject-relations { list-style: none; padding: 0; margin: 0; }
+.metaproject-list button, .metaproject-relations button { display: block; text-align: left; width: 100%; color: inherit; background: transparent; border: 0; border-radius: 4px; padding: 8px; cursor: pointer; }
+.metaproject-list button:hover, .metaproject-list button[aria-current], .metaproject-relations button:hover { background: var(--surface-hover, #303d49); }
+.metaproject-list button span, .metaproject-list button small, .metaproject-relations span { display: block; opacity: .75; overflow-wrap: anywhere; }
+.metaproject-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; }
+.metaproject-controls fieldset { display: flex; flex-wrap: wrap; gap: 8px; border: 0; padding: 0; margin: 0; }
+.metaproject-controls label { display: inline-flex; gap: 4px; align-items: center; }
+.metaproject-graph { height: 300px; min-width: 0; }
+@media (max-width: 700px) { .metaproject-panes { display: flex; flex-direction: column; overflow: auto; } .metaproject-list { flex: 0 0 auto; max-height: 220px; } .metaproject-content { overflow: visible; } }
