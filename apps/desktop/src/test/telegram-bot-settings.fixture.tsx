@@ -6,6 +6,15 @@ let capability = false;
 let pending = false;
 let connected = false;
 let nextError: string | null = null;
+let copyFails = true;
+let openFails = true;
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+Object.defineProperty(navigator, "clipboard", {
+  configurable: true,
+  value: { writeText: async () => {
+    if (copyFails) throw new Error("Clipboard unavailable");
+  } },
+});
 const calls: Array<{ command: string; args: unknown }> = [];
 let pairing: Record<string, unknown> = { state: "waiting-for-user", code: "ABCDEFGH", botUsername: "example_bot", expiresAt: Date.now() + 600_000, problems: [] };
 const operationId = "00000000-0000-4000-8000-000000000001";
@@ -15,6 +24,10 @@ function currentChannelStatus() {
 let nextStatus: Promise<ReturnType<typeof currentChannelStatus>> | undefined;
 mockIPC((command, args) => {
   calls.push({ command, args });
+  if (command === "plugin:opener|open_url") {
+    if (openFails) throw new Error("Opener unavailable");
+    return;
+  }
   if (command === "telegram_channel_status") {
     const result = nextStatus ?? currentChannelStatus();
     nextStatus = undefined;
@@ -59,6 +72,22 @@ try {
   assert.equal(input.value, "");
   assert.ok(host.querySelector('svg[aria-label="Pairing QR code"]'));
   assert.match(host.textContent ?? "", /ABCDEFGH/);
+  const copy = button("Copy code");
+  const open = button("Open in Telegram");
+  assert.ok(copy);
+  assert.ok(open);
+  await act(async () => { copy.click(); });
+  assert.match(host.textContent ?? "", /Could not copy the code/);
+  await act(async () => { open.click(); });
+  assert.match(host.textContent ?? "", /Could not open Telegram/);
+  assert.match(host.textContent ?? "", /Could not copy the code/);
+  copyFails = false;
+  await act(async () => { copy.click(); });
+  assert.doesNotMatch(host.textContent ?? "", /Could not copy the code/);
+  assert.match(host.textContent ?? "", /Could not open Telegram/);
+  openFails = false;
+  await act(async () => { open.click(); });
+  assert.doesNotMatch(host.textContent ?? "", /Could not open Telegram/);
   await mount();
   assert.ok(host.querySelector('svg[aria-label="Pairing QR code"]'), "pending pairing resumes after reopening Settings");
   const beforeCheck = calls.filter(({ command }) => command === "telegram_channel_status").length;
@@ -115,4 +144,10 @@ try {
   assert.match(host.textContent ?? "", /could not accept the bot token/i);
   await act(async () => { root.render(<TelegramBotSettings refreshKey={2} />); });
   assert.match(host.textContent ?? "", /could not accept the bot token/i);
-} finally { await act(() => root.unmount()); clearMocks(); await unregisterDom(); }
+} finally {
+  await act(() => root.unmount());
+  clearMocks();
+  if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+  else Reflect.deleteProperty(navigator, "clipboard");
+  await unregisterDom();
+}
