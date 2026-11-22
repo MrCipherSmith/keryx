@@ -1,5 +1,5 @@
-import { metaprojectExplorer } from "../integrations/metaproject-explorer";
 import type { MetaprojectEdgeKind, MetaprojectRequest } from "../integrations/metaproject-explorer-contract";
+import { metaprojectExplorer } from "../integrations/service";
 
 const EDGE_KINDS: MetaprojectEdgeKind[] = ["imports", "describes", "links", "contains", "defines", "calls"];
 

@@ -106,7 +106,7 @@ jobs:
         working-directory: apps/desktop
         run: |
           bun run build
-          bun test src/metaproject/MetaprojectView.dom.test.tsx
+          bun test src/metaproject/
 
   issues-acceptance:
     name: Issues board, Projects and session-to-Flow acceptance

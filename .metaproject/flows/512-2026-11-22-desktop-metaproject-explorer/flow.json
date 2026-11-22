@@ -11,12 +11,12 @@
   "title": "Metaproject Graph and Wiki in Keryx Desktop",
   "status": "in-progress",
   "createdAt": "2026-11-22T08:36:16.920Z",
-  "updatedAt": "2026-11-22T08:45:00.704Z",
+  "updatedAt": "2026-11-22T09:12:41.794Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:194056c574efb0f6bbb8138f9cc121549aa508ea54964ba6030e4391f96ea04f",
+  "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -375,6 +375,16 @@
       "at": "2026-11-22T08:45:00.704Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — Use an isolated Keryx QA bundle on the real checkout and exercise native navigation."
+    },
+    {
+      "at": "2026-11-22T09:12:41.529Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"One search finds wiki pages, modules and code by name or path, with Wiki full-text results attributed to a page. Selecting a result updates Graph and Wiki navigation while preserving the query when switching modes. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]\" -> \"One search finds wiki pages, modules and code by name or path, with Wiki full-text results attributed to a page. Selecting a result updates Graph and Wiki navigation while preserving the query when switching modes. [verify: exec `cd apps/desktop && bun test src/metaproject/`]\" (Run the Desktop suite from its own package, using the same command as GitHub CI.)"
+    },
+    {
+      "at": "2026-11-22T09:12:41.794Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]\" -> \"The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/`]\" (Run the Desktop suite from its own package, using the same command as GitHub CI.)"
     }
   ],
   "origin": {
@@ -389,11 +399,11 @@
     },
     "AC2": {
       "kind": "exec",
-      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+      "check": "cd apps/desktop && bun test src/metaproject/"
     },
     "AC3": {
       "kind": "exec",
-      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+      "check": "cd apps/desktop && bun test src/metaproject/"
     },
     "AC4": {
       "kind": "exec",
