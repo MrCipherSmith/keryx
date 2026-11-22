@@ -38,6 +38,23 @@ describe("OpenSpec catalog", () => {
     expect(result.entries.find((entry) => entry.path.endsWith("2025-03-01-old"))?.archiveDate).toBe("2025-03-01");
   });
 
+  test("lets archive use discovery capacity left by specs and active changes", async () => {
+    const project = fixture();
+    populateOpenSpecFixture(project);
+    const archivePath = "openspec/changes/archive/zz-large";
+    for (let index = 0; index < 3332; index++) {
+      project.write(`${archivePath}/ignored-${index}.txt`, "");
+    }
+    project.write(`${archivePath}/proposal.md`, "# Discoverable archive tail\n");
+
+    const result = await scanOpenSpec(project.root);
+    expect(result.availability).toBe("ready");
+    expect(result.truncated).toBe(false);
+    expect(result.counts).toEqual({ spec: 1, change: 2, archive: 3 });
+    const archive = result.entries.find((entry) => entry.path === archivePath);
+    expect(archive?.artifacts.map((artifact) => artifact.markdown)).toEqual(["# Discoverable archive tail\n"]);
+  }, 20_000);
+
   test("keeps valid link rows when a sibling is malformed", async () => {
     const project = fixture();
     populateOpenSpecFixture(project);

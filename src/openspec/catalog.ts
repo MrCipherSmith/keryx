@@ -58,7 +58,9 @@ const SPEC_ROOT = "openspec/specs";
 const CHANGE_ROOT = "openspec/changes";
 const ARCHIVE_ROOT = "openspec/changes/archive";
 const LINK_PATH = ".metaproject/openspec/links.json";
-const MAX_COLLECTION_ENTRIES = 3332; // Reserve one lookahead per collection within 10,000 entries.
+const MAX_DISCOVERY_ENTRIES = 10_000;
+// Each earlier collection gets this share plus one lookahead. Archive gets the remainder.
+const RESERVED_COLLECTION_ENTRIES = Math.floor(MAX_DISCOVERY_ENTRIES / 3) - 1;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 64 * MAX_FILE_BYTES;
 const MAX_DEPTH = 12;
@@ -95,6 +97,7 @@ function archiveDate(name: string): string | undefined {
 
 function checkedPath(value: unknown): value is string {
   if (typeof value !== "string" || value.length === 0 || Array.from(value).length > 1024
+    // eslint-disable-next-line no-control-regex -- control characters are forbidden in source paths
     || /^[a-z]:/i.test(value) || /[\\\x00-\x1f\x7f]/.test(value)) return false;
   return value.split("/").every((component) => component !== "" && component !== "." && component !== "..");
 }
@@ -190,6 +193,7 @@ class CheckoutScan {
   readonly rootKey: string;
   private readonly checked = new Map<string, BigIntStats | undefined>();
   private readonly diagnostics: OpenSpecDiagnostic[] = [];
+  private remainingDiscoveryEntries = MAX_DISCOVERY_ENTRIES;
   private admittedBytes = 0;
   private linkDigest?: string;
   private truncated = false;
@@ -222,7 +226,7 @@ class CheckoutScan {
   }
 
   private async currentSpecs(): Promise<OpenSpecEntry[]> {
-    const budget = { remaining: MAX_COLLECTION_ENTRIES, limitReported: false };
+    const budget = { remaining: RESERVED_COLLECTION_ENTRIES, limitReported: false };
     const entries: OpenSpecEntry[] = [];
     for (const capability of await this.children(SPEC_ROOT, budget)) {
       const capabilityPath = `${SPEC_ROOT}/${capability}`;
@@ -237,7 +241,8 @@ class CheckoutScan {
 
   private async changes(kind: "change" | "archive", collectionPath: string): Promise<OpenSpecEntry[]> {
     if (kind === "archive" && !await this.directory(CHANGE_ROOT)) return [];
-    const budget = { remaining: MAX_COLLECTION_ENTRIES, limitReported: false };
+    const remaining = kind === "archive" ? this.remainingDiscoveryEntries - 1 : RESERVED_COLLECTION_ENTRIES;
+    const budget = { remaining, limitReported: false };
     const entries: OpenSpecEntry[] = [];
     for (const name of await this.children(collectionPath, budget)) {
       if (kind === "change" && name === "archive") continue;
@@ -365,6 +370,8 @@ class CheckoutScan {
   }
 
   private takeEntry(relativePath: string, budget: CollectionBudget): boolean {
+    // Charge the over-limit candidate as well as admitted entries.
+    this.remainingDiscoveryEntries--;
     if (budget.remaining > 0) {
       budget.remaining--;
       return true;
