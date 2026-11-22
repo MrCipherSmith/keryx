@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import QRCode from "qrcode";
+import { Dialog } from "../components/ui";
 import { openExternal } from "../platform/commands";
 import { telegramChannelAction, telegramChannelStatus, type TelegramChannelOperation, type TelegramChannelStatus, type TelegramChannelRequest } from "../platform/telegramChannel";
 
@@ -43,34 +44,38 @@ function PairingQr({ link }: { link: string }) {
 export function TelegramBotSettings() {
   const [channel, setChannel] = useState<TelegramChannelStatus | null>(null);
   const [operation, setOperation] = useState<TelegramChannelOperation | null>(null);
-  const [accountAccepted, setAccountAccepted] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [expired, setExpired] = useState(false);
   const tokenInput = useRef<HTMLInputElement>(null);
   const alive = useRef(false);
-  const inFlight = useRef(false);
+  const mutating = useRef(false);
+  const refreshing = useRef(false);
   const version = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
+    if (mutating.current || refreshing.current) return;
+    refreshing.current = true;
     const requestVersion = ++version.current;
     try {
       const result = await telegramChannelStatus();
       if (!alive.current || requestVersion !== version.current) return;
       if (!result.ok) { setChannel(null); setOperation(null); setError(failureMessage(result.code)); return; }
       setChannel(result.value);
-      if (result.value.capabilities?.desktopTelegram !== 1) { setOperation(null); return; }
+      if (result.value.capabilities?.desktopTelegram !== 1) { setOperation(null); setNeedsRefresh(false); return; }
       const pending = result.value.pendingOperation;
-      if (!pending) { setOperation(null); return; }
+      if (!pending) { setOperation(null); setNeedsRefresh(false); return; }
       const detail = await telegramChannelAction({ action: "operation-status", operationId: pending.operationId, expectedRevision: pending.revision });
       if (!alive.current || requestVersion !== version.current) return;
-      if (detail.ok) { setOperation(withoutSpentCode(detail.value)); setError(""); }
-      else { setOperation(null); setError(failureMessage(detail.code)); }
+      if (!detail.ok) { setOperation(null); setNeedsRefresh(true); setError(failureMessage(detail.code)); }
+      else if ("operationId" in detail.value) { setOperation(withoutSpentCode(detail.value)); setNeedsRefresh(false); }
+      else { setOperation(null); setNeedsRefresh(true); setError("The channel status could not be understood. Retry."); }
     } catch {
       if (alive.current && requestVersion === version.current) { setChannel(null); setOperation(null); setError("Could not check the Telegram channel. Retry when the local service is available."); }
-    } finally { inFlight.current = false; }
+    } finally { refreshing.current = false; }
   }, []);
 
   useEffect(() => {
@@ -81,10 +86,9 @@ export function TelegramBotSettings() {
   }, [refresh]);
 
   const pairing = operation?.pairing;
-  useEffect(() => { setAccountAccepted(null); }, [operation?.operationId]);
   useEffect(() => {
     setExpired(false);
-    if (!pairing || (pairing.state !== "waiting-for-user" && pairing.state !== "waiting-for-group")) return;
+    if (!pairing || (pairing.state !== "waiting-for-user" && pairing.state !== "waiting-for-confirmation" && pairing.state !== "waiting-for-group")) return;
     const delay = Math.max(0, pairing.expiresAt - Date.now());
     const timer = window.setTimeout(() => { setExpired(true); setOperation((old) => {
       if (!old?.pairing) return old;
@@ -95,33 +99,37 @@ export function TelegramBotSettings() {
   }, [pairing?.expiresAt, pairing?.state, pairing?.code]);
 
   const perform = async (request: TelegramChannelRequest) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
+    if (mutating.current) return;
+    mutating.current = true;
     const requestVersion = ++version.current;
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const result = await telegramChannelAction(request);
       if (!alive.current || requestVersion !== version.current) return;
-      if (!result.ok) { setOperation(null); setError(failureMessage(result.code)); }
-      else if (result.value.state === "cancelled" || result.value.state === "connected") { setOperation(null); setAccountAccepted(null); }
-      else { setOperation(withoutSpentCode(result.value)); if (request.action === "begin") setAccountAccepted(null); }
+      if (!result.ok) { setOperation(null); setNeedsRefresh(true); setError(failureMessage(result.code)); }
+      else if (request.action === "test" && "delivered" in result.value && result.value.delivered) setNotice("Test message sent to the General topic.");
+      else if (request.action === "disconnect" && "deleted" in result.value) { setOperation(null); setNotice(result.value.remaining > 0 ? "Bot disconnected. Some topics could not be removed." : "Bot disconnected."); }
+      else if ("operationId" in result.value && (result.value.state === "cancelled" || result.value.state === "connected")) { setOperation(null); }
+      else if ("operationId" in result.value) setOperation(withoutSpentCode(result.value));
+      else { setNeedsRefresh(true); setError("The result is uncertain. Refresh the channel status before retrying."); }
     } catch {
-      if (alive.current && requestVersion === version.current) { setOperation(null); setError("The result is uncertain. Refresh the channel status before retrying."); }
+      if (alive.current && requestVersion === version.current) { setOperation(null); setNeedsRefresh(true); setError("The result is uncertain. Refresh the channel status before retrying."); }
     } finally {
-      inFlight.current = false;
+      mutating.current = false;
       if (alive.current && requestVersion === version.current) { setBusy(false); if (request.action !== "operation-status") void refresh(); }
     }
   };
   const begin = (event: FormEvent) => {
     event.preventDefault();
-    if (!tokenInput.current || !channel || inFlight.current) return;
+    if (!tokenInput.current || !channel || mutating.current || needsRefresh || !(channel.revision === null || (Number.isSafeInteger(channel.revision) && (channel.revision ?? 0) > 0))) return;
     const token = tokenInput.current.value.trim();
     tokenInput.current.value = "";
     if (!token) { setError("Enter a bot token from BotFather."); return; }
     void perform({ action: "begin", token, expectedRevision: channel.revision ?? null });
   };
-  const runOperation = (action: "operation-status" | "cancel" | "confirm") => {
+  const runOperation = (action: "operation-status" | "cancel" | "confirm-account" | "confirm") => {
     if (operation) void perform({ action, operationId: operation.operationId, expectedRevision: operation.revision });
   };
   const copyCode = async (code: string) => {
@@ -129,16 +137,24 @@ export function TelegramBotSettings() {
   };
   const link = pairing?.state === "waiting-for-user" && !expired && pairing.expiresAt > Date.now() ? pairingLink(pairing.botUsername, pairing.code) : null;
   const available = channel?.capabilities?.desktopTelegram === 1;
+  const configured = channel?.telegram.state === "connected" || channel?.telegram.state === "off";
+  const revisionKnown = channel?.revision === null || (Number.isSafeInteger(channel?.revision) && (channel?.revision ?? 0) > 0);
 
   return <div>
     <h3>Bot connection</h3>
     {!available ? <p className="settings-row-help">Telegram pairing is unavailable until a compatible local service is running.</p> : null}
-    {available && !operation ? <>
+    {available && !revisionKnown ? <p className="field-error" role="alert">The channel revision is unavailable. Refresh before making changes.</p> : null}
+    {available && !operation && channel.pendingOperation ? <p className="settings-row-help">Loading the pending pairing…</p> : null}
+    {available && !operation && !channel.pendingOperation ? <>
       <p className="settings-row-help">{channel.telegram.state === "connected" ? "To change the bot token, validate a new token from BotFather." : "Connect a bot from BotFather to a Telegram forum."}</p>
       <form onSubmit={begin}>
-        <label className="field"><span className="field-label">Bot token</span><input ref={tokenInput} type="password" autoComplete="off" spellCheck={false} required disabled={busy} /></label>
-        <div className="settings-actions"><button className="btn btn-primary" type="submit" disabled={busy}>{channel.telegram.state === "connected" ? "Change bot token" : "Connect bot"}</button></div>
+        <label className="field"><span className="field-label">Bot token</span><input ref={tokenInput} type="password" autoComplete="off" spellCheck={false} required disabled={busy || needsRefresh || !revisionKnown} /></label>
+        <div className="settings-actions"><button className="btn btn-primary" type="submit" disabled={busy || needsRefresh || !revisionKnown}>{configured ? "Change bot token" : "Connect bot"}</button></div>
       </form>
+      {configured && revisionKnown ? <div className="settings-actions">
+        <button className="btn" disabled={busy || needsRefresh || channel.telegram.state !== "connected"} onClick={() => void perform({ action: "test", expectedRevision: channel.revision ?? null })}>Test connection</button>
+        <button className="btn" disabled={busy || needsRefresh} onClick={() => setConfirmDisconnect(true)}>Disconnect</button>
+      </div> : null}
     </> : null}
     {available && operation ? <>
       {operation.state === "same-bot-ready" ? <p>Telegram verified the same bot. Confirm to replace its token and keep the current connection.</p> : null}
@@ -147,20 +163,20 @@ export function TelegramBotSettings() {
         {link ? <><PairingQr link={link} /><div className="settings-actions"><button className="btn" onClick={() => void openExternal(link).catch(() => setError("Could not open Telegram. Send the code manually."))}>Open in Telegram</button></div></> : <p className="settings-row-help">Open the bot in Telegram and send the code manually.</p>}
         {pairing.code ? <><p><strong>{pairing.code}</strong></p><button className="btn" onClick={() => void copyCode(pairing.code ?? "")}>Copy code</button></> : null}
       </> : null}
-      {pairing?.state === "waiting-for-group" || pairing?.state === "ready" ? <>
-        {pairing.userId !== undefined && accountAccepted !== pairing.userId ? <><p>Telegram account ID: {pairing.userId}. Confirm that this is your account before connecting the group.</p><button className="btn" onClick={() => setAccountAccepted(pairing.userId ?? null)}>This is my account</button></> : null}
-        {accountAccepted !== null && accountAccepted === pairing.userId ? <><p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>{pairing.chatTitle ? <p>Forum: {pairing.chatTitle}</p> : null}{pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}</> : null}
-      </> : null}
+      {pairing?.state === "waiting-for-confirmation" && pairing.userId !== undefined && !expired ? <><p>Telegram account ID: {pairing.userId}. Confirm that this is your account before connecting the group.</p><button className="btn" disabled={busy} onClick={() => runOperation("confirm-account")}>This is my account</button></> : null}
+      {pairing?.state === "waiting-for-group" || pairing?.state === "ready" ? <><p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>{pairing.chatTitle ? <p>Forum: {pairing.chatTitle}</p> : null}{pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}</> : null}
       {pairing?.state === "expired" || expired ? <p className="field-error">The pairing expired. Cancel it and start again.</p> : null}
       {pairing?.state === "failed" ? <p className="field-error">Pairing failed. Cancel it and try again.</p> : null}
       {pairing?.state === "ready" && channel.telegram.state === "connected" ? <p className="settings-row-help">Connecting a different bot will interrupt existing remote sessions. Each chat must be attached to a new topic.</p> : null}
       <div className="settings-actions">
-        {operation.state === "same-bot-ready" || (pairing?.state === "ready" && accountAccepted !== null && accountAccepted === pairing.userId) ? <button className="btn btn-primary" disabled={busy} onClick={() => runOperation("confirm")}>Confirm connection</button> : null}
+        {operation.state === "same-bot-ready" || pairing?.state === "ready" ? <button className="btn btn-primary" disabled={busy || needsRefresh} onClick={() => runOperation("confirm")}>Confirm connection</button> : null}
         <button className="btn" disabled={busy} onClick={() => runOperation("operation-status")}>Check pairing</button>
         <button className="btn btn-ghost" disabled={busy} onClick={() => runOperation("cancel")}>Cancel pairing</button>
       </div>
     </> : null}
     {error ? <p className="field-error" role="alert">{error}</p> : null}
+    {notice ? <p role="status">{notice}</p> : null}
     {!available || error ? <button className="btn btn-ghost" disabled={busy} onClick={() => void refresh()}>Retry channel status</button> : null}
+    {confirmDisconnect && channel && revisionKnown ? <Dialog title="Disconnect Telegram bot?" onClose={() => setConfirmDisconnect(false)} footer={<><button className="btn" onClick={() => setConfirmDisconnect(false)}>Cancel</button><button className="btn btn-primary" onClick={() => { setConfirmDisconnect(false); void perform({ action: "disconnect", expectedRevision: channel.revision ?? null }); }}>Disconnect bot</button></>}><p>This disconnects Telegram for all chats and affects all connected topics on this machine.</p></Dialog> : null}
   </div>;
 }
