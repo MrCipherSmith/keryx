@@ -4,7 +4,7 @@ import { desktopServePortAvailable } from "./desktop-serve-bootstrap";
 import { isLoopbackAddress, loadServeConfig, serveConfigState } from "./serve-config";
 import { readServeCredential } from "./serve-credential";
 
-export interface DesktopServeStatus { state: "not_configured" | "stopped" | "running" | "blocked"; reason?: string; pid?: number }
+export interface DesktopServeStatus { state: "not_configured" | "stopped" | "running" | "blocked"; reason?: string; pid?: number; activeSessions?: number }
 
 /** Probe only the configured listener and trust only a signed compatible response. */
 export async function desktopServeStatus(dir?: string): Promise<DesktopServeStatus> {
@@ -23,8 +23,10 @@ export async function desktopServeStatus(dir?: string): Promise<DesktopServeStat
       if (!confirmed.ok || confirmed.value.pid !== endpoint.value.pid || confirmed.value.address !== endpoint.value.address || confirmed.value.port !== endpoint.value.port) {
         return { state: "blocked", reason: "The serve endpoint changed during verification; retry." };
       }
-      const value = result.value as unknown as { capabilities?: { desktopTelegram?: number } };
-      return value.capabilities?.desktopTelegram === 1 ? { state: "running", pid: endpoint.value.pid } : { state: "blocked", reason: "The running serve is incompatible with Desktop Telegram. Update it before connecting." };
+      const value = result.value as unknown as { capabilities?: { desktopTelegram?: number }; telegram: { sessions: number } };
+      if (value.capabilities?.desktopTelegram !== 1) return { state: "blocked", reason: "The running serve is incompatible with Desktop Telegram. Update it before connecting." };
+      const sessions = value.telegram.sessions;
+      return { state: "running", pid: endpoint.value.pid, ...(Number.isSafeInteger(sessions) && sessions >= 0 ? { activeSessions: sessions } : {}) };
     }
   }
   if (!(await desktopServePortAvailable(config.bind.address, config.bind.port))) return { state: "blocked", reason: "The configured serve port is occupied by an unverified process." };

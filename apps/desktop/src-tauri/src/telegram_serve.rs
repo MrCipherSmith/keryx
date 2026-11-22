@@ -14,15 +14,17 @@ pub struct ServeStatus {
     ownership: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    active_sessions: Option<u64>,
 }
 impl ServeStatus {
-    fn new(state: &str, reason: Option<String>) -> Self { Self { state: state.into(), ownership: None, reason } }
-    fn running(ownership: &'static str) -> Self { Self { state: "running".into(), ownership: Some(ownership), reason: None } }
+    fn new(state: &str, reason: Option<String>) -> Self { Self { state: state.into(), ownership: None, reason, active_sessions: None } }
+    fn running(ownership: &'static str, active_sessions: Option<u64>) -> Self { Self { state: "running".into(), ownership: Some(ownership), reason: None, active_sessions } }
     fn owned_if(mut self, held: bool) -> Self { if held { self.ownership = Some("desktop"); } self }
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Probe { schema_version: u32, state: String, reason: Option<String>, pid: Option<u32> }
+struct Probe { schema_version: u32, state: String, reason: Option<String>, pid: Option<u32>, active_sessions: Option<u64> }
 
 #[derive(Default)]
 pub struct TelegramServe { child: Mutex<Option<Child>>, operation_lock: Mutex<Option<OperationLock>>, phase: AtomicU8 }
@@ -109,7 +111,7 @@ impl TelegramServe {
         }
         let status = match control(exe, "status", false, until) {
             Ok(probe) if probe.state == "running" && child.as_ref().is_some_and(|c| Some(c.id()) != probe.pid) => ServeStatus::new("failed", Some("A different process answered while the managed process is still running.".into())),
-            Ok(probe) if probe.state == "running" => ServeStatus::running(if child.is_some() { "desktop" } else { "external" }),
+            Ok(probe) if probe.state == "running" => ServeStatus::running(if child.is_some() { "desktop" } else { "external" }, probe.active_sessions),
             Ok(probe) if child.is_some() => ServeStatus::new("failed", Some(probe.reason.unwrap_or_else(|| "The managed process has not proved readiness. Stop it before retrying.".into()))),
             Ok(probe) => ServeStatus::new(&probe.state, probe.reason),
             Err(reason) => ServeStatus::new("failed", Some(reason)),
@@ -235,6 +237,13 @@ pub async fn telegram_serve_restart(state: tauri::State<'_, std::sync::Arc<Teleg
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signed_session_count_is_exposed_in_running_status() {
+        let probe: Probe = serde_json::from_str(r#"{"schemaVersion":1,"state":"running","activeSessions":2}"#).unwrap();
+        let status = ServeStatus::running("desktop", probe.active_sessions);
+        assert_eq!(serde_json::to_value(status).unwrap()["activeSessions"], 2);
+    }
 
     #[test]
     #[ignore]

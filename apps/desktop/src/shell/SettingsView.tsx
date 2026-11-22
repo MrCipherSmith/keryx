@@ -69,6 +69,7 @@ interface SettingsViewProps {
   onBack?: () => void;
   agentVersion?: string | null;
   integrations?: ReactNode;
+  telegramIntegration?: ReactNode;
   initialTab?: SettingsTab;
 }
 
@@ -80,7 +81,7 @@ function directionalIndex(key: string, index: number, length: number): number {
   return -1;
 }
 
-export function SettingsView({ onBack, agentVersion, integrations, initialTab = "appearance" }: SettingsViewProps) {
+export function SettingsView({ onBack, agentVersion, integrations, telegramIntegration, initialTab = "appearance" }: SettingsViewProps) {
   const prefs = usePrefs();
   const appearance = useAppearanceMode(prefs.theme);
   const palette = appearance === "light" ? prefs.lightPalette : prefs.darkPalette;
@@ -385,6 +386,7 @@ export function SettingsView({ onBack, agentVersion, integrations, initialTab = 
           <div {...panel("integrations")}>
             <h2 className="settings-panel-title">Integrations</h2>
             {integrations}
+            {tab === "integrations" ? telegramIntegration : null}
           </div>
 
           <div {...panel("desktop")}>

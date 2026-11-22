@@ -42,6 +42,16 @@ export const acpStop = () => invoke<void>("acp_stop");
 export const settingsGet = () => invoke<Settings>("settings_get");
 export const settingsSet = (settings: Settings) => invoke<Settings>("settings_set", { settings });
 export const settingsAddRecent = (project: string) => invoke<Settings>("settings_add_recent", { project });
+export interface TelegramServeStatus {
+  state: "not_configured" | "needs_setup" | "stopped" | "starting" | "stopping" | "running" | "blocked" | "failed";
+  ownership?: "desktop" | "external";
+  reason?: string;
+  activeSessions?: number;
+}
+export const telegramServeStatus = () => invoke<TelegramServeStatus>("telegram_serve_status");
+export const telegramServeStart = (completeSetup = false) => invoke<TelegramServeStatus>("telegram_serve_start", { completeSetup });
+export const telegramServeStop = () => invoke<TelegramServeStatus>("telegram_serve_stop");
+export const telegramServeRestart = () => invoke<TelegramServeStatus>("telegram_serve_restart");
 export const versionCheck = (found: string) => invoke<VersionCheck>("version_check", { found });
 
 /** The update banner's input (decision D-15); `null` when there is nothing to check. */
