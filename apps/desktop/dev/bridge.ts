@@ -29,7 +29,7 @@ import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
 import { reviewRunArgs } from "./reviewRun";
 import { parsePublicationRequest, publicationArgs } from "../../../src/commands/review-desk-publish";
 import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
-import { isMetaprojectEdgeKind, METAPROJECT_EDGE_KINDS } from "../../../src/integrations/metaproject-explorer-contract";
+import { parseExplorerRequest } from "../../../src/integrations/metaproject-explorer-contract";
 
 const runFile = promisify(execFile);
 const PORT = 1421;
@@ -728,20 +728,14 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "github_login":
       throw new Error("In browser dev mode, run `gh auth login --hostname github.com --web` in a terminal, then refresh accounts.");
     case "metaproject_request": {
-      const request = args.request;
-      if (!request || typeof request !== "object" || Array.isArray(request)) throw new Error("configuration: Invalid Metaproject request.");
-      const value = request as Json;
-      const keys = Object.keys(value).sort().join(",");
-      const text = (item: unknown) => typeof item === "string" && item.length > 0 && item.length <= 4096;
-      const valid = (value.action === "catalog" && keys === "action")
-        || (value.action === "detail" && keys === "action,id" && text(value.id))
-        || (value.action === "search" && keys === "action,query" && typeof value.query === "string" && value.query.length <= 4096)
-        || (value.action === "neighbors" && keys === "action,depth,direction,id,kinds" && text(value.id)
-          && (value.depth === 1 || value.depth === 2) && ["both", "incoming", "outgoing"].includes(String(value.direction))
-          && Array.isArray(value.kinds) && value.kinds.length <= METAPROJECT_EDGE_KINDS.length
-          && value.kinds.every(isMetaprojectEdgeKind));
-      const payload = JSON.stringify(request);
-      if (!valid || new TextEncoder().encode(payload).length > 16 * 1024) throw new Error("configuration: Invalid Metaproject request.");
+      const payload = JSON.stringify(args.request);
+      if (!payload || new TextEncoder().encode(payload).length > 16 * 1024) throw new Error("configuration: Invalid Metaproject request.");
+      try {
+        const parsed = parseExplorerRequest(args.request);
+        if (!("version" in parsed) && "id" in parsed && !parsed.id) throw new Error("Empty node ID.");
+      } catch {
+        throw new Error("configuration: Invalid Metaproject request.");
+      }
       return runReviewCli(await projectCwd(ws.data, cwd), ["metaproject-explorer", "--request", payload], true);
     }
     case "issues_request": {
