@@ -341,6 +341,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const openSessionWith = useCallback(async (reference: string, flow?: FlowCard) => {
     const id = flow ? await s.workOnFlow(flow.dir, "new") : await s.newSession();
     if (id) fillComposer(reference);
+    return id;
   }, [s, fillComposer]);
 
   useEffect(() => {
@@ -584,7 +585,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>}
       {workView === "metaproject" && <div className="view" hidden={view !== "metaproject"}>
         <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
-          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} />
+          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} onDraft={async task => {
+            if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+            setView("session");
+          }} />
         </Suspense>
       </div>}
       <div className="view" hidden={view !== "review"}>

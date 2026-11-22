@@ -1,12 +1,11 @@
 import cytoscape from "cytoscape";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   rankMetaprojectSearchHits,
   METAPROJECT_EDGE_KINDS,
   METAPROJECT_EDGE_KINDS_V2,
   type MetaprojectCatalog,
   type MetaprojectDetail,
-  type MetaprojectDetailV2,
   type MetaprojectDirection,
   type MetaprojectEdgeKind,
   type MetaprojectHit,
@@ -27,6 +26,8 @@ import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
 import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
 import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
+import { GraphNodePanel } from "./GraphNodePanel";
+import { useExplorerNavigation } from "./useExplorerNavigation";
 import "./metaproject.css";
 
 type Request = (
@@ -35,6 +36,7 @@ type Request = (
 ) => Promise<MetaprojectResponse>;
 const EMPTY_HITS: readonly MetaprojectHit[] = [];
 const GRAPH_PADDING = 36;
+const DOCUMENT_EDGES = ["describes", "links"] as const;
 
 function Graph({
   projection,
@@ -115,19 +117,25 @@ function Graph({
         },
       ],
       layout: { name: "preset", fit: true, padding: GRAPH_PADDING },
+      maxZoom: 1.8,
     });
     graph.on("tap", "node", (event) => select(event.target.id()));
-    const observer = new ResizeObserver(() => {
-      if (viewport.clientWidth && viewport.clientHeight) graph.resize().fit(undefined, GRAPH_PADDING);
-    });
+    function fit() {
+      if (viewport?.clientWidth && viewport.clientHeight) graph.resize().fit(graph.elements(), GRAPH_PADDING);
+    }
+    const firstFrame = requestAnimationFrame(fit);
+    const observer = new ResizeObserver(fit);
     observer.observe(viewport);
     return () => {
+      cancelAnimationFrame(firstFrame);
       observer.disconnect();
       graph.destroy();
     };
   }, [projection, selected, select]);
   return (
-    <div className="metaproject-graph" ref={container} aria-hidden="true" />
+    <div className="metaproject-graph" aria-hidden="true">
+      <div className="metaproject-graph-viewport" ref={container} />
+    </div>
   );
 }
 
@@ -141,7 +149,7 @@ function RepositoryMarkdown({
   text: string;
   nodes: MetaprojectNode[];
   source: string;
-  select: (id: string) => void;
+  select: (id: string, fragment?: string) => void;
   fragment?: string;
 }) {
   const html = useMemo(() => renderRepositoryMarkdown(text), [text]);
@@ -172,7 +180,7 @@ function RepositoryMarkdown({
           void openExternal(href).catch(() => {});
           return;
         }
-        const path = href.split("#")[0];
+        const [path, targetFragment] = href.split("#", 2);
         if (!path && href.startsWith("#")) {
           let fragment: string;
           try {
@@ -208,7 +216,7 @@ function RepositoryMarkdown({
           else if (part && part !== ".") resolved.push(part);
         }
         const node = nodes.find((item) => item.path === resolved.join("/"));
-        if (node) select(node.id);
+        if (node) select(node.id, targetFragment);
       }}
       onAuxClick={(event) => {
         if ((event.target as Element).closest("a")) event.preventDefault();
@@ -270,6 +278,7 @@ export function RelationshipList({
 export function MetaprojectView(props: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
+  onDraft?: (task: string) => Promise<void>;
   request?: Request;
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
 }) {
@@ -279,18 +288,20 @@ export function MetaprojectView(props: {
 function Explorer({
   cwd,
   onRebuild,
+  onDraft,
   request = requestMetaproject,
   requestV2,
 }: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
+  onDraft?: (task: string) => Promise<void>;
   request?: Request;
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
 }) {
   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
-  const [selection, setSelection] = useState("");
-  const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"graph" | "wiki" | "openspec">("graph");
+  const { route, setRoute, visit, switchView, back, canGoBack, root } = useExplorerNavigation();
+  const { mode, query } = route;
+  const [panelWidth, setPanelWidth] = useState(380);
   const [protocol, setProtocol] = useState<1 | 2 | null>(requestV2 ? 2 : request === requestMetaproject ? null : 1);
   const archiveSelection = useRef(false);
   const [protocolError, setProtocolError] = useState("");
@@ -303,9 +314,9 @@ function Explorer({
   const read: Request = useMemo(() => protocol === 2
     ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
     : request, [protocol, request, requestV2]);
-  const [openLocation, setOpenLocation] = useState<OpenSpecLocation | null>(null);
-  const [wikiFragment, setWikiFragment] = useState<string | undefined>();
-  archiveSelection.current = openLocation?.collection === "archive" && openLocation.id === selection;
+  const selection = route.mode === "graph" ? route.selection || catalog?.nodes[0]?.id || ""
+    : route.mode === "wiki" ? route.selection || catalog?.nodes.find(node => node.kind === "wiki")?.id || "" : "";
+  archiveSelection.current = route.mode === "graph" && Boolean(route.archive);
   const [direction, setDirection] = useState<MetaprojectDirection>("both");
   const [depth, setDepth] = useState<1 | 2>(1);
   const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(
@@ -315,6 +326,7 @@ function Explorer({
     if (protocol === 2) setKinds(current => [...new Set<MetaprojectEdgeKind>([...current, "changes-spec", "spec-context"])]);
   }, [protocol]);
   const [searchResult, setSearchResult] = useState<{
+    mode: "graph" | "wiki";
     query: string;
     snapshotId: string;
     hits: MetaprojectHit[];
@@ -337,10 +349,17 @@ function Explorer({
   const [revision, setRevision] = useState(0);
   const project = useRef(0);
   const loaded = useRef(false);
+  const loadedSnapshot = useRef<string>();
   const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
   const pageInFlight = useRef(false);
   const latestSearch = useRef({ query: "", snapshot: "", generation: 0 });
   const content = useRef<HTMLElement>(null);
+  const searchCache = useRef(new Map<string, NonNullable<typeof searchResult>>());
+  const activeMode = useRef(mode);
+  activeMode.current = mode;
+  const [documents, setDocuments] = useState<MetaprojectNeighbors | null>(null);
+  const [documentProblem, setDocumentProblem] = useState("");
+  const panelOpen = route.mode === "graph" && route.panelOpen;
   const graphIndex = useMemo(
     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
     [catalog],
@@ -364,11 +383,11 @@ function Explorer({
         loaded.current = true;
         setCatalog(result);
         setSnapshotMismatch(false);
-        setSelection((current) =>
-          result.nodes.some((node) => node.id === current)
-            ? current
-            : result.nodes[0]?.id || "",
-        );
+        if (loadedSnapshot.current && loadedSnapshot.current !== result.snapshotId && !result.truncated) {
+          setRoute(current => current.mode !== "openspec" && !result.nodes.some(node => node.id === current.selection)
+            ? { ...current, selection: "" } : current);
+        }
+        loadedSnapshot.current = result.snapshotId;
       } catch (cause) {
         if (generation === project.current) setError(errMessage(cause));
       } finally {
@@ -378,25 +397,23 @@ function Explorer({
     return () => {
       project.current++;
     };
-  }, [cwd, read, revision, protocol]);
+  }, [cwd, read, revision, protocol, setRoute]);
   useEffect(() => {
-    if (!catalog || !searchQuery) {
-      setSearchResult(null);
-      setSearchError(null);
-      return;
-    }
-    setSearchResult(null);
+    if (!catalog || !searchQuery || mode === "openspec") return;
+    const key = JSON.stringify([catalog.snapshotId, mode, searchQuery]);
+    const cached = searchCache.current.get(key);
     setSearchError(null);
+    if (cached) { setSearchResult(cached); return; }
+    setSearchResult(null);
     let active = true;
     const timer = window.setTimeout(() => {
       void (async () => {
         const previous = searchInFlight.current;
         if (previous) await previous.catch(() => {});
         if (!active) return;
-        const pending = Promise.resolve().then(() => read(cwd, {
-            action: "search",
-            query: searchQuery,
-        }));
+        const pending = Promise.resolve().then(() => protocol === 2 && mode === "wiki"
+          ? (requestV2 ?? requestMetaprojectV2)(cwd, { version: 2, action: "search", query: searchQuery, scopes: ["wiki"] }) as unknown as Promise<MetaprojectResponse>
+          : read(cwd, { action: "search", query: searchQuery }));
         searchInFlight.current = pending;
         try {
           const result = (await pending) as MetaprojectSearch;
@@ -405,6 +422,7 @@ function Explorer({
               setSnapshotMismatch(true);
             else {
               setSearchResult({
+                mode,
                 query: searchQuery,
                 snapshotId: result.snapshotId,
                 hits: result.hits,
@@ -424,19 +442,18 @@ function Explorer({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [catalog, cwd, read, searchQuery, searchAttempt]);
+  }, [catalog, cwd, mode, protocol, read, requestV2, searchQuery, searchAttempt]);
   useEffect(() => {
-    if (content.current) content.current.scrollTop = 0;
-  }, [mode, selection]);
+    if (!searchResult) return;
+    const cache = searchCache.current;
+    cache.set(JSON.stringify([searchResult.snapshotId, searchResult.mode, searchResult.query]), searchResult);
+    if (cache.size > 12) cache.delete(cache.keys().next().value!);
+  }, [searchResult]);
   useEffect(() => {
     setDetail(null);
     setLoadingDetail(false);
     setDetailError("");
-    if (!catalog || !selection) return;
-    if (selectedNode && selectedNode.kind !== "wiki" && selectedNode.kind !== "symbol" && selectedNode.kind !== "spec" && selectedNode.kind !== "change" && selectedNode.kind !== "archive") {
-      setDetail({ schemaVersion: catalog.schemaVersion, snapshotId: catalog.snapshotId, node: selectedNode });
-      return;
-    }
+    if (!catalog || !selection || mode !== "wiki") return;
     let active = true;
     setLoadingDetail(true);
     void (async () => {
@@ -459,12 +476,12 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [catalog, cwd, read, selectedNode, selection]);
+  }, [catalog, cwd, mode, read, selection]);
   useEffect(() => {
     setProjection(null);
     setRelationshipError("");
     setLoadingRelationships(false);
-    if (!catalog || !selection) return;
+    if (!catalog || !selection || mode === "openspec") return;
     const neighborsRequest = { action: "neighbors", id: selection, depth, direction, kinds } as const;
     if (
       protocol !== 2 && graphIndex && selectedNode &&
@@ -496,9 +513,34 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [graphIndex, selectedNode, catalog, cwd, read, selection, depth, direction, kinds, protocol]);
+  }, [graphIndex, selectedNode, catalog, cwd, mode, read, selection, depth, direction, kinds, protocol]);
+  useEffect(() => {
+    setDocuments(null);
+    setDocumentProblem("");
+    if (!catalog || !selection || !panelOpen) return;
+    const input: Extract<MetaprojectRequest, { action: "neighbors" }> = {
+      action: "neighbors", id: selection, depth: 1, direction: "both",
+      kinds: protocol === 2 ? [...DOCUMENT_EDGES, "spec-context", "changes-spec"] : [...DOCUMENT_EDGES],
+    };
+    if (protocol === 1 && graphIndex && !catalog.truncated && selectedNode) {
+      setDocuments(projectMetaprojectGraph(graphIndex, catalog, input));
+      return;
+    }
+    let active = true;
+    void read(cwd, input).then(result => {
+      if (!active || !("root" in result) || result.root !== selection) return;
+      if (result.snapshotId !== catalog.snapshotId) setSnapshotMismatch(true);
+      else setDocuments(result);
+    }).catch(cause => { if (active) setDocumentProblem(errMessage(cause)); });
+    return () => { active = false; };
+  }, [catalog, cwd, graphIndex, panelOpen, protocol, read, selectedNode, selection]);
+  const preview = useCallback(async (id: string) => {
+    const result = await read(cwd, { action: "detail", id });
+    if (!("node" in result) || result.snapshotId !== catalog?.snapshotId) throw new Error("Preview is no longer current.");
+    return result;
+  }, [catalog?.snapshotId, cwd, read]);
   const resolvedSearch =
-    searchResult?.query === searchQuery &&
+    searchResult?.mode === mode && searchResult.query === searchQuery &&
     searchResult.snapshotId === catalog?.snapshotId
       ? searchResult
       : null;
@@ -517,16 +559,57 @@ function Explorer({
     ],
     [catalog, hits, projection],
   );
-  const results = useMemo(
-    () => protocol === 2 && searchQuery ? hits : rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits),
-    [catalog, hits, searchQuery, protocol],
-  );
-  const select = useMemo(() => (id: string) => setSelection(id), []);
+  const results = useMemo(() => {
+    const results = protocol === 2 && searchQuery ? hits : rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits);
+    return mode === "wiki" ? results.filter(hit => hit.node.kind === "wiki") : results;
+  }, [catalog, hits, mode, searchQuery, protocol]);
+  const knownSelection = useRef<MetaprojectNode>();
+  const activeNode = nodes.find(node => node.id === selection) ?? (knownSelection.current?.id === selection ? knownSelection.current : undefined);
+  const [suggestedWiki, setSuggestedWiki] = useState<{ root: string; node: MetaprojectNode } | null>(null);
+  const modulePath = activeNode?.kind === "module" ? activeNode.path : undefined;
+  useEffect(() => {
+    if (!panelOpen || !modulePath || !catalog) return;
+    let active = true;
+    void read(cwd, { action: "search", query: modulePath }).then(result => {
+      if (!active || !("hits" in result) || result.snapshotId !== catalog.snapshotId) return;
+      const match = result.hits.find(({ node }) => node.kind === "wiki" && node.pageType === "component" && node.title === `Module ${modulePath}`);
+      setSuggestedWiki(match ? { root: selection, node: match.node } : null);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [catalog, cwd, modulePath, panelOpen, read, selection]);
+  const graphNodes = useRef(nodes);
+  graphNodes.current = nodes;
+  const select = useCallback((id: string) => {
+    const node = graphNodes.current.find(item => item.id === id);
+    if (node) knownSelection.current = node;
+    setRoute(current => current.mode === "graph"
+      ? { ...current, selection: id, panelOpen: true, archive: node?.kind === "archive" }
+      : current);
+  }, [setRoute]);
+  const openSpec = (location: OpenSpecLocation) =>
+    visit({ mode: "openspec", query: "", collection: location.collection, location });
+  const viewInGraph = (id: string, node?: MetaprojectNode) => {
+    if (node) knownSelection.current = node;
+    visit({ mode: "graph", query: "", selection: id, panelOpen: true, archive: node?.kind === "archive" });
+  };
+  const openDocument = (node: MetaprojectNode, fragment?: string) => {
+    switch (node.kind) {
+      case "wiki": visit({ mode: "wiki", query: "", selection: node.id, fragment }); break;
+      case "spec":
+      case "change":
+      case "archive": openSpec({ id: node.id, collection: node.kind, fragment }); break;
+      default: viewInGraph(node.id, node);
+    }
+  };
   const openHit = (hit: MetaprojectHit) => {
+    if (mode === "wiki") {
+      if (content.current) content.current.scrollTop = 0;
+      setRoute(current => current.mode === "wiki" ? { ...current, selection: hit.node.id, fragment: undefined } : current);
+      return;
+    }
     const v2 = protocol === 2 ? hit as MetaprojectHitV2 : null;
-    if (v2 && (v2.scope === "spec" || v2.scope === "change" || v2.scope === "archive")) {
-      setOpenLocation({ id: hit.node.id, collection: v2.scope, ...(v2.source && { artifact: v2.source.path, digest: v2.source.digest }), ...(v2.section && { section: v2.section }) });
-      setSelection(hit.node.id); setMode("openspec");
+    if (v2?.source && v2.section && (v2.scope === "spec" || v2.scope === "change" || v2.scope === "archive")) {
+      openSpec({ id: hit.node.id, collection: v2.scope, artifact: v2.source.path, digest: v2.source.digest, section: v2.section });
     } else select(hit.node.id);
   };
   const loadMoreSearch = async () => {
@@ -534,15 +617,17 @@ function Explorer({
     const cursor = resolvedSearch.nextCursor;
     const generation = latestSearch.current.generation;
     const projectGeneration = project.current;
+    const searchMode = resolvedSearch.mode;
     pageInFlight.current = true;
     try {
       const page = await (requestV2 ?? requestMetaprojectV2)(cwd, {
         version: 2, action: "search", query: searchQuery, cursor, expectedSnapshotId: resolvedSearch.snapshotId,
+        ...(searchMode === "wiki" && { scopes: ["wiki"] }),
       });
-      if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current) return;
+      if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current || searchMode !== activeMode.current) return;
       if (page.snapshotId !== resolvedSearch.snapshotId) { setSnapshotMismatch(true); return; }
       setSearchResult(current => current?.nextCursor === cursor && current.snapshotId === page.snapshotId
-        ? { query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
+        ? { mode: searchMode, query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
         : current);
     } catch (cause) {
       if (generation === latestSearch.current.generation && projectGeneration === project.current)
@@ -563,59 +648,74 @@ function Explorer({
     }
   };
   const currentProjection = projection?.root === selection ? projection : null;
-  const detailPanel = detail?.node.id === selection && (
+  const detailPanel = detail?.node.id === selection && detail.node.kind === "wiki" && (
     <article className="metaproject-article">
       <header className="metaproject-article-header">
         <h2>{detail.node.title}</h2>
         <p className="metaproject-meta">
-          {[detail.node.kind, detail.node.pageType, detail.node.status, detail.node.path]
-            .filter(Boolean)
-            .join(" · ")}
+          {[detail.node.pageType, detail.node.status, detail.node.path].filter(Boolean).join(" · ")}
         </p>
+        <button className="btn btn-sm" onClick={() => viewInGraph(detail.node.id, detail.node)}><Icon name="branch" size={14} />View in Graph</button>
       </header>
-      {protocol === 2 && (detail.node.kind === "spec" || detail.node.kind === "change" || detail.node.kind === "archive") && <button className="btn" onClick={() => { setOpenLocation(openLocation?.id === detail.node.id ? openLocation : { id: detail.node.id, collection: detail.node.kind as "spec" | "change" | "archive" }); setMode("openspec"); }}>Open in OpenSpec</button>}
-      {(detail as unknown as MetaprojectDetailV2).openSpec?.artifact && (
-        <RepositoryMarkdown text={(detail as unknown as MetaprojectDetailV2).openSpec?.artifact?.markdown ?? ""} nodes={nodes} source={(detail as unknown as MetaprojectDetailV2).openSpec?.artifact?.source.path ?? detail.node.path} select={select} />
-      )}
       {detail.markdown && (
-        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path} select={select} fragment={wikiFragment} />
+        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path}
+          select={(id, fragment) => { const node = nodes.find(item => item.id === id); if (node) openDocument(node, fragment); }}
+          fragment={route.mode === "wiki" ? route.fragment : undefined} />
       )}
     </article>
   );
   return (
-    <section className="flows metaproject" aria-label="Metaproject explorer">
+    <section className="flows metaproject" ref={root} aria-label="Metaproject explorer">
       <header className="flows-toolbar metaproject-header">
         <div className="flows-heading"><h1>Metaproject</h1></div>
+        {canGoBack && <button className="btn btn-sm" onClick={back}><Icon name="arrowLeft" size={14} />Back</button>}
         <label className="search-field">
           <Icon name="search" size={14} />
           <input
             type="search"
             aria-label="Search project knowledge"
-            placeholder="Search names, paths and wiki text"
+            placeholder={mode === "openspec" ? "Search OpenSpec" : mode === "wiki" ? "Search Wiki" : "Search names, paths and wiki text"}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={event => { const query = event.target.value; setRoute(current => ({ ...current, query })); }}
           />
         </label>
         <div className="segmented" role="group" aria-label="View">
           <button
             aria-pressed={mode === "graph"}
-            onClick={() => setMode("graph")}
+            onClick={() => switchView("graph")}
           >
             <Icon name="branch" size={14} />
             Graph
           </button>
           <button
             aria-pressed={mode === "wiki"}
-            onClick={() => setMode("wiki")}
+            onClick={() => switchView("wiki")}
           >
             <Icon name="file" size={14} />
             Wiki
           </button>
-          <button aria-pressed={mode === "openspec"} onClick={() => setMode("openspec")}><Icon name="file" size={14} />OpenSpec</button>
+          <button aria-pressed={mode === "openspec"} onClick={() => switchView("openspec")}><Icon name="file" size={14} />OpenSpec</button>
         </div>
       </header>
       {protocolError && <div className="inline-banner tone-warn" role="alert">{protocolError}</div>}
-      {mode === "openspec" && (protocol === 2 ? <OpenSpecView cwd={cwd} query={query} location={openLocation} onLocation={setOpenLocation} {...(requestV2 && { request: requestV2 })} nodes={nodes} onNavigate={(node, fragment) => { setSelection(node.id); setWikiFragment(fragment); setMode(node.kind === "wiki" ? "wiki" : "graph"); }} onGraph={id => { setSelection(id); setMode("graph"); }} /> : protocol === 1 ? <p role="status">This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings.</p> : <p role="status">Checking OpenSpec support…</p>)}
+      {protocol === 2 && <OpenSpecView
+        cwd={cwd}
+        active={route.mode === "openspec"}
+        query={route.mode === "openspec" ? route.query : ""}
+        location={route.mode === "openspec" ? route.location : null}
+        collection={route.mode === "openspec" ? route.collection : "spec"}
+        snapshot={catalog?.snapshotId}
+        onLocation={location => setRoute(current => current.mode === "openspec" ? { ...current, location } : current)}
+        onCollection={collection => setRoute(current => current.mode === "openspec" ? { ...current, collection, location: null, query: "" } : current)}
+        onOpen={openSpec}
+        {...(requestV2 && { request: requestV2 })}
+        nodes={nodes}
+        onNavigate={openDocument}
+        onGraph={(id, node) => viewInGraph(id, node)}
+      />}
+      {mode === "openspec" && protocol !== 2 && <p role="status">{protocol === 1
+        ? "This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings."
+        : "Checking OpenSpec support…"}</p>}
       {mode !== "openspec" && loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
       {error && (
         <div className="inline-banner tone-warn" role="alert">
@@ -656,7 +756,7 @@ function Explorer({
           {catalog.truncated && (
             <div className="inline-banner tone-neutral" role="status">Catalog is limited. Search for more results.</div>
           )}
-          <div className="metaproject-panes">
+          <div className={`metaproject-panes${mode === "graph" ? " metaproject-graph-panes" : ""}`}>
             <nav className="metaproject-list" aria-label="Search results">
               <h2>{searchQuery ? "Results" : "Catalog"}</h2>
               {searchFailure && (
@@ -774,7 +874,10 @@ function Explorer({
                   )}
                 </>
               )}
-              {currentProjection && mode === "graph" && (
+              {currentProjection && mode === "graph" && currentProjection.edges.length === 0 && (
+                <p className="metaproject-meta">No relationships for these filters.</p>
+              )}
+              {currentProjection && mode === "graph" && currentProjection.edges.length > 0 && (
                 <section className="metaproject-relationship-section">
                   <h2>Relationships</h2>
                   <RelationshipList projection={currentProjection} select={select} />
@@ -783,14 +886,32 @@ function Explorer({
               {currentProjection && mode === "wiki" && currentProjection.edges.length > 0 && (
                 <details className="metaproject-relationship-section" key={selection}>
                   <summary>Relationships <span className="count-label">{currentProjection.edges.length}</span></summary>
-                  <RelationshipList projection={currentProjection} select={select} />
+                  <RelationshipList projection={currentProjection} select={id => {
+                    const node = nodes.find(item => item.id === id); if (node) openDocument(node);
+                  }} />
                 </details>
               )}
               {mode === "wiki" && loadingRelationships && <p role="status">Loading relationships…</p>}
-              {mode === "graph" && detailPanel}
-              {mode === "graph" && loadingDetail && <p role="status">Loading item…</p>}
-              {!selection && <p>Select an item to explore it.</p>}
+              {!selection && <p>{mode === "wiki" ? "Select a Wiki page to read it." : "Select an item to explore it."}</p>}
             </section>
+            {panelOpen && activeNode && <GraphNodePanel
+              node={activeNode}
+              projection={documents?.root === selection ? documents : null}
+              pending={documents?.root !== selection && !snapshotMismatch && !documentProblem}
+              suggestedWiki={suggestedWiki?.root === selection ? suggestedWiki.node : undefined}
+              problem={documentProblem || (snapshotMismatch ? "The project index changed. Refresh to look up linked documents." : "")}
+              openSpec={protocol === 2}
+              readPreview={preview}
+              width={panelWidth}
+              onResize={setPanelWidth}
+              onClose={() => setRoute(current => current.mode === "graph" ? { ...current, panelOpen: false } : current)}
+              onOpen={openDocument}
+              onDraft={catalog.graph === "ready" && !documents?.truncated ? onDraft : undefined}
+              onFind={kind => kind === "wiki"
+                ? visit({ mode: "wiki", query: activeNode.path, selection: "" })
+                : visit({ mode: "openspec", query: activeNode.title, collection: "spec", location: null })}
+              onRetry={() => setRevision(value => value + 1)}
+            />}
           </div>
         </>
       )}

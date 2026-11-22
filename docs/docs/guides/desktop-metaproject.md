@@ -1,8 +1,9 @@
 # Explore project knowledge in Keryx Desktop
 
 Open **Metaproject** in a project window, or press **⌘5**. Use **Graph** to
-trace relationships between wiki pages and code and **Wiki** to read the
-selected page. Both views keep the same search and selection. The explorer
+trace relationships between project objects and **Wiki** to read articles.
+Each view remembers its own search and selection. **Back** restores the
+previous view, including the search and scroll position. The explorer
 reads the open checkout locally and works without a GitHub account or a model
 provider.
 
@@ -10,8 +11,10 @@ provider.
 
 Select **OpenSpec** to browse **Specs**, **Changes** and **Archive** from the
 open checkout. Requirements and scenarios show their source; archived changes
-provide historical context. Search can include Archive explicitly. Missing or
-partial OpenSpec data does not prevent using Graph and Wiki.
+provide historical context. Select **Archive** to search historical changes.
+**Open current spec** opens the linked specification directly. Use **View in
+Graph** when you want to explore its relationships. Missing or partial
+OpenSpec data does not prevent using Graph and Wiki.
 
 The same checkout-local reader is available in a terminal or Keryx Shell:
 
@@ -97,10 +100,13 @@ source, open that path in your editor.
 2. Start at **1 step** for direct neighbors. Use **2 steps** to follow those
    neighbors one level further. Turn off unrelated relationship types to
    narrow a busy graph.
-3. Click a node to make it the new selection. You can also use **Tab** to
-   reach a relationship action and **Enter** to follow it. A direct
-   relationship opens the neighboring item. A relationship between two
-   second-step items offers an **Open** button for each endpoint.
+3. Click a node to select it and open the details pane. Use its **Wiki** or
+   **OpenSpec** tab to preview linked documents, then open the full document
+   with the named action. Drag the divider, or focus it and use the arrow
+   keys, to change the pane width. Press **Escape** to close it. You can also
+   select a neighboring node with **Tab** and **Enter** in the relationship list.
+   A relationship between two second-step items offers an **Open** button for
+   each endpoint.
 4. Read the relationship row for the exact path or source evidence when
    available. Check the arrow direction before following a dependency.
 
