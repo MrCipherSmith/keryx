@@ -11,13 +11,34 @@
   "title": "Metaproject Graph and Wiki in Keryx Desktop",
   "status": "in-progress",
   "createdAt": "2026-11-22T08:36:16.920Z",
-  "updatedAt": "2026-11-22T09:12:41.794Z",
+  "updatedAt": "2026-11-22T09:21:29.174Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-22T09:14:44.332Z",
+      "note": "evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms graph and wiki node kinds, directed imports, describes provenance, projection caps and on-demand symbols."
+    },
+    "AC2": {
+      "at": "2026-11-22T09:14:44.599Z",
+      "note": "evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms catalog search, wiki body matches attributed to pages, and retained search selection across view changes."
+    },
+    "AC3": {
+      "at": "2026-11-22T09:14:44.866Z",
+      "note": "evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms degree controls, directional filters, bounded projections and list-based navigation."
+    },
+    "AC5": {
+      "at": "2026-11-22T09:14:45.137Z",
+      "note": "evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms wiki fallback when graph layers are missing or malformed, explicit graph freshness state and project-triggered rebuild."
+    },
+    "AC4": {
+      "at": "2026-11-22T09:17:45.627Z",
+      "note": "evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006455074/job/137159033071 passes the Rust allowlist and registered-project scope. https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 passes late-response isolation, snapshot mismatch and refresh tests."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -194,7 +215,7 @@
       "id": "T9",
       "title": "Verify contracts and UI in GitHub Actions",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -210,7 +231,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #1283 passed all applicable GitHub checks on 06a0f7ab2. AC1–AC5 verified in GitHub Actions, including the full Desktop Check. CI https://github.com/MrCipherSmith/keryx/actions/runs/45006454991 and Desktop https://github.com/MrCipherSmith/keryx/actions/runs/45006455074."
     },
     {
       "id": "T10",
@@ -221,12 +244,17 @@
         "T8"
       ],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-11-22T08:45:00.704Z",
             "outcome": "started",
             "detail": "Use an isolated Keryx QA bundle on the real checkout and exercise native navigation."
+          },
+          {
+            "at": "2026-11-22T09:14:45.401Z",
+            "outcome": "blocked",
+            "detail": "The native computer-use bridge reports that the Mac is locked. The QA app and CLI were built and the bundled CLI data path was observed. Native WebView interaction and UI timings still need verification."
           }
         ]
       },
@@ -385,6 +413,41 @@
       "at": "2026-11-22T09:12:41.794Z",
       "event": "ac-updated",
       "detail": "AC3: \"The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]\" -> \"The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/`]\" (Run the Desktop suite from its own package, using the same command as GitHub CI.)"
+    },
+    {
+      "at": "2026-11-22T09:14:44.333Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms graph and wiki node kinds, directed imports, describes provenance, projection caps and on-demand symbols. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-22T09:14:44.600Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms catalog search, wiki body matches attributed to pages, and retained search selection across view changes. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-22T09:14:44.866Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms degree controls, directional filters, bounded projections and list-based navigation. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-22T09:14:45.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms wiki fallback when graph layers are missing or malformed, explicit graph freshness state and project-triggered rebuild. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-22T09:14:45.401Z",
+      "event": "task-attempt",
+      "detail": "T10: blocked (attempt 2) — The native computer-use bridge reports that the Mac is locked. The QA app and CLI were built and the bundled CLI data path was observed. Native WebView interaction and UI timings still need verification."
+    },
+    {
+      "at": "2026-11-22T09:17:45.627Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006455074/job/137159033071 passes the Rust allowlist and registered-project scope. https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 passes late-response isolation, snapshot mismatch and refresh tests. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-22T09:21:29.174Z",
+      "event": "task-done",
+      "detail": "T9: Verify contracts and UI in GitHub Actions"
     }
   ],
   "origin": {
@@ -418,5 +481,62 @@
     "AC6": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-22T09:14:44.332Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37"
+    },
+    {
+      "at": "2026-11-22T09:14:44.599Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37"
+    },
+    {
+      "at": "2026-11-22T09:14:44.866Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37"
+    },
+    {
+      "at": "2026-11-22T09:14:45.137Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37"
+    },
+    {
+      "at": "2026-11-22T09:17:45.627Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37"
+    }
+  ]
 }
