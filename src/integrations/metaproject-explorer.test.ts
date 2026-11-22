@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { MetaprojectCatalog } from "./metaproject-explorer-contract";
 import { metaprojectExplorer } from "./metaproject-explorer";
 
 const roots: string[] = [];
@@ -104,4 +105,34 @@ describe("metaproject explorer", () => {
     expect(catalog.edges).toContainEqual({ from: "module:src/one", to: "module:src/two", kind: "imports", count: 1, evidence: ["src/one/a.ts → src/two/b.ts"] });
   });
 
+  test("writes a catalog larger than the pipe buffer as one complete CLI response", async () => {
+    const root = await fixture();
+    const storage = path.join(root, ".metaproject/data/gdgraph/storage");
+    await mkdir(storage, { recursive: true });
+    const files = Array.from({ length: 800 }, (_, index) => ({
+      id: String(index),
+      kind: "file",
+      path: `src/components/entry-${index}.ts`,
+      language: "typescript",
+    }));
+    await writeFile(path.join(storage, "nodes.jsonl"), files.map(file => JSON.stringify(file)).join("\n"));
+    await writeFile(path.join(storage, "edges.jsonl"), "");
+    const child = Bun.spawn([
+      process.execPath,
+      path.resolve(import.meta.dir, "../cli.ts"),
+      "metaproject-explorer",
+      "--request",
+      JSON.stringify({ action: "catalog" }),
+    ], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    expect(Buffer.byteLength(stdout)).toBeGreaterThan(65_536);
+    const catalog = JSON.parse(stdout) as MetaprojectCatalog;
+    expect(catalog.counts.files).toBe(files.length);
+  });
 });

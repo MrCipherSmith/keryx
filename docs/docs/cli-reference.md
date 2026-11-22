@@ -8266,7 +8266,7 @@ Every action except `inspect` and `release-stale-daemon` needs `--request-id`, a
 
 ## `keryx metaproject-explorer`
 
-Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop. The command returns a versioned JSON object and does not rebuild the graph.
+Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop. The command returns a versioned JSON object and does not rebuild the graph. Its snapshot ID is a change detector, not an atomic snapshot while graph or wiki files are being written.
 
 ```bash
 keryx metaproject-explorer --request '{"action":"catalog"}'
