@@ -12,6 +12,9 @@
 // launches of the CLI) never see each other's state.
 
 import { randomBytes, randomUUID } from "node:crypto";
+import { RemoteClient } from "../remote/client";
+import { redactSensitiveText } from "../security/service";
+import { ACP_TELEGRAM_SESSION_METHOD, TelegramSessionBindings, parseTelegramSessionRequest, unavailableTelegramSession, type TelegramBindingDependencies } from "./telegram-session";
 import {
   agentContextWindow,
   buildAgentSystemInstruction,
@@ -168,6 +171,8 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 
 export interface AcpServerOptions {
+  /** Test-only binding seam. Production keeps Telegram session control disabled. */
+  readonly telegramBindingTestOnly?: { create?: TelegramBindingDependencies["create"] };
   readonly input: AsyncIterable<Uint8Array | string>;
   readonly write: (chunk: string) => void;
   readonly logError: (line: string) => void;
@@ -382,6 +387,51 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     options.write(encodeAcpMessage(message));
   };
 
+  // This integration is not advertised and defaults closed until delegated turns,
+  // permissions and question projection have their own trusted execution boundary.
+  const telegramBindings = new TelegramSessionBindings({
+    incarnation: randomUUID(),
+    generation: () => randomUUID(),
+    held: (sessionId) => {
+      const state = registry.get(sessionId);
+      return state === undefined ? undefined : { project: state.resolvedRoot, lease: state.lease };
+    },
+    owns: (sessionId, lease) => registry.get(sessionId)?.lease === lease && registry.canPersist(sessionId),
+    create: options.telegramBindingTestOnly?.create ?? ((input) => new RemoteClient({
+      sessionId: input.sessionId, project: input.project, owner: input.owner,
+      ...(input.topicName === undefined ? {} : { name: input.topicName }),
+      ...(options.shellConfigDir === undefined ? {} : { dir: options.shellConfigDir }),
+      onLine: input.onLine,
+    })),
+    onStop: (sessionId, generation) => stopTelegramTurn(sessionId, generation),
+    onInput: async (input) => {
+      if (activeTurns.has(input.sessionId) || opening.has(input.sessionId)) return "busy";
+      if (stopping || !registry.canPersist(input.sessionId)) return "refused";
+      const task = handleSessionPrompt({ sessionId: input.sessionId, prompt: [{ type: "text", text: input.text }] }, input);
+      void task.catch(() => telegramBindings.send(input.sessionId, input.generation, "The Telegram turn failed.").catch(() => false));
+      return "accepted";
+    },
+    onState: (state) => writeMessage(notificationMessage(ACP_CLIENT_METHODS.sessionUpdate, {
+      sessionId: state.sessionId,
+      update: { sessionUpdate: "_keryx/telegram/session", telegram: state },
+    })),
+  });
+
+  async function handleTelegramSession(params: unknown): Promise<import("./telegram-session").TelegramSessionState> {
+    requireInitialized(ACP_TELEGRAM_SESSION_METHOD);
+    refuseIfStopping(ACP_TELEGRAM_SESSION_METHOD);
+    const request = parseTelegramSessionRequest(params);
+    if (request === undefined) refuse(invalidParams(`${ACP_TELEGRAM_SESSION_METHOD}: invalid request`));
+    const state = registry.get(request.sessionId);
+    if (state === undefined || !registry.canPersist(request.sessionId)) {
+      return { sessionId: request.sessionId, state: "unavailable", reason: "lease-lost" };
+    }
+    if (options.telegramBindingTestOnly === undefined) return unavailableTelegramSession(request.sessionId);
+    if (request.operation === "status") return telegramBindings.status(request.sessionId);
+    if (request.operation === "detach") return telegramBindings.detach(request.sessionId);
+    return telegramBindings.attach(request.sessionId, request.topicName);
+  }
+
   /**
    * Work to run right AFTER the reply to one request id has been written.
    *
@@ -476,6 +526,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     readonly controller: AbortController;
     cancelled: boolean;
     readonly permissionRequestIds: Set<string>;
+    readonly telegramGeneration?: string;
   }
   const activeTurns = new Map<string, AcpActiveTurn>();
 
@@ -890,6 +941,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * LOGIC-W7-R3-001).
    */
   function teardownSession(sessionId: string, endReason: string): Promise<void> {
+    const lease = registry.get(sessionId)?.lease;
+    const telegramRelease = lease === undefined ? undefined : telegramBindings.release(sessionId, lease);
     registry.release(sessionId);
     lastUsed.delete(sessionId);
     for (const [dir, owner] of planDirSessions) {
@@ -914,7 +967,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     sessionJobs.delete(sessionId);
     const hooks = shellHooksBySession.get(sessionId);
     shellHooksBySession.delete(sessionId);
-    return Promise.all([jobs?.sweepAll(), hooks !== undefined ? fireSessionEnd(hooks, endReason) : undefined]).then(() => undefined);
+    return Promise.all([telegramRelease, jobs?.sweepAll(), hooks !== undefined ? fireSessionEnd(hooks, endReason) : undefined]).then(() => undefined);
   }
 
   /** Bind a new or loaded shell-profile session: its mode, its plan directory, and what the client is told after the reply. */
@@ -2319,7 +2372,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
-  async function handleSessionPrompt(params: unknown): Promise<AcpPromptResponse> {
+  async function handleSessionPrompt(params: unknown, telegram?: { sessionId: string; generation: string; actorId: number; updateId: number }): Promise<AcpPromptResponse> {
     requireInitialized(ACP_AGENT_METHODS.sessionPrompt);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionPrompt);
     const sessionId = requireStringField(obj, "sessionId", ACP_AGENT_METHODS.sessionPrompt);
@@ -2440,8 +2493,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       controller: new AbortController(),
       cancelled: false,
       permissionRequestIds: new Set(),
+      ...(telegram === undefined ? {} : { telegramGeneration: telegram.generation }),
     };
     activeTurns.set(sessionId, turn);
+    const outputGeneration = telegram?.generation ?? telegramBindings.currentGeneration(sessionId);
+    if (telegram !== undefined) {
+      writeMessage(notificationMessage(ACP_CLIENT_METHODS.sessionUpdate, { sessionId, update: {
+        sessionUpdate: "_keryx/telegram/turn", source: "telegram", actorId: telegram.actorId, updateId: telegram.updateId, generation: telegram.generation,
+      } }));
+    }
     let finishIssueActivity: (() => void) | undefined;
     try {
       // The dials `session/new`/`session/load` started — bounded by each
@@ -2449,6 +2509,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // first turn would search an empty catalog. Awaited only AFTER the slot
       // is taken, so the busy guard above still holds while this waits.
       await sessionMcp.get(sessionId)?.mcp.ready;
+      if (telegram !== undefined && !telegramBindings.isCurrent(sessionId, telegram.generation)) throw new Error("Telegram attachment is no longer active");
       if (launchId !== undefined) {
         const missing = ["ask_user", "spawn_subagent", "shell_exec", "apply_patch"].filter(name => !toolNames.includes(name));
         if (typeof launchId !== "string" || !shellProfile || missing.length || sessionReadOnly.get(sessionId))
@@ -2456,14 +2517,33 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (!acceptIssueTurn(state.handle.dir, bound, launchId, rendered.trustedText)) return { stopReason: "end_turn" };
       }
       if (bound?.launch.flow) finishIssueActivity = startIssueSessionActivity(state.handle.dir, options.dataDir);
+      let finalText = "";
+      let progressSent = false;
+      let outbound = Promise.resolve();
+      const mirror = (text: string): void => {
+        if (outputGeneration === undefined) return;
+        const safe = redactSensitiveText(text).trim();
+        if (safe.length === 0) return;
+        outbound = outbound.then(async () => { await telegramBindings.send(sessionId, outputGeneration, safe); }).catch(() => undefined);
+      };
+      const turnUpdates = (id: string, update: AcpSessionUpdate): void => {
+        sendUpdate(id, update);
+        if (outputGeneration === undefined) return;
+        if (update.sessionUpdate === "tool_call") {
+          finalText = "";
+          if (!progressSent) { progressSent = true; mirror("Working on a tool call."); }
+        } else if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text" && update._meta === undefined) {
+          finalText += update.content.text;
+        }
+      };
       const io = createAcpAgentIo(
         sessionId,
-        sendUpdate,
+        turnUpdates,
         askPermissionFor(sessionId, turn),
         // The shell's own gate semantics (`resolveApprovalDecision`, read fresh
         // per call by `executeCall`) — the mode is the only thing ACP supplies.
         // Every ask also says why it is asked (`_meta.keryx.reasons`).
-        shellProfile ? { permissionMode: () => modeOf(sessionId), permissionReasons: true } : {},
+        shellProfile ? { permissionMode: () => telegram === undefined ? modeOf(sessionId) : "ask", permissionReasons: true } : {},
       );
       if (shellProfile) {
         // `spawn_subagent` links its subagents to THIS call: the id the client was shown is minted by
@@ -2565,6 +2645,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         archive: archive.messages,
       });
       registry.updateHandle(sessionId, updatedHandle);
+      if (outputGeneration !== undefined && !turn.cancelled && finalText.trim()) mirror(finalText);
+      await outbound;
       if (bound?.launch.flow) settleIssueTurn(state.handle.dir);
       if (shellProfile && updatedHandle.summary.title !== state.handle.summary.title) {
         sendUpdate(sessionId, {
@@ -2658,12 +2740,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       );
       return;
     }
+    cancelTurn(turn);
+  }
+
+  function cancelTurn(turn: AcpActiveTurn): void {
     turn.cancelled = true;
     turn.controller.abort();
-    for (const requestId of turn.permissionRequestIds) {
-      clientRequests.cancel(requestId, "the turn was cancelled by session/cancel");
-    }
+    for (const requestId of turn.permissionRequestIds) clientRequests.cancel(requestId, "the turn was cancelled");
     turn.permissionRequestIds.clear();
+  }
+
+  function stopTelegramTurn(sessionId: string, generation: string): boolean {
+    const turn = activeTurns.get(sessionId);
+    if (turn === undefined || turn.telegramGeneration !== generation) return false;
+    cancelTurn(turn);
+    return true;
   }
 
   /**
@@ -3073,6 +3164,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           ? {
               [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id),
               [KERYX_ACP_EXTENSION_METHODS.command]: (params: unknown) => handleKeryxCommand(params),
+              [ACP_TELEGRAM_SESSION_METHOD]: (params: unknown) => handleTelegramSession(params),
               ...(providers?.requests ?? {}),
               ...createTasksHandlers({
                 requireInitialized,

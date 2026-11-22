@@ -907,6 +907,8 @@ export interface AcpUsageCost {
 }
 
 export type AcpSessionUpdate =
+  | { readonly sessionUpdate: "_keryx/telegram/turn"; readonly source: "telegram"; readonly actorId: number; readonly updateId: number; readonly generation: string }
+  | { readonly sessionUpdate: "_keryx/telegram/session"; readonly telegram: import("./telegram-session").TelegramSessionState }
   | {
       readonly sessionUpdate: "user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk";
       readonly content: AcpContentBlock;
