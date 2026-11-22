@@ -2,7 +2,7 @@
 
 Keryx Desktop can start a local `keryx serve`, pair a bot with a Telegram account and forum, and share an individual Desktop session in a forum topic. The model and project policy still run in the session's ACP sidecar. For setup and everyday use, see [Use Keryx Desktop from Telegram](guides/desktop-telegram.md). For the terminal workflow and general serve API, see [Drive Keryx remotely](guides/drive-keryx-remotely.md).
 
-This integration is opt-in and currently in preview. The Desktop application, its CLI/ACP sidecar and the listener need compatible preview support. The current candidate enables the capability with `KERYX_DESKTOP_TELEGRAM_PREVIEW=1`. The listener must bind to loopback and use the same local Keryx profile as Desktop.
+This integration is opt-in and currently in preview. The Desktop application, its CLI/ACP sidecar and the listener need compatible preview support. Keryx 0.4.50 and Desktop 0.2.13 support enabling the capability with `KERYX_DESKTOP_TELEGRAM_PREVIEW=1`. The listener must bind to loopback and use the same local Keryx profile as Desktop.
 
 ## Component ownership
 
