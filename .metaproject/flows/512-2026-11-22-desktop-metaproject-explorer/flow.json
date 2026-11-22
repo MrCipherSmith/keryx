@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "512",
+  "slug": "desktop-metaproject-explorer",
+  "title": "Metaproject Graph and Wiki in Keryx Desktop",
+  "status": "in-progress",
+  "createdAt": "2026-11-22T08:36:16.920Z",
+  "updatedAt": "2026-11-22T08:38:29.823Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:194056c574efb0f6bbb8138f9cc121549aa508ea54964ba6030e4391f96ea04f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Research on main 53cd6c9a2 measured the actual graph and Wiki layers and identified the Desktop integration seams."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced with independent Core, Tauri and UI implementation tasks."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced with explicit CI acceptance."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced with integration review and native verification."
+    },
+    {
+      "id": "T5",
+      "title": "Read checkout graph and Wiki through a bounded Core CLI contract",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-22T08:38:28.768Z",
+            "outcome": "started",
+            "detail": "512-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Add a scoped Tauri and browser development transport",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-22T08:38:29.300Z",
+            "outcome": "started",
+            "detail": "512-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Build the Metaproject Graph and Wiki explorer",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-22T08:38:29.823Z",
+            "outcome": "started",
+            "detail": "512-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Integrate the project tab, search and navigation with the native app",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Verify contracts and UI in GitHub Actions",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verify the complete path and measure the native Keryx UI",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review the integrated diff and record handoff",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-22T08:36:16.920Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-22T08:36:57.418Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"Запускай фло для реализации, там где можно запускай сабагентов для реализации на моделе Terra\"; source: Desktop Metaproject planning session (Operator asked to start implementation after the Desktop Metaproject research)"
+    },
+    {
+      "at": "2026-11-22T08:36:57.802Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-22T08:36:58.085Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-22T08:36:58.451Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-22T08:36:58.743Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-22T08:36:59.005Z",
+      "event": "task-added",
+      "detail": "T5: Read checkout graph and Wiki through a bounded Core CLI contract"
+    },
+    {
+      "at": "2026-11-22T08:36:59.262Z",
+      "event": "task-added",
+      "detail": "T6: Add a scoped Tauri and browser development transport"
+    },
+    {
+      "at": "2026-11-22T08:36:59.538Z",
+      "event": "task-added",
+      "detail": "T7: Build the Metaproject Graph and Wiki explorer"
+    },
+    {
+      "at": "2026-11-22T08:36:59.807Z",
+      "event": "task-added",
+      "detail": "T8: Integrate the project tab, search and navigation with the native app"
+    },
+    {
+      "at": "2026-11-22T08:37:00.078Z",
+      "event": "task-added",
+      "detail": "T9: Verify contracts and UI in GitHub Actions"
+    },
+    {
+      "at": "2026-11-22T08:37:00.338Z",
+      "event": "task-added",
+      "detail": "T10: Verify the complete path and measure the native Keryx UI"
+    },
+    {
+      "at": "2026-11-22T08:37:00.602Z",
+      "event": "task-added",
+      "detail": "T11: Review the integrated diff and record handoff"
+    },
+    {
+      "at": "2026-11-22T08:37:47.267Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-22T08:37:47.533Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-22T08:38:28.768Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 512-T5"
+    },
+    {
+      "at": "2026-11-22T08:38:29.300Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 512-T6"
+    },
+    {
+      "at": "2026-11-22T08:38:29.823Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 512-T7"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "Запускай фло для реализации, там где можно запускай сабагентов для реализации на моделе Terra",
+    "source": "Desktop Metaproject planning session"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/integrations/metaproject-explorer.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop/src-tauri && cargo test --locked metaproject",
+      "sensitivity": "failure-scenario"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/integrations/metaproject-explorer.test.ts",
+      "sensitivity": "failure-scenario"
+    },
+    "AC6": {
+      "kind": "judged"
+    }
+  }
+}
