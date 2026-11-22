@@ -21,6 +21,8 @@ keryx init
 
 ## Documentation map
 
+- **[Use Keryx Desktop from Telegram](guides/desktop-telegram.md)** — Start the local service, pair a bot, share Desktop sessions, and work from Telegram.
+- **[Desktop Telegram module](desktop-telegram-module.md)** — Service ownership, credential lifecycle, session routing, and verification.
 - **[onboarding.md](./onboarding.md)** — Install paths (global / project-local / from source), first-run walkthrough, the typical build loop, and TTY/CI behavior.
 - **[complete-setup-and-agent-workflows.md](./complete-setup-and-agent-workflows.md)** — End-to-end global installation, full project setup, command catalog, copy-ready operational scripts, and reusable agent prompts.
 - **[agent-installation-playbook.md](./agent-installation-playbook.md)** — Autonomous Gherkin scenarios for installation, runtime configuration, optional capabilities, validation, repair, and structured handoff.

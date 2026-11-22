@@ -1108,6 +1108,12 @@ setup.
 
 ### Remote control from Telegram (opt-in, off by default)
 
+To connect Telegram from the Desktop preview, open **Settings → Integrations →
+Telegram**. The [illustrated setup guide](docs/docs/guides/desktop-telegram.md)
+covers starting the local service, pairing a bot and sharing a session. See the
+[Desktop Telegram module](docs/docs/desktop-telegram-module.md) for the architecture
+and verification.
+
 `/remote-control` in a running shell mirrors that session into its own topic of a
 Telegram supergroup: you send a line from your phone and it runs as if typed
 there, the reply and any approval question come back to the topic. Nothing

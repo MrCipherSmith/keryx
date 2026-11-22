@@ -130,16 +130,9 @@ the reason is printed underneath it — read that line rather than retrying.
 
 ### Share a Desktop session
 
-In a compatible Keryx Desktop build, open **Settings → Integrations → Telegram** and start the local service. If Keryx verifies a compatible service that was started in a terminal, Desktop uses it and shows that the process is external. Stop and Restart are available for a service that Desktop started.
-
-1. Select **Connect bot** and paste the token from BotFather into the password field. Scan the QR code or open the bot and send the displayed one-time code in a private chat. Confirm the claimed Telegram account in Keryx.
-2. Add the bot to a Telegram supergroup with Topics enabled and give it **Manage Topics** permission. Confirm the displayed forum, then use **Test connection** to send a message to its General topic.
-3. Open a chat in Desktop. Select **Telegram session** in the header and choose **Share in Telegram**. Each attached chat gets its own topic. Use **Open topic** when a link is available.
-4. Send a message in the topic. Desktop labels the message **Via Telegram** and shows the session as busy while it runs. To check whether the attached chat is idle, send `/status`. Use `/stop` to cancel a turn started from that topic. If Keryx reports that the chat is busy, resend after it finishes.
-
-**Detach** closes this session's link and archives its topic. You can still read the Telegram history. Closing Settings or switching projects keeps the local service running. Quitting Desktop stops its managed service. A separately started `keryx serve` continues running.
-
-To rotate the token, select **Change bot token**. Keryx verifies that Telegram accepts the token before activating it. A token for a different bot requires a new account and forum confirmation. After the switch, attach each Desktop session again to create a fresh topic. **Disconnect** removes the machine-wide bot connection and attempts to delete its managed topics after you confirm.
+The [illustrated Desktop Telegram guide](desktop-telegram.md) walks through
+starting the local service, pairing a bot, sharing a session and rotating the
+token from Desktop.
 
 ### Share a terminal session
 

@@ -13,6 +13,14 @@ background tasks; anything it does not draw yet still works in `keryx shell`.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
+## Use Desktop from Telegram
+
+In the Desktop Telegram preview, **Settings → Integrations → Telegram** starts
+the local service and connects a bot. Share individual sessions from the
+**Telegram session** button in their header. See the
+[illustrated setup guide](guides/desktop-telegram.md) and
+[Desktop Telegram module](desktop-telegram-module.md).
+
 ## Configure model routing
 
 In **Sessions**, run `/routing` to open the model routing dialog. Use **Add
