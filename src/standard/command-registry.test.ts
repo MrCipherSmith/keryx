@@ -117,7 +117,7 @@ function moduleStems(module: string): string[] {
     gdwiki: ["wiki"],
     gdctx: ["ctx"],
     tasks: ["flow"],
-    gdgraph: ["gdgraph"],
+    gdgraph: ["gdgraph", "metaproject-explorer"],
     gdskills: ["skills", "skill-verify-skill", "job"],
     memory: ["memory"],
     health: ["health"],

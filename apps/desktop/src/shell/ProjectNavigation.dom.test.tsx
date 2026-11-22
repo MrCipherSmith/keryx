@@ -58,12 +58,12 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
   const click = (b: HTMLButtonElement) => React.act(() => b.click());
 
   expect(project().getAttribute("aria-label")).toBe("Project views for alpha");
-  expect(project().querySelectorAll("button")).toHaveLength(4);
+  expect(project().querySelectorAll("button")).toHaveLength(5);
   const globalButtons = [...global.querySelectorAll("button")];
-  for (const section of ["Issues", "Pull requests", "Flows"]) {
+  for (const section of ["Metaproject", "Issues", "Pull requests", "Flows"]) {
     expect(globalButtons.some(b => b.getAttribute("aria-label") === section || b.textContent?.trim().startsWith(section))).toBe(false);
   }
-  for (const section of ["Issues", "Pull requests", "Flows", "Sessions"]) {
+  for (const section of ["Metaproject", "Issues", "Pull requests", "Flows", "Sessions"]) {
     const target = Array.from(project().querySelectorAll("button")).find((b) => b.textContent?.startsWith(section))!;
     await click(target);
     expect(target.getAttribute("aria-current")).toBe("page");
