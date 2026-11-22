@@ -3,6 +3,7 @@ import { Dialog, Spinner } from "../components/ui";
 import { telegramServeRestart, telegramServeStart, telegramServeStatus, telegramServeStop, type TelegramServeStatus } from "../platform/commands";
 
 const STATUS_POLL_MS = 3000;
+const IDLE_STATUS_POLL_MS = 30_000;
 type ServiceAction = "start" | "stop" | "restart";
 
 function serviceLabel(status: TelegramServeStatus): string {
@@ -55,8 +56,8 @@ export function TelegramServeSettings({ children }: { children?: (channelRefresh
   }, [refresh]);
 
   useEffect(() => {
-    if (status?.state !== "starting" && status?.state !== "stopping") return;
-    const timer = window.setInterval(() => void refresh(), STATUS_POLL_MS);
+    const interval = status?.state === "starting" || status?.state === "stopping" ? STATUS_POLL_MS : IDLE_STATUS_POLL_MS;
+    const timer = window.setInterval(() => void refresh(), interval);
     return () => window.clearInterval(timer);
   }, [status?.state, refresh]);
 
@@ -86,10 +87,6 @@ export function TelegramServeSettings({ children }: { children?: (channelRefresh
   const canStop = owned && (status?.state === "running" || status?.state === "failed" || status?.state === "blocked");
   const canStart = status && (status.state === "not_configured" || status.state === "stopped" || status.state === "needs_setup" || (status.state === "failed" && !status.ownership));
   const startLabel = status?.state === "not_configured" ? "Set up and start" : status?.state === "needs_setup" ? "Complete setup and start" : "Start";
-  const requestAction = (action: "stop" | "restart") => {
-    if (status?.state === "running" && (status.activeSessions ?? 0) > 0) setConfirm(action);
-    else void run(action);
-  };
 
   return (
     <section className="settings-group" aria-labelledby="telegram-service-title">
@@ -108,17 +105,17 @@ export function TelegramServeSettings({ children }: { children?: (channelRefresh
       {error ? <p className="field-error" role="alert">{error}</p> : null}
       <div className="settings-actions">
         {canStart ? <button className="btn btn-primary" disabled={transitioning} onClick={() => void run("start", status.state === "needs_setup")}>{busy === "start" ? <Spinner /> : null}{startLabel}</button> : null}
-        {canStop ? <button className="btn" disabled={transitioning} onClick={() => requestAction("stop")}>Stop</button> : null}
-        {owned && status?.state === "running" ? <button className="btn" disabled={transitioning} onClick={() => requestAction("restart")}>Restart</button> : null}
+        {canStop ? <button className="btn" disabled={transitioning} onClick={() => setConfirm("stop")}>Stop</button> : null}
+        {owned && status?.state === "running" ? <button className="btn" disabled={transitioning} onClick={() => setConfirm("restart")}>Restart</button> : null}
         <button className="btn btn-ghost" disabled={transitioning} onClick={() => void refresh()}>{error || status?.state === "blocked" || status?.state === "failed" ? "Retry" : "Refresh"}</button>
       </div>
       {status || error ? children?.(channelRefreshKey) : null}
       {confirm ? (
         <Dialog title={confirm === "stop" ? "Stop local service?" : "Restart local service?"} onClose={() => setConfirm(null)} footer={<>
           <button className="btn" onClick={() => setConfirm(null)}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => void run(confirm)}>{confirm === "stop" ? "Stop service" : "Restart service"}</button>
+          <button className="btn btn-primary" disabled={transitioning || !owned} onClick={() => void run(confirm)}>{confirm === "stop" ? "Stop service" : "Restart service"}</button>
         </>}>
-          <p>Connected remote sessions will be interrupted. Your service settings and bot connection will be kept.</p>
+          <p>This may interrupt connected remote sessions. Your service settings and bot connection will be kept.</p>
         </Dialog>
       ) : null}
     </section>

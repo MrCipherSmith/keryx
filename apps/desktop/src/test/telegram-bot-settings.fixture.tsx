@@ -9,9 +9,17 @@ let nextError: string | null = null;
 const calls: Array<{ command: string; args: unknown }> = [];
 let pairing: Record<string, unknown> = { state: "waiting-for-user", code: "ABCDEFGH", botUsername: "example_bot", expiresAt: Date.now() + 600_000, problems: [] };
 const operationId = "00000000-0000-4000-8000-000000000001";
+function currentChannelStatus() {
+  return { ok: true, value: { capabilities: capability ? { desktopTelegram: 1 } : {}, revision: connected ? 1 : null, ...(pending ? { pendingOperation: { operationId, revision: null } } : {}), telegram: { state: connected ? "connected" : "not-connected", sessions: 0 } } };
+}
+let nextStatus: Promise<ReturnType<typeof currentChannelStatus>> | undefined;
 mockIPC((command, args) => {
   calls.push({ command, args });
-  if (command === "telegram_channel_status") return { ok: true, value: { capabilities: capability ? { desktopTelegram: 1 } : {}, revision: connected ? 1 : null, ...(pending ? { pendingOperation: { operationId, revision: null } } : {}), telegram: { state: connected ? "connected" : "not-connected", sessions: 0 } } };
+  if (command === "telegram_channel_status") {
+    const result = nextStatus ?? currentChannelStatus();
+    nextStatus = undefined;
+    return result;
+  }
   if (command === "telegram_channel_action") {
     const request = (args as { request: { action: string } }).request;
     if (nextError) { const code = nextError; nextError = null; return { ok: false, code }; }
@@ -36,10 +44,16 @@ async function mount() { await act(() => root.render(null)); await act(async () 
 try {
   await mount();
   assert.equal(host.querySelector('input[type="password"]'), null);
+  const oldStatus = currentChannelStatus();
+  let resolveStatus!: (value: typeof oldStatus) => void;
+  nextStatus = new Promise((resolve) => { resolveStatus = resolve; });
+  await act(() => button("Retry channel status")?.click());
   capability = true;
-  await mount();
+  await act(() => root.render(<TelegramBotSettings refreshKey={1} />));
+  assert.equal(host.querySelector('input[type="password"]'), null);
+  await act(async () => { resolveStatus(oldStatus); });
   const input = host.querySelector<HTMLInputElement>('input[type="password"]');
-  assert.ok(input);
+  assert.ok(input, "the service-triggered refresh must run after the stale response");
   await act(() => { input.value = "test-token"; input.dispatchEvent(new Event("input", { bubbles: true })); });
   await act(async () => { button("Connect bot")?.click(); });
   assert.equal(input.value, "");
@@ -89,5 +103,7 @@ try {
   await act(() => { retryInput.value = "test-token"; retryInput.dispatchEvent(new Event("input", { bubbles: true })); });
   await act(async () => { button("Connect bot")?.click(); });
   assert.equal(retryInput.value, "");
+  assert.match(host.textContent ?? "", /could not accept the bot token/i);
+  await act(async () => { root.render(<TelegramBotSettings refreshKey={2} />); });
   assert.match(host.textContent ?? "", /could not accept the bot token/i);
 } finally { await act(() => root.unmount()); clearMocks(); await unregisterDom(); }

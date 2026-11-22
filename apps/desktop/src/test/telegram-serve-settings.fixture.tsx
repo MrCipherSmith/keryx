@@ -53,10 +53,16 @@ try {
   assert.ok(button("Stop"));
   assert.match(host.textContent ?? "", /may interrupt/i);
   await act(async () => { button("Stop")?.click(); });
+  assert.equal(calls.filter(({ command }) => command === "telegram_serve_stop").length, 0);
+  await act(async () => { button("Stop service")?.click(); });
   assert.equal(calls.filter(({ command }) => command === "telegram_serve_stop").length, 1);
 
   await mount({ state: "running", ownership: "desktop", activeSessions: 0 });
+  status = { state: "running", ownership: "desktop", activeSessions: 1 };
   await act(async () => { button("Stop")?.click(); });
+  assert.equal(calls.filter(({ command }) => command === "telegram_serve_stop").length, 1);
+  assert.ok(host.querySelector('[role="dialog"]'));
+  await act(async () => { button("Stop service")?.click(); });
   assert.equal(calls.filter(({ command }) => command === "telegram_serve_stop").length, 2);
   assert.equal(host.querySelector('[role="dialog"]'), null);
   await mount({ state: "running", ownership: "desktop", activeSessions: 2 });

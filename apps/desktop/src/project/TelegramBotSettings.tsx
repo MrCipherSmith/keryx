@@ -45,7 +45,8 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
   const [channel, setChannel] = useState<TelegramChannelStatus | null>(null);
   const [operation, setOperation] = useState<TelegramChannelOperation | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [statusError, setStatusError] = useState("");
   const [notice, setNotice] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -54,28 +55,38 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
   const alive = useRef(false);
   const mutating = useRef(false);
   const refreshing = useRef(false);
+  const refreshPending = useRef(false);
   const version = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (mutating.current || refreshing.current) return;
+    refreshPending.current = true;
+    if (!alive.current || mutating.current || refreshing.current) return;
     refreshing.current = true;
-    const requestVersion = ++version.current;
+    const refreshOnce = async () => {
+      const requestVersion = ++version.current;
+      try {
+        const result = await telegramChannelStatus();
+        if (!alive.current || requestVersion !== version.current) return;
+        if (!result.ok) { setChannel(null); setOperation(null); setStatusError(failureMessage(result.code)); return; }
+        setChannel(result.value);
+        setStatusError("");
+        if (result.value.capabilities?.desktopTelegram !== 1) { setOperation(null); setNeedsRefresh(false); return; }
+        const pending = result.value.pendingOperation;
+        if (!pending) { setOperation(null); setNeedsRefresh(false); return; }
+        const detail = await telegramChannelAction({ action: "operation-status", operationId: pending.operationId, expectedRevision: pending.revision });
+        if (!alive.current || requestVersion !== version.current) return;
+        if (!detail.ok) { setOperation(null); setNeedsRefresh(true); setStatusError(failureMessage(detail.code)); }
+        else if ("operationId" in detail.value) { setOperation(withoutSpentCode(detail.value)); setNeedsRefresh(false); }
+        else { setOperation(null); setNeedsRefresh(true); setStatusError("The channel status could not be understood. Retry."); }
+      } catch {
+        if (alive.current && requestVersion === version.current) { setChannel(null); setOperation(null); setStatusError("Could not check the Telegram channel. Retry when the local service is available."); }
+      }
+    };
     try {
-      const result = await telegramChannelStatus();
-      if (!alive.current || requestVersion !== version.current) return;
-      if (!result.ok) { setChannel(null); setOperation(null); setError(failureMessage(result.code)); return; }
-      setChannel(result.value);
-      setError("");
-      if (result.value.capabilities?.desktopTelegram !== 1) { setOperation(null); setNeedsRefresh(false); return; }
-      const pending = result.value.pendingOperation;
-      if (!pending) { setOperation(null); setNeedsRefresh(false); return; }
-      const detail = await telegramChannelAction({ action: "operation-status", operationId: pending.operationId, expectedRevision: pending.revision });
-      if (!alive.current || requestVersion !== version.current) return;
-      if (!detail.ok) { setOperation(null); setNeedsRefresh(true); setError(failureMessage(detail.code)); }
-      else if ("operationId" in detail.value) { setOperation(withoutSpentCode(detail.value)); setNeedsRefresh(false); }
-      else { setOperation(null); setNeedsRefresh(true); setError("The channel status could not be understood. Retry."); }
-    } catch {
-      if (alive.current && requestVersion === version.current) { setChannel(null); setOperation(null); setError("Could not check the Telegram channel. Retry when the local service is available."); }
+      while (refreshPending.current && alive.current && !mutating.current) {
+        refreshPending.current = false;
+        await refreshOnce();
+      }
     } finally { refreshing.current = false; }
   }, []);
 
@@ -110,22 +121,25 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
     mutating.current = true;
     const requestVersion = ++version.current;
     setBusy(true);
-    setError("");
+    setActionError("");
     setNotice("");
     try {
       const result = await telegramChannelAction(request);
       if (!alive.current || requestVersion !== version.current) return;
-      if (!result.ok) { setOperation(null); setNeedsRefresh(true); setError(failureMessage(result.code)); }
+      if (!result.ok) { setOperation(null); setNeedsRefresh(true); setActionError(failureMessage(result.code)); }
       else if (request.action === "test" && "delivered" in result.value && result.value.delivered) setNotice("Test message sent to the General topic.");
       else if (request.action === "disconnect" && "deleted" in result.value) { setOperation(null); setNotice(result.value.remaining > 0 ? "Bot disconnected. Some topics could not be removed." : "Bot disconnected."); }
       else if ("operationId" in result.value && (result.value.state === "cancelled" || result.value.state === "connected")) { setOperation(null); }
       else if ("operationId" in result.value) setOperation(withoutSpentCode(result.value));
-      else { setNeedsRefresh(true); setError("The result is uncertain. Refresh the channel status before retrying."); }
+      else { setNeedsRefresh(true); setActionError("The result is uncertain. Refresh the channel status before retrying."); }
     } catch {
-      if (alive.current && requestVersion === version.current) { setOperation(null); setNeedsRefresh(true); setError("The result is uncertain. Refresh the channel status before retrying."); }
+      if (alive.current && requestVersion === version.current) { setOperation(null); setNeedsRefresh(true); setActionError("The result is uncertain. Refresh the channel status before retrying."); }
     } finally {
       mutating.current = false;
-      if (alive.current && requestVersion === version.current) { setBusy(false); if (request.action !== "operation-status") void refresh(); }
+      if (alive.current && requestVersion === version.current) {
+        setBusy(false);
+        if (request.action !== "operation-status" || refreshPending.current) void refresh();
+      }
     }
   };
   const begin = (event: FormEvent) => {
@@ -133,14 +147,14 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
     if (!tokenInput.current || !channel || mutating.current || needsRefresh || !(channel.revision === null || (Number.isSafeInteger(channel.revision) && (channel.revision ?? 0) > 0))) return;
     const token = tokenInput.current.value.trim();
     tokenInput.current.value = "";
-    if (!token) { setError("Enter a bot token from BotFather."); return; }
+    if (!token) { setActionError("Enter a bot token from BotFather."); return; }
     void perform({ action: "begin", token, expectedRevision: channel.revision ?? null });
   };
   const runOperation = (action: "operation-status" | "cancel" | "confirm-account" | "confirm") => {
     if (operation) void perform({ action, operationId: operation.operationId, expectedRevision: operation.revision });
   };
   const copyCode = async (code: string) => {
-    try { await navigator.clipboard.writeText(code); } catch { setError("Could not copy the code. Enter it manually."); }
+    try { await navigator.clipboard.writeText(code); } catch { setActionError("Could not copy the code. Enter it manually."); }
   };
   const link = pairing?.state === "waiting-for-user" && !expired && pairing.expiresAt > Date.now() ? pairingLink(pairing.botUsername, pairing.code) : null;
   const available = channel?.capabilities?.desktopTelegram === 1;
@@ -167,7 +181,7 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
       {operation.state === "same-bot-ready" ? <p>Telegram verified the same bot. Confirm to replace its token and keep the current connection.</p> : null}
       {pairing?.state === "waiting-for-user" && !expired ? <>
         <p className="settings-row-help">Send this one-time code to the bot in a private chat. It expires in ten minutes.</p>
-        {link ? <><PairingQr link={link} /><div className="settings-actions"><button className="btn" onClick={() => void openExternal(link).catch(() => setError("Could not open Telegram. Send the code manually."))}>Open in Telegram</button></div></> : <p className="settings-row-help">Open the bot in Telegram and send the code manually.</p>}
+        {link ? <><PairingQr link={link} /><div className="settings-actions"><button className="btn" onClick={() => void openExternal(link).catch(() => setActionError("Could not open Telegram. Send the code manually."))}>Open in Telegram</button></div></> : <p className="settings-row-help">Open the bot in Telegram and send the code manually.</p>}
         {pairing.code ? <><p><strong>{pairing.code}</strong></p><button className="btn" onClick={() => void copyCode(pairing.code ?? "")}>Copy code</button></> : null}
       </> : null}
       {pairing?.state === "waiting-for-confirmation" && pairing.userId !== undefined && !expired ? <><p>Telegram account ID: {pairing.userId}. Confirm that this is your account before connecting the group.</p><button className="btn" disabled={busy} onClick={() => runOperation("confirm-account")}>This is my account</button></> : null}
@@ -181,9 +195,10 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
         <button className="btn btn-ghost" disabled={busy} onClick={() => runOperation("cancel")}>Cancel pairing</button>
       </div>
     </> : null}
-    {error ? <p className="field-error" role="alert">{error}</p> : null}
+    {actionError ? <p className="field-error" role="alert">{actionError}</p> : null}
+    {statusError ? <p className="field-error" role="alert">{statusError}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
-    {!available || error ? <button className="btn btn-ghost" disabled={busy} onClick={() => void refresh()}>Retry channel status</button> : null}
+    {!available || statusError || needsRefresh ? <button className="btn btn-ghost" disabled={busy} onClick={() => void refresh()}>Retry channel status</button> : null}
     {confirmDisconnect && channel && revisionKnown ? <Dialog title="Disconnect Telegram bot?" onClose={() => setConfirmDisconnect(false)} footer={<><button className="btn" onClick={() => setConfirmDisconnect(false)}>Cancel</button><button className="btn btn-primary" onClick={() => { setConfirmDisconnect(false); void perform({ action: "disconnect", expectedRevision: channel.revision ?? null }); }}>Disconnect bot</button></>}><p>This disconnects Telegram for all chats and affects all connected topics on this machine.</p></Dialog> : null}
   </div>;
 }
