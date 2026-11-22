@@ -1,0 +1,129 @@
+.metaproject-header .search-field { flex: 1 1 220px; min-inline-size: 0; max-inline-size: 440px; }
+.metaproject-header .segmented { flex: none; margin-inline-start: auto; }
+.metaproject-header .segmented [aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--bg-surface);
+  box-shadow: inset 0 -2px var(--accent-text), var(--shadow-1);
+}
+
+.metaproject .inline-banner { flex-wrap: wrap; overflow-wrap: anywhere; }
+.metaproject-rebuild { min-inline-size: 116px; }
+.metaproject-panes {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  flex: 1;
+  min-block-size: 0;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5) var(--sp-5);
+}
+.metaproject-list, .metaproject-content { min-inline-size: 0; overflow: auto; }
+.metaproject-content { display: flex; flex-direction: column; gap: var(--sp-4); }
+.metaproject-content > * { flex: none; min-inline-size: 0; }
+.metaproject-list h2, .metaproject-relationship-section h2 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-md);
+}
+.metaproject-list ul, .metaproject-relations {
+  display: grid;
+  gap: var(--sp-1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.metaproject-row {
+  display: grid;
+  gap: var(--sp-1);
+  inline-size: 100%;
+  min-block-size: 28px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+button.metaproject-row:hover { background: var(--bg-hover); }
+button.metaproject-row:focus-visible { outline-offset: -3px; }
+button.metaproject-row[aria-current="true"] {
+  background: var(--bg-selected);
+  border-color: var(--accent);
+}
+.metaproject-meta, .metaproject-snippet {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.metaproject-snippet {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.metaproject-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-surface);
+}
+.metaproject-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-block-size: 28px;
+}
+.metaproject-controls fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--sp-2);
+  min-inline-size: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.metaproject-controls legend { padding: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+.metaproject-controls input[type="checkbox"] { accent-color: var(--accent); }
+.metaproject-graph {
+  block-size: clamp(220px, 34vh, 300px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+}
+
+.metaproject-article, .metaproject-relationship-section {
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-surface);
+  overflow-wrap: anywhere;
+}
+.metaproject-article-header h2 { margin: 0 0 var(--sp-1); font-size: var(--fs-lg); }
+.metaproject-article-header { margin-block-end: var(--sp-3); }
+.metaproject-article .md :not(pre) > code { overflow-wrap: anywhere; }
+.metaproject-relationship-section summary { min-block-size: 28px; padding-block: var(--sp-1); font-weight: 600; }
+.metaproject-relationship-section summary .count-label { margin-inline-start: var(--sp-1); }
+.metaproject-relation-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.metaproject-relation-actions .btn {
+  max-inline-size: 100%;
+  block-size: auto;
+  min-block-size: 28px;
+  padding-block: var(--sp-1);
+  white-space: normal;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .metaproject-header, .metaproject-panes { padding-inline: var(--sp-3); }
+  .metaproject-panes { display: flex; flex-direction: column; overflow: auto; }
+  .metaproject-list { flex: none; max-block-size: min(180px, 28vh); }
+  .metaproject-content { flex: none; overflow: visible; }
+}

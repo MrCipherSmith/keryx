@@ -87,6 +87,15 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  {
+    module: "gdgraph",
+    command: "metaproject-explorer",
+    summary: "Read the current project graph and wiki for Desktop.",
+    intent: ["explore project knowledge"],
+    args: [{ name: "request", type: "string", required: true, desc: "JSON explorer request" }],
+    json: true,
+    read: true,
+  },
   // ---- gdgraph ----------------------------------------------------------
   {
     module: "gdgraph",

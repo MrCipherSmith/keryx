@@ -81,6 +81,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | CLI command | Summary |
 |---|---|
 | `keryx hub` | Connect, sync and exchange revisions with the Team Hub prototype. |
+| `keryx metaproject-explorer` | Read the project graph and wiki for Desktop. |
 | `keryx gdgraph` | Build and query the code dependency graph. |
 | `keryx ctx` | Run compact context commands and save raw output. |
 | `keryx wiki` | Manage the local project knowledge base. |

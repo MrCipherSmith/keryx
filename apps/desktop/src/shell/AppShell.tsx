@@ -13,13 +13,14 @@ import { projectHue, projectInitials, type ProjectActivity } from "./projectRail
 import type { LiveProject } from "../platform/projects";
 import type { ReviewTabIndicator } from "../review/ReviewBoard";
 
-export type View = "session" | "flows" | "review" | "issues" | "settings";
+export type View = "session" | "flows" | "review" | "issues" | "metaproject" | "settings";
 
 export const PROJECT_VIEWS = [
   { id: "session", label: "Sessions", icon: "chat", shortcut: `${MOD}1` },
   { id: "flows", label: "Flows", icon: "board", shortcut: `${MOD}2` },
   { id: "review", label: "Pull requests", icon: "pr", shortcut: `${MOD}3` },
   { id: "issues", label: "Issues", icon: "circleDot", shortcut: `${MOD}4` },
+  { id: "metaproject", label: "Metaproject", icon: "branch", shortcut: `${MOD}5` },
 ] as const;
 
 /**

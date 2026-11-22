@@ -421,12 +421,21 @@ session (`flags.json`).
 The board refreshes when a `flow.json` changes (checked every 2 seconds) and
 when the window gets focus.
 
+### Explore Metaproject
+
+Open **Metaproject** in a project window or press **⌘5**. Search wiki text and
+indexed names or paths, read a page in **Wiki**, and use **Graph** to trace
+its connections. The [Desktop Metaproject guide](guides/desktop-metaproject.md)
+walks through setup, optional symbol indexing, graph filters, keyboard
+navigation, and recovery when an index is stale or missing.
+
 ### Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
 | ⌘K | Command palette: commands, sessions, views |
 | ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Review in the current project |
+| ⌘4 / ⌘5 | Issues / Metaproject in the current project |
 | ⌘, | Settings |
 | ⌘N | New session |
 | ⌘O | Open folder |

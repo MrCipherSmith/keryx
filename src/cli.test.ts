@@ -260,6 +260,9 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // Flow 511 adds GitHub issues to flat usage and the command summary.
     "  keryx issues <viewer|origin|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json\n",
     "  issues    Browse GitHub issues and projects, open linked sessions and prepare issue flows\n",
+    // Flow 512 adds the Metaproject explorer command used by Desktop.
+    "  keryx metaproject-explorer --request <json>\n",
+    "  metaproject-explorer  Read the project graph and wiki for Desktop\n",
     // Worktree readiness (flow 506): `keryx worktree`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
     "  keryx worktree create <name> [--base <ref>] [--branch <b>] [--path <dir>] [--json]\n",
     "                                               git worktree add on a new branch, then prepare\n",

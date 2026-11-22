@@ -3,7 +3,10 @@
 A macOS Tauri v2 app (`dev.keryx.desktop`) that talks to `keryx acp --profile shell`.
 Rust core in `src-tauri/`, React 18 + Vite + TypeScript in `src/`. Contract:
 `docs/requirements/keryx-desktop-client/specification.md`.
-Installing and using the app: [Keryx for macOS](../../docs/docs/desktop-app.md).
+See [Keryx for macOS](../../docs/docs/desktop-app.md) for installation and the
+[Desktop Metaproject guide](../../docs/docs/guides/desktop-metaproject.md) for
+setup, search, graph filters and wiki navigation.
+
 For Telegram, see the [illustrated setup guide](../../docs/docs/guides/desktop-telegram.md)
 and [module reference](../../docs/docs/desktop-telegram-module.md).
 

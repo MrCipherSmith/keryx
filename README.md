@@ -152,7 +152,8 @@ keryx app install --relaunch
 
 `keryx app update` installs newer app releases. See
 [Keryx for macOS](docs/docs/desktop-app.md) for requirements, updates and
-removal.
+removal. Use the [Desktop Metaproject guide](docs/docs/guides/desktop-metaproject.md)
+to set up the code graph, search wiki pages, and follow relationships.
 
 ### Where to go next
 

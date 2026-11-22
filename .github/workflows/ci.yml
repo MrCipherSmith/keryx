@@ -83,6 +83,31 @@ jobs:
           AC8_RESULT: ${{ needs.ac8-full-suite.result }}
         run: test "$AC8_RESULT" = success
 
+  desktop-metaproject-acceptance:
+    name: Desktop Metaproject graph and wiki acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.5'
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd apps/desktop && bun install --frozen-lockfile)
+      - name: Verify the Core catalog and Wiki reader
+        run: bun test src/integrations/metaproject-explorer.test.ts
+      - name: Build Desktop and verify shared Graph and Wiki navigation
+        working-directory: apps/desktop
+        run: |
+          bun run build
+          bun test src/metaproject/
+
   issues-acceptance:
     name: Issues board, Projects and session-to-Flow acceptance
     runs-on: ubuntu-latest
