@@ -6,7 +6,7 @@
 // is fatal. Nothing here polls: `hub.start()` does that.
 
 import { createHttpBotApi, type HttpBotApiOptions } from "./bot-api-http";
-import { loadBotToken, loadRemoteConfig } from "./config";
+import { loadBotToken, loadRemoteConfig, type RemoteConfig } from "./config";
 import { RemoteHub, type RemoteHubOptions } from "./hub";
 import type { BotApi } from "./types";
 
@@ -28,6 +28,8 @@ export interface OpenRemoteHubOptions
     | "beforeAck"
     | "machine"
   > {
+  /** Explicit committed values, only for the gated revisioned service. */
+  committed?: { token: string; config: RemoteConfig };
   /** Replaces the real HTTP client; tests pass the in-process fake here. The token is then not read. */
   api?: BotApi;
   /** Passed to the HTTP client (tests of the client itself). */
@@ -59,15 +61,18 @@ export function openBotApi(options: Pick<OpenRemoteHubOptions, "api" | "fetchImp
 }
 
 export function openRemoteHub(options: OpenRemoteHubOptions): OpenRemoteHubResult {
-  const config = loadRemoteConfig(options.dir);
+  const config = options.committed === undefined ? loadRemoteConfig(options.dir) : { ok: true as const, value: options.committed.config };
   if (!config.ok) {
     return { ok: false, reason: config.reason };
   }
-  const opened = openBotApi(options);
+  const opened = options.committed !== undefined && options.api === undefined
+    ? { ok: true as const, api: createHttpBotApi({ token: options.committed.token }) }
+    : openBotApi(options);
   if (!opened.ok) {
     return { ok: false, reason: opened.reason };
   }
-  const { api: _api, fetchImpl: _fetch, baseUrl: _base, ...rest } = options;
+  const { api: _api, fetchImpl: _fetch, baseUrl: _base, committed: _committed, ...rest } = options;
+  void _committed;
   void _api;
   void _fetch;
   void _base;

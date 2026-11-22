@@ -34,3 +34,13 @@ describe("channel record", () => {
     expect(loadChannelRecord(d).ok).toBe(true);
   });
 });
+
+test("the operation fence is checked inside the revision lock", async () => {
+  const d = dir();
+  let checks = 0;
+  const candidate = { token, bot: { id: 123456 }, config };
+  const result = await commitChannelRecord(null, candidate, d, () => { checks += 1; return false; });
+  expect(checks).toBe(1);
+  expect(result.ok).toBe(false);
+  expect(loadChannelRecord(d)).toEqual({ ok: true, value: null });
+});

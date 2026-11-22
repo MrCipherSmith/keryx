@@ -1,3 +1,4 @@
+import { ForwardingBotApi } from "./forwarding-bot-api";
 import type { DesktopOwner, RegisterBody } from "./protocol";
 // The serve-side remote-control hub (flow 376, block 1).
 //
@@ -134,6 +135,8 @@ export interface RemoteEvent {
 export interface RemoteHubOptions extends RemoteConsumer {
   api: BotApi;
   config: RemoteConfig;
+  /** Prepare a candidate without dispatch or durable side effects. */
+  staged?: boolean;
   /** This machine's name; when set, default topic names start with it so two machines never collide. */
   machine?: string;
   /** User-global directory override (the test seam). */
@@ -223,6 +226,7 @@ function formatDuration(ms: number): string {
 
 export class RemoteHub {
   private readonly api: BotApi;
+  private readonly forwardingApi: ForwardingBotApi;
   private readonly config: RemoteConfig;
   private readonly machine: string | undefined;
   private readonly consumer: RemoteConsumer;
@@ -247,7 +251,12 @@ export class RemoteHub {
   private readonly droppedReasons = new Map<string, string>();
   private readonly journal: RejectedJournal;
   private readonly offset: PollerState;
-  private readonly poller: UpdatePoller;
+  private poller: UpdatePoller;
+  private readonly createPoller: (api: BotApi, hold?: (signal: AbortSignal) => Promise<void>) => UpdatePoller;
+  private handoffPaused = false;
+  private handoffInProgress = false;
+  private lifecycleGeneration = 0;
+  private staged: boolean;
   private readonly recent: RemoteEvent[] = [];
   private readonly dispatching = new Map<string, Promise<void>>();
   private readonly redispatch = new Set<string>();
@@ -265,7 +274,8 @@ export class RemoteHub {
   private botUsername: string | undefined;
 
   constructor(options: RemoteHubOptions) {
-    this.api = options.api;
+    this.forwardingApi = new ForwardingBotApi(options.api);
+    this.api = this.forwardingApi.api;
     this.config = options.config;
     this.machine = options.machine;
     this.consumer = { deliver: options.deliver, ...(options.deliverCallback === undefined ? {} : { deliverCallback: options.deliverCallback }) };
@@ -315,19 +325,22 @@ export class RemoteHub {
     this.serviceTopics = new ServiceTopics(options.dir === undefined ? {} : { dir: options.dir });
     this.serviceTopics.load();
     this.offset.load();
-    this.forgetOtherGroups();
+    this.staged = options.staged === true;
+    if (!this.staged) this.forgetOtherGroups();
     const onPollerStatus = options.onPollerStatus ?? (() => undefined);
-    this.poller = new UpdatePoller({
-      api: this.api,
-      sink: { accept: (updates) => this.receive(updates) },
+    this.createPoller = (api, hold) => new UpdatePoller({
+      api,
+      ...(hold === undefined ? {} : { holdAfterFirstResponse: hold }),
+      sink: { accept: (updates) => this.staged || this.handoffPaused ? Promise.resolve() : this.receive(updates) },
       ...(options.pollTimeoutSec === undefined ? {} : { timeoutSec: options.pollTimeoutSec }),
       ...(options.pollSleep === undefined ? {} : { sleep: options.pollSleep }),
       ...(options.pollBackoffMs === undefined ? {} : { backoffMs: options.pollBackoffMs }),
       onStatus: (status) => {
         this.event("poller-status", status.reason === undefined ? status.state : `${status.state}: ${status.reason}`);
-        onPollerStatus(status);
+        if (!this.handoffInProgress) onPollerStatus(status);
       },
     });
+    this.poller = this.createPoller(options.api);
   }
 
   /** Records left by a channel connected to another group are not ours: reusing one would answer into the old group. */
@@ -352,6 +365,7 @@ export class RemoteHub {
     this.stopped = false;
     await this.learnBotUsername();
     this.poller.start();
+    if (this.staged) return;
     this.sweepTimer = this.timers.setInterval(() => {
       void this.sweep();
     }, this.sweepIntervalMs);
@@ -360,6 +374,19 @@ export class RemoteHub {
       void this.dispatch(nameKey(record.name));
     }
     await this.publishCommandMenu();
+  }
+
+  /** A successful runtime poll, including an empty response, is the readiness proof. */
+  waitForPollerReady(timeoutMs: number): Promise<boolean> {
+    return this.poller.waitForReady(timeoutMs);
+  }
+
+  /** Called only after the revisioned commit; candidate updates before this point were discarded. */
+  async activatePrepared(): Promise<void> {
+    if (!this.staged) return;
+    this.forgetOtherGroups();
+    this.staged = false;
+    await this.start();
   }
 
   /** Ask the Bot API who this bot is, once and briefly. A failure leaves the name unknown; nothing else depends on it. */
@@ -394,6 +421,8 @@ export class RemoteHub {
   /** Stop polling and timers. In-flight deliveries are abandoned, not awaited. */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.lifecycleGeneration += 1;
+    this.forwardingApi.resume(false);
     if (this.sweepTimer !== undefined) {
       this.timers.clearInterval(this.sweepTimer);
       this.sweepTimer = undefined;
@@ -411,6 +440,63 @@ export class RemoteHub {
     }
     this.typing.clear();
     await this.poller.stop();
+  }
+
+  /**
+   * Swap the polling credential without replacing this hub or its bindings. Incoming
+   * updates are discarded during readiness; callers must fence approvals and serialize
+   * persistence separately. A failed candidate is stopped before recovery is attempted.
+   */
+  async handoffPoller(candidate: BotApi, timeoutMs: number, beforePublish: () => Promise<boolean> = async () => true): Promise<{ ok: true } | { ok: false; recovered: boolean }> {
+    if (this.handoffInProgress || this.stopped || this.staged || this.poller.status().state !== "running") return { ok: false, recovered: false };
+    this.handoffInProgress = true;
+    this.handoffPaused = true;
+    this.forwardingApi.pause();
+    const generation = this.lifecycleGeneration;
+    const previous = this.forwardingApi.current();
+    try {
+      await this.poller.stop();
+      if (this.lifecycleGeneration !== generation) return { ok: false, recovered: false };
+      let released = false;
+      let heldRelease: (() => void) | undefined;
+      const releaseCandidate = (): void => { released = true; heldRelease?.(); };
+      const hold = (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+        const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+        heldRelease = release;
+        signal.addEventListener("abort", release, { once: true });
+        if (signal.aborted || released) release();
+      });
+      this.poller = this.createPoller(candidate, hold);
+      this.poller.start();
+      const ready = await this.poller.waitForReady(timeoutMs);
+      let committed = false;
+      if (ready && this.lifecycleGeneration === generation) {
+        try { committed = await beforePublish(); } catch { committed = false; }
+      }
+      if (committed && this.lifecycleGeneration === generation) {
+        this.forwardingApi.replace(candidate);
+        this.handoffPaused = false;
+        this.forwardingApi.resume(true);
+        releaseCandidate();
+        return { ok: true };
+      }
+      releaseCandidate();
+      await this.poller.stop();
+      if (this.lifecycleGeneration !== generation) return { ok: false, recovered: false };
+      this.poller = this.createPoller(previous);
+      this.poller.start();
+      const recovered = await this.poller.waitForReady(timeoutMs);
+      if (!recovered || this.lifecycleGeneration !== generation) {
+        await this.poller.stop();
+        return { ok: false, recovered: false };
+      }
+      this.handoffPaused = false;
+      this.forwardingApi.resume(true);
+      return { ok: false, recovered: true };
+    } finally {
+      if (this.handoffPaused) this.forwardingApi.resume(false);
+      this.handoffInProgress = false;
+    }
   }
 
   pollerStatus(): PollerStatus {

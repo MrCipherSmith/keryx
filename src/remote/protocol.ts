@@ -53,6 +53,7 @@ export function remoteRoutePath(route: RemoteRoute): string {
 // travel is not secret (a pairing code, a user id, a group id, a machine name).
 
 export type ChannelsRoute =
+  | "channels-control"
   | "channels-status"
   | "channels-pair"
   | "channels-pairing"
@@ -62,6 +63,7 @@ export type ChannelsRoute =
   | "channels-disconnect";
 
 export const CHANNELS_ROUTE_METHODS: Readonly<Record<ChannelsRoute, "GET" | "POST">> = {
+  "channels-control": "POST",
   "channels-status": "GET",
   "channels-pair": "POST",
   "channels-pairing": "GET",
@@ -103,6 +105,9 @@ export interface ChannelsStatusResponse {
   schemaVersion: string;
   /** This machine's name (the hostname), as it appears in the Test message and in topic names. */
   machine: string;
+  /** Present only on the gated revisioned controller. */
+  revision?: number | null;
+  pendingOperation?: { operationId: string; revision: number | null };
   telegram: {
     state: TelegramChannelState;
     reason?: string;

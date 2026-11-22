@@ -187,6 +187,8 @@ export class Pairing {
     };
   }
 
+  identity(): { id: number; username?: string } { return { ...this.bot }; }
+
   isFinal(): boolean {
     this.expireIfDue();
     return FINAL.has(this.state);

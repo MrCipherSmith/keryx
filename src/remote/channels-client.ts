@@ -18,8 +18,13 @@
 // proof for that nonce and that exact body before anything in it is used (F-002).
 
 import { isLoopbackAddress } from "../lib/serve-config";
+import { withFileLock } from "../lib/fs";
+import path from "node:path";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { authority, ownProcessIsAlive } from "./client";
+import { channelRecordPath, loadChannelRecord } from "./channel-record";
+import { stageChannelToken, discardChannelToken } from "./channel-staging";
+import type { PairingSnapshot } from "./pairing";
 import {
   DEFAULT_ORPHAN_MS,
   DEFAULT_RUN_TIMEOUT_MS,
@@ -30,7 +35,7 @@ import {
   saveRemoteConfig,
 } from "./config";
 import { readEndpoint } from "./endpoint";
-import { botTokenPath, ensureRemoteDir, remoteConfigPath } from "./paths";
+import { botTokenPath, ensureRemoteDir, remoteConfigPath, remoteDirPath } from "./paths";
 import {
   type ChannelsDisconnectResponse,
   type ChannelsReloadResponse,
@@ -42,6 +47,14 @@ import {
   type PairingResponse,
 } from "./protocol";
 import { readShellToken, SERVE_PROOF_HEADER, shellRequestCredential, verifyServeResponseProof } from "./shell-token";
+
+export interface RevisionedChannelResponse {
+  schemaVersion: string;
+  operationId: string;
+  revision: number | null;
+  state?: string;
+  pairing?: PairingSnapshot;
+}
 
 export interface ChannelsClientOptions {
   /** User-global directory override (the test seam). */
@@ -149,25 +162,31 @@ export class ChannelsClient {
    * replaced since.
    */
   async startPairing(token: string): Promise<ChannelsResult<PairingResponse>> {
+    const legacy = this.legacyAllowed();
+    if (!legacy.ok) return legacy;
     // Reach serve first: a token is not written for a serve that is not there.
     const reachable = this.reachable();
     if (!reachable.ok) {
       return reachable;
     }
     const file = botTokenPath(this.options.dir);
-    const before = readConfigFile(file);
-    const saved = saveBotToken(token, this.options.dir);
-    if (!saved.ok) {
-      return { ok: false, code: "invalid", reason: saved.reason };
-    }
-    const written = readConfigFile(file);
+    const staged = await this.withLegacyLock(() => {
+      const allowed = this.legacyAllowed();
+      if (!allowed.ok) return allowed;
+      const before = readConfigFile(file);
+      const saved = saveBotToken(token, this.options.dir);
+      if (!saved.ok) return { ok: false as const, code: "invalid", reason: saved.reason };
+      return { ok: true as const, before, written: readConfigFile(file) };
+    });
+    if (!staged.ok) return staged;
+    const { before, written } = staged;
     const result = await this.call<PairingResponse>("channels-pair", isPairing);
     if (!result.ok && !PAIRING_OUTCOME_UNKNOWN.has(result.code)) {
-      const now = readConfigFile(file);
-      // Only a file still holding exactly what this call wrote is this call's to put back.
-      if (written.ok && now.ok && now.text === written.text) {
-        this.restore(file, before);
-      }
+      await this.withLegacyLock(() => {
+        if (!this.legacyAllowed().ok) return;
+        const now = readConfigFile(file);
+        if (written.ok && now.ok && now.text === written.text) this.restore(file, before);
+      });
     }
     return result;
   }
@@ -178,10 +197,12 @@ export class ChannelsClient {
 
   /** Abandon a pairing. A token that never became a connection is erased with it. */
   async cancelPairing(): Promise<ChannelsResult<{ cancelled: boolean }>> {
+    const legacy = this.legacyAllowed();
+    if (!legacy.ok) return legacy;
     const result = await this.call<{ cancelled: boolean }>("channels-cancel", (body) => typeof body.cancelled === "boolean");
-    if (!fileExists(remoteConfigPath(this.options.dir))) {
-      removeBotToken(this.options.dir);
-    }
+    await this.withLegacyLock(() => {
+      if (this.legacyAllowed().ok && !fileExists(remoteConfigPath(this.options.dir))) removeBotToken(this.options.dir);
+    });
     return result;
   }
 
@@ -192,34 +213,46 @@ export class ChannelsClient {
    * neither a config nor a token).
    */
   async connectFinish(ids: { userId: number; chatId: number }): Promise<ChannelsResult<ChannelsReloadResponse>> {
+    const legacy = this.legacyAllowed();
+    if (!legacy.ok) return legacy;
     const reachable = this.reachable();
     if (!reachable.ok) {
-      this.dropUnusedToken();
+      await this.dropUnusedToken();
       return reachable;
     }
     const configFile = remoteConfigPath(this.options.dir);
-    const before = readConfigFile(configFile);
-    const saved = saveRemoteConfig(
-      {
-        schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION,
-        chatId: ids.chatId,
-        allowedUserIds: [ids.userId],
-        orphanMs: DEFAULT_ORPHAN_MS,
-        runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
-      },
-      this.options.dir,
-    );
-    if (!saved.ok) {
-      this.dropUnusedToken();
-      return { ok: false, code: "invalid", reason: saved.reason };
-    }
+    const savedState = await this.withLegacyLock(() => {
+      const allowed = this.legacyAllowed();
+      if (!allowed.ok) return allowed;
+      const before = readConfigFile(configFile);
+      const saved = saveRemoteConfig(
+        {
+          schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION,
+          chatId: ids.chatId,
+          allowedUserIds: [ids.userId],
+          orphanMs: DEFAULT_ORPHAN_MS,
+          runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
+        },
+        this.options.dir,
+      );
+      if (!saved.ok) {
+        if (!fileExists(remoteConfigPath(this.options.dir))) removeBotToken(this.options.dir);
+        return { ok: false as const, code: "invalid", reason: saved.reason };
+      }
+      return { ok: true as const, before, written: readConfigFile(configFile) };
+    });
+    if (!savedState.ok) return savedState;
+    const { before, written } = savedState;
     const result = await this.call<ChannelsReloadResponse>("channels-reload", (body) => typeof body.state === "string");
     // No answer is not a refusal: serve may have started the hub from these files, so they stay and the next status read tells the truth.
     if (!result.ok && result.code !== "no-answer") {
-      this.restore(configFile, before);
-      if (!before.ok) {
-        removeBotToken(this.options.dir);
-      }
+      await this.withLegacyLock(() => {
+        if (!this.legacyAllowed().ok) return;
+        const now = readConfigFile(configFile);
+        if (!written.ok || !now.ok || now.text !== written.text) return;
+        this.restore(configFile, before);
+        if (!before.ok) removeBotToken(this.options.dir);
+      });
     }
     return result;
   }
@@ -230,10 +263,10 @@ export class ChannelsClient {
   }
 
   /** The token written for a pairing that did not become a connection: nothing is kept, so it goes. */
-  private dropUnusedToken(): void {
-    if (!fileExists(remoteConfigPath(this.options.dir))) {
-      removeBotToken(this.options.dir);
-    }
+  private async dropUnusedToken(): Promise<void> {
+    await this.withLegacyLock(() => {
+      if (this.legacyAllowed().ok && !fileExists(remoteConfigPath(this.options.dir))) removeBotToken(this.options.dir);
+    });
   }
 
   /** One message to the General topic, naming this machine. */
@@ -246,6 +279,8 @@ export class ChannelsClient {
    * are erased anyway and the result says the topics remain in the group.
    */
   async disconnect(): Promise<ChannelsResult<ChannelsDisconnectResult>> {
+    const legacy = this.legacyAllowed();
+    if (!legacy.ok) return legacy;
     const result = await this.call<ChannelsDisconnectResponse>(
       "channels-disconnect",
       (body) =>
@@ -255,9 +290,12 @@ export class ChannelsClient {
       // Serve refused, or may have acted and not answered (a timeout): keep the files, the connection may still be there.
       return result.code === "no-answer" ? { ...result, reason: `${result.reason} Nothing was erased on this machine.` } : result;
     }
-    const erasedToken = removeBotToken(this.options.dir);
-    const erasedConfig = removeRemoteConfig(this.options.dir);
-    const erased = erasedToken && erasedConfig;
+    const erased = await this.withLegacyLock(() => {
+      if (!this.legacyAllowed().ok) return false;
+      const erasedToken = removeBotToken(this.options.dir);
+      const erasedConfig = removeRemoteConfig(this.options.dir);
+      return erasedToken && erasedConfig;
+    });
     const gone = erased ? "The bot token and the config were erased." : "The bot token or the config could not be erased; remove the files in the keryx remote directory by hand.";
     if (!result.ok) {
       return {
@@ -278,6 +316,54 @@ export class ChannelsClient {
         ? `${plural(deleted, "topic", "topics")} deleted; ${plural(remaining, "topic", "topics")} could not be deleted and remain in the group.`
         : `${plural(deleted, "topic", "topics")} deleted.`;
     return { ok: true, value: { deleted, remaining, topicsDeleted: hubWasRunning && remaining === 0, erased, message: `${topics} ${gone}` } };
+  }
+
+  private withLegacyLock<T>(operation: () => T): Promise<T> {
+    ensureRemoteDir(this.options.dir);
+    return withFileLock(path.join(remoteDirPath(this.options.dir), "channel.lock"), async () => operation());
+  }
+
+  private legacyAllowed(): { ok: true } | { ok: false; code: string; reason: string } {
+    if (fileExists(channelRecordPath(this.options.dir))) return { ok: false, code: "upgrade-required", reason: "This channel uses revisioned configuration; update the client before changing it." };
+    return { ok: true };
+  }
+
+  /** New clients stage credentials locally; the authenticated request carries only the one-use identifier. */
+  async beginRevisioned(token: string, expectedRevision: number | null): Promise<ChannelsResult<RevisionedChannelResponse>> {
+    const capability = await this.revisionedCapability();
+    if (!capability.ok) return capability;
+    const record = loadChannelRecord(this.options.dir);
+    if (!record.ok) return { ok: false, code: "unavailable", reason: "Cannot verify the current channel revision." };
+    if ((record.value?.revision ?? null) !== expectedRevision) return { ok: false, code: "conflict", reason: "Channel revision changed; refresh and retry." };
+    const staged = stageChannelToken(token, this.options.dir);
+    if (!staged.ok) return { ok: false, code: "invalid", reason: staged.reason };
+    const result = await this.control({ version: 1, action: "begin", expectedRevision, stagingId: staged.value });
+    discardChannelToken(staged.value, this.options.dir);
+    return result;
+  }
+
+  async revisionedOperation(action: "status" | "cancel" | "confirm", operationId: string, expectedRevision: number | null): Promise<ChannelsResult<RevisionedChannelResponse>> {
+    if (!/^[0-9a-f-]{36}$/.test(operationId) || !(expectedRevision === null || (Number.isSafeInteger(expectedRevision) && expectedRevision > 0))) return { ok: false, code: "invalid", reason: "Invalid channel operation." };
+    const capability = await this.revisionedCapability();
+    if (!capability.ok) return capability;
+    return this.control({ version: 1, action, expectedRevision, operationId });
+  }
+
+  private async revisionedCapability(): Promise<ChannelsResult<true>> {
+    const status = await this.status();
+    if (!status.ok) return status;
+    const capabilities = (status.value as unknown as { capabilities?: { desktopTelegram?: unknown } }).capabilities;
+    if (capabilities?.desktopTelegram !== 1) return { ok: false, code: "unsupported", reason: "This serve does not support revisioned Telegram control." };
+    return { ok: true, value: true };
+  }
+
+  private control(body: Record<string, unknown>): Promise<ChannelsResult<RevisionedChannelResponse>> {
+    return this.call<RevisionedChannelResponse>("channels-control", (value) =>
+      typeof value.operationId === "string" && /^[0-9a-f-]{36}$/.test(value.operationId) &&
+      (body.action === "begin" || value.operationId === body.operationId) &&
+      (value.revision === null || (typeof value.revision === "number" && Number.isSafeInteger(value.revision) && value.revision > 0)) &&
+      (body.action === "confirm" || value.revision === body.expectedRevision) &&
+      (typeof value.state === "string" || (isObject(value.pairing) && isPairing(value.pairing))), body);
   }
 
   // ---- requests --------------------------------------------------------------
@@ -307,7 +393,7 @@ export class ChannelsClient {
    * One request. The bearer is derived from the token and a fresh nonce, never the token
    * itself; the answer is trusted only once its proof for that nonce checks out (F-002).
    */
-  private async send(route: ChannelsRoute): Promise<{ response: Response; token: string; nonce: string }> {
+  private async send(route: ChannelsRoute, body: Record<string, unknown> = {}): Promise<{ response: Response; token: string; nonce: string }> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const post = CHANNELS_ROUTE_METHODS[route] === "POST";
@@ -315,7 +401,7 @@ export class ChannelsClient {
       method: post ? "POST" : "GET",
       redirect: "manual",
       headers: post ? { authorization: `Bearer ${bearer}`, "content-type": "application/json" } : { authorization: `Bearer ${bearer}` },
-      ...(post ? { body: "{}" } : {}),
+      ...(post ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(route === "channels-disconnect" ? this.requestTimeoutMs * DISCONNECT_TIMEOUT_FACTOR : this.requestTimeoutMs),
     });
     return { response, token, nonce };
@@ -333,11 +419,11 @@ export class ChannelsClient {
     }
   }
 
-  private async call<T>(route: ChannelsRoute, guard: (body: Record<string, unknown>) => boolean): Promise<ChannelsResult<T>> {
+  private async call<T>(route: ChannelsRoute, guard: (body: Record<string, unknown>) => boolean, body: Record<string, unknown> = {}): Promise<ChannelsResult<T>> {
     let sent: { response: Response; token: string; nonce: string };
     let text: string;
     try {
-      sent = await this.send(route);
+      sent = await this.send(route, body);
       text = await sent.response.text();
     } catch (error) {
       if (error instanceof ServeDown) {

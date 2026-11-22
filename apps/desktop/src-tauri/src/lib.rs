@@ -21,6 +21,7 @@ pub mod review;
 pub mod pty;
 pub mod settings;
 pub mod telegram_serve;
+pub mod telegram_channel;
 pub mod shellenv;
 mod slots;
 pub mod version;
@@ -104,6 +105,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            telegram_channel::telegram_channel_status,
+            telegram_channel::telegram_channel_action,
             telegram_serve::telegram_serve_status,
             telegram_serve::telegram_serve_start,
             telegram_serve::telegram_serve_stop,

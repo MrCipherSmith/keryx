@@ -24,14 +24,17 @@
 // that is about to be refused cannot rotate the token under the one that is running.
 
 import { unlinkSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import path from "node:path";
 import { isLoopbackAddress } from "../lib/serve-config";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { commitChannelRecord, disconnectChannelRecord, loadChannelRecord } from "./channel-record";
+import { RemoteHub } from "./hub";
 import { openBotApi, openRemoteHub, type OpenRemoteHubOptions } from "./bootstrap";
 import { ChannelsController, type ChannelsOptions } from "./channels";
-import type { RemoteHub } from "./hub";
 import { endpointPath, type RemoteEndpoint } from "./endpoint";
 import { localMachineName } from "./naming";
-import { ensureRemoteDir, remoteConfigPath } from "./paths";
+import { ensureRemoteDir, remoteConfigPath, remoteDirPath } from "./paths";
 import { acquirePollLock, type AcquirePollLockOptions, type PollLock } from "./poll-lock";
 import { RemoteHttpSurface, type RemoteSurfaceOptions } from "./http-surface";
 import { createShellTokenVerifier, mintShellToken, serveResponseProof } from "./shell-token";
@@ -48,6 +51,12 @@ export interface OpenRemoteServiceOptions
   onNotice?: (message: string) => void;
   surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalAckMs" | "approvalIds" | "promptIds" | "reminderMs">;
   lock?: Pick<AcquirePollLockOptions, "pid" | "isAlive"> & { disabled?: boolean };
+  /** Test-only opt-in; the production capability remains unavailable. */
+  experimentalChannelControl?: boolean;
+  /** Test seam for a candidate distinct from the injected active API. */
+  candidateApi?: (token: string) => import("./types").BotApi;
+  /** Test seam for post-commit failure and competing writers. */
+  afterCandidateCommit?: () => Promise<void>;
   /** Test seams for a pairing (code, expiry, poll cadence). */
   pairing?: ChannelsOptions["pairing"];
   /** Test seam: topic names carry the machine name. Serve turns this on; plain tests keep the short names. */
@@ -109,8 +118,15 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
     if (hub !== undefined) {
       return { ok: true };
     }
+    const committed = options.experimentalChannelControl === true ? loadChannelRecord(options.dir) : { ok: true as const, value: null };
+    if (!committed.ok) return { ok: false, reason: committed.reason };
+    if (committed.value?.state === "disconnected") {
+      hubReason = "Telegram is not connected on this machine";
+      surface.detach(hubReason);
+      return { ok: false, reason: hubReason, notConnected: true };
+    }
     const present = readConfigFile(remoteConfigPath(options.dir));
-    if (!present.ok && present.reason === "absent") {
+    if (committed.value === null && !present.ok && present.reason === "absent") {
       // Not an error: nothing is connected yet. Stay quiet.
       hubReason = "Telegram is not connected on this machine";
       surface.detach("Telegram is not connected on this machine; connect it from the shell with /channels");
@@ -122,7 +138,10 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
     // eslint-disable-next-line prefer-const
     let mine: RemoteHub | undefined;
     const opened = openRemoteHub({
-      ...(options.dir === undefined ? {} : { dir: options.dir }),
+      ...(committed.value?.state === "connected" ? { committed: { token: committed.value.token, config: committed.value.config } } : {}),
+      ...(committed.value?.state === "connected" && committed.value.bindingId !== undefined
+        ? { dir: path.join(remoteDirPath(options.dir), "channel-state", committed.value.bindingId) }
+        : options.dir === undefined ? {} : { dir: options.dir }),
       ...(options.api === undefined ? {} : { api: options.api }),
       ...(options.now === undefined ? {} : { now: options.now }),
       ...(options.timers === undefined ? {} : { timers: options.timers }),
@@ -188,6 +207,7 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
   };
 
   const controller = new ChannelsController({
+    ...(options.experimentalChannelControl === true ? { experimentalControl: true } : {}),
     host: {
       dir: options.dir,
       machine,
@@ -196,6 +216,82 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
       startHub: () => exclusive(startHubNow),
       stopHub: (reason) => exclusive(() => stopHubNow(reason)),
       settle: () => exclusive(async () => undefined),
+      ...(options.candidateApi !== undefined ? { openCandidate: options.candidateApi } : options.api === undefined ? {} : { openCandidate: () => options.api! }),
+      activateCandidate: (candidate) => exclusive(async () => {
+        const running = hub;
+        if (running !== undefined) {
+          const current = loadChannelRecord(options.dir);
+          if (!current.ok || current.value?.state !== "connected" || current.value.revision !== candidate.expectedRevision || current.value.bot?.id !== candidate.bot.id || !candidate.stillOwned()) return { ok: false, reason: "Channel changed during activation." };
+          const previousConfig = current.value.config;
+          const bindingId = current.value.bindingId;
+          surface.detach("Telegram credential rotation in progress");
+          let committedRevision: number | undefined;
+          const result = await running.handoffPoller(candidate.api, 30_000, async () => {
+            const committed = await commitChannelRecord(candidate.expectedRevision, { token: candidate.token, bot: candidate.bot, config: previousConfig, ...(bindingId === undefined ? {} : { bindingId }) }, options.dir, () => {
+              const actual = loadChannelRecord(options.dir);
+              return hub === running && candidate.stillOwned() && actual.ok && actual.value?.state === "connected" && actual.value.bot?.id === candidate.bot.id;
+            });
+            if (!committed.ok) return false;
+            committedRevision = committed.value.revision;
+            return true;
+          });
+          if (result.ok && committedRevision !== undefined) {
+            surface.attach(running);
+            return { ok: true, revision: committedRevision };
+          }
+          if (!result.ok && result.recovered && hub === running) surface.attach(running);
+          else if (hub === running) await stopHubNow("Telegram recovery could not be confirmed");
+          return { ok: false, reason: committedRevision === undefined ? "Candidate activation failed." : "Channel outcome is uncertain; refresh its revision." };
+        }
+        const prior = loadChannelRecord(options.dir);
+        const legacy = readConfigFile(remoteConfigPath(options.dir));
+        const firstSetup = prior.ok && prior.value === null && candidate.expectedRevision === null && !legacy.ok && legacy.reason === "absent";
+        const reconnect = prior.ok && prior.value?.state === "disconnected" && prior.value.revision === candidate.expectedRevision;
+        if ((!firstSetup && !reconnect) || !candidate.stillOwned()) return { ok: false, reason: "The channel changed during setup." };
+        const bindingId = randomBytes(16).toString("hex");
+        const stateDir = ensureRemoteDir(options.dir, "channel-state", bindingId);
+        let committedRevision: number | undefined;
+        const staged = new RemoteHub({
+          api: candidate.api, config: candidate.config, staged: true,
+          dir: stateDir,
+          ...(options.pollTimeoutSec === undefined ? {} : { pollTimeoutSec: options.pollTimeoutSec }),
+          ...(options.pollBackoffMs === undefined ? {} : { pollBackoffMs: options.pollBackoffMs }),
+          ...(options.pollSleep === undefined ? {} : { pollSleep: options.pollSleep }),
+          deliver: surface.consumer.deliver,
+          ...(surface.consumer.deliverCallback === undefined ? {} : { deliverCallback: surface.consumer.deliverCallback }),
+        });
+        try {
+          await staged.start();
+          if (!await staged.waitForPollerReady(30_000) || !candidate.stillOwned()) {
+            await staged.stop();
+            return { ok: false, reason: "Candidate poller readiness could not be confirmed." };
+          }
+          const committed = await commitChannelRecord(candidate.expectedRevision, { token: candidate.token, bot: candidate.bot, config: candidate.config, bindingId }, options.dir, candidate.stillOwned);
+          if (!committed.ok) { await staged.stop(); return { ok: false, reason: committed.reason }; }
+          committedRevision = committed.value.revision;
+          await options.afterCandidateCommit?.();
+          const beforeActivation = loadChannelRecord(options.dir);
+          if (!beforeActivation.ok || beforeActivation.value?.state !== "connected" || beforeActivation.value.revision !== committedRevision || beforeActivation.value.bindingId !== bindingId || !candidate.stillActive()) throw new Error("channel changed after commit");
+          await staged.activatePrepared();
+          const beforePublish = loadChannelRecord(options.dir);
+          if (!beforePublish.ok || beforePublish.value?.state !== "connected" || beforePublish.value.revision !== committedRevision || beforePublish.value.bindingId !== bindingId || !candidate.stillActive()) throw new Error("channel changed during activation");
+          hub = staged;
+          hubReason = undefined;
+          surface.attach(staged);
+          return { ok: true, revision: committed.value.revision };
+        } catch {
+          await staged.stop().catch(() => undefined);
+          if (committedRevision !== undefined) {
+            try {
+              const rollback = await disconnectChannelRecord(committedRevision, options.dir);
+              if (!rollback.ok) return { ok: false, reason: "Channel outcome is uncertain; refresh its revision." };
+            } catch {
+              return { ok: false, reason: "Channel outcome is uncertain; refresh its revision." };
+            }
+          }
+          return { ok: false, reason: "Candidate activation failed." };
+        }
+      }),
       openApi: () =>
         openBotApi({ ...(options.api === undefined ? {} : { api: options.api }), ...(options.dir === undefined ? {} : { dir: options.dir }) }),
     },

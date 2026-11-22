@@ -7,7 +7,7 @@ import { isBotTokenShape, loadBotToken, loadRemoteConfig, parseRemoteConfig, typ
 import { botTokenPath, ensureRemoteDir, remoteConfigPath, remoteDirPath } from "./paths";
 
 export interface ChannelBotIdentity { id: number; username?: string }
-export interface ChannelCandidate { token: string; bot: ChannelBotIdentity | null; config: RemoteConfig }
+export interface ChannelCandidate { token: string; bot: ChannelBotIdentity | null; config: RemoteConfig; bindingId?: string }
 export type ChannelRecord =
   | ({ schemaVersion: 1; revision: number; state: "connected" } & ChannelCandidate)
   | { schemaVersion: 1; revision: number; state: "disconnected" };
@@ -28,8 +28,8 @@ export function loadChannelRecord(dir?: string): Loaded<ChannelRecord | null> {
     if (doc.schemaVersion !== 1 || !Number.isSafeInteger(doc.revision) || Number(doc.revision) < 1) throw new Error();
     const revision = Number(doc.revision);
     if (doc.state === "disconnected" && Object.keys(doc).every((key) => ["schemaVersion", "revision", "state"].includes(key))) return { ok: true, value: { schemaVersion: 1, revision, state: "disconnected" } };
-    if (doc.state !== "connected" || !Object.keys(doc).every((key) => ["schemaVersion", "revision", "state", "token", "bot", "config"].includes(key))) throw new Error();
-    const candidate = validateCandidate({ token: doc.token, bot: doc.bot, config: doc.config });
+    if (doc.state !== "connected" || !Object.keys(doc).every((key) => ["schemaVersion", "revision", "state", "token", "bot", "config", "bindingId"].includes(key))) throw new Error();
+    const candidate = validateCandidate({ token: doc.token, bot: doc.bot, config: doc.config, bindingId: doc.bindingId });
     if (!candidate.ok) return candidate;
     return { ok: true, value: { schemaVersion: 1, revision, state: "connected", ...candidate.value } };
   } catch {
@@ -37,7 +37,7 @@ export function loadChannelRecord(dir?: string): Loaded<ChannelRecord | null> {
   }
 }
 
-function validateCandidate(value: { token: unknown; bot: unknown; config: unknown }): Loaded<ChannelCandidate> {
+function validateCandidate(value: { token: unknown; bot: unknown; config: unknown; bindingId?: unknown }): Loaded<ChannelCandidate> {
   if (typeof value.token !== "string" || !isBotTokenShape(value.token)) return { ok: false, reason: "invalid channel credential" };
   let bot: ChannelBotIdentity | null = null;
   if (value.bot !== null) {
@@ -46,9 +46,10 @@ function validateCandidate(value: { token: unknown; bot: unknown; config: unknow
     if (!Object.keys(raw).every((key) => key === "id" || key === "username") || !Number.isSafeInteger(raw.id) || Number(raw.id) <= 0 || (raw.username !== undefined && (typeof raw.username !== "string" || !/^[A-Za-z0-9_]{1,64}$/.test(raw.username)))) return { ok: false, reason: "invalid channel bot identity" };
     bot = { id: Number(raw.id), ...(typeof raw.username === "string" ? { username: raw.username } : {}) };
   }
+  if (value.bindingId !== undefined && (typeof value.bindingId !== "string" || !/^[0-9a-f]{32}$/.test(value.bindingId))) return { ok: false, reason: "invalid channel binding id" };
   const config = parseRemoteConfig(value.config);
   if (!config.ok) return config;
-  return { ok: true, value: { token: value.token, bot, config: config.value } };
+  return { ok: true, value: { token: value.token, bot, config: config.value, ...(typeof value.bindingId === "string" ? { bindingId: value.bindingId } : {}) } };
 }
 
 async function locked<T>(dir: string | undefined, fn: () => T): Promise<T> {
@@ -62,14 +63,14 @@ function conflict(currentRevision: number | null): ChannelMutationResult {
   return { ok: false, code: "conflict", currentRevision, reason: "channel revision changed; refresh and retry" };
 }
 
-export async function commitChannelRecord(expectedRevision: number | null, candidate: ChannelCandidate, dir?: string): Promise<ChannelMutationResult> {
+export async function commitChannelRecord(expectedRevision: number | null, candidate: ChannelCandidate, dir?: string, stillOwned?: () => boolean): Promise<ChannelMutationResult> {
   const checked = validateCandidate(candidate);
   if (!checked.ok) return checked;
   return locked(dir, () => {
     const current = loadChannelRecord(dir);
     if (!current.ok) return current;
     const revision = current.value?.revision ?? null;
-    if (revision !== expectedRevision) return conflict(revision);
+    if (revision !== expectedRevision || (stillOwned !== undefined && !stillOwned())) return conflict(revision);
     if (revision === Number.MAX_SAFE_INTEGER) return { ok: false, reason: "channel revision exhausted" };
     const record: ChannelRecord = { schemaVersion: 1, revision: (revision ?? 0) + 1, state: "connected", ...checked.value };
     write(record, dir);
