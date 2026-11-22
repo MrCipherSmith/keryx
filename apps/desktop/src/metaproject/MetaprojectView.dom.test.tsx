@@ -93,3 +93,69 @@ test("debounced full-text hits identify their wiki page", async () => {
     expect(host.textContent).toContain("Guide");
   } finally { window.setTimeout = originalTimeout; }
 });
+
+test("snapshot mismatch offers a refresh and drops a selection absent from the refreshed catalog", async () => {
+  let version = 0;
+  const read = (_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve(version === 0 ? catalog : { ...catalog, snapshotId: "two", nodes: [file] });
+    if (input.action === "detail") return Promise.resolve({ schemaVersion: 1, snapshotId: "two", node: input.id === "page" ? page : file, markdown: "Fresh detail" });
+    return Promise.resolve({ schemaVersion: 1, snapshotId: "two", hits: [] });
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  expect(host.textContent).toContain("Project knowledge changed while loading");
+  expect(host.textContent).not.toContain("Fresh detail");
+  version = 1;
+  await act(async () => { button("Refresh catalog").click(); });
+  expect(host.textContent).not.toContain("Project knowledge changed while loading");
+  expect(host.textContent).toContain("Fresh detail");
+  expect(host.textContent).toContain("src/client.ts");
+});
+
+test("old remote hits disappear immediately on a new query and mismatched search offers refresh", async () => {
+  const originalTimeout = window.setTimeout;
+  let runTimer: () => void = () => {};
+  window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") runTimer = () => callback(); return 1; }) as typeof window.setTimeout;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "search"
+    ? Promise.resolve(input.query === "first" ? { ...snapshot, hits: [{ node: page, snippet: "first remote match" }] } : { ...snapshot, snapshotId: "two", hits: [{ node: file, snippet: "wrong snapshot" }] })
+    : request(cwd, input);
+  try {
+    await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+    const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
+    const type = async (value: string) => act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value); search.dispatchEvent(new Event("input", { bubbles: true })); });
+    await type("first"); await act(async () => { runTimer(); });
+    expect(host.textContent).toContain("first remote match");
+    await type("second");
+    expect(host.textContent).not.toContain("first remote match");
+    await act(async () => { runTimer(); });
+    expect(host.textContent).not.toContain("wrong snapshot");
+    expect(host.textContent).toContain("Refresh catalog");
+  } finally { window.setTimeout = originalTimeout; }
+});
+
+test("mismatched neighbor snapshot offers refresh and default filters omit symbol layers", async () => {
+  let requestedKinds: string[] = [];
+  const read = (_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...catalog, graph: "ready", truncated: true, hasSymbolLayer: true });
+    if (input.action === "detail") return Promise.resolve({ ...snapshot, node: page });
+    if (input.action === "neighbors") { requestedKinds = input.kinds; return Promise.resolve({ ...snapshot, snapshotId: "two", root: input.id, nodes: [page], edges: [], truncated: false }); }
+    return Promise.resolve({ ...snapshot, hits: [] });
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  expect(requestedKinds).not.toContain("calls");
+  expect(requestedKinds).not.toContain("defines");
+  expect(host.textContent).toContain("Refresh catalog");
+});
+
+test("a wiki fragment scrolls only to a heading inside the current article", async () => {
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "detail"
+    ? Promise.resolve({ ...snapshot, node: page, markdown: "[Jump](#installation)\n\n## Installation" }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  const heading = host.querySelector<HTMLElement>("article h2 + p + .md h2");
+  if (!heading) throw new Error("Missing heading");
+  let scrolled = false;
+  heading.scrollIntoView = () => { scrolled = true; };
+  const link = host.querySelector<HTMLAnchorElement>('article a[href="#installation"]');
+  if (!link) throw new Error("Missing fragment link");
+  await act(async () => { link.click(); });
+  expect(scrolled).toBe(true);
+});

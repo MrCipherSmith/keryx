@@ -7,7 +7,7 @@ use tauri::{AppHandle, Webview};
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "lowercase", deny_unknown_fields)]
 enum Request {
-    Catalog,
+    Catalog {},
     Detail { id: String },
     Search { query: String },
     Neighbors { id: String, depth: u8, direction: Direction, kinds: Vec<Kind> },
@@ -26,7 +26,7 @@ fn metaproject_args(request: &Value) -> Result<Vec<String>, String> {
         .map_err(|_| "configuration: Invalid Metaproject request.".to_string())?;
     let valid_text = |s: &str| !s.is_empty() && s.len() <= 4096;
     let valid = match parsed {
-        Request::Catalog => true,
+        Request::Catalog {} => true,
         Request::Detail { id } => valid_text(&id),
         Request::Search { query } => query.len() <= 4096,
         Request::Neighbors { id, depth, direction, kinds } => {
