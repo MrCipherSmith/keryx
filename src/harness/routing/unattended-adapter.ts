@@ -100,7 +100,7 @@ async function currentUnattendedSnapshot(
   const providers = listed.some((entry) => entry.models?.includes(baseline.modelId) === true)
     ? listed
     : [...listed.filter((entry) => entry.name !== baseline.providerId), { name: baseline.providerId, models: [baseline.modelId] }];
-  const profiles = loadModelProfiles(configDir);
+  const profiles = loadModelProfiles(configDir, () => Date.parse(observedAt));
   const baselineProvider = providerFor(baseline);
   if (baselineProvider === undefined) throw new Error("the explicit unattended provider/model pin could not be built");
   const snapshot = buildCatalogRoutingSnapshot({

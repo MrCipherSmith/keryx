@@ -120,8 +120,11 @@ export function ModelPicker({ tier, choices, onSelect, onClose }: {
   </div>;
 }
 
-function ModelTier({ label, picked, models, open, setOpen, onChange }: {
+export function ModelTier({ label, picked, models, open, setOpen, onChange, readOnly = false, emptyLabel, maxModels = DESK_MAX_POOL_MODELS }: {
   label: string; picked: DeskReviewModel[]; models: ReadonlyMap<string, ReviewLaunchModel>;
+  readOnly?: boolean;
+  emptyLabel?: string;
+  maxModels?: number;
   open: boolean; setOpen: (open: boolean) => void; onChange: (models: DeskReviewModel[]) => void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -136,22 +139,22 @@ function ModelTier({ label, picked, models, open, setOpen, onChange }: {
   return <section className="review-launch-tier" aria-label={label + " models"}>
     <header className="review-launch-tier-head">
       <strong>{label}</strong>
-      <button ref={trigger} className="btn btn-sm" type="button" aria-label={`Add model to ${label} tier`}
-        aria-expanded={open} aria-controls={id} disabled={!choices.length || picked.length >= DESK_MAX_POOL_MODELS}
-        onClick={() => open ? close() : setOpen(true)}><Icon name="plus" size={13} /> Add model</button>
+      {!readOnly && <button ref={trigger} className="btn btn-sm" type="button" aria-label={`Add model to ${label} tier`}
+        aria-expanded={open} aria-controls={id} disabled={!choices.length || picked.length >= maxModels}
+        onClick={() => open ? close() : setOpen(true)}><Icon name="plus" size={13} /> Add model</button>}
     </header>
     <div id={id} hidden={!open}>{open && <ModelPicker tier={label} choices={choices} onClose={close}
       onSelect={({ provider, model }) => { close(); onChange([...picked, { provider, model }]); }} />}</div>
-    {picked.length > 0 && <ul className="review-launch-pool">{picked.map(option => {
+    {picked.length > 0 ? <ul className="review-launch-pool">{picked.map(option => {
       const key = modelKey(option);
       const title = models.get(key)?.label || option.model;
       return <li key={key}>
         <span className="review-pool-model" title={option.model}>{title}</span>
         <span className="review-pool-provider" title={option.provider}>{option.provider}</span>
-        <button className="icon-btn icon-btn-sm" type="button" aria-label={`Remove ${option.provider} ${title} from ${label}`}
-          onClick={() => onChange(picked.filter(model => modelKey(model) !== key))}><Icon name="x" size={13} /></button>
+        {!readOnly && <button className="icon-btn icon-btn-sm" type="button" aria-label={`Remove ${option.provider} ${title} from ${label}`}
+          onClick={() => onChange(picked.filter(model => modelKey(model) !== key))}><Icon name="x" size={13} /></button>}
       </li>;
-    })}</ul>}
+    })}</ul> : emptyLabel && <p className="field-hint">{emptyLabel}</p>}
   </section>;
 }
 

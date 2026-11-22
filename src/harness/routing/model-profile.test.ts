@@ -44,6 +44,21 @@ async function tempDir(prefix: string): Promise<string> {
   return dir;
 }
 
+test("editing metadata does not verify availability until a live listing", async () => {
+  const dir = await tempDir("keryx-model-profile-unverified-");
+  const models = ["claude-sonnet-5", "custom-model"];
+  for (const model of models) {
+    await setModelProfileField("anthropic", model, { field: "priority", value: 42 }, dir);
+    expect(loadStoredModelProfiles(dir)[profileKey("anthropic", model)]?.availabilityUnverified).toBe(true);
+  }
+  await refreshModelProfiles("anthropic", models, {}, { dir });
+  for (const model of models) {
+    const stored = loadStoredModelProfiles(dir)[profileKey("anthropic", model)];
+    expect(stored?.available).toBe(true);
+    expect(stored?.availabilityUnverified).toBeUndefined();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // AC4 — curated seed: exactly anthropic/openai/gemini.
 // ---------------------------------------------------------------------------

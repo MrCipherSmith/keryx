@@ -13,6 +13,7 @@ export interface UiActions {
   /** Open the mode picker, or set the mode when `arg` names one. */
   mode(arg: string): void;
   model(arg: string): void;
+  openRouting?(): void;
   /** The Providers dialog (`/connect`, `/search-provider`). */
   openProviders(name: string, args: string): void;
   /** Move text into the composer (never sends). */
@@ -117,10 +118,13 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
     return refuse(`/${command.name} is not available while keryx is working. Stop the turn first (Esc), then run it again.`);
   }
 
-  switch (commandSurface(command)) {
+  const name = command.name.toLowerCase();
+  const routingDialog = name === "routing" && !parsed.args && meta.routingTiers
+    && deps.hasCommandMethod && deps.client && deps.ui.openRouting;
+  switch (routingDialog ? "dialog" : commandSurface(command)) {
     case "client":
     case "dialog":
-      return runClient(command.name.toLowerCase(), parsed.args, deps, card, refuse);
+      return runClient(name, parsed.args, deps, card, refuse);
     default:
       break;
   }
@@ -199,6 +203,10 @@ function runClient(name: string, args: string, deps: RunDeps, card: CardFn, refu
       return true;
     case "model":
       deps.ui.model(args);
+      return true;
+    case "routing":
+      if (!deps.ui.openRouting) return false;
+      deps.ui.openRouting();
       return true;
     case "connect":
     case "search-provider":

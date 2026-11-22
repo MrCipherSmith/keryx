@@ -47,6 +47,7 @@ export interface CommandMeta {
   surface?: "text" | "view" | "dialog" | "client";
   /** What the shell does while a turn runs: run the command, or refuse it. */
   busy?: "run" | "refuse";
+  routingTiers?: true;
 }
 
 export interface AvailableCommand {

@@ -24,10 +24,11 @@
 
 import { loadOAuthGrant } from "../lib/oauth/grants";
 import { envWithSavedApiKeys } from "../lib/shell-config";
-import { fetchOpenAiCodexModels } from "../commands/subscription-models";
+import { fetchOpenAiCodexCatalog } from "../commands/subscription-models";
 import { detectProviders, type DetectedProvider, type DetectProvidersDeps } from "../commands/select";
 import {
   balanceCapableProvider,
+  fetchAnthropicModels,
   fetchOpenAiCompatModelsDetailed,
   fetchProviderBalance,
   providerApiKey,
@@ -40,9 +41,11 @@ import {
   isCatalogFresh,
   loadProviderCatalogCache,
   saveProviderCatalogCache,
+  withCatalogRefreshLock,
   type ProviderCatalog,
   type ProviderCatalogEntry,
 } from "./provider-catalog-cache";
+import { refreshModelProfiles } from "./routing/model-profile";
 import type { FlatPickerProvider } from "./routing/table";
 
 export {
@@ -111,20 +114,30 @@ async function buildCatalogEntry(
   }
   if (detected.name === "openai-codex") {
     if (loadOAuthGrant("openai-codex", deps.dir) === undefined) return undefined;
-    const result = await fetchOpenAiCodexModels(deps.fetch, { ...(deps.dir !== undefined ? { configDir: deps.dir } : {}), timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    const result = await fetchOpenAiCodexCatalog(deps.fetch, { ...(deps.dir !== undefined ? { configDir: deps.dir } : {}), timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    if (result.source === "live") {
+      await refreshModelProfiles(detected.name, result.models, Object.fromEntries(
+        Object.entries(result.contextWindows).map(([model, contextLength]) => [model, { contextLength }]),
+      ), deps);
+    }
     return { name: detected.name, status: classifyModelsStatus(result), models: result.models, fallbackModels: [...detected.models], fetchedAt, label: detected.label ?? "ChatGPT / Codex" };
   }
   const registry = providerByName(detected.name, deps.dir);
+  if (registry === undefined && detected.name === "anthropic") {
+    const key = envWithSavedApiKeys(deps.env, deps.dir)[detected.envKey ?? "ANTHROPIC_API_KEY"];
+    if (!key) return undefined;
+    const result = await fetchAnthropicModels(deps.fetch, key, { timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    return {
+      name: detected.name,
+      status: classifyModelsStatus(result),
+      models: result.models,
+      fallbackModels: [...detected.models],
+      fetchedAt,
+      ...(detected.label !== undefined ? { label: detected.label } : {}),
+    };
+  }
   if (registry === undefined) {
-    // Native anthropic/gemini: `detectProviders()` includes one only
-    // when its API key is present in `deps.env` (the connectedness check for
-    // a provider with no live listing endpoint — `describe().modelListing`
-    // is false for these providers, see `select.ts`), so `detected.models` here IS
-    // the curated fallback a caller should show.
-    if (detected.name === "anthropic") {
-      const key = envWithSavedApiKeys(deps.env, deps.dir)[detected.envKey ?? "ANTHROPIC_API_KEY"];
-      if (key === undefined || key.length === 0) return undefined;
-    }
+    // Native providers without an implemented listing use curated picker rows.
     return {
       name: detected.name,
       status: "not-supported",
@@ -187,7 +200,8 @@ async function buildCatalogEntry(
  */
 export async function refreshProviderCatalog(deps: ProviderCatalogDeps): Promise<ProviderCatalog> {
   const detectDeps: DetectProvidersDeps = {
-    fetch: deps.fetch,
+    fetch: ((input: string | URL | Request, init?: RequestInit) =>
+      deps.fetch(input, { ...init, signal: AbortSignal.timeout(deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS) })) as typeof fetch,
     env: deps.env,
     ...(deps.dir !== undefined ? { configDir: deps.dir } : {}),
     ...(deps.baseUrl !== undefined ? { baseUrl: deps.baseUrl } : {}),
@@ -248,21 +262,33 @@ async function detectedOrRedetected(detected: readonly DetectedProvider[], deps:
  * it also drops an older non-empty file, so the next reader detects again
  * instead of being served a catalog the operator has since emptied (flow 468).
  */
+interface CatalogRefreshOptions { force?: boolean; ttlMs?: number; checkEntryDates?: boolean }
+
 async function loadOrRefreshWith(
   deps: ProviderCatalogDeps,
-  opts: { force?: boolean; ttlMs?: number },
+  opts: CatalogRefreshOptions,
   refresh: () => Promise<ProviderCatalog>,
 ): Promise<ProviderCatalog> {
-  if (opts.force !== true) {
+  const now = deps.now ?? Date.now;
+  const readFresh = () => {
+    if (opts.force) return undefined;
     const cached = loadProviderCatalogCache(deps.dir);
-    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
-      return cached as ProviderCatalog;
+    if (cached && isServableCatalog(cached, now, opts.ttlMs) &&
+        (!opts.checkEntryDates || Object.values(cached.providers).every(entry =>
+          isCatalogFresh({ fetchedAt: entry.fetchedAt, providers: {} }, now, opts.ttlMs)
+        ))) {
+      return cached;
     }
-  }
-  const fresh = await refresh();
-  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
-  else await clearProviderCatalogCache(deps.dir);
-  return fresh;
+    return undefined;
+  };
+  return readFresh() ?? withCatalogRefreshLock(deps.dir, async () => {
+    const cached = readFresh();
+    if (cached) return cached;
+    const fresh = await refresh();
+    if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
+    else await clearProviderCatalogCache(deps.dir);
+    return fresh;
+  });
 }
 
 /**
@@ -272,7 +298,7 @@ async function loadOrRefreshWith(
  */
 export async function loadOrRefreshProviderCatalog(
   deps: ProviderCatalogDeps,
-  opts: { force?: boolean; ttlMs?: number } = {},
+  opts: CatalogRefreshOptions = {},
 ): Promise<ProviderCatalog> {
   return loadOrRefreshWith(deps, opts, () => refreshProviderCatalog(deps));
 }
@@ -290,7 +316,7 @@ function isServableCatalog(catalog: ProviderCatalog | undefined, now: () => numb
 export async function loadOrRefreshProviderCatalogFromDetected(
   detected: readonly DetectedProvider[],
   deps: ProviderCatalogDeps,
-  opts: { force?: boolean; ttlMs?: number } = {},
+  opts: CatalogRefreshOptions = {},
 ): Promise<ProviderCatalog> {
   return loadOrRefreshWith(deps, opts, () => refreshProviderCatalogFromDetected(detected, deps));
 }
@@ -304,7 +330,7 @@ export async function loadOrRefreshProviderCatalogFromDetected(
  */
 export async function loadOrRefreshProviderCatalogLive(
   deps: ProviderCatalogDeps & { readonly redetect: () => Promise<readonly DetectedProvider[]> },
-  opts: { force?: boolean; ttlMs?: number } = {},
+  opts: CatalogRefreshOptions = {},
 ): Promise<ProviderCatalog> {
   const { redetect, ...rest } = deps;
   return loadOrRefreshWith(rest, opts, async () => refreshProviderCatalogFromDetected(await redetect(), rest));
@@ -338,7 +364,10 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { w
     }
     // unreachable | timeout | not-supported
     if (entry.fallbackModels.length > 0) {
-      out.push({ name: entry.name, models: entry.fallbackModels, offline: true, observedAt: entry.fetchedAt });
+      out.push({
+        name: entry.name, models: entry.fallbackModels, offline: true, observedAt: entry.fetchedAt,
+        ...(entry.status === "not-supported" && { profileOnly: true }),
+      });
     } else if (opts.withStatusRows === true) {
       out.push({ name: entry.name, models: [], listUnavailable: describeCatalogStatus(entry.status), observedAt: entry.fetchedAt });
     }

@@ -193,17 +193,18 @@ test("refreshProviderCatalog (AC5): a documented balance endpoint is read and ne
   expect(catalog.providers.groq?.balance).toBeUndefined();
 });
 
-test("refreshProviderCatalog: a native provider with no live listing endpoint (anthropic) is not-supported, key presence alone gates it", async () => {
-  const fetchFn = (async (url: string) => {
+test("refreshProviderCatalog verifies Anthropic with its authenticated native listing", async () => {
+  const fetchFn = (async (url: string, init?: RequestInit) => {
     if (ollamaRefused(url)) return { ok: false } as Response;
-    throw new Error(`unexpected fetch: ${url}`); // never probed — no endpoint exists
+    expect(url).toBe("https://api.anthropic.com/v1/models?limit=1000");
+    expect(new Headers(init?.headers).get("x-api-key")).toBe("test-key");
+    return Response.json({ data: [{ id: "claude-live" }] });
   }) as unknown as typeof fetch;
-
-  const catalog = await refreshProviderCatalog({ fetch: fetchFn, env: { ANTHROPIC_API_KEY: "sk-ant" }, platform: "linux", dir: emptyCustomProvidersDir() });
-  const entry = catalog.providers.anthropic;
-  expect(entry?.status).toBe("not-supported");
-  expect(entry?.models).toEqual([]);
-  expect(entry?.fallbackModels.length).toBeGreaterThan(0);
+  const catalog = await refreshProviderCatalog({
+    fetch: fetchFn, env: { ANTHROPIC_API_KEY: "test-key" }, platform: "linux", dir: emptyCustomProvidersDir(),
+  });
+  expect(catalog.providers.anthropic).toMatchObject({ status: "ok", models: ["claude-live"] });
+  expect(catalog.providers.anthropic?.fallbackModels.length).toBeGreaterThan(0);
 });
 
 test("refreshProviderCatalog: the synthetic fake provider is excluded from the user-facing catalog", async () => {
@@ -243,7 +244,7 @@ test("catalogToFlatPickerProviders: unreachable/timeout/not-supported fall back 
   });
   expect(flat).toEqual([
     { name: "groq", models: ["llama-3.3-70b-versatile"], offline: true, observedAt: "now" },
-    { name: "anthropic", models: ["claude-sonnet-5"], offline: true, observedAt: "now" },
+    { name: "anthropic", models: ["claude-sonnet-5"], offline: true, observedAt: "now", profileOnly: true },
   ]);
 });
 
@@ -553,4 +554,48 @@ test("flow 468 AC4: withStatusRows keeps an unreachable, timed-out or unsupporte
   ]);
   // Without the opt-in the old behaviour holds: nothing to show, nothing returned.
   expect(catalogToFlatPickerProviders(catalog)).toEqual([{ name: "groq", models: ["llama-fake"], offline: true, observedAt: "now" }]);
+});
+
+test("routing refreshes stale entries even when another provider made the cache recent", async () => {
+  const dir = emptyCustomProvidersDir();
+  const now = Date.now();
+  const current = new Date(now).toISOString();
+  const stale = new Date(now - 6 * 60_000).toISOString();
+  await saveProviderCatalogCache({ fetchedAt: current, providers: {
+    ollama: { name: "ollama", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: stale },
+    openai: { name: "openai", status: "ok", models: ["fresh-model"], fallbackModels: [], fetchedAt: current },
+  } }, dir);
+  let probes = 0;
+  const deps = {
+    fetch, env: {}, dir, now: () => now,
+    redetect: async () => { probes++; return [{ name: "ollama", models: ["refreshed-model"] }]; },
+  };
+  const options = { ttlMs: 5 * 60_000, checkEntryDates: true };
+  const fresh = await loadOrRefreshProviderCatalogLive(deps, options);
+  expect(catalogToFlatPickerProviders(fresh)).toEqual([{ name: "ollama", models: ["refreshed-model"], observedAt: current }]);
+  await loadOrRefreshProviderCatalogLive(deps, options);
+  expect(probes).toBe(1);
+});
+
+test("concurrent catalogue readers share one live probe", async () => {
+  const dir = emptyCustomProvidersDir();
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let probes = 0;
+  const deps = {
+    fetch, env: {}, dir,
+    redetect: async () => {
+      probes++;
+      started.resolve();
+      await release.promise;
+      return [{ name: "ollama", models: ["shared-model"] }];
+    },
+  };
+  const first = loadOrRefreshProviderCatalogLive(deps, { checkEntryDates: true });
+  await started.promise;
+  const second = loadOrRefreshProviderCatalogLive(deps, { checkEntryDates: true });
+  release.resolve();
+  const [a, b] = await Promise.all([first, second]);
+  expect(b).toEqual(a);
+  expect(probes).toBe(1);
 });

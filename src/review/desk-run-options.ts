@@ -26,8 +26,11 @@ function object(value: unknown, fields: readonly string[], label: string): Recor
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !fields.includes(key))) invalid(label);
   return value as Record<string, unknown>;
 }
+export function isDeskReviewModelName(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z\d][a-z\d_./:@+%-]{0,159}$/i.test(value);
+}
 function modelName(value: unknown, label: string): string {
-  if (typeof value !== "string" || !/^[a-z\d][a-z\d_./:@+%-]{0,159}$/i.test(value)) invalid(label);
+  if (!isDeskReviewModelName(value)) invalid(label);
   return value;
 }
 export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {

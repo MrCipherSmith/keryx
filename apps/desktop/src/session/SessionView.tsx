@@ -50,6 +50,7 @@ interface Props {
   reviewComposer?: ReviewComposerTarget | undefined;
   reviewLinks?: readonly SessionReviewLink[];
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
+  onRouting?: () => void;
   onProviders: (name: string, args: string) => void;
 }
 
@@ -59,7 +60,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders, reviewActivity, reviewComposer, reviewLinks }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewActivity, reviewComposer, reviewLinks }, composerRef) {
   const { state } = s;
   const reviewBySession = useMemo(() => new Map((reviewLinks ?? []).map(link => [link.sessionId, link])), [reviewLinks]);
   const prefs = usePrefs();
@@ -160,6 +161,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     focusSessions,
     fillComposer: fill,
     openProviders: onProviders,
+    openRouting: onRouting,
     mode: (arg) => {
       if (!arg) return handle()?.openMenu("mode");
       const id = resolveMode(state.modes, arg);

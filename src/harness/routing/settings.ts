@@ -225,6 +225,8 @@ export interface UpdateRoutingLayerInput extends RoutingLocation {
   readonly scope: RoutingScope;
   readonly expectedRevision: string;
   readonly next: RoutingConfigLayer;
+  /** An edit to the existing layer must preserve project-only activation. */
+  readonly preserveLegacyScope?: true;
 }
 
 /** Replace a whole scope's layer, refused when the settings changed since `expectedRevision` was read. */
@@ -237,7 +239,7 @@ export async function updateRoutingLayer(input: UpdateRoutingLayerInput): Promis
   if (before !== undefined && routingDigest(before) === routingDigest(input.next) && current[input.scope].source === "canonical") {
     return { status: "unchanged", revision: current.revision };
   }
-  await writeScope(input.scope, location, "all", (base) => {
+  await writeScope(input.scope, location, input.preserveLegacyScope ? new Set() : "all", (base) => {
     if (routingDigest(base) !== routingDigest(before ?? { schemaVersion: ROUTING_SCHEMA_VERSION })) {
       throw new Error("routing settings revision conflict; read the settings again before writing");
     }

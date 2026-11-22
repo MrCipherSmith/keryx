@@ -144,6 +144,8 @@ import {
 } from "./profile";
 import { buildAcpShellSessionTools, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
 import type { ShellConfirmAction, ShellView } from "./shell-views";
+import type { FlatPickerProvider } from "../harness/routing/table";
+import { ROUTING_AVAILABILITY_TTL_MS } from "../harness/routing/snapshot-adapter";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
@@ -202,6 +204,8 @@ export interface AcpServerOptions {
    * model is the only choice.
    */
   readonly models?: AcpModelSource;
+  /** Live routing evidence, distinct from cached picker choices. */
+  readonly routingProviders?: (force: boolean) => Promise<readonly FlatPickerProvider[]>;
   /**
    * Called after an EXPLICIT model switch (`session/set_config_option` or
    * `/model`) took effect: never per turn, never on a load's restore. The CLI
@@ -1371,6 +1375,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   function refreshModelChoicesAfterProviderChange(): void {
     const source = options.models;
     if (source === undefined || stopping) return;
+    if (options.routingProviders) {
+      routingRefreshNeeded = true;
+      routingProviders = [];
+    }
     listingGeneration += 1;
     listedChoices = undefined;
     listing = undefined;
@@ -1809,6 +1817,42 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  let routingProviders: readonly FlatPickerProvider[] | undefined;
+  let routingRefresh: Promise<void> | undefined;
+  let routingRefreshNeeded = false;
+  let routingForceRetry = false;
+  let routingRefreshFailedAt: number | undefined;
+  function freshRoutingProvider(provider: FlatPickerProvider, now: number): boolean {
+    const age = now - Date.parse(provider.observedAt ?? "");
+    return age >= 0 && age < ROUTING_AVAILABILITY_TTL_MS;
+  }
+  function refreshRoutingProviders(): Promise<void> {
+    const load = options.routingProviders;
+    if (!load) return Promise.resolve();
+    if (routingRefresh) return routingRefresh;
+    const now = Date.now();
+    const retryAge = routingRefreshFailedAt === undefined ? Infinity : now - routingRefreshFailedAt;
+    if (!routingRefreshNeeded && (
+      (retryAge >= 0 && retryAge < 10_000) ||
+      (routingProviders && routingProviders.length > 0 && routingProviders.every(provider => freshRoutingProvider(provider, now)))
+    )) return Promise.resolve();
+    const force = routingRefreshNeeded || routingForceRetry;
+    routingRefreshNeeded = false;
+    return routingRefresh = Promise.resolve().then(() => load(force)).then(providers => {
+      routingRefreshFailedAt = providers.length === 0 ? Date.now() : undefined;
+      routingForceRetry = false;
+      if (!routingRefreshNeeded) routingProviders = providers;
+    }, () => {
+      routingRefreshFailedAt = Date.now();
+      routingForceRetry = force;
+      options.logError("acp: could not refresh the provider catalogue for model routing");
+    }).finally(() => {
+      routingRefresh = undefined;
+      // Existing waiters must also wait for changes that arrived mid-refresh.
+      if (routingRefreshNeeded) return refreshRoutingProviders();
+    });
+  }
+
   /** Each session's MCP trust grants (`trustedMcpTools`), never persisted; dropped with the session. */
   const mcpGrants = new Map<string, SessionMcpGrants>();
 
@@ -1836,13 +1880,28 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (providerId === binding.providerId && modelId === binding.modelId) return binding.provider;
         throw new Error(`keryx acp has no provider factory for ${providerId}/${modelId}; a subagent runs on its parent's model here`);
       },
-      getDetectedProviders: () => {
+      ...(options.routingProviders ? { refreshRoutingProviders } : {}),
+      getDetectedProviders: (lookup) => {
+        const now = Date.now();
+        // Expiry triggers refresh for new routes. Active routes still respect
+        // newer probe results and explicit credential invalidation.
+        const verified = (lookup?.forActiveRoute
+          ? routingProviders
+          : routingProviders?.filter(provider => freshRoutingProvider(provider, now))) ?? [];
+        if (verified.length > 0) {
+          const providerId = parent().providerId;
+          return verified.some(entry => entry.name === providerId)
+            ? verified
+            : [{ name: providerId, models: [] }, ...verified];
+        }
         const byProvider = new Map<string, string[]>();
         for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);
-        return withSessionProvider(
+        const fallback = withSessionProvider(
           parent().providerId,
           [...byProvider].map(([name, models]) => ({ name, models })),
         );
+        // Picker rows can describe models without verifying their availability.
+        return options.routingProviders ? fallback.map(row => ({ ...row, offline: true })) : fallback;
       },
       onFleetEvent: (event) => {
         if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));

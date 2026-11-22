@@ -48,6 +48,7 @@ async function activeTool(
   profileObservedAt = "2026-11-04T00:00:00.000Z",
   options: {
     readonly clearDetectedOnProviderBuild?: boolean;
+    readonly ageDetectedOnProviderBuild?: boolean;
     readonly detectedOnProviderBuild?: readonly FlatPickerProvider[];
     readonly parentBaseUrl?: string;
   } = {},
@@ -75,6 +76,7 @@ async function activeTool(
   const streamed: Array<{ providerId: string; modelId: string }> = [];
   const events: SpawnSubagentFleetEvent[] = [];
   let currentDetected = detected;
+  let expired = false;
   const tool = createSpawnSubagentTool({
     cwd,
     routingConfigDir: configDir,
@@ -83,10 +85,11 @@ async function activeTool(
       modelId: "medium",
       ...(options.parentBaseUrl === undefined ? {} : { baseUrl: options.parentBaseUrl }),
     }),
-    getDetectedProviders: () => currentDetected,
+    getDetectedProviders: (lookup) => expired && !lookup?.forActiveRoute ? [] : currentDetected,
     makeProvider: (providerId, modelId, baseUrl) => {
       built.push({ providerId, modelId });
       providerBaseUrls.push(baseUrl);
+      expired = options.ageDetectedOnProviderBuild === true;
       if (options.clearDetectedOnProviderBuild === true) currentDetected = [];
       else if (options.detectedOnProviderBuild !== undefined) currentDetected = options.detectedOnProviderBuild;
       return stubProvider(providerText, () => streamed.push({ providerId, modelId }));
@@ -258,6 +261,20 @@ test("routing rechecks current credentials before child provider I/O", async () 
   expect(result.output).toContain("credentials-missing");
   expect(built).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
   expect(streamed).toEqual([]);
+});
+
+test("routing retains selected evidence for an active route after the catalogue ages", async () => {
+  const { tool, streamed } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
+  }, [
+    { name: "ollama", models: ["medium"] },
+    { name: "anthropic", models: ["reviewer"] },
+  ], "done", "2026-11-04T00:00:00.000Z", { ageDetectedOnProviderBuild: true });
+  const result = await tool.invoke({ task: "continue a verified route", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(streamed).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
 });
 
 test("routing refuses a child removed by the current provider catalogue before I/O", async () => {

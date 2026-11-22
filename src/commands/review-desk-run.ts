@@ -42,8 +42,8 @@ export async function runReviewDesk(args: string[]) {
     },
   });
   if (action === "worker" && Object.keys(v).length === 1 && v.id && uuid.test(v.id)) {
-    const { resolveDeskReviewModel } = await import("./review-desk-provider");
-    await runDeskWorker(v.id, resolveDeskReviewModel);
+    const { resolveDeskReviewModel, resolveDeskReviewOptions } = await import("./review-desk-provider");
+    await runDeskWorker(v.id, resolveDeskReviewModel, resolveDeskReviewOptions);
     return;
   }
   const number = Number(v.number);
@@ -91,10 +91,12 @@ export async function runReviewDesk(args: string[]) {
   } else if (action === "status" && !v.base && !v.head && (v.id === undefined || uuid.test(v.id))) {
     input = { action, ...(v.id ? { id: v.id } : {}), ...(activityId ? { activityId } : {}) };
   } else throw new Error(DESK_USAGE);
+  const resolveManualOptions = input.action === "start" ? (await import("./review-desk-provider")).resolveDeskReviewOptions : undefined;
   const snapshot = await requestDeskRun(
     process.cwd(),
     { repo: v.repo, repositoryId, viewer: v.viewer, number },
     input,
+    resolveManualOptions,
   );
   await new Promise<void>((resolve, reject) =>
     process.stdout.write(JSON.stringify(snapshot) + "\n", (error) => (error ? reject(error) : resolve())),

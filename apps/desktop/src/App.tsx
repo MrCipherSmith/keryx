@@ -20,6 +20,7 @@ import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
+import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
 import { SessionReviewActivity } from "./review/SessionReviewActivity";
 import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
@@ -493,6 +494,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     setView("session");
   }, [cwd, s, state.sessions]);
   const draftReview = s.reviewDraftRequest;
+  const [routingSession, setRoutingSession] = useState<string | null>(null);
+  useEffect(() => {
+    if (routingSession !== null && (routingSession !== state.sessionId || view !== "session")) setRoutingSession(null);
+  }, [routingSession, state.sessionId, view]);
   const sessionFlow = state.sessions.find(session => session.sessionId === state.sessionId);
   const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
   const viewer = reviewViewer ?? currentNotice?.viewer;
@@ -549,7 +554,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders}
+        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
           reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
@@ -585,7 +590,12 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         </div>
       ) : null}
 
-      {view === "session" && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+      {view === "session" && routingSession !== null && routingSession === state.sessionId &&
+        !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+        <RoutingDialog key={routingSession} sessionId={routingSession} models={reviewModels} rpc={s.rpc}
+          onClose={() => setRoutingSession(null)} />}
+
+      {view === "session" && !(routingSession && routingSession === state.sessionId) && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
           initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
           onApply={async (key, revision, options) => {

@@ -220,7 +220,7 @@ const HINTS: Readonly<Record<string, string>> = {
   opencomments: "owner/repo pr",
   mcp: "trust list | trust revoke <server__tool> | all",
   bus: "send | ask | reply | name",
-  routing: "set <category> <provider/model | baseline> | trust",
+  routing: "status | set <category> <provider/model | baseline> | trust",
   ci: "triage <run id> [job name]",
   conform: "run <target id> <document>",
   task: "<mode> <description> [|| criteria]",
@@ -297,18 +297,18 @@ export function findShellCommand(name: string): ShellCommandRow | undefined {
   return ACP_SHELL_COMMAND_TABLE.find((row) => row.name === name);
 }
 
-/** The shell profile's `availableCommands`: the editor shape plus `_meta.keryx = { group, surface, busy }`. */
+/** The shell profile's `availableCommands`: the editor shape plus Keryx command metadata. */
 export function shellAvailableCommands(): {
   name: string;
   description: string;
   input?: { hint: string };
-  _meta: { keryx: { group: HelpGroupName; surface: ShellCommandSurface; busy: ShellCommandBusy } };
+  _meta: { keryx: { group: HelpGroupName; surface: ShellCommandSurface; busy: ShellCommandBusy; routingTiers?: true } };
 }[] {
   return ACP_SHELL_COMMAND_TABLE.map((row) => ({
     name: row.name,
-    description: row.description,
+    description: row.name === "routing" ? "Configure models for the Strong, Middle and Light tiers" : row.description,
     ...(row.hint !== undefined ? { input: { hint: row.hint } } : {}),
-    _meta: { keryx: { group: row.group, surface: row.surface, busy: row.busy } },
+    _meta: { keryx: { group: row.group, surface: row.surface, busy: row.busy, ...(row.name === "routing" && { routingTiers: true }) } },
   }));
 }
 

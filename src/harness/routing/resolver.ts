@@ -1,9 +1,9 @@
 import { routingDigest, type ModelClassConfig, type NormalizedRoutingConfig, type RoutingAssignment, type RoutingCandidate } from "./config";
 import type { RoutingAssignmentSource, RoutingDecision, RoutingExclusion, RoutingFallbackReason, RoutingNotice, RoutingReason } from "./decision";
-import { compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
+import { ROUTING_TIERS, compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
 import { ROUTING_CAPABILITIES, type RoutingRequest } from "./routing-request";
 import { isVerifiedRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot } from "./snapshot";
-import { isRoutingCategory } from "./table";
+import { ROUTING_CATEGORY_TIERS, isRoutingCategory } from "./table";
 
 interface AssignmentResolution {
   readonly assignment: RoutingAssignment;
@@ -99,6 +99,22 @@ function assignmentFor(request: RoutingRequest, config: NormalizedRoutingConfig)
       source,
       recommendationSource: "none",
       ...(classifierReceiptId !== undefined ? { classifierReceiptId } : {}),
+    };
+  }
+  if (config.tierRouting && source === "builtin" &&
+      (request.recommendation !== undefined || config.classifier.chain.length === 0)) {
+    const suggested = request.recommendation?.modelClass;
+    const modelClass = suggested === "frontier" && !config.classes.frontier.candidates.some(candidate => candidate.enabled)
+      && config.classes.frontier.fallbackClasses.length === 0
+      ? "expert" : suggested ??
+      ROUTING_TIERS[ROUTING_CATEGORY_TIERS[request.category]];
+    const { candidates, fallbackClasses } = config.classes[modelClass];
+    const hasCandidates = candidates.some(candidate => candidate.enabled) || fallbackClasses.length > 0;
+    return {
+      assignment: hasCandidates ? { mode: "class", modelClass } : { mode: "baseline" },
+      source,
+      recommendationSource: request.recommendation?.source ?? "none",
+      ...(request.recommendation?.receiptId !== undefined ? { classifierReceiptId: request.recommendation.receiptId } : {}),
     };
   }
   if (request.recommendation !== undefined) {

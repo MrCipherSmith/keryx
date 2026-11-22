@@ -120,7 +120,10 @@ describe("the served table", () => {
     const advertised = shellAvailableCommands();
     expect(advertised.map((entry) => entry.name)).toEqual(rowNames);
     for (const entry of advertised) {
-      expect(Object.keys(entry._meta.keryx).sort()).toEqual(["busy", "group", "surface"]);
+      expect(Object.keys(entry._meta.keryx).sort()).toEqual(
+        entry.name === "routing" ? ["busy", "group", "routingTiers", "surface"] : ["busy", "group", "surface"],
+      );
+      if (entry.name === "routing") expect(entry._meta.keryx.routingTiers).toBe(true);
       expect(entry.description.length).toBeGreaterThan(0);
       expect(entry.name.startsWith("/")).toBe(false);
     }

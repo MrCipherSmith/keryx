@@ -8,6 +8,10 @@
     "schemaVersion": {
       "const": 2
     },
+    "tierRouting": {
+      "type": "boolean",
+      "description": "Use the configured model tiers for categories without explicit routing."
+    },
     "classes": {
       "type": "object",
       "additionalProperties": false,

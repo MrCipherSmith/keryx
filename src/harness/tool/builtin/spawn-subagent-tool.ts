@@ -723,7 +723,9 @@ export interface SpawnSubagentToolDeps {
    * one, so a caller holding a `detectProviders()` result must pass its `models`
    * through rather than mapping it down to bare names.
    */
-  getDetectedProviders: () => readonly FlatPickerProvider[];
+  getDetectedProviders: (options?: { forActiveRoute: true }) => readonly FlatPickerProvider[];
+  /** Refresh live availability when the host catalogue has aged out. */
+  refreshRoutingProviders?: () => Promise<void>;
   /**
    * Rank hints for tier resolution on the session's provider; the host supplies
    * the operator's `routing profile set --tier` pins here. Absent, the built-in
@@ -1511,16 +1513,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // Inner paths retain ownership of reservation/slate cleanup.
       try {
       const parent = deps.getParentModel();
-      const detected = deps.getDetectedProviders();
       const session = { providerId: parent.providerId, modelId: parent.modelId };
-      // The candidate set for tier resolution: whatever runtime detection
-      // reported, passed through verbatim. No table of model ids exists on this
-      // path — a provider that reported no models simply contributes none, and
-      // its tiers resolve to the session model.
-      const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map((p) => ({
-        ...p,
-        models: p.models ?? [],
-      }));
       let routingConfig: ReturnType<typeof loadRouting>;
       try {
         routingConfig = loadRouting(deps.routingProjectRoot ?? deps.cwd, deps.routingConfigDir);
@@ -1596,6 +1589,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         };
       }
 
+      const maySwitchModel = deskOverride !== undefined || assignment.mode !== "baseline" || assignment.fallbackClass !== undefined;
+      if (!isExternalRuntimeRequest && maySwitchModel) await deps.refreshRoutingProviders?.();
+      const detected = deps.getDetectedProviders();
+      const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map(p => ({ ...p, models: p.models ?? [] }));
+
       // The relative tier is never translated into an absolute class; an agent
       // class is a recommendation only and cannot populate RoutingRequest.userOverride.
       let categoryModelRequest: ChildModelRequest | undefined;
@@ -1653,7 +1651,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           parentAllowed: parentAllowed(target),
           cooldown: false,
         }));
-        const profiles = loadModelProfiles(deps.routingConfigDir);
+        const profiles = loadModelProfiles(deps.routingConfigDir, () => Date.parse(observedAt));
         let routingBudget = routingBudgets.get(routingConfig.configDigest);
         if (routingBudget === undefined) {
           routingBudget = new RoutingBudgetLedger({
@@ -1794,7 +1792,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           receipt: routingReceipt,
           selectionTimeoutMs: routingConfig.execution.selectionTimeoutMs,
           beforeIo: async (target, _decisionId, context) => {
-            const currentDetected = deps.getDetectedProviders();
+            const currentDetected = deps.getDetectedProviders({ forActiveRoute: true });
             const currentCredentialedProviders = new Set(currentDetected.map((entry) => entry.name));
             const currentProvider = currentDetected.find((entry) => entry.name === target.providerId);
             const currentEnv = envWithSavedApiKeys(process.env, deps.routingConfigDir);
@@ -1824,7 +1822,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             const authenticatedSession = modelRefKey(target) === modelRefKey(session);
             const dispatchProfile = profiles[profileKey(target.providerId, target.modelId)];
             if (!authenticatedSession) {
-              const explicitlyUnavailable = currentProvider?.offline === true
+              const explicitlyUnavailable = (deps.refreshRoutingProviders !== undefined && currentProvider === undefined)
+                || (currentProvider?.offline === true && !currentProvider.profileOnly)
                 || currentProvider?.listUnavailable !== undefined
                 || (currentProvider?.models !== undefined && !currentProvider.models.includes(target.modelId));
               if (explicitlyUnavailable || selectedAvailability !== "available") {

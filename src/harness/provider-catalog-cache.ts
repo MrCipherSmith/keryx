@@ -64,6 +64,29 @@ function catalogFile(dir?: string): string {
   return path.join(keryxConfigDir(dir), CATALOG_CACHE_FILE);
 }
 
+/** Serialize live probes across processes while leaving cache writes free to merge. */
+export async function withCatalogRefreshLock(
+  dir: string | undefined,
+  refresh: () => Promise<ProviderCatalog>,
+): Promise<ProviderCatalog> {
+  ensureKeryxConfigDir(dir);
+  let acquired = false;
+  try {
+    // Detection and model listing are sequential and can each take eight seconds.
+    return await withFileLock(`${catalogFile(dir)}.refresh.lock`, () => {
+      acquired = true;
+      return refresh();
+    }, { timeoutMs: 25_000, retryMs: 50, staleMs: 15_000 });
+  } catch (error) {
+    // A read-only config directory still permits live detection. A contended
+    // lock must never trigger another probe or supply expired routing facts.
+    if (!acquired && error instanceof Error && "code" in error && ["EACCES", "EPERM", "EROFS"].some(code => code === error.code)) {
+      return refresh();
+    }
+    throw error;
+  }
+}
+
 function sanitizeBalance(value: unknown): ProviderBalance | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const record = value as Record<string, unknown>;

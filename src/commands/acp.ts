@@ -14,6 +14,8 @@ import { ACP_PROFILES, DEFAULT_ACP_PROFILE, isAcpProfile, type AcpProfile } from
 import { MAX_HELD_SESSIONS, runAcpServer } from "../acp/server";
 import { loadAcpFixture } from "../acp/fixture-provider";
 import { acpModelChoice, type AcpModelChoice, type AcpModelSource, type AcpTurnSettings } from "../acp/models";
+import { catalogToFlatPickerProviders, loadOrRefreshProviderCatalogLive, CATALOG_FETCH_TIMEOUT_MS } from "../harness/provider-catalog";
+import { ROUTING_AVAILABILITY_TTL_MS } from "../harness/routing/snapshot-adapter";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { ProviderPort } from "../harness/provider/types";
 import { envWithSavedApiKeys, loadShellConfig, shellConfigPath, updateShellConfig } from "../lib/shell-config";
@@ -527,6 +529,22 @@ export async function acpCommand(args: string[]): Promise<void> {
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
       profile,
+      ...(profile === "shell" && resolution.kind === "ready" && resolution.source !== "fixture" ? {
+        routingProviders: async (force: boolean) => {
+          const env = envWithSavedApiKeys(process.env);
+          const catalog = await loadOrRefreshProviderCatalogLive({
+            fetch: globalThis.fetch,
+            env,
+            redetect: async () => withSavedBaseUrls(await detectProviders({
+              fetch: ((input: string | URL | Request, init?: RequestInit) =>
+                globalThis.fetch(input, { ...init, signal: AbortSignal.timeout(CATALOG_FETCH_TIMEOUT_MS) })) as typeof fetch,
+              env,
+              ...(parsed.baseUrl !== undefined ? { baseUrl: parsed.baseUrl } : {}),
+            }), loadShellConfig()),
+          }, { ttlMs: ROUTING_AVAILABILITY_TTL_MS, force, checkEntryDates: true });
+          return catalogToFlatPickerProviders(catalog, { withStatusRows: true });
+        },
+      } : {}),
       // The shell profile's `spawn_subagent` builds a child's provider the way `keryx shell` does.
       makeProvider: realMakeProvider(() => {}),
       ...(parsed.dataDir !== undefined ? { dataDir: parsed.dataDir } : {}),

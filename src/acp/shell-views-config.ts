@@ -5,6 +5,7 @@
 // text subcommands (`src/commands/shell-subcommands.ts` and the shells' own `on|off` forms),
 // so the desktop, the readline shell and the TUI share them.
 
+import { describeTierSettings, saveTierSettings } from "./routing-tier-settings";
 import { normalizeRoutingConfig } from "../harness/routing/config";
 import { readRoutingSettings, ROUTING_NORMALIZATION } from "../harness/routing/settings";
 import { ROUTING_CATEGORIES } from "../harness/routing/table";
@@ -70,7 +71,20 @@ async function routingView(host: ShellCommandHost): Promise<ShellView> {
 export async function runRouting(host: ShellCommandHost, args: string): Promise<ShellCommandOutcome> {
   const [sub, ...rest] = args.trim().split(/\s+/);
   const location = { cwd: host.cwd, ...(host.configDir !== undefined ? { configDir: host.configDir } : {}) };
-  if (args.trim().length === 0) return viewOutcome(await routingView(host));
+  if (!sub || (sub === "status" && rest.length === 0)) return viewOutcome(await routingView(host));
+  if (sub === "tiers") {
+    try {
+      const input = args.trim().slice(sub.length).trim();
+      if (!input) return { text: JSON.stringify(describeTierSettings(readRoutingSettings(location))) };
+      const revision = input.slice(0, 64);
+      const json = input.slice(64).trim();
+      if (!/^[a-f0-9]{64}$/.test(revision) || input[64] !== " " || json.length > 50_000) throw new Error("Invalid routing settings request.");
+      await saveTierSettings(location, revision, JSON.parse(json));
+      return { text: "Routing tiers saved.", effects: ["config"] };
+    } catch (error) {
+      return { text: errorText(error), refused: true };
+    }
+  }
   if (sub === "set") return actionOutcome(await routingSet(location, rest.join(" ")));
   if (sub === "trust") return actionOutcome(routingTrust(location));
   return { text: `Unknown /routing argument '${sub}'. ${ROUTING_SET_USAGE} | /routing trust\n`, refused: true };

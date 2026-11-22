@@ -29,3 +29,29 @@ export function sameModelRef(left: ModelRef, right: ModelRef): boolean {
 export function modelRefKey(ref: ModelRef): string {
   return `${ref.providerId}\u0000${ref.modelId}`;
 }
+
+/** The three operator-facing tiers, mapped to the resolver's model classes. */
+export const ROUTING_MAX_TIER_MODELS = 32;
+export const ROUTING_TIER_IDS = ["strong", "middle", "light"] as const;
+export type RoutingTier = (typeof ROUTING_TIER_IDS)[number];
+export const ROUTING_TIERS = {
+  strong: "expert",
+  middle: "standard",
+  light: "light",
+} as const satisfies Readonly<Record<RoutingTier, ModelClass>>;
+
+export interface TierSettingsSnapshot {
+  readonly revision: string;
+  readonly saveBlocked: boolean;
+  readonly enabled: boolean;
+  readonly projectEnabled: boolean | null;
+  readonly notices: readonly string[];
+  readonly projectOverrides: boolean;
+  readonly projectTrustRequired: boolean;
+  readonly personalOverrides: boolean;
+  readonly tiers: readonly {
+    readonly tier: RoutingTier;
+    readonly user: readonly ModelRef[];
+    readonly project: readonly ModelRef[] | null;
+  }[];
+}

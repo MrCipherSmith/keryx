@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { routingDigest } from "./config";
 import { migrateLegacyRouting } from "./legacy-migration";
-import { loadRouting, readRoutingSettings, setRoutingCategory } from "./settings";
+import { loadRouting, readRoutingSettings, setRoutingCategory, updateRoutingLayer } from "./settings";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -106,6 +106,20 @@ describe("legacy category table", () => {
     const config = loadRouting(f.cwd, f.configDir);
     expect(config.categories.planning).toEqual({ mode: "class", modelClass: "expert" });
     expect(config.categories.review).toEqual({ mode: "model", target: MODEL });
+  });
+
+  test("a partial edit cannot promote project-activated user settings to the global layer", async () => {
+    const f = await fixture();
+    const settings = { schemaVersion: 2 as const, categories: { quick: { mode: "baseline" as const } } };
+    await writeFile(f.authFile, JSON.stringify({ routingV2: settings }));
+    await writeActivationMarker(f, undefined, settings);
+    const { revision, user } = readRoutingSettings(f.location);
+    expect(user.source).toBe("opt-in");
+    await expect(updateRoutingLayer({
+      ...f.location, scope: "user", expectedRevision: revision,
+      preserveLegacyScope: true, next: { ...settings, tierRouting: true },
+    })).rejects.toThrow(/activated for this project only/);
+    expect(JSON.parse(await readFile(f.authFile, "utf8"))).toEqual({ routingV2: settings });
   });
 
   test("an interrupted activation change refuses migration instead of reading past it", async () => {

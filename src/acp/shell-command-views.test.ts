@@ -13,6 +13,8 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { loadRouting } from "../harness/routing/settings";
+import type { TierSettingsSnapshot } from "../harness/routing/model-class";
 import { ROUTING_CATEGORIES } from "../harness/routing/table";
 import { RECOMMENDED_JEV_PROFILE } from "../review/jev-profile";
 import { loadShellConfig } from "../lib/shell-config";
@@ -109,10 +111,75 @@ describe("every served view command answers a view bare", () => {
 });
 
 describe("/routing", () => {
+  test("Desktop tiers persist several models and reject a stale write", async () => {
+    const host = fakeHost(project(), tempDir("keryx-acp-tier-settings-"));
+    await run(host, "routing", "set subagents baseline");
+    const read = async (): Promise<TierSettingsSnapshot> => JSON.parse((await run(host, "routing", "tiers")).text);
+    const { revision, enabled, projectEnabled } = await read();
+    expect(enabled).toBe(false);
+    expect(projectEnabled).toBeNull();
+    const models = [{ provider: "openrouter", model: "vendor/one" }, { provider: "openai", model: "two" }];
+    const modelPools = { strong: [], middle: models, light: [] };
+    const save = `tiers ${revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: false }, null, 1)}`;
+    expect((await run(host, "routing", save)).refused).toBeUndefined();
+    expect((await read()).tiers.find(row => row.tier === "middle")?.user).toEqual([
+      { providerId: "openrouter", modelId: "vendor/one" }, { providerId: "openai", modelId: "two" },
+    ]);
+    const config = loadRouting(host.cwd, host.configDir);
+    expect(config.categories.subagents).toEqual({ mode: "baseline" });
+    expect(config.classes.standard.candidates.map(candidate => candidate.target.modelId)).toEqual(["vendor/one", "two"]);
+    expect(await run(host, "routing", save)).toMatchObject({ refused: true, text: expect.stringContaining("revision conflict") });
+    const old = await read();
+    expect(old.personalOverrides).toBe(true);
+    expect((await run(host, "routing", `tiers ${old.revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: true })}`)).refused).toBeUndefined();
+    expect((await read()).personalOverrides).toBe(false);
+    expect(loadRouting(host.cwd, host.configDir).categories).toMatchObject({
+      subagents: { mode: "auto" }, review: { mode: "baseline" }, default: { mode: "baseline" },
+    });
+    const active = await read();
+    expect((await run(host, "routing", `tiers ${active.revision} ${JSON.stringify({ modelPools, enabled: false, replaceOverrides: false })}`)).refused).toBeUndefined();
+    expect((await read()).enabled).toBe(false);
+    expect(loadRouting(host.cwd, host.configDir).categories.subagents).toEqual({ mode: "baseline" });
+    expect(loadRouting(host.cwd, host.configDir).classes.standard.candidates).toHaveLength(2);
+  });
+
+  test("Desktop preserves existing pools outside the dialog's limits", async () => {
+    const configDir = tempDir("keryx-acp-tier-large-pool-");
+    const host = fakeHost(project(), configDir);
+    const strong = Array.from({ length: 33 }, (_, i) => ({ provider: "openai", model: `existing ${i}` }));
+    const candidates = strong.map(({ provider, model }, i) => ({
+      target: { providerId: provider, modelId: model }, priority: strong.length - i, enabled: true,
+    }));
+    writeFileSync(path.join(configDir, "auth.json"), JSON.stringify({
+      modelRouting: { schemaVersion: 2, classes: { expert: { candidates, selection: "priority", fallbackClasses: [] } } },
+    }), { mode: 0o600 });
+    const { revision }: TierSettingsSnapshot = JSON.parse((await run(host, "routing", "tiers")).text);
+    const modelPools = { strong, middle: [], light: [{ provider: "openai", model: "new-model" }] };
+    const saved = await run(host, "routing", `tiers ${revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: false })}`);
+    expect(saved.refused).toBeUndefined();
+    expect(loadRouting(host.cwd, configDir).classes.expert.candidates).toEqual(candidates);
+  });
+
+  test("Desktop can save models projected from a canonical category assignment", async () => {
+    const configDir = tempDir("keryx-acp-tier-category-pool-");
+    const host = fakeHost(project(), configDir);
+    const target = { providerId: "openai", modelId: "older model" };
+    writeFileSync(path.join(configDir, "auth.json"), JSON.stringify({
+      modelRouting: { schemaVersion: 2, categories: { quick: { mode: "model", target } } },
+    }), { mode: 0o600 });
+    const settings: TierSettingsSnapshot = JSON.parse((await run(host, "routing", "tiers")).text);
+    expect(settings.tiers.find(t => t.tier === "light")?.user).toEqual([target]);
+    const modelPools = { strong: [], middle: [], light: [{ provider: target.providerId, model: target.modelId }] };
+    const saved = await run(host, "routing", `tiers ${settings.revision} ${JSON.stringify({ modelPools, enabled: false, replaceOverrides: false })}`);
+    expect(saved.refused).toBeUndefined();
+    expect(loadRouting(host.cwd, configDir).categories.quick).toEqual({ mode: "model", target });
+  });
+
   test("one row per category with its source, a set action, and a form for a model pick", async () => {
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"));
     const view = viewOf(await run(host, "routing"));
     expect(view.title).toBe("Routing");
+    expect(viewOf(await run(host, "routing", "status"))).toEqual(view);
     expect(view.rows.map((row) => row.id)).toEqual([...ROUTING_CATEGORIES]);
     for (const row of view.rows) {
       expect(row.status).toBeDefined();
