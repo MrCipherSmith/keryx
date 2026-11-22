@@ -1,3 +1,4 @@
+import { isDesktopOwner } from "./protocol";
 // The `/v1/remote/*` surface of `keryx serve` (flow 376, block 2).
 //
 // Implements the structural interface `ServeRemoteSurface` that `lib/serve-server.ts`
@@ -472,7 +473,7 @@ export class RemoteHttpSurface {
       case "prompt":
         return this.requestPrompt(hub, request);
       case "prompt-close":
-        return this.closePrompt(request);
+        return this.closePrompt(hub, request);
       case "state":
         return this.messageState(hub, request);
       case "ack":
@@ -534,6 +535,7 @@ export class RemoteHttpSurface {
     if (!body.ok) {
       return body.response;
     }
+    if (body.value.probeExactOwner === true) return ok({ exactOwner: true });
     const checked = this.parseRegister(body.value);
     if (typeof checked === "string") {
       return invalid(checked);
@@ -549,6 +551,7 @@ export class RemoteHttpSurface {
       }
       const limits = hub.limits();
       return ok({
+        exactOwner: true,
         name: result.name,
         threadId: result.threadId,
         reused: result.reused,
@@ -573,22 +576,36 @@ export class RemoteHttpSurface {
     if (name !== undefined && (typeof name !== "string" || name.length > MAX_PROJECT_NAME_CHARS || CONTROL_CHARS.test(name))) {
       return `name must be a string of at most ${MAX_PROJECT_NAME_CHARS} characters without control characters.`;
     }
-    return { sessionId: value.sessionId, project, ...(name === undefined ? {} : { name }) };
+    if (value.owner !== undefined && !isDesktopOwner(value.owner)) return "invalid owner";
+    if (value.expectedThreadId !== undefined && (!Number.isSafeInteger(value.expectedThreadId) || typeof value.expectedThreadId !== "number" || value.expectedThreadId <= 0 || value.owner === undefined)) return "invalid expectedThreadId";
+    return { sessionId: value.sessionId, project, ...(name === undefined ? {} : { name }), ...(value.owner === undefined ? {} : { owner: value.owner }), ...(value.expectedThreadId === undefined ? {} : { expectedThreadId: value.expectedThreadId as number }) };
   }
 
-  private async sessionBody(request: Request): Promise<{ ok: true; body: SessionBody } | { ok: false; response: Response }> {
+  /** Parse once with the normal byte limit, then bind the request to the current owner. */
+  private async readOwnedBody(hub: RemoteHub, request: Request): Promise<BodyResult> {
     const body = await readJsonBody(request);
+    if (!body.ok) return body;
+    const { sessionId, owner } = body.value;
+    if (owner !== undefined && !isDesktopOwner(owner)) return { ok: false, response: invalid("invalid owner") };
+    if (typeof sessionId === "string" && hub.hasSession(sessionId) && !hub.matchesOwner(sessionId, owner)) {
+      return { ok: false, response: fail(404, "unknown-session", "this session is not registered for this owner") };
+    }
+    return body;
+  }
+
+  private async sessionBody(hub: RemoteHub, request: Request): Promise<{ ok: true; body: SessionBody } | { ok: false; response: Response }> {
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body;
     }
     if (!isSessionId(body.value.sessionId)) {
       return { ok: false, response: invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.") };
     }
-    return { ok: true, body: { sessionId: body.value.sessionId } };
+    return { ok: true, body: { sessionId: body.value.sessionId, ...(isDesktopOwner(body.value.owner) ? { owner: body.value.owner } : {}) } };
   }
 
   private async deregister(hub: RemoteHub, request: Request): Promise<Response> {
-    const parsed = await this.sessionBody(request);
+    const parsed = await this.sessionBody(hub, request);
     if (!parsed.ok) {
       return parsed.response;
     }
@@ -598,16 +615,16 @@ export class RemoteHttpSurface {
     this.completed.delete(sessionId);
     this.sent.delete(sessionId);
     this.bound.delete(sessionId);
-    const result = await hub.deregister(sessionId);
+    const result = await hub.deregister(sessionId, parsed.body.owner);
     return ok({ existed: result.existed });
   }
 
   private async heartbeat(hub: RemoteHub, request: Request): Promise<Response> {
-    const parsed = await this.sessionBody(request);
+    const parsed = await this.sessionBody(hub, request);
     if (!parsed.ok) {
       return parsed.response;
     }
-    const result = await hub.heartbeat(parsed.body.sessionId);
+    const result = await hub.heartbeat(parsed.body.sessionId, parsed.body.owner);
     if (result.ok) {
       return ok({ name: result.name, threadId: result.threadId });
     }
@@ -651,7 +668,7 @@ export class RemoteHttpSurface {
   }
 
   private async reply(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -678,7 +695,7 @@ export class RemoteHttpSurface {
   }
 
   private async requestApproval(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -739,9 +756,11 @@ export class RemoteHttpSurface {
         ],
         ...(remember === undefined ? [] : [[{ text: alwaysButtonText(remember), callback_data: approvalCallbackData(approvalId, "always") }]]),
       ],
-      onSent: (info) => this.onApprovalSent(approvalId, sessionId, info.messageId, info.text),
+      onSent: (info) => {
+        if (hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) this.onApprovalSent(approvalId, sessionId, info.messageId, info.text);
+      },
     });
-    if (!sent) {
+    if (!sent || !hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) {
       this.dropApproval(approvalId);
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
@@ -754,7 +773,7 @@ export class RemoteHttpSurface {
    * edited to say whether the rule was remembered. Anything else changes nothing.
    */
   private async approvalResult(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -802,7 +821,7 @@ export class RemoteHttpSurface {
    * The prompt is registered before it is sent, so a press cannot beat the record.
    */
   private async requestPrompt(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -888,9 +907,11 @@ export class RemoteHttpSurface {
     }
     const sent = await hub.send(sessionId, redactSensitiveText(value.text), {
       keyboard,
-      onSent: (info) => this.onChoiceSent(promptId, sessionId, info.messageId, info.text),
+      onSent: (info) => {
+        if (hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) this.onChoiceSent(promptId, sessionId, info.messageId, info.text);
+      },
     });
-    if (!sent) {
+    if (!sent || !hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) {
       this.dropChoice(promptId);
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
@@ -902,8 +923,8 @@ export class RemoteHttpSurface {
    * Only the session that asked can close it. The message is put in its final state and a later press or
    * reply finds nothing to answer.
    */
-  private async closePrompt(request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+  private async closePrompt(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -966,7 +987,7 @@ export class RemoteHttpSurface {
 
   /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */
   private async messageState(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -987,7 +1008,7 @@ export class RemoteHttpSurface {
   }
 
   private async ack(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -1011,7 +1032,7 @@ export class RemoteHttpSurface {
    * accepted and changes nothing; an id this surface never sent, or sent to another session, is refused.
    */
   private async approvalAck(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -1071,13 +1092,22 @@ export class RemoteHttpSurface {
   }
 
   private openStream(hub: RemoteHub, request: Request, io: { untimed: () => void }): Response {
-    const sessionId = new URL(request.url).searchParams.get("sessionId");
+    const params = new URL(request.url).searchParams;
+    if (params.getAll("sessionId").length !== 1 || params.getAll("owner").length > 1) return invalid("duplicate or missing stream identity");
+    const sessionId = params.get("sessionId");
+    const rawOwner = params.get("owner");
+    let owner: unknown;
+    if (rawOwner !== null) {
+      try { owner = JSON.parse(rawOwner); } catch { return invalid("invalid owner"); }
+      if (!isDesktopOwner(owner)) return invalid("invalid owner");
+    }
     if (!isSessionId(sessionId)) {
       return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
     }
     if (!hub.hasSession(sessionId)) {
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
+    if (!hub.matchesOwner(sessionId, isDesktopOwner(owner) ? owner : undefined)) return fail(404, "unknown-session", "this session is not registered for this owner");
     const resumeFrom = parseLastEventId(request);
     if (resumeFrom !== undefined) {
       this.complete(sessionId, resumeFrom);

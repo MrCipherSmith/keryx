@@ -1,3 +1,4 @@
+import type { DesktopOwner, RegisterBody } from "./protocol";
 // The serve-side remote-control hub (flow 376, block 1).
 //
 // Owns the registry of remote sessions, the topic lifecycle, the durable queues
@@ -448,6 +449,13 @@ export class RemoteHub {
     };
   }
 
+  matchesOwner(sessionId: string, owner: DesktopOwner | undefined): boolean {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) return false;
+    if (record.owner === undefined) return owner === undefined;
+    return owner !== undefined && record.owner.incarnation === owner.incarnation && record.owner.generation === owner.generation;
+  }
+
   hasSession(sessionId: string): boolean {
     return this.registry.bySession(sessionId) !== undefined;
   }
@@ -469,14 +477,14 @@ export class RemoteHub {
 
   // ---- session lifecycle ---------------------------------------------------
 
-  register(input: { sessionId: string; project: string; name?: string }): Promise<RegisterResult> {
+  register(input: RegisterBody): Promise<RegisterResult> {
     return this.serial(() => this.doRegister(input));
   }
 
-  deregister(sessionId: string): Promise<{ ok: true; existed: boolean }> {
+  deregister(sessionId: string, owner?: DesktopOwner): Promise<{ ok: true; existed: boolean }> {
     return this.serial(async () => {
       const record = this.registry.bySession(sessionId);
-      if (record === undefined) {
+      if (record === undefined || !this.matchesOwner(sessionId, owner)) {
         return { ok: true as const, existed: false };
       }
       await this.archive(record, "The session was closed.");
@@ -523,10 +531,10 @@ export class RemoteHub {
     );
   }
 
-  heartbeat(sessionId: string): Promise<HeartbeatResult> {
+  heartbeat(sessionId: string, owner?: DesktopOwner): Promise<HeartbeatResult> {
     return this.serial(async () => {
       const record = this.registry.bySession(sessionId);
-      if (record === undefined) {
+      if (record === undefined || !this.matchesOwner(sessionId, owner)) {
         return { ok: false as const, code: "unknown-session" as const, message: "this session is not registered for remote control; register again" };
       }
       record.lastHeartbeat = this.now();
@@ -941,9 +949,13 @@ export class RemoteHub {
     this.outbound.enqueue({ chatId: record.chatId, threadId: record.threadId, text });
   }
 
-  private async doRegister(input: { sessionId: string; project: string; name?: string }): Promise<RegisterResult> {
+  private async doRegister(input: RegisterBody): Promise<RegisterResult> {
     const now = this.now();
     const existing = this.registry.bySession(input.sessionId);
+    const collision = (): RegisterResult => ({ ok: false, code: "name-taken", message: "topic belongs to another attachment" });
+    if (existing !== undefined && (existing.owner !== undefined || input.owner !== undefined) && !this.matchesOwner(input.sessionId, input.owner)) return collision();
+    if (input.expectedThreadId !== undefined && (existing === undefined || existing.threadId !== input.expectedThreadId)) return collision();
+    if (existing?.owner !== undefined && (existing.closing || existing.chatId !== this.config.chatId)) return collision();
     let name: string;
     if (input.name !== undefined && input.name.trim().length > 0) {
       const checked = checkName(input.name);
@@ -952,6 +964,7 @@ export class RemoteHub {
       }
       name = checked.name;
       const holder = this.registry.byNameKey(name);
+      if (holder !== undefined && (holder.owner !== undefined || input.owner !== undefined) && (holder.sessionId !== input.sessionId || !this.matchesOwner(input.sessionId, input.owner))) return collision();
       if (holder !== undefined && holder.sessionId !== input.sessionId && isLive(holder, now)) {
         return { ok: false, code: "name-taken", message: `the name "${name}" is held by a live remote session` };
       }
@@ -961,7 +974,7 @@ export class RemoteHub {
       let chosen: string | undefined;
       for (const candidate of defaultNameCandidates(input.project, input.sessionId, this.machine)) {
         const holder = this.registry.byNameKey(candidate);
-        if (holder === undefined || holder.sessionId === input.sessionId || !isLive(holder, now)) {
+        if (holder === undefined || (holder.sessionId === input.sessionId && this.matchesOwner(input.sessionId, input.owner)) || (input.owner === undefined && holder.owner === undefined && !isLive(holder, now))) {
           chosen = candidate;
           break;
         }
@@ -973,6 +986,7 @@ export class RemoteHub {
     }
 
     // The same session asking for a different name leaves its old topic first.
+    if (existing?.owner !== undefined && nameKey(existing.name) !== nameKey(name)) return collision();
     if (existing !== undefined && nameKey(existing.name) !== nameKey(name)) {
       await this.retire(existing, "renamed by the session");
     }
@@ -1004,6 +1018,7 @@ export class RemoteHub {
       return { ok: false, code: "api-error", message: `could not create the topic: ${describeError(error)}` };
     }
     const record: RemoteSessionRecord = {
+      ...(input.owner === undefined ? {} : { owner: input.owner }),
       name,
       sessionId: input.sessionId,
       project: input.project,

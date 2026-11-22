@@ -12,6 +12,7 @@
 // timestamp that stopped moving while serve was down.
 
 import path from "node:path";
+import { isDesktopOwner, type DesktopOwner } from "./protocol";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { SESSION_LEASE_STALE_MS } from "../session/lease";
 import { nameKey } from "./naming";
@@ -20,6 +21,7 @@ import { ensureRemoteDir, REGISTRY_FILE } from "./paths";
 export type RemoteSessionStatus = "live" | "unavailable";
 
 export interface RemoteSessionRecord {
+  owner?: DesktopOwner;
   name: string;
   sessionId: string;
   project: string;
@@ -34,13 +36,14 @@ export interface RemoteSessionRecord {
   closing?: boolean;
 }
 
-const REGISTRY_VERSION = 1;
+const REGISTRY_VERSION = 2;
 
 function parseRecord(value: unknown): RemoteSessionRecord | undefined {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
   const raw = value as Record<string, unknown>;
+  if (raw.owner !== undefined && !isDesktopOwner(raw.owner)) return undefined;
   const numbers = ["chatId", "threadId", "registeredAt", "lastHeartbeat"] as const;
   if (typeof raw.name !== "string" || typeof raw.sessionId !== "string" || typeof raw.project !== "string") {
     return undefined;

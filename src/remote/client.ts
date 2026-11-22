@@ -1,3 +1,4 @@
+import type { DesktopOwner } from "./protocol";
 // The shell-side client of `keryx serve`'s remote hub (flow 376, block 2).
 //
 // A library, not a feature: no TUI, no shell, nothing from `src/tui`. The shell
@@ -93,6 +94,7 @@ export interface ClientStatus {
 }
 
 export interface RemoteClientOptions {
+  owner?: DesktopOwner;
   sessionId: string;
   project: string;
   /** The topic name to ask for. Absent: serve picks one from the project. */
@@ -664,14 +666,14 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | PromptCloseBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: { probeExactOwner: true } | RegisterBody | ReplyBody | ApprovalBody | PromptBody | PromptCloseBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
       method: "POST",
       redirect: "manual",
       headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(this.options.owner === undefined || "probeExactOwner" in body ? body : { ...body, owner: this.options.owner }),
       signal: AbortSignal.any([AbortSignal.timeout(this.requestTimeoutMs), this.lifetime.signal]),
     });
     const text = await response.text();
@@ -749,7 +751,7 @@ export class RemoteClient {
     }
     const abort = new AbortController();
     this.streamAbort = abort;
-    const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}`);
+    const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}${this.options.owner === undefined ? "" : `&owner=${encodeURIComponent(JSON.stringify(this.options.owner))}`}`);
     const { nonce, bearer } = shellRequestCredential(token);
     const headers: Record<string, string> = { authorization: `Bearer ${bearer}`, accept: "text/event-stream" };
     if (this.lastCompleted > 0) {
@@ -826,7 +828,13 @@ export class RemoteClient {
   }
 
   private async register(): Promise<void> {
+    if (this.options.owner !== undefined) {
+      const probe = await this.post("register", { probeExactOwner: true });
+      const capability = await probe.json().catch(() => ({})) as { exactOwner?: unknown };
+      if (!probe.ok || capability.exactOwner !== true) throw new FatalClientError("unsupported-owner", "serve does not support exact owner registration");
+    }
     const body: RegisterBody = {
+      ...(this.options.owner === undefined || this.threadId === undefined ? {} : { expectedThreadId: this.threadId }),
       sessionId: this.options.sessionId,
       project: this.options.project,
       ...(this.assignedName !== undefined ? { name: this.assignedName } : this.options.name === undefined ? {} : { name: this.options.name }),
@@ -834,6 +842,7 @@ export class RemoteClient {
     const response = await this.post("register", body);
     if (response.ok) {
       const result = (await response.json()) as RegisterResponse;
+      if (this.options.owner !== undefined && result.exactOwner !== true) throw new FatalClientError("unsupported-owner", "serve did not confirm exact owner registration");
       this.assignedName = result.name;
       this.name = result.name;
       this.threadId = result.threadId;

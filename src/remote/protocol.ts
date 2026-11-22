@@ -323,13 +323,28 @@ export const APPROVAL_INPUT_PREVIEW_CHARS = 1_500;
 
 // ---- request bodies -----------------------------------------------------------
 
+export interface DesktopOwner {
+  kind: "desktop";
+  incarnation: string;
+  generation: string;
+}
+
+export function isDesktopOwner(value: unknown): value is DesktopOwner {
+  if (typeof value !== "object" || value === null) return false;
+  const owner = value as Record<string, unknown>;
+  return owner.kind === "desktop" && isSessionId(owner.incarnation) && isSessionId(owner.generation);
+}
+
 export interface RegisterBody {
+  owner?: DesktopOwner;
+  expectedThreadId?: number;
   sessionId: string;
   project: string;
   name?: string;
 }
 
 export interface SessionBody {
+  owner?: DesktopOwner;
   sessionId: string;
 }
 
@@ -422,6 +437,7 @@ export interface StateBody {
 // ---- responses ----------------------------------------------------------------
 
 export interface RegisterResponse {
+  exactOwner?: boolean;
   schemaVersion: string;
   name: string;
   threadId: number;
