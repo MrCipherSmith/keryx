@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "514",
+  "slug": "metaproject-openspec",
+  "title": "OpenSpec in Keryx Metaproject — local catalog, history and Explorer",
+  "status": "in-progress",
+  "createdAt": "2026-11-22T16:21:10.206Z",
+  "updatedAt": "2026-11-22T16:22:18.115Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "human-request",
+    "quote": "Давай тогда расширим добавим к графу и Вики опенспек.",
+    "source": "Codex conversation, OpenSpec product request"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Granular implementation tasks T5, T6 and T8–T11 supersede this scaffold."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "T7, T12 and T13 supersede this scaffold."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "T14 performs review; publishing a PR requires separate authorization."
+    },
+    {
+      "id": "T5",
+      "title": "Read-only checkout catalog, containment, snapshot evidence and link rows",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "OpenSpec requirement and delta parser with archive semantics",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Portable fixtures and catalog, history, search regression coverage",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Shared read service, artifact detail and scoped stable search",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Explorer v2 projection, evidence and v1 compatibility",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "OpenSpec CLI, Shell routing, guide and core CI discovery",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Desktop OpenSpec reader, tabs, history and graph navigation",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Verify focused core and Desktop checks in GitHub CI",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Verify packaged Desktop, Shell parity and large-fixture usability",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Review all implementation lanes and record verification evidence",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-22T16:21:10.206Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-22T16:21:27.070Z",
+      "event": "task-added",
+      "detail": "T5: Read-only checkout catalog, containment, snapshot evidence and link rows"
+    },
+    {
+      "at": "2026-11-22T16:21:27.336Z",
+      "event": "task-added",
+      "detail": "T6: OpenSpec requirement and delta parser with archive semantics"
+    },
+    {
+      "at": "2026-11-22T16:21:27.607Z",
+      "event": "task-added",
+      "detail": "T7: Portable fixtures and catalog, history, search regression coverage"
+    },
+    {
+      "at": "2026-11-22T16:21:27.869Z",
+      "event": "task-added",
+      "detail": "T8: Shared read service, artifact detail and scoped stable search"
+    },
+    {
+      "at": "2026-11-22T16:21:28.139Z",
+      "event": "task-added",
+      "detail": "T9: Explorer v2 projection, evidence and v1 compatibility"
+    },
+    {
+      "at": "2026-11-22T16:21:28.409Z",
+      "event": "task-added",
+      "detail": "T10: OpenSpec CLI, Shell routing, guide and core CI discovery"
+    },
+    {
+      "at": "2026-11-22T16:21:28.677Z",
+      "event": "task-added",
+      "detail": "T11: Desktop OpenSpec reader, tabs, history and graph navigation"
+    },
+    {
+      "at": "2026-11-22T16:21:28.942Z",
+      "event": "task-added",
+      "detail": "T12: Verify focused core and Desktop checks in GitHub CI"
+    },
+    {
+      "at": "2026-11-22T16:21:29.205Z",
+      "event": "task-added",
+      "detail": "T13: Verify packaged Desktop, Shell parity and large-fixture usability"
+    },
+    {
+      "at": "2026-11-22T16:21:29.466Z",
+      "event": "task-added",
+      "detail": "T14: Review all implementation lanes and record verification evidence"
+    },
+    {
+      "at": "2026-11-22T16:22:16.499Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-22T16:22:16.770Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-22T16:22:17.044Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-22T16:22:17.308Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-22T16:22:17.848Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-22T16:22:18.115Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/openspec/catalog.test.ts src/integrations/metaproject-explorer.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/openspec/history.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/openspec/search.test.ts src/integrations/metaproject-explorer.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/integrations/metaproject-explorer.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/openspec.test.ts src/integrations/metaproject-explorer.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts"
+    },
+    "AC7": {
+      "kind": "judged"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.35
+Version: 0.29.36
 
 ## Status
 
@@ -14,6 +14,8 @@ carrying the measurement that found it and the reason it was not done then.
 > **Changelog**
 >
 > - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
+>
+> - **0.29.36** — [OpenSpec in Keryx Metaproject](keryx-metaproject-openspec/README.md). Spec ready for owner review. Plans a local source alongside Graph and Wiki, with specs, active changes, archive, search and evidence-backed links. Draft Flow intake is a later increment. Runtime planned.
 >
 > - **0.29.35** — [Keryx Desktop: рабочие панели и внимание](keryx-desktop-workspace-panels/README.md) и [Готовность worktree](keryx-worktree-readiness/README.md). Draft requirements: attention tracked in Rust across all project views and windows (notifications, Dock badge, a Needs attention group), Changes and Files side tabs with path-and-line comments and `@path`, a context meter with compact, native image input once keryx accepts images (built on open PRs #1254 and #1256 and flow 493); worktree preparation (env files, copy-on-write dependencies, ports, local index rebuild), the worktree root and index for agents, `promote` of worktree findings to the user scope, a merge-conflict preview, and a report-only test baseline and flaky retry. Nothing implemented.
 >
@@ -739,6 +741,7 @@ carrying the measurement that found it and the reason it was not done then.
 
 | Package | Status | Summary |
 |---|---|---|
+| [OpenSpec in Keryx Metaproject](keryx-metaproject-openspec/README.md) | spec ready for owner review | Read-only OpenSpec catalog and history, shared Desktop/CLI queries, graph relationships, and a later draft Flow handoff. Runtime planned. |
 | [Keryx Desktop: рабочие панели и внимание](keryx-desktop-workspace-panels/README.md) | draft — not implemented | Attention tracked in Rust across all project views and windows (notifications, Dock badge, Needs attention group, review questions after #1256); Changes tab including deleted files, with path-and-line comments sent as plain text; Files tab with `@path` in the #1254 popup; context meter with compact; native image blocks once keryx advertises `promptCapabilities.image` (flow 493), file paths before that. |
 | [Готовность worktree](keryx-worktree-readiness/README.md) | draft — not implemented | `keryx worktree create/prepare/promote/check` (planned): env files, copy-on-write dependencies, per-worktree ports and local index rebuild, all per-worktree state in the worktree's own git dir; the worktree root and index for every agent; `promote` of worktree findings to the user scope (metaproject data and stores of other checkouts are neither read nor written; the owner-run prepare only copies listed env files and dependencies from the main checkout; RP-08 not claimed); merge-tree conflict and overlap preview; report-only base-commit test baseline and flaky retry (gating left to acceptance-layer W1 after G1). |
 | [Keryx Learn Probe](keryx-learn-probe/README.md) | implemented — merged in PR #1072 | Falsification step for the W3 self-learning loop: `keryx learn probe <id>` runs one task in two isolated worktrees (base vs base+pattern, read-only tools), scores the paired delta with a Newcombe interval, and appends one `sourceType: "probe"` evidence item only on `improved`/`regressed`. Every other outcome is either `indistinguishable` (no evidence) or one of six named `unmeasurable` reasons. No automatic acceptance, no judge, no scheduling; a real run needs a TTY and `--max-usd`. |
