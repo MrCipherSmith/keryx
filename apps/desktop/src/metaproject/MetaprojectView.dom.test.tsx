@@ -195,3 +195,66 @@ test("a wiki fragment scrolls only to a heading inside the current article", asy
   await act(async () => { link.click(); });
   expect(scrolled).toBe(true);
 });
+
+test("OpenSpec collection opens source and keeps repository Markdown inert", async () => {
+  const { OpenSpecView } = await import("./OpenSpecView");
+  const entry = { id: "spec-one", kind: "spec" as const, title: "Review", path: "openspec/specs/review/spec.md" };
+  const source = { path: entry.path, digest: "abc", startLine: 3, endLine: 5 };
+  const read = async (_cwd: string, input: { version: 2; action: string; [key: string]: unknown }): Promise<unknown> => {
+    if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [entry], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+    if (input.action === "openspec-history") return { schemaVersion: 2, snapshotId: "s", entries: [] };
+    return { schemaVersion: 2, snapshotId: "s", openSpec: { entry, artifacts: [source], artifact: { source, markdown: "### Requirement: Safe\n<script>danger()</script>\n![remote](https://example.invalid/image.png)", requirements: [{ title: "Safe", section: "section-safe", source, scenarios: [] }] }, diagnostics: [], partial: false, deltas: [{ specPath: entry.path, source, requirements: [{ title: "Updated", section: "delta", source, operation: "modified", scenarios: [] }] }] } };
+  };
+  await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "", request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+  const review = [...host.querySelectorAll("button")].find(item => item.textContent?.includes("Review") && item.textContent?.includes("openspec/specs"));
+  if (!review) throw new Error("Missing OpenSpec entry");
+  await act(async () => { review.click(); });
+  expect(host.textContent).toContain("Requirement: Safe");
+  expect(host.textContent).toContain("modified: Updated");
+  expect(host.querySelector("img, script")).toBeNull();
+  expect(host.textContent).toContain("openspec/specs/review/spec.md:3–5");
+});
+
+test("OpenSpec distinguishes missing source and discards a prior checkout response", async () => {
+  const { OpenSpecView } = await import("./OpenSpecView");
+  let release: (value: unknown) => void = () => {};
+  const read = (cwd: string): Promise<unknown> => cwd === "/old" ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ schemaVersion: 2, snapshotId: "new", entries: [], openSpec: { availability: "missing", diagnostics: [], truncated: false } });
+  await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/old", query: "", request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+  await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/new", query: "", request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+  await act(async () => { release({ schemaVersion: 2, snapshotId: "old", entries: [{ id: "old", title: "Old private entry", path: "old", kind: "spec" }], openSpec: { availability: "ready", diagnostics: [], truncated: false } }); });
+  expect(host.textContent).toContain("OpenSpec missing");
+  expect(host.textContent).not.toContain("Old private entry");
+});
+
+test("opening an OpenSpec search location requests and focuses the exact scenario", async () => {
+  const { OpenSpecView } = await import("./OpenSpecView");
+  const entry = { id: "spec-one", kind: "spec" as const, title: "Review", path: "openspec/specs/review/spec.md" };
+  const source = { path: entry.path, digest: "d".repeat(64), startLine: 6, endLine: 8 };
+  const seen: Record<string, unknown>[] = [];
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    seen.push(input);
+    if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [entry], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+    if (input.action === "openspec-history") return { schemaVersion: 2, snapshotId: "s", entries: [] };
+    if (input.action === "search") return { schemaVersion: 2, snapshotId: "s", hits: [], partial: false };
+    return { schemaVersion: 2, snapshotId: "s", node: entry, openSpec: { entry, artifacts: [source], artifact: { source, markdown: "### Requirement: Review\n#### Scenario: Accepted", requirements: [{ title: "Review", section: "req", source, scenarios: [{ title: "Accepted", section: "scenario", source }] }] }, diagnostics: [], partial: false } };
+  };
+  await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "Accepted", location: { id: entry.id, collection: "spec", artifact: source.path, digest: source.digest, section: "scenario" }, request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+  expect(seen.some(input => input.action === "detail" && input.artifact === source.path && input.digest === source.digest && input.section === "scenario")).toBe(true);
+  expect(document.activeElement?.textContent).toContain("Accepted");
+  expect(host.textContent).toContain("openspec/specs/review/spec.md:6–8");
+});
+
+test("relationship list shows OpenSpec edge provenance", async () => {
+  const { RelationshipList } = await import("./MetaprojectView");
+  const digest = "a".repeat(64);
+  const projection = {
+    ...snapshot,
+    root: page.id,
+    nodes: [page, file],
+    edges: [{ from: page.id, to: file.id, kind: "spec-context" as const, provenance: [{ path: ".metaproject/openspec/links.json", index: 2, digest }] }],
+    truncated: false,
+  };
+  await act(async () => { root.render(createElement(RelationshipList, { projection, select: () => {} })); });
+  expect(host.textContent).toContain(".metaproject/openspec/links.json (link 2)");
+  expect(host.textContent).toContain(digest);
+});
