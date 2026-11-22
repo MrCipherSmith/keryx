@@ -9,6 +9,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 const FLOWS_DIR = path.join(REPO_ROOT, ".metaproject", "flows");
 const EXEC_LINE = /\[verify:\s*exec\s+`([^`]+)`/g;
 const TEST_FILE = /(?:^|\s)((?:\.\/)?[\w./@-]+\.test\.tsx?)(?=\s|$)/g;
+const WORKING_DIRECTORY = /^\s*cd\s+([\w./@-]+)\s+&&\s+/;
 
 // Flow 375 froze verify commands for board tests that were never written under these names.
 // Frozen criteria are not edited here; the operator decides whether to write the tests or re-seal the criteria.
@@ -22,7 +23,8 @@ const KNOWN_MISSING: Record<string, readonly string[]> = {
 };
 
 function namedTestFiles(command: string): string[] {
-  return [...command.matchAll(TEST_FILE)].map((m) => m[1]!.replace(/^\.\//, ""));
+  const cwd = command.match(WORKING_DIRECTORY)?.[1] ?? ".";
+  return [...command.matchAll(TEST_FILE)].map((m) => path.join(cwd, m[1]!));
 }
 
 function missingByFlow(): Map<string, Set<string>> {
@@ -66,4 +68,6 @@ test("the scan recognises exec lines and test-file tokens", () => {
   const line = "- AC2: x. [verify: exec `bun test src/a/b.test.ts ./src/c.test.tsx --timeout 5`]";
   const found = [...line.matchAll(EXEC_LINE)].flatMap((m) => namedTestFiles(m[1]!));
   expect(found).toEqual(["src/a/b.test.ts", "src/c.test.tsx"]);
+  expect(namedTestFiles("cd apps/desktop && bun test src/platform/metaproject.test.ts"))
+    .toEqual(["apps/desktop/src/platform/metaproject.test.ts"]);
 });

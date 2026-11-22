@@ -134,6 +134,7 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // Core owners — deterministic operations, policies, source owners, budgets.
   { segment: "gdgraph", zone: "core" },
   { segment: "wiki", zone: "core" },
+  { segment: "openspec", zone: "core" },
   { segment: "memory", zone: "core" },
   { segment: "health", zone: "core" },
   { segment: "testing", zone: "core" },

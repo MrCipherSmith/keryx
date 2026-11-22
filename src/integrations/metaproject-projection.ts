@@ -21,11 +21,11 @@ export function indexMetaprojectGraph(nodes: readonly MetaprojectNode[], edges: 
   return { byId, adjacency };
 }
 
-export function projectMetaprojectGraph(
+export function projectMetaprojectGraph<Version extends 1 | 2>(
   index: ReturnType<typeof indexMetaprojectGraph>,
-  snapshot: Pick<MetaprojectNeighbors, "schemaVersion" | "snapshotId">,
+  snapshot: { schemaVersion: Version; snapshotId: string },
   request: Extract<MetaprojectRequest, { action: "neighbors" }>,
-): MetaprojectNeighbors | null {
+): (Omit<MetaprojectNeighbors, "schemaVersion"> & { schemaVersion: Version }) | null {
   const root = index.byId.get(request.id);
   if (!root) return null;
   const kinds = new Set(request.kinds);

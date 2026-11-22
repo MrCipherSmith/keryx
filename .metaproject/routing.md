@@ -57,6 +57,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 
 | User intent | Capability | Primary entry | Agent action |
 |-------------|------------|---------------|--------------|
+| Browse OpenSpec requirements, changes, archive | `openspec` | `skills/gdskills/quality/openspec-read/SKILL.md`; `keryx openspec list/show/search` | Read the selected checkout without modifying it. |
 | Any repository task / unclear request | `metaproject-router` | `skills/gdskills/core/metaproject-router/SKILL.md` | Classify the intent first, then route to the narrowest capability. |
 | Find related files, dependencies, blast radius, cycles, or orphans | `gdgraph` | `skills/gdgraph/SKILL.md`; MCP `gdgraph.*` if available | Start with graph/affected context before broad search. |
 | Files were added, renamed, deleted or moved; graph answers look stale | `gdgraph` | `modules/gdgraph.md` (Freshness & Refresh) | Run `keryx gdgraph build`, then answer from the rebuilt graph. |

@@ -62,6 +62,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `fresh-eyes`: Doubt work still in flight from a reader who was never told why it works.
 - `git-publish`: Write commits, push branches and open pull requests with explicit staging, hook, upstream, force and PR-body rules.
 - `metaproject-security`: Check Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection, and data exfiltration.
+- `openspec-read`: Browse OpenSpec requirements, changes, and source evidence in the current checkout.
 - `perf-check`: Run or summarize performance, bundle, and complexity checks.
 - `pr-issue-documenter`: Create PR descriptions and linked issue documentation from branch changes.
 - `root-cause`: Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair.
