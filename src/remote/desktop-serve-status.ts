@@ -1,4 +1,4 @@
-import { ChannelsClient } from "./channels-client";
+import { ChannelsClient, type ChannelsClientOptions } from "./channels-client";
 import { readEndpoint } from "./endpoint";
 import { desktopServePortAvailable } from "../lib/desktop-serve-bootstrap";
 import { isLoopbackAddress, loadServeConfig, serveConfigState } from "../lib/serve-config";
@@ -9,7 +9,7 @@ export interface DesktopServeStatus { state: "not_configured" | "stopped" | "run
 /** Probe only the configured listener and trust only a signed compatible response. */
 export async function desktopServeStatus(
   dir?: string,
-  probes: { fetchImpl?: typeof fetch; portAvailable?: typeof desktopServePortAvailable } = {},
+  probes: Pick<ChannelsClientOptions, "fetchImpl"> & { portAvailable?: typeof desktopServePortAvailable } = {},
 ): Promise<DesktopServeStatus> {
   const state = serveConfigState(dir);
   if (state === "absent") return { state: "not_configured" };
