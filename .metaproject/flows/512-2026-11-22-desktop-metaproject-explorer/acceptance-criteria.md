@@ -1,0 +1,8 @@
+# Acceptance criteria
+
+- AC1: The project-local catalog distinguishes files, modules and wiki pages, preserves directed imports, page links and provenance on describes edges, and bounds returned data. Optional symbol callers and callees are read on demand. [verify: exec `bun test src/integrations/metaproject-explorer.test.ts`]
+- AC2: One search finds wiki pages, modules and code by name or path, with Wiki full-text results attributed to a page. Selecting a result updates Graph and Wiki navigation while preserving the query when switching modes. [verify: exec `cd apps/desktop && bun test src/metaproject/`]
+- AC3: The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/`]
+- AC4: The Desktop transport reads only the registered checkout via a fixed command and validates operations. A failed request or a late reply from a previous project does not expose content in the new project; the active view can retry. [verify: exec `cd apps/desktop/src-tauri && cargo test --locked metaproject` · sensitive: failure-scenario]
+- AC5: Markdown detail and the wiki catalog remain usable when graph storage is missing, and stale or missing graph information is explicit. Rebuild is an explicit project action. [verify: exec `bun test src/integrations/metaproject-explorer.test.ts` · sensitive: failure-scenario]
+- AC6: In native Keryx Desktop on a real checkout, navigate from search to a wiki page, related file, dependent file and back; exercise keyboard navigation and record graph and search timing/limits with the build identifier. [verify: judged]

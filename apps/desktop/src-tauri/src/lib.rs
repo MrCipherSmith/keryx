@@ -11,6 +11,7 @@ pub mod images;
 pub mod gitinfo;
 pub mod issues;
 pub mod locator;
+pub mod metaproject;
 pub mod navigation;
 pub mod panel_mcp;
 pub mod panels;
@@ -129,6 +130,7 @@ pub fn run() {
             pullrequest::pr_info,
             review::github_accounts,
             review::github_login,
+            metaproject::metaproject_request,
             issues::issues_request,
             issues::issues_transfer,
             issues::issues_take_transfer,

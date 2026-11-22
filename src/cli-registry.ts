@@ -153,6 +153,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
+  "metaproject-explorer": (rest) => import("./commands/metaproject-explorer").then((mod) => mod.metaprojectExplorerCommand(rest)),
   gdgraph: gdgraphCommand,
   ctx: ctxCommand,
   wiki: wikiCommand,
@@ -339,6 +340,7 @@ export const USAGE_BODY = `Usage:
   keryx orient install-hook [--runtime <id|all>] [--dry-run]
   keryx agents bootstrap status --runtime <claude|opencode|zcode|codex|antigravity|all>
   keryx agents bootstrap install --runtime <claude|opencode|zcode|codex|antigravity|all> [--dry-run]
+  keryx metaproject-explorer --request <json>
   keryx gdgraph build
   keryx gdgraph query <cycles|orphans>
   keryx gdgraph affected <file>
@@ -518,6 +520,7 @@ Commands:
   auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions, and the agent catalog (list/show/export/verify/generate)
+  metaproject-explorer  Read the project graph and wiki for Desktop
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
   wiki      Manage the local project knowledge base

@@ -12,6 +12,8 @@ intent, implementation plans, and release evidence do not get mixed together.
   copy-ready agent prompts.
 - [Agent installation playbook](docs/agent-installation-playbook.md) — autonomous
   Gherkin scenarios for complete setup, validation, repair, and handoff.
+- [Explore project knowledge in Keryx Desktop](docs/guides/desktop-metaproject.md)
+  — graph setup, wiki search, relationship navigation, and troubleshooting.
 - [Documentation index](docs/index.md) — compact navigation for the generated
   current-behavior reference.
 - [OpenAI API and ChatGPT subscriptions](docs/cli-reference.md#openai-api-and-chatgpt-subscriptions)

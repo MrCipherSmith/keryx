@@ -1,0 +1,36 @@
+# Flow Journal
+
+- 2026-11-22T08:36:16.920Z - flow created
+- 2026-11-22T08:36:57.418Z - origin-set: unknown -> human-request; quote: "Запускай фло для реализации, там где можно запускай сабагентов для реализации на моделе Terra"; source: Desktop Metaproject planning session (Operator asked to start implementation after the Desktop Metaproject research)
+- 2026-11-22T08:36:57.802Z - task-done: T1: Collect remaining context
+- 2026-11-22T08:36:58.085Z - task-done: T2: Implement per plan
+- 2026-11-22T08:36:58.451Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-11-22T08:36:58.743Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-22T08:36:59.005Z - task-added: T5: Read checkout graph and Wiki through a bounded Core CLI contract
+- 2026-11-22T08:36:59.262Z - task-added: T6: Add a scoped Tauri and browser development transport
+- 2026-11-22T08:36:59.538Z - task-added: T7: Build the Metaproject Graph and Wiki explorer
+- 2026-11-22T08:36:59.807Z - task-added: T8: Integrate the project tab, search and navigation with the native app
+- 2026-11-22T08:37:00.078Z - task-added: T9: Verify contracts and UI in GitHub Actions
+- 2026-11-22T08:37:00.338Z - task-added: T10: Verify the complete path and measure the native Keryx UI
+- 2026-11-22T08:37:00.602Z - task-added: T11: Review the integrated diff and record handoff
+- 2026-11-22T08:37:47.267Z - frozen: 6 criteria; checksum recorded
+- 2026-11-22T08:37:47.533Z - started
+- 2026-11-22T08:38:28.768Z - task-attempt: T5: started (attempt 1) — 512-T5
+- 2026-11-22T08:38:29.300Z - task-attempt: T6: started (attempt 1) — 512-T6
+- 2026-11-22T08:38:29.823Z - task-attempt: T7: started (attempt 1) — 512-T7
+- 2026-11-22T08:42:38.729Z - task-done: T6: Add a scoped Tauri and browser development transport
+- 2026-11-22T08:44:07.415Z - task-done: T7: Build the Metaproject Graph and Wiki explorer
+- 2026-11-22T08:44:45.275Z - task-done: T5: Read checkout graph and Wiki through a bounded Core CLI contract
+- 2026-11-22T08:44:46.036Z - task-attempt: T8: started (attempt 1) — Integrate project tabs and explicit graph rebuild with the worktree-bound reader.
+- 2026-11-22T08:45:00.035Z - task-done: T8: Integrate the project tab, search and navigation with the native app
+- 2026-11-22T08:45:00.380Z - task-attempt: T9: started (attempt 1) — Run the frozen executable criteria in GitHub Actions.
+- 2026-11-22T08:45:00.704Z - task-attempt: T10: started (attempt 1) — Use an isolated Keryx QA bundle on the real checkout and exercise native navigation.
+- 2026-11-22T09:12:41.529Z - ac-updated: AC2: "One search finds wiki pages, modules and code by name or path, with Wiki full-text results attributed to a page. Selecting a result updates Graph and Wiki navigation while preserving the query when switching modes. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]" -> "One search finds wiki pages, modules and code by name or path, with Wiki full-text results attributed to a page. Selecting a result updates Graph and Wiki navigation while preserving the query when switching modes. [verify: exec `cd apps/desktop && bun test src/metaproject/`]" (Run the Desktop suite from its own package, using the same command as GitHub CI.)
+- 2026-11-22T09:12:41.794Z - ac-updated: AC3: "The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]" -> "The selected node has a bounded one- or two-step projection and accessible relationship lists. Direction and type controls affect both views, and selecting a neighbor navigates to it. [verify: exec `cd apps/desktop && bun test src/metaproject/`]" (Run the Desktop suite from its own package, using the same command as GitHub CI.)
+- 2026-11-22T09:14:44.333Z - ac-confirmed: AC1: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms graph and wiki node kinds, directed imports, describes provenance, projection caps and on-demand symbols. (signed: Flow verification agent [stated])
+- 2026-11-22T09:14:44.600Z - ac-confirmed: AC2: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms catalog search, wiki body matches attributed to pages, and retained search selection across view changes. (signed: Flow verification agent [stated])
+- 2026-11-22T09:14:44.866Z - ac-confirmed: AC3: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms degree controls, directional filters, bounded projections and list-based navigation. (signed: Flow verification agent [stated])
+- 2026-11-22T09:14:45.137Z - ac-confirmed: AC5: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 confirms wiki fallback when graph layers are missing or malformed, explicit graph freshness state and project-triggered rebuild. (signed: Flow verification agent [stated])
+- 2026-11-22T09:14:45.401Z - task-attempt: T10: blocked (attempt 2) — The native computer-use bridge reports that the Mac is locked. The QA app and CLI were built and the bundled CLI data path was observed. Native WebView interaction and UI timings still need verification.
+- 2026-11-22T09:17:45.627Z - ac-confirmed: AC4: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/45006455074/job/137159033071 passes the Rust allowlist and registered-project scope. https://github.com/MrCipherSmith/keryx/actions/runs/45006454991/job/137159033560 passes late-response isolation, snapshot mismatch and refresh tests. (signed: Flow verification agent [stated])
+- 2026-11-22T09:21:29.174Z - task-done: T9: Verify contracts and UI in GitHub Actions

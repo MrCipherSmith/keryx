@@ -8263,3 +8263,11 @@ keryx hub machine unpair [--hub <hub-id>]
 | `settle-crashed-command` | `--command`, `--request-id` | Records what is known about a session command a crash left unresolved, and sends the receipt to the Hub. |
 
 Every action except `inspect` and `release-stale-daemon` needs `--request-id`, a new id you keep: repeating it returns the recorded result, and reusing it with other flags is `payload-conflict`. The pins and every refusal code are in the [recovery runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/hub-remote-sessions/recovery-runbook.md).
+
+## metaproject-explorer
+
+Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop. The command returns a versioned JSON object and does not rebuild the graph. Its snapshot ID is a change detector, not an atomic snapshot while graph or wiki files are being written.
+
+```bash
+keryx metaproject-explorer --request '{"action":"catalog"}'
+```
