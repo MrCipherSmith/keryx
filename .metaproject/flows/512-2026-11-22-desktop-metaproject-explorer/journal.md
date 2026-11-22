@@ -18,3 +18,10 @@
 - 2026-11-22T08:38:28.768Z - task-attempt: T5: started (attempt 1) — 512-T5
 - 2026-11-22T08:38:29.300Z - task-attempt: T6: started (attempt 1) — 512-T6
 - 2026-11-22T08:38:29.823Z - task-attempt: T7: started (attempt 1) — 512-T7
+- 2026-11-22T08:42:38.729Z - task-done: T6: Add a scoped Tauri and browser development transport
+- 2026-11-22T08:44:07.415Z - task-done: T7: Build the Metaproject Graph and Wiki explorer
+- 2026-11-22T08:44:45.275Z - task-done: T5: Read checkout graph and Wiki through a bounded Core CLI contract
+- 2026-11-22T08:44:46.036Z - task-attempt: T8: started (attempt 1) — Integrate project tabs and explicit graph rebuild with the worktree-bound reader.
+- 2026-11-22T08:45:00.035Z - task-done: T8: Integrate the project tab, search and navigation with the native app
+- 2026-11-22T08:45:00.380Z - task-attempt: T9: started (attempt 1) — Run the frozen executable criteria in GitHub Actions.
+- 2026-11-22T08:45:00.704Z - task-attempt: T10: started (attempt 1) — Use an isolated Keryx QA bundle on the real checkout and exercise native navigation.
