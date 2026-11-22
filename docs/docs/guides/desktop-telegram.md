@@ -2,7 +2,7 @@
 
 Connect a bot once on your Mac, then share individual Desktop sessions with their own Telegram topics. A message from your phone and a message from Desktop use the same session, model and conversation. The Mac, the local `keryx serve` process and the Desktop session need to remain available while you work from Telegram.
 
-This guide covers the **Desktop Telegram preview**. It requires a build with the Desktop Telegram capability and a compatible local CLI and service. In the development candidate, launch Desktop with `KERYX_DESKTOP_TELEGRAM_PREVIEW=1`. When starting `keryx serve` yourself, use the same opt-in for that process. Desktop and the service must use the same local Keryx configuration profile. The screenshots show the Desktop UI in a browser with simulated native responses. The QR code and account and forum details are examples.
+This guide covers the **Desktop Telegram preview**. It requires a build with the Desktop Telegram capability and a compatible local CLI and service. With Keryx 0.4.50 and Desktop 0.2.13, launch Desktop with `KERYX_DESKTOP_TELEGRAM_PREVIEW=1`. When starting `keryx serve` yourself, use the same opt-in for that process. Desktop and the service must use the same local Keryx configuration profile. The screenshots show the Desktop UI in a browser with simulated native responses. The QR code and account and forum details are examples.
 
 For example, to start a preview app bundle from a terminal on macOS:
 
@@ -10,7 +10,7 @@ For example, to start a preview app bundle from a terminal on macOS:
 KERYX_DESKTOP_TELEGRAM_PREVIEW=1 /Applications/Keryx.app/Contents/MacOS/keryx-desktop
 ```
 
-Adjust the path for a development build.
+Adjust the path if you installed Keryx Desktop in another location.
 
 ## 1. Start the local service
 

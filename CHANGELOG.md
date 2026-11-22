@@ -5,6 +5,15 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.50] - 2026-11-22
+
+**Keryx Desktop 0.2.13** requires Keryx 0.4.50 or newer.
+
+### Added
+
+- Set up and manage local `keryx serve` in Desktop Integrations, pair a Telegram bot by QR code or manually, and replace its token from the app. (#1284)
+- Share individual Desktop sessions in Telegram forum topics and continue the same conversation from either client. Desktop Telegram is an opt-in preview enabled by launching Desktop with `KERYX_DESKTOP_TELEGRAM_PREVIEW=1`. See the [setup guide](docs/docs/guides/desktop-telegram.md). (#1284)
+
 ## [0.4.49] - 2026-11-22
 
 **Keryx Desktop 0.2.12** requires Keryx 0.4.49 or newer.
