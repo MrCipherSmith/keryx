@@ -21,6 +21,8 @@ pub mod pullrequest;
 pub mod review;
 pub mod pty;
 pub mod settings;
+pub mod telegram_serve;
+pub mod telegram_channel;
 pub mod shellenv;
 mod slots;
 pub mod version;
@@ -40,6 +42,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(bridge::AppState::default())
+        .manage(std::sync::Arc::new(telegram_serve::TelegramServe::default()))
         .manage(issues::IssueTransfers::default())
         .manage(flows::watch::FlowWatchers::default())
         .manage(pty::PtyManager::default())
@@ -103,6 +106,12 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            telegram_channel::telegram_channel_status,
+            telegram_channel::telegram_channel_action,
+            telegram_serve::telegram_serve_status,
+            telegram_serve::telegram_serve_start,
+            telegram_serve::telegram_serve_stop,
+            telegram_serve::telegram_serve_restart,
             bridge::acp_start,
             bridge::acp_send,
             bridge::acp_stop,
@@ -177,6 +186,7 @@ pub fn run() {
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
+            handle.state::<std::sync::Arc<telegram_serve::TelegramServe>>().shutdown();
             handle.state::<pty::PtyManager>().close_all();
             chromium::engine::close_all(handle);
             let _ = std::fs::remove_file(std::env::temp_dir().join(format!("keryx-panels-{}.sock", std::process::id())));

@@ -7,7 +7,9 @@
 // changes: the shell's own permission mode and the "changed this session" flag. `/mode` owns those;
 // once `/mode` has been used, the shell's mode wins for every turn and the saved default is moot.
 
-import { loadRemoteConfig, updateRemotePolicy, type RemotePermissionMode, type RemotePolicyPatch } from "../remote/config";
+import { updateRemotePolicy, type RemotePermissionMode, type RemotePolicyPatch } from "../remote/config";
+import { loadActiveRemoteConfig, loadChannelRecord } from "../remote/channel-record";
+import { writeChannelSettings } from "../remote/channels-client";
 import { loadPermissionsView } from "./permissions-command";
 
 export const REMOTE_POLICY_COMMAND = "/remote-policy";
@@ -134,8 +136,9 @@ export interface RemotePolicyDeps {
 
 /** The posture from the running shell when there is one, else from the saved file. `undefined` when Telegram is not set up. */
 export function loadPosture(deps: RemotePolicyDeps = {}): PolicyPosture | undefined {
-  const base = deps.running?.() ?? (() => {
-    const loaded = loadRemoteConfig(deps.dir);
+  const record = loadChannelRecord(deps.dir);
+  const base = (record.ok && record.value === null ? deps.running?.() : undefined) ?? (() => {
+    const loaded = loadActiveRemoteConfig(deps.dir);
     return loaded.ok
       ? { defaultMode: loaded.value.permissionMode, runTimeoutMs: loaded.value.runTimeoutMs, approvalTimeoutMs: loaded.value.approvalTimeoutMs }
       : undefined;
@@ -149,11 +152,11 @@ const SHELL_MODE_NOTE =
   "A /mode in the shell (or typed in the topic) changes the shell's mode and wins for every turn after that; /remote-policy never changes it.";
 
 /** The whole text of `/remote-policy`, for the readline shell and the TUI transcript. Never contains a secret. */
-export function remotePolicyText(rest: string, deps: RemotePolicyDeps = {}): string {
+export async function remotePolicyText(rest: string, deps: RemotePolicyDeps = {}): Promise<string> {
   const request = parseRemotePolicyArgs(rest);
   if (request.action === "invalid") return `${request.message}\n`;
   if (request.action === "set") {
-    const saved = updateRemotePolicy(request.patch, deps.dir);
+    const saved = await writeChannelSettings({ action: "policy", patch: request.patch }, deps.dir, () => updateRemotePolicy(request.patch, deps.dir));
     if (!saved.ok) return `Not changed: ${saved.reason}\n`;
     deps.applyPolicy?.(request.patch);
     const posture = loadPosture(deps);

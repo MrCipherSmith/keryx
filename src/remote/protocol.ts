@@ -19,6 +19,7 @@ export type RemoteRoute =
   | "approval"
   | "approval-result"
   | "approval-ack"
+  | "channel-revoke-ack"
   | "prompt"
   | "prompt-close"
   | "state"
@@ -37,6 +38,7 @@ export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">>
   state: "POST",
   ack: "POST",
   "approval-ack": "POST",
+  "channel-revoke-ack": "POST",
   stream: "GET",
 };
 
@@ -53,6 +55,7 @@ export function remoteRoutePath(route: RemoteRoute): string {
 // travel is not secret (a pairing code, a user id, a group id, a machine name).
 
 export type ChannelsRoute =
+  | "channels-control"
   | "channels-status"
   | "channels-pair"
   | "channels-pairing"
@@ -62,6 +65,7 @@ export type ChannelsRoute =
   | "channels-disconnect";
 
 export const CHANNELS_ROUTE_METHODS: Readonly<Record<ChannelsRoute, "GET" | "POST">> = {
+  "channels-control": "POST",
   "channels-status": "GET",
   "channels-pair": "POST",
   "channels-pairing": "GET",
@@ -103,6 +107,10 @@ export interface ChannelsStatusResponse {
   schemaVersion: string;
   /** This machine's name (the hostname), as it appears in the Test message and in topic names. */
   machine: string;
+  capabilities?: { desktopTelegram: 1 };
+  /** Present only on the gated revisioned controller. */
+  revision?: number | null;
+  pendingOperation?: { operationId: string; revision: number | null };
   telegram: {
     state: TelegramChannelState;
     reason?: string;
@@ -113,7 +121,7 @@ export interface ChannelsStatusResponse {
   };
 }
 
-export type PairingState = "waiting-for-user" | "waiting-for-group" | "ready" | "failed" | "expired" | "cancelled";
+export type PairingState = "waiting-for-user" | "waiting-for-confirmation" | "waiting-for-group" | "ready" | "failed" | "expired" | "cancelled";
 
 export interface PairingResponse {
   schemaVersion: string;
@@ -323,13 +331,28 @@ export const APPROVAL_INPUT_PREVIEW_CHARS = 1_500;
 
 // ---- request bodies -----------------------------------------------------------
 
+export interface DesktopOwner {
+  kind: "desktop";
+  incarnation: string;
+  generation: string;
+}
+
+export function isDesktopOwner(value: unknown): value is DesktopOwner {
+  if (typeof value !== "object" || value === null) return false;
+  const owner = value as Record<string, unknown>;
+  return owner.kind === "desktop" && isSessionId(owner.incarnation) && isSessionId(owner.generation);
+}
+
 export interface RegisterBody {
+  owner?: DesktopOwner;
+  expectedThreadId?: number;
   sessionId: string;
   project: string;
   name?: string;
 }
 
 export interface SessionBody {
+  owner?: DesktopOwner;
   sessionId: string;
 }
 
@@ -422,6 +445,8 @@ export interface StateBody {
 // ---- responses ----------------------------------------------------------------
 
 export interface RegisterResponse {
+  topicUrl?: string;
+  exactOwner?: boolean;
   schemaVersion: string;
   name: string;
   threadId: number;
@@ -505,10 +530,11 @@ export interface CallbackEvent {
   messageId?: number;
 }
 
-export type StatusKind = "ready" | "superseded" | "closing";
+export type StatusKind = "ready" | "superseded" | "closing" | "channel-revoked";
 
 export interface StatusEvent {
   kind: StatusKind;
+  cutoverId?: string;
   name?: string;
   threadId?: number;
 }

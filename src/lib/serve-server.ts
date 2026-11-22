@@ -461,6 +461,7 @@ const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
   ["state", "POST"],
   ["ack", "POST"],
   ["approval-ack", "POST"],
+  ["channel-revoke-ack", "POST"],
   ["stream", "GET"],
   // The channels plane (flow 377): connect Telegram, test it, disconnect it.
   ["channels-status", "GET"],
@@ -470,6 +471,7 @@ const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
   ["channels-reload", "POST"],
   ["channels-test", "POST"],
   ["channels-disconnect", "POST"],
+  ["channels-control", "POST"],
 ]);
 
 export type RemoteRouteName =
@@ -484,6 +486,7 @@ export type RemoteRouteName =
   | "state"
   | "ack"
   | "approval-ack"
+  | "channel-revoke-ack"
   | "stream"
   | "channels-status"
   | "channels-pair"
@@ -491,7 +494,8 @@ export type RemoteRouteName =
   | "channels-cancel"
   | "channels-reload"
   | "channels-test"
-  | "channels-disconnect";
+  | "channels-disconnect"
+  | "channels-control";
 
 /**
  * What the listener needs from the remote-control side. A structural interface

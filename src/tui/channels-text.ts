@@ -30,7 +30,7 @@ export function parseChannelsArgs(line: string): ChannelsRequest {
 export type ChannelsApi = Pick<
   ChannelsClient,
   "localFiles" | "status" | "startPairing" | "pairingStatus" | "cancelPairing" | "connectFinish" | "reload" | "test" | "disconnect"
->;
+> & Partial<Pick<ChannelsClient, "beginRevisioned" | "revisionedOperation" | "testRevisioned" | "disconnectRevisioned">>;
 
 export type ChannelsSnapshotState = "not-connected" | "pairing" | "connected" | "off" | "serve-down" | "error";
 
@@ -44,21 +44,26 @@ export interface ChannelsSnapshot {
   rendering?: ChannelsRendering;
   /** Serve's or the client's own plain-language reason. */
   reason?: string;
+  revisioned?: { revision: number | null | undefined; pendingOperation?: { operationId: string; revision: number | null } };
 }
 
 export async function loadChannelsSnapshot(client: Pick<ChannelsApi, "status" | "localFiles">): Promise<ChannelsSnapshot> {
   const status = await client.status();
   const local: ChannelsLocalFiles = client.localFiles();
   if (status.ok) {
-    const { machine, telegram } = status.value;
+    const { machine, telegram, capabilities, revision, pendingOperation } = status.value;
+    const revisionValid = revision === null || (typeof revision === "number" && Number.isSafeInteger(revision) && revision > 0);
+    const pendingValid = pendingOperation === undefined || (pendingOperation !== null && typeof pendingOperation === "object" && revisionValid && pendingOperation.revision === revision && typeof pendingOperation.operationId === "string" && /^[0-9a-f-]{36}$/.test(pendingOperation.operationId));
+    const revisioned = capabilities?.desktopTelegram === 1 ? { revision: revisionValid && pendingValid ? revision : undefined, ...(pendingValid && pendingOperation !== undefined ? { pendingOperation } : {}) } : undefined;
     return {
-      state: telegram.state,
+      state: revisioned && (!revisionValid || !pendingValid) ? "error" : revisioned?.pendingOperation ? "pairing" : telegram.state,
       // A token or config left on disk counts even when serve says nothing is connected (a crash between the two writes).
       configured: telegram.state !== "not-connected" || local.tokenFile || local.configFile,
       machine,
       sessions: telegram.sessions,
+      ...(revisioned === undefined ? {} : { revisioned }),
       ...(telegram.rendering !== undefined ? { rendering: telegram.rendering } : {}),
-      ...(telegram.reason !== undefined ? { reason: telegram.reason } : {}),
+      ...(revisioned && (!revisionValid || !pendingValid) ? { reason: "The signed channel revision or pending operation is invalid; refresh before changing it." } : telegram.reason !== undefined ? { reason: telegram.reason } : {}),
     };
   }
   const configured = local.tokenFile || local.configFile;
@@ -144,7 +149,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
       return [
         "Telegram: pairing in progress",
         ...machine,
-        "Resume shows the one-time code again, or connects a pairing that already finished; Cancel pairing abandons it and erases the token.",
+        snapshot.revisioned ? "Resume the pairing and confirm the account and connection; Cancel pairing abandons the pending operation." : "Resume shows the one-time code again, or connects a pairing that already finished; Cancel pairing abandons it and erases the token.",
       ];
     case "connected":
       return [
@@ -161,7 +166,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
         ...machine,
         ...(snapshot.reason === undefined ? [] : [`Why: ${snapshot.reason}`]),
         ...renderingLines(snapshot.rendering),
-        "Retry starts it again from the saved token and config. Disconnect erases them. Test works once Telegram is running.",
+        snapshot.revisioned ? "Change token validates a replacement. Disconnect removes the bot connection; Test works once Telegram is running." : "Retry starts it again from the saved token and config. Disconnect erases them. Test works once Telegram is running.",
       ];
     case "serve-down":
       return [

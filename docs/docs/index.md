@@ -15,6 +15,7 @@ the one that describes shipped behaviour.
 - [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
 - [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
 - [desktop-app.md](./desktop-app.md) — Keryx for macOS (preview): install the `.dmg` or build it, choose which keryx it runs, sessions, approvals, permission modes, the Flows board, shortcuts and troubleshooting.
+- [desktop-telegram-module.md](./desktop-telegram-module.md) — Desktop Telegram setup, bot credentials, and session sharing internals.
 - [shell-preservation.md](./shell-preservation.md) — What `keryx shell` preserves on a handled exit: checkpoint, immutable snapshot, and how local preservation differs from workspace delivery.
 - [shell-recovery.md](./shell-recovery.md) — How the interactive shell waits and retries a temporary model-provider failure within the original turn.
 - [integrations.md](./integrations.md) — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, the generated capability matrix, and per-harness notes (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
@@ -49,6 +50,7 @@ the one that describes shipped behaviour.
 - [Agent web search](guides/web-search.md)
 - [Use local SearXNG for agent web search](guides/use-local-searxng.md)
 - [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
+- [Use Keryx Desktop from Telegram](guides/desktop-telegram.md)
 - [Answer a remote approval from a bot or another product](guides/answer-remote-approvals.md)
 - [Run Keryx sessions on your machines from Team Hub (beta)](guides/team-hub-remote-sessions.md)
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)

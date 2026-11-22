@@ -128,6 +128,14 @@ the reason is printed underneath it — read that line rather than retrying.
 
 ## Remote control from Telegram
 
+### Share a Desktop session
+
+The [illustrated Desktop Telegram guide](desktop-telegram.md) walks through
+starting the local service, pairing a bot, sharing a session and rotating the
+token from Desktop.
+
+### Share a terminal session
+
 `/remote-control` in a running `keryx shell` mirrors that session into its own
 topic of a Telegram supergroup. A line you send in the topic runs in the shell as
 if you had typed it there (it shows as `tg ❯` in the transcript, and `[tg]` in the

@@ -20,7 +20,7 @@ interface Pending {
 
 export type NotificationHandler = (method: string, params: unknown) => void;
 /** Return the result, or throw an RpcError to answer with an error response. */
-export type RequestHandler = (method: string, params: unknown) => Promise<unknown>;
+export type RequestHandler = (method: string, params: unknown, id: Id) => Promise<unknown>;
 
 export class AcpClient {
   private nextId = 1;
@@ -96,7 +96,7 @@ export class AcpClient {
   private async answer(id: Id, method: string, params: unknown): Promise<void> {
     let frame: Record<string, unknown>;
     try {
-      const result = await this.onRequest(method, params);
+      const result = await this.onRequest(method, params, id);
       frame = { jsonrpc: "2.0", id, result: result ?? null };
     } catch (e) {
       const err =

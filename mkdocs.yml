@@ -94,6 +94,7 @@ nav:
       - Agent web search: guides/web-search.md
       - Use local SearXNG for web search: guides/use-local-searxng.md
       - Drive keryx from a bot: guides/drive-keryx-remotely.md
+      - Use Keryx Desktop from Telegram: guides/desktop-telegram.md
       - Answer a remote approval from a bot: guides/answer-remote-approvals.md
       - "Run Keryx sessions on your machines from Team Hub (beta)": guides/team-hub-remote-sessions.md
       - Review with a durable record: guides/review-with-a-record.md
@@ -115,6 +116,7 @@ nav:
   - Architecture: architecture.md
   - The agent harness: harness.md
   - Keryx for macOS (desktop app): desktop-app.md
+  - Desktop Telegram module: desktop-telegram-module.md
   - Shell exit preservation: shell-preservation.md
   - Interactive shell recovery: shell-recovery.md
   - Integrations: integrations.md

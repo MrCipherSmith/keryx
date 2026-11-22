@@ -2,12 +2,14 @@ import type { AskUserRequest, AskUserResult, PermissionOutcome, PermissionReques
 
 export interface PendingPermission {
   id: number;
+  requestId?: string | number;
   sessionId: string;
   req: PermissionRequest;
   resolve: (o: PermissionOutcome) => void;
 }
 export interface PendingAsk {
   id: number;
+  requestId?: string | number;
   sessionId: string;
   req: AskUserRequest;
   resolve: (r: AskUserResult) => void;
@@ -30,12 +32,12 @@ export class DialogQueue {
 
   constructor(private readonly onChange: () => void = () => {}) {}
 
-  permission(sessionId: string, req: PermissionRequest): Promise<PermissionOutcome> {
-    return new Promise((resolve) => this.push({ kind: "permission", id: ++this.seq, sessionId, req, resolve }));
+  permission(sessionId: string, req: PermissionRequest, requestId?: string | number): Promise<PermissionOutcome> {
+    return new Promise((resolve) => this.push({ kind: "permission", id: ++this.seq, sessionId, req, resolve, ...(requestId === undefined ? {} : { requestId }) }));
   }
 
-  ask(sessionId: string, req: AskUserRequest): Promise<AskUserResult> {
-    return new Promise((resolve) => this.push({ kind: "ask", id: ++this.seq, sessionId, req, resolve }));
+  ask(sessionId: string, req: AskUserRequest, requestId?: string | number): Promise<AskUserResult> {
+    return new Promise((resolve) => this.push({ kind: "ask", id: ++this.seq, sessionId, req, resolve, ...(requestId === undefined ? {} : { requestId }) }));
   }
 
   /** The session's dialogs in arrival order. */
@@ -66,6 +68,10 @@ export class DialogQueue {
   /** Cancel every dialog of one session: its turn ended or was stopped, or keryx released it. */
   dropSession(sessionId: string): void {
     this.drop((e) => e.sessionId === sessionId);
+  }
+
+  dropRequest(sessionId: string, requestId: string): void {
+    this.drop((e) => e.sessionId === sessionId && e.requestId === requestId);
   }
 
   /** Cancel every dialog: the connection is gone. */

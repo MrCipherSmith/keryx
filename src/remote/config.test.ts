@@ -102,10 +102,10 @@ describe("the file on disk", () => {
 });
 
 describe("readRenderingSetting / writeRenderingMode", () => {
-  test("no remote config: the default, and nothing to save into", () => {
+  test("no remote config: the default, and nothing to save into", async () => {
     const dir = freshDir();
     expect(readRenderingSetting(dir)).toEqual({ mode: "auto", source: "default", saveable: false });
-    const written = writeRenderingMode("html", dir);
+    const written = await writeRenderingMode("html", dir);
     expect(written.ok).toBe(false);
     if (!written.ok) {
       expect(written.reason).toContain("not set up");
@@ -118,10 +118,10 @@ describe("readRenderingSetting / writeRenderingMode", () => {
     expect(readRenderingSetting(dir)).toEqual({ mode: "auto", source: "default", saveable: true });
   });
 
-  test("a mode is saved, case and spaces forgiven, and the rest of the config is kept", () => {
+  test("a mode is saved, case and spaces forgiven, and the rest of the config is kept", async () => {
     const dir = freshDir();
     saveRemoteConfig(testConfig({ orphanMs: 1234 }), dir);
-    expect(writeRenderingMode("  Plain ", dir)).toEqual({ ok: true, value: "plain" });
+    expect(await writeRenderingMode("  Plain ", dir)).toEqual({ ok: true, value: "plain" });
     expect(readRenderingSetting(dir)).toEqual({ mode: "plain", source: "config", saveable: true });
     const loaded = loadRemoteConfig(dir);
     expect(loaded.ok && loaded.value.orphanMs).toBe(1234);
@@ -129,25 +129,25 @@ describe("readRenderingSetting / writeRenderingMode", () => {
 
   // Perimeter review (regression-21 F-001): a load fills the flow-396 defaults in; saving the loaded
   // value wrote them into the file, so a later change of the default no longer reached it.
-  test("saving a mode leaves the keys the file did not have out of it", () => {
+  test("saving a mode leaves the keys the file did not have out of it", async () => {
     const dir = freshDir();
     // A file as Connect writes it: neither flow-396 key.
     const { permissionMode: _mode, approvalTimeoutMs: _wait, ...connected } = testConfig();
     saveRemoteConfig(connected, dir);
     const file = remoteConfigPath(dir);
     expect(readFileSync(file, "utf8")).not.toContain("permissionMode");
-    expect(writeRenderingMode("html", dir)).toEqual({ ok: true, value: "html" });
+    expect(await writeRenderingMode("html", dir)).toEqual({ ok: true, value: "html" });
     const doc = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
     expect(doc.rendering).toBe("html");
     expect("permissionMode" in doc).toBe(false);
     expect("approvalTimeoutMs" in doc).toBe(false);
   });
 
-  test("a bad value is refused naming the valid ones, and the file is not touched", () => {
+  test("a bad value is refused naming the valid ones, and the file is not touched", async () => {
     const dir = freshDir();
     saveRemoteConfig(testConfig({ rendering: "rich" }), dir);
     const before = readFileSync(remoteConfigPath(dir), "utf8");
-    const written = writeRenderingMode("bogus", dir);
+    const written = await writeRenderingMode("bogus", dir);
     expect(written.ok).toBe(false);
     if (!written.ok) {
       expect(written.reason).toContain("auto, rich, html, plain");

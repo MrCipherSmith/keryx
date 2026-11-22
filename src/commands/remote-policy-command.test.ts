@@ -137,25 +137,25 @@ describe("loading the posture", () => {
 });
 
 describe("remotePolicyText", () => {
-  test("show without a config says to connect and prints the usage", () => {
-    const text = remotePolicyText("", { dir });
+  test("show without a config says to connect and prints the usage", async () => {
+    const text = await remotePolicyText("", { dir });
     expect(text).toContain("/channels");
     expect(text).toContain("Usage: /remote-policy");
   });
 
-  test("show prints the posture and says a shell /mode wins", () => {
+  test("show prints the posture and says a shell /mode wins", async () => {
     seed({ permissionMode: "ask", runTimeoutMs: 1_800_000 });
-    const text = remotePolicyText("", { dir });
+    const text = await remotePolicyText("", { dir });
     expect(text).toContain("Mode: ask");
     expect(text).toContain("Run limit: 30m");
     expect(text).toContain("changes the shell's mode and wins for every turn");
     expect(readFileSync(configFile(), "utf8")).toContain("1800000");
   });
 
-  test("set writes the file, tells the running shell, and states that the shell's mode is untouched", () => {
+  test("set writes the file, tells the running shell, and states that the shell's mode is untouched", async () => {
     seed();
     const applied: RemotePolicyPatch[] = [];
-    const text = remotePolicyText("mode ask wait 5", { dir, applyPolicy: (patch) => applied.push(patch) });
+    const text = await remotePolicyText("mode ask wait 5", { dir, applyPolicy: (patch) => applied.push(patch) });
     expect(onDisk()).toMatchObject({ permissionMode: "ask", approvalTimeoutMs: 300_000 });
     expect("runTimeoutMs" in onDisk()).toBe(false);
     expect(applied).toEqual([{ permissionMode: "ask", approvalTimeoutMs: 300_000 }]);
@@ -164,37 +164,37 @@ describe("remotePolicyText", () => {
     expect(text).toContain("from the next Telegram turn");
   });
 
-  test("the readline path (no applyPolicy) edits the file and says open shells keep their values", () => {
+  test("the readline path (no applyPolicy) edits the file and says open shells keep their values", async () => {
     seed();
-    const text = remotePolicyText("limit 30", { dir });
+    const text = await remotePolicyText("limit 30", { dir });
     expect(onDisk().runTimeoutMs).toBe(1_800_000);
     expect(text).toContain("Open shells keep their values until they are restarted");
   });
 
-  test("an invalid request changes nothing and does not call the shell", () => {
+  test("an invalid request changes nothing and does not call the shell", async () => {
     seed();
     const before = readFileSync(configFile(), "utf8");
     let called = 0;
     for (const bad of ["mode auto", "wait 999", "limit x"]) {
-      const text = remotePolicyText(bad, { dir, applyPolicy: () => (called += 1) });
+      const text = await remotePolicyText(bad, { dir, applyPolicy: () => (called += 1) });
       expect(text.length).toBeGreaterThan(0);
     }
     expect(called).toBe(0);
     expect(readFileSync(configFile(), "utf8")).toBe(before);
   });
 
-  test("set without a config is refused, says to connect first, and does not call the shell", () => {
+  test("set without a config is refused, says to connect first, and does not call the shell", async () => {
     let called = 0;
-    const text = remotePolicyText("mode ask", { dir, applyPolicy: () => (called += 1) });
+    const text = await remotePolicyText("mode ask", { dir, applyPolicy: () => (called += 1) });
     expect(text).toContain("Not changed");
     expect(text).toContain("connect Telegram first");
     expect(called).toBe(0);
   });
 
-  test("the text never carries the bot token or the chat id", () => {
+  test("the text never carries the bot token or the chat id", async () => {
     seed({ permissionMode: "ask" });
     writeFileSync(path.join(dir, "remote", "bot-token"), "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n", { mode: 0o600 });
-    const text = `${remotePolicyText("", { dir })}${remotePolicyText("mode trust", { dir })}`;
+    const text = `${await remotePolicyText("", { dir })}${await remotePolicyText("mode trust", { dir })}`;
     expect(text).not.toContain("AAAAAAAA");
     expect(text).not.toContain("-1001");
   });

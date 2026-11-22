@@ -412,10 +412,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
     text(readlineChannelsText(`/channels ${args}`.trim(), await loadChannelsSnapshot(new ChannelsClient()))),
   intake: async (host, args) => text(await readlineIntakeText(`/intake ${args}`.trim(), { root: host.cwd })),
   rendering: async (host, args) =>
-    text(runRenderingCommand(args, host.configDir), args.trim().length > 0 ? ["config"] : undefined),
+    text(await runRenderingCommand(args, host.configDir), args.trim().length > 0 ? ["config"] : undefined),
   "remote-policy": async (host, args) =>
     text(
-      remotePolicyText(args, { ...(host.configDir !== undefined ? { dir: host.configDir } : {}) }),
+      await remotePolicyText(args, { ...(host.configDir !== undefined ? { dir: host.configDir } : {}) }),
       args.trim().length > 0 ? ["config"] : undefined,
     ),
   permissions: async (_host, args) => text(permissionsSlashText(args)),

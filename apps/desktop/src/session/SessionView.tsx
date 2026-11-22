@@ -34,6 +34,8 @@ import { modelOption, type useAcpSession } from "./useAcpSession";
 import type { ProjectGitHubAccount } from "../platform/githubAccounts";
 import { reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "../review/sessionReview";
 import { ProjectGitHubAccountButton } from "../project/GitHubSettings";
+import { TelegramSessionDialog } from "./TelegramSessionDialog";
+import { TELEGRAM_SESSION } from "./telegramSession";
 
 type Session = ReturnType<typeof useAcpSession>;
 
@@ -43,6 +45,8 @@ interface Props {
   projectName: string;
   onGoFlows: () => void;
   onGoSettings: () => void;
+  onTelegramSettings?: () => void;
+  visible?: boolean;
   githubAccount?: ProjectGitHubAccount;
   onProjectSettings?: () => void;
   narrow: boolean;
@@ -60,7 +64,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewActivity, reviewComposer, reviewLinks }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewActivity, reviewComposer, reviewLinks }, composerRef) {
   const { state } = s;
   const reviewBySession = useMemo(() => new Map((reviewLinks ?? []).map(link => [link.sessionId, link])), [reviewLinks]);
   const prefs = usePrefs();
@@ -79,6 +83,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const infoSlot = useSlot("info");
   const changesSlot = useSlot("changes");
   const sessionControls = useSlot("sessionControls");
+  const [telegramDialog, setTelegramDialog] = useState<string | null>(null);
+  useEffect(() => { setTelegramDialog(null); }, [state.sessionId, visible]);
   // A sidebar click on another session's subagent loads that session first; the panel opens on it once it is shown.
   const pendingSubagent = useRef<{ sessionId: string; id: string } | null>(null);
   useEffect(() => {
@@ -367,7 +373,19 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
               <Icon name="list" size={15} />
             </button>
           ) : null}
+          {visible && isTauri() && ready ? (
+            <button className="icon-btn titlebar-toggle" aria-label="Telegram session"
+              title={state.telegram?.state === "active" ? "Telegram session connected" : "Telegram session"}
+              onClick={() => setTelegramDialog(state.sessionId)}>
+              <Icon name="telegram" size={15} />
+            </button>
+          ) : null}
         </>, sessionControls)}
+        {visible && ready && telegramDialog !== null && telegramDialog === state.sessionId && (
+          <TelegramSessionDialog key={telegramDialog} supported={s.extensions.includes(TELEGRAM_SESSION)} attachment={state.telegram}
+            onControl={(operation, name) => s.telegramSession(telegramDialog, operation, name)}
+            onClose={() => setTelegramDialog(null)} onSettings={() => { setTelegramDialog(null); (onTelegramSettings ?? onGoSettings)(); }} />
+        )}
 
         {state.banners.length > 0 ? (
           <div className="session-banners">

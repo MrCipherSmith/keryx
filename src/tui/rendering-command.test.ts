@@ -22,9 +22,9 @@ test("only the exact command word is a rendering command", () => {
   expect(isRenderingCommand("rendering")).toBe(false);
 });
 
-test("bare: the mode in effect marked, every mode explained, the fallback chain, the usage", () => {
+test("bare: the mode in effect marked, every mode explained, the fallback chain, the usage", async () => {
   saveRemoteConfig(testConfig({ rendering: "rich" }), dir);
-  const text = runRenderingCommand("", dir);
+  const text = await runRenderingCommand("", dir);
   expect(text).toContain("Telegram rendering: rich (saved in the remote config)");
   expect(text).toContain(`  * rich: ${RENDERING_MEANING.rich}`);
   expect(text).toContain(`    auto: ${RENDERING_MEANING.auto}`);
@@ -32,37 +32,37 @@ test("bare: the mode in effect marked, every mode explained, the fallback chain,
   expect(text).toContain("Usage: /rendering [auto|rich|html|plain]");
 });
 
-test("bare with no saved key says it is the default; with no remote config it says remote control is not set up", () => {
+test("bare with no saved key says it is the default; with no remote config it says remote control is not set up", async () => {
   saveRemoteConfig(testConfig(), dir);
-  expect(runRenderingCommand("", dir)).toContain("Telegram rendering: auto (default (auto))");
+  expect(await runRenderingCommand("", dir)).toContain("Telegram rendering: auto (default (auto))");
   rmSync(dir, { recursive: true, force: true });
   const fresh = makeRemoteDir();
   try {
-    expect(runRenderingCommand("", fresh)).toContain("default, remote control is not set up yet");
+    expect(await runRenderingCommand("", fresh)).toContain("default, remote control is not set up yet");
   } finally {
     rmSync(fresh, { recursive: true, force: true });
   }
 });
 
-test("a mode is saved in the remote config and reported, with the rest of the file kept", () => {
+test("a mode is saved in the remote config and reported, with the rest of the file kept", async () => {
   saveRemoteConfig(testConfig({ orphanMs: 5000 }), dir);
-  const text = runRenderingCommand("plain", dir);
+  const text = await runRenderingCommand("plain", dir);
   expect(text).toContain("Telegram rendering: plain");
   expect(text).toContain("Saved; it applies to the next message.");
   const loaded = loadRemoteConfig(dir);
   expect(loaded.ok && loaded.value).toMatchObject({ rendering: "plain", orphanMs: 5000 });
 });
 
-test("a bad mode is refused naming the valid ones and changes nothing", () => {
+test("a bad mode is refused naming the valid ones and changes nothing", async () => {
   saveRemoteConfig(testConfig({ rendering: "html" }), dir);
-  const text = runRenderingCommand("sparkly", dir);
+  const text = await runRenderingCommand("sparkly", dir);
   expect(text).toContain("/rendering: rendering must be one of auto, rich, html, plain");
   expect(text).not.toContain("sparkly");
   const loaded = loadRemoteConfig(dir);
   expect(loaded.ok && loaded.value.rendering).toBe("html");
 });
 
-test("with no remote config a mode cannot be saved, and the message says why instead of throwing", () => {
-  const text = runRenderingCommand("html", dir);
+test("with no remote config a mode cannot be saved, and the message says why instead of throwing", async () => {
+  const text = await runRenderingCommand("html", dir);
   expect(text).toContain("/rendering: remote control is not set up on this machine");
 });

@@ -294,14 +294,14 @@ function withServeCredentialLock<T>(
   });
 }
 
-function mintRecord(now: string): { token: string; record: ServeCredentialRecord } {
+function mintRecord(now: string, id: string = randomUUID()): { token: string; record: ServeCredentialRecord } {
   // 32 bytes of CSPRNG output — 256 bits, the same strength as the digest it is
   // compared through, so the hash is not the weak half.
   const token = randomBytes(32).toString("base64url");
   const salt = randomBytes(32).toString("hex");
   return {
     token,
-    record: { id: randomUUID(), algorithm: "sha256", salt, hash: hashToken(salt, token), createdAt: now },
+    record: { id, algorithm: "sha256", salt, hash: hashToken(salt, token), createdAt: now },
   };
 }
 
@@ -317,6 +317,7 @@ export function issueServeToken(
   dir?: string,
   now: () => string = () => new Date().toISOString(),
   onWaiting?: (message: string) => void,
+  credentialId?: string,
 ): IssueOutcome {
   // The check and the write are ONE critical section. Without the lock this is
   // a check-then-write, and a security review ran eight concurrent `issue`
@@ -331,7 +332,7 @@ export function issueServeToken(
         message: "a serve credential already exists; use `keryx serve token rotate` to replace it, or `revoke` to remove it",
       };
     }
-    const { token, record } = mintRecord(now());
+    const { token, record } = mintRecord(now(), credentialId);
     if (!writeStore({ schemaVersion: 1, active: record }, dir)) {
       return { ok: false, reason: "write-failed", message: "could not write the serve credential store" };
     }

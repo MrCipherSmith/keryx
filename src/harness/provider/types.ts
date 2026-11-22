@@ -227,6 +227,8 @@ export interface MessageReasoning {
 export interface NormalizedMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Display provenance for an authenticated Telegram operator message. Store-only. */
+  source?: "telegram";
   /**
    * Trust provenance of the content (trusted policy vs. project/model output).
    *

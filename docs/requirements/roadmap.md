@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.36
+Version: 0.29.37
 
 ## Status
 
@@ -14,6 +14,8 @@ carrying the measurement that found it and the reason it was not done then.
 > **Changelog**
 >
 > - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
+>
+> - **0.29.37** — [Keryx Desktop Telegram](keryx-desktop-telegram/README.md). Spec ready for local service setup and management from Integrations, QR or manual bot pairing, token replacement and explicit sharing of a live Desktop ACP session with Telegram. Scope includes revision-checked bot changes, poller readiness and recovery, turn arbitration, delegated approvals, and live-bot acceptance. Desktop runtime implementation is planned.
 >
 > - **0.29.36** — [OpenSpec in Keryx Metaproject](keryx-metaproject-openspec/README.md). Spec ready for owner review. Plans a local source alongside Graph and Wiki, with specs, active changes, archive, search and evidence-backed links. Draft Flow intake is a later increment. Runtime planned.
 >

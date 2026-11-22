@@ -2996,10 +2996,10 @@ export async function runAgentRepl(
         agentIo.onSystem?.(await readlineIntakeText(line, { root: sessionCwd }));
       } else if (isRenderingCommand(command)) {
         // Flow 395: same text as the full-screen shell and the /settings row, no modal needed.
-        agentIo.onSystem?.(runRenderingCommand(rest));
+        agentIo.onSystem?.(await runRenderingCommand(rest, configDir));
       } else if (command === "/remote-policy") {
         // Flow 396: the saved Telegram defaults. This shell has no bridge, so it edits the file only.
-        agentIo.onSystem?.(remotePolicyText(rest, { ...(configDir !== undefined ? { dir: configDir } : {}) }));
+        agentIo.onSystem?.(await remotePolicyText(rest, { ...(configDir !== undefined ? { dir: configDir } : {}) }));
       } else if (isTrailCommand(command)) {
         // Flow 393: the Trail of the live session, the same list the model reads with slate_trail.
         agentIo.onSystem?.(await runTrailCommand(rest, slateSession?.dir));

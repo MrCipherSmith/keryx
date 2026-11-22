@@ -529,6 +529,7 @@ export async function acpCommand(args: string[]): Promise<void> {
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
       profile,
+      ...(profile === "shell" && process.env.KERYX_DESKTOP_TELEGRAM_PREVIEW === "1" ? { telegramSessionEnabled: true } : {}),
       ...(profile === "shell" && resolution.kind === "ready" && resolution.source !== "fixture" ? {
         routingProviders: async (force: boolean) => {
           const env = envWithSavedApiKeys(process.env);

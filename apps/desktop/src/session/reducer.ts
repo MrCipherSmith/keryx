@@ -16,9 +16,10 @@ import type {
 import type { TaskInfo } from "../acp/providers";
 import { applySubagentEvent, isActiveSubagent, mergeArchivedSubagents, replaySpawn, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
 import { isLegacySystemText, isSystemMeta, parseSystemNote } from "./systemNote";
+import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN, type TelegramAttachment, type TelegramTurn } from "./telegramSession";
 
 export type Item =
-  | { kind: "user"; id: number; text: string; messageId?: string | null; context?: import("./userPrompt").UserPromptContext; failed?: boolean }
+  | { kind: "user"; id: number; text: string; messageId?: string | null; context?: import("./userPrompt").UserPromptContext; failed?: boolean; sendId?: number; source?: "telegram" | undefined }
   | { kind: "agent"; id: number; text: string; messageId?: string | null }
   | { kind: "thought"; id: number; text: string; messageId?: string | null }
   | {
@@ -83,6 +84,7 @@ export interface CommandItem {
 /** A prompt typed while the turn runs; sent in order when it ends. */
 export interface QueuedPrompt {
   issueLaunchId?: string;
+  resumeIssueQuestions?: true;
   id: number;
   text: string;
 }
@@ -119,6 +121,8 @@ export interface ConvState {
   items: Item[];
   nextId: number;
   busy: boolean;
+  telegram?: TelegramAttachment | null;
+  telegramTurn?: TelegramTurn | null;
   /** Its session/load replay is running. */
   replaying: boolean;
   commands: AvailableCommand[];
@@ -212,15 +216,17 @@ function appendChunk(
   kind: "user" | "agent" | "thought",
   text: string,
   messageId: string | null | undefined,
+  source?: "telegram",
 ): boolean {
   if (text === "") return false;
   const items = d.items;
   const last = items[items.length - 1];
-  if (last && last.kind === kind && (messageId == null || last.messageId == null || last.messageId === messageId)) {
+  if (last && last.kind === kind && (last.kind !== "user" || last.source === source) &&
+    (messageId == null || last.messageId == null || last.messageId === messageId)) {
     items[items.length - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
     return true;
   }
-  items.push({ kind, id: d.nextId, text, messageId });
+  items.push({ kind, id: d.nextId, text, messageId, ...(kind === "user" && source ? { source } : {}) });
   d.nextId += 1;
   return true;
 }
@@ -351,8 +357,26 @@ function tokenPair(v: unknown): TokenPair | null {
  */
 function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
   switch (u.sessionUpdate) {
+    case TELEGRAM_SESSION: {
+      const attachment = readTelegramAttachment(u.telegram, d.sessionId);
+      if (!d.held || !attachment) return false;
+      d.telegram = attachment;
+      return true;
+    }
+    case TELEGRAM_TURN: {
+      const turn = readTelegramTurn(u);
+      if (!d.held || !turn) return false;
+      if (turn.phase === "started") {
+        if (d.telegramTurn) return false;
+        d.telegramTurn = { generation: turn.generation, updateId: turn.updateId };
+        return true;
+      }
+      if (d.telegramTurn?.generation !== turn.generation || d.telegramTurn.updateId !== turn.updateId) return false;
+      d.telegramTurn = null;
+      return true;
+    }
     case "user_message_chunk": {
-      if (!d.replaying) return false; // live user text is added locally on send
+      if (!d.replaying && !d.telegramTurn) return false; // Desktop user text is added locally on send
       const c = u as ChunkUpdate;
       const note = delegateNoteOf((u as { _meta?: unknown })._meta);
       const parentTurn = (c._meta as { keryx?: { parentTurn?: number } } | undefined)?.keryx?.parentTurn;
@@ -360,7 +384,9 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       else if (!note && d.items.at(-1)?.kind !== "user") d.parentTurn++;
       if (note) return replayDelegateNote(d, note, replayDate(c._meta));
       if (MEDIA_BLOCKS.has(c.content?.type)) return pushBlock(d, "user", c.content);
-      return appendChunk(d, "user", blockText(c.content), c.messageId);
+      const source = d.telegramTurn || (c._meta as { keryx?: { source?: string } } | undefined)?.keryx?.source === "telegram" ? "telegram" : undefined;
+      const messageId = c.messageId ?? (d.telegramTurn ? `telegram:${d.telegramTurn.generation}:${d.telegramTurn.updateId}` : undefined);
+      return appendChunk(d, "user", blockText(c.content), messageId, source);
     }
     case "agent_message_chunk": {
       const c = u as ChunkUpdate;
@@ -431,7 +457,7 @@ export function applyUpdates(conv: ConvState, updates: readonly QueuedUpdate[]):
  * One per call: sending it makes the session busy again, so the next waits for that turn to end.
  */
 export function pendingQueueSend(conv: ConvState, turnRunning: boolean): QueuedPrompt | null {
-  if (conv.busy || turnRunning || !conv.held || conv.replaying) return null;
+  if (conv.busy || conv.telegramTurn || turnRunning || !conv.held || conv.replaying) return null;
   return conv.queue[0] ?? null;
 }
 
@@ -478,16 +504,17 @@ export const initialState: WindowState = {
 export type Action =
   /** Session updates coalesced into one render, each routed to the session it names. */
   | { t: "updates"; updates: readonly RoutedUpdate[] }
-  | { t: "userSent"; sessionId: string; text: string; context?: import("./userPrompt").UserPromptContext; replaces?: number }
+  | { t: "userSent"; sessionId: string; text: string; context?: import("./userPrompt").UserPromptContext; replaces?: number; sendId?: number }
   /** session/prompt was rejected: flags the optimistic user item (`itemId`, default the last user item) as failed. */
-  | { t: "userSendFailed"; sessionId: string; itemId?: number }
+  | { t: "userSendFailed"; sessionId: string; itemId?: number; sendId?: number; busyRefusal?: boolean }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
   | { t: "busy"; sessionId: string; busy: boolean }
+  | { t: "telegramStatus"; sessionId: string; previous: TelegramAttachment | null; value: TelegramAttachment }
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
   /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
   | { t: "delegateResult"; sessionId: string; runId: string; agentId: string; turn: number; text: string }
   | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
-  | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string }
+  | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string; resumeIssueQuestions?: true }
   | { t: "queueRemove"; sessionId: string; index: number }
   /** The prompt at the front was sent. */
   | { t: "queueShift"; sessionId: string }
@@ -556,7 +583,7 @@ function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): Win
 /** Detached children have no verified live runtime in this connection. */
 function releaseConversation(c: ConvState, reason: LostReason): ConvState {
   if (!c.held && !c.busy) return c;
-  return { ...c, held: false, busy: false, lostReason: c.held ? reason : c.lostReason,
+  return { ...c, held: false, busy: false, telegram: null, telegramTurn: null, lostReason: c.held ? reason : c.lostReason,
     subagents: c.subagents.map(row => isActiveSubagent(row) ? { ...row, status: "unknown" } : row) };
 }
 
@@ -578,16 +605,19 @@ export function reducer(state: WindowState, a: Action): WindowState {
             const { failed: _failed, ...rest } = i;
             return rest;
           }),
-          { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) },
+          { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}),
+            ...(a.sendId === undefined ? {} : { sendId: a.sendId }) },
         ],
       }));
     case "userSendFailed":
       return withConv(state, a.sessionId, (c) => {
-        const at = a.itemId !== undefined
+        const at = a.sendId !== undefined
+          ? c.items.findIndex(i => i.kind === "user" && i.sendId === a.sendId)
+          : a.itemId !== undefined
           ? c.items.findIndex((i) => i.kind === "user" && i.id === a.itemId)
           : c.items.map((i) => i.kind).lastIndexOf("user");
-        // Only a prompt nothing answered is "not sent": once agent output follows it, the turn did start.
-        if (at < 0 || c.items.slice(at + 1).some((i) => i.kind !== "user")) return c;
+        // A busy refusal proves this send failed, regardless of another turn's output.
+        if (at < 0 || (!a.busyRefusal && c.items.slice(at + 1).some((i) => i.kind !== "user"))) return c;
         return { ...c, items: c.items.map((i, n) => (n === at && i.kind === "user" ? { ...i, failed: true } : i)) };
       });
     case "notice":
@@ -611,8 +641,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
       }));
     case "queueAdd":
       return withConv(state, a.sessionId, c => {
-        if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId))) return c;
-        const prompt: QueuedPrompt = { id: c.nextId, text: a.text, ...(a.issueLaunchId ? { issueLaunchId: a.issueLaunchId } : {}) };
+        if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId)) || (a.resumeIssueQuestions && c.queue.some(prompt => prompt.resumeIssueQuestions))) return c;
+        const prompt: QueuedPrompt = { id: c.nextId, text: a.text, ...(a.issueLaunchId ? { issueLaunchId: a.issueLaunchId } : {}), ...(a.resumeIssueQuestions ? { resumeIssueQuestions: true as const } : {}) };
         return { ...c, nextId: c.nextId + 1, queue: [...c.queue, prompt] };
       });
     case "queueRemove":
@@ -634,6 +664,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
       return withConv(state, a.sessionId, (c) => ({ ...c, tasks: a.tasks }));
     case "busy":
       return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c : { ...c, busy: a.busy }));
+    case "telegramStatus":
+      return withConv(state, a.sessionId, (c) => c.held && (c.telegram ?? null) === a.previous ? { ...c, telegram: a.value } : c);
     case "config":
       return withConv(state, a.sessionId, (c) => ({ ...c, configOptions: a.configOptions }));
     case "creating":
@@ -748,6 +780,7 @@ export interface SessionState {
   sessionId: string | null;
   items: Item[];
   busy: boolean;
+  telegram?: TelegramAttachment | null;
   replaying: boolean;
   /** The shown session is still held by keryx; false means read-only until it is reopened. */
   held: boolean;
@@ -786,7 +819,8 @@ export function shownView(w: WindowState): SessionState {
     banners: w.banners,
     sessionId: c?.sessionId ?? null,
     items: c?.items ?? NO_ITEMS,
-    busy: c?.busy ?? false,
+    busy: (c?.busy ?? false) || !!c?.telegramTurn,
+    ...(c?.telegram ? { telegram: c.telegram } : {}),
     replaying: c?.replaying ?? false,
     held: c?.held ?? false,
     lostReason: c?.lostReason ?? null,
@@ -812,6 +846,6 @@ export function activityCount(c: Pick<ConvState, "subagents" | "tasks">): number
 /** Marks for every session the window has, for the sidebar. */
 export function sessionMarks(w: WindowState, waiting: ReadonlySet<string>): Record<string, SessionMark> {
   const out: Record<string, SessionMark> = {};
-  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title, running: activityCount(c), subagents: c.held ? c.subagents : NO_SUBAGENTS };
+  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy || !!c.telegramTurn, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title, running: activityCount(c), subagents: c.held ? c.subagents : NO_SUBAGENTS };
   return out;
 }

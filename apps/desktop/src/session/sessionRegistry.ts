@@ -1,4 +1,5 @@
 import type { RoutedUpdate } from "./reducer";
+import type { TelegramTurn } from "./telegramSession";
 
 /** What switching to a session takes. */
 export type SwitchPlan =
@@ -22,6 +23,7 @@ export class SessionRegistry<Turn = unknown> {
   readonly loading = new Set<string>();
   /** The running prompt turn of each session that has one. */
   readonly turns = new Map<string, Turn>();
+  readonly telegramTurns = new Map<string, TelegramTurn>();
   /** `_keryx/command` requests in flight per session: keryx may ask a question while one runs. */
   readonly commands = new Map<string, number>();
   /** session/new requests in flight. */
@@ -40,6 +42,7 @@ export class SessionRegistry<Turn = unknown> {
     this.held.clear();
     this.loading.clear();
     this.turns.clear();
+    this.telegramTurns.clear();
     this.commands.clear();
     this.creating = 0;
     this.loadIntents.clear();
@@ -164,13 +167,14 @@ export class SessionRegistry<Turn = unknown> {
   admit(params: unknown): string | null {
     const sid = (params as { sessionId?: unknown } | null | undefined)?.sessionId;
     if (typeof sid !== "string") return null;
-    if (!this.held.has(sid) || !(this.turns.has(sid) || this.commands.has(sid))) return null;
+    if (!this.held.has(sid) || !(this.turns.has(sid) || this.telegramTurns.has(sid) || this.commands.has(sid))) return null;
     return sid;
   }
 
   /** keryx released the session (idle cap). True when the window held it. */
   release(sessionId: string): boolean {
     this.turns.delete(sessionId);
+    this.telegramTurns.delete(sessionId);
     this.commands.delete(sessionId);
     return this.held.delete(sessionId);
   }

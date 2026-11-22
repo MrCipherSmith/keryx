@@ -33,6 +33,32 @@ const twoHeld = run(
   { t: "created", sessionId: "s2", show: false },
 );
 
+test("tracks a Telegram turn off-screen, ignores a mismatched finish, and clears it on owner loss", () => {
+  const event = (phase: string, updateId: number) =>
+    u({ sessionUpdate: "_keryx/telegram/turn", source: "telegram", phase, updateId, generation: "generation-a" });
+  const start = run(twoHeld, { t: "updates", updates: [
+    routed("s2", event("started", 7)), routed("s2", chunk("From Telegram", "user_message_chunk")),
+    routed("s2", event("finished", 6)),
+  ] });
+  expect(sessionMarks(start, new Set()).s2?.busy).toBe(true);
+  expect(shownView(start).busy).toBe(false);
+  expect(textOf(start.convs.s2)).toBe("From Telegram");
+  const end = run(start, { t: "updates", updates: [routed("s2", event("finished", 7))] });
+  expect(sessionMarks(end, new Set()).s2?.busy).toBe(false);
+  expect(sessionMarks(run(start, { t: "connectionReset" }), new Set()).s2?.busy).toBe(false);
+});
+
+test("requires the same session and a Telegram topic URL, and ignores stale status after a notification", () => {
+  const update = (sessionId: string, topicUrl: string) => u({
+    sessionUpdate: "_keryx/telegram/session", telegram: { sessionId, state: "active", topicUrl },
+  });
+  const wrongSession = run(twoHeld, { t: "updates", updates: [routed("s1", update("s2", "https://t.me/c/100/4"))] });
+  expect(shownView(wrongSession).telegram).toBeUndefined();
+  const changed = run(wrongSession, { t: "updates", updates: [routed("s1", update("s1", "https://t.me.evil.example/c/100/4"))] },
+    { t: "telegramStatus", sessionId: "s1", previous: null, value: { state: "detached" } });
+  expect(shownView(changed).telegram).toEqual({ state: "active" });
+});
+
 describe("conversation: batched updates", () => {
   const batch: QueuedUpdate[] = [
     { update: chunk("Hel"), at: 1 },

@@ -1,3 +1,4 @@
+import { isDesktopOwner } from "./protocol";
 // The `/v1/remote/*` surface of `keryx serve` (flow 376, block 2).
 //
 // Implements the structural interface `ServeRemoteSurface` that `lib/serve-server.ts`
@@ -194,6 +195,7 @@ class ShellStream {
 
   constructor(
     readonly sessionId: string,
+    readonly owner: import("./protocol").DesktopOwner | undefined,
     private readonly timers: HubTimers,
     private readonly onEnded: (stream: ShellStream) => void,
   ) {}
@@ -373,6 +375,7 @@ export class RemoteHttpSurface {
   private readonly newApprovalId: () => string;
   private readonly newPromptId: () => string;
   private readonly streams = new Map<string, ShellStream>();
+  private revocation: { id: string; waiting: Map<string, ShellStream>; finish: (ok: boolean) => void } | undefined;
   /** Per session: the exact update ids the shell finished (bounded). */
   private readonly completed = new Map<string, Set<number>>();
   /** Per session: the exact update ids written to its stream (bounded). Only these can be acknowledged. */
@@ -472,13 +475,15 @@ export class RemoteHttpSurface {
       case "prompt":
         return this.requestPrompt(hub, request);
       case "prompt-close":
-        return this.closePrompt(request);
+        return this.closePrompt(hub, request);
       case "state":
         return this.messageState(hub, request);
       case "ack":
         return this.ack(hub, request);
       case "approval-ack":
         return this.approvalAck(hub, request);
+      case "channel-revoke-ack":
+        return this.revokeAck(hub, request);
       case "stream":
         return this.openStream(hub, request, io);
     }
@@ -508,6 +513,55 @@ export class RemoteHttpSurface {
 
   // ---- composition ---------------------------------------------------------
 
+  /** Refuse cutover if any live binding lacks an exact, currently connected owner. */
+  canRevokeChannelBindings(hub: RemoteHub, allowUnowned = false): boolean {
+    if (this.revocation !== undefined || this.hub !== hub) return false;
+    return hub.list().every((item) => {
+      if (allowUnowned && hub.matchesOwner(item.sessionId, undefined)) return true;
+      const stream = this.streams.get(item.sessionId);
+      return stream?.owner !== undefined && hub.matchesOwner(item.sessionId, stream.owner);
+    });
+  }
+
+  /** Revoke only after every exact Desktop owner acknowledges cancellation. */
+  async revokeChannelBindings(hub: RemoteHub, cutoverId: string, timeoutMs: number, allowUnowned = false): Promise<boolean> {
+    if (!this.canRevokeChannelBindings(hub, allowUnowned)) return false;
+    const waiting = new Map<string, ShellStream>();
+    for (const item of hub.list()) {
+      if (allowUnowned && hub.matchesOwner(item.sessionId, undefined)) continue;
+      const stream = this.streams.get(item.sessionId);
+      if (stream?.owner === undefined || !hub.matchesOwner(item.sessionId, stream.owner)) return false;
+      waiting.set(item.sessionId, stream);
+    }
+    if (waiting.size === 0) return true;
+    return new Promise((resolve) => {
+      const finish = (ok: boolean): void => {
+        if (this.revocation?.id !== cutoverId) return;
+        clearTimeout(timer);
+        this.revocation = undefined;
+        resolve(ok);
+      };
+      this.revocation = { id: cutoverId, waiting, finish };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      for (const stream of waiting.values()) {
+        if (!stream.write(encodeSseEvent("status", { kind: "channel-revoked", cutoverId } satisfies StatusEvent))) { finish(false); break; }
+      }
+    });
+  }
+
+  private async revokeAck(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await readJsonBody(request);
+    if (!body.ok) return body.response;
+    const { sessionId, owner, cutoverId } = body.value;
+    if (!isSessionId(sessionId) || !isDesktopOwner(owner) || typeof cutoverId !== "string" || Object.keys(body.value).some((key) => !["sessionId", "owner", "cutoverId"].includes(key))) return invalid("invalid revocation acknowledgement");
+    const revocation = this.revocation;
+    const stream = revocation?.waiting.get(sessionId);
+    if (revocation?.id !== cutoverId || stream === undefined || this.streams.get(sessionId) !== stream || !hub.matchesOwner(sessionId, owner) || stream.owner?.incarnation !== owner.incarnation || stream.owner.generation !== owner.generation) return fail(409, "stale-revocation", "The channel revocation is no longer current.");
+    revocation.waiting.delete(sessionId);
+    if (revocation.waiting.size === 0) revocation.finish(true);
+    return ok({ acknowledged: true });
+  }
+
   /** The channels controller: its routes answer even while no hub is running. */
   setChannels(handler: ChannelsHandler): void {
     this.channels = handler;
@@ -516,6 +570,16 @@ export class RemoteHttpSurface {
   /** The hub is up: routes begin answering. */
   attach(hub: RemoteHub): void {
     this.hub = hub;
+  }
+
+  /** Retire Telegram decision projections without closing Desktop or shell streams. */
+  invalidateTelegramProjections(): void {
+    for (const [id, entry] of [...this.approvals]) {
+      this.dropApproval(id);
+      this.rememberDecided(id, entry.sessionId);
+    }
+    for (const id of [...this.awaiting.keys()]) this.dropAwaiting(id);
+    for (const id of [...this.choices.keys()]) this.dropChoice(id);
   }
 
   /** The hub is not running (and why). Streams end; routes answer 503 with the reason. */
@@ -534,6 +598,7 @@ export class RemoteHttpSurface {
     if (!body.ok) {
       return body.response;
     }
+    if (body.value.probeExactOwner === true) return ok({ exactOwner: true });
     const checked = this.parseRegister(body.value);
     if (typeof checked === "string") {
       return invalid(checked);
@@ -548,7 +613,10 @@ export class RemoteHttpSurface {
         this.bound.set(checked.sessionId, binding);
       }
       const limits = hub.limits();
+      const topicUrl = checked.owner === undefined ? undefined : hub.topicUrl(checked.sessionId, checked.owner);
       return ok({
+        ...(topicUrl === undefined ? {} : { topicUrl }),
+        exactOwner: true,
         name: result.name,
         threadId: result.threadId,
         reused: result.reused,
@@ -573,22 +641,36 @@ export class RemoteHttpSurface {
     if (name !== undefined && (typeof name !== "string" || name.length > MAX_PROJECT_NAME_CHARS || CONTROL_CHARS.test(name))) {
       return `name must be a string of at most ${MAX_PROJECT_NAME_CHARS} characters without control characters.`;
     }
-    return { sessionId: value.sessionId, project, ...(name === undefined ? {} : { name }) };
+    if (value.owner !== undefined && !isDesktopOwner(value.owner)) return "invalid owner";
+    if (value.expectedThreadId !== undefined && (!Number.isSafeInteger(value.expectedThreadId) || typeof value.expectedThreadId !== "number" || value.expectedThreadId <= 0 || value.owner === undefined)) return "invalid expectedThreadId";
+    return { sessionId: value.sessionId, project, ...(name === undefined ? {} : { name }), ...(value.owner === undefined ? {} : { owner: value.owner }), ...(value.expectedThreadId === undefined ? {} : { expectedThreadId: value.expectedThreadId as number }) };
   }
 
-  private async sessionBody(request: Request): Promise<{ ok: true; body: SessionBody } | { ok: false; response: Response }> {
+  /** Parse once with the normal byte limit, then bind the request to the current owner. */
+  private async readOwnedBody(hub: RemoteHub, request: Request): Promise<BodyResult> {
     const body = await readJsonBody(request);
+    if (!body.ok) return body;
+    const { sessionId, owner } = body.value;
+    if (owner !== undefined && !isDesktopOwner(owner)) return { ok: false, response: invalid("invalid owner") };
+    if (typeof sessionId === "string" && hub.hasSession(sessionId) && !hub.matchesOwner(sessionId, owner)) {
+      return { ok: false, response: fail(404, "unknown-session", "this session is not registered for this owner") };
+    }
+    return body;
+  }
+
+  private async sessionBody(hub: RemoteHub, request: Request): Promise<{ ok: true; body: SessionBody } | { ok: false; response: Response }> {
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body;
     }
     if (!isSessionId(body.value.sessionId)) {
       return { ok: false, response: invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.") };
     }
-    return { ok: true, body: { sessionId: body.value.sessionId } };
+    return { ok: true, body: { sessionId: body.value.sessionId, ...(isDesktopOwner(body.value.owner) ? { owner: body.value.owner } : {}) } };
   }
 
   private async deregister(hub: RemoteHub, request: Request): Promise<Response> {
-    const parsed = await this.sessionBody(request);
+    const parsed = await this.sessionBody(hub, request);
     if (!parsed.ok) {
       return parsed.response;
     }
@@ -598,16 +680,16 @@ export class RemoteHttpSurface {
     this.completed.delete(sessionId);
     this.sent.delete(sessionId);
     this.bound.delete(sessionId);
-    const result = await hub.deregister(sessionId);
+    const result = await hub.deregister(sessionId, parsed.body.owner);
     return ok({ existed: result.existed });
   }
 
   private async heartbeat(hub: RemoteHub, request: Request): Promise<Response> {
-    const parsed = await this.sessionBody(request);
+    const parsed = await this.sessionBody(hub, request);
     if (!parsed.ok) {
       return parsed.response;
     }
-    const result = await hub.heartbeat(parsed.body.sessionId);
+    const result = await hub.heartbeat(parsed.body.sessionId, parsed.body.owner);
     if (result.ok) {
       return ok({ name: result.name, threadId: result.threadId });
     }
@@ -651,7 +733,7 @@ export class RemoteHttpSurface {
   }
 
   private async reply(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -678,7 +760,7 @@ export class RemoteHttpSurface {
   }
 
   private async requestApproval(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -739,9 +821,11 @@ export class RemoteHttpSurface {
         ],
         ...(remember === undefined ? [] : [[{ text: alwaysButtonText(remember), callback_data: approvalCallbackData(approvalId, "always") }]]),
       ],
-      onSent: (info) => this.onApprovalSent(approvalId, sessionId, info.messageId, info.text),
+      onSent: (info) => {
+        if (hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) this.onApprovalSent(approvalId, sessionId, info.messageId, info.text);
+      },
     });
-    if (!sent) {
+    if (!sent || !hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) {
       this.dropApproval(approvalId);
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
@@ -754,7 +838,7 @@ export class RemoteHttpSurface {
    * edited to say whether the rule was remembered. Anything else changes nothing.
    */
   private async approvalResult(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -802,7 +886,7 @@ export class RemoteHttpSurface {
    * The prompt is registered before it is sent, so a press cannot beat the record.
    */
   private async requestPrompt(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -888,9 +972,11 @@ export class RemoteHttpSurface {
     }
     const sent = await hub.send(sessionId, redactSensitiveText(value.text), {
       keyboard,
-      onSent: (info) => this.onChoiceSent(promptId, sessionId, info.messageId, info.text),
+      onSent: (info) => {
+        if (hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) this.onChoiceSent(promptId, sessionId, info.messageId, info.text);
+      },
     });
-    if (!sent) {
+    if (!sent || !hub.matchesOwner(sessionId, isDesktopOwner(value.owner) ? value.owner : undefined)) {
       this.dropChoice(promptId);
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
@@ -902,8 +988,8 @@ export class RemoteHttpSurface {
    * Only the session that asked can close it. The message is put in its final state and a later press or
    * reply finds nothing to answer.
    */
-  private async closePrompt(request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+  private async closePrompt(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -966,7 +1052,7 @@ export class RemoteHttpSurface {
 
   /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */
   private async messageState(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -987,7 +1073,7 @@ export class RemoteHttpSurface {
   }
 
   private async ack(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -1011,7 +1097,7 @@ export class RemoteHttpSurface {
    * accepted and changes nothing; an id this surface never sent, or sent to another session, is refused.
    */
   private async approvalAck(hub: RemoteHub, request: Request): Promise<Response> {
-    const body = await readJsonBody(request);
+    const body = await this.readOwnedBody(hub, request);
     if (!body.ok) {
       return body.response;
     }
@@ -1071,13 +1157,23 @@ export class RemoteHttpSurface {
   }
 
   private openStream(hub: RemoteHub, request: Request, io: { untimed: () => void }): Response {
-    const sessionId = new URL(request.url).searchParams.get("sessionId");
+    if (this.revocation !== undefined) return fail(409, "channel-revoking", "Channel revocation is in progress.");
+    const params = new URL(request.url).searchParams;
+    if (params.getAll("sessionId").length !== 1 || params.getAll("owner").length > 1) return invalid("duplicate or missing stream identity");
+    const sessionId = params.get("sessionId");
+    const rawOwner = params.get("owner");
+    let owner: unknown;
+    if (rawOwner !== null) {
+      try { owner = JSON.parse(rawOwner); } catch { return invalid("invalid owner"); }
+      if (!isDesktopOwner(owner)) return invalid("invalid owner");
+    }
     if (!isSessionId(sessionId)) {
       return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
     }
     if (!hub.hasSession(sessionId)) {
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
+    if (!hub.matchesOwner(sessionId, isDesktopOwner(owner) ? owner : undefined)) return fail(404, "unknown-session", "this session is not registered for this owner");
     const resumeFrom = parseLastEventId(request);
     if (resumeFrom !== undefined) {
       this.complete(sessionId, resumeFrom);
@@ -1086,7 +1182,7 @@ export class RemoteHttpSurface {
     this.streams.get(sessionId)?.end("superseded");
     io.untimed();
 
-    const stream = new ShellStream(sessionId, this.timers, (ended) => this.onStreamEnded(ended));
+    const stream = new ShellStream(sessionId, isDesktopOwner(owner) ? owner : undefined, this.timers, (ended) => this.onStreamEnded(ended));
     const body = new ReadableStream<Uint8Array>({
       start: (controller) => {
         stream.controller = controller;
@@ -1670,6 +1766,7 @@ export class RemoteHttpSurface {
   }
 
   private onStreamEnded(stream: ShellStream): void {
+    if (this.revocation?.waiting.get(stream.sessionId) === stream) this.revocation.finish(false);
     if (this.streams.get(stream.sessionId) !== stream) {
       return;
     }

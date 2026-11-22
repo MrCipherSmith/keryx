@@ -1,3 +1,5 @@
+import { ForwardingBotApi } from "./forwarding-bot-api";
+import type { DesktopOwner, RegisterBody } from "./protocol";
 // The serve-side remote-control hub (flow 376, block 1).
 //
 // Owns the registry of remote sessions, the topic lifecycle, the durable queues
@@ -31,6 +33,7 @@ import { INTAKE_SERVICE_TOPIC, isIntakeCallbackData, type MessageState } from ".
 import { type PollerStatus, UpdatePoller } from "./poller";
 import { ServiceTopics } from "./service-topics";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
+import { telegramTopicUrl } from "./topic-url";
 import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
 /** How much of a replied-to message's text is kept: enough to recognise a reply box by its opening. */
@@ -133,6 +136,9 @@ export interface RemoteEvent {
 export interface RemoteHubOptions extends RemoteConsumer {
   api: BotApi;
   config: RemoteConfig;
+  /** Prepare a candidate without dispatch or durable side effects. */
+  staged?: boolean;
+  currentConfig?: () => RemoteConfig | undefined;
   /** This machine's name; when set, default topic names start with it so two machines never collide. */
   machine?: string;
   /** User-global directory override (the test seam). */
@@ -222,7 +228,9 @@ function formatDuration(ms: number): string {
 
 export class RemoteHub {
   private readonly api: BotApi;
+  private readonly forwardingApi: ForwardingBotApi;
   private readonly config: RemoteConfig;
+  private readonly currentConfig: () => RemoteConfig;
   private readonly machine: string | undefined;
   private readonly consumer: RemoteConsumer;
   private readonly now: () => number;
@@ -246,7 +254,13 @@ export class RemoteHub {
   private readonly droppedReasons = new Map<string, string>();
   private readonly journal: RejectedJournal;
   private readonly offset: PollerState;
-  private readonly poller: UpdatePoller;
+  private poller: UpdatePoller;
+  private readonly createPoller: (api: BotApi, hold?: (signal: AbortSignal) => Promise<void>) => UpdatePoller;
+  private handoffPaused = false;
+  private handoffInProgress = false;
+  private lifecycleGeneration = 0;
+  private staged: boolean;
+  private releaseStagedPoll: (() => void) | undefined;
   private readonly recent: RemoteEvent[] = [];
   private readonly dispatching = new Map<string, Promise<void>>();
   private readonly redispatch = new Set<string>();
@@ -264,8 +278,10 @@ export class RemoteHub {
   private botUsername: string | undefined;
 
   constructor(options: RemoteHubOptions) {
-    this.api = options.api;
+    this.forwardingApi = new ForwardingBotApi(options.api);
+    this.api = this.forwardingApi.api;
     this.config = options.config;
+    this.currentConfig = () => options.currentConfig?.() ?? this.config;
     this.machine = options.machine;
     this.consumer = { deliver: options.deliver, ...(options.deliverCallback === undefined ? {} : { deliverCallback: options.deliverCallback }) };
     this.now = options.now ?? Date.now;
@@ -288,6 +304,7 @@ export class RemoteHub {
       mode:
         options.renderingMode ??
         ((): RenderMode => {
+          if (options.currentConfig !== undefined) return this.currentConfig().rendering ?? DEFAULT_RENDER_MODE;
           const fresh = loadRemoteConfig(options.dir);
           return (fresh.ok ? fresh.value.rendering : undefined) ?? options.config.rendering ?? DEFAULT_RENDER_MODE;
         }),
@@ -314,19 +331,30 @@ export class RemoteHub {
     this.serviceTopics = new ServiceTopics(options.dir === undefined ? {} : { dir: options.dir });
     this.serviceTopics.load();
     this.offset.load();
-    this.forgetOtherGroups();
+    this.staged = options.staged === true;
+    if (!this.staged) this.forgetOtherGroups();
     const onPollerStatus = options.onPollerStatus ?? (() => undefined);
-    this.poller = new UpdatePoller({
-      api: this.api,
-      sink: { accept: (updates) => this.receive(updates) },
+    this.createPoller = (api, hold) => new UpdatePoller({
+      api,
+      ...(hold === undefined ? {} : { holdAfterFirstResponse: hold }),
+      sink: { accept: (updates) => this.staged || this.handoffPaused
+        ? Promise.reject(new Error("Telegram admission is paused"))
+        : this.receive(updates) },
       ...(options.pollTimeoutSec === undefined ? {} : { timeoutSec: options.pollTimeoutSec }),
       ...(options.pollSleep === undefined ? {} : { sleep: options.pollSleep }),
       ...(options.pollBackoffMs === undefined ? {} : { backoffMs: options.pollBackoffMs }),
       onStatus: (status) => {
         this.event("poller-status", status.reason === undefined ? status.state : `${status.state}: ${status.reason}`);
-        onPollerStatus(status);
+        if (!this.handoffInProgress) onPollerStatus(status);
       },
     });
+    const holdStaged = options.staged === true ? (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+      const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+      this.releaseStagedPoll = release;
+      signal.addEventListener("abort", release, { once: true });
+      if (signal.aborted || !this.staged) release();
+    }) : undefined;
+    this.poller = this.createPoller(options.api, holdStaged);
   }
 
   /** Records left by a channel connected to another group are not ours: reusing one would answer into the old group. */
@@ -351,6 +379,7 @@ export class RemoteHub {
     this.stopped = false;
     await this.learnBotUsername();
     this.poller.start();
+    if (this.staged) return;
     this.sweepTimer = this.timers.setInterval(() => {
       void this.sweep();
     }, this.sweepIntervalMs);
@@ -359,6 +388,20 @@ export class RemoteHub {
       void this.dispatch(nameKey(record.name));
     }
     await this.publishCommandMenu();
+  }
+
+  /** A successful runtime poll, including an empty response, is the readiness proof. */
+  waitForPollerReady(timeoutMs: number): Promise<boolean> {
+    return this.poller.waitForReady(timeoutMs);
+  }
+
+  /** Called only after the revisioned commit; admit the pending first response. */
+  async activatePrepared(): Promise<void> {
+    if (!this.staged) return;
+    this.forgetOtherGroups();
+    this.staged = false;
+    this.releaseStagedPoll?.();
+    await this.start();
   }
 
   /** Ask the Bot API who this bot is, once and briefly. A failure leaves the name unknown; nothing else depends on it. */
@@ -393,6 +436,8 @@ export class RemoteHub {
   /** Stop polling and timers. In-flight deliveries are abandoned, not awaited. */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.lifecycleGeneration += 1;
+    this.forwardingApi.resume(false);
     if (this.sweepTimer !== undefined) {
       this.timers.clearInterval(this.sweepTimer);
       this.sweepTimer = undefined;
@@ -410,6 +455,117 @@ export class RemoteHub {
     }
     this.typing.clear();
     await this.poller.stop();
+  }
+
+  /**
+   * Swap the polling credential without replacing this hub or its bindings. Incoming
+   * updates are held during readiness; callers must fence approvals and serialize
+   * persistence separately. A failed candidate is stopped before recovery is attempted.
+   */
+  async handoffPoller(candidate: BotApi, timeoutMs: number, beforePublish: () => Promise<boolean> = async () => true): Promise<{ ok: true } | { ok: false; recovered: boolean }> {
+    if (this.handoffInProgress || this.stopped || this.staged || this.poller.status().state !== "running") return { ok: false, recovered: false };
+    this.handoffInProgress = true;
+    this.handoffPaused = true;
+    this.forwardingApi.pause();
+    const generation = this.lifecycleGeneration;
+    const previous = this.forwardingApi.current();
+    try {
+      await this.poller.stop();
+      if (this.lifecycleGeneration !== generation) return { ok: false, recovered: false };
+      let released = false;
+      let heldRelease: (() => void) | undefined;
+      const releaseCandidate = (): void => { released = true; heldRelease?.(); };
+      const hold = (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+        const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+        heldRelease = release;
+        signal.addEventListener("abort", release, { once: true });
+        if (signal.aborted || released) release();
+      });
+      this.poller = this.createPoller(candidate, hold);
+      this.poller.start();
+      const ready = await this.poller.waitForReady(timeoutMs);
+      let committed = false;
+      if (ready && this.lifecycleGeneration === generation) {
+        try { committed = await beforePublish(); } catch { committed = false; }
+      }
+      if (committed && this.lifecycleGeneration === generation) {
+        this.forwardingApi.replace(candidate);
+        this.handoffPaused = false;
+        this.forwardingApi.resume(true);
+        releaseCandidate();
+        return { ok: true };
+      }
+      await this.poller.stop();
+      if (this.lifecycleGeneration !== generation) return { ok: false, recovered: false };
+      let releaseRecovery: (() => void) | undefined;
+      const holdRecovery = (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+        const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+        releaseRecovery = release;
+        signal.addEventListener("abort", release, { once: true });
+        if (signal.aborted) release();
+      });
+      this.poller = this.createPoller(previous, holdRecovery);
+      this.poller.start();
+      const recovered = await this.poller.waitForReady(timeoutMs);
+      if (!recovered || this.lifecycleGeneration !== generation) {
+        await this.poller.stop();
+        return { ok: false, recovered: false };
+      }
+      this.handoffPaused = false;
+      this.forwardingApi.resume(true);
+      releaseRecovery?.();
+      return { ok: false, recovered: true };
+    } finally {
+      if (this.handoffPaused) this.forwardingApi.resume(false);
+      this.handoffInProgress = false;
+    }
+  }
+
+  /** Stop admission without destroying live binding state, for a distinct-bot cutover. */
+  async pauseForCutover(): Promise<boolean> {
+    if (this.stopped || this.staged || this.handoffInProgress || this.poller.status().state !== "running") return false;
+    this.handoffInProgress = true;
+    this.handoffPaused = true;
+    this.forwardingApi.pause();
+    await this.poller.stop();
+    return !this.stopped;
+  }
+
+  /** Restore the original poller only after its first successful response. */
+  async recoverCutover(timeoutMs: number): Promise<boolean> {
+    if (!this.handoffInProgress || this.stopped) return false;
+    let releaseRecovery: (() => void) | undefined;
+    const holdRecovery = (signal: AbortSignal): Promise<void> => new Promise((resolve) => {
+      const release = (): void => { signal.removeEventListener("abort", release); resolve(); };
+      releaseRecovery = release;
+      signal.addEventListener("abort", release, { once: true });
+      if (signal.aborted) release();
+    });
+    this.poller = this.createPoller(this.forwardingApi.current(), holdRecovery);
+    this.poller.start();
+    const ready = await this.poller.waitForReady(timeoutMs);
+    if (!ready || this.stopped) {
+      await this.poller.stop();
+      this.forwardingApi.resume(false);
+      this.handoffInProgress = false;
+      return false;
+    }
+    this.handoffPaused = false;
+    this.handoffInProgress = false;
+    this.forwardingApi.resume(true);
+    releaseRecovery?.();
+    return true;
+  }
+
+  /** Permit cleanup calls after revocation while incoming Telegram remains paused. */
+  allowCutoverCleanup(): void { this.forwardingApi.resume(true); }
+
+  /** Retire all old topic bindings without deleting their Telegram history. */
+  async retireCutoverBindings(): Promise<void> {
+    this.forwardingApi.resume(true);
+    await this.serial(async () => {
+      for (const record of this.registry.records()) await this.archive(record, "The Telegram channel changed.");
+    });
   }
 
   pollerStatus(): PollerStatus {
@@ -440,12 +596,26 @@ export class RemoteHub {
 
   /** What a shell needs to know about this hub's limits (the run guard reads `runTimeoutMs`). */
   limits(): { runTimeoutMs: number; orphanMs: number; permissionMode: RemoteConfig["permissionMode"]; approvalTimeoutMs: number } {
+    const config = this.currentConfig();
     return {
-      runTimeoutMs: this.config.runTimeoutMs,
-      orphanMs: this.config.orphanMs,
-      permissionMode: this.config.permissionMode,
-      approvalTimeoutMs: this.config.approvalTimeoutMs,
+      runTimeoutMs: config.runTimeoutMs,
+      orphanMs: config.orphanMs,
+      permissionMode: config.permissionMode,
+      approvalTimeoutMs: config.approvalTimeoutMs,
     };
+  }
+
+  matchesOwner(sessionId: string, owner: DesktopOwner | undefined): boolean {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) return false;
+    if (record.owner === undefined) return owner === undefined;
+    return owner !== undefined && record.owner.incarnation === owner.incarnation && record.owner.generation === owner.generation;
+  }
+
+  topicUrl(sessionId: string, owner: DesktopOwner): string | undefined {
+    if (!this.matchesOwner(sessionId, owner)) return undefined;
+    const record = this.registry.bySession(sessionId);
+    return record === undefined ? undefined : telegramTopicUrl(record.chatId, record.threadId);
   }
 
   hasSession(sessionId: string): boolean {
@@ -469,14 +639,14 @@ export class RemoteHub {
 
   // ---- session lifecycle ---------------------------------------------------
 
-  register(input: { sessionId: string; project: string; name?: string }): Promise<RegisterResult> {
+  register(input: RegisterBody): Promise<RegisterResult> {
     return this.serial(() => this.doRegister(input));
   }
 
-  deregister(sessionId: string): Promise<{ ok: true; existed: boolean }> {
+  deregister(sessionId: string, owner?: DesktopOwner): Promise<{ ok: true; existed: boolean }> {
     return this.serial(async () => {
       const record = this.registry.bySession(sessionId);
-      if (record === undefined) {
+      if (record === undefined || !this.matchesOwner(sessionId, owner)) {
         return { ok: true as const, existed: false };
       }
       await this.archive(record, "The session was closed.");
@@ -523,10 +693,10 @@ export class RemoteHub {
     );
   }
 
-  heartbeat(sessionId: string): Promise<HeartbeatResult> {
+  heartbeat(sessionId: string, owner?: DesktopOwner): Promise<HeartbeatResult> {
     return this.serial(async () => {
       const record = this.registry.bySession(sessionId);
-      if (record === undefined) {
+      if (record === undefined || !this.matchesOwner(sessionId, owner)) {
         return { ok: false as const, code: "unknown-session" as const, message: "this session is not registered for remote control; register again" };
       }
       record.lastHeartbeat = this.now();
@@ -941,9 +1111,13 @@ export class RemoteHub {
     this.outbound.enqueue({ chatId: record.chatId, threadId: record.threadId, text });
   }
 
-  private async doRegister(input: { sessionId: string; project: string; name?: string }): Promise<RegisterResult> {
+  private async doRegister(input: RegisterBody): Promise<RegisterResult> {
     const now = this.now();
     const existing = this.registry.bySession(input.sessionId);
+    const collision = (): RegisterResult => ({ ok: false, code: "name-taken", message: "topic belongs to another attachment" });
+    if (existing !== undefined && (existing.owner !== undefined || input.owner !== undefined) && !this.matchesOwner(input.sessionId, input.owner)) return collision();
+    if (input.expectedThreadId !== undefined && (existing === undefined || existing.threadId !== input.expectedThreadId)) return collision();
+    if (existing?.owner !== undefined && (existing.closing || existing.chatId !== this.config.chatId)) return collision();
     let name: string;
     if (input.name !== undefined && input.name.trim().length > 0) {
       const checked = checkName(input.name);
@@ -952,6 +1126,7 @@ export class RemoteHub {
       }
       name = checked.name;
       const holder = this.registry.byNameKey(name);
+      if (holder !== undefined && (holder.owner !== undefined || input.owner !== undefined) && (holder.sessionId !== input.sessionId || !this.matchesOwner(input.sessionId, input.owner))) return collision();
       if (holder !== undefined && holder.sessionId !== input.sessionId && isLive(holder, now)) {
         return { ok: false, code: "name-taken", message: `the name "${name}" is held by a live remote session` };
       }
@@ -961,7 +1136,7 @@ export class RemoteHub {
       let chosen: string | undefined;
       for (const candidate of defaultNameCandidates(input.project, input.sessionId, this.machine)) {
         const holder = this.registry.byNameKey(candidate);
-        if (holder === undefined || holder.sessionId === input.sessionId || !isLive(holder, now)) {
+        if (holder === undefined || (holder.sessionId === input.sessionId && this.matchesOwner(input.sessionId, input.owner)) || (input.owner === undefined && holder.owner === undefined && !isLive(holder, now))) {
           chosen = candidate;
           break;
         }
@@ -973,6 +1148,7 @@ export class RemoteHub {
     }
 
     // The same session asking for a different name leaves its old topic first.
+    if (existing?.owner !== undefined && nameKey(existing.name) !== nameKey(name)) return collision();
     if (existing !== undefined && nameKey(existing.name) !== nameKey(name)) {
       await this.retire(existing, "renamed by the session");
     }
@@ -1004,6 +1180,7 @@ export class RemoteHub {
       return { ok: false, code: "api-error", message: `could not create the topic: ${describeError(error)}` };
     }
     const record: RemoteSessionRecord = {
+      ...(input.owner === undefined ? {} : { owner: input.owner }),
       name,
       sessionId: input.sessionId,
       project: input.project,

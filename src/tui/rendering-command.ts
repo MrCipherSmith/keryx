@@ -26,11 +26,11 @@ export const RENDERING_MEANING: Record<RenderMode, string> = {
 export const RENDERING_FALLBACK_NOTE = "Whatever the mode, a refused message is resent once one step down: rich, then HTML, then plain text.";
 
 /** The text to print. Never throws. */
-export function runRenderingCommand(argText: string, dir?: string): string {
+export async function runRenderingCommand(argText: string, dir?: string): Promise<string> {
   const arg = argText.trim();
   try {
     if (arg.length > 0) {
-      const saved = writeRenderingMode(arg, dir);
+      const saved = await writeRenderingMode(arg, dir);
       return saved.ok
         ? `Telegram rendering: ${saved.value} (${RENDERING_MEANING[saved.value]}). Saved; it applies to the next message.\n`
         : `${RENDERING_COMMAND}: ${saved.reason}\n`;

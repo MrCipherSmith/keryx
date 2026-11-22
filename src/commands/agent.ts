@@ -941,6 +941,8 @@ function retryStructuredError(error: NormalizedError | undefined): boolean {
 
 
 export interface RunAgentTurnOptions {
+  /** Host-verified transport label, stored with the operator's transcript entry. */
+  source?: "telegram";
   /** Interactive hosts only. Absent for print, unattended and child runs. */
   recovery?: InteractiveRecovery;
   /** Abort signal for a running turn (UI hard-stop support). */
@@ -3292,7 +3294,8 @@ async function runAgentTurnCore(
     if (automaticReview) {
       effectivePrompt = `${effectivePrompt}\n\n${AUTOMATIC_REVIEW_NOTE}`;
     }
-    history.push({ role: "user", content: effectivePrompt, provenance: "project", ts: now() });
+    history.push({ role: "user", content: effectivePrompt, provenance: "project", ts: now(),
+      ...(options.source === undefined ? {} : { source: options.source }) });
     io.onHistoryChange?.("user");
   }
   const signal = options.signal;

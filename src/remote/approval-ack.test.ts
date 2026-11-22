@@ -716,3 +716,13 @@ describe("the ack says whether the decision was applied to a live question (find
     expect(seen).toEqual([false]);
   });
 });
+
+test("a shared-decision claim refuses a stale Telegram press before acknowledging it", async () => {
+  const { client, fake } = await shellWithFakeServe();
+  const result = client.askApproval("Run it?", 10_000, { claim: () => false });
+  await settle();
+  fake.push(approvalFrame(APPROVAL, "allow"));
+  expect((await result).decision).toBe("deny");
+  await until(() => fake.acks.length === 1, "the rejected ack");
+  expect(fake.acks[0]).toMatchObject({ approvalId: APPROVAL, applied: false });
+});

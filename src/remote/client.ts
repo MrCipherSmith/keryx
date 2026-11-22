@@ -1,3 +1,4 @@
+import type { DesktopOwner } from "./protocol";
 // The shell-side client of `keryx serve`'s remote hub (flow 376, block 2).
 //
 // A library, not a feature: no TUI, no shell, nothing from `src/tui`. The shell
@@ -93,6 +94,7 @@ export interface ClientStatus {
 }
 
 export interface RemoteClientOptions {
+  owner?: DesktopOwner;
   sessionId: string;
   project: string;
   /** The topic name to ask for. Absent: serve picks one from the project. */
@@ -102,6 +104,8 @@ export interface RemoteClientOptions {
   /** Buttons the shell attached to a reply itself (not approvals). */
   onCallback?: (data: string, meta: { updateId: number; threadId: number; fromId: number }) => void | Promise<void>;
   onStatus?: (status: ClientStatus) => void;
+  /** Invalidate the exact binding synchronously before acknowledging a channel cutover. */
+  onChannelRevoked?: (cutoverId: string) => boolean;
   /**
    * An approval decision frame arrived from the topic (flow 397, AC5). Called once per approval id,
    * before the shell acknowledges it, so the operator sees the decision as it lands. `applied` is
@@ -160,6 +164,7 @@ export type StartResult =
       ok: true;
       name: string;
       threadId: number;
+      topicUrl?: string;
       runTimeoutMs: number;
       permissionMode?: "ask" | "trust";
       approvalTimeoutMs?: number;
@@ -280,7 +285,7 @@ export class RemoteClient {
   /** The register request in flight, so `close` can wait for it and deregister what it created. */
   private registering: Promise<void> | undefined;
   private inboundChain: Promise<void> = Promise.resolve();
-  private readonly waiters = new Map<string, { resolve: (answer: PressedApproval) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly waiters = new Map<string, { resolve: (answer: PressedApproval) => void; timer: ReturnType<typeof setTimeout>; claim?: (answer: PressedApproval) => boolean }>();
   private readonly earlyDecisions = new Map<string, { pressed: PressedApproval; timer: ReturnType<typeof setTimeout> }>();
   /** `pending` is a parked decision whose question has not claimed it yet; its ack goes out when it settles. */
   private readonly seenApprovals = new Map<string, "applied" | "not-applied" | "pending">();
@@ -288,8 +293,8 @@ export class RemoteClient {
   /** Decision frames received whose ack has not gone through (approval id to when it arrived). Bounded and aged out. */
   private readonly unackedApprovals = new Map<string, number>();
   private readonly lingerTimers = new Set<ReturnType<typeof setTimeout>>();
-  private readonly choiceWaiters = new Map<string, { resolve: (answer: ChoiceAnswer) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly earlyChoices = new Map<string, ChoiceAnswer>();
+  private readonly choiceWaiters = new Map<string, { resolve: (answer: ChoiceAnswer) => void; timer: ReturnType<typeof setTimeout>; claim?: (index: number, fromId: number) => boolean }>();
+  private readonly earlyChoices = new Map<string, { answer: ChoiceAnswer; fromId: number }>();
   /** Prompts this side ended (the dock answered first, the turn stopped): a frame for one is dropped, never parked as early. */
   private readonly closedChoices = new Set<string>();
   private firstResult: ((result: StartResult) => void) | undefined;
@@ -299,6 +304,7 @@ export class RemoteClient {
   threadId: number | undefined;
   /** How long a run started from Telegram may take; learned at registration. */
   runTimeoutMs: number | undefined;
+  topicUrl: string | undefined;
   /**
    * What serve says a Telegram-started turn starts under, and how long an approval waits (flow 396).
    * Undefined when the serve that answered is older than this client: the shell then keeps today's
@@ -436,7 +442,7 @@ export class RemoteClient {
    * approval and the Telegram user who pressed, so the shell can audit it and report what became of an
    * "Always" press with {@link reportApprovalResult}. Same fail-closed rule: no press is a deny.
    */
-  async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal } = {}): Promise<ApprovalAnswer> {
+  async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal; claim?: (answer: PressedApproval) => boolean } = {}): Promise<ApprovalAnswer> {
     if (!this.connected || options.signal?.aborted === true) {
       return { decision: "deny", undelivered: true };
     }
@@ -465,8 +471,9 @@ export class RemoteClient {
       // The frame beat this response: now it reaches a live question, so it is applied, and only now.
       clearTimeout(early.timer);
       this.earlyDecisions.delete(approvalId);
-      this.settleApproval(approvalId, early.pressed.decision, true);
-      return { ...early.pressed, approvalId };
+      const applied = !isAborted(options.signal) && this.claimApproval(options.claim, early.pressed);
+      this.settleApproval(approvalId, early.pressed.decision, applied);
+      return applied ? { ...early.pressed, approvalId } : { decision: "deny", approvalId };
     }
     if (!this.connected) {
       return { decision: "deny" };
@@ -497,6 +504,7 @@ export class RemoteClient {
           resolve({ ...pressed, approvalId });
         },
         timer,
+        ...(options.claim === undefined ? {} : { claim: options.claim }),
       });
       signal?.addEventListener("abort", onAbort, { once: true });
     });
@@ -538,7 +546,7 @@ export class RemoteClient {
     text: string,
     rows: string[][],
     timeoutMs: number,
-    options: { forUserId?: number; own?: boolean; signal?: AbortSignal } = {},
+    options: { forUserId?: number; own?: boolean; signal?: AbortSignal; claim?: (index: number, fromId: number) => boolean } = {},
   ): Promise<ChoiceAnswer> {
     const none: ChoiceAnswer = { kind: "none" };
     if (!this.connected) {
@@ -574,7 +582,7 @@ export class RemoteClient {
     const early = this.earlyChoices.get(promptId);
     if (early !== undefined) {
       this.earlyChoices.delete(promptId);
-      return early;
+      return this.claimChoice(options.claim, early.answer, early.fromId);
     }
     if (!this.connected) {
       return none;
@@ -602,6 +610,7 @@ export class RemoteClient {
           resolve(answer);
         },
         timer,
+        ...(options.claim === undefined ? {} : { claim: options.claim }),
       });
       signal?.addEventListener("abort", onAbort, { once: true });
     });
@@ -664,14 +673,14 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | PromptCloseBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: { probeExactOwner: true } | RegisterBody | ReplyBody | ApprovalBody | PromptBody | PromptCloseBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string; cutoverId?: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
       method: "POST",
       redirect: "manual",
       headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(this.options.owner === undefined || "probeExactOwner" in body ? body : { ...body, owner: this.options.owner }),
       signal: AbortSignal.any([AbortSignal.timeout(this.requestTimeoutMs), this.lifetime.signal]),
     });
     const text = await response.text();
@@ -749,7 +758,7 @@ export class RemoteClient {
     }
     const abort = new AbortController();
     this.streamAbort = abort;
-    const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}`);
+    const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}${this.options.owner === undefined ? "" : `&owner=${encodeURIComponent(JSON.stringify(this.options.owner))}`}`);
     const { nonce, bearer } = shellRequestCredential(token);
     const headers: Record<string, string> = { authorization: `Bearer ${bearer}`, accept: "text/event-stream" };
     if (this.lastCompleted > 0) {
@@ -794,12 +803,24 @@ export class RemoteClient {
                   ok: true,
                   name: this.name,
                   threadId: this.threadId,
+                  ...(this.topicUrl === undefined ? {} : { topicUrl: this.topicUrl }),
                   runTimeoutMs: this.runTimeoutMs,
                   ...(this.permissionMode === undefined ? {} : { permissionMode: this.permissionMode }),
                   ...(this.approvalTimeoutMs === undefined ? {} : { approvalTimeoutMs: this.approvalTimeoutMs }),
                   ...(this.firstReused === undefined ? {} : { reused: this.firstReused }),
                 });
               }
+            } else if (status.kind === "channel-revoked") {
+              // An old terminal client cannot prove it invalidated a Desktop binding.
+              if (this.options.owner === undefined || typeof status.cutoverId !== "string" || !/^[0-9a-f-]{36}$/.test(status.cutoverId)) {
+                throw new FatalClientError("channel-revoked", "channel binding was revoked");
+              }
+              let invalidated = false;
+              try { invalidated = this.options.onChannelRevoked?.(status.cutoverId) === true; } catch { /* Refuse to acknowledge uncertain invalidation. */ }
+              if (invalidated) {
+                try { await this.post("channel-revoke-ack", { sessionId: this.options.sessionId, cutoverId: status.cutoverId }); } catch { /* No proof of acknowledgement; serve keeps dispatch closed. */ }
+              }
+              throw new FatalClientError("channel-revoked", "channel binding was revoked");
             } else if (status.kind === "superseded") {
               // Another connection for this session id took over; fighting it would loop forever.
               throw new FatalClientError("superseded", "another connection for this session replaced this one");
@@ -826,7 +847,13 @@ export class RemoteClient {
   }
 
   private async register(): Promise<void> {
+    if (this.options.owner !== undefined) {
+      const probe = await this.post("register", { probeExactOwner: true });
+      const capability = await probe.json().catch(() => ({})) as { exactOwner?: unknown };
+      if (!probe.ok || capability.exactOwner !== true) throw new FatalClientError("unsupported-owner", "serve does not support exact owner registration");
+    }
     const body: RegisterBody = {
+      ...(this.options.owner === undefined || this.threadId === undefined ? {} : { expectedThreadId: this.threadId }),
       sessionId: this.options.sessionId,
       project: this.options.project,
       ...(this.assignedName !== undefined ? { name: this.assignedName } : this.options.name === undefined ? {} : { name: this.options.name }),
@@ -834,9 +861,12 @@ export class RemoteClient {
     const response = await this.post("register", body);
     if (response.ok) {
       const result = (await response.json()) as RegisterResponse;
+      if (this.options.owner !== undefined && result.exactOwner !== true) throw new FatalClientError("unsupported-owner", "serve did not confirm exact owner registration");
       this.assignedName = result.name;
       this.name = result.name;
       this.threadId = result.threadId;
+      const topicMatch = typeof result.topicUrl === "string" ? /^https:\/\/t\.me\/c\/[0-9]+\/([1-9][0-9]*)$/.exec(result.topicUrl) : null;
+      this.topicUrl = topicMatch !== null && Number(topicMatch[1]) === result.threadId ? result.topicUrl : undefined;
       this.runTimeoutMs = result.runTimeoutMs;
       this.permissionMode = result.permissionMode;
       this.approvalTimeoutMs = result.approvalTimeoutMs;
@@ -872,11 +902,11 @@ export class RemoteClient {
     } else if (event === "choice") {
       const choice = parsed as ChoiceEvent;
       if (typeof choice.own === "string") {
-        this.resolveChoice(choice.promptId, { kind: "own", text: choice.own });
+        this.resolveChoice(choice.promptId, { kind: "own", text: choice.own }, choice.fromId);
       } else if (choice.closed !== undefined) {
-        this.resolveChoice(choice.promptId, { kind: "none" });
+        this.resolveChoice(choice.promptId, { kind: "none" }, choice.fromId);
       } else {
-        this.resolveChoice(choice.promptId, { kind: "index", index: choice.index });
+        this.resolveChoice(choice.promptId, { kind: "index", index: choice.index }, choice.fromId);
       }
     } else if (event === "callback") {
       const callback = parsed as CallbackEvent;
@@ -950,12 +980,20 @@ export class RemoteClient {
       void this.ackApproval(approvalId, seen === "applied");
       return;
     }
-    if (this.waiters.has(approvalId)) {
-      this.settleApproval(approvalId, pressed.decision, true, () => this.resolveApproval(approvalId, pressed));
+    const waiter = this.waiters.get(approvalId);
+    if (waiter !== undefined) {
+      const applied = this.claimApproval(waiter.claim, pressed);
+      this.settleApproval(approvalId, pressed.decision, applied, () => this.resolveApproval(approvalId, applied ? pressed : { decision: "deny" }));
       return;
     }
     this.rememberSeen(approvalId, "pending");
     this.parkEarlyDecision(approvalId, pressed);
+  }
+
+  /** A shared decision may have been won elsewhere; acknowledge only a successful claim. */
+  private claimApproval(claim: ((answer: PressedApproval) => boolean) | undefined, answer: PressedApproval): boolean {
+    if (claim === undefined) return true;
+    try { return claim(answer); } catch { return false; }
   }
 
   private rememberSeen(approvalId: string, outcome: "applied" | "not-applied" | "pending"): void {
@@ -1074,7 +1112,7 @@ export class RemoteClient {
     waiter.resolve(decision);
   }
 
-  private resolveChoice(promptId: string, answer: ChoiceAnswer): void {
+  private resolveChoice(promptId: string, answer: ChoiceAnswer, fromId: number): void {
     const waiter = this.choiceWaiters.get(promptId);
     if (waiter === undefined) {
       if (this.closedChoices.has(promptId)) {
@@ -1088,12 +1126,18 @@ export class RemoteClient {
           this.earlyChoices.delete(oldest);
         }
       }
-      this.earlyChoices.set(promptId, answer);
+      this.earlyChoices.set(promptId, { answer, fromId });
       return;
     }
     clearTimeout(waiter.timer);
     this.choiceWaiters.delete(promptId);
-    waiter.resolve(answer);
+    waiter.resolve(this.claimChoice(waiter.claim, answer, fromId));
+  }
+
+  private claimChoice(claim: ((index: number, fromId: number) => boolean) | undefined, answer: ChoiceAnswer, fromId: number): ChoiceAnswer {
+    if (claim === undefined) return answer;
+    if (answer.kind !== "index" || !Number.isSafeInteger(fromId) || fromId <= 0) return { kind: "none" };
+    try { return claim(answer.index, fromId) ? answer : { kind: "none" }; } catch { return { kind: "none" }; }
   }
 
   private markChoiceClosed(promptId: string): void {

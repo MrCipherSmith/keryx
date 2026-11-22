@@ -49,6 +49,8 @@ export interface UpdatePollerOptions {
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   /** Delays between retries after a failed cycle; the last one repeats. */
   backoffMs?: number[];
+  /** Hold the first response before admission until a handoff is decided. */
+  holdAfterFirstResponse?: (signal: AbortSignal) => Promise<void>;
   /** Called when the status changes. */
   onStatus?: (status: PollerStatus) => void;
 }
@@ -76,9 +78,12 @@ export class UpdatePoller {
   private readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   private readonly backoffMs: number[];
   private readonly onStatus: (status: PollerStatus) => void;
+  private readonly holdAfterFirstResponse: UpdatePollerOptions["holdAfterFirstResponse"];
   private current: PollerStatus = { state: "idle" };
   private controller: AbortController | undefined;
   private loop: Promise<void> | undefined;
+  private firstPoll: Promise<boolean> | undefined;
+  private resolveFirstPoll: ((ready: boolean) => void) | undefined;
 
   constructor(options: UpdatePollerOptions) {
     this.api = options.api;
@@ -87,6 +92,7 @@ export class UpdatePoller {
     this.sleep = options.sleep ?? defaultSleep;
     this.backoffMs = options.backoffMs !== undefined && options.backoffMs.length > 0 ? options.backoffMs : [1_000, 2_000, 5_000, 15_000, 30_000];
     this.onStatus = options.onStatus ?? (() => undefined);
+    this.holdAfterFirstResponse = options.holdAfterFirstResponse;
   }
 
   status(): PollerStatus {
@@ -99,6 +105,7 @@ export class UpdatePoller {
       return;
     }
     this.controller = new AbortController();
+    this.firstPoll = new Promise((resolve) => { this.resolveFirstPoll = resolve; });
     this.set({ state: "running" });
     this.loop = this.run(this.controller.signal);
   }
@@ -106,6 +113,8 @@ export class UpdatePoller {
   /** Stop and wait for the loop to end. */
   async stop(): Promise<void> {
     this.controller?.abort();
+    this.resolveFirstPoll?.(false);
+    this.resolveFirstPoll = undefined;
     await this.loop;
     this.loop = undefined;
     if (this.current.state === "running") {
@@ -116,6 +125,18 @@ export class UpdatePoller {
   /** Resolves when the loop has ended on its own (conflict) or by `stop`. */
   async whenStopped(): Promise<void> {
     await this.loop;
+  }
+
+  /** True only after this runtime poller receives its first successful getUpdates response. */
+  async waitForReady(timeoutMs: number): Promise<boolean> {
+    const first = this.firstPoll;
+    if (first === undefined || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([first, new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); })]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   private set(status: PollerStatus): void {
@@ -129,15 +150,21 @@ export class UpdatePoller {
     let confirm: number | undefined;
     while (!signal.aborted) {
       let updates: BotUpdate[];
+      let firstSuccess: boolean;
       try {
         updates = await this.api.getUpdates({
           ...(confirm === undefined ? {} : { offset: confirm }),
           timeoutSec: this.timeoutSec,
           signal,
         });
+        firstSuccess = this.resolveFirstPoll !== undefined;
+        this.resolveFirstPoll?.(true);
+        this.resolveFirstPoll = undefined;
         // That call carried the confirmation (or had none to carry).
         confirm = undefined;
       } catch (error) {
+        this.resolveFirstPoll?.(false);
+        this.resolveFirstPoll = undefined;
         if (signal.aborted) {
           return;
         }
@@ -154,6 +181,8 @@ export class UpdatePoller {
         await this.sleep(this.backoffMs[Math.min(failures, this.backoffMs.length) - 1] ?? 1_000, signal);
         continue;
       }
+      if (firstSuccess) await this.holdAfterFirstResponse?.(signal);
+      if (signal.aborted) return;
       if (updates.length === 0) {
         failures = 0;
         if (this.timeoutSec <= 0) {

@@ -7,6 +7,9 @@ See [Keryx for macOS](../../docs/docs/desktop-app.md) for installation and the
 [Desktop Metaproject guide](../../docs/docs/guides/desktop-metaproject.md) for
 setup, search, graph filters and wiki navigation.
 
+For Telegram, see the [illustrated setup guide](../../docs/docs/guides/desktop-telegram.md)
+and [module reference](../../docs/docs/desktop-telegram-module.md).
+
 Toolchain: Rust (rustup), Bun. The app is not part of the root workspace
 (same as `apps/hub-web`): it has its own `package.json` and `bun.lock`.
 

@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
 import type { PermissionMode } from "../commands/permission-mode";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { acpPermissionReasons, approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
+import { acpPermissionReasons, approvalFromPermissionResponse, permissionIsEscalated, permissionOptionsFor } from "./permission";
 import {
   SYSTEM_NOTE_META,
   textBlock,
@@ -25,6 +25,8 @@ export interface AcpPermissionRequest {
   /** The call being authorised, carrying the id the client was already shown (F-3). */
   readonly toolCall: AcpToolCallUpdate;
   readonly options: readonly AcpPermissionOption[];
+  /** Trusted host classification, never sent to the ACP client. */
+  readonly telegramPrompt?: string;
 }
 
 /**
@@ -312,7 +314,14 @@ export function createAcpAgentIo(
     const pending = pendingByName.get(tool)?.find((entry) => entry.input === input);
     const toolCallId = pending?.toolCallId ?? openToolCall(tool, input, false);
     const options = permissionOptionsFor(meta);
+    // The only projected execution ask is a non-escalated, read-only listing of the project root.
+    // Paths, shell commands, writes, credentials, grants and policy floors stay on Desktop.
+    const parsedInput = tryParseJson(input);
+    const routineRootListing = tool === "list_dir" && meta?.risk === "read" && meta.cause === "mode-ask" && !permissionIsEscalated(meta) &&
+      meta.card === undefined && !meta.mcpTrustAvailable && typeof parsedInput === "object" && parsedInput !== null && !Array.isArray(parsedInput) &&
+      Object.keys(parsedInput).every((key) => key === "path") && ((parsedInput as Record<string, unknown>).path === "." || (parsedInput as Record<string, unknown>).path === undefined);
     const response = await askPermission({
+      ...(routineRootListing ? { telegramPrompt: "Allow listing the project root directory once?" } : {}),
       toolCall: {
         toolCallId,
         title: tool,

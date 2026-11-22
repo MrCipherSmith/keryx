@@ -32,6 +32,9 @@
 // damaged file quotes a field name that came off disk.
 
 import { randomUUID } from "node:crypto";
+import { bootstrapDesktopServe } from "../lib/desktop-serve-bootstrap";
+import { desktopServeStatus } from "../remote/desktop-serve-status";
+import { desktopTelegramChannel, readDesktopChannelRequest } from "../remote/desktop-telegram-channel";
 import { loadRemoteConfig } from "../remote/config";
 import { formatPolicyDuration, loadPosture } from "./remote-policy-command";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -160,6 +163,28 @@ export async function serveCommand(args: string[] = []): Promise<void> {
   }
 
   const sub = args[0];
+  if (sub === "desktop-channel") {
+    if (args.length !== 1) { console.error("Invalid desktop channel request."); process.exitCode = 1; return; }
+    try {
+      const result = await desktopTelegramChannel(await readDesktopChannelRequest(process.stdin));
+      console.log(JSON.stringify(result));
+    } catch {
+      console.error("Invalid desktop channel request.");
+      process.exitCode = 1;
+    }
+    return;
+  }
+  if (sub === "desktop-control") {
+    const action = args[1];
+    if ((action !== "status" && action !== "bootstrap") || args.slice(2).some((arg) => arg !== "--complete-setup") || (action === "status" && args.length !== 2) || args.length > 3) {
+      console.error("Invalid desktop-control request");
+      process.exitCode = 1;
+      return;
+    }
+    const result = action === "status" ? await desktopServeStatus() : await bootstrapDesktopServe({ completeSetup: args[2] === "--complete-setup" });
+    console.log(JSON.stringify({ schemaVersion: 1, ...result }));
+    return;
+  }
   if (sub === undefined || sub.startsWith("-")) {
     await runServe(args);
     return;
@@ -217,6 +242,8 @@ async function runServe(args: string[]): Promise<void> {
   const remoteService = openRemoteService({
     machine: localMachineName(),
     nameTopicsByMachine: true,
+    ...(config && isLoopbackAddress(config.bind.address) && process.env.KERYX_DESKTOP_TELEGRAM_PREVIEW === "1"
+      ? { experimentalChannelControl: true } : {}),
     onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
   });
 

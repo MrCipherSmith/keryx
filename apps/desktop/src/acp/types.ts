@@ -216,6 +216,7 @@ export interface AskUserRequest {
       allowFreeform?: boolean;
       irreversible?: boolean;
       untrustedContent?: boolean;
+      telegramProjectable?: boolean;
     };
   } & Meta;
 }

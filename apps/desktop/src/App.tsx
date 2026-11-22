@@ -42,6 +42,8 @@ import { SessionView } from "./session/SessionView";
 import { modelOption, useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
 import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
+import { TelegramServeSettings } from "./project/TelegramServeSettings";
+import { TelegramBotSettings } from "./project/TelegramBotSettings";
 import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
 import { PROJECT_COMMANDS } from "./project/projectCommands";
 import { useProjectRunner } from "./project/useProjectRunner";
@@ -85,7 +87,7 @@ export function App() {
       ) : welcomeSettings ? (
         <div className="standalone">
           <div className="welcome-drag" data-tauri-drag-region />
-          <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} />
+        <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
         </div>
       ) : (
         <Welcome onOpen={async (folder) => {
@@ -563,7 +565,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
+        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
           reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
@@ -600,7 +602,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {view === "settings" ? (
         <div className="view">
-          <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} />
+          <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
         </div>
       ) : null}
 
@@ -673,7 +675,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           onAnswer={s.answerPermission}
         />
       ) : null}
-      {!s.fatal && !topPermission && topAsk ? <AskUserDialog key={topAsk.id} pending={topAsk} onAnswer={s.answerAsk} /> : null}
+      {!s.fatal && !topPermission && topAsk ? <AskUserDialog key={topAsk.id} pending={topAsk} onAnswer={s.answerAsk} onSendToTelegram={s.projectTelegramQuestion} /> : null}
     </AppShell>
   );
 }

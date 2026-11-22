@@ -10,6 +10,8 @@
 // from there, exactly as the hub does. Responses carry no secret: a state, a
 // pairing code, ids, a machine name and plain-language reasons.
 
+import { loadChannelRecord } from "./channel-record";
+import { ChannelControl, type ChannelControlOptions } from "./channel-control";
 import { redactSensitiveText } from "../security/service";
 import { readConfigFile } from "../lib/config-dir";
 import type { OpenBotApiResult } from "./bootstrap";
@@ -33,11 +35,16 @@ export interface ChannelsHost {
   /** Resolves once every hub start or stop already in flight has finished. */
   settle(): Promise<void>;
   openApi(): OpenBotApiResult;
+  activateCandidate?: ChannelControlOptions["activate"];
+  openCandidate?: ChannelControlOptions["openCandidate"];
+  channelAction?: ChannelControlOptions["channelAction"];
+  updateConfig?: ChannelControlOptions["updateConfig"];
 }
 
 export interface ChannelsOptions {
   host: ChannelsHost;
   now?: () => number;
+  experimentalControl?: boolean;
   pairing?: Pick<PairingOptions, "ttlMs" | "code" | "timers" | "pollTimeoutSec" | "pollBackoffMs" | "pollSleep">;
 }
 
@@ -47,6 +54,7 @@ function describe(error: unknown): string {
 
 export class ChannelsController {
   private pairing: Pairing | undefined;
+  private control: ChannelControl | undefined;
   // pair, reload and disconnect run one at a time; any call that changes what the channel is bumps the generation, so work queued or in flight for an older one gives up.
   private generation = 0;
   private pairTickets = 0;
@@ -60,7 +68,14 @@ export class ChannelsController {
   }
 
   handle(route: ChannelsRoute, _request: Request): Promise<Response> {
+    if (this.options.experimentalControl === true && ["channels-pair", "channels-cancel", "channels-reload", "channels-disconnect"].includes(route)) {
+      return Promise.resolve(fail(409, "upgrade-required", "Update this client to change the revisioned Telegram channel."));
+    }
     switch (route) {
+      case "channels-control":
+        if (this.options.experimentalControl !== true) return Promise.resolve(fail(503, "activation-unavailable", "Revisioned channel control is not available yet."));
+        this.control ??= new ChannelControl({ dir: this.host.dir, hasActiveHub: () => this.host.hub() !== undefined, ...(this.host.updateConfig === undefined ? {} : { updateConfig: this.host.updateConfig }), ...(this.host.channelAction === undefined ? {} : { channelAction: this.host.channelAction }), ...(this.host.openCandidate === undefined ? {} : { openCandidate: this.host.openCandidate }), ...(this.host.activateCandidate === undefined ? {} : { activate: this.host.activateCandidate }), ...(this.options.pairing === undefined ? {} : { pairing: this.options.pairing }) });
+        return this.control.handle(_request);
       case "channels-status":
         return Promise.resolve(this.status());
       case "channels-pair":
@@ -82,6 +97,7 @@ export class ChannelsController {
   async stop(): Promise<void> {
     this.generation += 1;
     await this.dropPairing();
+    await this.control?.stop();
   }
 
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -91,6 +107,11 @@ export class ChannelsController {
   }
 
   private configured(): boolean {
+    if (this.options.experimentalControl === true) {
+      const record = loadChannelRecord(this.host.dir);
+      if (!record.ok) return true;
+      if (record.value !== null) return record.value.state === "connected";
+    }
     const read = readConfigFile(remoteConfigPath(this.host.dir));
     return read.ok || read.reason !== "absent";
   }
@@ -100,7 +121,7 @@ export class ChannelsController {
       return { state: "connected" };
     }
     // A pairing that reached `ready` is final but not used up: nothing connected it yet (only an open modal does), so the modal must offer Resume. `reload` consumes it.
-    if (this.pairing !== undefined && (!this.pairing.isFinal() || this.pairing.isReady())) {
+    if ((this.pairing !== undefined && (!this.pairing.isFinal() || this.pairing.isReady())) || this.control?.pendingOperation() !== undefined) {
       return { state: "pairing" };
     }
     if (this.configured()) {
@@ -117,15 +138,22 @@ export class ChannelsController {
     if (hub !== undefined && typeof hub.renderingStatus === "function") {
       return hub.renderingStatus();
     }
-    const config = loadRemoteConfig(this.host.dir);
+    const record = this.options.experimentalControl === true ? loadChannelRecord(this.host.dir) : undefined;
+    if (record !== undefined && (!record.ok || record.value?.state === "disconnected")) return undefined;
+    const config = record?.ok === true && record.value?.state === "connected" ? { ok: true as const, value: record.value.config } : loadRemoteConfig(this.host.dir);
     return config.ok ? { mode: config.value.rendering ?? DEFAULT_RENDER_MODE } : undefined;
   }
 
   private status(): Response {
     const { state, reason } = this.state();
     const rendering = this.rendering();
+    const record = this.options.experimentalControl === true ? loadChannelRecord(this.host.dir) : undefined;
+    if (record !== undefined && !record.ok) return fail(503, "channel-record-invalid", record.reason);
+    const pendingOperation = this.control?.pendingOperation();
     return ok({
       machine: this.host.machine,
+      ...(record?.ok === true ? { capabilities: { desktopTelegram: 1 }, revision: record.value?.revision ?? null } : {}),
+      ...(record !== undefined && pendingOperation !== undefined ? { pendingOperation } : {}),
       telegram: {
         state,
         ...(reason === undefined ? {} : { reason }),

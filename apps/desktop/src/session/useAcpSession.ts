@@ -49,6 +49,7 @@ import { SessionRegistry } from "./sessionRegistry";
 import { answerAgentRequest } from "./agentRequests";
 import { retentionDays } from "../lib/retention";
 import { idleSessions, pickStartSession } from "./startup";
+import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN } from "./telegramSession";
 
 export type { PendingAsk, PendingPermission } from "./dialogQueue";
 
@@ -120,6 +121,7 @@ export function useAcpSession(cwd: string) {
   }, [archiveWriter]);
   const winRef = useRef(win);
   winRef.current = win;
+  const sendSequence = useRef(0);
   const [dialogVersion, setDialogVersion] = useState(0);
   const dialogsRef = useRef<DialogQueue | null>(null);
   if (!dialogsRef.current) dialogsRef.current = new DialogQueue(() => setDialogVersion((v) => v + 1));
@@ -274,7 +276,7 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable || !l.extensions.includes(SESSION_FLAGS)) return;
-      const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys()]);
+      const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys(), ...l.reg.telegramTurns.keys()]);
       const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
       for (const sessionId of ids) {
         try {
@@ -307,10 +309,25 @@ export function useAcpSession(cwd: string) {
 
   const acceptUpdate = useCallback(
     (u: RoutedUpdate) => {
+      const reg = live.current.reg;
+      if (u.update.sessionUpdate === TELEGRAM_TURN && reg.held.has(u.sessionId)) {
+        const turn = readTelegramTurn(u.update);
+        const current = reg.telegramTurns.get(u.sessionId);
+        if (turn?.phase === "started" && !current) reg.telegramTurns.set(u.sessionId, turn);
+        if (turn?.phase === "finished" && current?.generation === turn.generation && current.updateId === turn.updateId) {
+          reg.telegramTurns.delete(u.sessionId);
+          dialogs.dropSession(u.sessionId);
+        }
+      }
+      if (u.update.sessionUpdate === "_keryx/telegram/decision" && u.update.phase === "closed" &&
+        typeof u.update.requestId === "string") dialogs.dropRequest(u.sessionId, u.update.requestId);
+      if (u.update.sessionUpdate === "_keryx/telegram/delivery" && u.update.status === "unconfirmed") {
+        dispatch({ t: "notice", sessionId: u.sessionId, level: "warn", text: "Telegram reply delivery could not be confirmed. The reply is available in Desktop." });
+      }
       enqueueUpdate(u);
       if (u.update.sessionUpdate === "session_info_update") void refreshSessions();
     },
-    [enqueueUpdate, refreshSessions],
+    [dialogs, dispatch, enqueueUpdate, refreshSessions],
   );
 
   /** Every session/update goes to the session it names, shown or not. */
@@ -343,13 +360,16 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       const client = l.client;
       const sessionId = target ?? l.reg.shown;
-      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
+      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) ||
+        l.reg.telegramTurns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
       const restoringQuestions = !!issue && "resumeIssueQuestions" in issue;
-      if (!restoringQuestions) dispatch({ t: "userSent", sessionId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
+      const sendId = ++sendSequence.current;
+      if (!restoringQuestions) dispatch({ t: "userSent", sessionId, sendId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       l.reg.turns.set(sessionId, turn);
       turn.done = (async () => {
+        let busyRefusal = false;
         try {
           const prompt = buildUserPrompt(text, extra, literal);
           const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issue ? { _meta: { keryx: issue } } : {}) });
@@ -361,14 +381,16 @@ export function useAcpSession(cwd: string) {
           else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
         } catch (e) {
           if (l.client === client) {
-            if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId });
-            dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+            busyRefusal = e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
+            if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
+            dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
+              text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
           }
         } finally {
           if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
           if (l.client === client) {
             // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
-            dialogs.dropSession(sessionId);
+            if (!busyRefusal) dialogs.dropSession(sessionId);
             dispatch({ t: "busy", sessionId, busy: false });
             void applyPendingFlow(sessionId).finally(() => void refreshSessions());
           }
@@ -557,8 +579,8 @@ export function useAcpSession(cwd: string) {
           if (c && typeof c.userCode === "string") for (const f of challengeListeners.current) f(c);
         }
       };
-      client.onRequest = (method, params) => answerAgentRequest(method, params, l.reg, dialogs,
-        l.gen === gen && l.extensions.includes(PREPARE_REVIEW_METHOD) ? prepareReview : undefined);
+      client.onRequest = (method, params, id) => answerAgentRequest(method, params, l.reg, dialogs,
+        l.gen === gen && l.extensions.includes(PREPARE_REVIEW_METHOD) ? prepareReview : undefined, id);
       client.onReplyFailed = (method, error) => {
         if (l.gen === gen) dispatch({ t: "banner", level: "error", text: `Could not send keryx the answer to ${method}: ${error}` });
       };
@@ -599,7 +621,7 @@ export function useAcpSession(cwd: string) {
             fs: { readTextFile: true, writeTextFile: false },
             terminal: false,
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
-            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true } : {}) } },
+            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });
@@ -778,8 +800,8 @@ export function useAcpSession(cwd: string) {
   useEffect(() => {
     const l = live.current;
     for (const c of Object.values(win.convs)) {
-      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId));
-      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId));
+      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : next.resumeIssueQuestions ? { resumeIssueQuestions: true } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
   }, [win.convs, sendPrompt, dispatch]);
 
@@ -820,6 +842,27 @@ export function useAcpSession(cwd: string) {
     const client = live.current.client;
     return client ? client.request<T>(method, params) : Promise.reject(new Error("keryx is not running"));
   }, []);
+  const telegramSession = useCallback(async (sessionId: string, operation: "status" | "attach" | "detach", topicName?: string) => {
+    const l = live.current;
+    const client = l.client;
+    if (!client || !l.reg.held.has(sessionId) || !l.extensions.includes(TELEGRAM_SESSION)) return false;
+    const previous = winRef.current.convs[sessionId]?.telegram ?? null;
+    const result = await client.request<unknown>(TELEGRAM_SESSION, { sessionId, operation, ...(topicName ? { topicName } : {}) });
+    if (l.client !== client || !l.reg.held.has(sessionId)) return false;
+    const value = readTelegramAttachment(result, sessionId);
+    if (!value) throw new Error("Keryx returned an invalid Telegram session status.");
+    dispatch({ t: "telegramStatus", sessionId, previous, value });
+    return true;
+  }, [dispatch]);
+  useEffect(() => {
+    if (shown.phase === "ready" && shown.held && shown.sessionId && extensions.includes(TELEGRAM_SESSION)) {
+      const sessionId = shown.sessionId;
+      const previous = winRef.current.convs[sessionId]?.telegram ?? null;
+      void telegramSession(sessionId, "status").catch(() => {
+        if (live.current.reg.held.has(sessionId)) dispatch({ t: "telegramStatus", sessionId, previous, value: { state: "unavailable", reason: "serve-unavailable" } });
+      });
+    }
+  }, [dispatch, extensions, shown.phase, shown.held, shown.sessionId, telegramSession]);
   const onLoginChallenge = useCallback((f: (c: LoginChallenge) => void) => {
     challengeListeners.current.add(f);
     return () => void challengeListeners.current.delete(f);
@@ -836,7 +879,7 @@ export function useAcpSession(cwd: string) {
         {
           client: l.client,
           sessionId: sid,
-          busy: conv?.busy ?? false,
+          busy: (conv?.busy ?? false) || !!conv?.telegramTurn,
           commands: conv?.commands ?? [],
           hasCommandMethod: l.commandMethod,
           queue: conv?.queue ?? [],
@@ -929,6 +972,15 @@ export function useAcpSession(cwd: string) {
 
   const answerPermission = useCallback((p: PendingPermission, outcome: PermissionOutcome) => dialogs.answerPermission(p, outcome), [dialogs]);
   const answerAsk = useCallback((a: PendingAsk, result: AskUserResult) => dialogs.answerAsk(a, result), [dialogs]);
+  const projectTelegramQuestion = useCallback(async (ask: PendingAsk) => {
+    if (typeof ask.requestId !== "string" || ask.req._meta?.keryx?.telegramProjectable !== true) return false;
+    const l = live.current;
+    const client = l.client;
+    if (!client || !l.reg.held.has(ask.sessionId) || !l.extensions.includes(TELEGRAM_SESSION)) return false;
+    const result = await client.request<{ projected?: boolean }>("_keryx/telegram/project-question",
+      { sessionId: ask.sessionId, requestId: ask.requestId });
+    return l.client === client && result?.projected === true;
+  }, []);
 
   return {
     state,
@@ -949,9 +1001,12 @@ export function useAcpSession(cwd: string) {
       const alreadyHeld = l.reg.held.has(sessionId);
       if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope)) throw new Error("Could not open the linked session.");
       if (issueScope?.aborted) return;
-      if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId)) resumeIssueQuestions(sessionId);
+      if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId) && !resumeIssueQuestions(sessionId)) {
+        if (l.reg.telegramTurns.has(sessionId)) dispatch({ t: "queueAdd", sessionId, text: "Resume the pending issue questions.", resumeIssueQuestions: true });
+        else throw new Error("Reopen the linked session and resume Flow preparation.");
+      }
       if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, { issueLaunchId: initialTurn.launchId })) {
-        if (!l.reg.turns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
+        if (!l.reg.turns.has(sessionId) && !l.reg.telegramTurns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
         dispatch({ t: "queueAdd", sessionId, text: initialTurn.text, issueLaunchId: initialTurn.launchId });
       }
       void refreshSessions();
@@ -960,6 +1015,7 @@ export function useAcpSession(cwd: string) {
     /** Show a `/delegate` run's terminal tab; false when it is closed (or not a terminal run). */
     focusDelegateTerminal: (runId: string): boolean => delegates.focus(runId),
     rpc,
+    telegramSession,
     extensions,
     keryxPath,
     onLoginChallenge,
@@ -986,6 +1042,7 @@ export function useAcpSession(cwd: string) {
     continueAnyway,
     answerPermission,
     answerAsk,
+    projectTelegramQuestion,
     dismissFatal: () => setFatal(null),
     dismissBanner: (id: number) => dispatch({ t: "dismissBanner", id }),
   };
