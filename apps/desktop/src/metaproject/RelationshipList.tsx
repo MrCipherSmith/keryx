@@ -43,14 +43,16 @@ export interface RelationshipGroups {
 
 /**
  * Direction is relative to the projection's root: `edge.to === root` is incoming and
- * `edge.from === root` is outgoing (a self-loop counts once, as outgoing). Edges whose ends are
- * not in the projection are left out, as the old list did.
+ * `edge.from === root` is outgoing. A self-loop is left out at every step, as the graph layout
+ * (`layoutNeighborhood`) leaves it out, so the panel and the graph caption count the same edges.
+ * Edges whose ends are not in the projection are left out, as the old list did.
  */
 export function groupRelationships(projection: MetaprojectNeighbors): RelationshipGroups {
   const nodes = new Map(projection.nodes.map(node => [node.id, node]));
   const adjacent: Record<RelationshipDirection, AdjacentRelationship[]> = { incoming: [], outgoing: [] };
   const secondStep: SecondStepRelationship[] = [];
   for (const edge of projection.edges) {
+    if (edge.from === edge.to) continue;
     const from = nodes.get(edge.from);
     const to = nodes.get(edge.to);
     if (!from || !to) continue;
@@ -188,7 +190,7 @@ function SecondStepGroup({ rows, select }: { rows: SecondStepRelationship[]; sel
           </p>
           <div className="metaproject-rel-ends">
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(from.id)} title={from.path}>Open {from.title}</button>
-            {to.id !== from.id && <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(to.id)} title={to.path}>Open {to.title}</button>}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(to.id)} title={to.path}>Open {to.title}</button>
             <EvidenceDisclosure lines={lines} label={examplesLabel(lines.length)} />
           </div>
         </li>;

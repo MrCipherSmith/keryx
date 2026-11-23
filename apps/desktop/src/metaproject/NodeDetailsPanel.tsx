@@ -244,7 +244,12 @@ export function NodeDetailsPanel({
     openspec: documents && openSpec ? openSpecDocuments.length : undefined,
   };
   const relationFact = summary
-    ? `${summary.incoming} incoming · ${summary.outgoing} outgoing${summary.truncated ? " · limited" : ""}`
+    ? [
+      `${summary.incoming} incoming`,
+      `${summary.outgoing} outgoing`,
+      ...(summary.secondStep > 0 ? [`${summary.secondStep} second-step`] : []),
+      ...(summary.truncated ? ["limited"] : []),
+    ].join(" · ")
     : relationshipsProblem ? "Unavailable" : relationshipsPending ? "Loading…" : "—";
   const copyState = copied?.node === node.id ? copied.ok ? "Copied" : "Could not copy" : "";
 

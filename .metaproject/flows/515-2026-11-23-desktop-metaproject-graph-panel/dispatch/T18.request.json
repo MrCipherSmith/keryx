@@ -1,0 +1,97 @@
+{
+  "task": {
+    "task_id": "fix-18",
+    "task_name": "Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)",
+    "task_type": "fix",
+    "complexity": "medium",
+    "dependencies": [],
+    "description": "Four findings of review round 1 in the node details panel and the relationship list: two about behaviour, two about tests that do not pin behaviour. Each is in `fix_context.review_feedback`; the full text and evidence are in findings.json, the mutants in research-evidence/mutation-1-compact.txt. The task is done when every line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-007. The operator upheld it with this fix: the fact row also shows the second-step count; the tab count stays (first answer «Дополнить строку фактов», recorded as uphold). Finish line: when the projection has second-step relationships, the Relationships fact row reads like `5 incoming · 4 outgoing · 3 second-step` (the same middle dot and wording style as today, `limited` still appended when the projection is truncated); with none it reads exactly as today, so AC7's text holds. The tab count is unchanged. A test asserts both forms and fails without the change (`scratch_check.py red`).\nF-022. A self-loop edge (from and to are both the root) is listed and counted as outgoing in the panel, while the graph caption skips it (`layoutNeighborhood` in graphLayout.ts returns early on `edge.from === edge.to`), so the two counts on one screen differ. Finish line: the panel uses the graph's rule — a self-loop is not listed and not counted, at the first step and at the second — with a test that fails without the change. graphLayout.ts belongs to another lane: read it, do not edit it.\nF-019. Fifteen mutants of NodeDetailsPanel.tsx survive: P1, P3, P4, P5, P6, P7, P8, P9, P11, P13, P14, P17, P18, P20, P21. Finish line: `scratch_check.py mutants --ids <those> --tests src/metaproject/NodeDetailsPanel.dom.test.tsx` reports each as killed, or your result names the ones that cannot be killed by a DOM test and says why (an equivalent mutant, or behaviour only a layout engine shows).\nF-020. Four mutants of RelationshipList.tsx survive: L1, L2, L3, L8. Same finish line with `--tests src/metaproject/RelationshipList.dom.test.tsx`. If the F-022 change moves or removes an anchor, the tool reports the mutant as invalid: say which line now carries that behaviour and show the test that pins it.\n\nA test added here asserts what a user or a caller can observe (rendered text, roles, a callback's arguments), not the wording of the source.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix.",
+    "target_files": [
+      "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "apps/desktop/src/metaproject/nodePanel.css"
+    ],
+    "acceptance_criteria": [
+      "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+      "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+      "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 1. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. The review package is .metaproject/reviews/2026-11-23-review-flow-branch: report.md (the round's report), findings.json (every finding with its file, line, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-1-compact.txt (each mutant of the mutation pass: file:line, the anchor, its replacement, killed or survived). Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies the review's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-007",
+        "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "severity": "WARNING",
+        "message": "Code reading, not a render. The Relationships tab count adds secondStep edges; the Relationships fact row in the same panel header (`${summary.incoming} incoming · ${summary.outgoing} outgoing`) and the graph caption count only root-adjacent edges. A node with 5 incoming, 4 outgoing and 3 second-step edges shows 'Relationships 12' on the tab and '5 incoming · 4 outgoing' two rows above it. Unverified on screen; a live read of such a node would settle it.",
+        "suggested_fix": "Either show the tab count as incoming + outgoing only (matching the fact row and caption) or add the second-step count to the fact row (for example '5 incoming · 4 outgoing · 3 second-step').",
+        "reviewer": "review-ui-ux",
+        "line": 242,
+        "premise_verdict": "owner-decision",
+        "premise_answer": "uphold"
+      },
+      {
+        "id": "F-022",
+        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "severity": "WARNING",
+        "message": "The panel counts and lists a self-loop edge (edge.from === edge.to === root) once, as outgoing (documented in groupRelationships). The graph layout skips self-loops (`if (edge.from === edge.to) return;` in layoutNeighborhood), so its caption count leaves them out. The two numbers are computed from the same projection for the same selection and shown on one screen.",
+        "suggested_fix": "Pick one rule for both: skip self-loops in groupRelationships (the row does nothing useful), or count them in layoutNeighborhood. Skipping them in groupRelationships keeps the two counts equal.",
+        "reviewer": "review-logic",
+        "line": 57,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-019",
+        "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "severity": "WARNING",
+        "message": "Per-node tab reset, tab-list arrow keys, drag and ArrowRight resize, failed-copy message, suggested-page count, stale-preview guard, 360-char cut, list-after-prose rule and fenced-code skipping have no fixture.",
+        "suggested_fix": "Fixtures: a leading-list page with a fenced block, a 400-char paragraph, a second node after a tab choice, ArrowRight/Home/End on the tab list.",
+        "reviewer": "review-testing-practices",
+        "line": 146,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-020",
+        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "severity": "WARNING",
+        "message": "No fixture has a dangling edge, exactly two evidence lines, a second-step self-loop, or a count label beside evidence lines.",
+        "suggested_fix": "Add one projection with a dangling edge, one edge with two evidence lines, one second-step self-loop.",
+        "reviewer": "review-testing-practices",
+        "line": 56,
+        "premise_verdict": "upheld"
+      }
+    ],
+    "original_task_ids": [
+      "task-6",
+      "task-13"
+    ],
+    "iteration": 1
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

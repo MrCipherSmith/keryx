@@ -129,3 +129,49 @@ test("limited and empty projections say so", async () => {
 test("summary counts incoming and outgoing root-adjacent edges only", () => {
   expect(summarize(projection())).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1, truncated: false });
 });
+
+test("a self-loop is neither listed nor counted, at the root or at the second step, as in the graph", async () => {
+  const withLoops = projection({
+    edges: [
+      ...projection().edges,
+      { from: client.id, to: client.id, kind: "imports" },
+      { from: server.id, to: server.id, kind: "calls" },
+    ],
+  });
+  expect(summarize(withLoops)).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1 });
+  await act(async () => { root.render(createElement(List, { projection: withLoops, select: () => {} })); });
+  expect(groupHeadings("h3")).toEqual(["Incoming 3", "Outgoing 2", "Second step 1"]);
+  expect(host.querySelector('[data-direction="outgoing"] button[title="src/client.ts"]')).toBeNull();
+  const second = host.querySelector('[data-direction="second-step"]')!;
+  expect([...second.querySelectorAll("button")].map(item => item.textContent?.trim())).toEqual(["Open Server", "Open Api"]);
+});
+
+test("an edge whose end is missing from the projection is left out", async () => {
+  const dangling = projection({
+    edges: [
+      ...projection().edges,
+      { from: "gone", to: client.id, kind: "imports" },
+      { from: client.id, to: "gone", kind: "imports" },
+      { from: "gone", to: server.id, kind: "calls" },
+    ],
+  });
+  expect(summarize(dangling)).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1 });
+  await act(async () => { root.render(createElement(List, { projection: dangling, select: () => {} })); });
+  expect(groupHeadings("h3")).toEqual(["Incoming 3", "Outgoing 2", "Second step 1"]);
+});
+
+test("exactly two evidence lines show both and no 'more' line", async () => {
+  const two = projection({
+    edges: [{ from: guide.id, to: client.id, kind: "describes", evidence: ["guide:3", "guide:9"] }],
+  });
+  await act(async () => { root.render(createElement(List, { projection: two, select: () => {} })); });
+  await act(async () => { host.querySelector<HTMLButtonElement>(".metaproject-rel-toggle")!.click(); });
+  expect([...host.querySelectorAll(".metaproject-rel-evidence li")].map(item => item.textContent)).toEqual(["guide:3", "guide:9"]);
+});
+
+test("a count beside evidence lines labels the disclosure and is not repeated on the row", async () => {
+  await act(async () => { root.render(createElement(List, { projection: projection(), select: () => {} })); });
+  const item = host.querySelector('[data-direction="outgoing"] button[title="src/server.ts"]')!.closest("li")!;
+  expect(item.querySelector(".metaproject-rel-toggle")?.textContent?.trim()).toBe("7 imports");
+  expect(item.textContent?.split("7 imports")).toHaveLength(2);
+});

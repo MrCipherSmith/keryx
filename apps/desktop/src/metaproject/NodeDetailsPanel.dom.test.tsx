@@ -116,11 +116,13 @@ test("the header shows a kind badge, the title and the path, and Copy path write
 });
 
 test("relationship counts come from the root-adjacent edges and say when they are limited", async () => {
-  await render();
+  // Root-adjacent edges only: the fact reads exactly as AC7 states (second-step counts: F-007 test below).
+  const adjacentOnly = { ...relationships, edges: relationships.edges.filter(edge => edge.from === client.id || edge.to === client.id) };
+  await render({ relationships: adjacentOnly });
   const facts = host.querySelector(".metaproject-details-facts");
   expect(facts?.textContent).toContain("2 incoming · 2 outgoing");
   expect(facts?.textContent).not.toContain("limited");
-  await render({ relationships: { ...relationships, truncated: true } });
+  await render({ relationships: { ...adjacentOnly, truncated: true } });
   expect(host.querySelector(".metaproject-details-facts")?.textContent).toContain("2 incoming · 2 outgoing · limited");
 });
 
@@ -242,4 +244,136 @@ test("markdownPreview drops metadata and Markdown markers", () => {
   expect(preview(COVERS_PAGE)).toBe("The client sends requests to the server and retries twice on failure.");
   expect(preview("Version: 2\nStatus: draft\n\n1. Use [the guide](wiki/guide.md) for ~~old~~ setup")).toBe("Use the guide for old setup");
   expect(preview("snake_case names stay intact")).toBe("snake_case names stay intact");
+});
+
+test("the Relationships fact adds the second-step count when there is one, and reads as before when there is none", async () => {
+  await render({ relationships: { ...relationships, truncated: true } });
+  expect(host.querySelector(".metaproject-details-facts")?.textContent).toContain("2 incoming · 2 outgoing · 1 second-step · limited");
+  expect(tab("relationships").querySelector(".tab-count")?.textContent).toBe("5");
+  const adjacentOnly = { ...relationships, edges: relationships.edges.filter(edge => edge.from === client.id || edge.to === client.id) };
+  await render({ relationships: adjacentOnly });
+  const facts = host.querySelector(".metaproject-details-facts")?.textContent ?? "";
+  expect(facts).toContain("2 incoming · 2 outgoing");
+  expect(facts).not.toContain("second-step");
+});
+
+test("Escape that another handler already handled does not close the panel", async () => {
+  let closed = 0;
+  await render({ onClose: () => { closed++; } });
+  const target = button("Copy path");
+  const handled = (event: Event) => event.preventDefault();
+  target.addEventListener("keydown", handled);
+  try {
+    await act(async () => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
+    expect(closed).toBe(0);
+  } finally { target.removeEventListener("keydown", handled); }
+});
+
+test("Draft runs once while a session is opening, and a draft error is cleared by choosing another tab", async () => {
+  const drafts: string[] = [];
+  let finish: () => void = () => {};
+  await render({ documents: { ...documents, nodes: [client], edges: [] }, onDraft: task => { drafts.push(task); return new Promise<void>(resolve => { finish = resolve; }); } });
+  await act(async () => { tab("wiki").click(); });
+  const draft = button("Draft Wiki page");
+  await act(async () => { draft.click(); });
+  expect(draft.textContent).toContain("Opening session");
+  await act(async () => { draft.click(); });
+  expect(drafts).toHaveLength(1);
+  await act(async () => { finish(); });
+  await render({ documents: { ...documents, nodes: [client], edges: [] }, onDraft: () => Promise.reject(new Error("No session could be opened")) });
+  await act(async () => { button("Draft Wiki page").click(); });
+  expect(host.querySelector('[role="tabpanel"] [role="alert"]')?.textContent).toBe("No session could be opened");
+  await act(async () => { tab("openspec").click(); });
+  expect(host.textContent).not.toContain("No session could be opened");
+});
+
+test("a preview answered for another document is not shown", async () => {
+  await render({ readPreview: () => Promise.resolve({ ...snapshot, node: app, markdown: "Stale paragraph" }) });
+  await act(async () => { tab("wiki").click(); });
+  expect(host.textContent).not.toContain("Stale paragraph");
+});
+
+test("no preview is read while the Relationships tab is shown", async () => {
+  const reads: unknown[] = [];
+  await render({ readPreview: id => { reads.push(id); return Promise.resolve({ ...snapshot, node: guide, markdown: "Text" }); } });
+  expect(reads).toEqual([]);
+  await act(async () => { tab("wiki").click(); });
+  expect(reads).toEqual(["guide"]);
+});
+
+test("a tab chosen for one node does not carry over to the next node", async () => {
+  await render();
+  await act(async () => { tab("wiki").click(); });
+  await render({ node: server });
+  expect(tab("relationships").getAttribute("aria-selected")).toBe("true");
+});
+
+test("arrow keys, Home and End move between tabs and focus the chosen one", async () => {
+  await render();
+  const list = host.querySelector<HTMLElement>('[role="tablist"]')!;
+  const press = (key: string) => act(async () => { list.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); });
+  await press("ArrowRight");
+  expect(tab("wiki").getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(tab("wiki"));
+  await press("ArrowRight");
+  expect(tab("openspec").getAttribute("aria-selected")).toBe("true");
+  await press("ArrowRight");
+  expect(tab("relationships").getAttribute("aria-selected")).toBe("true");
+  await press("ArrowLeft");
+  expect(tab("openspec").getAttribute("aria-selected")).toBe("true");
+  await press("Home");
+  expect(tab("relationships").getAttribute("aria-selected")).toBe("true");
+  await press("End");
+  expect(tab("openspec").getAttribute("aria-selected")).toBe("true");
+});
+
+test("the Wiki count leaves out a suggested component page", async () => {
+  const page = { id: "page", kind: "wiki" as const, title: "Client page", path: "wiki/client.md" };
+  await render({ documents: { ...documents, nodes: [client], edges: [] }, suggestedWiki: page });
+  expect(tab("wiki").querySelector(".tab-count")?.textContent).toBe("0");
+  await act(async () => { tab("wiki").click(); });
+  expect(host.textContent).toContain("Matching component page");
+});
+
+test("a failed copy says so, and copy feedback does not follow to another node", async () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  let fail = true;
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { if (fail) throw new Error("denied"); } } });
+  try {
+    await render();
+    await act(async () => { button("Copy path").click(); });
+    expect(host.querySelector(".metaproject-details-copied")?.textContent).toBe("Could not copy");
+    fail = false;
+    await act(async () => { button("Copy path").click(); });
+    expect(host.querySelector(".metaproject-details-copied")?.textContent).toBe("Copied");
+    await render({ node: server });
+    expect(host.querySelector(".metaproject-details-copied")?.textContent).toBe("");
+  } finally {
+    if (original) Object.defineProperty(navigator, "clipboard", original);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  }
+});
+
+test("dragging the handle left widens the panel and ArrowRight narrows it", async () => {
+  const widths: number[] = [];
+  await render({ width: 380, onResize: width => widths.push(width) });
+  const separator = host.querySelector<HTMLElement>('[role="separator"]')!;
+  Object.defineProperty(separator, "setPointerCapture", { configurable: true, value: () => {} });
+  await act(async () => {
+    separator.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, button: 0, clientX: 500, bubbles: true }));
+    separator.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientX: 460, bubbles: true }));
+  });
+  expect(widths).toEqual([420]);
+  await act(async () => { separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+  expect(widths).toEqual([420, 348]);
+});
+
+test("markdownPreview skips fenced code, prefers prose after a leading list, and cuts long text", () => {
+  const page = ["- first item", "- second item", "", "```", "const notProse = true;", "```", "", "The prose paragraph."].join("\n");
+  expect(preview(page)).toBe("The prose paragraph.");
+  const long = "word ".repeat(80).trim();
+  const cut = preview(long);
+  expect(cut).toHaveLength(360);
+  expect(cut.endsWith("…")).toBe(true);
+  expect(preview("x".repeat(360))).toHaveLength(360);
 });
