@@ -1,5 +1,5 @@
 import cytoscape from "cytoscape";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { MetaprojectNeighbors } from "../../../../src/integrations/metaproject-explorer-contract";
 import { Icon } from "../components/Icon";
 import {
@@ -31,6 +31,8 @@ export interface RelationshipGraphProps {
   onShowHidden?: (side: "incoming" | "outgoing") => void;
   /** Test seam; the app always uses core cytoscape. */
   createCytoscape?: CytoscapeFactory;
+  /** Host controls shown in the header row, left of the zoom controls (the explorer's Filters button). */
+  actions?: ReactNode;
 }
 
 const USER_ZOOM = { min: 0.3, max: 2.5, step: 1.25 } as const;
@@ -212,7 +214,7 @@ function isSide(value: unknown): value is GraphSide {
   return value === "incoming" || value === "outgoing";
 }
 
-export function RelationshipGraph({ projection, busy = false, onSelect, onShowHidden, createCytoscape }: RelationshipGraphProps): JSX.Element {
+export function RelationshipGraph({ projection, busy = false, onSelect, onShowHidden, createCytoscape, actions }: RelationshipGraphProps): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const graph = useRef<cytoscape.Core | null>(null);
@@ -322,6 +324,7 @@ export function RelationshipGraph({ projection, busy = false, onSelect, onShowHi
             </>
           )}
         </p>
+        {actions && <div className="metaproject-rgraph-actions">{actions}</div>}
         <div className="metaproject-rgraph-zoom" role="group" aria-label="Graph zoom">
           <button type="button" className="icon-btn" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(USER_ZOOM.step)}>
             <Icon name="plus" size={14} />

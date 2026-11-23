@@ -98,6 +98,7 @@ test("direction, depth and type controls filter the accessible relationship list
   await act(async () => { listRow("Guide").click(); });
   const relations = () => host.querySelector('[aria-label="Graph node details"] .metaproject-rel')?.textContent ?? "";
   expect(host.querySelector('[aria-label="Graph node details"] [data-direction="outgoing"]')?.textContent).toContain("Client");
+  await openFilters();
   const direction = host.querySelector<HTMLSelectElement>('select[aria-label="Direction"]')!;
   const depth = host.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
   await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -474,6 +475,7 @@ test("the Wiki relationships read uses fixed defaults whatever the Graph filters
     return request(cwd, input);
   };
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await openFilters();
   const depth = host.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
   await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
   await act(async () => { button("Imports").click(); });
@@ -578,6 +580,7 @@ test("Graph mode shows the relationship list in the panel, not under the canvas,
   const panelList = host.querySelector('[aria-label="Graph node details"] .metaproject-rel');
   expect(panelList?.textContent).toContain("Guide");
   expect(panelList?.textContent).toContain("Server");
+  await openFilters();
   expect(host.querySelector('select[aria-label="Direction"]')).not.toBeNull();
   expect(host.querySelector('select[aria-label="Depth"]')).not.toBeNull();
   const kinds = host.querySelector('[aria-label="Relationship types"]');
@@ -594,6 +597,78 @@ test("Graph mode shows the relationship list in the panel, not under the canvas,
   expect(button("Imports").getAttribute("aria-pressed")).toBe("false");
   await act(async () => { button("Reset filters").click(); });
   expect(button("Imports").getAttribute("aria-pressed")).toBe("true");
+});
+
+/** The Filters button: in the graph header, or in a slim row of its own when no graph is drawn. */
+function filtersButton() {
+  const found = host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+  if (!found) throw new Error("Missing Filters button");
+  return found;
+}
+const filtersDialog = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Graph filters"]');
+async function openFilters() {
+  if (!filtersDialog()) await act(async () => { filtersButton().click(); });
+}
+async function renderFilters() {
+  const createCytoscape = await headlessCytoscape();
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
+}
+
+test("graph filters sit behind a closed Filters button in the graph's header", async () => {
+  await renderFilters();
+  const toggle = filtersButton();
+  expect(toggle.closest(".metaproject-rgraph-header")).not.toBeNull();
+  expect(toggle.textContent?.trim()).toBe("Filters");
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(toggle.title).toBe("Both · 1 step · 5 of 7 types");
+  expect(filtersDialog()).toBeNull();
+  expect(host.querySelector('select[aria-label="Direction"]')).toBeNull();
+});
+
+test("the Filters popover opens with focus inside and closes on the button, Escape and a press outside, focus back on the button", async () => {
+  await renderFilters();
+  await act(async () => { filtersButton().click(); });
+  expect(filtersButton().getAttribute("aria-expanded")).toBe("true");
+  expect(filtersDialog()?.contains(document.activeElement)).toBe(true);
+  expect(filtersDialog()?.querySelector('select[aria-label="Direction"]')).not.toBeNull();
+  expect(filtersDialog()?.querySelector('[aria-label="Relationship types"]')?.textContent).toContain("Wiki links");
+  expect(filtersDialog()?.textContent).toContain("symbol layer");
+  expect(filtersDialog()?.textContent).not.toContain("Reset filters");
+  await act(async () => { filtersButton().click(); });
+  expect(filtersDialog()).toBeNull();
+  await openFilters();
+  await act(async () => { document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  expect(filtersDialog()).toBeNull();
+  expect(document.activeElement).toBe(filtersButton());
+  await openFilters();
+  await act(async () => { host.querySelector(".metaproject-list")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+  expect(filtersDialog()).toBeNull();
+  expect(document.activeElement).toBe(filtersButton());
+});
+
+test("changed filters show their count and the pressed look on the button, and Reset brings the defaults back", async () => {
+  await renderFilters();
+  expect(filtersButton().dataset.changed).toBeUndefined();
+  await openFilters();
+  const depth = filtersDialog()!.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
+  await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => { button("Imports").click(); });
+  expect(filtersButton().textContent?.trim()).toBe("Filters · 2");
+  expect(filtersButton().dataset.changed).toBe("true");
+  expect(filtersButton().title).toBe("Both · 2 steps · 4 of 7 types");
+  await act(async () => { button("Reset filters").click(); });
+  expect(filtersButton().textContent?.trim()).toBe("Filters");
+  expect(filtersButton().dataset.changed).toBeUndefined();
+  expect(filtersDialog()?.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')?.value).toBe("1");
+  expect(filtersDialog()?.textContent).not.toContain("Reset filters");
+});
+
+test("without a drawn graph the Filters button sits in a slim row of its own", async () => {
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => false })); });
+  const toggle = filtersButton();
+  expect(toggle.closest(".metaproject-filter-strip")).not.toBeNull();
+  expect(host.querySelector(".metaproject-rgraph")).toBeNull();
 });
 
 test("the list header counts shown of total and the limited-catalog banner is gone", async () => {

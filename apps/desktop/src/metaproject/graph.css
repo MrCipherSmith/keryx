@@ -42,6 +42,9 @@
   gap: var(--sp-1);
   margin-inline-start: auto;
 }
+/* Host controls (the explorer's Filters button) sit just left of the zoom controls. */
+.metaproject-rgraph-actions { display: flex; flex: none; align-items: center; gap: var(--sp-1); margin-inline-start: auto; }
+.metaproject-rgraph-actions + .metaproject-rgraph-zoom { margin-inline-start: 0; }
 .metaproject-rgraph-zoom .icon-btn {
   inline-size: 24px;
   block-size: 24px;

@@ -82,6 +82,17 @@ function legendItems(): string[] {
 }
 
 describe("RelationshipGraph overlay (AC4)", () => {
+  test("host actions render in the header row, left of the zoom controls", async () => {
+    await render({ projection: moduleProjection(), actions: createElement("button", { type: "button" }, "Filters") });
+    const header = host.querySelector(".metaproject-rgraph-header");
+    const action = [...header?.querySelectorAll("button") ?? []].find((item) => item.textContent === "Filters");
+    const zoom = header?.querySelector('[aria-label="Graph zoom"]');
+    if (!action || !zoom) throw new Error("Missing action or zoom controls in the header");
+    expect(action.compareDocumentPosition(zoom) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    await render({ projection: moduleProjection() });
+    expect(host.querySelector(".metaproject-rgraph-actions")).toBeNull();
+  });
+
   test("the caption names the root and the incoming and outgoing counts", async () => {
     await render({ projection: moduleProjection() });
     const caption = host.querySelector(".metaproject-rgraph-caption")?.textContent ?? "";

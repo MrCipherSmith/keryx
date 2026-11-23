@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   rankMetaprojectSearchHits,
   METAPROJECT_EDGE_KINDS,
@@ -21,7 +21,7 @@ import {
 import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
 import { Icon } from "../components/Icon";
 import { renderRepositoryMarkdown } from "../components/Markdown";
-import { EmptyState } from "../components/ui";
+import { EmptyState, useEscape } from "../components/ui";
 import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
 import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
@@ -161,6 +161,45 @@ const NO_SYMBOL_LAYER = "Not available: this project's graph has no symbol layer
 const sameKinds = (left: readonly MetaprojectEdgeKind[], right: readonly MetaprojectEdgeKind[]) =>
   left.length === right.length && left.every(kind => right.includes(kind));
 
+const DIRECTION_LABELS: Record<MetaprojectDirection, string> = { both: "Both", incoming: "Incoming", outgoing: "Outgoing" };
+const POPOVER_WIDTH = 320;
+
+/**
+ * A non-modal dialog anchored under its button, built on the app's menu surface (`.menu`): focus
+ * moves in on open; Escape or a press outside calls `onClose`, which gives focus back to the button.
+ */
+function FiltersPopover({ id, anchor, onClose, children }: { id: string; anchor: HTMLElement; onClose: () => void; children: ReactNode }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: -9999, top: -9999 });
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEscape(() => close.current());
+  useLayoutEffect(() => {
+    const rect = anchor.getBoundingClientRect();
+    // Right-aligned with the button (it sits at the end of the graph header), kept inside the window.
+    const left = Math.max(8, Math.min(rect.right - POPOVER_WIDTH, window.innerWidth - POPOVER_WIDTH - 8));
+    setPosition({ left, top: rect.bottom + 4 });
+  }, [anchor]);
+  useLayoutEffect(() => {
+    panel.current?.querySelector<HTMLElement>("select, button:not([disabled])")?.focus();
+  }, []);
+  useLayoutEffect(() => {
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (panel.current?.contains(target) || anchor.contains(target)) return;
+      close.current();
+    };
+    window.addEventListener("mousedown", onDown, true);
+    return () => window.removeEventListener("mousedown", onDown, true);
+  }, [anchor]);
+  return (
+    <div ref={panel} id={id} className="menu metaproject-filters-pop" role="dialog" aria-label="Graph filters"
+      style={{ ...position, width: POPOVER_WIDTH }}>
+      {children}
+    </div>
+  );
+}
+
 function Explorer({
   cwd,
   onRebuild,
@@ -217,6 +256,10 @@ function Explorer({
   const filtersChanged = direction !== "both" || depth !== 1 || !sameKinds(kinds, defaultKinds);
   const resetFilters = () => { setDirection("both"); setDepth(1); setKinds(defaultKinds); };
   const [revealRelationships, setRevealRelationships] = useState(0);
+  // Open or closed is explorer state like the filters: it survives a view or tab switch and is not a history entry.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersAnchor, setFiltersAnchor] = useState<HTMLButtonElement | null>(null);
+  const filtersDialogId = useId();
   // Wiki reads a page's relationships with fixed defaults; only Graph applies its filters.
   const relationDepth = mode === "wiki" ? 1 : depth;
   const relationDirection = mode === "wiki" ? "both" : direction;
@@ -621,25 +664,41 @@ function Explorer({
     </article>
   );
   const kindChoices = protocol === 2 ? METAPROJECT_EDGE_KINDS_V2 : METAPROJECT_EDGE_KINDS;
-  const filters = (
-    <div className="metaproject-controls metaproject-filters" role="group" aria-label="Graph filters">
-      <label className="metaproject-filter">
-        <span>Direction</span>
-        <select className="select-compact" aria-label="Direction" value={direction}
-          onChange={event => setDirection(event.target.value as MetaprojectDirection)}>
-          <option value="both">Both</option>
-          <option value="incoming">Incoming</option>
-          <option value="outgoing">Outgoing</option>
-        </select>
-      </label>
-      <label className="metaproject-filter">
-        <span>Depth</span>
-        <select className="select-compact" aria-label="Depth" value={depth}
-          onChange={event => setDepth(event.target.value === "2" ? 2 : 1)}>
-          <option value="1">1 step</option>
-          <option value="2">2 steps</option>
-        </select>
-      </label>
+  const kindsOn = kindChoices.filter(kind => kinds.includes(kind) && !(SYMBOL_KINDS.includes(kind) && !catalog?.hasSymbolLayer)).length;
+  const changedSettings = (direction !== "both" ? 1 : 0) + (depth !== 1 ? 1 : 0) + (sameKinds(kinds, defaultKinds) ? 0 : 1);
+  const filterSummary = `${DIRECTION_LABELS[direction]} · ${depth === 1 ? "1 step" : "2 steps"} · ${kindsOn} of ${kindChoices.length} types`;
+  const closeFilters = () => { setFiltersOpen(false); filtersAnchor?.focus(); };
+  // One element for the button: in the graph's header when a graph is drawn, otherwise in a slim row of its own.
+  const filtersButton = (
+    <button ref={setFiltersAnchor} type="button" className="chip-btn metaproject-filters-toggle"
+      aria-haspopup="dialog" aria-expanded={filtersOpen} aria-controls={filtersOpen ? filtersDialogId : undefined}
+      data-changed={changedSettings ? "true" : undefined} title={filterSummary}
+      onClick={() => setFiltersOpen(open => !open)}>
+      {changedSettings ? `Filters · ${changedSettings}` : "Filters"}<Icon name="chevronDown" size={12} />
+    </button>
+  );
+  const filters = filtersOpen && filtersAnchor && (
+    <FiltersPopover id={filtersDialogId} anchor={filtersAnchor} onClose={closeFilters}>
+      <div className="metaproject-filters-pop-row">
+        <label className="metaproject-filter">
+          <span>Direction</span>
+          <select className="select-compact" aria-label="Direction" value={direction}
+            onChange={event => setDirection(event.target.value as MetaprojectDirection)}>
+            <option value="both">Both</option>
+            <option value="incoming">Incoming</option>
+            <option value="outgoing">Outgoing</option>
+          </select>
+        </label>
+        <label className="metaproject-filter">
+          <span>Depth</span>
+          <select className="select-compact" aria-label="Depth" value={depth}
+            onChange={event => setDepth(event.target.value === "2" ? 2 : 1)}>
+            <option value="1">1 step</option>
+            <option value="2">2 steps</option>
+          </select>
+        </label>
+      </div>
+      <div className="menu-header">Relationship types · {kindsOn} of {kindChoices.length}</div>
       <div className="metaproject-kind-chips" role="group" aria-label="Relationship types">
         {kindChoices.map(kind => {
           const unavailable = SYMBOL_KINDS.includes(kind) && !catalog?.hasSymbolLayer;
@@ -653,9 +712,13 @@ function Explorer({
           );
         })}
       </div>
-      {catalog && !catalog.hasSymbolLayer && <span id={symbolReasonId} className="metaproject-filter-note">{NO_SYMBOL_LAYER}</span>}
-      {filtersChanged && <button type="button" className="btn btn-ghost btn-sm metaproject-filter-reset" onClick={resetFilters}>Reset filters</button>}
-    </div>
+      {catalog && !catalog.hasSymbolLayer && <p id={symbolReasonId} className="metaproject-filter-note">{NO_SYMBOL_LAYER}</p>}
+      {filtersChanged && (
+        <div className="menu-footer metaproject-filters-pop-footer">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>Reset filters</button>
+        </div>
+      )}
+    </FiltersPopover>
   );
   const wikiEmptyTitle = searching ? `Searching the Wiki for “${searchQuery}”…`
     : results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`;
@@ -766,6 +829,7 @@ function Explorer({
               )}
               {mode === "wiki" && detailPanel}
               {mode === "wiki" && loadingDetail && <p role="status">Loading item…</p>}
+              {mode === "graph" && !(graphProjection && showGraph) && <div className="metaproject-filter-strip">{filtersButton}</div>}
               {mode === "graph" && filters}
               {mode === "graph" && relationshipError && !panelOpen && (
                 <div className="inline-banner tone-warn" role="alert">
@@ -776,7 +840,7 @@ function Explorer({
               {mode === "graph" && relationshipsLoading && !graphProjection && <p role="status">Loading relationships…</p>}
               {graphProjection && showGraph && (
                 <RelationshipGraph projection={graphProjection} busy={graphBusy} onSelect={select} onShowHidden={showHidden}
-                  {...(createCytoscape && { createCytoscape })} />
+                  actions={filtersButton} {...(createCytoscape && { createCytoscape })} />
               )}
               {mode === "graph" && currentProjection && !showGraph && (
                 <p className="metaproject-meta">The graph is not built yet. Open the panel's Relationships tab to see this node's links.</p>

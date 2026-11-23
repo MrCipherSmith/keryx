@@ -74,13 +74,20 @@ button.metaproject-row[aria-current="true"] {
   border-radius: var(--r-md);
   background: var(--bg-surface);
 }
-/* Graph filters: one compact row that wraps; kinds are chips that say when they are on. */
-.metaproject-filters { align-items: center; padding: var(--sp-2); gap: var(--sp-2); }
+/* Graph filters: a "Filters" button (graph header, or a slim row when no graph is drawn) opens a
+   popover on the app's menu surface; the graph stays visible behind it. */
+.metaproject-filters-toggle { flex: none; }
+.metaproject-filters-toggle[aria-expanded="true"],
+.metaproject-filters-toggle[data-changed="true"],
+.metaproject-kind-chips .chip-btn[aria-pressed="true"] { color: var(--fg); background: var(--bg-selected); border-color: var(--accent); }
+.metaproject-filter-strip { display: flex; justify-content: flex-end; }
+.metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+.metaproject-filters-pop .menu-header { padding-inline: 0; }
+.metaproject-filters-pop-row { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
 .metaproject-filter { display: inline-flex; align-items: center; gap: var(--sp-1); min-block-size: 24px; font-size: var(--fs-sm); color: var(--fg-muted); }
 .metaproject-kind-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); min-inline-size: 0; }
-.metaproject-kind-chips .chip-btn[aria-pressed="true"] { color: var(--fg); background: var(--bg-selected); border-color: var(--accent); }
-.metaproject-filter-note { flex: 1 1 100%; font-size: var(--fs-xs); color: var(--fg-muted); }
-.metaproject-filter-reset { margin-inline-start: auto; }
+.metaproject-filter-note { margin: 0; font-size: var(--fs-xs); color: var(--fg-muted); }
+.metaproject-filters-pop-footer { display: flex; justify-content: flex-end; margin-top: 0; padding-inline: 0; }
 
 .metaproject-article, .metaproject-relationship-section {
   padding: var(--sp-3);
@@ -117,7 +124,10 @@ button.metaproject-row[aria-current="true"] {
   .metaproject-panes { gap: var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); }
   .metaproject-graph-panes:has(.metaproject-details:not(.compact)) { grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) auto; }
   .metaproject-content { gap: var(--sp-2); }
-  .metaproject-filters { padding: var(--sp-1) var(--sp-2); }
+  /* One header row: the heading is hidden visually but stays for assistive technology. */
+  .metaproject-header .flows-heading {
+    position: absolute; inline-size: 1px; block-size: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
   .metaproject-graph-panes .metaproject-content > .metaproject-rgraph { min-block-size: 160px; }
   .metaproject > .inline-banner { margin-inline: var(--sp-3); }
 }
