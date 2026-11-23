@@ -1,0 +1,57 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Read every hunk of slice-04 (T8 result file and the App, MetaprojectView, NodeDetailsPanel, RelationshipGraph, RelationshipList and graphLayout tests) against the 21 acceptance criteria. Fixtures match the behaviour the criteria describe (31-node depth-1 module, 200-node/269-edge depth-2 fixture, AC9 Covers page, AC16 percent-encoded and leading-slash hrefs) and the arithmetic in the layout, viewport and colour tests checks out. Three gaps between a criterion's wording and what its test asserts: AC12's resolved no-match state is never asserted (minor), and two info notes on AC6 (data-palette) and AC13 (protocol 2 kinds).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:466",
+      "title": "AC12 test asserts the in-flight state, never the 'no matching page' outcome the criterion describes",
+      "problem": "AC12 says: 'Find a Wiki page' for a node with no matching page shows an empty state that names the searched text. The test 'Find a Wiki page with no selected page shows an empty state naming the search instead of an article' clicks the button and reads the empty state before the debounced search runs; it ends with `expect(content?.querySelector(\".empty-state h3\")?.textContent).not.toContain(\"No Wiki page matches\");` and its comment says 'The search is still in flight'. So it checks the title 'Searching the Wiki for “src/client.ts”…' only. The state a user sees once the search returns no hit, `No Wiki page matches “${searchQuery}”` (MetaprojectView.tsx:727-728, the third branch of wikiEmptyTitle), is asserted nowhere: `keryx ctx rg \"No Wiki page matches\" apps/desktop/src/metaproject` finds only the negated assertion above and the source line. The mocked `request` already answers search with `hits: []`, so the fixture is the right one; the test just never lets the search finish.",
+      "why_it_matters": "The AC12 verify command passes while the terminal state of the scenario it names (no page found: article area shows an empty state naming the text, no article) is unchecked. A regression in that branch, for example the empty state not naming the query or a stale article reappearing after the search resolves, would not fail any test.",
+      "suggested_fix": "Extend the test, or add one, to run the pending debounce timer (as 'full-text hits stay visible…' does with its captured setTimeout) and assert that the empty-state title contains `No Wiki page matches “src/client.ts”`, that `article` is still absent and that 'Readable guide' is not in the content."
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx:1223",
+      "title": "AC6 names data-palette, the re-colour test switches only data-theme (plus --fg)",
+      "problem": "AC6: 'Changing `data-theme` or `data-palette` … re-colours the mounted graph'. The test 'tokens resolve to opaque colours and a theme change re-colours labels in place' sets `--fg` and `data-theme=\"dark\"` in one act and checks the label colour becomes rgb(225,236,229). The component observes both attributes (RelationshipGraph.tsx:289, `attributeFilter: [\"data-theme\", \"data-palette\", \"style\"]`), but no test changes data-palette. AC6 is `judged`, not an exec criterion, so nothing fails; the test name and body do cover the data-theme half.",
+      "why_it_matters": "Dropping 'data-palette' from the attributeFilter would pass the suite.",
+      "suggested_fix": "Add a second switch in the same test with `document.documentElement.setAttribute(\"data-palette\", …)` and a changed `--fg`, asserting the label colour follows."
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:432",
+      "title": "AC13 test pins the protocol-1 kind list only",
+      "problem": "AC13 says the Wiki-mode neighbours request carries 'every non-symbol relationship kind'. The test expects `kinds: [\"imports\", \"asset\", \"describes\", \"links\", \"contains\"]`, which equals WIKI_KINDS_V1 (MetaprojectView.tsx:158). The view also defines WIKI_KINDS_V2 (line 159, used when protocol is 2, adding the OpenSpec kinds). The AC13 test passes no `negotiate`, so the protocol-2 Wiki read, whose kinds list is the larger one, is not asserted.",
+      "why_it_matters": "A Wiki read under protocol 2 that takes its kinds from the Graph filter state (the defect AC13 guards against) would not be caught by this test.",
+      "suggested_fix": "Repeat the Wiki-mode assertion with a `negotiate` that returns 2 and compare `kinds` with the protocol-2 non-symbol list."
+    }
+  ],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+
+## Logic Review (review-logic, wave 4, slice-04)
+
+Spec compliance, criterion by criterion for what this slice's tests carry:
+- AC1-AC3: depthOneModule is 1+18+12 = 31 nodes with `contains` and `imports`; incoming-only importers left, outgoing and both-direction files right, 12 per column plus "+6 more" (hidden = 18-12), no overlaps, second-step nodes in columns -2/2 strictly beyond every first-step box on their side. The depth-2 fixture is exactly 200 nodes / 269 edges (1+25+15+159 nodes; 199 structural edges topped up to 269). Consistent.
+- AC4: caption counts 15 incoming / 18 outgoing match the fixture (3 files import the root, 12 importers; 18 contained files); legend lists exactly present kinds and line styles; seven node-kind treatments distinct; nine edge kinds mapped to solid/dashed/dotted.
+- AC7-AC9: counts 2 incoming / 2 outgoing from root-adjacent edges (the server calls api edge is second step), limited suffix, Copy path, default tab, direction grouping, either-endpoint second-step rows, revealRelationships change-only switch, preview of the Covers page.
+- AC11, AC14-AC17: test bodies match the criteria (Back twice reaches Beta then Alpha with a repeated select and typing in between; rebuild with a reloaded catalog; Retry after a failed negotiation; lookup read counted once and the unresolved path named; list header 'Catalog · 2 of 52' from counts 40+9+3; busy graph kept while the next read waits).
+- AC12: see F-001. AC6: see F-002. AC13: see F-003.
+- AC5, AC10, AC20, AC21: judged live, not carried by this slice's tests; App.dom.test covers the retained-view mechanism behind AC10 (state kept while hidden). AC18, AC19 are not tested in this slice.
+
+Arithmetic checked in the layout fixtures: the G2 two-slots-then-kind-order split gives 10/1/1 and 8/2/2, the G3 order is o, c, a, b with n dropped, G5 shortenMiddle outputs have the stated lengths, toOpaqueColor 127.5 rounds to 128 and 0x80 alpha to 127.
+
+T8.result.json: point-in-time record (833 passing, "+6 new tests"); later tasks in the same slice added further tests, so its counts are stale but it states AC5/AC6/AC20 were unverified at that point, which matches the later live passes cited in the brief. Nothing to report.
+
+Not read or run: no tests were executed (exec budget 0); source files outside the slice were consulted only at MetaprojectView.tsx:158-159, 727-728 and RelationshipGraph.tsx:289 to verify the findings.
+
+Routing audit: graph_used no (not-relevant: slice is tests, verified with targeted reads), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no.

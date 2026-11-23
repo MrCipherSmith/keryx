@@ -1,0 +1,43 @@
+STATUS: DONE
+
+## Frontend Review (wave 1, slice-04)
+
+### Scope
+- Branch: feat/desktop-metaproject-redesign; merge-base 1358d962f4dfc07a9e086a533f51e75aa757dfcd; head 60cbe1c565f4e478833605b41c49c2827eed2bbf
+- Slice-04 holds only the T8 result JSON and test files (App.dom.test.tsx, MetaprojectView.dom.test.tsx, NodeDetailsPanel.dom.test.tsx, RelationshipGraph.dom.test.tsx, RelationshipList.dom.test.tsx, graphLayout.test.ts). No component or store source is in this slice; I read it in full (1899 diff lines).
+- Spot checks at head: RetainedView exists in App.tsx and renders `hidden={!visible}`; markdownPreview, summarizeRelationships and RelationshipList are exported from the files the tests import; graph.css `.metaproject-rgraph` carries `flex: 1 1 auto;` and `min-block-size: 200px;` with no clamp(), so the G8 test matches.
+
+### Summary
+- Blockers: 0, Major: 0, Minor: 0, Info: 1
+
+### Findings
+F-001 (info): the G8 test asserts on CSS source text. See REVIEW_RESULT.
+
+### Clean Areas
+Observer/MobX laws: no store or component source in this slice. Tests restore every global they patch (navigator.clipboard, HTMLElement.prototype.scrollIntoView, window.setTimeout in a finally block, clientWidth, document.documentElement style and data-theme). Mounted roots are unmounted in afterAll. The tests cover the behaviours the acceptance criteria name (AC4, AC7-AC9, AC11-AC17).
+
+Not verified: I ran no tests (read-only, exec budget 0); results rest on the orchestrator's evidence in the brief.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Slice-04 is tests plus one flow result file. Every hunk was read; nothing is wrong with the tests as written. One info observation about a test that pins CSS text.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "line": null,
+      "quote": "expect(block).toContain(\"min-block-size: 200px;\");",
+      "problem": "The G8 test reads graph.css from disk and matches a regex over its text, including the exact declaration `min-block-size: 200px;`. It verifies the stylesheet's spelling, not that the graph fills its host, and it will fail on any harmless reformat or a change of the minimum (the T8 notes lower the minimum to 160px in a narrow container, done in metaproject.css).",
+      "impact": "A brittle test: it can fail on a benign CSS edit and gives no evidence about layout, which happy-dom cannot measure; the real check is the live measurement (AC5, AC20).",
+      "suggested_fix": "Keep only the `not.toContain(\"clamp(\")` and `flex: 1 1 auto;` assertions, or drop the pinned minimum value; leave layout proof to the live pass.",
+      "evidence": "RelationshipGraph.dom.test.tsx G8 test (slice-04 diff); graph.css lines 2-12 at head contain the matched declarations.",
+      "confidence": "high",
+      "reviewer": "review-frontend"
+    }
+  ],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}

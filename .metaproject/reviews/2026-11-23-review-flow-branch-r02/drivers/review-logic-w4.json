@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-logic",
+  "wave": 4,
+  "waves": 10,
+  "slices": [
+    "slice-05"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-05",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-05.diff",
+      "bytes": 80731
+    }
+  ],
+  "result": "raw/review-logic-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+}

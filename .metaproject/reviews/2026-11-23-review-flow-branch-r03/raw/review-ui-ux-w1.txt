@@ -1,0 +1,58 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "F-001 is closed: RelationshipList decides its empty note from the three groups, and the Wiki disclosure is shown and counted from summarizeRelationships, the same rule as the panel's tab; both are pinned by tests, and the guide's troubleshooting row for a missing Relationships section covers the absent disclosure. Code mode only (no render supplied; the self-link case and the failed quiet re-read were not seen live). Three findings remain, all on the quiet re-read on return: a standing error banner stays over a catalog that a successful quiet re-read just replaced (minor), a failed quiet re-read leaves the old graph freshness with no cue (info), and the 'Project knowledge changed while loading' banner can show for a catalog that is already the new one (info).",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setCatalog(result);\n        setFreshness(null);\n        setSnapshotMismatch(false);",
+      "problem": "A quiet re-read that succeeds never touches `error`. Its full-replace branch clears `snapshotMismatch` but not `error`, because `setError(\"\")` now sits under `if (!quiet)`. So a standing catalog error survives a read that proves the CLI works and that has just replaced the catalog. The test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins this on purpose, but only for an unchanged snapshot and a failed rebuild; the changed-snapshot case is not covered. Criterion: Nielsen #1 (status visibility), #9 (error recovery): an alert whose cause is gone.",
+      "impact": "Trigger: a Retry, Refresh or reload after a rebuild fails (banner 'The index is being written.' with Retry, old catalog kept), the user leaves the Metaproject view, the index finishes, and they come back. The explorer shows the new catalog and the new graph freshness, and the red alert with Retry stays above it. They cannot tell whether the list is current and press Retry for nothing (a non-quiet reload that resets nothing but pending lookups). No data is lost.",
+      "suggested_fix": "On a quiet success that replaces the catalog (the branch after the unchanged-snapshot return), also `setError(\"\")`; keep the error only on the unchanged-snapshot branch if the failed rebuild's message must stay, or say in the test why the stale-catalog case keeps it.",
+      "evidence": "Read MetaprojectView.tsx catalog effect at head (slice hunk @@ 309,434 @@): `if (!quiet) { project.current++; setError(\"\"); }` and the success branch above; banner at `{error && (<div className=\"inline-banner tone-warn\" role=\"alert\">`. Not seen live; follows from the code and the test titles.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "// A failed quiet read keeps the loaded catalog; the next read the user starts reports a lasting failure.\n        if (generation === catalogRead.current && !quiet) setError(errMessage(cause));",
+      "problem": "UNVERIFIED (not seen live). When the quiet re-read on return fails, the explorer shows nothing and keeps the last `graphState`. The freshness banner is the only thing the re-read exists to refresh, so a user who left while the graph was ready and returns after it went stale, while the CLI is busy, still sees no banner.",
+      "impact": "Trigger: return while the catalog read fails. The user sees a calm explorer with an old freshness verdict (for example no 'Graph is stale.' banner) and has no cue that the check failed. The design choice (silent) is defensible and the next real read reports it; what settles it is whether a stale graph shown as fresh is acceptable until the next action.",
+      "suggested_fix": "Optional: leave as is and say so in the guide's sentence about the quiet re-read ('if the re-read fails the explorer keeps the last banner'), or show a muted one-line note.",
+      "evidence": "Code at head and test 'a failed quiet re-read on return shows no error and leaves the explorer as it was'. The guide (docs/docs/guides/desktop-metaproject.md:10) says only that the re-read keeps the banner current.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-003",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }",
+      "problem": "UNVERIFIED (derived from code). Choice 1 of the brief: a wiki-link lookup started under snapshot one and not cancelled when a quiet re-read replaces the catalog with snapshot two compares its answer with the `snapshotId` it captured at click time, not with the current catalog. The banner 'Project knowledge changed while loading' with Refresh catalog then shows although the catalog on screen is already the new one.",
+      "impact": "Trigger: click an unloaded Wiki link, leave and return within one CLI read, with the project's knowledge changed in between. The link does not open, the banner says to refresh a catalog that is already fresh, Refresh catalog reloads it again (and drops the lookup), and the user clicks the link a second time. Narrow; costs one click and a misleading banner.",
+      "suggested_fix": "Compare against the current snapshot (a ref of `loadedSnapshot.current`) and, when it differs only because the catalog moved on, run the lookup again instead of showing the banner; or clear a pending lookup's banner when a quiet read replaces the catalog.",
+      "evidence": "Read the openPath hunk (@@ 691,736 @@: `const snapshotId = catalog?.snapshotId;` captured before the await) and the catalog effect that calls `setSnapshotMismatch(false)` only at the moment of replacement, before the lookup answers.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+
+Notes (checks and gaps)
+
+F-001 closed. RelationshipList.tsx computes `empty` from the three groups, so a self-link-only node gets the note in the panel's Relationships tab. The Wiki disclosure is hidden when `wikiRelationshipRows` is 0 and counted with the same summarizeRelationships as the panel tab and fact row, so the count and the rows agree (test: 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none').
+
+Absent disclosure on a Wiki page: the guide's troubleshooting row at docs/docs/guides/desktop-metaproject.md:278 ('A page has no Relationships section', confirm the page links to other pages or declares the code it covers, rebuild, check Graph filters) covers it. A page whose only link is to itself matches that row's advice closely enough. No finding.
+
+Note "No relationships for these filters." for a self-link-only node: the panel only exists in Graph mode, where filters exist, so the wording is accurate there; with default filters it hints at a filter change that cannot help. Not filed (copy preference, not blocking).
+
+Checks not run: no render was supplied; tab order, contrast and the live look of the banners were not measured. The self-link page, the failed quiet re-read and a lookup in flight across leaving and returning were not seen live (the orchestrator says the same).

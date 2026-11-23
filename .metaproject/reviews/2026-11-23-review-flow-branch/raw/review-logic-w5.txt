@@ -1,0 +1,62 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice 05 (App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx) was read in full and checked against AC4, AC6-AC18 and the plan's state and event matrix. The explorer state, async reads (stale-response guards, rebuild that outlives catalog reloads, negotiation Retry, lookup read for wiki links), history through navigate, the retained mount and the graph lifecycle are logically sound; no acceptance criterion in this slice is unimplemented. Two minor defects were found, both narrow.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "useEscape(() => close.current());",
+      "problem": "FiltersPopover registers on the app-wide Escape stack (useEscape) for as long as it is mounted, and the explorer now stays mounted, hidden, after its first visit (RetainedView). filtersOpen is deliberately kept as explorer state and nothing closes the popover when the view is hidden. The popover closes on a mousedown outside it, so a mouse click on another tab closes it, but a keyboard route does not: open Filters in Graph, open the command palette with its shortcut (AppShell lets the palette through while an overlay is open), choose Go to Session with Enter. The palette unmounts, the hidden popover's escape entry stays.",
+      "impact": "While the Session view is shown, overlayOpen() stays true: the tab shortcuts in AppShell (`if (!tab || overlayOpen()) return;`) and the App.tsx overlay guard back off, and the first Escape (for example to stop a running turn) is consumed by the hidden popover's handler. One click or one Escape clears it, so nothing is lost, but shortcuts silently do not work until then.",
+      "suggested_fix": "Close the popover when its view is hidden: have RetainedView pass visibility to the explorer (or check `anchor.getClientRects().length === 0` in a ResizeObserver on the anchor) and call setFiltersOpen(false) then. Alternatively register the escape layer only while the anchor is rendered.",
+      "evidence": "App.tsx RetainedView renders `<div className=\"view\" hidden={!visible}>` around the whole explorer; FiltersPopover is rendered inside it while filtersOpen && filtersAnchor (anchor stays connected, only display:none). components/ui.tsx useEscape pushes onto escapeStack in a mount effect and overlayOpen() returns escapeStack.length > 0. AppShell.tsx:84 and :112 and App.tsx:360 read overlayOpen(). The old explorer was unmounted when the view was left, so this is new with the retained mount. Not run: read-only review.",
+      "confidence": 0.7,
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "line": null,
+      "quote": "if (edge.from === projection.root) adjacent.outgoing.push({ edge, node: to });",
+      "problem": "The panel counts and lists a self-loop edge (edge.from === edge.to === root) once, as outgoing (documented in groupRelationships). The graph layout skips self-loops (`if (edge.from === edge.to) return;` in layoutNeighborhood), so its caption count leaves them out. The two numbers are computed from the same projection for the same selection and shown on one screen.",
+      "impact": "For a node with a self-edge (for example a wiki page whose `links` edge points at itself) the graph caption reads '0 incoming · 0 outgoing' while the panel fact reads '0 incoming · 1 outgoing', and the Relationships tab lists the node as its own outgoing neighbour, whose row selects the node already shown (a no-op). AC7 asks for the panel counts to come from the root-adjacent edges, so the panel follows the criterion; the caption is the one that differs.",
+      "suggested_fix": "Pick one rule for both: skip self-loops in groupRelationships (the row does nothing useful), or count them in layoutNeighborhood. Skipping them in groupRelationships keeps the two counts equal.",
+      "evidence": "RelationshipList.tsx groupRelationships: `if (edge.from === projection.root) adjacent.outgoing.push(...)` runs before any self-loop test; graphLayout.ts lines 505-508: `if (edge.from === edge.to) return; if (edge.to === root.id) incoming++; if (edge.from === root.id) outgoing++;`. The self-loop case is only reachable if the producer emits a self-edge; not verified that it does.",
+      "confidence": 0.55,
+      "reviewer": "review-logic"
+    }
+  ],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+
+## Logic Review
+
+### Review Scope
+- Branch: feat/desktop-metaproject-redesign
+- Merge-base: 1358d962f4dfc07a9e086a533f51e75aa757dfcd, head 60cbe1c565f4e478833605b41c49c2827eed2bbf
+- Spec compliance gate: ran against the 21 acceptance criteria of flow 515 and the plan's state and event matrix (criteria whose code lives in other slices, AC1-AC3 and AC19-AC21, were not judged here).
+
+### Summary
+Explorer logic holds: stale responses are dropped by `active` flags and root checks, a rebuild resolves against `mounted` instead of the catalog generation (AC14), Retry re-runs negotiation and hides the Loading banner (AC15), a wiki link resolves through one lookup read with percent-decoding and leading "/" handling (AC16), Wiki relationships use fixed depth 1 / both / non-symbol kinds (AC13), a query with no selection shows the empty state and never the first page (AC12), and re-selecting the shown node or typing a query makes no history entry (AC11). Two minor findings.
+
+### Spec Gaps
+None detected in this slice. AC18 holds (GraphNodePanel.tsx is deleted in the diff). AC10 is implemented by RetainedView (judged live by the orchestrator, not re-run here).
+
+### Checked and found sound (no finding)
+- Graph lifecycle: init effect runs before the elements effect; a zero-size container is skipped in `fit` and refitted by ResizeObserver; edges are added only between drawn nodes, so cytoscape cannot meet a missing endpoint; theme observer covers data-theme, data-palette, style and the scheme media query.
+- lastGraph / graphBusy: the previous graph stays through a selection or filter change and is dropped on a failed read or when leaving Graph; the local (v1) projection path sets null then the new value in one batch, so no flash.
+- Panel: tab choice is per node, reveal counter switches to Relationships including when the panel mounts, drawer focus is taken only when compact.
+- Filter state: reset uses the protocol's default kinds; symbol kinds are disabled and excluded from the count when the catalog has no symbol layer.
+
+### Not verified
+Nothing was run (read-only, exec budget 0). The live-browser criteria (AC5, AC6, AC10, AC20) rest on the orchestrator's journal entries. graphLayout.ts was read only around the lines needed for F-002 and the edge filter.
+
+Routing audit: graph_used no (slice supplied, not-relevant), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg / read), raw_rg_used no.

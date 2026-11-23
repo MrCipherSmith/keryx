@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-06 holds the pure layout module (graphLayout.ts), shared label maps (labels.ts), the split of the old panel CSS into metaproject.css and nodePanel.css, the explorer navigation hook and the user guide. Dependency direction is sound: graphLayout.ts depends only on labels.ts and the explorer contract, labels.ts depends only on the contract, and neither imports a component or the DOM; nodePanel.css is imported by the two components that use it. The CSS removed from metaproject.css leaves no orphan class in the desktop sources, and the tokens the new CSS uses (--shadow-sheet, --sp-7, --dur, --ease-out, slide-in) exist. No architectural violation found.",
+  "findings": [],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Notes on what was checked and not checked: every hunk of slice-06 was read. Checked with keryx ctx rg: no remaining references to the removed classes (metaproject-node-*, metaproject-graph, metaproject-graph-viewport, metaproject-relation-actions, metaproject-relations) under apps/desktop/src; the design tokens and the slide-in keyframes exist. Not verified: runtime behaviour of useExplorerNavigation (refs written during render, history trimming), which is logic and belongs to review-logic. No tests were run (read-only, exec budget 0).

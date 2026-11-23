@@ -1,0 +1,34 @@
+# keryx review verify-run
+finding: tests-to-run
+command: cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx; do bun test $f 2>&1 | tail -6 || exit 1; done
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign
+time: 2026-11-23T12:30:50.563Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+
+ 5 pass
+ 0 fail
+ 20 expect() calls
+Ran 5 tests across 1 file. [224.00ms]
+bun test v1.4.4 (38afee6c8)
+
+ 91 pass
+ 0 fail
+ 359 expect() calls
+Ran 91 tests across 1 file. [631.00ms]
+bun test v1.4.4 (38afee6c8)
+
+ 14 pass
+ 0 fail
+ 46 expect() calls
+Ran 14 tests across 1 file. [177.00ms]
+bun test v1.4.4 (38afee6c8)
+
+ 24 pass
+ 0 fail
+ 73 expect() calls
+Ran 24 tests across 1 file. [217.00ms]
+--- stderr ---
+

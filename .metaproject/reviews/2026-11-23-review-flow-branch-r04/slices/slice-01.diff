@@ -1,0 +1,1098 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md
+@@ 140,173 @@
+ - 2026-11-23T10:12:37.125Z - task-attempt: T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows
+ - 2026-11-23 - orchestrator: review round 2 planned on head b1538097e (`keryx review plan`, package `.metaproject/reviews/2026-11-23-review-flow-branch-r02`): delta round over 60cbe1c56..b1538097e, 88 fix hunks, 10 slices (3 fix, 1 new, 6 second-look), 13 reviewers (review-clean-code and review-style are new in the roster), 53 dispatches, 28-70 min by `keryx review estimate` — over the 40-dispatch threshold, so the operator confirms. Of the 53: 24 read slice-03 (the code and tests the fixes changed) and slice-04 (new hunks), 17 read slice-01 and slice-02 (the flow package's dispatch, resolved-context and result JSON of T17 to T21), 12 are a second look by review-logic and review-security-code at the six slices of round 1's whole diff. The plan lists F-015, F-016 and F-017 as carried open: the T20 commit message names them as a range ("F-014 to F-018"), which the tool does not expand; they were fixed in T20.
+ - 2026-11-23 - orchestrator: operator asked with the host question tool which part of round 2 to run. Answer verbatim: "Только код правок (Recommended)" — the 24 dispatches over slice-03 and slice-04; not read in this round: the flow package's JSON files of the fix tasks and the second look at round 1's diff. `keryx review confirm-plan` accepts only a plain yes for the plan as a whole, so the operator was asked once more, with the plan key 487f9329f4c92447, "53 dispatches, expected duration 28-70 min" and the statement that only 24 of them will run. Answer verbatim: "yes". Recorded in the package's `plan-confirmation.json`. The 29 dispatches that do not run stay missing in the round; closing the round with them unrun is the operator's waiver.
+ - 2026-11-23 - orchestrator: review round 2 run on head b1538097e: 24 reviewer dispatches (13 reviewers over slice-03 and slice-04; sonnet, review-regression on opus), one verifier pass (haiku), one premise pass (opus). Result: 13 findings, 0 blocker, 0 major, 9 minor, 4 info. All 22 findings of round 1 that were in the fix loop are closed against the code; F-022 is closed with a regression (round 2's F-001). Round 2's minors: F-001 a node whose only relationships are links to itself gets a blank Relationships list and the Wiki count still includes them (left by the F-022 fix); F-002 a Wiki-link lookup or a load-more page in flight is dropped when the user leaves the view and returns (brought by the F-004 fix); F-003 a failed quiet catalog re-read shows the error banner (brought by the F-004 fix); F-004 the node-memory write has two spellings; F-005 finding ids in test names; F-006 to F-009 test gaps in the fix code (16 of 34 new mutants survive, two of them judged redundant code). Info, not in the fix loop: F-010 one catalog read per return with no coalescing, F-011 and F-012 the popover is not placed again when its content grows or the page scrolls under it (unmeasured), F-013 two readers of the graph state (not reachable today).
+ - 2026-11-23 - orchestrator: evidence run by the orchestrator in round 2: `keryx review mutate` over round 1's 82 mutants on this head (76 killed, 2 survived as equivalent, 4 invalid on moved lines) and over the 34 mutants review-testing-practices proposed for the fix code (18 killed, 16 survived, 0 invalid; research-evidence/mutation-2.md). Verifier: 10 confirmed (4 by the recorded mutation run, 6 by site check), 0 refuted, 3 unverifiable (F-002 not reproduced by a run, F-011 and F-012 need a render). Premise: 8 upheld, 1 challenged (F-005). Not rendered live: F-001 (none of the project's 129 wiki pages links to itself; the producer's path to a self edge was read in src/integrations/metaproject-explorer.ts:79 and :159-163).
+ - 2026-11-23 - orchestrator: `keryx review ingest` refused review-regression's minor about the dropped lookup (`non-regression-severity`: a minor cannot be a scope-B claim); the reviewer had asked for it to be filed under scope A rather than raised. The orchestrator put the claim to review-logic (the reviewer of the same slice) as a scope-A question; it traced and confirmed it at minor (research-evidence/followup-review-logic-w3.txt) and adds that against the base branch this is not a regression, because there the explorer unmounted on leaving. It is round 2's F-002.
+ - 2026-11-23 - orchestrator: operator asked with the host question tool about F-005, which the premise judge held (the repository already titles tests with the finding id they answer, about 20 test files outside this branch, and no rule says otherwise). Answer verbatim: "dismiss". `keryx review decide-premise` refused the first record because the question's text did not carry the finding id; asked once more with the id in the question, answer verbatim: "dismiss"; recorded in the package's operator-decisions.json. F-005 is closed without a change.
+ - 2026-11-23 - orchestrator: round 2 verdict (`keryx review verdict`): no open blockers or majors; 8 minor to address (F-001 to F-004, F-006 to F-009). Readiness is NOT READY on four items that follow from the operator's choice of scope (files-covered, blast-radius, reviewers, ledger census): closing the round with the 29 dispatches unrun is the operator's waiver. Fix round 2: T22 (behaviour: F-001 to F-004) then T23 (test strength: F-006 to F-009), sequential because both edit MetaprojectView.dom.test.tsx; then review round 3 over the fix commits.
+ - 2026-11-23T10:52:22.579Z - task-attempt: T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)
+ - 2026-11-23T10:52:22.786Z - task-added: T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)
+ - 2026-11-23T10:52:22.977Z - task-added: T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)
+ - 2026-11-23T10:52:23.173Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round
+ - 2026-11-23T10:53:40.447Z - task-attempt: T22: started (attempt 1) — 515-T22 (fix round 2)
+ - 2026-11-23T11:04:12.196Z - task-done: T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)
+ - 2026-11-23 - orchestrator: T22 accepted (worker on opus, STATUS: DONE_WITH_CONCERNS). Verified by the orchestrator: the result file validates against its resolved context; `bunx tsc --noEmit` exit 0; MetaprojectView.dom.test.tsx 71 pass, RelationshipList.dom.test.tsx 13, NodeDetailsPanel.dom.test.tsx 24, App.dom.test.tsx 2, RelationshipGraph.dom.test.tsx 27, graphLayout.test.ts 51, each in its own process; in a scratch copy with the two production files put back to HEAD, seven of the new tests fail (six in the explorer file, one in the list file) and nothing else does, which also reproduces round 2's F-002 by a run (the verifier had it as unverifiable); the diff was read. What changed: the list's empty note and the Wiki disclosure, its condition and its count, come from the grouping rule (F-001); the catalog effect has its own counter `catalogRead`, and `project.current`, the guard of `openPath` and `loadMoreSearch`, moves only for a read that is not quiet (F-002); a quiet read neither clears nor sets `error` (F-003); `remember` is a stable callback that the effect calls (F-004). Committed as the T22 boundary commit a37719ff2.
+ - 2026-11-23 - orchestrator: T22 reported two choices the state x event matrix does not decide; the orchestrator took the default each finding's finish line implies and did not put them to the operator, because both are narrow timing cases with an existing designed response. They are named in the completion report for the operator to overrule. (1) A quiet re-read that finds a changed snapshot replaces the catalog and does not cancel a wiki-link lookup in flight; if that lookup's answer comes from the new snapshot, the existing "Project knowledge changed while loading" banner with Refresh catalog shows. The alternative, dropping the lookup silently, is the defect F-002 was filed for. (2) A return while a catalog read is already in flight (a Retry, the reload after a rebuild) starts no quiet read; the read in flight finishes and shows its own result or failure. The alternative, letting the quiet read replace it, would hide that read's failure. Noticed by the worker and left: the sum incoming + outgoing + second-step is now written in two files (NodeDetailsPanel.tsx:242 and MetaprojectView.tsx).
+ - 2026-11-23T11:04:34.114Z - task-attempt: T23: started (attempt 1) — 515-T23 (fix round 2)
+ - 2026-11-23T11:14:40.285Z - task-done: T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)
+ - 2026-11-23 - orchestrator: T23 accepted (worker on opus, STATUS: DONE). Verified by the orchestrator: the result file validates against its resolved context; in a scratch copy, round 2's surviving mutants re-run against the new tests: R2-2, R2-4, R2-5, R2-6, R2-7, R2-9, R2-16, R2-17, R2-19, R2-26 and R2-28 killed; R2-14 and R2-23, whose lines T22 moved, killed on their new lines; R2-18 survives and is kept as equivalent (the snapshot check in `graphState` cannot change the result, because every full load clears `freshness` in the same update that replaces the catalog); the five branches T22 added (the two `!quiet` gates, the `catalogPending` check and its reset, the `!quietRead.current` gate in the cleanup), mutated by the orchestrator's own script, are all killed, four of them by T22's tests. Ten tests added to MetaprojectView.dom.test.tsx (81 pass) and one to App.dom.test.tsx (3 pass). One production change, a test seam with no change of behaviour: the work-view block of App.tsx is now the exported component `MetaprojectWork`, which takes an optional `explorer` component and passes it `visible`; ProjectWindow renders it with the same props as before. The diff was read. Committed as the T23 boundary commit.
+ - 2026-11-23 - orchestrator: after fix round 2, on the head that holds T22 and T23, run by the orchestrator: `cd apps/desktop && bunx tsc --noEmit` exit 0; `bun test src` 922 pass, 0 fail across 89 files (904 before the round); `bunx vite build` exit 0. Seen live in the browser dev build (Chromium, the worktree's own data): on return to the Metaproject view exactly one `catalog` request leaves and no other, with no alert, the open Wiki page and its Relationships disclosure kept (Agent Bus: "Relationships 13" over 13 rows); the Filters popover opens, closes on leaving the view and stays closed on return, with the explorer hidden and mounted once, after the App.tsx change too. Not seen live: a wiki page that links to itself (the project has none), a failed quiet re-read, a lookup in flight across leaving and returning (each rests on its DOM test); the native Tauri window.
++- 2026-11-23T11:15:31.676Z - task-attempt: T4: started (attempt 3) — review round 3 on the head that holds fix round 2 (T22, T23)
++- 2026-11-23 - orchestrator: review round 3 planned on head 8e0f656fb. `keryx review plan` took round 1 as the previous round, because round 2 ran on part of its plan and is not closed (the tool takes a draft or partial package as a previous round only when its ledger covers the whole scope), and planned a delta over 60cbe1c56..8e0f656fb: 55 dispatches re-reading the fixes round 2 had already reviewed. `keryx review start --prior` with round 2's package fell back to a full review of the branch for the same reason. The orchestrator started the package over the range since round 2's head instead (`keryx review start --no-prior-round --base b1538097e636 --review-id 2026-11-23-review-flow-branch-r03`, then `review scope`, `review blast-radius`, `review slice` and `review required --depth auto --style`), which the tool records as a first round: 17 files, 1316 changed lines, 2 slices (slice-01 the flow's record, slice-02 the code and tests), 13 reviewers, 15 dispatches, within the operator threshold, so no plan confirmation was asked. Round 2's findings were attached to the code slice by the orchestrator's payload script. This keeps to the operator's choice for round 2 ("Только код правок") and was not put to the operator again.
++- 2026-11-23 - orchestrator: review round 3 run: 15 reviewer dispatches (sonnet, review-regression on opus), one verifier pass (haiku), one premise pass (opus). Result: 15 findings, 0 blocker, 0 major, 8 minor, 7 info. Of round 2's eight findings in the fix loop, six are closed against the code (F-001, F-002, F-004, F-006, F-007, F-008), F-003 is closed with a regression (round 3's F-001) and F-009 is partial (round 3's F-005). Round 3's minors: F-001 the banner of a failed catalog read stays after a later quiet re-read has succeeded (raised by review-logic, review-frontend and review-ui-ux; it follows from the finish line the orchestrator gave T22, which did not tell a failed catalog read from a failed rebuild); F-002 to F-005 gaps in the tests of fix round 2 (14 of 20 new mutants survive, two of them judged equivalent or near-equivalent); F-006 tasks.md still gives T4 the dependencies it had before T22 and T23; F-007 the journal's entries on T22 and T23 name no script for the runs they report; F-008 T22's result file names "F-005" without its round. Info, not in the fix loop: F-009 a quiet re-read that fails is never reported, F-010 the "Project knowledge changed while loading" banner can show for a catalog already replaced (the first of the two choices taken without the operator), F-011 a comment at the effect's cleanup, F-012 the row total written in two files, F-013 placement tests on inputs a real layout may not produce, F-014 the graph legend reads raw edges, F-015 the ids of the orchestrator's own mutants.
++- 2026-11-23 - orchestrator: evidence run by the orchestrator in round 3: the impacted test files through `keryx review verify-run` (exit 0); `keryx review mutate` over round 2's 34 mutants on this head (28 killed, 3 survived as equivalent or redundant: R2-12, R2-18, R2-30; 3 invalid on lines T22 moved: R2-14, R2-23, R2-24, each killed on its new line, research-evidence/moved-mutants-2.txt) and over the 20 mutants review-testing-practices proposed (6 killed, 14 survived, research-evidence/mutation-2.md). Verifier: 13 confirmed (4 by the recorded mutation run, 9 by site check), 0 refuted, 2 unverifiable (F-010, F-013). Premise: 8 upheld, none held, so no question went to the operator. `keryx review verdict`: no open blockers or majors; 8 minor to address. `keryx review readiness`: READY, all twelve items pass. Fix round 3: T24 (the code and the tests: F-001 to F-005, a worker) and T25 (the flow's record: F-006 to F-008, the orchestrator); then review round 4 over the fix commits.
++- 2026-11-23T11:39:20.414Z - task-attempt: T4: failed (attempt 4) — review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)
++- 2026-11-23T11:39:20.600Z - task-added: T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)
++- 2026-11-23T11:39:20.777Z - task-added: T25: Fix round 3: flow record (F-006, F-007, F-008)
++- 2026-11-23T11:39:20.963Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23) — review round 3 asked for changes; the review task closes after fix round 3 (T24, T25) and a clean round
++- 2026-11-23T11:39:22.052Z - task-attempt: T24: started (attempt 1) — 515-T24 (fix round 3)
++- 2026-11-23 - orchestrator: T25 done by the orchestrator itself (the flow's record is its own; no worker, no dispatch file). Round 3's F-006: `tasks.md` gives T4 its dependencies through T25, names T22 to T25 in its opening sentence, and has the rows and the section of fix round 3; its 25 rows were compared with `flow.json` by a script (kind and dependencies of every task): no difference. Round 3's F-007: `verification/fix-round-2.md` in this flow's folder holds what was run before T22 and T23 were accepted: how the scratch copy is made, the red check of T22 with the seven tests that fail, and every mutant with its file, anchor, replacement and the test that kills it (twelve of review round 2's, the three on lines T22 moved, and the five of the branches T22 added). The scripts themselves (`scratch_check2.py`, `moved_mutants.py`) stay untracked in the session scratch directory; the entries above on T22 and T23 that say "in a scratch copy" and "the orchestrator's own script" mean those runs. Round 3's F-008: one sentence of `results/T22.result.json` now reads "Round 1's F-005 token rule", with a note in the same sentence that it was reworded after the task had been accepted; the file still validates against its resolved context. Not done: the info finding F-015 (the ids T23-1 to T23-5) is answered only in the verification file, which says what those ids name.
++- 2026-11-23T11:41:39.242Z - task-attempt: T25: started (attempt 1) — 515-T25 (fix round 3, the orchestrator's own record)
++- 2026-11-23T11:41:39.455Z - task-done: T25: Fix round 3: flow record (F-006, F-007, F-008)
++- 2026-11-23T11:53:58.193Z - task-done: T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)
++- 2026-11-23 - orchestrator: T24 accepted (worker on opus, STATUS: DONE_WITH_CONCERNS). What changed: the explorer's `error` state is now `{ source: "catalog" | "rebuild", message } | null`; a quiet re-read that succeeds clears it only when its source is a catalog read, before the branch on the snapshot, so both success paths share one line; every other writer keeps its place (a read that is not quiet clears at its start and sets `catalog` on failure; a rebuild clears at its start and sets `rebuild` on failure); the banner is the only reader (round 3's F-001). Nine tests added: six in MetaprojectView.dom.test.tsx (87 pass), one in RelationshipList.dom.test.tsx (14 pass), two and one assertion in App.dom.test.tsx (5 pass); App.tsx untouched. The worker's table of the banner's states (ten rows: each standing failure followed by each kind of read) is in results/T24.result.json; no cell was left undecided. Verified by the orchestrator, with every run written out in `verification/fix-round-3.md`: the result file validates against its resolved context; `bunx tsc --noEmit` exit 0; `bun test src` 931 pass, 0 fail across 89 files (922 before the round); `bunx vite build` exit 0; root `bun run typecheck` exit 0; in a scratch copy with MetaprojectView.tsx put back to the previous commit, the new F-001 test fails and nothing else does (`scratch_check3.py red`); of review round 3's twelve named mutants, nine are killed (R3-4, R3-7, R3-9, R3-10, R3-14 to R3-18), R3-13 survives (the call site in ProjectWindow, which no test renders; it rests on the live check), and R3-19 and R3-20 survive one at a time and are killed together (a read that is not quiet moves `project.current` twice, in the effect's cleanup and in its body, and either move retires pending work; the worker noted the double move and left it); seven mutants of the F-001 change run by the orchestrator's own script (`t24_mutants.py`) are killed. The diff was read. Seen live in the browser dev build: three returns to the Metaproject view, each with exactly one `catalog` request and no alert; on the first the snapshot had moved since the page was loaded, so the quiet read replaced the catalog and re-read the selection's detail and neighbours (two more requests), and the selected page stayed; on the next two, with the snapshot unchanged, no other request left. Not seen live: a failed catalog read followed by a successful quiet re-read (it rests on its DOM test); the native Tauri window. Committed as the T24 boundary commit 46c472162.
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 1,54 @@
+ # Tasks
+ 
+ Task definitions live here; task **statuses** live in flow.json and are managed
+ only via `keryx flow task done <id> <taskId>`. The table follows `flow.json`: T12–T16 were added
+-while the screen was tuned on a live preview, T17–T21 after review round 1; the journal records why.
++while the screen was tuned on a live preview, T17–T21 after review round 1, T22–T23 after review
++round 2, T24–T25 after review round 3; the journal records why.
+ 
+ | ID | Kind | Title | Depends on | Criteria |
+ |----|------|-------|------------|----------|
+ | T1 | context | Collect remaining context | — | — |
+ | T2 | implement | Implement per plan (scaffold; superseded by T5–T8) | — | — |
+ | T3 | test | Add/adjust tests and make them pass (scaffold; tests live in T5–T8, suite in T10) | — | — |
+-| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 | — |
++| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 | — |
+ | T5 | implement | Graph layout module and RelationshipGraph component (new files) | — | AC1, AC2, AC3, AC4 |
+ | T6 | implement | NodeDetailsPanel and RelationshipList components (new files) | — | AC7, AC8, AC9 |
+ | T7 | implement | Explorer navigation and state fixes D1–D7 | — | AC11, AC12, AC13, AC14, AC15, AC16 (and the code for AC10) |
+ | T8 | implement | Integrate graph and panel into the explorer; filters, counts, cleanup | T5, T6, T7, T12, T13 | AC17, AC18, AC19 (and the code for AC5, AC6, AC20) |
+ | T9 | docs | Update the Desktop Metaproject guide | T12, T13 | AC21 |
+ | T10 | verify | Desktop typecheck and full desktop test suite pass | T8 | AC19 |
+ | T11 | verify | Live browser verification at three window sizes, dark and light | T8, T14 | AC5, AC6, AC10, AC20 |
+ | T12 | implement | Graph polish from the isolated live preview | T5 | AC1, AC2, AC3, AC4 |
+ | T13 | implement | Panel and relationship list polish from the isolated live preview | T6 | AC7, AC8, AC9 |
+ | T14 | implement | Compact filter bar and one-row header on narrow hosts (became the Filters popover) | T8 | AC17, AC19, AC20 |
+ | T15 | docs | Align the guide with the final screen and refresh its screenshots | T14 | AC21 |
+ | T16 | implement | One-line freshness banner with details on demand | T14 | AC19, AC20 |
+ | T17 | implement | Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008) | — | AC10, AC11, AC14, AC16, AC17, AC19, AC20 |
+ | T18 | implement | Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022) | — | AC7, AC8, AC9, AC19 |
+ | T19 | test | Fix round 1: graph test strength (F-012, F-013, F-021) | — | AC1, AC2, AC3, AC4, AC6, AC19 |
+ | T20 | test | Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018) | T17 | AC10, AC11, AC12, AC13, AC16, AC17, AC19 |
+ | T21 | docs | Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes) | T17, T18 | AC21 |
+ | T22 | implement | Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004) | — | AC7, AC10, AC14, AC16, AC19 |
+ | T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
++| T24 | implement | Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005) | — | AC10, AC14, AC16, AC19 |
++| T25 | docs | Fix round 3: flow record (F-006, F-007, F-008) | — | — |
+ 
+ ## Context
+ 
+ - **T1.** Done by the review that preceded this flow; its findings are in `context.md`,
+   "Agent Findings".
+ 
+ ## Implement
+ 
+ - **T5 — graph (wave 1).** New files only, in `apps/desktop/src/metaproject/`: `graphLayout.ts`
+   (pure `layoutNeighborhood`), `graphLayout.test.ts`, `RelationshipGraph.tsx`,
+   `RelationshipGraph.dom.test.tsx`, `graph.css`. Design: `plan.md`, "Graph: a local neighbourhood in
+   columns". Export contract: `plan.md`, "Interfaces between tasks".
+ - **T6 — panel (wave 1).** New files only, in `apps/desktop/src/metaproject/`:
+   `NodeDetailsPanel.tsx`, `NodeDetailsPanel.dom.test.tsx`, `RelationshipList.tsx`,
+   `RelationshipList.dom.test.tsx`, `nodePanel.css`. Design: `plan.md`, "Panel: a summary of the
+   node". The behaviour of the Wiki / OpenSpec document tabs is carried over from
+   `GraphNodePanel.tsx`, which stays untouched until T8.
+ - **T7 — navigation and state (wave 1).** Defects D1–D7 of `context.md` in `MetaprojectView.tsx`
+   (outside the `Graph`, `RelationshipList` and `<GraphNodePanel>` parts), `useExplorerNavigation.ts`
+   and `apps/desktop/src/App.tsx`, with tests in `MetaprojectView.dom.test.tsx`. Behaviour per cell:
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 76,146 @@
+ ## Polish and follow-up tasks (added after the first plan)
+ 
+ - **T12 — graph polish.** Changes the orchestrator asked for after seeing the graph on an isolated
+   live preview; dispatch `dispatch/T12.dispatch.json`.
+ - **T13 — panel and list polish.** The same for the details panel and the relationship list;
+   dispatch `dispatch/T13.dispatch.json`.
+ - **T14 — filters.** Started as a compact filter bar; on the operator's request it became a "Filters"
+   button that opens a popover; dispatch `dispatch/T14.dispatch.json`.
+ - **T15 — guide alignment.** The guide brought in line with the final screen, with the two
+   screenshots replaced; dispatch `dispatch/T15.dispatch.json`.
+ - **T16 — freshness banner.** One line with "Details" on demand; dispatch `dispatch/T16.dispatch.json`.
+ 
+ ## Review
+ 
+ - **T4.** `review-orchestrator` on the flow's diff, with fix rounds through `task-implementer`.
+   Round 1: package `.metaproject/reviews/2026-11-23-review-flow-branch` (29 findings: 2 major,
+   20 minor, 7 info).
+   Round 2 (delta over the fixes of round 1): package
+   `.metaproject/reviews/2026-11-23-review-flow-branch-r02` (13 findings: 9 minor, 4 info; one minor
+   dismissed by the operator).
++  Round 3 (the commits of fix round 2): package
++  `.metaproject/reviews/2026-11-23-review-flow-branch-r03` (15 findings: 8 minor, 7 info).
+ 
+ ## Fix round 1 (findings of review round 1)
+ 
+ Each task's finish line is in its dispatch file; the findings are in the review package's
+ `findings.json`. Info findings are not fixed; they are listed in the completion report.
+ 
+ - **T17 — explorer behaviour.** F-001 (the Filters popover runs past a 720×480 window), F-003 (its
+   Escape layer outlives the visible view), F-004 (re-read the catalog on return, upheld by the
+   operator), F-005 (Wiki-link lookups settled by arrival order), F-006 (a catalog walk on every
+   render), F-008 (Back in OpenSpec lands at the top, upheld by the operator).
+ - **T18 — details panel and relationship list.** F-007 (the fact row also shows the second-step
+   count, the operator's choice), F-022 (a self-loop counted in the panel and skipped in the graph
+   caption), F-019 and F-020 (surviving mutants of the panel and the list).
+ - **T19 — graph test strength.** F-012, F-013, F-021: 22 surviving mutants of `graphLayout.ts` and
+   `RelationshipGraph.tsx`.
+ - **T20 — explorer test strength.** F-011, F-014 to F-018: 26 surviving mutants of
+   `MetaprojectView.tsx`, `useExplorerNavigation.ts` and `App.tsx`; after T17, which edits the same files.
+ - **T21 — flow record and guide.** F-009 (this file), F-010 (the resolved-context and result files the
+   T9 and T15 dispatches name), and the guide where T17 and T18 change what it describes.
+ 
+ ## Fix round 2 (findings of review round 2)
+ 
+ The finding ids below are round 2's. Each task's finish line is in its dispatch file; the findings are
+ in `.metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json`. F-005 (finding ids in test
+ names) was dismissed by the operator; the info findings F-010 to F-013 are not fixed.
+ 
+ - **T22 — explorer behaviour the first fixes left.** F-001 (a node whose only relationships are links
+   to itself gets a blank Relationships list, and the Wiki count still includes them), F-002 (a
+   Wiki-link lookup or a "load more" page in flight is dropped when the user leaves the view and
+   returns), F-003 (a failed quiet catalog re-read shows the error banner), F-004 (two spellings of the
+   node-memory write).
+ - **T23 — test strength of the first fixes.** F-006 to F-009: 14 surviving mutants of the Filters
+   popover placement, the quiet catalog re-read, the node memory and the `visible` wiring in `App.tsx`;
+   after T22, which edits the same files.
++
++## Fix round 3 (findings of review round 3)
++
++The finding ids below are round 3's. The finish line of T24 is in its dispatch file; the findings are in
++`.metaproject/reviews/2026-11-23-review-flow-branch-r03/findings.json`. The info findings F-009 to F-015
++are not fixed.
++
++- **T24 — catalog error and test strength.** F-001 (the banner of a failed catalog read stays after a
++  later quiet re-read has succeeded), F-002 to F-005 (14 surviving mutants of the list's empty note, the
++  Wiki disclosure's count, the counter that retires pending lookups and pages, and the `MetaprojectWork`
++  wiring).
++- **T25 — flow record.** Done by the orchestrator, with no dispatch file: F-006 (this file gave T4 the
++  dependencies it had before T22 and T23), F-007 (the journal's entries on T22 and T23 named no script
++  for the runs they report; `verification/fix-round-2.md` now holds the commands and the mutants),
++  F-008 (T22's result file named "F-005" without its round).
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-2.md
+@@ 1,369 @@
++# Verification runs of fix round 2 (T22, T23)
++
++What the orchestrator ran before it accepted T22 and T23, written out so that the runs can be repeated from
++this file. The journal's entries on T22 and T23 report the results; review round 3 (its F-007) found that they
++named no script and that the scripts lived only in a session scratch directory. Nothing in this file was run
++again when it was written: it records the runs of 2026-11-23 on commits `a37719ff2` (T22) and `8f5bf6d14` (T23).
++
++## How each run was made
++
++Every run used a scratch copy, because a dev server was serving the worktree: `apps/desktop` copied to a temporary
++directory as `<tmp>/apps/desktop` without `node_modules`, `target`, `dist`, `.vite` and `gen`; `apps/desktop/node_modules`,
++the repository's `src` and its `node_modules` linked into the copy at the same relative places. Tests ran from the
++copy's `apps/desktop`, each test file in its own process: `bun test <file>` for a red check, `bun test --bail <file>`
++for a mutant. The orchestrator's scripts for this (`scratch_check2.py` with the modes `red` and `mutants`, and
++`moved_mutants.py`) are not tracked; this section is what they do.
++
++- **Red check.** In the copy, the named production files are replaced by their version at the previous commit
++  (`git show HEAD:<path>` before the task's commit), and the named test files run. A test written for a fix must fail.
++- **Mutant.** In the copy, one anchor (a string that occurs exactly once in its file) is replaced by its replacement,
++  the test file runs with `--bail`, and the file is put back. `killed` means the run exited non-zero.
++
++## T22: the new tests are red without the fix
++
++Production files put back: `apps/desktop/src/metaproject/MetaprojectView.tsx`, `apps/desktop/src/metaproject/RelationshipList.tsx`.
++
++`MetaprojectView.dom.test.tsx`: 65 pass, 6 fail. The six:
++
++- a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none
++- a wiki-link lookup in flight when the explorer is hidden and shown again still settles
++- a page of results in flight when the explorer is hidden and shown again is still appended
++- a failed quiet re-read on return shows no error and leaves the explorer as it was
++- a standing error, such as a failed rebuild's, survives a quiet re-read on return
++- a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown
++
++`RelationshipList.dom.test.tsx`: 12 pass, 1 fail: “a projection whose every edge is left out says it has no relationships”.
++
++## T23: review round 2's surviving mutants
++
++Ids are review round 2's (`R2-n`). Test file: `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`, except R2-28
++(`apps/desktop/src/App.dom.test.tsx`). Run on the tree that held T22 and T23.
++
++### R2-2 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (needed > below && above > below) {
++```
++
++Replacement:
++
++```
++if (needed > below) {
++```
++
++Result: **killed** by “the Filters popover stays under its button when its content fits on neither side and there is less room above”.
++
++### R2-4 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++bottom: Math.max(POPOVER_MARGIN, height - rect.top + POPOVER_GAP)
++```
++
++Replacement:
++
++```
++bottom: height - rect.top + POPOVER_GAP
++```
++
++Result: **killed** by “a Filters button at the window's bottom edge keeps the popover above it 8 px inside the window”.
++
++### R2-5 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++maxHeight: Math.min(MENU_MAX_HEIGHT, above) }
++```
++
++Replacement:
++
++```
++maxHeight: above }
++```
++
++Result: **killed** by “in a tall window the Filters popover keeps the menu's 420 px height cap, under its button and above it”.
++
++### R2-6 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++maxHeight: Math.max(0, Math.min(MENU_MAX_HEIGHT, below)) }
++```
++
++Replacement:
++
++```
++maxHeight: Math.max(0, below) }
++```
++
++Result: **killed** by “in a tall window the Filters popover keeps the menu's 420 px height cap, under its button and above it”.
++
++### R2-7 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++maxHeight: Math.max(0, Math.min(MENU_MAX_HEIGHT, below)) }
++```
++
++Replacement:
++
++```
++maxHeight: Math.min(MENU_MAX_HEIGHT, below) }
++```
++
++Result: **killed** by “in a window too short for any room beside its button, the Filters popover gets no negative height”.
++
++### R2-9 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++return () => window.removeEventListener("resize", place);
++```
++
++Replacement:
++
++```
++return () => {};
++```
++
++Result: **killed** by “a closed Filters popover no longer measures its button when the window is resized”.
++
++### R2-16 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (quiet && result.snapshotId === loadedSnapshot.current) {
++```
++
++Replacement:
++
++```
++if (quiet) {
++```
++
++Result: **killed** by “shown again after the project's knowledge changed, the explorer shows the new catalog”.
++
++### R2-17 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++        setFreshness(null);
++```
++
++Replacement:
++
++_(the anchor is deleted)_
++
++Result: **killed** by “a graph gone stale while hidden shows its reason under Details, and a rebuild's ready reload clears it”.
++
++### R2-18 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog
++```
++
++Replacement:
++
++```
++freshness ?? catalog
++```
++
++Result: **survived**, kept as equivalent. Every full load clears `freshness` in the same update that replaces the catalog, so `freshness` is null or belongs to the loaded snapshot and the snapshot check cannot change the result.
++
++### R2-19 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++const quiet = quietRead.current;
++    quietRead.current = false;
++```
++
++Replacement:
++
++```
++const quiet = quietRead.current;
++```
++
++Result: **killed** by “after a quiet re-read on return, a rebuild's failed catalog reload is still shown”.
++
++### R2-26 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++const freshnessOpen = Boolean(graphState?.graphReason) && freshnessReason === graphState?.graphReason;
++```
++
++Replacement:
++
++```
++const freshnessOpen = Boolean(catalog?.graphReason) && freshnessReason === catalog?.graphReason;
++```
++
++Result: **killed** by “a graph gone stale while hidden shows its reason under Details, and a rebuild's ready reload clears it”.
++
++### R2-28 — `apps/desktop/src/App.tsx`
++
++Anchor:
++
++```
++<MetaprojectView cwd={cwd} visible={view === "metaproject"} onRebuild
++```
++
++Replacement:
++
++```
++<MetaprojectView cwd={cwd} onRebuild
++```
++
++Result: **killed** by “the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return”.
++
++## Mutants on lines T22 moved, and of the branches T22 added
++
++The anchors of R2-14, R2-23 and R2-24 no longer occurred once after T22, so each was written again on the line that
++now carries the behaviour. `T23-1` to `T23-5` are not mutants of T23's code: they are the orchestrator's mutants of
++the five branches T22 added, named after the task whose acceptance they were run for. Test file:
++`apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`. The output of the run is kept, untracked, in the review
++package of round 3 (`research-evidence/moved-mutants-2.txt`).
++
++### R2-14 (moved by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (!returned || !loaded.current || catalogPending.current) return;
++```
++
++Replacement:
++
++```
++if (!returned || catalogPending.current) return;
++```
++
++Result: **killed**; the first failing test: “a return after a failed first catalog read starts no read, and its failure and Retry stay”.
++
++### R2-23 (moved by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++    for (const node of nodes) remember(node);
++```
++
++Replacement:
++
++_(the anchor is deleted)_
++
++Result: **killed**; the first failing test: “a node known only from a search hit keeps its panel once the search is cleared, and Back returns to it at once”.
++
++### R2-24 (moved by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++  }, [nodes, remember]);
++```
++
++Replacement:
++
++```
++  });
++```
++
++Result: **killed**; the first failing test: “a render that changes no node list leaves the explorer's node memory alone”.
++
++### T23-1 (the `!quiet` gate at the start of the catalog effect, added by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++    if (!quiet) {
++      project.current++;
++      setError("");
++    }
++```
++
++Replacement:
++
++```
++    {
++      project.current++;
++      setError("");
++    }
++```
++
++Result: **killed**; the first failing test: “a wiki-link lookup in flight when the explorer is hidden and shown again still settles”.
++
++### T23-2 (the `!quiet` gate in the catch, added by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (generation === catalogRead.current && !quiet) setError(errMessage(cause));
++```
++
++Replacement:
++
++```
++if (generation === catalogRead.current) setError(errMessage(cause));
++```
++
++Result: **killed**; the first failing test: “a failed quiet re-read on return shows no error and leaves the explorer as it was”.
++
++### T23-3 (the `catalogPending` check in the visible effect, added by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (!returned || !loaded.current || catalogPending.current) return;
++```
++
++Replacement:
++
++```
++if (!returned || !loaded.current) return;
++```
++
++Result: **killed**; the first failing test: “a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown”.
++
++### T23-4 (the reset of `catalogPending`, added by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++          catalogPending.current = false;
++```
++
++Replacement:
++
++_(the anchor is deleted)_
++
++Result: **killed**; the first failing test: “shown again after being hidden, the explorer re-reads the catalog once and quietly, keeping its state”.
++
++### T23-5 (the `!quietRead.current` gate in the effect's cleanup, added by T22) — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (!quietRead.current) project.current++;
++```
++
++Replacement:
++
++```
++project.current++;
++```
++
++Result: **killed**; the first failing test: “a wiki-link lookup in flight when the explorer is hidden and shown again still settles”.
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json
+@@ 43,64 @@
+         "Bump project.current when a quiet read applies a changed catalog, so pending lookups and pages are dropped silently as a Refresh would drop them."
+       ]
+     },
+     {
+       "description": "Returning to the view while a catalog read is already in flight (for example the reload after a successful rebuild, or a Retry) starts no quiet re-read; the read in flight is left to finish and shows its own result or failure. Before, the quiet read superseded it and that read's failure was lost.",
+       "user_visible": true,
+       "needs_operator": true,
+       "alternatives": [
+         "Let the quiet read supersede the read in flight and inherit its loudness (report a failure).",
+         "Let the quiet read supersede it silently, as round 1's fix did on the success path."
+       ]
+     },
+     {
+       "description": "A Wiki page whose only relationships are left out by the grouping rule (a self `links` edge to a heading of its own file, or an edge with a missing end) shows no Relationships disclosure; otherwise the disclosure's count equals the rows it lists. The guide's sentences 'A relationship from an item to itself is neither listed nor counted.' and the table row 'A page has no **Relationships** section' already describe this; no guide sentence is contradicted.",
+       "user_visible": true,
+       "needs_operator": false,
+       "alternatives": []
+     }
+   ],
+   "not_touched": [],
+-  "notes": "Readers of what changed. (1) RelationshipList empty note: rendered by RelationshipList itself, which is used by NodeDetailsPanel.tsx:265 (panel Relationships tab) and MetaprojectView's Wiki disclosure; both now show the note whenever no row is listed. groupRelationships/summarizeRelationships are unchanged; summarizeRelationships is read by NodeDetailsPanel.tsx:199 (fact row and tab count) and now also by MetaprojectView (Wiki disclosure), so the fact row, tab count, disclosure count and listed rows come from groupRelationships. (2) project.current: read by openPath (MetaprojectView.tsx:694-695) and loadMoreSearch (646, 654, 660). They now see it unchanged across a quiet re-read and moved by every other catalog read (new protocol, Retry, Refresh catalog, Rebuild's reload, relationship/detail Retry, which all bump revision with quietRead false) and by the catalog effect's cleanup on unmount (another project remounts the Explorer by key). The F-005 token rule in openPath (lookup.current) is untouched. (3) catalogRead (new) is read only by the catalog effect: the quiet read still drops its own superseded result and a later read drops it. (4) catalogPending (new) is read only by the visible effect. (5) error: also set/cleared by rebuild() (673-681 region) and read by the banner; a quiet read no longer touches it. (6) remember: called by the node-memory effect and by viewInGraph (619); it is now stable (useCallback, empty deps; it writes only the seenNodes ref), so the effect's dependency list [nodes, remember] is honest and the effect still runs only when nodes changes (the existing test 'a render that changes no node list leaves the explorer's node memory alone' passes). Quiet-path lines for T23 (MetaprojectView.tsx after this change): refs project/catalogRead/catalogPending/loaded/loadedSnapshot/quietRead at 326-337; the visible effect at 340-349 with the new catalogPending guard at 346; the catalog effect at 371-416: generation from catalogRead at 373, loud-only project bump and setError(\"\") at 376-379, catalogPending set at 381, superseded check at 387, quiet unchanged-snapshot branch right after, catch with the quiet guard at 403, finally clearing catalogPending at 405-408, cleanup at 411-415. Test file: new helpers showView(props, visible) and catalogErrorBanner() sit after the last pre-existing test (around line 1313) for T23 to reuse; the new tests follow them. suggested_fix diverged: F-002 — the reviewer offered either skipping the project bump while quiet or restoring the counter in the unchanged-snapshot branch; I split the counter instead (catalogRead for superseded catalog results, project.current for retiring pending work) because the restore variant would still drop work when a quiet read applies a changed catalog mid-flight and would leave a window between bump and restore. F-003 — beyond the suggestion, a return while a catalog read is in flight now starts no quiet read, because otherwise the quiet read supersedes a loud read and its failure (which the finish line requires to be reported as today) would vanish. F-001 and F-004 followed the suggestions; for F-004 remember was made stable with useCallback so calling it from the effect keeps the dependency list honest, as the task required. All four findings reproduced (red output above). Red-run output quoted: 'restored to HEAD in the copy: src/metaproject/MetaprojectView.tsx', 'restored to HEAD in the copy: src/metaproject/RelationshipList.tsx', '== src/metaproject/MetaprojectView.dom.test.tsx: exit 1; 65 pass | 6 fail', failing: 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' (F-001), 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' and 'a page of results in flight when the explorer is hidden and shown again is still appended' (F-002), 'a failed quiet re-read on return shows no error and leaves the explorer as it was', 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' and 'a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown' (F-003); '== src/metaproject/RelationshipList.dom.test.tsx: exit 1; 12 pass | 1 fail', failing 'a projection whose every edge is left out says it has no relationships' (F-001). F-004 is a no-behaviour-change refactor and has no red test. Not verified: the whole desktop suite (bun test src) was not run, per the dispatch's scope; round 2's mutants were not run; AC10 (judged, browser dev build) was not checked in a browser. The .metaproject changes in git status predate this task. No commit made."
++  "notes": "Readers of what changed. (1) RelationshipList empty note: rendered by RelationshipList itself, which is used by NodeDetailsPanel.tsx:265 (panel Relationships tab) and MetaprojectView's Wiki disclosure; both now show the note whenever no row is listed. groupRelationships/summarizeRelationships are unchanged; summarizeRelationships is read by NodeDetailsPanel.tsx:199 (fact row and tab count) and now also by MetaprojectView (Wiki disclosure), so the fact row, tab count, disclosure count and listed rows come from groupRelationships. (2) project.current: read by openPath (MetaprojectView.tsx:694-695) and loadMoreSearch (646, 654, 660). They now see it unchanged across a quiet re-read and moved by every other catalog read (new protocol, Retry, Refresh catalog, Rebuild's reload, relationship/detail Retry, which all bump revision with quietRead false) and by the catalog effect's cleanup on unmount (another project remounts the Explorer by key). Round 1's F-005 token rule in openPath (lookup.current) is untouched (this sentence was reworded during T25, after the task had been accepted: review round 3's F-008 asked that the id carry its round). (3) catalogRead (new) is read only by the catalog effect: the quiet read still drops its own superseded result and a later read drops it. (4) catalogPending (new) is read only by the visible effect. (5) error: also set/cleared by rebuild() (673-681 region) and read by the banner; a quiet read no longer touches it. (6) remember: called by the node-memory effect and by viewInGraph (619); it is now stable (useCallback, empty deps; it writes only the seenNodes ref), so the effect's dependency list [nodes, remember] is honest and the effect still runs only when nodes changes (the existing test 'a render that changes no node list leaves the explorer's node memory alone' passes). Quiet-path lines for T23 (MetaprojectView.tsx after this change): refs project/catalogRead/catalogPending/loaded/loadedSnapshot/quietRead at 326-337; the visible effect at 340-349 with the new catalogPending guard at 346; the catalog effect at 371-416: generation from catalogRead at 373, loud-only project bump and setError(\"\") at 376-379, catalogPending set at 381, superseded check at 387, quiet unchanged-snapshot branch right after, catch with the quiet guard at 403, finally clearing catalogPending at 405-408, cleanup at 411-415. Test file: new helpers showView(props, visible) and catalogErrorBanner() sit after the last pre-existing test (around line 1313) for T23 to reuse; the new tests follow them. suggested_fix diverged: F-002 — the reviewer offered either skipping the project bump while quiet or restoring the counter in the unchanged-snapshot branch; I split the counter instead (catalogRead for superseded catalog results, project.current for retiring pending work) because the restore variant would still drop work when a quiet read applies a changed catalog mid-flight and would leave a window between bump and restore. F-003 — beyond the suggestion, a return while a catalog read is in flight now starts no quiet read, because otherwise the quiet read supersedes a loud read and its failure (which the finish line requires to be reported as today) would vanish. F-001 and F-004 followed the suggestions; for F-004 remember was made stable with useCallback so calling it from the effect keeps the dependency list honest, as the task required. All four findings reproduced (red output above). Red-run output quoted: 'restored to HEAD in the copy: src/metaproject/MetaprojectView.tsx', 'restored to HEAD in the copy: src/metaproject/RelationshipList.tsx', '== src/metaproject/MetaprojectView.dom.test.tsx: exit 1; 65 pass | 6 fail', failing: 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' (F-001), 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' and 'a page of results in flight when the explorer is hidden and shown again is still appended' (F-002), 'a failed quiet re-read on return shows no error and leaves the explorer as it was', 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' and 'a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown' (F-003); '== src/metaproject/RelationshipList.dom.test.tsx: exit 1; 12 pass | 1 fail', failing 'a projection whose every edge is left out says it has no relationships' (F-001). F-004 is a no-behaviour-change refactor and has no red test. Not verified: the whole desktop suite (bun test src) was not run, per the dispatch's scope; round 2's mutants were not run; AC10 (judged, browser dev build) was not checked in a browser. The .metaproject changes in git status predate this task. No commit made."
+ }
+
+--- apps/desktop/src/App.dom.test.tsx
+@@ 1,27 @@
+ import { afterAll, beforeAll, expect, test } from "bun:test";
+ import type { Root } from "react-dom/client";
+ import { registerDom, unregisterDom } from "./test/dom";
+ import type { View } from "./shell/AppShell";
+ 
++type ExplorerProps = { cwd: string; visible?: boolean; onRebuild: () => Promise<boolean>; onDraft?: (task: string) => Promise<void> };
++
+ let React: typeof import("react");
+ let RetainedView: typeof import("./App").RetainedView;
+ let MetaprojectWork: typeof import("./App").MetaprojectWork;
+ let root: Root;
+ let host: HTMLElement;
+ 
+ beforeAll(async () => {
+   registerDom();
+   React = await import("react");
+   ({ RetainedView, MetaprojectWork } = await import("./App"));
+   host = document.createElement("div");
+   document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ afterAll(async () => { await React.act(() => root.unmount()); await unregisterDom(); });
+ 
+ function Draft() {
+   const [value, setValue] = React.useState("");
+   return React.createElement("input", { "aria-label": "Draft", value, onChange: (event: { target: { value: string } }) => setValue(event.target.value) });
+ }
+
+--- apps/desktop/src/App.dom.test.tsx
+@@ 69,117 @@
+ 
+ test("the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return", async () => {
+   // A stand-in explorer records the `visible` it is given; the real one closes its Filters popover and re-reads its catalog on it.
+   const given: Array<boolean | undefined> = [];
+   const Explorer = ({ visible }: { visible?: boolean }) => { given.push(visible); return React.createElement("p", null, "Explorer"); };
+   const render = (view: View, workView: Exclude<View, "settings">) => React.act(async () => {
+     root.render(React.createElement(MetaprojectWork, { cwd: "/project", view, workView, onRebuild: async () => false, onDraft: async () => {}, explorer: Explorer }));
+   });
+   await render("metaproject", "metaproject");
+   expect(host.textContent).toContain("Explorer");
+   expect(given.at(-1)).toBe(true);
+   await render("flows", "flows");
+   // Still mounted, hidden: the explorer keeps its state and hears that it left the screen.
+   expect(host.querySelector("p")?.closest("[hidden]")).not.toBeNull();
+   expect(given.at(-1)).toBe(false);
+   await render("metaproject", "metaproject");
+   expect(given.at(-1)).toBe(true);
+   // Settings opened over the explorer hides it too.
+   await render("settings", "metaproject");
+   expect(given.at(-1)).toBe(false);
++  // The view itself is hidden under Settings, not only told so.
++  expect(host.querySelector("p")?.closest("[hidden]")).not.toBeNull();
++});
++
++test("the Metaproject explorer is given the app's rebuild and draft callbacks", async () => {
++  const calls: string[] = [];
++  let props: ExplorerProps | undefined;
++  const Explorer = (given: ExplorerProps) => { props = given; return React.createElement("p", null, "Explorer"); };
++  await React.act(async () => {
++    root.render(React.createElement(MetaprojectWork, {
++      cwd: "/project", view: "metaproject", workView: "metaproject", explorer: Explorer,
++      onRebuild: async () => { calls.push("rebuild"); return true; },
++      onDraft: async (task: string) => { calls.push(`draft ${task}`); },
++    }));
++  });
++  expect(props?.cwd).toBe("/project");
++  expect(await props?.onRebuild()).toBe(true);
++  await props?.onDraft?.("Document the client");
++  expect(calls).toEqual(["rebuild", "draft Document the client"]);
++});
++
++test("without a stand-in, the app's explorer is loaded lazily behind a visible loading status", async () => {
++  // Rendered and removed synchronously: the real explorer, which would read the CLI, never mounts here.
++  await React.act(() => {
++    root.render(React.createElement(MetaprojectWork, { cwd: "/project", view: "metaproject", workView: "metaproject", onRebuild: async () => false, onDraft: async () => {} }));
++  });
++  expect(host.querySelector('[role="status"]')?.textContent).toBe("Loading Metaproject…");
++  await React.act(() => { root.render(null); });
+ });
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 1620,1811 @@
+   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "search"
+     ? Promise.resolve({ ...snapshot, hits: input.query === "far" ? [{ node: far, snippet: "far away" }] : [] })
+     : request(cwd, input);
+   const debounce = holdDebounce();
+   try {
+     await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+     await typeQuery("far");
+     await debounce.run();
+     await act(async () => { listRow("Far module").click(); });
+     expect(panelTitle()).toBe("Far module");
+     // The hit is gone from the list; the node is in neither the catalog nor any read the explorer holds now.
+     await typeQuery("");
+     expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Far module");
+     expect(panelTitle()).toBe("Far module");
+     await act(async () => { listRow("Client").click(); });
+     expect(panelTitle()).toBe("Client");
+     await act(async () => { button("Back").click(); });
+     expect(panelTitle()).toBe("Far module");
+   } finally { debounce.restore(); }
+ });
++
++// ---- Fix round 3 (T24): a quiet re-read and the catalog error, and test strength of fix round 2. ----
++
++test("a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not", async () => {
++  const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
++  let snapshotId = "one";
++  let failure = "";
++  let catalogReads = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      if (failure) return Promise.reject(new Error(failure));
++      return Promise.resolve(snapshotId === "one" ? catalog : { ...catalog, snapshotId, nodes: [page, file, server], counts: { files: 2, wiki: 1, modules: 0 } });
++    }
++    return request(cwd, input).then(result => ({ ...result, snapshotId }));
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
++  await showView(props, true);
++  // The reload after a rebuild fails: its banner and Retry show above the catalog still loaded.
++  failure = "The index is being written.";
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
++  // A failed quiet re-read on return neither removes that banner nor replaces its message.
++  failure = "The CLI is busy.";
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(3);
++  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
++  expect(host.textContent).not.toContain("The CLI is busy.");
++  // The catalog can be read again, with the same snapshot: the banner goes.
++  failure = "";
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(4);
++  expect(catalogErrorBanner()?.textContent).toBeUndefined();
++  expect(freshnessBanner()?.textContent).toContain("Graph is missing.");
++  // A failed Retry shows the banner again; the next quiet read finds a changed snapshot, shows it, and the banner goes.
++  failure = "The CLI is not ready.";
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
++  await act(async () => { button("Retry").click(); });
++  expect(catalogReads).toBe(6);
++  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
++  failure = "";
++  snapshotId = "two";
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(7);
++  expect(catalogErrorBanner()?.textContent).toBeUndefined();
++  expect(listRow("Server").textContent).toContain("src/server.ts");
++});
++
++test("a failed rebuild's message outlives a catalog read that was already in flight and then succeeds", async () => {
++  let release: () => void = () => {};
++  let catalogReads = 0;
++  const reader = (hold: boolean) => (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      if (hold) return new Promise(resolve => { release = () => resolve(catalog); });
++    }
++    return request(cwd, input);
++  };
++  const onRebuild = async (): Promise<boolean> => { throw new Error("Rebuild failed: index locked."); };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(false), onRebuild })); });
++  // A new reader identity reloads the catalog, loudly; that read is held while a rebuild fails.
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(true), onRebuild })); });
++  expect(catalogReads).toBe(2);
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
++  await act(async () => { release(); });
++  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
++});
++
++test("a rebuild's catalog reload retires a wiki-link lookup in flight: it neither opens its target nor names a path", async () => {
++  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
++  const pending = new Map<string, () => void>();
++  let catalogReads = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") catalogReads++;
++    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Missing](missing.md) [Far](../src/far.ts)" });
++    if (input.action === "search") {
++      const query = input.query;
++      return new Promise(resolve => { pending.set(query, () => resolve({ ...snapshot, hits: query === far.path ? [{ node: far }] : [] })); });
++    }
++    return request(cwd, input);
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => true })); });
++  await act(async () => { button("Wiki").click(); });
++  await act(async () => { wikiLink("Missing").click(); });
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogReads).toBe(2);
++  await act(async () => { pending.get("wiki/missing.md")?.(); });
++  expect(wikiArticle()?.textContent).toContain("Intro.");
++  expect(wikiArticle()?.textContent).not.toContain("No indexed project file");
++  await act(async () => { wikiLink("Far").click(); });
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogReads).toBe(3);
++  await act(async () => { pending.get(far.path)?.(); });
++  expect(panelTitle()).toBeUndefined();
++  expect(button("Wiki").getAttribute("aria-pressed")).toBe("true");
++  expect(wikiArticle()?.querySelector("h2")?.textContent).toBe("Guide");
++});
++
++test("a rebuild's catalog reload retires a page of results in flight: it is not appended", async () => {
++  const debounce = holdDebounce();
++  let releasePage: () => void = () => {};
++  let catalogReads = 0;
++  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
++    if (input.action === "catalog") { catalogReads++; return { ...catalog, schemaVersion: 2 }; }
++    if (input.action === "search") {
++      if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
++      return new Promise(resolve => { releasePage = () => resolve({ schemaVersion: 2, snapshotId: "one", hits: [{ node: { ...page, id: "second-page", title: "Second Wiki page" }, scope: "wiki" }], partial: false }); });
++    }
++    if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
++    return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
++  };
++  const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: async () => true, createCytoscape: await headlessCytoscape() };
++  try {
++    await showView(props, true);
++    await act(async () => { button("Wiki").click(); });
++    await typeQuery("query");
++    await debounce.run();
++    await act(async () => { button("Load more results").click(); });
++    await act(async () => { button("Rebuild graph").click(); });
++    expect(catalogReads).toBe(2);
++    await act(async () => { releasePage(); });
++    expect(host.querySelector(".metaproject-list")?.textContent).toContain("Guide");
++    expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Second Wiki page");
++  } finally { debounce.restore(); }
++});
++
++test("a Wiki page's Relationships disclosure counts a second-step row with the adjacent ones", async () => {
++  // A limited catalog of a built graph makes the explorer read the neighbourhood from the CLI, which this test answers.
++  const limited = { ...catalog, truncated: true, graph: "ready" as const };
++  const edges: MetaprojectEdge[] = [{ from: page.id, to: file.id, kind: "describes" }, { from: file.id, to: third.id, kind: "imports" }];
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") return Promise.resolve(limited);
++    if (input.action === "neighbors") return Promise.resolve({ ...snapshot, root: input.id, nodes: [page, file, third], edges, truncated: false });
++    return request(cwd, input);
++  };
++  const createCytoscape = await headlessCytoscape();
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild, createCytoscape })); });
++  await act(async () => { button("Wiki").click(); });
++  const section = host.querySelector(".metaproject-relationship-section");
++  expect(section?.querySelector("summary .count-label")?.textContent).toBe("2");
++  expect(section?.querySelectorAll('[data-direction="outgoing"] .metaproject-rel-row')).toHaveLength(1);
++  expect(section?.querySelector('[data-direction="second-step"] summary')?.textContent?.replace(/\s+/g, " ").trim()).toBe("Second step 1");
++  expect(section?.querySelectorAll('[data-direction="second-step"] .metaproject-rel-second')).toHaveLength(1);
++});
++
++test("a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone", async () => {
++  let catalogReads = 0;
++  let finish: (value: boolean) => void = () => {};
++  let rebuilds = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      if (catalogReads === 2) return Promise.reject(new Error("The index is being written."));
++    }
++    return request(cwd, input);
++  };
++  const onRebuild = () => { rebuilds++; return rebuilds === 1 ? Promise.resolve(true) : new Promise<boolean>(resolve => { finish = resolve; }); };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild })); });
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(button("Rebuilding…").disabled).toBe(true);
++  expect(catalogErrorBanner()?.textContent).toBeUndefined();
++  await act(async () => { finish(false); });
++  expect(catalogReads).toBe(2);
++  expect(catalogErrorBanner()?.textContent).toBeUndefined();
++});
+
+--- apps/desktop/src/metaproject/RelationshipList.dom.test.tsx
+@@ 172,205 @@
+   expect(summarize(dangling)).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1 });
+   await act(async () => { root.render(createElement(List, { projection: dangling, select: () => {} })); });
+   expect(groupHeadings("h3")).toEqual(["Incoming 3", "Outgoing 2", "Second step 1"]);
+ });
+ 
+ test("exactly two evidence lines show both and no 'more' line", async () => {
+   const two = projection({
+     edges: [{ from: guide.id, to: client.id, kind: "describes", evidence: ["guide:3", "guide:9"] }],
+   });
+   await act(async () => { root.render(createElement(List, { projection: two, select: () => {} })); });
+   await act(async () => { host.querySelector<HTMLButtonElement>(".metaproject-rel-toggle")!.click(); });
+   expect([...host.querySelectorAll(".metaproject-rel-evidence li")].map(item => item.textContent)).toEqual(["guide:3", "guide:9"]);
+ });
+ 
+ test("a count beside evidence lines labels the disclosure and is not repeated on the row", async () => {
+   await act(async () => { root.render(createElement(List, { projection: projection(), select: () => {} })); });
+   const item = host.querySelector('[data-direction="outgoing"] button[title="src/server.ts"]')!.closest("li")!;
+   expect(item.querySelector(".metaproject-rel-toggle")?.textContent?.trim()).toBe("7 imports");
+   expect(item.textContent?.split("7 imports")).toHaveLength(2);
+ });
++
++test("a projection with rows in some groups only lists them and does not say it is empty", async () => {
++  const incomingOnly = projection({ edges: [{ from: guide.id, to: client.id, kind: "describes" }] });
++  await act(async () => { root.render(createElement(List, { projection: incomingOnly, select: () => {} })); });
++  expect(host.textContent).not.toContain("No relationships for these filters.");
++  expect(groupHeadings("h3")).toEqual(["Incoming 1"]);
++  // An edge between two neighbours of the root, and none at the root, is a second-step row.
++  const secondStepOnly = projection({ edges: [{ from: server.id, to: api.id, kind: "calls" }] });
++  expect(summarize(secondStepOnly)).toMatchObject({ incoming: 0, outgoing: 0, secondStep: 1 });
++  await act(async () => { root.render(createElement(List, { projection: secondStepOnly, select: () => {} })); });
++  expect(host.textContent).not.toContain("No relationships for these filters.");
++  expect(groupHeadings("h3")).toEqual(["Second step 1"]);
++});
+
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 296,338 @@
+   const filtersDialogId = useId();
+   // The freshness reason is shown on demand; remembering which reason was opened closes it when the text changes.
+   const [freshnessReason, setFreshnessReason] = useState<string | null>(null);
+   const freshnessReasonId = useId();
+   // Wiki reads a page's relationships with fixed defaults; only Graph applies its filters.
+   const relationDepth = mode === "wiki" ? 1 : depth;
+   const relationDirection = mode === "wiki" ? "both" : direction;
+   const relationKinds = mode === "wiki" ? protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1 : kinds;
+   const [searchResult, setSearchResult] = useState<{
+     mode: "graph" | "wiki";
+     query: string;
+     snapshotId: string;
+     hits: MetaprojectHit[];
+     nextCursor?: string;
+   } | null>(null);
+   const [snapshotMismatch, setSnapshotMismatch] = useState(false);
+   const [detail, setDetail] = useState<MetaprojectDetail | null>(null);
+   const [projection, setProjection] = useState<MetaprojectNeighbors | null>(
+     null,
+   );
+-  const [error, setError] = useState("");
++  // The explorer's error banner, with what failed: a catalog read or a rebuild. A quiet re-read that succeeds
++  // removes only a catalog read's failure; a rebuild's stands until the next read or rebuild the user starts.
++  const [error, setError] = useState<{ source: "catalog" | "rebuild"; message: string } | null>(null);
+   const [detailError, setDetailError] = useState("");
+   const [relationshipError, setRelationshipError] = useState("");
+   const [searchError, setSearchError] = useState<{ query: string; message: string } | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [loadingDetail, setLoadingDetail] = useState(false);
+   const [loadingRelationships, setLoadingRelationships] = useState(false);
+   const [searchAttempt, setSearchAttempt] = useState(0);
+   const [rebuilding, setRebuilding] = useState(false);
+   const [revision, setRevision] = useState(0);
+   // Retires pending work (wiki-link lookups, pages of results): moved by every catalog read except
+   // the quiet one, which is no new project, protocol, Retry, Refresh or Rebuild.
+   const project = useRef(0);
+   // The catalog read whose result may still apply; every read, the quiet one included, supersedes the last.
+   const catalogRead = useRef(0);
+   const catalogPending = useRef(false);
+   const loaded = useRef(false);
+   const loadedSnapshot = useRef<string>();
+   // Shown again after being hidden, the explorer re-reads the catalog once, quietly: an unchanged
+-  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads, and a
+-  // failure leaves the explorer as it was, any standing error included.
++  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads; success
++  // removes a failed catalog read's banner, and a failure leaves the explorer as it was, any standing error included.
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 360,427 @@
+   const [documentProblem, setDocumentProblem] = useState("");
+   const panelOpen = route.mode === "graph" && route.panelOpen;
+   // The graph's freshness as last read: a quiet re-read's, while it is for the loaded snapshot.
+   const graphState = catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog;
+   const graphIndex = useMemo(
+     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
+     [catalog],
+   );
+   const selectedNode = graphIndex?.byId.get(selection);
+   const searchQuery = query.trim();
+   if (latestSearch.current.query !== searchQuery || latestSearch.current.snapshot !== catalog?.snapshotId) {
+     latestSearch.current = { query: searchQuery, snapshot: catalog?.snapshotId ?? "", generation: latestSearch.current.generation + 1 };
+   }
+   useEffect(() => {
+     if (protocol === null) return;
+     const generation = ++catalogRead.current;
+     const quiet = quietRead.current;
+     quietRead.current = false;
+     if (!quiet) {
+       project.current++;
+-      setError("");
++      setError(null);
+     }
+     if (!loaded.current) setLoading(true);
+     catalogPending.current = true;
+     void (async () => {
+       try {
+         const result = (await read(cwd, {
+           action: "catalog",
+         })) as MetaprojectCatalog;
+         if (generation !== catalogRead.current) return;
+         loaded.current = true;
++        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.
++        if (quiet) setError(current => current?.source === "catalog" ? null : current);
+         if (quiet && result.snapshotId === loadedSnapshot.current) {
+           setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });
+           return;
+         }
+         setCatalog(result);
+         setFreshness(null);
+         setSnapshotMismatch(false);
+         if (loadedSnapshot.current && loadedSnapshot.current !== result.snapshotId && !result.truncated) {
+           setRoute(current => current.mode !== "openspec" && !result.nodes.some(node => node.id === current.selection)
+             ? { ...current, selection: "" } : current);
+         }
+         loadedSnapshot.current = result.snapshotId;
+       } catch (cause) {
+         // A failed quiet read keeps the loaded catalog; the next read the user starts reports a lasting failure.
+-        if (generation === catalogRead.current && !quiet) setError(errMessage(cause));
++        if (generation === catalogRead.current && !quiet) setError({ source: "catalog", message: errMessage(cause) });
+       } finally {
+         if (generation === catalogRead.current) {
+           catalogPending.current = false;
+           setLoading(false);
+         }
+       }
+     })();
+     return () => {
+       catalogRead.current++;
+       // Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work.
+       if (!quietRead.current) project.current++;
+     };
+   }, [cwd, read, revision, protocol, setRoute]);
+   useEffect(() => {
+     if (!catalog || !searchQuery || mode === "openspec") return;
+     const key = JSON.stringify([catalog.snapshotId, mode, searchQuery]);
+     const cached = searchCache.current.get(key);
+     setSearchError(null);
+     if (cached) { setSearchResult(cached); return; }
+     setSearchResult(null);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 657,701 @@
+       });
+       if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current || searchMode !== activeMode.current) return;
+       if (page.snapshotId !== resolvedSearch.snapshotId) { setSnapshotMismatch(true); return; }
+       setSearchResult(current => current?.nextCursor === cursor && current.snapshotId === page.snapshotId
+         ? { mode: searchMode, query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
+         : current);
+     } catch (cause) {
+       if (generation === latestSearch.current.generation && projectGeneration === project.current)
+         setSearchError({ query: searchQuery, message: errMessage(cause) });
+     } finally { pageInFlight.current = false; }
+   };
+   // A rebuild outlives catalog reloads; only leaving the explorer (unmount, or a project
+   // change, which remounts it) stops it from writing state.
+   const mounted = useRef(true);
+   useEffect(() => {
+     mounted.current = true;
+     return () => { mounted.current = false; };
+   }, []);
+   const rebuild = async () => {
+     setRebuilding(true);
+-    setError("");
++    setError(null);
+     try {
+       if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);
+     } catch (cause) {
+-      if (mounted.current) setError(errMessage(cause));
++      if (mounted.current) setError({ source: "rebuild", message: errMessage(cause) });
+     } finally {
+       if (mounted.current) setRebuilding(false);
+     }
+   };
+   const [unresolvedLink, setUnresolvedLink] = useState<{ selection: string; path: string; message: string } | null>(null);
+   // Every link click takes a new token; only the lookup holding the latest one may settle.
+   const lookup = useRef(0);
+   const openPath = (path: string, fragment: string | undefined, resolved: boolean) => {
+     const token = ++lookup.current;
+     const from = selection;
+     const unresolved = (message: string) => setUnresolvedLink({ selection: from, path, message });
+     setUnresolvedLink(null);
+     if (!resolved) { unresolved(`The link ${path} is not a valid repository path.`); return; }
+     const loaded = nodes.find(item => item.path === path);
+     if (loaded) { openDocument(loaded, fragment); return; }
+     const snapshotId = catalog?.snapshotId;
+     const generation = project.current;
+     const current = () => token === lookup.current && generation === project.current && shownSelection.current === from && activeMode.current === "wiki";
+     void (async () => {
+       try {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 828,868 @@
+             aria-label="Search project knowledge"
+             placeholder={mode === "openspec" ? "Search OpenSpec" : mode === "wiki" ? "Search Wiki" : "Search names, paths and wiki text"}
+             value={query}
+             onChange={event => { const query = event.target.value; setRoute(current => ({ ...current, query })); }}
+           />
+         </label>
+         <div className="segmented" role="group" aria-label="View">
+           <button aria-pressed={mode === "graph"} onClick={() => switchView("graph")}><Icon name="branch" size={14} />Graph</button>
+           <button aria-pressed={mode === "wiki"} onClick={() => switchView("wiki")}><Icon name="file" size={14} />Wiki</button>
+           <button aria-pressed={mode === "openspec"} onClick={() => switchView("openspec")}><Icon name="file" size={14} />OpenSpec</button>
+         </div>
+       </header>
+       {protocolError && (
+         <div className="inline-banner tone-warn" role="alert">
+           <span>{protocolError}</span>
+           <button className="btn btn-sm" onClick={() => setNegotiation(value => value + 1)}>Retry</button>
+         </div>
+       )}
+       {error && (
+         <div className="inline-banner tone-warn" role="alert">
+-          <span>{error}</span>
++          <span>{error.message}</span>
+           <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+         </div>
+       )}
+       {snapshotMismatch && (
+         <div className="inline-banner tone-warn" role="alert">
+           <span>Project knowledge changed while loading.</span>
+           <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Refresh catalog</button>
+         </div>
+       )}
+       {protocol === 2 && <OpenSpecView
+         cwd={cwd}
+         active={route.mode === "openspec"}
+         query={route.mode === "openspec" ? route.query : ""}
+         location={route.mode === "openspec" ? route.location : null}
+         collection={route.mode === "openspec" ? route.collection : "spec"}
+         snapshot={catalog?.snapshotId}
+         onLocation={location => navigate(current => current.mode === "openspec" && !sameLocation(current.location, location)
+           ? { ...current, location } : null, { resetContent: true })}
+         onCollection={collection => setRoute(current => current.mode === "openspec" ? { ...current, collection, location: null } : current)}
+         onOpen={openSpec}

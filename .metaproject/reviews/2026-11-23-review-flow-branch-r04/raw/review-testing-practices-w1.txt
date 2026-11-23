@@ -1,0 +1,163 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+ "status": "DONE",
+ "reviewer": "review-testing-practices",
+ "summary": "F-002 to F-005 are closed: their mutants (R3-4, R3-7, R3-9, R3-10, R3-14 to R3-18, T24-7) are killed by tests that assert what the list and the explorer show; R3-19 and R3-20 are redundant code one at a time, T24-3 is equivalent, and R3-13 is reasonably left to the live check. The nine tests and the added assertion assert observable state, restore what they replace and, in the App test without a stand-in, unmount before the lazy explorer loads. Two minor gaps remain in the clears of the new `error` state: a standing rebuild error is unpinned against the loud read and rebuild clears (R4-10, R4-11), and the order of the quiet clear against the superseded-read check and the guard of the failure write (R4-8, R4-7).",
+ "findings": [
+  {
+   "id": "F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 380,
+   "quote": "setError(null);",
+   "problem": "The clear a read the user starts makes at its start (the effect body, line 380) and the clear a rebuild makes at its start (rebuild(), line 677) are pinned for a standing catalog-source error only. Run in a scratch copy of apps/desktop at 744d9ef75 against MetaprojectView.dom.test.tsx (baseline exit 0, 87 pass): R4-10 (the effect body's `setError(null);` -> `setError(current => current?.source === \"rebuild\" ? current : null);`, so a loud read keeps a failed rebuild's banner) SURVIVED (exit 0); R4-11 (rebuild()'s `setError(null);` -> the same functional form, so a second rebuild keeps the first one's failure message) SURVIVED (exit 0). Killed for contrast: T24-8 and T24-9 (the clears removed altogether), R4-4, R4-9. T24.result.json's table has the cells 'failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before' and cites 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown'; that test makes a catalog read fail after a rebuild and never starts a read or a rebuild while a rebuild's failure stands. No test builds `source: \"rebuild\"` followed by Retry, Refresh catalog, or a second Rebuild graph.",
+   "impact": "Today's code is correct. The next editor who makes the clear conditional on source (the natural reading of 'a quiet success clears only a catalog failure') keeps the table's cell green: after a failed rebuild, Retry on its banner would leave the 'Rebuild failed' message above a catalog that has just loaded, and a second Rebuild graph would show the old failure while it runs. The comment that T24-3 is equivalent depends on the loud start clear, so this clear is the one thing that keeps a rebuild's banner from outliving the next read.",
+   "suggested_fix": "One test: onRebuild throws, banner shows the rebuild message; click Retry on the banner (read succeeds) and expect no banner; repeat with a second Rebuild graph click held pending and expect no banner while 'Rebuilding…' shows. Kills R4-10 and R4-11.",
+   "evidence": "Mutation R4-10 and R4-11 survived; T24-8, T24-9 killed (verification/fix-round-3.md and my own run, script r4_mutants.py in the session scratchpad). The cells are in results/T24.result.json notes. Introduced by the work that answered round 3's F-001 (the table of states).",
+   "confidence": "high",
+   "reviewer": "review-testing-practices"
+  },
+  {
+   "id": "F-002",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 392,
+   "quote": "if (quiet) setError(current => current?.source === \"catalog\" ? null : current);",
+   "problem": "The order of the new clear against the 'superseded read' check and the latest-read guard of the failure write are unpinned. R4-8 (the clear moved above `if (generation !== catalogRead.current) return;`, so a quiet read that a later read has superseded still clears a catalog banner when it lands) SURVIVED (exit 0). R4-7 (`if (generation === catalogRead.current && !quiet) setError(` -> `if (!quiet) setError(`, so a superseded read's late failure writes the banner) SURVIVED (exit 0). R4-2 (clear only in the changed-snapshot branch), R4-3 (only in the unchanged one) and R4-4 killed. No fixture holds a catalog read in flight, starts a later read, and lets the first land.",
+   "impact": "Trigger for R4-8's shape: a quiet re-read on return is slow; the user clicks Rebuild graph; the reload fails and shows its banner; the quiet read then lands and a version of the clear above the check removes that failure banner. Trigger for R4-7's shape: a read A is slow, a later read B starts and clears, A fails late, and its stale message stands above B's catalog until Retry. Production is correct; the next editor of the effect's body has no test to tell the two orders apart.",
+   "suggested_fix": "Two tests with a held read: (a) held quiet read, then a failing Rebuild reload, then release the quiet read as a success: the rebuild-reload banner stays; (b) held loud read, a later read that succeeds, then the first rejects: no banner. Kills R4-8 and R4-7.",
+   "evidence": "Mutation R4-7 and R4-8 survived my run of 14 mutants against MetaprojectView.dom.test.tsx (baseline 87 pass, exit 0). R4-7's line is old (T22's catalogRead) but the line was changed by this round. The T24 table has no cell for a superseded read.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices"
+  }
+ ],
+ "prior_dispositions": [
+  {
+   "id": "F-002",
+   "disposition": "closed"
+  },
+  {
+   "id": "F-003",
+   "disposition": "closed"
+  },
+  {
+   "id": "F-004",
+   "disposition": "closed"
+  },
+  {
+   "id": "F-005",
+   "disposition": "closed"
+  }
+ ],
+ "slices": [
+  "slice-01"
+ ],
+ "mutant_candidates": [
+  {
+   "id": "R4-1",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (quiet) setError(current => current?.source === \"catalog\" ? null : current);",
+   "replacement": "setError(current => current?.source === \"catalog\" ? null : current);",
+   "result": "survived (equivalent)"
+  },
+  {
+   "id": "R4-2",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result.snapshotId",
+   "replacement": "(clear removed; same clear added after setCatalog(result) in the changed-snapshot branch only)",
+   "result": "killed"
+  },
+  {
+   "id": "R4-3",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (quiet) setError(current => current?.source === \"catalog\" ? null : current);",
+   "replacement": "(removed; same clear added after the setFreshness(...) of the unchanged-snapshot branch only)",
+   "result": "killed"
+  },
+  {
+   "id": "R4-4",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "current?.source === \"catalog\" ? null : current",
+   "replacement": "current?.source === \"rebuild\" ? null : current",
+   "result": "killed"
+  },
+  {
+   "id": "R4-5",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "<span>{error.message}</span>",
+   "replacement": "<span>{error.source}</span>",
+   "result": "killed"
+  },
+  {
+   "id": "R4-6",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (mounted.current) setError({ source: \"rebuild\"",
+   "replacement": "setError({ source: \"rebuild\"",
+   "result": "survived (guard predates the round; not reported)"
+  },
+  {
+   "id": "R4-7",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (generation === catalogRead.current && !quiet) setError(",
+   "replacement": "if (!quiet) setError(",
+   "result": "survived"
+  },
+  {
+   "id": "R4-8",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (generation !== catalogRead.current) return;\n        loaded.current = true;",
+   "replacement": "(the quiet clear moved above this check)",
+   "result": "survived"
+  },
+  {
+   "id": "R4-9",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "<span>{error.message}</span>\n          <button className=\"btn btn-sm\" onClick={() => setRevision(value => value + 1)}>",
+   "replacement": "<span>{error.message}</span>\n          <button className=\"btn btn-sm\" onClick={() => {}}>",
+   "result": "killed"
+  },
+  {
+   "id": "R4-10",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "      project.current++;\n      setError(null);",
+   "replacement": "      project.current++;\n      setError(current => current?.source === \"rebuild\" ? current : null);",
+   "result": "survived"
+  },
+  {
+   "id": "R4-11",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "    setRebuilding(true);\n    setError(null);",
+   "replacement": "    setRebuilding(true);\n    setError(current => current?.source === \"rebuild\" ? current : null);",
+   "result": "survived"
+  },
+  {
+   "id": "R4-12",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "setError({ source: \"catalog\", message: errMessage(cause) });",
+   "replacement": "setError({ source: quiet ? \"rebuild\" : \"catalog\", message: errMessage(cause) });",
+   "result": "survived (equivalent: the catch is guarded by !quiet)"
+  }
+ ],
+ "mutation_table": "14 mutants run by me in one scratch copy (exit shown per result): R4-1 survived (equivalent); R4-2, R4-3, R4-4, R4-5, R4-9 killed; R4-6 survived (guard predates the round); R4-7, R4-8, R4-10, R4-11 survived (F-001, F-002); R4-12 survived (equivalent); R3-19 survived and R3-20 survived (redundant one at a time; T24-7 together killed in verification/fix-round-3.md and in research-evidence/t24-mutants-1.txt). 0 not reached. mutation-1.json (round 3's 20 on this head): 15 killed, 4 survived (R3-6 equivalent, R3-11 near-equivalent, R3-13, R3-20), 1 invalid (R3-19, anchor moved by T24).",
+ "stats": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2,
+  "info": 0
+ },
+ "commands": [
+  "bun test src/App.dom.test.tsx x3 (apps/desktop, exit 0, 5 pass each); bun test src/metaproject/MetaprojectView.dom.test.tsx (exit 0, 87 pass); bun test src/metaproject/RelationshipList.dom.test.tsx (exit 0, 14 pass)",
+  "python3 .../scratchpad/r4_mutants.py (scratch copy of apps/desktop; baseline exit 0; 14 mutants, each `bun test --bail` of MetaprojectView.dom.test.tsx; results above)",
+  "a probe test in a second scratch copy (App test without a stand-in, then an 800 ms wait): after the first act the DOM holds the fallback 'Loading Metaproject…'; after the wait the real explorer had mounted (exit 0). Scratch copy removed.",
+  "keryx ctx rg / read on the slice, the production file and platform/metaproject.ts (exit 0)"
+ ],
+ "judgments": {
+  "R3-19_R3-20": "Agreed, with the reason checked in code. The effect body (MetaprojectView.tsx:375-380) reads quietRead.current into `quiet`; its cleanup (:418) reads the same ref, set by the visible effect before the revision bump and reset by the body, so a cleanup and the body that follows it in one commit read the same value. `protocol` goes from null to a value and never back (setProtocol at :269 only), and the null early return registers no cleanup, so no change of deps runs a body without the cleanup of the run before it or the reverse. The two unpaired moves are mount (body only, nothing pending) and unmount (cleanup only; the instance is gone, and a project change remounts by key with fresh refs). I know of no input a test can drive that reaches one move without the other with a lookup or page pending; each alone is redundant code, not a test gap. Both survive on my run too; together (T24-7) they are killed.",
+  "T24-3": "Equivalent. With `if (quiet)` dropped the clear also runs on a loud read's success. At that moment the error is null or a rebuild's: the loud read cleared at its start (:380), only the latest read's catch can set a catalog error (:407), and a rebuild's source is kept by the predicate. R4-1 survived my run. It depends on the loud start clear, which F-001 says is not pinned for a rebuild error.",
+  "R3-13": "Reasonable to leave. ProjectWindow is one component of over 400 lines with many hooks and the Tauri platform calls; a test would need a fixture larger than the wiring it checks, and App.dom.test.tsx pins MetaprojectWork, where the three props meet. The recorded live check covers the explorer hidden while another view shows; it does not name Settings, which is the case `view={workView}` would break, so the call site's Settings case rests on the code reading only.",
+  "tests": "All nine and the added assertion assert user- or caller-visible state: banner text and its absence, row counts and group headings, which panel opens, the list text, props given to the explorer and the hidden wrapper. Fixtures drive their titles: the second-step edge sits between two non-root nodes (summarize asserts secondStep 1, incoming 0, outgoing 0 before the note is checked); the rebuild-source test fails onRebuild, not a catalog read; the in-flight tests hold the read and assert the counter of catalog reads. The one helper that replaces a global, holdDebounce (window.setTimeout), restores in `finally` in the new page test; the new lookup test replaces nothing. The App test without a stand-in renders the lazy real explorer and unmounts it in the next act; my probe showed that after the first act only the fallback is in the DOM and that the explorer mounts if the test waits (it then calls the Tauri-backed request, which has no CLI in the test environment). The test therefore does not start a CLI read, but its safety rests on the unmount running before the dynamic import settles, a race it wins by awaiting only microtasks; 3 of 3 runs passed. Not a finding."
+ },
+ "not_verified": "No live browser or Tauri run; 'the explorer never reads the CLI' in the App test is from the probe and the code, not from a CLI trace. Journal, tasks.md and verification/fix-round-2.md hunks of the slice were read but are outside this lens (reviewed only for what they claim of the tests: the fix-round-3.md table matches my runs)."
+}

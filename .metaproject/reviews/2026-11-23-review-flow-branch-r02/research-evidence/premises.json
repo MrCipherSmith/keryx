@@ -1,0 +1,144 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": "docs/docs/guides/desktop-metaproject.md:158",
+          "says": "the shipped guide promises 'A relationship from an item to itself is neither listed nor counted.' — the Wiki disclosure count at MetaprojectView.tsx:925 still counts it, and the empty note at RelationshipList.tsx:217 still reads the raw edge count"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/RelationshipList.tsx:75",
+          "says": "summarizeRelationships already counts from groupRelationships, which skips self-loops; the two remaining readers of projection.edges.length are the odd ones out"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "No signal that the raw count was kept on purpose; the fix for round 1's F-022 and the guide it shipped say self-loops are neither listed nor counted, so a count of 1 over an empty list and a blank tab body contradict the stated intent. The suggested fix moves the two sites toward the sibling summarize path, so it adds consistency."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "intent_signals": [],
+      "practice_sources": [],
+      "reasoning": "Looked in T17.result.json (description, behavior_changes, assumptions, noticed_not_touched) and the journal (lines 124-128): neither mentions that a quiet re-read on return retires pending link lookups or load-more pages. MetaprojectView.tsx:367 and :398 bump project.current on every revision, the quiet one included, and the comment at :329-330 says the quiet read is meant to leave 'nothing that hangs on the catalog' disturbed. A silently lost click with no message has no intent signal and no practice source in its favour."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch/operator-decisions.json:8",
+          "says": "the operator's answer to round 1's F-004: 're-read the catalog silently when the view is shown again, keeping the selection, filters and history'"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:329",
+          "says": "comment: 'the explorer re-reads the catalog once, quietly'"
+        },
+        {
+          "ref": "docs/docs/guides/desktop-metaproject.md:10",
+          "says": "guide: 'It also re-reads the catalog quietly, so the graph freshness banner is current.'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
+          "says": "the T17 worker's description, behavior_changes and assumptions cover only the success paths of the quiet read; nothing chooses a loud error on its failure (the reviewer's 'the T17 worker chose it' is not borne out by the file)"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "apps/desktop/src/session/GitStatus.tsx:11",
+          "says": "the app's own background refresh: 'Both reads fail quietly: no git or no PR just means nothing to show.'"
+        },
+        {
+          "name": "apps/desktop/src/panels/ChangesPanel.tsx:73",
+          "says": "the background tick swallows its failure (`api.info(cwd).catch(() => null)`) and keeps the shown list"
+        }
+      ],
+      "reasoning": "Every recorded intent (operator, code comment, guide) asks for a silent re-read, and the app's sibling background refreshes fail quietly over valid data. Nobody chose the alert banner with Retry for a failed quiet read; it is inherited from the load effect's catch. The signals support the finding rather than weigh against it."
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "upheld",
+      "intent_signals": [],
+      "practice_sources": [
+        {
+          "name": "React docs, react.dev — Removing Effect Dependencies / eslint-plugin-react-hooks exhaustive-deps",
+          "says": "a function declared in the component body and called inside an effect is a reactive value the effect must list; calling the render-scoped `remember` from the [nodes] effect, as the suggested fix does, would be flagged"
+        }
+      ],
+      "reasoning": "The two spellings of one write in one component are real (MetaprojectView.tsx:569, :572, :603), with no comment explaining the inline form, and the line was added by this branch, so it cannot ratify itself. The practice source does not refute the premise; it only qualifies the suggested fix: the fixer should resolve the duplication without making the effect depend on a per-render function (for example inline the write at :603 and drop `remember`, or make `remember` stable)."
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/commands/decisions.test.ts:112",
+          "says": "test(\"answer refuses a choice that is no option, and --other records a free-form answer (F-005)\") — a test titled with the review finding id it answers, outside this branch (git log main..HEAD on the file is empty)"
+        },
+        {
+          "ref": "src/tui/ask-user-bridge.test.ts:42",
+          "says": "test(\"... writes the journal.md line (F-003)\") — same convention, outside this branch"
+        },
+        {
+          "ref": "src/harness/process/sandbox/bwrap.test.ts:122",
+          "says": "describe(\"buildBwrapArgs: host IPC services are unreachable (F-001)\") — a describe block suffixed with a finding id, outside this branch"
+        },
+        {
+          "ref": "src/lib/metaproject-gitignore.test.ts:265",
+          "says": "test(\"... (F-005)\"), and :294 (F-014), :326 (F-001) — same convention, outside this branch"
+        },
+        {
+          "ref": "src/harness/hooks/runtime.test.ts",
+          "says": "ten test titles carrying a '(F-NNN)' id; keryx ctx rg counts such titles in about 20 test files under src/ that this branch does not touch"
+        },
+        {
+          "ref": ".metaproject/rules/stacks/ts-js-node/testing.mdc, .metaproject/rules/core/tdd-workflow.mdc",
+          "says": "no rule on test titles; searched for name/title/describe — nothing forbids or prescribes ids in titles"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "The repository already titles tests with the finding id they answer, in many files that predate this branch, and no project rule says otherwise; the new tests follow that sibling practice. The reviewer's fix would make these four files differ from the rest of the suite, which is evidence against the premise. Whether the convention itself should change is the operator's call, not a defect in this change. The behaviour-describing part of each title is already present (\"RelationshipGraph viewport\", \"layoutNeighborhood — review round 1 fixtures\"); the comment-only cases (MetaprojectView.dom.test.tsx:1019, NodeDetailsPanel.dom.test.tsx:119) fall under the same convention.",
+      "question": "Many tests in this repository already end their title with the review finding they answer, like \"(F-003)\". Should this flow's new tests drop those ids and be named by behaviour only?",
+      "options": [
+        "uphold — drop the ids here and name the tests by behaviour only",
+        "dismiss — keep the ids, as the rest of the repository does"
+      ]
+    },
+    {
+      "finding_id": "F-006",
+      "verdict": "upheld",
+      "intent_signals": [],
+      "practice_sources": [],
+      "reasoning": "A test gap reported with surviving mutants; no signal that the bounds of placeFiltersPopover or the resize cleanup were left unpinned on purpose (T17 lists no such scope limit; the journal's live check at line 125 measures two placements, not the bounds). By the skill, a test gap stays as reported unless intent or practice shrinks it, and none does."
+    },
+    {
+      "finding_id": "F-007",
+      "verdict": "upheld",
+      "intent_signals": [],
+      "practice_sources": [],
+      "reasoning": "A test gap on the quiet-read gates with surviving mutants. The operator upheld round 1's F-004 (operator-decisions.json:7), so the quiet path is wanted behaviour; nothing in T17, T20 or the journal says its changed-snapshot or follow-up-Retry branches were left to the live check. Upheld as reported."
+    },
+    {
+      "finding_id": "F-008",
+      "verdict": "upheld",
+      "intent_signals": [],
+      "practice_sources": [],
+      "reasoning": "The test pins only the absence of writes, so deleting the fill survives (R2-23). The comment at MetaprojectView.tsx:566-567 states the memory's purpose (Back to a lookup result shows its panel at once), and no test reaches that purpose; no signal that the positive case was left out on purpose. Upheld as reported."
+    },
+    {
+      "finding_id": "F-009",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
+          "says": "notes: 'Not covered by a red test: the one-line App.tsx wiring of `visible` (verified by tsc only)'; not_touched App.dom.test.tsx: 'rendering the whole App is outside this test's seam'"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "The only signal is the fix worker's own note, written in this branch: it records the gap rather than an operator choice, and a change cannot ratify itself. Round 1's F-011 fix (T20.result.json:38) pinned RetainedView, not the `visible` prop App passes to MetaprojectView, and the journal (line 128) records a live check of F-003/F-004 but no decision that the wiring rests on it. The reviewer's own second option (state in the flow that the wiring is covered by the live check only) remains a valid way to close it."
+    }
+  ]
+}

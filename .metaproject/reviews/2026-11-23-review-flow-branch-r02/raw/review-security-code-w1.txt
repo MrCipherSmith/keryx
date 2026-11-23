@@ -1,0 +1,37 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Read slice-03 in full (App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, OpenSpecView.tsx, RelationshipList.tsx, six test files, the guide). The three areas of my lens are clean. The wiki-link lookup token only narrows which lookup may settle and leaves the path handling unchanged. The quiet catalog re-read is a read-only request through the same local CLI reader with no new input. The popover's inline styles are numbers from getBoundingClientRect and window.innerHeight/innerWidth, set through React's style object, with no string-built CSS or HTML. No findings.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Security Review (round 2, slice-03, fix slice)
+
+### Checked, no finding
+- openPath with token (MetaprojectView.tsx): `const token = ++lookup.current` and `current()` now also requires `token === lookup.current`. The repository path comes from a wiki link, as before. It is decoded and validated by the existing `resolved` flag, then sent as a `search` query to the local reader and matched by exact `hit.node.path === path`. It is never used to open a file by path, so there is no traversal. The token adds no new input. A stale lookup is dropped, which is the safe direction. The snapshot-mismatch check is intact.
+- Catalog re-read on return (visible false to true): it issues the same `{ action: "catalog" }` read, with no new parameters, on a hidden-to-visible edge only. The `quiet` flag and `project.current` generation guard drop a stale result. A quiet result for the same snapshot updates only `freshness` (snapshotId, graph, graphReason), and graphReason is rendered as React text (no dangerouslySetInnerHTML). A different snapshot takes the normal path. There is no unbounded loop: one bump per return, only after the first load. Not a DoS vector.
+- Inline styles from window geometry (placeFiltersPopover): the values are numeric (left, top, bottom, maxHeight) and go through a React style object, so there is no CSS injection. `Math.max(0, …)` and the `min` caps bound them. Unvalidated NaN is not reachable from the browser APIs used. The resize listener is added and removed in the effect cleanup.
+- RelationshipList self-loop skip and the `to.id !== from.id` guard removal, NodeDetailsPanel fact row, OpenSpecView scroll-order change: no trust boundary involved. All text is rendered as React children. Node paths are used only as `title` and button labels.
+- Tests: no secrets, no network. The Map.prototype.set and window.setTimeout stubs are restored in finally blocks.
+- Guide: no content with security meaning.
+
+### Prior findings checked against the code (not mine; checked at head)
+- F-003: `filters = visible && filtersOpen && filtersAnchor && (...)` plus `if (!visible) setFiltersOpen(false)` unmounts FiltersPopover, so its useEscape layer and mousedown listener are gone while hidden. Closed. The pinning test checks overlayOpen() and an unprevented Escape.
+- F-004: the effect on `visible` bumps `revision` once on return, and the catalog effect applies a quiet result. Closed. Two tests pin it.
+- F-005: closed, per the token in openPath and `current()`. A test pins it with three pending lookups.
+
+### Clean areas
+Injection and XSS (no dangerouslySetInnerHTML in the slice), command injection, path traversal, secrets, auth, open redirect, React-specific patterns.
+
+### Not verified
+Native Tauri window and the Rust side, per the brief. No commands were run (read-only, budget 0).

@@ -1,0 +1,11 @@
+baseline exit 0
+T24-1 (the quiet-success clear removed): killed — (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not [2.27ms]
+T24-2 (a quiet success clears any error): killed — (fail) a standing error, such as a failed rebuild's, survives a quiet re-read on return [1.64ms]
+T24-4 (a failed catalog read recorded as a rebuild's): killed — (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not [1.92ms]
+T24-5 (a failed rebuild recorded as a catalog read's): killed — (fail) a standing error, such as a failed rebuild's, survives a quiet re-read on return [1.60ms]
+T24-6 (a failed quiet read sets the error): killed — (fail) a failed quiet re-read on return shows no error and leaves the explorer as it was [3.60ms]
+T24-8 (a loud read no longer clears the error at its start): killed — (fail) a return after a failed first catalog read starts no read, and its failure and Retry stay [1072.53ms]
+T24-9 (a rebuild no longer clears the error at its start): killed — (fail) a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone [1.47ms]
+R3-19 (moved by T24: the body's bump removed): survived
+R3-20 (the cleanup's bump removed): survived
+T24-7 (both bumps removed): killed — (fail) a rebuild's catalog reload retires a wiki-link lookup in flight: it neither opens its target nor names a path [3.35ms]

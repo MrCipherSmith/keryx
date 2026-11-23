@@ -1,0 +1,39 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-03 read in full (source hunks of App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, OpenSpecView.tsx, RelationshipList.tsx, the six test files and the guide). No performance finding: the seenNodes effect now runs once per change of `nodes`; the catalog re-read on return is one read per hidden-to-visible change (user-driven, a few per minute at most) and drops the result when the snapshot is unchanged; the resize listener exists only while the popover is open and visible, and each event costs one rect read, one scrollHeight read and one setState on a small subtree; graphState is a ternary per render. F-006 is closed.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-006", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Performance Review
+
+### Scope
+- Branch feat/desktop-metaproject-redesign, delta 60cbe1c565f4..b1538097e636, slice-03 (FIX slice), read-only; nothing run.
+
+### F-006 disposition: closed
+- At head, MetaprojectView.tsx:571-573 reads `useEffect(() => { for (const node of nodes) seenNodes.current.set(node.id, node); }, [nodes]);`. `nodes` is a `useMemo` over [catalog, hits, projection] (hits is `resolvedSearch?.hits ?? EMPTY_HITS`, line 547, a stable reference between searches), so the Map.set walk runs when one of those changes, not on each search keystroke or panel-resize pointermove. The render itself still reads `nodes.find(...) ?? seenNodes.current.get(selection)` (line 574), so the first render after a node-list change does not depend on the effect having run. The other writers (`remember`, line 603; reads at 590 and 927) are per user action. The test 'a render that changes no node list leaves the explorer's node memory alone' pins zero writes across two popover re-renders, so the behaviour is pinned.
+- Unchanged and out of this delta: `seenNodes` keeps every node ever shown (no eviction); it is bounded by the catalog plus lookup results per project, and the explorer is keyed by cwd.
+
+### Fix code checked through the performance lens
+- seenNodes effect: one pass per `nodes` change. Clean.
+- Quiet catalog re-read (visible effect, MetaprojectView.tsx:1527-1536 of the diff, catalog effect with `quiet`): one `catalog` request per hidden-to-visible transition and only when `loaded.current`; no read while hidden; no poll. When the snapshot is unchanged only `freshness` (three scalar fields) is set, so `catalog`, `graphIndex`, `nodes`, `results` and the graph are not recomputed. Frequency is a tab switch, cost is one CLI read plus parse of the catalog (size not measured here; the journal records one request on return). Not a hot path, so not a finding.
+- placeFiltersPopover() on resize: the `resize` listener is added in a layout effect of FiltersPopover and removed in its cleanup; the popover is not mounted while the view is hidden (`visible && filtersOpen && filtersAnchor`) or closed, so no window listener outlives the popover. Per event: getBoundingClientRect, one scrollHeight read (forced layout) and a setState with a fresh object, re-rendering only FiltersPopover, whose children are the same element references from the parent. Resize events arrive at most about once per frame, and only while the popover is open. Not throttled, but no named cost, so below the bar for a finding.
+- graphState derivation: `catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog`, two comparisons per render, used in place of `catalog.graph*` reads. Clean.
+- OpenSpecView.choose(): reorders onLocation and scrollTop write; the same calls, no added work.
+- RelationshipList.groupRelationships: adds one `edge.from === edge.to` comparison per edge in a pass that already ran per render; byKind (kinds x rows filter) is unchanged and out of the diff.
+- NodeDetailsPanel relationFact: builds a 2 to 4 element array and joins it per render; negligible.
+- Tests: the Map.prototype.set patch and window.setTimeout replacement in the new tests are restored in finally blocks; no cost to the product.
+
+### Clean areas
+CLI/TUI hot paths, N+1, re-renders, expensive computations in render, memory leaks (listener and timer cleanup checked for the resize listener, mousedown listener and Escape layer), bundle imports, sync blocking, pagination, redundant API calls (the extra catalog read is the single deliberate one for F-004).
+
+### Not verified
+Catalog payload size on a large project and the wall time of a catalog read on return were not measured; the review ran read-only with no execution budget. The re-render of the retained, hidden explorer on every App render (inline `onDraft`/`onRebuild` props) is a round-1 retention property, outside this delta, and not raised.

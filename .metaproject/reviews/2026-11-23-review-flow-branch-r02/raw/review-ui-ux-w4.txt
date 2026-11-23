@@ -1,0 +1,11 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Slice-04 is almost entirely removed or moved lines. Checked at head: the 'Graph is not ready' banner is still rendered, now as the one-line freshness banner with a Details toggle and the Rebuild graph control (MetaprojectView.tsx, `metaproject-freshness`). The 'Catalog is limited' banner is replaced by the 'Catalog · N of M' list heading (AC17). The `problem` prop was not dropped: `documentsProblem` still carries the same text. `onDraft` is still passed (App.tsx line 596 only gained `visible`). The `.metaproject-relation-actions` rules and the max-width 700px media query have no remaining users; the container query at 760px covers the narrow layout. No UI/UX defect was found in the slice. Unverified: live render (no render supplied beyond the T17/T18 journal entries); pixel geometry belongs to review-layout.",
+  "findings": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

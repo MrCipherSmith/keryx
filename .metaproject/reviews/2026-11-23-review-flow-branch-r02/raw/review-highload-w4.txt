@@ -1,0 +1,11 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Read all hunks of slice-04: removals only (an App.tsx line, dead GRAPH_PADDING and unused RepositoryMarkdown nodes prop, the unused generation const in rebuild, the old freshness and Catalog-is-limited banners, two panel props re-supplied in rewritten form, a dead CSS media block and a guide sentence). Checked against MetaprojectView.tsx at head: rebuild() guards its writes with mounted.current, the Rebuild button stays disabled while rebuilding, the freshness banner and the onDraft/problem props survive in rewritten form. No concurrency, race, resource or retry defect is introduced.",
+  "findings": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

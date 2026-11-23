@@ -1,0 +1,41 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression found. The `error` state of MetaprojectView.tsx (string -> `{ source: \"catalog\" | \"rebuild\", message } | null`) has, at head, exactly the writers it had at 8e0f656fb (loud read start :380, loud read catch :407, rebuild() start :677 and catch :681) plus the one new quiet-success updater (:392), and one reader, the banner (:846-848, `error &&` / `error.message`); nothing outside the file read the string: App.tsx (:161-172) passes only cwd/visible/onRebuild/onDraft, main.tsx and test/app-navigation.fixture.tsx reach it only through App.tsx, `error` is in no dependency array, and the test helper catalogErrorBanner (MetaprojectView.dom.test.tsx:1318) reads the DOM, not the state. Walking every standing failure x later event, the only cell whose outcome moved is the one round 3's F-001 asked to move (a quiet success clears a catalog-source error); every other cell, including a rebuild failing while a catalog read (loud or quiet) is in flight and the reverse, behaves as at 8e0f656fb, and a quiet read can never clear a catalog error newer than itself because it starts only when no catalog read is pending and any later read supersedes it via catalogRead. The blast-radius record (depth 2, cap 40) lists App.tsx, main.tsx and app-navigation.fixture.tsx; its dropped entries are text-hub links from the flow record's Markdown, not code dependents, so the radius answered the question for this change.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Walk of the changed state (MetaprojectView.tsx at 744d9ef75 vs 8e0f656fb)
+
+Writers at head (keryx ctx rg --all "\berror\b|setError\(" apps/desktop/src/metaproject/MetaprojectView.tsx, 10 matches):
+- :380 `setError(null);` inside `if (!quiet) {` (was `setError("")`): same effect, the banner's `error &&` is falsy for both.
+- :392 `if (quiet) setError(current => current?.source === "catalog" ? null : current);` new; runs after the superseded check, before the unchanged-snapshot branch, so both success paths share it.
+- :407 catch, `!quiet` only: `{ source: "catalog", ... }` (was the string).
+- :677 rebuild() start: `setError(null)` (was "").
+- :681 rebuild() catch: `{ source: "rebuild", ... }` (was the string).
+Reader: :846 `{error && (` and :848 `{error.message}`; Retry still bumps revision (a loud read). No other reader in the file; the state is in no effect's dependency list, so the object identity changes nothing else.
+
+Cells checked (standing failure -> later event):
+- failed first read (loaded false) -> return: visible effect still returns on `!loaded.current`; no quiet read; banner and Retry stay. Unchanged.
+- failed Retry / Refresh / post-rebuild reload (catalog source) -> quiet success, same snapshot: banner cleared, freshness set (the F-001 fix). Changed snapshot: banner cleared, catalog replaced. Quiet failure: banner and its message kept (catch is `!quiet`-gated). Loud read: cleared at start, as before. New rebuild: cleared at start, as before.
+- failed rebuild (rebuild source) -> quiet success: kept (functional updater returns `current`). Quiet failure: kept. Loud read: cleared at start, as before. New rebuild: cleared at start, as before.
+- rebuild fails while a loud catalog read is in flight: rebuild error set; the read then succeeds -> loud success never touches error, so it stays (as before; test 'a failed rebuild's message outlives a catalog read that was already in flight'); the read then fails -> overwritten by the catalog message (as before, the string was overwritten too).
+- rebuild fails while a quiet read is in flight: the quiet success keeps a rebuild-source error (at 8e0f656fb it kept everything). Same outcome.
+- catalog read fails while a rebuild is in flight: as before (rebuild cleared at its start; the read's catch sets catalog; the rebuild's success bumps revision -> loud read clears; its false return leaves the catalog error; its throw replaces it with rebuild).
+- Can a quiet success clear a catalog error newer than itself? No: the visible effect starts a quiet read only when `catalogPending.current` is false, so no loud read is in flight when it begins, and any loud read started after it increments catalogRead, so the quiet result returns at `generation !== catalogRead.current` before :392.
+
+Outside the file: App.tsx (MetaprojectWork, :161-172) renders the explorer with cwd, visible, onRebuild, onDraft only; OpenSpecView has its own unrelated `error` string; App.dom.test.tsx uses stand-in explorers and never reads the state. No caller breaks.
+
+Prior finding checked: round 3 F-001 -> closed (the :392 line clears a catalog-source error on both quiet success paths; a rebuild-source error is kept; the new test in the slice walks failed reload -> failed quiet -> successful quiet with same and changed snapshot). The other prior findings were not checked by this reviewer and are left out.
+
+Not run: nothing was executed (allowed_tools read-only, exec_budget_s 0); conclusions are from reading the code at head and the slice.
+
+Routing audit: graph_used: yes (blast-radius.json and payload layers, graph built at head); wiki_used: not-relevant (a single-state change inside one component); ctx_used: yes (keryx ctx rg / read); raw_rg_used: no.

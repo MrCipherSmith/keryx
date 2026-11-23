@@ -1,0 +1,34 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "The claim holds at head for both callers. A return to the explorer always re-runs the catalog effect, whose cleanup and start each bump project.current, so a Wiki-link lookup or a 'load more' page still in flight at that moment is dropped by its generation guard without a message, on an unchanged project. Nothing else protects them. The outcome costs the user one repeated click, so it is minor; it is also milder than base, where leaving unmounted the explorer and dropped the same work.",
+  "findings": [
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 367,
+      "quote": "const generation = ++project.current;",
+      "problem": "The quiet re-read added for F-004 goes through the catalog effect. On a hidden-to-visible change the visible effect (`if (!returned || !loaded.current) return; quietRead.current = true; setRevision(value => value + 1);`) bumps `revision`, a dependency of the catalog effect. React runs that effect's cleanup (`project.current++`) and then its body (`const generation = ++project.current;`), so project.current moves by two even when the re-read finds the same snapshotId and changes nothing. openPath captured `const generation = project.current;` and its `current()` requires `generation === project.current`; loadMoreSearch captured `const projectGeneration = project.current;` and checks `projectGeneration !== project.current` after its read (line 638) and in its catch (line 644). Both therefore see the guard fail and return. openPath has already cleared the unresolved message (`setUnresolvedLink(null)`), so no message is shown; loadMoreSearch appends nothing and sets no error. The unchanged-snapshot branch (`setFreshness(...); return;`) does not restore the counter. The other guards do not help: latestSearch.generation moves only when the query or catalog snapshotId changes (not here), and the token in openPath and shownSelection/activeMode all still match, so project.current is the only guard that fails.",
+      "impact": "Trigger: click an unloaded Wiki link (a `search` read) or 'load more' in a protocol 2 search, leave the Metaproject view before the read resolves, and return before it resolves, which means within one local CLI read. The lookup does not open its target and the page of results is not appended, with no message, and the project did not change. The user clicks the link or the load-more control again: pageInFlight is cleared in `finally` and the cursor is unchanged, and openPath starts a new lookup. If the read resolves while the view is still hidden the guard passes and the result is applied as before. On base the explorer unmounted on leaving and dropped the same work, so this is not a regression against base. The same retirement already happens on a Refresh, a Rebuild or a catalog reload.",
+      "suggested_fix": "Keep project.current for real project changes and give the quiet same-snapshot re-read its own counter: let the effect skip `++project.current` and the cleanup bump while `quiet` is set, guarding that read by a separate ref; or restore project.current in the unchanged-snapshot branch. Add a test that holds a wiki-link lookup, hides and shows the explorer, then releases it and checks the target opens.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:678-679 (openPath current())",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:630,638,644 (loadMoreSearch)"
+        ],
+        "enumeration_method": "keryx ctx rg for `project\\.current|projectGeneration` in MetaprojectView.tsx: 18 matches; writers are the catalog effect (lines 367 and 398); readers that capture and compare are openPath and loadMoreSearch only; the remaining reads (lines 377, 392, 394) are the effect's own guards. The other in-flight reads (neighbors, documents, search effect, preview) are guarded by effect-local `active` flags and are not retired by the bump."
+      }
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+
+Severity: minor, because the trigger is named (leave and return inside one read) and the outcome costs the user a single repeated click, with no lost data and no wrong result shown.
+
+Read from code only; nothing run. The files read are MetaprojectView.tsx lines 360-450 and 620-680, plus the slice-03 hunks.

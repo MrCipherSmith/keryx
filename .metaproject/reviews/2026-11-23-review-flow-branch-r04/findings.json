@@ -1,0 +1,379 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The clear a read the user starts makes at its start (the effect body, line 380) and the clear a rebuild makes at its start (rebuild(), line 677) are pinned for a standing catalog-source error only. Run in a scratch copy of apps/desktop at 744d9ef75 against MetaprojectView.dom.test.tsx (baseline exit 0, 87 pass): R4-10 (the effect body's `setError(null);` -> `setError(current => current?.source === \"rebuild\" ? current : null);`, so a loud read keeps a failed rebuild's banner) SURVIVED (exit 0); R4-11 (rebuild()'s `setError(null);` -> the same functional form, so a second rebuild keeps the first one's failure message) SURVIVED (exit 0). Killed for contrast: T24-8 and T24-9 (the clears removed altogether), R4-4, R4-9. T24.result.json's table has the cells 'failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before' and cites 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown'; that test makes a catalog read fail after a rebuild and never starts a read or a rebuild while a rebuild's failure stands. No test builds `source: \"rebuild\"` followed by Retry, Refresh catalog, or a second Rebuild graph.",
+    "impact": "Today's code is correct. The next editor who makes the clear conditional on source (the natural reading of 'a quiet success clears only a catalog failure') keeps the table's cell green: after a failed rebuild, Retry on its banner would leave the 'Rebuild failed' message above a catalog that has just loaded, and a second Rebuild graph would show the old failure while it runs. The comment that T24-3 is equivalent depends on the loud start clear, so this clear is the one thing that keeps a rebuild's banner from outliving the next read.",
+    "suggested_fix": "One test: onRebuild throws, banner shows the rebuild message; click Retry on the banner (read succeeds) and expect no banner; repeat with a second Rebuild graph click held pending and expect no banner while 'Rebuilding…' shows. Kills R4-10 and R4-11.",
+    "evidence": "Mutation R4-10 and R4-11 survived; T24-8, T24-9 killed (verification/fix-round-3.md and my own run, script r4_mutants.py in the session scratchpad). The cells are in results/T24.result.json notes. Introduced by the work that answered round 3's F-001 (the table of states). Introduced or left by the work that answered round 3's F-001. The orchestrator re-ran the reviewer's 12 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md, spec mutants-r4.json: 5 killed, 7 survived, 0 invalid); of the ids this finding names, every one survived there as well. The quote is the comment on the `error` state that states the behaviour R4-10 and R4-11 break; the two clears the finding names are `setError(null);` at the start of a read that is not quiet (line 380) and in rebuild(), the line after `setRebuilding(true);` (line 677). The reviewer quoted `setError(null);`, which occurs on both lines; the quote was moved at normalisation to a line that occurs once. The same unpinned cell is cited with a test that does not exercise it in T24's result file, which is this round's F-003. Normalisation notes: the quote is a part of the reviewer's, cut at normalisation so that it sits on one line of the file.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 317,
+    "quote": "// removes only a catalog read's failure; a rebuild's stands until the next read or rebuild the user starts.",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.json (head 744d9ef7542f, baseline exit 0): R4-10 (MetaprojectView.tsx:380 setError(null) -> functional form keeping source 'rebuild') survived, exit 0; R4-11 (:677 setError(null) -> same form) survived, exit 0; R4-4 (:392 'catalog' -> 'rebuild') and R4-9 (:849 Retry onClick emptied) killed, exit 1. Lines 380 and 677 read at head and hold the quoted setError(null). Tests: MetaprojectView.dom.test.tsx 1596 (return after failed first read: Retry clears) and 1418 (standing rebuild error survives quiet re-read) are the only ones touching these clears; no test has source 'rebuild' followed by Retry or a second Rebuild (confirmed by rg of setError/rebuild fixtures: rebuild failures only at 1424 and 1702). T24-8 and T24-9 killed per research-evidence/t24-mutants-1.txt:7 and T24.result.json notes.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:316-317",
+          "says": "comment on the `error` state: 'A quiet re-read that succeeds removes only a catalog read's failure; a rebuild's stands until the next read or rebuild the user starts.' It states the behaviour R4-10 and R4-11 break; added in 46c472162 (this round), so it supports the finding and ratifies nothing"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json:8",
+          "says": "finish line 'every read that is not quiet behaves as today', plus 'mutate what you added for F-001 yourself (... each place that clears or keeps the banner) ... and add a test for any that survives'. This sets a minimum and does not limit what the tests may pin; R4-10 breaks 'as today' for a loud read"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:65",
+          "says": "the worker's assumption: 'A rebuild that the user starts still clears whatever banner stands (catalog or rebuild), as before this task; the new test pins that'. The worker meant the rebuild case to be pinned too, and the new test pins only the catalog case"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:380,677",
+          "says": "the two clears at a start predate the branch (git blame: db6438889, an ancestor of base 1358d962f); this round changed only their value from \"\" to null. Nothing in the record says their rebuild-source case was left unpinned on purpose"
+        }
+      ],
+      "reasoning": "I looked in T24's request, result and fix-round-3.md, the journal (lines 147, 155, 163, 173), the operator decisions of rounds 1 and 2, round 3's premises, and plan.md's state x event matrix (lines 169-185). The matrix has no row for a failed catalog read or a failed rebuild, and no operator answer touches these clears. The only finish line on them asks for more tests, not fewer. The worker's own assumption says the rebuild case is pinned, and the code comment states the behaviour as a contract. Info finding F-009 notes that today's app onRebuild never rejects. That is about whether the path can be reached, not a sign that anyone chose to leave it unpinned: the component handles a rejecting onRebuild on purpose (the catch at :680-681 and the pinned test at MetaprojectView.dom.test.tsx:1418). The test gap stays as reported."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The order of the new clear against the 'superseded read' check and the latest-read guard of the failure write are unpinned. R4-8 (the clear moved above `if (generation !== catalogRead.current) return;`, so a quiet read that a later read has superseded still clears a catalog banner when it lands) SURVIVED (exit 0). R4-7 (`if (generation === catalogRead.current && !quiet) setError(` -> `if (!quiet) setError(`, so a superseded read's late failure writes the banner) SURVIVED (exit 0). R4-2 (clear only in the changed-snapshot branch), R4-3 (only in the unchanged one) and R4-4 killed. No fixture holds a catalog read in flight, starts a later read, and lets the first land.",
+    "impact": "Trigger for R4-8's shape: a quiet re-read on return is slow; the user clicks Rebuild graph; the reload fails and shows its banner; the quiet read then lands and a version of the clear above the check removes that failure banner. Trigger for R4-7's shape: a read A is slow, a later read B starts and clears, A fails late, and its stale message stands above B's catalog until Retry. Production is correct; the next editor of the effect's body has no test to tell the two orders apart.",
+    "suggested_fix": "Two tests with a held read: (a) held quiet read, then a failing Rebuild reload, then release the quiet read as a success: the rebuild-reload banner stays; (b) held loud read, a later read that succeeds, then the first rejects: no banner. Kills R4-8 and R4-7.",
+    "evidence": "Mutation R4-7 and R4-8 survived my run of 14 mutants against MetaprojectView.dom.test.tsx (baseline 87 pass, exit 0). R4-7's line is old (T22's catalogRead) but the line was changed by this round. The T24 table has no cell for a superseded read. Introduced or left by the work that answered round 3's F-001. The orchestrator re-ran the reviewer's 12 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md, spec mutants-r4.json: 5 killed, 7 survived, 0 invalid); of the ids this finding names, every one survived there as well.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 392,
+    "quote": "if (quiet) setError(current => current?.source === \"catalog\" ? null : current);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.json: R4-8 (MetaprojectView.tsx:389 quiet clear moved above 'if (generation !== catalogRead.current) return;') survived, exit 0; R4-7 (:407 'if (generation === catalogRead.current && !quiet) setError(' -> 'if (!quiet) setError(') survived, exit 0; R4-2 (:391 clear moved into changed-snapshot branch) killed, exit 1; R4-3 (clear only in unchanged branch) killed, exit 1; R4-4 killed, exit 1. Quoted line at MetaprojectView.tsx:392 read at head. Held-read fixtures (1434, 1692, 1713, 1743) hold a reload or lookup and do not start a later catalog read that lands first, consistent with the finding.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "round 2's finish line (committed in 8e0f656fb, this round's base): 'the quiet read still drops its own superseded result'. R4-8 breaks this rule: a superseded quiet read still clears a later read's catalog banner"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:331",
+          "says": "comment: 'The catalog read whose result may still apply; every read, the quiet one included, supersedes the last.' The guards at :389 and :407 rely on this rule, and R4-8 and R4-7 bypass it"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:155",
+          "says": "the two timing choices taken without the operator (a quiet read that finds a changed snapshot does not cancel a lookup in flight; a return during a read in flight starts no quiet read). Neither concerns the banner of a superseded read"
+        }
+      ],
+      "reasoning": "Both mutants break a rule the flow wrote down before this round: superseded reads drop their result. T24's table of banner states (results/T24.result.json:84) has no row for a superseded read, and nothing in T24's request, result, fix-round-3.md or the journal says that ordering was left to reading alone. No operator answer or practice source makes the gap smaller. Upheld."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A cell of T24's banner table cites a test that does not exercise the cell. The cell is about a standing failed rebuild (source `rebuild`) followed by a read or rebuild the user starts. The test it names, MetaprojectView.dom.test.tsx:1575, never fails a rebuild: its `onRebuild` is `async () => true`, the rebuild succeeds, and what fails is the catalog reload after it (source `catalog`), which the test shows is still displayed. No test in the file has a failed rebuild followed by Retry, Refresh or a second Rebuild: the only failed-rebuild fixtures are at :1424 (followed by quiet re-reads only) and :1702 (followed by the release of a read already in flight). The code does clear at both starts (MetaprojectView.tsx:380 and :677, neither conditional on `source`), so the behaviour the cell states is true; what is wrong is the claim that a named test pins it. The header of the table is 'banner after (test that pins it)'. Consequence for the next editor: a change that clears at a loud read's start only when `error.source === \"catalog\"` leaves every test green (T24-8 removes the clear altogether and is killed by the catalog-source Retry step at :1612, which cannot tell the two apart), and the table says it is covered.",
+    "impact": "A reader who trusts the table believes the failed-rebuild cell is pinned and will not add the test; the only cost is to the next editor of this code and of the record.",
+    "suggested_fix": "Either replace the citation with 'not pinned by a test; follows from :380 and :677, which do not read `source`', or add the test (a rebuild that throws, then Retry with a working read, expect no banner) and cite it; the same sentence belongs in the journal only if the table is quoted there (it is not).",
+    "evidence": "Introduced or left by the work that answered round 3's F-001. The test gap behind the cell is this round's F-001; this finding is the record's claim that a named test pins it.",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    "line": 84,
+    "quote": "- failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before ('after a quiet re-read on return, a rebuild's failed catalog reload is still shown').",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.dom.test.tsx:1575-1594: the test titled 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown' has onRebuild: async () => true (line 1585), so the rebuild succeeds; the rejection (line 1581) is the catalog reload after it. It makes no read or rebuild after the failure beyond the reload. The only tests whose onRebuild rejects are at 1424 (followed by quiet re-reads only, 1428-1431) and 1702 (followed by release of a held read, 1709-1710). T24.result.json notes row 'failed rebuild x loud read started after it, or a new rebuild' cites this test at 1575, so the cell is not pinned by the cited test. Test 1612 (Retry) is a catalog-source failure, not a rebuild failure.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:84",
+          "says": "the table's header reads 'Standing banner x following event -> banner after (test that pins it)', so the parenthesis is meant to name the pinning test. The last cell names 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown'"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1575-1594",
+          "says": "the cited test's onRebuild is `async () => true` (:1585). The rebuild succeeds and the catalog reload after it fails (source `catalog`), so no failed rebuild is ever followed by a read or rebuild the user starts"
+        }
+      ],
+      "reasoning": "The record says a named test pins the cell, and the named test does not exercise it. Nothing in T24's request, the journal (line 173 calls the table complete: 'no cell was left undecided') or fix-round-3.md says the citation was meant only as a loose pointer. The behaviour the cell states is true (:380 and :677 do not read `source`), so the defect is the claim of a pin, as the finding says. Upheld."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The result file uses bare finding ids (`F-001 banner table`, `F-004`, `F-003`, `F-005`, and in `description` `F-001:`, `F-002 to F-005:`) and never says whose round they are. Three review rounds number findings from F-001, and the same flow.json lists T22 as `Fix round 2: ... (F-001, F-002, F-003, F-004)`. The file also uses `R3-4`, `R3-19` and `T24-7` as mutant ids, so a reader sees ids of three kinds side by side with no key. The key exists only in dispatch/T24.request.json (`Finding ids in this task are round 3's`) and the commit message; dispatch/T24.dispatch.json, whose description also opens with a bare `F-001 (left by the fix of round 2's F-003)`, does not carry it. A reader of the result alone who sees `F-004` can take it for round 2's F-004 (the T22 title lists F-001 to F-004 of round 2) and look in the wrong findings.json.",
+    "impact": "not stated by the reviewer",
+    "suggested_fix": "Qualify once at the top of notes (`F-n are review round 3's findings, R3-n its mutants, T24-n this task's mutants`) or write `round 3's F-004`, as the dispatch already does for round 2's F-003.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 3.",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    "line": 84,
+    "quote": "suggested_fix diverged: F-004 — used Rebuild graph (onRebuild resolving true) as the loud read for both the lookup and the page, not Refresh catalog",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T24.result.json notes name ids without a round: 'F-001 banner table', 'F-004 — used Rebuild graph ...', 'F-003 — added a new test', 'F-005 — R3-14 and R3-16'; description 'F-001:' and 'F-002 to F-005:'; mutant ids R3-4, R3-19, T24-7 present. flow.json T22 title lists '(F-001, F-002, F-003, F-004)'. The key 'Finding ids in this task are round 3's' is in dispatch/T24.request.json (context field); dispatch/T24.dispatch.json description opens with 'Five minor findings of review round 3' and then a bare 'F-001 (left by the fix of round 2's F-003)' paragraph, so the round is named once there but the key sentence is absent. Caveat: T24 task_name in T24.result.json says 'Fix round 3 ... (F-001 to F-005)', so the round is visible in the title; the claim is about the notes and the bare ids.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "challenged",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:22",
+          "says": "the flow's id convention, committed in 8e0f656fb (this round's base): 'Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`'. A bare id means the task's own round, and only an older round's id is spelled out. T24.request.json:22 restates it for round 3 (that file is in this round's range, so it is cited only as the restatement)"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json:3",
+          "says": "sibling result file, before this round's base: 'Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)'. Bare ids sit under a title that names the fix round. T23.result.json:3 and T20.result.json:3 have the same form"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:3",
+          "says": "T24's own title: 'Fix round 3: ... (F-001 to F-005)'. The file names its round in the same place and form as its siblings, so 'never says whose round they are' is not accurate"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:73",
+          "says": "'(round 2's behaviour, the defect F-001 names)': the worker spells out the round when it means an older one and leaves its own round's id bare, which follows the convention"
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/research-evidence/premises.json:143",
+          "says": "round 3's F-008 was upheld because 'The dispatch's own id convention is what the sentence departs from': it was a round-1 id written bare in a round-2 file. Bare own-round ids in the same file were not faulted"
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/operator-decisions.json:8",
+          "says": "the operator dismissed round 2's F-005 (bare finding ids in test titles, e.g. '(F-012)'), keeping them 'so these four files stay consistent with the rest of the suite'. This is the operator's only recorded answer on how finding ids are written"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "task-implementer output contract (.metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json, field `notes`, lines 116-118)",
+          "says": "`notes` is free text for 'Warnings, blockers, or additional context'. Neither the contract nor .metaproject/rules nor the flow-orchestrator skill says how a result file must write finding ids"
+        }
+      ],
+      "reasoning": "Round 3's F-008 targeted an older round's id written bare, which broke the convention. Every id in T24's result belongs to the task's own round, and the one older-round reference is spelled out, so the file follows the convention. Every fix result of this flow (T17 to T23) is written the same way, under a title that names its fix round. Adding a key to T24 alone would make it the only result file that differs from its siblings, which counts against the premise. The operator's one answer on finding-id style kept bare ids for consistency. The ambiguity the reviewer describes (a reader matching F-004 to round 2's T22 title) is real, but it applies to the flow-wide convention, not to a slip in T24. Whether result files must carry their round's key is a record-keeping convention for the operator to set.",
+      "question": "F-004: in every fix task's result file in this flow, finding ids from the task's own review round are written bare (F-001, F-004) under a title that names the fix round, and only an older round's id is spelled out ('round 2's F-003'). T24's result file does the same. Should T24's result file still get a note saying its ids are review round 3's?",
+      "options": [
+        "uphold: add the note (or write \"round 3's F-00n\") in T24's result file",
+        "dismiss: keep the flow's convention, where a bare id belongs to the task's own round"
+      ]
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The same red run is counted differently in two records. results/T24.result.json notes: `85 pass | 1 fail` for the file restored to HEAD, with `Green with the change: 87 pass, 0 fail`. fix-round-3.md says 86 pass, 1 fail. The test file is the same in both runs, so the totals should be equal: 85+1=86 against green 87 cannot be, and 86+1=87 can. A person repeating the red check from fix-round-3.md and getting either number cannot tell which record is right; the file exists so that the runs can be repeated.",
+    "impact": "not stated by the reviewer",
+    "suggested_fix": "Say in fix-round-3.md which run it counts (the orchestrator's) and that the worker's figure was 85, or correct the result file; either way one total for 87 tests.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 3. The orchestrator's own red run (scratch_check3.py red, in its session scratch directory) printed 86 pass, 1 fail on the file at head, which holds 87 tests. The orchestrator's reading, not checked against the worker's run: the two counts agree only if the worker's red run was made before its last test in that file was added; the result file does not say so. Normalisation notes: the same defect was raised by review-logic (review-logic-w12, F-002, info).",
+    "confidence": "medium",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    "line": 12,
+    "quote": "`MetaprojectView.dom.test.tsx`: 86 pass, 1 fail: “a quiet re-read that succeeds after a failed catalog reload removes its\nbanner, whether the snapshot changed or not”.",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T24.result.json notes: red run of F-001's test 'restored to HEAD ... 85 pass | 1 fail' and 'Green with the change: 87 pass, 0 fail'; test_result field '87 pass 0 fail'. fix-round-3.md:12 says 'MetaprojectView.dom.test.tsx: 86 pass, 1 fail' for the same red check. The file holds 87 tests (rg of test() titles at head: 87 matches), so 85+1 and 86+1 cannot both be the same run. The records disagree; which count is right is not settled here.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md:3",
+          "says": "'What the orchestrator ran before it accepted T24, written out so that the runs can be repeated from this file.' It names its own run as the orchestrator's, and its 86 pass + 1 fail matches the 87 tests at head (:12)"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:173",
+          "says": "the acceptance entry says the orchestrator's runs are 'written out in verification/fix-round-3.md' and gives no count for the red check, so it does not settle which figure governs"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:84",
+          "says": "'exit 1; 85 pass | 1 fail' for the red run, then 'Green with the change: 87 pass, 0 fail'. The same notes say T24-9 'first survived; killed after adding' a test, which could explain a red run on 86 tests, but the file never links the two and gives no test-file state for the red run"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:169",
+          "says": "precedent: round 3's F-008 was fixed by rewording a result file after acceptance, with a note, so correcting T24's record is not barred"
+        }
+      ],
+      "reasoning": "Neither record claims to be the count of record over the other. fix-round-3.md claims only its own runs, and the result file claims only the worker's. The finding calls these 'the same red run', which is loose: they are two runs. But the defect holds. T24's result puts a red total of 86 tests next to a green total of 87 for the same test file, with no word that the red run predates a test. A reader comparing the two records cannot tell why they differ, and nothing in either record or the journal says the difference was known and accepted. No operator answer or project rule covers it. Upheld; the finding's own suggested fix already allows either record to carry the explanation."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The file's opening says the table follows flow.json, and the journal's T25 entry says the 25 rows were compared by script on kind and dependencies. That comparison holds: kind and dependsOn match for all 25 tasks. Titles do not: flow.json has T4 'Self-review and prepare draft PR' (tasks.md: 'Review round on the integrated change'), T2 'Implement per plan', T3 'Add/adjust tests and make them pass', T7 'Explorer navigation and state fixes D1-D7' (hyphen, tasks.md has an en dash) and T14 'Compact filter bar and one-row header on narrow hosts'. The tasks.md titles of T2, T3, T7 and T14 are annotated or typographically changed, and T4's is a different name.",
+    "impact": "No behaviour depends on it. Someone searching flow.json by a title copied from tasks.md finds nothing for these five tasks. Not for the fix loop.",
+    "suggested_fix": "Either say in the opening that the table follows flow.json for kind and dependencies and that titles are annotated, or copy flow.json's titles and keep the annotation in the Implement section.",
+    "evidence": "Compared every `| Tn |` row with flow.json at head by script: 25 rows, 25 tasks, none missing; kind and dependsOn equal for all; title differs for T2, T3, T4, T7, T14. Introduced or left by the work that answered round 3's F-006.",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    "line": 13,
+    "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 | — |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Compared all 25 rows of tasks.md (lines 10-34) with flow.json tasks by hand: same 25 ids; kind and dependsOn equal; titles differ for T2 (tasks.md 'Implement per plan (scaffold; superseded by T5–T8)' vs flow 'Implement per plan'), T3 (annotated '(scaffold; ...)' vs plain), T4 ('Review round on the integrated change' vs flow 'Self-review and prepare draft PR'), T7 (en dash 'D1–D7' vs flow hyphen 'D1-D7'), T14 ('... (became the Filters popover)' vs flow without it). All other 20 titles match. tasks.md line 4 says the table follows flow.json.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "fix-round-3.md names the T23 entry of the journal as a source of the live check; that entry holds none. The journal's entry on T23 (line 158, 'T23 accepted ...') records scratch-copy mutant runs and test counts and no browser check. The live check of the explorer hidden and mounted once with one `catalog` request on return is the next entry (line 159, 'after fix round 2, on the head that holds T22 and T23'), which is not the entry on T23; T24's entry (line 173) records three returns with one `catalog` request each and no alert, and does not say the explorer was hidden. T24's result file points at 'journal.md line 159', which is the right place.",
+    "impact": "The sentence says what verified R3-13's call site and sends the reader to an entry that does not hold it; one line away there is the one that does.",
+    "suggested_fix": "Write 'journal, the entry after T23's (after fix round 2) and the entry on T24' or cite line 159 as the result file does.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 3.",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    "line": 98,
+    "quote": "It rests on the live check: in the browser dev build the explorer is hidden while another view is shown and one `catalog` request leaves on return (journal, the entries on T23 and T24).",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "fix-round-3.md:98 cites 'journal, the entries on T23 and T24' for the live check. journal.md:158 (T23 accepted) lists scratch-copy mutant runs and test counts, no browser check. journal.md:159 (after fix round 2, on the head that holds T22 and T23) holds the live check: one catalog request, explorer hidden and mounted once. journal.md:173 (T24 accepted) records three returns with one catalog request each and no alert, and does not mention the explorer being hidden. T24.result.json notes cite 'journal.md line 159', which is the right place.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "The heading can be read two ways: mutants that survive (now), or mutants that survived review round 3's run. Nine of the eleven entries under it end in `**killed**`; only R3-13 and R3-20 say `survived`. A reader who scans headings takes the whole section for open gaps. fix-round-2.md titled its equivalent section by the task whose tests were run (`T23: review round 2's surviving mutants`) and had the same shape, so this is a carry-over, not a new departure.",
+    "impact": "not stated by the reviewer",
+    "suggested_fix": "`## Mutants that survived review round 3, run against T24's tests`.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 3.",
+    "confidence": "medium",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    "line": 15,
+    "quote": "## Review round 3's surviving mutants",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-008",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "fix-round-3.md:15 heading '## Review round 3's surviving mutants' covers R3-4, R3-7, R3-9, R3-10, R3-13, R3-14, R3-15, R3-16, R3-17, R3-18, R3-20 (11 entries; R3-19 sits under the next heading at line 196+). Recorded results: 9 killed, 2 survived (R3-13 and R3-20). fix-round-2.md:37 uses '## T23: review round 2's surviving mutants'. Wording caveat: entries do not literally 'end in **killed**'; the result is written as '**killed** by <test>' mid-line. The substance (9 of 11 killed under a surviving-sounding heading) holds.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "The kept-on-purpose rebuild banner is not reachable from the app. rebuild() sets source \"rebuild\" only when onRebuild() rejects. The app's onRebuild (App.tsx rebuildGraph: `new Promise<boolean>(resolve => { void runProject([\"gdgraph\", \"build\"], ..., code => resolve(code === 0)).then(started => { if (!started) resolve(false); }); })`) never rejects: a failed build resolves false, and useProjectRunner reports it as an error toast (\"Build Metaproject graph failed\", exit code). So every row of the worker's table with 'failed rebuild' is pinned by tests that reject onRebuild by hand, and none is seen by a user today. If a later onRebuild does reject, the banner would read as the raw error text, would not say that the rebuild failed (the banner carries no copy from `source`), and its Retry re-reads the catalog and does not rebuild; the loud read clears the message at its start (`setError(null)`), so after one click the failure is gone, the graph is still stale, and nothing was rebuilt.",
+    "impact": "Today: nothing, the path has no trigger; the tests and the table describe a state no user reaches. If it becomes reachable: a user who clicks Retry on a failed rebuild believes the build was retried, and instead loses the message while the graph stays stale (the 'Rebuild graph' button below still shows).",
+    "suggested_fix": "Either say in the comment at the `error` state that the rebuild source exists for an onRebuild that rejects and the app's does not, or, when it is wired up, give the rebuild banner its own copy ('Rebuild failed: ...') and its action the same name; use `error.source` in the banner, which nothing reads now.",
+    "evidence": "Read App.tsx 219-222 and useProjectRunner.ts 37-65 (every failure path returns false or toasts; none throws to the caller); MetaprojectView.tsx 675-685 and 846-851. Not run: no render, read-only. Introduced or left by the work that answered round 3's F-001.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 681,
+    "quote": "if (mounted.current) setError({ source: \"rebuild\", message: errMessage(cause) });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-009",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Sites exist: App.tsx:218-222 (rebuildGraph: runProject(...).then(started => { if (!started) resolve(false); }) with code => resolve(code === 0)); useProjectRunner.ts:37-67 (every failure path returns false after a toast or a complete() call; no throw reaches the caller). MetaprojectView.tsx:681 writes source 'rebuild' only in rebuild()'s catch, and :848-849 is the banner whose Retry re-reads the catalog (setRevision). So the quoted state is reachable only if onRebuild rejects, and the app's onRebuild does not in the code read. Whether a future rejecting onRebuild would show a banner that does not say the rebuild failed is a rendering claim; not run, no render recorded. Unverifiable with what would settle it: a DOM test rendering the banner with a rejecting onRebuild (the existing 1424 test already does so and shows the raw message), plus a check of the copy the banner would show for source 'rebuild'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "A Rebuild the user starts clears a standing catalog-read failure at its start, whatever the build does next (the new test 'a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone' pins it, and the result file's assumption says it is as before). With the app's onRebuild a failed build resolves false, so no catalog read follows. Trigger: a catalog reload failed after a first success (banner 'The index is being written.' with Retry), the graph is not ready so 'Rebuild graph' shows, the user clicks it, the build exits non-zero. Outcome: the red alert is gone, no catalog read was made, the screen holds the old catalog, and the only signal is the toast about the build. A later return does not report it either (a failed quiet re-read shows nothing).",
+    "impact": "The user is shown an older catalog with no indication that the last read of it failed; the stale graph banner and the build toast stay, so they are not misled about the build, only about the catalog read.",
+    "suggested_fix": "Clear the banner when the rebuild's reload succeeds (the loud read already clears at its start) and leave it when onRebuild resolves false; or accept it as designed and keep the test.",
+    "evidence": "MetaprojectView.tsx 675-685 and the test at slice-01.diff 823-844. Not run: no render, read-only. Introduced or left by the work that answered round 3's F-001. Normalisation notes: the quote is a part of the reviewer's, cut at normalisation so that it sits on one line of the file.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 676,
+    "quote": "setRebuilding(true);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r04#F-010",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The behaviour is pinned by a passing test at head: MetaprojectView.dom.test.tsx:1790-1811 ('a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone'): after a failed reload (1797), a second Rebuild graph clears the banner (1807) and finish(false) leaves it cleared with catalogReads still 2 (1809-1810). research-evidence/mutation-2.json baseline (head 744d9ef7542f, all six files, exit 0) includes this file, so the test passes at head. The clear is MetaprojectView.tsx:677 (quoted setRebuilding(true) at :676). The slice text cited at slice-01.diff:823 holds the test title. Whether clearing here is a defect is a judgement the finding itself leaves open; the factual claim is confirmed.",
+      "verifier": "review-verifier"
+    }
+  }
+]

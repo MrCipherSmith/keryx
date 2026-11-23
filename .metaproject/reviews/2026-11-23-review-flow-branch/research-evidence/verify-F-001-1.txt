@@ -1,0 +1,39 @@
+# keryx review verify-run
+finding: F-001
+command: keryx ctx rg 'setPosition\(|max-block-size|max-height|innerHeight' apps/desktop/src/metaproject/MetaprojectView.tsx apps/desktop/src/metaproject/metaproject.css apps/desktop/src/styles.css
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign
+time: 2026-11-23T09:10:14.638Z
+exit: 0
+
+--- stdout ---
+# gdctx rg summary
+
+Command: `rg --with-filename --line-number --column --no-heading -- setPosition\(|max-block-size|max-height|innerHeight apps/desktop/src/metaproject/MetaprojectView.tsx apps/desktop/src/metaproject/metaproject.css apps/desktop/src/styles.css`
+Exit code: `0`
+Matches: `14` (5 shown below; full output in raw)
+Files: `2`
+Raw lines: `14`
+Scope: `ripgrep defaults` — NOT searched: hidden paths not named on the command line (any dot-directory, `.metaproject/` included); `.gitignore`d files; binary files (anything holding a NUL byte, which ripgrep always skips silently). There, a nil result means "not looked at", not "not present". Widen with `--hidden` / `--no-ignore`.
+Completeness: `partial` — 5 of 14 matches across 2 of 2 files are listed below. This is NOT an enumeration: re-run with `--all` for every match, or `--json` for the full machine-readable set.
+
+## Top Files
+
+- apps/desktop/src/styles.css: 13
+- apps/desktop/src/metaproject/MetaprojectView.tsx: 1
+
+## Matches
+
+- apps/desktop/src/styles.css
+  - 143:47 position: fixed; z-index: 70; padding: 4px; max-height: min(420px, calc(100vh - 80px)); overflow-y: auto;
+  - 164:73 width: 600px; max-width: 100%; display: flex; flex-direction: column; max-height: 60vh;
+  - 271:61 .exit-tail { margin: var(--sp-2) 0 0; padding: var(--sp-2); max-height: 220px; overflow: auto; font: calc(11px * var(--text-scale))/1.45 var(--mono); background: var(--bg-surfac...
+  - 285:48 .sent-image { display: block; max-width: 100%; max-height: 180px; object-fit: contain; border-radius: var(--r-md); }
+  … omitted 9 of 13 matches in this file — full output in raw
+- apps/desktop/src/metaproject/MetaprojectView.tsx
+  - 181:5 setPosition({ left, top: rect.bottom + 4 });
+
+compacted: 2,138 → 1,742 bytes (19% saved; full output in raw)
+raw: .metaproject/data/gdctx/raw/2026-11-23T09-10-14-632Z-aeed15_rg.log
+summary: .metaproject/data/gdctx/artifacts/2026-11-23T09-10-14-632Z-aeed15_rg.md
+--- stderr ---
+

@@ -1,0 +1,1079 @@
+--- apps/desktop/src/App.dom.test.tsx
+@@ 1,35 @@
+ import { afterAll, beforeAll, expect, test } from "bun:test";
+ import type { Root } from "react-dom/client";
+ import { registerDom, unregisterDom } from "./test/dom";
++import type { View } from "./shell/AppShell";
+ 
+ let React: typeof import("react");
+ let RetainedView: typeof import("./App").RetainedView;
++let MetaprojectWork: typeof import("./App").MetaprojectWork;
+ let root: Root;
+ let host: HTMLElement;
+ 
+ beforeAll(async () => {
+   registerDom();
+   React = await import("react");
+-  RetainedView = (await import("./App")).RetainedView;
++  ({ RetainedView, MetaprojectWork } = await import("./App"));
+   host = document.createElement("div");
+   document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ afterAll(async () => { await React.act(() => root.unmount()); await unregisterDom(); });
+ 
+ function Draft() {
+   const [value, setValue] = React.useState("");
+   return React.createElement("input", { "aria-label": "Draft", value, onChange: (event: { target: { value: string } }) => setValue(event.target.value) });
+ }
+ 
+ test("a retained view mounts on its first visit and keeps its state while hidden", async () => {
+   const show = (active: boolean) => React.act(async () => {
+     root.render(React.createElement(RetainedView, { active, visible: active, children: React.createElement(Draft) }));
+   });
+   await show(false);
+   expect(host.querySelector("input")).toBeNull();
+   await show(true);
+   const input = host.querySelector<HTMLInputElement>("input");
+   if (!input) throw new Error("Missing retained input");
+
+--- apps/desktop/src/App.dom.test.tsx
+@@ 47,87 @@
+ 
+ test("a retained view is hidden while it is the work view under Settings, keeping its state, and shown when visible alone", async () => {
+   // App.tsx passes active = the work view and visible = the shown view; Settings opened over the work view sets them apart.
+   const render = (active: boolean, visible: boolean) => React.act(async () => {
+     root.render(React.createElement(RetainedView, { active, visible, children: React.createElement(Draft) }));
+   });
+   await render(true, true);
+   const input = host.querySelector<HTMLInputElement>("input");
+   if (!input) throw new Error("Missing retained input");
+   await React.act(async () => {
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "under settings");
+     input.dispatchEvent(new Event("input", { bubbles: true }));
+   });
+   await render(true, false);
+   expect(host.querySelector("input")).toBe(input);
+   expect(input.closest("[hidden]")).not.toBeNull();
+   await render(false, true);
+   expect(input.closest("[hidden]")).toBeNull();
+   expect(input.value).toBe("under settings");
+ });
++
++test("the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return", async () => {
++  // A stand-in explorer records the `visible` it is given; the real one closes its Filters popover and re-reads its catalog on it.
++  const given: Array<boolean | undefined> = [];
++  const Explorer = ({ visible }: { visible?: boolean }) => { given.push(visible); return React.createElement("p", null, "Explorer"); };
++  const render = (view: View, workView: Exclude<View, "settings">) => React.act(async () => {
++    root.render(React.createElement(MetaprojectWork, { cwd: "/project", view, workView, onRebuild: async () => false, onDraft: async () => {}, explorer: Explorer }));
++  });
++  await render("metaproject", "metaproject");
++  expect(host.textContent).toContain("Explorer");
++  expect(given.at(-1)).toBe(true);
++  await render("flows", "flows");
++  // Still mounted, hidden: the explorer keeps its state and hears that it left the screen.
++  expect(host.querySelector("p")?.closest("[hidden]")).not.toBeNull();
++  expect(given.at(-1)).toBe(false);
++  await render("metaproject", "metaproject");
++  expect(given.at(-1)).toBe(true);
++  // Settings opened over the explorer hides it too.
++  await render("settings", "metaproject");
++  expect(given.at(-1)).toBe(false);
++});
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 1,23 @@
+ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+ import type { Root } from "react-dom/client";
+-import type { MetaprojectCatalog, MetaprojectRequest, MetaprojectResponse } from "../../../../src/integrations/metaproject-explorer-contract";
++import type { MetaprojectCatalog, MetaprojectEdge, MetaprojectRequest, MetaprojectResponse } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { registerDom, unregisterDom } from "../test/dom";
+ 
+ let createElement: typeof import("react").createElement;
+ let act: (fn: () => void | Promise<void>) => Promise<void>;
+ let View: typeof import("./MetaprojectView").MetaprojectView;
+ type ViewProps = import("react").ComponentProps<typeof View>;
+ let overlayOpen: typeof import("../components/ui").overlayOpen;
+ let root: Root;
+ let host: HTMLElement;
+ const page = { id: "page", kind: "wiki" as const, title: "Guide", path: "wiki/guide.md" };
+ const file = { id: "file", kind: "file" as const, title: "Client", path: "src/client.ts" };
+ const snapshot = { schemaVersion: 1 as const, snapshotId: "one" };
+ const catalog: MetaprojectCatalog = { ...snapshot, nodes: [page, file], edges: [], truncated: false, graph: "missing", hasWikiLayer: true, hasSymbolLayer: false, counts: { files: 1, wiki: 1, modules: 0 } };
+ 
+ beforeAll(async () => {
+   registerDom();
+   const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
+   View = (await import("./MetaprojectView")).MetaprojectView;
+   overlayOpen = (await import("../components/ui")).overlayOpen;
+   host = document.createElement("div"); document.body.append(host); root = (await import("react-dom/client")).createRoot(host);
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 1292,1639 @@
+ test("once the search settles, Find a Wiki page names the searched text in its empty state", async () => {
+   const debounce = holdDebounce();
+   try {
+     await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: noRebuild })); });
+     await act(async () => { listRow("Client").click(); });
+     await openPanelTab("wiki");
+     await act(async () => { button("Find a Wiki page").click(); });
+     await debounce.run();
+     const content = host.querySelector('[aria-label="Wiki article"]');
+     expect(content?.querySelector(".empty-state h3")?.textContent).toBe("No Wiki page matches “src/client.ts”");
+     expect(content?.querySelector("article")).toBeNull();
+   } finally { debounce.restore(); }
+ });
+ 
+ test("a Wiki page without relationships shows no Relationships disclosure", async () => {
+   await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: noRebuild })); });
+   await act(async () => { button("Wiki").click(); });
+   expect(wikiArticle()?.textContent).toContain("Readable guide");
+   expect(host.querySelector(".metaproject-relationship-section")).toBeNull();
+ });
++
++/** Renders the explorer with `props`, shown or hidden as the app does when the user leaves its view and returns. */
++function showView(props: ViewProps, visible: boolean) {
++  return act(async () => { root.render(createElement(View, { ...props, visible })); });
++}
++/** The explorer's catalog error banner: the alert whose Retry re-reads the catalog. */
++const catalogErrorBanner = () => [...host.querySelectorAll<HTMLElement>('.inline-banner[role="alert"]')]
++  .find(item => !item.closest(".metaproject-list, .metaproject-content"));
++
++test("a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none", async () => {
++  // A limited catalog of a built graph makes the explorer read the neighbourhood from the CLI, which this test answers.
++  const limited = { ...catalog, truncated: true, graph: "ready" as const };
++  const selfLink = { from: page.id, to: page.id, kind: "links" as const };
++  const readWith = (edges: MetaprojectEdge[]) => (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") return Promise.resolve(limited);
++    if (input.action === "neighbors") return Promise.resolve({ ...snapshot, root: input.id, nodes: [page, file], edges, truncated: false });
++    return request(cwd, input);
++  };
++  const createCytoscape = await headlessCytoscape();
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: readWith([selfLink]), onRebuild: noRebuild, createCytoscape })); });
++  await act(async () => { button("Wiki").click(); });
++  expect(wikiArticle()?.textContent).toContain("Readable guide");
++  // A count, not the element: a failing match would print the whole disclosure.
++  expect(host.querySelectorAll(".metaproject-relationship-section").length).toBe(0);
++  await act(async () => { root.render(null); });
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: readWith([selfLink, { from: page.id, to: file.id, kind: "describes" }]), onRebuild: noRebuild, createCytoscape })); });
++  await act(async () => { button("Wiki").click(); });
++  const section = host.querySelector(".metaproject-relationship-section");
++  expect(section?.querySelector("summary .count-label")?.textContent).toBe("1");
++  expect(section?.querySelectorAll(".metaproject-rel-row")).toHaveLength(1);
++});
++
++test("a wiki-link lookup in flight when the explorer is hidden and shown again still settles", async () => {
++  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
++  const pending = new Map<string, () => void>();
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Missing](missing.md) [Far](../src/far.ts)" });
++    if (input.action === "search") {
++      const query = input.query;
++      return new Promise(resolve => { pending.set(query, () => resolve({ ...snapshot, hits: query === far.path ? [{ node: far }] : [] })); });
++    }
++    return request(cwd, input);
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
++  await showView(props, true);
++  await act(async () => { button("Wiki").click(); });
++  await act(async () => { wikiLink("Missing").click(); });
++  await showView(props, false);
++  await showView(props, true);
++  await act(async () => { pending.get("wiki/missing.md")?.(); });
++  expect(wikiArticle()?.textContent).toContain("No indexed project file at wiki/missing.md.");
++  await act(async () => { wikiLink("Far").click(); });
++  await showView(props, false);
++  await showView(props, true);
++  await act(async () => { pending.get(far.path)?.(); });
++  expect(panelTitle()).toBe("Far module");
++});
++
++test("a page of results in flight when the explorer is hidden and shown again is still appended", async () => {
++  const debounce = holdDebounce();
++  let releasePage: () => void = () => {};
++  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
++    if (input.action === "catalog") return { ...catalog, schemaVersion: 2 };
++    if (input.action === "search") {
++      if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
++      return new Promise(resolve => { releasePage = () => resolve({ schemaVersion: 2, snapshotId: "one", hits: [{ node: { ...page, id: "second-page", title: "Second Wiki page" }, scope: "wiki" }], partial: false }); });
++    }
++    if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
++    return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
++  };
++  const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: noRebuild, createCytoscape: await headlessCytoscape() };
++  try {
++    await showView(props, true);
++    await act(async () => { button("Wiki").click(); });
++    await typeQuery("query");
++    await debounce.run();
++    await act(async () => { button("Load more results").click(); });
++    await showView(props, false);
++    await showView(props, true);
++    await act(async () => { releasePage(); });
++    expect(host.querySelector(".metaproject-list")?.textContent).toContain("Second Wiki page");
++  } finally { debounce.restore(); }
++});
++
++test("a failed quiet re-read on return shows no error and leaves the explorer as it was", async () => {
++  let catalogReads = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      return catalogReads === 1 ? Promise.resolve(catalog) : Promise.reject(new Error("The CLI is busy."));
++    }
++    return request(cwd, input);
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
++  await showView(props, true);
++  await act(async () => { listRow("Client").click(); });
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(2);
++  expect(host.textContent).not.toContain("The CLI is busy.");
++  expect(catalogErrorBanner()).toBeUndefined();
++  expect(freshnessBanner()?.textContent).toContain("Graph is missing.");
++  expect(listRow("Client").getAttribute("aria-current")).toBe("true");
++  expect(panelTitle()).toBe("Client");
++});
++
++test("a standing error, such as a failed rebuild's, survives a quiet re-read on return", async () => {
++  let catalogReads = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") catalogReads++;
++    return request(cwd, input);
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => { throw new Error("Rebuild failed: index locked."); } };
++  await showView(props, true);
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(2);
++  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
++});
++
++test("a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown", async () => {
++  let catalogReads = 0;
++  let failReload: () => void = () => {};
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      if (catalogReads === 2) return new Promise((_resolve, reject) => { failReload = () => reject(new Error("The index is being written.")); });
++    }
++    return request(cwd, input);
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
++  await showView(props, true);
++  // A successful rebuild reloads the catalog; that reload is held.
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogReads).toBe(2);
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(2);
++  await act(async () => { failReload(); });
++  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
++});
++
++test("the Filters popover stays under its button when its content fits on neither side and there is less room above", async () => {
++  const restoreHeight = stubWindowHeight(480);
++  const restoreContent = stubPopoverContentHeight(500);
++  try {
++    await renderFilters();
++    // 294 px below the button, 138 px above it: neither holds 500 px, so the larger room, below, wins.
++    stubBox(filtersButton(), { left: 544, top: 150, right: 615, bottom: 174 });
++    await openFilters();
++    const style = filtersDialog()!.style;
++    expect(style.bottom).toBe("");
++    expect(px(style.top)).toBe(174 + 4);
++    expect(px(style.maxHeight)).toBe(480 - 8 - 178);
++  } finally { restoreContent(); restoreHeight(); }
++});
++
++test("in a tall window the Filters popover keeps the menu's 420 px height cap, under its button and above it", async () => {
++  const restoreHeight = stubWindowHeight(900);
++  const restoreContent = stubPopoverContentHeight(229);
++  try {
++    await renderFilters();
++    // 764 px of room below the button.
++    stubBox(filtersButton(), { left: 544, top: 100, right: 615, bottom: 124 });
++    await openFilters();
++    expect(px(filtersDialog()!.style.top)).toBe(128);
++    expect(px(filtersDialog()!.style.maxHeight)).toBe(420);
++    await act(async () => { filtersButton().click(); });
++    // 264 px below cannot hold the content; 788 px above can.
++    stubBox(filtersButton(), { left: 544, top: 800, right: 615, bottom: 824 });
++    await openFilters();
++    expect(filtersDialog()!.style.top).toBe("");
++    expect(px(filtersDialog()!.style.bottom)).toBe(900 - 800 + 4);
++    expect(px(filtersDialog()!.style.maxHeight)).toBe(420);
++  } finally { restoreContent(); restoreHeight(); }
++});
++
++test("a Filters button at the window's bottom edge keeps the popover above it 8 px inside the window", async () => {
++  const restoreHeight = stubWindowHeight(480);
++  const restoreContent = stubPopoverContentHeight(229);
++  try {
++    await renderFilters();
++    stubBox(filtersButton(), { left: 544, top: 478, right: 615, bottom: 502 });
++    await openFilters();
++    expect(filtersDialog()!.style.top).toBe("");
++    expect(px(filtersDialog()!.style.bottom)).toBe(8);
++  } finally { restoreContent(); restoreHeight(); }
++});
++
++test("in a window too short for any room beside its button, the Filters popover gets no negative height", async () => {
++  const restoreHeight = stubWindowHeight(30);
++  try {
++    await renderFilters();
++    // 6 px short below the button and 12 px short above it.
++    stubBox(filtersButton(), { left: 544, top: 0, right: 615, bottom: 24 });
++    await openFilters();
++    expect(px(filtersDialog()!.style.top)).toBe(28);
++    expect(px(filtersDialog()!.style.maxHeight)).toBe(0);
++  } finally { restoreHeight(); }
++});
++
++test("a closed Filters popover no longer measures its button when the window is resized", async () => {
++  await renderFilters();
++  const toggle = filtersButton();
++  stubBox(toggle, { left: 544, top: 100, right: 615, bottom: 124 });
++  const box = toggle.getBoundingClientRect;
++  let measured = 0;
++  toggle.getBoundingClientRect = () => { measured++; return box(); };
++  await openFilters();
++  const opened = measured;
++  await act(async () => { window.dispatchEvent(new Event("resize")); });
++  expect(measured).toBe(opened + 1);
++  await act(async () => { toggle.click(); });
++  expect(filtersDialog()).toBeNull();
++  const closed = measured;
++  await act(async () => { window.dispatchEvent(new Event("resize")); });
++  expect(measured).toBe(closed);
++});
++
++test("shown again after the project's knowledge changed, the explorer shows the new catalog", async () => {
++  const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
++  let snapshotId = "one";
++  let catalogReads = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      return Promise.resolve(snapshotId === "one" ? catalog : { ...catalog, snapshotId, nodes: [page, file, server], counts: { files: 2, wiki: 1, modules: 0 } });
++    }
++    return request(cwd, input).then(result => ({ ...result, snapshotId }));
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
++  await showView(props, true);
++  expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Server");
++  await showView(props, false);
++  snapshotId = "two";
++  await showView(props, true);
++  expect(catalogReads).toBe(2);
++  expect(listRow("Server").textContent).toContain("src/server.ts");
++  expect(host.textContent).not.toContain("Project knowledge changed while loading");
++});
++
++test("a graph gone stale while hidden shows its reason under Details, and a rebuild's ready reload clears it", async () => {
++  let graph: "ready" | "stale" = "ready";
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
++    ? Promise.resolve(graph === "ready" ? { ...catalog, graph } : { ...catalog, graph, graphReason: "an untracked file changed" })
++    : request(cwd, input);
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true, createCytoscape: await headlessCytoscape() };
++  await showView(props, true);
++  expect(freshnessBanner()).toBeUndefined();
++  await showView(props, false);
++  graph = "stale";
++  await showView(props, true);
++  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
++  await act(async () => { detailsButton()?.click(); });
++  expect(detailsButton()?.getAttribute("aria-expanded")).toBe("true");
++  expect(freshnessBanner()?.textContent).toContain("an untracked file changed");
++  graph = "ready";
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(freshnessBanner()).toBeUndefined();
++});
++
++test("after a quiet re-read on return, a rebuild's failed catalog reload is still shown", async () => {
++  let catalogReads = 0;
++  let failing = false;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      if (failing) return Promise.reject(new Error("The index is being written."));
++    }
++    return request(cwd, input);
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
++  await showView(props, true);
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(2);
++  failing = true;
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(catalogReads).toBe(3);
++  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
++});
++
++test("a return after a failed first catalog read starts no read, and its failure and Retry stay", async () => {
++  let catalogReads = 0;
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") {
++      catalogReads++;
++      return catalogReads === 1 ? Promise.reject(new Error("The CLI is not ready.")) : Promise.resolve(catalog);
++    }
++    return request(cwd, input);
++  };
++  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
++  await showView(props, true);
++  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
++  await showView(props, false);
++  await showView(props, true);
++  expect(catalogReads).toBe(1);
++  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
++  await act(async () => { button("Retry").click(); });
++  expect(catalogReads).toBe(2);
++  expect(catalogErrorBanner()).toBeUndefined();
++  expect(listRow("Client").textContent).toContain("src/client.ts");
++});
++
++test("a node known only from a search hit keeps its panel once the search is cleared, and Back returns to it at once", async () => {
++  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "search"
++    ? Promise.resolve({ ...snapshot, hits: input.query === "far" ? [{ node: far, snippet: "far away" }] : [] })
++    : request(cwd, input);
++  const debounce = holdDebounce();
++  try {
++    await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
++    await typeQuery("far");
++    await debounce.run();
++    await act(async () => { listRow("Far module").click(); });
++    expect(panelTitle()).toBe("Far module");
++    // The hit is gone from the list; the node is in neither the catalog nor any read the explorer holds now.
++    await typeQuery("");
++    expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Far module");
++    expect(panelTitle()).toBe("Far module");
++    await act(async () => { listRow("Client").click(); });
++    expect(panelTitle()).toBe("Client");
++    await act(async () => { button("Back").click(); });
++    expect(panelTitle()).toBe("Far module");
++  } finally { debounce.restore(); }
++});
+
+--- apps/desktop/src/metaproject/RelationshipList.dom.test.tsx
+@@ 109,162 @@
+   expect(second?.querySelector("summary")?.textContent?.replace(/\s+/g, " ").trim()).toBe("Second step 1");
+   second!.open = true;
+   expect(second?.textContent).toContain("Server");
+   expect(second?.textContent).toContain("calls");
+   expect(second?.textContent).toContain("Api");
+   const buttons = [...second!.querySelectorAll("button")];
+   expect(buttons.map(item => item.textContent?.trim())).toEqual(["Open Server", "Open Api"]);
+   await act(async () => { buttons[0]!.click(); });
+   await act(async () => { buttons[1]!.click(); });
+   expect(selected).toEqual(["server", "api"]);
+ });
+ 
+ test("limited and empty projections say so", async () => {
+   await act(async () => { root.render(createElement(List, { projection: projection({ truncated: true }), select: () => {} })); });
+   expect(host.querySelector('[role="status"]')?.textContent).toContain("limited");
+   await act(async () => { root.render(createElement(List, { projection: projection({ edges: [] }), select: () => {} })); });
+   expect(host.textContent).toContain("No relationships for these filters.");
+   expect(host.querySelector("h3")).toBeNull();
+ });
+ 
++test("a projection whose every edge is left out says it has no relationships", async () => {
++  // A wiki page that links to a heading of its own file carries a self `links` edge.
++  const leftOut = projection({
++    edges: [
++      { from: client.id, to: client.id, kind: "links" },
++      { from: "gone", to: client.id, kind: "imports" },
++    ],
++  });
++  expect(summarize(leftOut)).toMatchObject({ incoming: 0, outgoing: 0, secondStep: 0 });
++  await act(async () => { root.render(createElement(List, { projection: leftOut, select: () => {} })); });
++  expect(host.textContent).toContain("No relationships for these filters.");
++  expect(host.querySelector("h3")).toBeNull();
++});
++
+ test("summary counts incoming and outgoing root-adjacent edges only", () => {
+   expect(summarize(projection())).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1, truncated: false });
+ });
+ 
+ test("a self-loop is neither listed nor counted, at the root or at the second step, as in the graph", async () => {
+   const withLoops = projection({
+     edges: [
+       ...projection().edges,
+       { from: client.id, to: client.id, kind: "imports" },
+       { from: server.id, to: server.id, kind: "calls" },
+     ],
+   });
+   expect(summarize(withLoops)).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1 });
+   await act(async () => { root.render(createElement(List, { projection: withLoops, select: () => {} })); });
+   expect(groupHeadings("h3")).toEqual(["Incoming 3", "Outgoing 2", "Second step 1"]);
+   expect(host.querySelector('[data-direction="outgoing"] button[title="src/client.ts"]')).toBeNull();
+   const second = host.querySelector('[data-direction="second-step"]')!;
+   expect([...second.querySelectorAll("button")].map(item => item.textContent?.trim())).toEqual(["Open Server", "Open Api"]);
+ });
+ 
+
+--- apps/desktop/src/App.tsx
+@@ 1,21 @@
+-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
++import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+ import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
+ import { isTauri } from "./platform/backend";
+ import {
+   acpStop,
+   pickFolder,
+   setFolderPrompter,
+   setWindowTitle,
+   settingsAddRecent,
+   settingsGet,
+   windowInitialCwd,
+   windowOpenProject,
+ } from "./platform/commands";
+ import { applyTheme, setPrefs, MOD } from "./lib/prefs";
+ import { basename, errMessage } from "./lib/format";
+ import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+ import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
+ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
+ import { SettingsView } from "./shell/SettingsView";
+ import { Welcome } from "./shell/Welcome";
+ import { UpdateBanner } from "./shell/UpdateBanner";
+
+--- apps/desktop/src/App.tsx
+@@ 35,75 @@
+ import type { FlowCard } from "./platform/commands";
+ import { laneOf, workPrompt } from "./flows/model";
+ import { useFlows } from "./flows/useFlows";
+ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
+ import type { ComposerHandle } from "./session/Composer";
+ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
+ import { SessionView } from "./session/SessionView";
+ import { modelOption, useAcpSession } from "./session/useAcpSession";
+ import { ProjectMenu } from "./project/ProjectMenu";
+ import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
+ import { TelegramServeSettings } from "./project/TelegramServeSettings";
+ import { TelegramBotSettings } from "./project/TelegramBotSettings";
+ import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
+ import { PROJECT_COMMANDS } from "./project/projectCommands";
+ import { useProjectRunner } from "./project/useProjectRunner";
+ import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
+ import { supportsProviders } from "./acp/providers";
+ import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
+ import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
+ 
+-const MetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
++const LazyMetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
+ 
+ export function App() {
+   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
+   const [welcomeSettings, setWelcomeSettings] = useState(false);
+   const [prompt, setPrompt] = useState<{ title: string; resolve: (v: string | null) => void } | null>(null);
+ 
+   useEffect(() => {
+     applyTheme();
+     void windowInitialCwd()
+       .then((c) => setCwd(c ?? null))
+       .catch(() => setCwd(null));
+     if (!isTauri()) setFolderPrompter((title) => new Promise((resolve) => setPrompt({ title, resolve })));
+     return () => setFolderPrompter(null);
+   }, []);
+ 
+   useEffect(() => {
+     if (cwd === null) void setWindowTitle("Keryx");
+     if (cwd) void settingsAddRecent(cwd).catch(() => {});
+     if (cwd === null) void projectRegister(null).catch(() => {});
+     if (!isTauri() && cwd !== undefined) {
+
+--- apps/desktop/src/App.tsx
+@@ 134,197 @@
+           className="mono"
+           data-autofocus
+           placeholder="/Users/you/project"
+           value={value}
+           onChange={(e) => setValue(e.target.value)}
+           onKeyDown={(e) => e.key === "Enter" && value.trim() && onDone(value.trim())}
+         />
+         <span className="field-hint">Browser dev mode has no folder picker. The bridge opens this path on your machine.</span>
+       </label>
+     </Dialog>
+   );
+ }
+ 
+ /** Mounts a view on its first visit and keeps it mounted, hidden, afterwards, so its state survives view switches. */
+ export function RetainedView({ active, visible, children }: { active: boolean; visible: boolean; children: ReactNode }) {
+   const [visited, setVisited] = useState(active);
+   if (active && !visited) setVisited(true);
+   return visited || active ? <div className="view" hidden={!visible}>{children}</div> : null;
+ }
+ 
++type ExplorerProps = { cwd: string; visible?: boolean; onRebuild: () => Promise<boolean>; onDraft?: (task: string) => Promise<void> };
++
++/**
++ * The Metaproject explorer in the work area: mounted on its first visit and kept, and told whether it is the
++ * shown view, so it closes its Filters popover on leaving and re-reads its catalog on return.
++ * `explorer` is a test seam (the app passes nothing); bun's module mocks would outlive one test file.
++ */
++export function MetaprojectWork({ cwd, view, workView, onRebuild, onDraft, explorer: MetaprojectView = LazyMetaprojectView }: {
++  cwd: string;
++  view: View;
++  workView: Exclude<View, "settings">;
++  onRebuild: () => Promise<boolean>;
++  onDraft: (task: string) => Promise<void>;
++  explorer?: ComponentType<ExplorerProps>;
++}) {
++  return (
++    <RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
++      <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
++        <MetaprojectView cwd={cwd} visible={view === "metaproject"} onRebuild={onRebuild} onDraft={onDraft} />
++      </Suspense>
++    </RetainedView>
++  );
++}
++
+ function useNarrow(px: number): boolean {
+   const [narrow, setNarrow] = useState(() => window.innerWidth < px);
+   useEffect(() => {
+     const mq = window.matchMedia(`(max-width: ${px - 1}px)`);
+     const on = () => setNarrow(mq.matches);
+     on();
+     mq.addEventListener("change", on);
+     return () => mq.removeEventListener("change", on);
+   }, [px]);
+   return narrow;
+ }
+ 
+ type Status = { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
+ 
+ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; onOpenProject: (cwd: string) => void; onCloseProject: () => void }) {
+   const s = useAcpSession(cwd);
+   const flows = useFlows(cwd);
+   const providers = useProvidersDialog();
+   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
+   const [view, setView] = useState<View>("session");
+
+--- apps/desktop/src/App.tsx
+@@ 598,641 @@
+       {/* The session view stays mounted so the transcript and draft survive view switches. */}
+       <div className="view" hidden={view !== "session"}>
+         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
+           reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
+           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
+             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
+             onContinuation={linkReviewContinuation} /> : undefined}
+           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
+       </div>
+       {workView === "flows" ? (
+         <div className="view" hidden={view !== "flows"}>
+           <FlowsBoard onOpenIssue={dir => openIssueOrigin({flowDir:dir})} initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
+         </div>
+       ) : null}
+       {issueWork.chooser}
+       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
+         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+       </div>}
+       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
+-      <RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
+-        <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
+-          <MetaprojectView cwd={cwd} visible={view === "metaproject"} onRebuild={rebuildGraph} onDraft={async task => {
+-            if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+-            setView("session");
+-          }} />
+-        </Suspense>
+-      </RetainedView>
++      <MetaprojectWork cwd={cwd} view={view} workView={workView} onRebuild={rebuildGraph} onDraft={async task => {
++        if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
++        setView("session");
++      }} />
+       <div className="view" hidden={view !== "review"}>
+         {reviewDisconnected ? (
+           <EmptyState title="GitHub is not connected" icon="pr">
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+         ) : (
+           <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+               flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
+             setLinkedFlow(dir);
+             setView("flows");
+           }} />
+         )}
+       </div>
+       {view === "settings" ? (
+         <div className="view">
+           <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
+         </div>
+       ) : null}
+ 
+       {view === "session" && routingSession !== null && routingSession === state.sessionId &&
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 11,51 @@
+   type MetaprojectHitV2,
+   type MetaprojectSearchV2,
+   type MetaprojectRequestV2,
+   type MetaprojectV2Response,
+   type MetaprojectNeighbors,
+   type MetaprojectNode,
+   type MetaprojectRequest,
+   type MetaprojectResponse,
+   type MetaprojectSearch,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
+ import { Icon } from "../components/Icon";
+ import { renderRepositoryMarkdown } from "../components/Markdown";
+ import { EmptyState, useEscape } from "../components/ui";
+ import { errMessage } from "../lib/format";
+ import { openExternal } from "../platform/commands";
+ import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
+ import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
+ import { NodeDetailsPanel } from "./NodeDetailsPanel";
+ import { RelationshipGraph, type CytoscapeFactory } from "./RelationshipGraph";
+-import { RelationshipList } from "./RelationshipList";
++import { RelationshipList, summarizeRelationships } from "./RelationshipList";
+ import { RELATIONSHIP_KIND_LABELS } from "./labels";
+ import { useExplorerNavigation } from "./useExplorerNavigation";
+ import "./metaproject.css";
+ 
+ type Request = (
+   cwd: string,
+   request: MetaprojectRequest,
+ ) => Promise<MetaprojectResponse>;
+ const EMPTY_HITS: readonly MetaprojectHit[] = [];
+ const DOCUMENT_EDGES = ["describes", "links"] as const;
+ const sameLocation = (left: OpenSpecLocation | null, right: OpenSpecLocation | null) =>
+   left === right || (left !== null && right !== null && left.id === right.id && left.collection === right.collection &&
+     left.artifact === right.artifact && left.section === right.section && left.digest === right.digest && left.fragment === right.fragment);
+ 
+ /**
+  * The repository path a Markdown link in `source` points at: percent-decoded, relative to the
+  * page's folder, or to the repository root when it starts with "/". Null when it cannot be decoded.
+  */
+ function resolveRepositoryPath(source: string, href: string): string | null {
+   let path: string;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 309,434 @@
+     nextCursor?: string;
+   } | null>(null);
+   const [snapshotMismatch, setSnapshotMismatch] = useState(false);
+   const [detail, setDetail] = useState<MetaprojectDetail | null>(null);
+   const [projection, setProjection] = useState<MetaprojectNeighbors | null>(
+     null,
+   );
+   const [error, setError] = useState("");
+   const [detailError, setDetailError] = useState("");
+   const [relationshipError, setRelationshipError] = useState("");
+   const [searchError, setSearchError] = useState<{ query: string; message: string } | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [loadingDetail, setLoadingDetail] = useState(false);
+   const [loadingRelationships, setLoadingRelationships] = useState(false);
+   const [searchAttempt, setSearchAttempt] = useState(0);
+   const [rebuilding, setRebuilding] = useState(false);
+   const [revision, setRevision] = useState(0);
++  // Retires pending work (wiki-link lookups, pages of results): moved by every catalog read except
++  // the quiet one, which is no new project, protocol, Retry, Refresh or Rebuild.
+   const project = useRef(0);
++  // The catalog read whose result may still apply; every read, the quiet one included, supersedes the last.
++  const catalogRead = useRef(0);
++  const catalogPending = useRef(false);
+   const loaded = useRef(false);
+   const loadedSnapshot = useRef<string>();
+   // Shown again after being hidden, the explorer re-reads the catalog once, quietly: an unchanged
+-  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads.
++  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads, and a
++  // failure leaves the explorer as it was, any standing error included.
+   const quietRead = useRef(false);
+   const [freshness, setFreshness] = useState<Pick<MetaprojectCatalog, "snapshotId" | "graph" | "graphReason"> | null>(null);
+   const wasVisible = useRef(visible);
+   useEffect(() => {
+     const returned = visible && !wasVisible.current;
+     wasVisible.current = visible;
+     // Leaving the explorer's view closes the Filters popover; focus stays where the user went.
+     if (!visible) setFiltersOpen(false);
+-    // A catalog still loading is left to finish; its result is applied on arrival.
+-    if (!returned || !loaded.current) return;
++    // A catalog still loading, or a reload in flight, is left to finish; its result, or its failure, is shown on arrival.
++    if (!returned || !loaded.current || catalogPending.current) return;
+     quietRead.current = true;
+     setRevision(value => value + 1);
+   }, [visible]);
+   const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
+   const pageInFlight = useRef(false);
+   const latestSearch = useRef({ query: "", snapshot: "", generation: 0 });
+   const content = useRef<HTMLElement>(null);
+   const searchCache = useRef(new Map<string, NonNullable<typeof searchResult>>());
+   const activeMode = useRef(mode);
+   activeMode.current = mode;
+   const [documents, setDocuments] = useState<MetaprojectNeighbors | null>(null);
+   const [documentProblem, setDocumentProblem] = useState("");
+   const panelOpen = route.mode === "graph" && route.panelOpen;
+   // The graph's freshness as last read: a quiet re-read's, while it is for the loaded snapshot.
+   const graphState = catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog;
+   const graphIndex = useMemo(
+     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
+     [catalog],
+   );
+   const selectedNode = graphIndex?.byId.get(selection);
+   const searchQuery = query.trim();
+   if (latestSearch.current.query !== searchQuery || latestSearch.current.snapshot !== catalog?.snapshotId) {
+     latestSearch.current = { query: searchQuery, snapshot: catalog?.snapshotId ?? "", generation: latestSearch.current.generation + 1 };
+   }
+   useEffect(() => {
+     if (protocol === null) return;
+-    const generation = ++project.current;
++    const generation = ++catalogRead.current;
+     const quiet = quietRead.current;
+     quietRead.current = false;
+-    setError("");
++    if (!quiet) {
++      project.current++;
++      setError("");
++    }
+     if (!loaded.current) setLoading(true);
++    catalogPending.current = true;
+     void (async () => {
+       try {
+         const result = (await read(cwd, {
+           action: "catalog",
+         })) as MetaprojectCatalog;
+-        if (generation !== project.current) return;
++        if (generation !== catalogRead.current) return;
+         loaded.current = true;
+         if (quiet && result.snapshotId === loadedSnapshot.current) {
+           setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });
+           return;
+         }
+         setCatalog(result);
+         setFreshness(null);
+         setSnapshotMismatch(false);
+         if (loadedSnapshot.current && loadedSnapshot.current !== result.snapshotId && !result.truncated) {
+           setRoute(current => current.mode !== "openspec" && !result.nodes.some(node => node.id === current.selection)
+             ? { ...current, selection: "" } : current);
+         }
+         loadedSnapshot.current = result.snapshotId;
+       } catch (cause) {
+-        if (generation === project.current) setError(errMessage(cause));
++        // A failed quiet read keeps the loaded catalog; the next read the user starts reports a lasting failure.
++        if (generation === catalogRead.current && !quiet) setError(errMessage(cause));
+       } finally {
+-        if (generation === project.current) setLoading(false);
++        if (generation === catalogRead.current) {
++          catalogPending.current = false;
++          setLoading(false);
++        }
+       }
+     })();
+     return () => {
+-      project.current++;
++      catalogRead.current++;
++      // Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work.
++      if (!quietRead.current) project.current++;
+     };
+   }, [cwd, read, revision, protocol, setRoute]);
+   useEffect(() => {
+     if (!catalog || !searchQuery || mode === "openspec") return;
+     const key = JSON.stringify([catalog.snapshotId, mode, searchQuery]);
+     const cached = searchCache.current.get(key);
+     setSearchError(null);
+     if (cached) { setSearchResult(cached); return; }
+     setSearchResult(null);
+     let active = true;
+     const timer = window.setTimeout(() => {
+       void (async () => {
+         const previous = searchInFlight.current;
+         if (previous) await previous.catch(() => {});
+         if (!active) return;
+         const pending = Promise.resolve().then(() => protocol === 2 && mode === "wiki"
+           ? (requestV2 ?? requestMetaprojectV2)(cwd, { version: 2, action: "search", query: searchQuery, scopes: ["wiki"] }) as unknown as Promise<MetaprojectResponse>
+           : read(cwd, { action: "search", query: searchQuery }));
+         searchInFlight.current = pending;
+         try {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 565,609 @@
+   const searching = Boolean(searchQuery && !resolvedSearch && !searchFailure && !snapshotMismatch);
+   const nodes = useMemo(
+     () => [
+       ...new Map(
+         [
+           ...(catalog?.nodes ?? []),
+           ...hits.map((hit) => hit.node),
+           ...(projection?.nodes ?? []),
+         ].map((node) => [node.id, node]),
+       ).values(),
+     ],
+     [catalog, hits, projection],
+   );
+   const results = useMemo(() => {
+     const results = protocol === 2 && searchQuery ? hits : rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits);
+     return mode === "wiki" ? results.filter(hit => hit.node.kind === "wiki") : results;
+   }, [catalog, hits, mode, searchQuery, protocol]);
+   // Every node this explorer has shown or opened, so Back to one shows its panel at once even
+   // when it is not among the catalog, hits or current projection (for example a lookup result).
+   const seenNodes = useRef(new Map<string, MetaprojectNode>());
+-  const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };
++  const remember = useCallback((node: MetaprojectNode) => { seenNodes.current.set(node.id, node); }, []);
+   // Filled when the node list changes, not on every render; the current render reads `nodes` itself.
+   useEffect(() => {
+-    for (const node of nodes) seenNodes.current.set(node.id, node);
+-  }, [nodes]);
++    for (const node of nodes) remember(node);
++  }, [nodes, remember]);
+   const activeNode = nodes.find(node => node.id === selection) ?? seenNodes.current.get(selection);
+   const [suggestedWiki, setSuggestedWiki] = useState<{ root: string; node: MetaprojectNode } | null>(null);
+   const modulePath = activeNode?.kind === "module" ? activeNode.path : undefined;
+   useEffect(() => {
+     if (!panelOpen || !modulePath || !catalog) return;
+     let active = true;
+     void read(cwd, { action: "search", query: modulePath }).then(result => {
+       if (!active || !("hits" in result) || result.snapshotId !== catalog.snapshotId) return;
+       const match = result.hits.find(({ node }) => node.kind === "wiki" && node.pageType === "component" && node.title === `Module ${modulePath}`);
+       setSuggestedWiki(match ? { root: selection, node: match.node } : null);
+     }).catch(() => {});
+     return () => { active = false; };
+   }, [catalog, cwd, modulePath, panelOpen, read, selection]);
+   const graphNodes = useRef(nodes);
+   graphNodes.current = nodes;
+   const select = useCallback((id: string) => {
+     const node = graphNodes.current.find(item => item.id === id) ?? seenNodes.current.get(id);
+     const archive = node?.kind === "archive";
+     if (id === shownSelection.current) {
+       // Re-selecting the shown node only opens its panel; it is not a new history entry.
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 691,736 @@
+     const loaded = nodes.find(item => item.path === path);
+     if (loaded) { openDocument(loaded, fragment); return; }
+     const snapshotId = catalog?.snapshotId;
+     const generation = project.current;
+     const current = () => token === lookup.current && generation === project.current && shownSelection.current === from && activeMode.current === "wiki";
+     void (async () => {
+       try {
+         const result = await read(cwd, { action: "search", query: path });
+         if (!current()) return;
+         if (!("hits" in result)) throw new Error(`The lookup of ${path} returned no search results.`);
+         if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }
+         const target = result.hits.find(hit => hit.node.path === path)?.node;
+         if (target) openDocument(target, fragment);
+         else unresolved(`No indexed project file at ${path}.`);
+       } catch (cause) {
+         if (current()) unresolved(`Could not look up ${path}: ${errMessage(cause)}`);
+       }
+     })();
+   };
+   const currentProjection = projection?.root === selection ? projection : null;
++  // The Wiki disclosure counts the rows its list shows, by the list's own grouping rule, as the panel's Relationships tab does.
++  const wikiRelationships = useMemo(
++    () => mode === "wiki" && currentProjection ? summarizeRelationships(currentProjection) : null,
++    [mode, currentProjection],
++  );
++  const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;
+   // While the next selection's relationships load, the last graph stays on screen, marked busy;
+   // a failed read or leaving Graph drops it.
+   const lastGraph = useRef<MetaprojectNeighbors | null>(null);
+   if (mode !== "graph" || relationshipError) lastGraph.current = null;
+   else if (currentProjection) lastGraph.current = currentProjection;
+   // A projection for another root means the read for this selection has not started yet.
+   const relationshipsLoading = loadingRelationships || (projection !== null && projection.root !== selection);
+   const graphProjection = mode !== "graph" ? null : currentProjection ?? (relationshipsLoading ? lastGraph.current : null);
+   const graphBusy = graphProjection !== null && graphProjection !== currentProjection;
+   const showGraph = graphState !== null && (graphState.graph !== "missing" || protocol === 2);
+   const list = useRef<HTMLElement>(null);
+   useEffect(() => {
+     list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+   }, [selection, mode]);
+   const shownTotal = catalog ? mode === "wiki" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;
+   const listHeading = searchQuery ? `Results · ${results.length}` : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
+   const showHidden = useCallback(() => {
+     setRoute(current => current.mode === "graph" && !current.panelOpen ? { ...current, panelOpen: true } : current);
+     setRevealRelationships(value => value + 1);
+   }, [setRoute]);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 925,967 @@
+                 </div>
+               )}
+               {mode === "wiki" && detailPanel}
+               {mode === "wiki" && loadingDetail && <p role="status">Loading item…</p>}
+               {mode === "graph" && !(graphProjection && showGraph) && <div className="metaproject-filter-strip">{filtersButton}</div>}
+               {mode === "graph" && filters}
+               {mode === "graph" && relationshipError && !panelOpen && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>{relationshipError}</span>
+                   <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+                 </div>
+               )}
+               {mode === "graph" && relationshipsLoading && !graphProjection && <p role="status">Loading relationships…</p>}
+               {graphProjection && showGraph && (
+                 <RelationshipGraph projection={graphProjection} busy={graphBusy} onSelect={select} onShowHidden={showHidden}
+                   actions={filtersButton} {...(createCytoscape && { createCytoscape })} />
+               )}
+               {mode === "graph" && currentProjection && !showGraph && (
+                 <p className="metaproject-meta">The graph is not built yet. Open the panel's Relationships tab to see this node's links.</p>
+               )}
+-              {currentProjection && mode === "wiki" && currentProjection.edges.length > 0 && (
++              {currentProjection && mode === "wiki" && wikiRelationshipRows > 0 && (
+                 <details className="metaproject-relationship-section" key={selection}>
+-                  <summary>Relationships <span className="count-label">{currentProjection.edges.length}</span></summary>
++                  <summary>Relationships <span className="count-label">{wikiRelationshipRows}</span></summary>
+                   <RelationshipList projection={currentProjection} select={id => {
+                     const node = nodes.find(item => item.id === id) ?? seenNodes.current.get(id); if (node) openDocument(node);
+                   }} />
+                 </details>
+               )}
+               {mode === "wiki" && loadingRelationships && <p role="status">Loading relationships…</p>}
+               {!selection && mode === "wiki" && searchQuery ? (
+                 <EmptyState icon="search" title={wikiEmptyTitle}
+                   actions={<button className="btn btn-sm" onClick={() => setRoute(current => ({ ...current, query: "" }))}>Clear search</button>}>
+                   {results.length ? "Pick a page from the results to read it." : searching ? "Results appear here as soon as the search finishes." : "Clear the search to read the first Wiki page."}
+                 </EmptyState>
+               ) : !selection && <p>{mode === "wiki" ? "Select a Wiki page to read it." : "Select an item to explore it."}</p>}
+             </section>
+             {panelOpen && activeNode && <NodeDetailsPanel
+               node={activeNode}
+               relationships={currentProjection}
+               relationshipsPending={relationshipsLoading}
+               relationshipsProblem={relationshipError}
+               revealRelationships={revealRelationships}
+               documents={documents?.root === selection ? documents : null}
+
+--- apps/desktop/src/metaproject/RelationshipList.tsx
+@@ 192,226 @@
+             <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(from.id)} title={from.path}>Open {from.title}</button>
+             <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(to.id)} title={to.path}>Open {to.title}</button>
+             <EvidenceDisclosure lines={lines} label={examplesLabel(lines.length)} />
+           </div>
+         </li>;
+       })}
+     </ul>
+   </details>;
+ }
+ 
+ /** The accessible relationship list: root-adjacent relationships by direction and kind, then second-step ones. */
+ export function RelationshipList({
+   projection,
+   select,
+ }: {
+   projection: MetaprojectNeighbors;
+   select: (id: string) => void;
+ }) {
+   const groups = groupRelationships(projection);
+   const rootPath = projection.nodes.find(node => node.id === projection.root)?.path ?? "";
++  // Empty by the grouping rule, not by the raw edges: a self-loop or an edge with a missing end lists no row.
++  const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;
+   return (
+     <div className="metaproject-rel">
+       {projection.truncated && <p className="metaproject-rel-note" role="status">
+         This projection is limited: some relationships are hidden. Narrow the filters to see them.
+       </p>}
+-      {projection.edges.length === 0 && <p className="metaproject-rel-note">No relationships for these filters.</p>}
++      {empty && <p className="metaproject-rel-note">No relationships for these filters.</p>}
+       <DirectionGroup direction="incoming" groups={groups.incoming} rootPath={rootPath} select={select} />
+       <DirectionGroup direction="outgoing" groups={groups.outgoing} rootPath={rootPath} select={select} />
+       <SecondStepGroup rows={groups.secondStep} select={select} />
+     </div>
+   );
+ }
+

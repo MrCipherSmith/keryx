@@ -1,0 +1,120 @@
+{
+ "F-001": {
+  "raw": "review-logic-w2",
+  "source_id": "F-001",
+  "merged": [
+   [
+    "review-frontend-w1",
+    "F-001",
+    "review-frontend"
+   ],
+   [
+    "review-ui-ux-w1",
+    "UX-001",
+    "review-ui-ux"
+   ]
+  ],
+  "answers": "round 2's F-003"
+ },
+ "F-002": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "round 2's F-001"
+ },
+ "F-003": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "round 2's F-001"
+ },
+ "F-004": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-003",
+  "merged": [],
+  "answers": "round 2's F-002"
+ },
+ "F-005": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-004",
+  "merged": [],
+  "answers": "round 2's F-009"
+ },
+ "F-006": {
+  "raw": "review-logic-w1",
+  "source_id": "F-001",
+  "merged": [
+   [
+    "review-style-w1",
+    "F-001",
+    "review-style"
+   ]
+  ],
+  "answers": "the flow record of fix round 2"
+ },
+ "F-007": {
+  "raw": "review-logic-w1",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "the flow record of fix round 2"
+ },
+ "F-008": {
+  "raw": "review-style-w1",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "the flow record of fix round 2"
+ },
+ "F-009": {
+  "raw": "review-degradation-w1",
+  "source_id": "F-001",
+  "merged": [
+   [
+    "review-security-code-w1",
+    "F-001",
+    "review-security-code"
+   ],
+   [
+    "review-ui-ux-w1",
+    "UX-002",
+    "review-ui-ux"
+   ]
+  ],
+  "answers": "round 2's F-003"
+ },
+ "F-010": {
+  "raw": "review-ui-ux-w1",
+  "source_id": "UX-003",
+  "merged": [],
+  "answers": "round 2's F-002"
+ },
+ "F-011": {
+  "raw": "review-clean-code-w1",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "round 2's F-002"
+ },
+ "F-012": {
+  "raw": "review-clean-code-w1",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "round 2's F-001"
+ },
+ "F-013": {
+  "raw": "review-layout-w1",
+  "source_id": "LY-001",
+  "merged": [],
+  "answers": "round 2's F-006"
+ },
+ "F-014": {
+  "raw": "review-logic-w2",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "round 2's F-001"
+ },
+ "F-015": {
+  "raw": "review-style-w1",
+  "source_id": "F-003",
+  "merged": [],
+  "answers": "the flow record of fix round 2"
+ }
+}

@@ -1,0 +1,11 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Read every hunk of slice-05 (App.tsx RetainedView, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx); the sizing reads consistently and no finding is filed because no layout claim is measured (read-only, exec_budget_s 0, so no real-engine probe; the journal's live measurements at 1180x780, 1440x900 and 720x480 were not re-derived). Unverified 1: the graph header caption (.metaproject-rgraph-caption, flex 1 1 auto, min-inline-size 0, nowrap, ellipsis, beside flex:none actions and zoom) can shrink toward 0px at the 320px floor; a probe at 320px host width with a long module title would settle it, and the payload does not say whether any supported host is that narrow. Unverified 2: no layout claim was measured in this run at all. Unverified 3: graph.css legend swatches use physical clip-path polygons and the canvas places incoming left and outgoing right physically; the slice uses no dir=rtl, so nothing mirrors partially, and it is not a finding unless the product ships RTL. nodePanel.css and metaproject.css are not in this slice diff.",
+  "findings": [],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

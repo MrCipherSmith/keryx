@@ -1,0 +1,496 @@
+{
+ "mutants": [
+  {
+   "id": "A1",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "hidden={!visible}",
+   "replacement": "hidden={!active}"
+  },
+  {
+   "id": "P1",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "event.defaultPrevented || event.nativeEvent.isComposing",
+   "replacement": "event.nativeEvent.isComposing"
+  },
+  {
+   "id": "P2",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "    if (!compact) return;\n    const before",
+   "replacement": "    const before"
+  },
+  {
+   "id": "P3",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "if (!onDraft || drafting) return;",
+   "replacement": "if (!onDraft) return;"
+  },
+  {
+   "id": "P4",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "if (!active || detail.node.id !== firstId) return;",
+   "replacement": "if (!active) return;"
+  },
+  {
+   "id": "P5",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "tabChoice?.node === node.id ? tabChoice.value : \"relationships\"",
+   "replacement": "tabChoice ? tabChoice.value : \"relationships\""
+  },
+  {
+   "id": "P6",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "ArrowRight: TABS[(index + 1) % TABS.length],",
+   "replacement": "ArrowRight: TABS[index],"
+  },
+  {
+   "id": "P7",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "wiki: documents ? wikiDocuments.filter(item => !item.suggested).length : undefined,",
+   "replacement": "wiki: documents ? wikiDocuments.length : undefined,"
+  },
+  {
+   "id": "P8",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "const copyState = copied?.node === node.id ? copied.ok",
+   "replacement": "const copyState = copied ? copied.ok"
+  },
+  {
+   "id": "P9",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "copied.ok ? \"Copied\" : \"Could not copy\"",
+   "replacement": "\"Copied\""
+  },
+  {
+   "id": "P11",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "    setDraftError(\"\");\n    if (focus)",
+   "replacement": "    if (focus)"
+  },
+  {
+   "id": "P13",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "resize(start.width + start.x - event.clientX)",
+   "replacement": "resize(start.width - start.x + event.clientX)"
+  },
+  {
+   "id": "P14",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "ArrowRight: currentWidth - RESIZE_STEP",
+   "replacement": "ArrowRight: currentWidth + RESIZE_STEP"
+  },
+  {
+   "id": "P17",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "return text.length > PREVIEW_LIMIT ? `${text.slice(0, PREVIEW_LIMIT - 1).trimEnd()}…` : text;",
+   "replacement": "return text;"
+  },
+  {
+   "id": "P18",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "(blocks.find(block => !block.list) ?? blocks[0])?.text",
+   "replacement": "blocks[0]?.text"
+  },
+  {
+   "id": "P20",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "    if (fenced) continue;\n",
+   "replacement": "\n"
+  },
+  {
+   "id": "P21",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "if (!firstId) return;\n    let active = true;",
+   "replacement": "let active = true;"
+  },
+  {
+   "id": "L1",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "    if (!from || !to) continue;\n",
+   "replacement": "\n"
+  },
+  {
+   "id": "L2",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "{hidden > 0 && <li>",
+   "replacement": "{hidden >= 0 && <li>"
+  },
+  {
+   "id": "L3",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "{to.id !== from.id && <button",
+   "replacement": "{true && <button"
+  },
+  {
+   "id": "L5",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": ".sort((a, b) => a.node.title.localeCompare(b.node.title))",
+   "replacement": ""
+  },
+  {
+   "id": "L6",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "if (!lines.length) return null;",
+   "replacement": ""
+  },
+  {
+   "id": "L8",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "{lines.length === 0 && countLabel &&",
+   "replacement": "{countLabel &&"
+  },
+  {
+   "id": "Y1",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "if (edge.from === edge.to) continue;",
+   "replacement": ""
+  },
+  {
+   "id": "Y2",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "if (edge.from === edge.to) return;",
+   "replacement": ""
+  },
+  {
+   "id": "Y3",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": " || (preferDrawn && !drawnFirst.has(other))",
+   "replacement": ""
+  },
+  {
+   "id": "Y4",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "while (candidates(false, attached));",
+   "replacement": ""
+  },
+  {
+   "id": "Y5",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "1 + Math.min(2, Math.log2(edge.count) / 2)",
+   "replacement": "1"
+  },
+  {
+   "id": "Y6",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "const alpha = Math.min(1, Math.max(0, fg.a));",
+   "replacement": "const alpha = fg.a;"
+  },
+  {
+   "id": "Y7",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "(high - low) * zoom <= inner ? (low + high) / 2 : rootAt",
+   "replacement": "rootAt"
+  },
+  {
+   "id": "Y8",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "return value.endsWith(\"%\") ? (Number.parseFloat(value) / 100) * scale : Number.parseFloat(value);",
+   "replacement": "return Number.parseFloat(value);"
+  },
+  {
+   "id": "Y9",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "if (!Number.isInteger(cap) || cap < 1)",
+   "replacement": "if (cap < 1)"
+  },
+  {
+   "id": "Y12",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "options.textScale && options.textScale > 0 ? options.textScale : 1",
+   "replacement": "options.textScale ?? 1"
+  },
+  {
+   "id": "Y16",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "hex.length <= 4 ?",
+   "replacement": "false ?"
+  },
+  {
+   "id": "Y18",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "seen.weight = Math.max(seen.weight, edge.count ?? 0);",
+   "replacement": "seen.weight = edge.count ?? 0;"
+  },
+  {
+   "id": "Y19",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "anchor": "if (!result.has(id)) result.set(id, { side: \"incoming\"",
+   "replacement": "result.set(id, { side: \"incoming\""
+  },
+  {
+   "id": "G1",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "if (isSide(side)) showHiddenRef.current?.(side);",
+   "replacement": "showHiddenRef.current?.(side as GraphSide);"
+  },
+  {
+   "id": "G2",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "cy.elements().not(near).not(\"node.caption\").addClass(\"faded\");",
+   "replacement": ""
+  },
+  {
+   "id": "G3",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "scheme?.addEventListener(\"change\", refreshTheme);",
+   "replacement": ""
+  },
+  {
+   "id": "G4",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "[\"data-theme\", \"data-palette\", \"style\"]",
+   "replacement": "[\"data-theme\", \"style\"]"
+  },
+  {
+   "id": "G5",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "if (!target.usable) return;",
+   "replacement": ""
+  },
+  {
+   "id": "G6",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "if (!cy || !viewport || !viewport.clientWidth || !viewport.clientHeight) return;",
+   "replacement": "if (!cy || !viewport) return;"
+  },
+  {
+   "id": "G7",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "item.role === \"root\" ? Math.max(2, style.borderWidth) : style.borderWidth",
+   "replacement": "style.borderWidth"
+  },
+  {
+   "id": "G8",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "classes: item.secondStep ? \"second-step\" : \"\",",
+   "replacement": "classes: \"\","
+  },
+  {
+   "id": "G9",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "Math.min(USER_ZOOM.max, Math.max(USER_ZOOM.min, cy.zoom() * factor))",
+   "replacement": "cy.zoom() * factor"
+  },
+  {
+   "id": "G10",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "if (!event.target.hasClass(\"graph-node\")) return;",
+   "replacement": ""
+  },
+  {
+   "id": "G11",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+   "anchor": "viewport.style.cursor = \"pointer\";",
+   "replacement": ""
+  },
+  {
+   "id": "V1",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const relationDirection = mode === \"wiki\" ? \"both\" : direction;",
+   "replacement": "const relationDirection = direction;"
+  },
+  {
+   "id": "V2",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "Math.max(shownTotal, results.length)",
+   "replacement": "shownTotal"
+  },
+  {
+   "id": "V3",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "catalog ? mode === \"wiki\" ? catalog.counts.wiki : catalog.counts.files",
+   "replacement": "catalog ? catalog.counts.files"
+  },
+  {
+   "id": "V4",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (mode !== \"graph\" || relationshipError) lastGraph.current = null;",
+   "replacement": "if (mode !== \"graph\") lastGraph.current = null;"
+  },
+  {
+   "id": "V5",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "(catalog.graph !== \"missing\" || protocol === 2)",
+   "replacement": "(catalog.graph !== \"missing\")"
+  },
+  {
+   "id": "V6",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "onDraft={catalog.graph === \"ready\" && !documents?.truncated ? onDraft : undefined}",
+   "replacement": "onDraft={onDraft}"
+  },
+  {
+   "id": "V7",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "documentsPending={documents?.root !== selection && !snapshotMismatch && !documentProblem}",
+   "replacement": "documentsPending={documents?.root !== selection}"
+  },
+  {
+   "id": "V8",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "    setRevealRelationships(value => value + 1);\n",
+   "replacement": "\n"
+  },
+  {
+   "id": "V8b",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "    setRoute(current => current.mode === \"graph\" && !current.panelOpen ? { ...current, panelOpen: true } : current);\n",
+   "replacement": "\n"
+  },
+  {
+   "id": "V9",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }",
+   "replacement": ""
+  },
+  {
+   "id": "V10",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!resolved) { unresolved(",
+   "replacement": "if (false) { unresolved("
+  },
+  {
+   "id": "V11",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!current()) return;",
+   "replacement": ""
+  },
+  {
+   "id": "V12",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "{unresolvedLink?.selection === selection && (",
+   "replacement": "{unresolvedLink && ("
+  },
+  {
+   "id": "V13",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "(direction !== \"both\" ? 1 : 0) + ",
+   "replacement": ""
+  },
+  {
+   "id": "V14",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (panel.current?.contains(target) || anchor.contains(target)) return;",
+   "replacement": "if (panel.current?.contains(target)) return;"
+  },
+  {
+   "id": "V15",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const left = Math.max(8, Math.min(rect.right - POPOVER_WIDTH, window.innerWidth - POPOVER_WIDTH - 8));",
+   "replacement": "const left = rect.right - POPOVER_WIDTH;"
+  },
+  {
+   "id": "V16",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": ": results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`",
+   "replacement": ": `No Wiki page matches`"
+  },
+  {
+   "id": "V17",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "currentProjection && mode === \"wiki\" && currentProjection.edges.length > 0 && (",
+   "replacement": "currentProjection && mode === \"wiki\" && currentProjection.edges.length >= 0 && ("
+  },
+  {
+   "id": "V18",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (id === shownSelection.current) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "V19",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "else unresolved(`No indexed project file at ${path}.`);",
+   "replacement": ""
+  },
+  {
+   "id": "V21",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);",
+   "replacement": "await onRebuild();"
+  },
+  {
+   "id": "V21b",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (mounted.current) setRebuilding(false);",
+   "replacement": ""
+  },
+  {
+   "id": "V22",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "      setProtocolError(\"\");\n",
+   "replacement": "\n"
+  },
+  {
+   "id": "V23",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "loading && !protocolError &&",
+   "replacement": "loading &&"
+  },
+  {
+   "id": "V24",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "list.current?.querySelector<HTMLElement>('[aria-current=\"true\"]')?.scrollIntoView?.({ block: \"nearest\" });",
+   "replacement": ""
+  },
+  {
+   "id": "V26",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const graphBusy = graphProjection !== null && graphProjection !== currentProjection;",
+   "replacement": "const graphBusy = false;"
+  },
+  {
+   "id": "V27",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "disabled={unavailable}",
+   "replacement": "disabled={false}"
+  },
+  {
+   "id": "V28",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "{filtersChanged && (",
+   "replacement": "{true && ("
+  },
+  {
+   "id": "V30",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "mode === \"wiki\" ? protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1 : kinds",
+   "replacement": "mode === \"wiki\" ? WIKI_KINDS_V1 : kinds"
+  },
+  {
+   "id": "V31",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const generation = project.current;\n    const current = () =>",
+   "replacement": "const generation = project.current;\n    const current = () => true ||"
+  },
+  {
+   "id": "N1",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "anchor": "[...entries.slice(1 - HISTORY_LIMIT), leaving]",
+   "replacement": "[...entries, leaving]"
+  },
+  {
+   "id": "N2",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "anchor": "\".metaproject-details-body\"]",
+   "replacement": "\".metaproject-node-body\"]"
+  },
+  {
+   "id": "N3",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "anchor": "if (next === leaving) return;",
+   "replacement": ""
+  },
+  {
+   "id": "N4",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "anchor": "options.resetContent && index === CONTENT_PANE ? 0 : top",
+   "replacement": "top"
+  },
+  {
+   "id": "N5",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "anchor": "if (mode !== current.current.mode) enter(",
+   "replacement": "enter("
+  }
+ ]
+}

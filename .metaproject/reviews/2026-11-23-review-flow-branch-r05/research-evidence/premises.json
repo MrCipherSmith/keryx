@@ -1,0 +1,63 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:391",
+          "says": "Production comment (46c472162, before fix round 4): 'a failed catalog read's banner goes, a failed rebuild's stays.' The code's own vocabulary uses 'failed rebuild' for the error with source \"rebuild\" only."
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1575",
+          "says": "Older title (8f5bf6d14, before fix round 4) for the same event as the test under review (onRebuild resolves true at :1585, the catalog reload fails): 'a rebuild's failed catalog reload'."
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1692",
+          "says": "Older title (46c472162): 'a failed rebuild's message ...', where onRebuild throws (:1702). In this file, 'failed rebuild' means a rejecting onRebuild."
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1855",
+          "says": "The test's own comment names the case by what fails: 'the reload after the rebuild, started meanwhile, fails'."
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1874",
+          "says": "The only signal for the chosen reading: a sibling title, 'a rebuild reload that a later one superseded ...', uses 'rebuild reload' as a compound noun. The same commit added it (c8db67492, the change under review), so it cannot show an earlier deliberate choice."
+        },
+        {
+          "ref": "c8db67492 (commit message)",
+          "says": "Describes the case as 'a quiet re-read that a later, failed reload superseded', without the ambiguous 'rebuild'. It gives no reason for the title's wording."
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:84",
+          "says": "The banner table keeps the two cases apart: 'failed Retry/Refresh/post-rebuild reload' rows (source catalog) and 'failed rebuild' rows (source rebuild). It also records that a cell cited 'a rebuild's failed catalog reload' for a failed-rebuild case, 'does not fail a rebuild', and was 'Reworded after acceptance, for review round 4's F-003'."
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/consolidated-findings.json:38",
+          "says": "Round 4's F-003, fixed by T27, was this same mix-up of 'failed rebuild' (source rebuild) and 'rebuild's failed catalog reload' (source catalog). The flow has already treated the distinction as worth a fix."
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/consolidated-findings.json:25",
+          "says": "The phrase comes from round 4's F-002 suggested_fix ('a failing Rebuild reload', 'the rebuild-reload banner'). A reviewer wrote it; no operator decision chose it."
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/operator-decisions.json:8",
+          "says": "The only earlier operator decision on test titles (round 2's F-005, finding ids in titles) was dismissed to keep the suite's established convention. None of the r01, r02 or r04 decisions is about this wording. Here the established convention is the one the finding asks for."
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "Robert C. Martin, Clean Code (2008), ch. 2 'Meaningful Names', sections 'Pick One Word per Concept' and 'Don't Pun'",
+          "says": "Do not use the same word for two different purposes. Here 'failed rebuild' would name both the rebuild-source and catalog-source cases within four adjacent titles."
+        },
+        {
+          "name": "Winters, Manshreck, Wright, Software Engineering at Google (2020), ch. 12 'Unit Testing', section 'Test Behaviors, Not Methods'",
+          "says": "Name a test after the behavior and scenario it checks, so a reader can tell what it covers from the name alone."
+        }
+      ],
+      "reasoning": "Intent signals were looked for in the test file, MetaprojectView.tsx, the T24 and T26 results, journal.md, tasks.md, the three operator-decisions files and the commit. None shows a deliberate choice of 'a failed rebuild reload'. The only support for that reading is the compound 'rebuild reload' at :1874, which the same commit added; the change under review cannot ratify itself. The file, the production comment at MetaprojectView.tsx:391 and the T24 table, all written before fix round 4, reserve 'failed rebuild' for source \"rebuild\". The case this test covers already has a name in the file: 'a rebuild's failed catalog reload' (:1575). So the suggested fix makes the titles more consistent and is sound: it reuses an existing phrase and changes no behavior. Round 4's F-003 shows this exact mix-up has already misled the flow's record once. One slip in the finding does not change the premise: its problem text says tasks.md carries the title, but tasks.md at this head does not. Its suggested_fix names the right copies: results/T26.result.json:51, journal.md:185 and verification/fix-round-4.md:182. The finding is a naming-only minor, with no intent signal or practice source against it, so it is upheld."
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "T24's change is correct: I wrote the banner's states from the code at head (five writers of `error`, one reader) and they agree with the worker's table. F-001 is closed, F-006 is closed (all 25 rows match flow.json in kind and dependencies) and F-007 is closed (every anchor in fix-round-2.md occurs exactly once at the commits it names). One info finding: five titles in tasks.md differ from flow.json, which the file says it follows.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "line": 54,
+      "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 | — |",
+      "problem": "The file's opening says the table follows flow.json, and the journal's T25 entry says the 25 rows were compared by script on kind and dependencies. That comparison holds: kind and dependsOn match for all 25 tasks. Titles do not: flow.json has T4 'Self-review and prepare draft PR' (tasks.md: 'Review round on the integrated change'), T2 'Implement per plan', T3 'Add/adjust tests and make them pass', T7 'Explorer navigation and state fixes D1-D7' (hyphen, tasks.md has an en dash) and T14 'Compact filter bar and one-row header on narrow hosts'. The tasks.md titles of T2, T3, T7 and T14 are annotated or typographically changed, and T4's is a different name.",
+      "impact": "No behaviour depends on it. Someone searching flow.json by a title copied from tasks.md finds nothing for these five tasks. Not for the fix loop.",
+      "suggested_fix": "Either say in the opening that the table follows flow.json for kind and dependencies and that titles are annotated, or copy flow.json's titles and keep the annotation in the Implement section.",
+      "evidence": "Compared every `| Tn |` row with flow.json at head by script: 25 rows, 25 tasks, none missing; kind and dependsOn equal for all; title differs for T2, T3, T4, T7, T14.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+## Logic Review (round 4, slice-01)
+
+Every hunk of slice-01 was read: journal.md, tasks.md, fix-round-2.md, T22.result.json, App.dom.test.tsx, MetaprojectView.dom.test.tsx, RelationshipList.dom.test.tsx and MetaprojectView.tsx. The production file was also read at head `744d9ef75` around each hunk. Nothing was run; only read-only `git show` / `git cat-file` and scripts over their output.
+
+### F-001 (prior): banner after a failed catalog read, then a quiet re-read succeeds. closed
+
+Writers of `error` at head, and the one reader:
+- initial value `null` (MetaprojectView.tsx:318)
+- catalog effect start, only when the read is not quiet: `setError(null)` (:380)
+- catalog effect catch, only when it is the latest read and not quiet: `{ source: "catalog", message }` (:407)
+- quiet read success, after the `generation` check and before the snapshot branch: clears only when `current?.source === "catalog"` (:392)
+- `rebuild()` start: `null`; `rebuild()` catch: `{ source: "rebuild", message }` when mounted
+- reader: the banner, `error.message`, whose Retry bumps `revision` (a loud read). Nothing else reads it.
+
+What each later event leaves on screen, per standing failure:
+
+| Standing | Later event | Banner after |
+|---|---|---|
+| catalog failure, first read | return | stays: `loaded.current` is false, no quiet read |
+| catalog failure after a first success | quiet read succeeds, same snapshot | goes (:392, then the freshness-only branch) |
+| same | quiet read succeeds, changed snapshot | goes, catalog replaced (the same line runs first) |
+| same | quiet read fails | stays with its own message; the quiet failure is not shown |
+| same | quiet read superseded by Retry or a rebuild | the generation check drops the quiet result; the loud read cleared the banner at its start |
+| same | loud read succeeds | cleared at its start |
+| same | loud read fails | cleared at start, set again with the new message |
+| same | rebuild starts | cleared; a failed rebuild then shows a rebuild error |
+| rebuild failure | quiet read succeeds (either snapshot) | stays (source is "rebuild") |
+| rebuild failure | quiet read fails | stays |
+| rebuild failure | loud read in flight from before, then succeeds | stays: only a quiet success clears |
+| rebuild failure | loud read started later, or a new rebuild | cleared at its start |
+| rebuild failure | return while a catalog read is in flight | no quiet read starts (`catalogPending`) |
+| none | catalog read fails while a rebuild runs, then the rebuild fails | the rebuild error replaces it; a rebuild success starts a loud read that clears it |
+
+Against the worker's table in results/T24.result.json: the ten rows agree with mine cell for cell. My extra rows (a quiet read superseded by a loud one, a catalog failure during a rebuild) are consistent with the code; the worker's table is shorter, not wrong. The one clear sits after `generation !== catalogRead.current` and before the snapshot branch, so both success paths share it, and a quiet read dropped by a loud read cannot clear a banner. The functional update reads the error standing when the read lands. The worker's mutant T24-3 (the `if (quiet)` guard dropped) is equivalent, as the worker says: a loud read cleared the error at its start, and a catalog error can only be set by the latest read's own failure. No defect in the change. The new test walks the same-snapshot, failed-quiet and changed-snapshot cells in one sequence.
+
+### F-006 (prior): tasks.md dependencies. closed
+
+T4's row, the opening sentence, the T24 and T25 rows and the fix-round-3 section agree with flow.json at head. All 25 rows have a task in flow.json and all 25 tasks have a row; kind and dependsOn are equal for every row. Titles differ for five tasks (the info finding above); F-006 was not about titles.
+
+### F-007 (prior): fix-round-2.md can be followed from the repository alone. closed
+
+- Each of the 20 anchors in the file (12 of round 2's mutants, the 3 moved ones, the 5 T23-n), taken at the file named in its heading, occurs exactly once in `git show 8f5bf6d14:<path>` and exactly once at `a37719ff2`; the file names both commits. Multi-line anchors match with their indentation.
+- The test names the file cites as red tests and as killers are present in the test files at `8f5bf6d14`.
+- The file agrees with the journal: T22's red check (6 fail in the explorer file, 1 in the list file, 7 in all); the twelve R2 mutants with R2-18 surviving as equivalent; R2-14 and R2-23 killed on their new lines; the five T23-n mutants. The file also lists R2-24 as killed, which the T23 journal entry does not name; the round 3 entry does name it among the three moved. That is a gap in the journal, not a contradiction.
+- The scripts stay untracked, and the file says what each does (scratch copy, red check, mutant run with `--bail`), which is enough to repeat a run by hand.
+
+### Other hunks
+
+- App.dom.test.tsx: the three new tests and the added `hidden` assertion test what their names say. The lazy-load test renders and removes the explorer within one `act`, so the real explorer never reads the CLI.
+- MetaprojectView.dom.test.tsx: the six added tests follow the code paths above. In the failed-rebuild test, the held reader and `release()` model a loud read in flight when the rebuild fails.
+- RelationshipList.dom.test.tsx: the second-step-only projection is checked through `summarize` first, so the test does not rest on the heading alone.
+- Routing audit: graph_used: not-relevant (one slice and one file read); wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`, `keryx ctx run -- git`); raw_rg_used: no.

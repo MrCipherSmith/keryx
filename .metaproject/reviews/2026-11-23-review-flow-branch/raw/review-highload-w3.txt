@@ -1,0 +1,21 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Read all of slice-06 (graphLayout.ts, labels.ts, metaproject.css, nodePanel.css, useExplorerNavigation.ts, the user guide). No concurrency, resource or unbounded-growth defect found. Back history is capped at 40 entries, the layout is pure and bounded by the projection (column cap 12, 200-node projections), and the scroll-restore MutationObserver and its wheel, pointerdown and keydown listeners are all removed in stop(), which the effect cleanup returns.",
+  "findings": [],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-redesign, merge-base 1358d962f, diff mode, load profile not provided; triggers used: a 200-node and 269-edge depth-2 projection, repeated selections growing Back history, and rapid view switches. Files reviewed: graphLayout.ts, labels.ts, metaproject.css, nodePanel.css, useExplorerNavigation.ts, docs/docs/guides/desktop-metaproject.md. Read-only; no tests run.
+
+Clean areas:
+- CLI/TUI/multi-session: no shared state files, children or locks in the slice.
+- Resources: the history array is bounded (HISTORY_LIMIT 40, slice(1 - 40) plus the leaving entry), the WeakMap of scroll offsets is keyed by route objects and so is collected with them, and the MutationObserver and the three area listeners are disconnected in stop() on cleanup and on settle.
+- Layout cost: secondStep loops until no progress, at most N passes over 2E edge ends, which is trivial at the 200-node bound. boundsOf spreads at most about 60 boxes, which is safe.
+- Races: enter() and back() read and write refs synchronously, so back-to-back calls within one React batch stay consistent. One narrow gap: enter() does not update previousRoutes.current, so a back() issued before the next render in the same batch would not see the entry enter() just pushed. It needs two discrete events with no render between them, which React does not do for user events, so it is not reported.
+- Caching, locks, queues, retries, idempotency: not present in the slice.

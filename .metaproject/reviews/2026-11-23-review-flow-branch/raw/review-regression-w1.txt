@@ -1,0 +1,21 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B (regression) over slice-03, read in full (2410 lines, 21 file hunks). Every hunk in the slice is a new file of the flow-515 package: dispatch/T8.request.json, dispatch/T9.dispatch.json, dispatch/T9.request.json, flow.json, resolved/T12, T13, T14, T16, T5, T6, T7, T8.implement.json, and results/T12, T13, T14, T16, T5, T6, T7.result.json. None of them is application code, and none is imported, required or read by any of the 40 files in the computed blast-radius set. They are inputs to keryx flow/review tooling (flow.json through the keryx flow CLI, resolved/results through `keryx skills contracts validate`), and those are runtime or file-handoff edges the code graph does not carry. The blast-radius brief says the same thing: 46 changed files, these flow files among them, are absent from the code graph, so their radius is unknown, not empty. For this slice the radius could not answer the regression question. The 40 listed dependents reach the changed set only through apps/desktop source files (MetaprojectView.tsx, NodeDetailsPanel.tsx, GraphNodePanel.tsx, MetaprojectView.dom.test.tsx). Those files belong to other slices and other waves of this reviewer, and this slice changes none of them. Every hop-1 edge links a dependent to an apps/desktop file, never to a flow-package file, so no dependent in the set reaches this slice. The cap dropped files: 25 of 75 candidates were not checked (blast_radius_max_files=40, recorded in chunks.json), and 26 more were left out by the cap or the pre-filter. This result does not cover them. No regression finding: nothing in this slice changes behaviour that an existing consumer relies on. Two observations outside the regression question are below major, so they are not filed as findings because scope B would reject them. They are left to the scope-A lenses that own the flow package. (1) The flow folder at head has no resolved/T9.implement.json, results/T9.result.json, resolved/T15.implement.json or results/T15.result.json. Yet dispatch/T9.dispatch.json marks resolved/T9.implement.json as \"exists\": true and tells the implementer to write and validate results/T9.result.json, and flow.json records T9 and T15 as done/completed. Checked with `git ls-tree -r --name-only 60cbe1c56` on the flow folder. (2) T7.result.json `noticed_not_touched` names a possible gap: Back to a node opened from a lookup can show no panel. T8's dispatch (item 9) asks for a map of nodes already seen to close it. Whether that holds is a question about MetaprojectView.tsx, which is not in this slice. Not run: tests, servers (exec_budget_s 0). `keryx gdgraph affected` was not run, because the slice holds no graph-resident code file.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-03", "coverage": "all 2410 lines / 21 file hunks read in full", "status": "DONE" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Short summary: slice-03 is flow-package data only (dispatch, resolved-context and result JSON plus flow.json). No consumer in the 40-file blast-radius set depends on any of it. The code graph cannot see the runtime and file-handoff edges these files travel through, so for this slice the radius is unresolved, not clean. The cap dropped 25 of 75 candidates, and they are not covered here. No regression findings. Outside the regression question, the T9 and T15 resolved/result artifacts are missing at head even though flow.json marks both tasks completed. That is for the scope-A flow-package lenses.
+
+Routing audit: graph_used: no (the slice has no graph-resident code; the blast-radius brief was the graph input). wiki_used: not-relevant. ctx_used: yes (keryx ctx rg; a raw `git ls-tree` listed the head tree). raw_rg_used: no.

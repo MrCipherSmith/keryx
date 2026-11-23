@@ -1,0 +1,18 @@
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "chunk": "chunk-001",
+  "summary": "Nine of the 25 files the blast-radius cap dropped (cap blast_radius_max_files=40 of 75) were read in full and checked against the removed and changed surface of flow 515: GraphNodePanel.tsx and its isOpenSpecNode export, the RelationshipList export from MetaprojectView.tsx, the removed CSS classes (.metaproject-node-panel*, .metaproject-controls label/fieldset, .metaproject-graph*, .metaproject-relation-actions, the max-width:700px media block), the new RetainedView wrapper in App.tsx, and the .metaproject container rule. None of the nine imports or references any removed or changed name, and none uses a metaproject-* class or a custom property the change altered. The links in the brief were text/hub matches, not dependencies. No findings. Coverage caveat: this chunk covers only nine files; the other dropped files belong to other chunks. The radius could not answer for 46 changed non-graph files (flow records, docs, images), which is recorded as unresolved, not clean.",
+  "files": [
+    "apps/desktop/src/review/PullRequestAutomation.tsx",
+    "apps/desktop/src/review/ReviewFilters.tsx",
+    "apps/desktop/src/review/ReviewWatcher.tsx",
+    "apps/desktop/src/session/RunsTab.tsx",
+    "apps/desktop/src/session/SchedulesTab.tsx",
+    "apps/desktop/src/shell/Welcome.tsx",
+    "apps/desktop/src/styles/flows.css",
+    "apps/desktop/src/styles/panels.css",
+    "apps/desktop/src/styles/review.css"
+  ],
+  "findings": []
+}

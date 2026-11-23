@@ -1,0 +1,50 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice 06 (graphLayout.ts, labels.ts, both CSS files, useExplorerNavigation.ts, the user guide) is logically sound. The layout satisfies AC1-AC4 by construction (side split, cap of 12 with a per-kind reserve and an exact hidden count, second-step in the outer column on the anchor's side, total style maps); Back history (AC11) records only visit/navigate and keeps search edits in place; the guide (AC21) covers every required topic and lists all nine relationship types. One info-level note on an image alt text.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "line": 1451,
+      "title": "Graph screenshot alt text says twelve importing files sit on the left, the picture draws ten",
+      "problem": "The alt text reads \"twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left\". That is 14 left-column items, while the same page says a column shows at most 12. In docs/docs/images/desktop-metaproject/graph.jpg the left column draws 10 import nodes, 1 Describes, 1 Contains and a \"+2 more\" entry; only the caption (\"Imports · 12\") and the panel list carry twelve.",
+      "why_it_matters": "A screen-reader user, or a reader comparing text and picture, is told the graph draws more nodes than the 12-per-column rule allows. No behaviour is affected.",
+      "suggested_fix": "Drop the count or state it as drawn: \"the files that import it (Imports · 12, two of them collapsed into +2 more), the Agent Bus page and its module bus on the left\"."
+    }
+  ],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+## Logic Review
+
+### Review Scope
+- Branch: feat/desktop-metaproject-redesign, merge-base 1358d962f4dfc07a9e086a533f51e75aa757dfcd, head 60cbe1c565f4e478833605b41c49c2827eed2bbf
+- Scope mode: diff, slice-06 read in full (every hunk)
+- Spec compliance gate: ran against AC1-AC4, AC11, AC21 (the criteria this slice implements)
+
+### Spec check
+- AC1: firstStep puts a neighbour the root points at (or has edges both ways with) in `outgoing`, a neighbour with only inbound edges in `incoming`; stackColumn gives each column a disjoint vertical stack and columnSpans gives disjoint horizontal spans (root half-width + 40 px gaps), so no two boxes overlap. Met by construction; the test itself was not re-run (read-only).
+- AC2: selectColumn reserves up to 2 slots per kind in kind order, then fills the rest in kind order; shown = min(cap, total); stackColumn emits the overflow entry with hidden = total - shown. Met. A column with more than 6 kinds drops the later kinds into the overflow count, consistent with the exact-count rule.
+- AC3: secondStep anchors to a drawn first-step neighbour first, then an undrawn one, then chains; `side` is copied from the anchor and the node goes to column +-2, whose span starts after the inner column. Met.
+- AC4 (style mapping part): nodeKindStyle covers all 7 kinds with distinct shape/border combinations; EDGE_LINE_STYLES is a total Record over the 9 kinds (solid/dashed/dotted); legendFor filters to what is present. Met.
+- AC11: `navigate`/`visit`/`switchView` call `enter`, which pushes the leaving route; `setRoute` (query, filters, panel) pushes nothing, so typing adds no entries; `back` pops through eagerly updated refs so repeated Back steps C -> B -> A. Met.
+- AC21: the guide describes the columns, caption counts, legend, "+N more", the three tabs, Back through selections; the old "same search and selection as Graph" sentence is gone; the type table lists all nine types. Met.
+
+### Checked and found sound
+- shortenMiddle: result length is exactly maxChars for every maxChars >= 2 (head + 1 + tail = available + 1); the dotted-tail branch cannot leave head < 1.
+- computeViewport: pan = size/2 - zoom*centre matches cytoscape's rendered = pan + zoom*position; zoom clamp 0.8-1.15 keeps a 12 px label at or above 9.6 px.
+- Colour parser: hex 3/4/6/8 and legacy/modern rgb(a) read; anything else is returned unchanged (documented).
+- useExplorerNavigation history cap: slice(1 - 40) plus the leaving entry gives 40, the same bound as before.
+- The old `max-width: 700px` media block is replaced by a container query on `.metaproject` (inline-size); the rules inside only target descendants of the container, so the query applies. Custom properties used by nodePanel.css exist in styles/tokens.css and themes.css; keyframes `slide-in` exists in components.css.
+
+### Not verified
+- Tests were not run (read-only, exec budget 0); the brief records 842 desktop tests passing on this head.
+- The Filters popover and the "Filters · n" label in the guide belong to other slices; only the "+N more" wiring was confirmed to exist (RelationshipGraph.tsx tap handler on node.overflow).
+- `previousRoutes.current` is refreshed on render, not inside `enter`; a `back()` issued in the same tick as a `navigate()` and before a re-render would pop the older entry. No call site in this slice does that, so it is not reported.

@@ -1,0 +1,86 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression found in slice-02. I read every hunk and walked the consumers of each name the fixes changed, at head 8e0f656fb against round 2's head b1538097e. The readers of project.current (openPath, loadMoreSearch) now survive a quiet return. The Relationships disclosure in the Wiki view and the list's empty note now count by the same grouping rule as NodeDetailsPanel. remember, MetaprojectWork/LazyMetaprojectView and RetainedView reach their callers unchanged. The blast-radius record dropped no file by the cap (droppedByCap 0). It did drop 49 text-hub files (the 'resize' event key, all flow and docs records, none code) and one test consumer (NodeDetailsPanel.dom.test.tsx, which is to be run rather than read). For all six code files it fell back to whole-file edges because the head source did not parse. The graph sees no runtime edges; the effect ordering and ref interplay below were traced by reading the code, not by running it.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Consumer walk, name by name (head 8e0f656fb vs round 2's head b1538097e)
+
+### project.current (MetaprojectView.tsx:328)
+- Writers at head: the catalog effect body, `if (!quiet) { project.current++; setError(""); }` (:376-379), and its cleanup, `if (!quietRead.current) project.current++;` (:414).
+- Readers at head: openPath (:694-695, `generation === project.current` in `current()`) and loadMoreSearch (:646, :654, :660). There are no others: `keryx ctx rg "project\.current|projectGeneration"` over MetaprojectView.tsx found 4 write sites and these 5 read sites. The effect's own guards moved to `catalogRead`.
+- What they get now. On a return, the visible effect sets `quietRead.current = true` and then calls `setRevision`. In the next commit the catalog effect's cleanup sees `quietRead.current === true` and does not move project.current; the body reads `quiet === true` and does not move it either. A lookup or a "load more" page in flight across leaving and returning therefore keeps its guard. Every other reason the effect re-runs still moves it, as at round 2's head: a Retry or Refresh catalog, a rebuild's reload, the relationship Retry buttons (:924, :934, :982 bump `revision` too), a change of `read` or `protocol`, and unmount.
+- The flag cannot leak to a non-quiet run. It is set only in the visible effect, immediately before the `setRevision` that re-runs the catalog effect, and it is consumed at that run's start. The `protocol === null` early return at :372 cannot swallow it, because the visible effect requires `loaded.current`, which needs a completed read, so protocol is already non-null, and `setProtocol` is never given null.
+- A quiet read that finds a changed snapshot does not retire the pending work. The brief's choice 1 covers this. loadMoreSearch is still retired, by `latestSearch.generation` (the snapshot moved). openPath is still retired by `shownSelection.current === from` when the selection is dropped, or it shows the "Project knowledge changed while loading" banner on a snapshot mismatch. I found no broken consumer.
+
+### catalogRead (:330), new
+- It is read and written only inside the catalog effect: :373 (generation), :387, :403, :405 (guards) and :412 (cleanup). No other reader exists.
+- It takes over the role project.current had as the effect's own staleness guard, unchanged: every run, the quiet one included, supersedes the previous run.
+
+### catalogPending (:331), new
+- Written at :381 (true at each run) and at :406 (false in `finally`, only for the current generation). Read only by the visible effect at :346.
+- A superseded run leaves the flag to the run that superseded it, which clears it in its own `finally`. The flag cannot stay true while no read is pending, except when a read never settles; in that case no quiet read starts on a return, which is the brief's choice 2.
+- The rebuild path does not set it (`onRebuild` is no catalog read). A return during a rebuild therefore still starts a quiet read, and the rebuild's later `setRevision` supersedes that read with a non-quiet one, which clears `error` and moves project.current.
+
+### error state
+- Set by the catalog effect (:403, now only when `!quiet`) and by rebuild() (:677). Cleared by the catalog effect (:378, now only when `!quiet`) and by rebuild() (:673).
+- Read only by the banner at :842-847, whose Retry bumps `revision` and so starts a non-quiet read.
+- Change against round 2's head: a standing error (a failed rebuild, or a failed Retry or Refresh over a loaded catalog) is no longer cleared by a successful quiet re-read on return. This is what F-003's suggested fix asked for. It matches the base branch, which read nothing on return, and is pinned by 'a standing error, such as a failed rebuild's, survives a quiet re-read on return'.
+- Not a regression against base, so not filed. I note it as a deliberate trade-off: after a return that read the catalog successfully, the banner can show a failure the newer read contradicts, until the user presses Retry.
+- `loading` is unaffected: a quiet read requires `loaded.current`, so `setLoading(true)` is skipped, and `setLoading(false)` in `finally` is a no-op.
+
+### quietRead (:337)
+- Writers: the visible effect (:347, true) and the catalog effect (:375, false). Readers: the catalog effect at :374 and its cleanup at :414.
+- The success path is the same as at round 2's head (:389-392). The failure path no longer sets `error`, and the start no longer clears it (see above).
+
+### summarizeRelationships / groupRelationships and the list's empty note (RelationshipList.tsx)
+- groupRelationships has two consumers: summarizeRelationships (:76) and RelationshipList (:210).
+- summarizeRelationships has two consumers: NodeDetailsPanel.tsx:199 (the fact row at :246-253 and the tab count at :242, both unchanged) and, new, MetaprojectView.tsx:712-716 (the Wiki disclosure).
+- RelationshipList is rendered by NodeDetailsPanel.tsx:265 and MetaprojectView.tsx:1021 (inside the Wiki disclosure).
+- What changed:
+  - The empty note now follows the groups (:211, `empty`). NodeDetailsPanel shows it for a projection whose only edges are self-loops or edges with a missing end; that tab was blank at round 2's head.
+  - The Wiki disclosure is shown when, and counted as, incoming + outgoing + secondStep rows. That is the same sum NodeDetailsPanel's tab count uses, so the two now agree.
+  - Inside the Wiki disclosure the empty note can never render, because the disclosure needs rows > 0.
+  - A truncated projection whose every edge is left out now shows both the "limited" note and the empty note. Both statements are true, and no test asserted otherwise.
+- I found no other reader of a raw projection edge count. `keryx ctx rg "edges\.length"` over apps/desktop/src matched only graphLayout.test.ts and platform/metaproject.ts:31 (a payload validator, not a count shown to the user).
+
+### remember (:585)
+- Callers: the node-memory effect (:588) and viewInGraph (:619).
+- It is now a stable useCallback with empty dependencies, so the effect's dependency list `[nodes, remember]` re-runs exactly when `nodes` changes, as `[nodes]` did. viewInGraph does the same write as before. No behaviour moved.
+
+### App.tsx: MetaprojectWork, LazyMetaprojectView, RetainedView
+- What imports App.tsx: main.tsx:2 (`App`), test/app-navigation.fixture.tsx:102 (`App`, rendered whole) and App.dom.test.tsx (`RetainedView`, `MetaprojectWork`).
+- `MetaprojectWork` is rendered once, by ProjectWindow (:618), with the same cwd, rebuildGraph and onDraft as the inline block it replaced, and it computes `visible={view === "metaproject"}` and `active={workView === "metaproject"}` exactly as that block did.
+- The `explorer` default is the module-level const `LazyMetaprojectView`, so the component's identity is stable across renders and nothing remounts. The Suspense fallback is unchanged.
+- ProjectWindow is keyed by cwd (:86), so a project change still remounts the explorer.
+- The old identifier `MetaprojectView` survives only as the destructured parameter name (:161, :172). No other code in App.tsx refers to it.
+- RetainedView is unchanged; its consumers are MetaprojectWork (:170) and App.dom.test.tsx.
+
+### Blast-radius entries ruled out
+- ReviewBoard.tsx, FlowsBoard.tsx, IssueDetail.tsx, IssuesBoard.tsx, styles/flows.css, metaproject.css and the flow's context.md are text-link entries. None of them imports MetaprojectView.tsx or any of the names above, so no consumer path reaches them.
+- nodePanel.css is a text link from RelationshipList; no class name changed.
+- NodeDetailsPanel.tsx is the one graph consumer, covered above.
+
+## Prior findings
+- F-001: closed. Both sites the finding named are fixed. RelationshipList.tsx:211-218 decides the note from the groups. MetaprojectView.tsx:712-716 and :1017-1020 gate and count the disclosure from summarizeRelationships. Both are pinned by tests in this slice: 'a projection whose every edge is left out says it has no relationships' and 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none'.
+- F-002: closed. project.current no longer moves on a quiet re-read, either at the effect's start or in the cleanup that precedes it. openPath and loadMoreSearch, its only readers, keep their guard. Pinned by 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' and 'a page of results in flight when the explorer is hidden and shown again is still appended'.
+- F-003 (checked, not owned): closed. The quiet read neither clears nor sets `error` (:376-379, :403), and a read in flight blocks a quiet read (:346). Pinned by three tests in the slice.
+- F-004 (checked, not owned): closed. The effect calls `remember` (:588).
+- F-009 (checked, not owned): closed. MetaprojectWork passes `visible` (:172), and App.dom.test.tsx asserts true/false/true/false for metaproject, flows, metaproject and Settings. I did not re-run the R2-28 mutant (exec budget 0).
+- F-006, F-007, F-008: not checked by this reviewer, so left out.
+
+## Not verified
+Nothing was executed (exec_budget_s 0). The effect ordering (the visible effect before the catalog effect's cleanup and body in the following commit) is read from the code and from React's effect semantics. The app has no StrictMode (main.tsx:16), so no double mount changes these counts.

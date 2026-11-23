@@ -1,0 +1,28 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "Read slice-04 in full and, because its hunks are mostly the removed halves of lines the fix round rewrote, read the real range diff (60cbe1c..b153809) for App.tsx and MetaprojectView.tsx and the files at head. One minor finding: the new quiet catalog re-read on return reports a failure through the loud error banner. Verified clean: the `visible` prop (App.tsx passes `view === \"metaproject\"`; MetaprojectView defaults it to true, so the test seam and any other caller are unchanged); filters popover is unmounted and closed while hidden; the quiet read only updates freshness when the snapshot is unchanged and otherwise takes the old full-reload path; `remember` moved into an effect on `nodes` (the render still reads `nodes` first, so Back keeps its fallback); the lookup token in openPath (a later click now wins, which only narrows when an old lookup may settle); `graphState` feeds showGraph, the freshness banner and onDraft consistently. Slice-04 hunks that touch metaproject.css (`.metaproject-relation-actions`, the max-width 700px block), the GRAPH_PADDING constant, the `nodes` prop of RepositoryMarkdown, the `catalog.truncated` banner and the `problem=` line are not in this round's range diff for those files (metaproject.css has no change between the two commits; the rg of head finds no `relation-actions`, no `GRAPH_PADDING`, no `Catalog is limited` in source and only a negative assertion in a test), so they are not changes of this round and nothing worse than base is shown by them; the guide hunk is a line reflow. Graph consumer list (layers.affected): App.dom.test.tsx, main.tsx, MetaprojectView.dom.test.tsx, app-navigation.fixture.tsx; the only caller of MetaprojectView outside tests is App.tsx:596, traced. Not run: read-only, exec budget 0.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "category": "behaviour-delta",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 392,
+      "quote": "if (generation === project.current) setError(errMessage(cause));",
+      "title": "A failed quiet re-read on return shows the loud catalog error over a working explorer",
+      "problem": "The fix round added a quiet catalog re-read when the explorer becomes visible again (`quietRead.current = true; setRevision(...)`, lines 335-343). The load effect it reuses clears and sets `error` unconditionally: `setError(\"\")` at line 370 and `setError(errMessage(cause))` in the catch at line 392. On base nothing was read on return, so nothing could fail there. Trigger: the user leaves the Metaproject tab and comes back while the CLI read fails (CLI busy or exiting, a rebuild writing the index, a transient spawn error). Outcome: the `{error && ...role=\"alert\"}` banner (line 820) appears with the CLI message and a Retry button above an explorer whose catalog, graph and selection are still valid; Retry runs a non-quiet read, which replaces the catalog and may drop the selection if the snapshot moved. The quiet read was meant to be invisible (its comment says 'quietly'); only its success path is. The test at MetaprojectView.dom.test.tsx:889 covers the unchanged-snapshot success path only.",
+      "evidence": "consumer-trace: read MetaprojectView.tsx 326-343 (quietRead set on return), 365-400 (effect: `quiet` is read but only consulted on the success path at 379; the catch at 391-392 and `setError(\"\")` at 370 ignore it), 820-825 (banner). refute: looked for a guard on `quiet` in the catch or on `loaded.current` in the banner and found none; the base had no read on return, so this is new.",
+      "fix": "In the catch, when `quiet` is true, keep the loaded catalog and skip `setError` (and do not clear a standing error at line 370 for a quiet read); the next real read or the user's Retry reports a persistent failure.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}

@@ -1,0 +1,98 @@
+--- apps/desktop/src/App.tsx
+@@ 596,596 @@
+-          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} onDraft={async task => {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 37,41 @@
+   cwd: string,
+   request: MetaprojectRequest,
+ ) => Promise<MetaprojectResponse>;
+ const EMPTY_HITS: readonly MetaprojectHit[] = [];
+-const GRAPH_PADDING = 36;
+ const DOCUMENT_EDGES = ["describes", "links"] as const;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 62,64 @@
+ function RepositoryMarkdown({
+   text,
+-  nodes,
+   source,
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 68,69 @@
+   text: string;
+-  nodes: MetaprojectNode[];
+   source: string;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 656,657 @@
+-    const generation = project.current;
+     setRebuilding(true);
+     setError("");
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 854,854 @@
+-          {catalog.graph !== "ready" && (
+-            <div className="inline-banner tone-warn" role="status">
+-              <span>Graph {catalog.graph}. {catalog.graphReason}</span>
+-              <button
+-                className="btn metaproject-rebuild"
+-                disabled={rebuilding}
+-                onClick={() => void rebuild()}
+-              >
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 867,869 @@
+             </div>
+           )}
+-          {catalog.truncated && (
+-            <div className="inline-banner tone-neutral" role="status">Catalog is limited. Search for more results.</div>
+-          )}
+           <div className={`metaproject-panes${mode === "graph" ? " metaproject-graph-panes" : ""}`}>
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 949,951 @@
+-              problem={documentProblem || (snapshotMismatch ? "The project index changed. Refresh to look up linked documents." : "")}
+               openSpec={protocol === 2}
+               readPreview={preview}
+               width={panelWidth}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 956,957 @@
+-              onDraft={catalog.graph === "ready" && !documents?.truncated ? onDraft : undefined}
+               onFind={kind => kind === "wiki"
+                 ? visit({ mode: "wiki", query: activeNode.path, selection: "" })
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 104,111 @@
+ }
+ .metaproject-article-header h2 { margin: 0 0 var(--sp-1); font-size: var(--fs-lg); }
+ .metaproject-article-header { margin-block-end: var(--sp-3); }
+ .metaproject-article .md :not(pre) > code { overflow-wrap: anywhere; }
+ .metaproject-relationship-section summary { min-block-size: 28px; padding-block: var(--sp-1); font-weight: 600; }
+ .metaproject-relationship-section summary .count-label { margin-inline-start: var(--sp-1); }
+-.metaproject-relation-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+-.metaproject-relation-actions .btn {
+-  max-inline-size: 100%;
+-  block-size: auto;
+-  min-block-size: 28px;
+-  padding-block: var(--sp-1);
+-  white-space: normal;
+-  text-align: start;
+-  overflow-wrap: anywhere;
+-}
+-
+-@media (max-width: 700px) {
+-  .metaproject-header, .metaproject-panes { padding-inline: var(--sp-3); }
+-  .metaproject-panes { display: flex; flex-direction: column; overflow: auto; }
+-  .metaproject-list { flex: none; max-block-size: min(180px, 28vh); }
+-  .metaproject-content { flex: none; overflow: visible; }
+-}
+-
+ .openspec-view { display: flex; flex: 1; min-block-size: 0; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); }
+ .openspec-view .metaproject-panes { padding: 0; }
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 212,212 @@
+-Use **Graph** again to trace the same selection. To give an agent the same
+-context, use the path shown under the title in a session prompt. For example,

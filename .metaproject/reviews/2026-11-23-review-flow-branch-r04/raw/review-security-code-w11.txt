@@ -1,0 +1,26 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No security finding. Slice-03 is removed lines only; this round's three are the old `useState(\"\")` for error, the old `setError(\"\")` in rebuild() and the old `setError(errMessage(cause))`. The banner now renders `error.message`, a React text child of the same `errMessage(cause)` string it rendered before, so the change adds no HTML sink and no new disclosure. A quiet re-read removes only a banner whose source is `catalog`, and only after the catalog read succeeded.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Notes on what was checked (not findings)
+
+Hunks of slice-03 read in full: MetaprojectView.tsx (GRAPH_PADDING; `nodes` prop of RepositoryMarkdown; `const [error, setError] = useState("")`; in rebuild() `const generation = project.current` and `setError("")`; `if (generation === project.current) setError(errMessage(cause))`; the "Catalog is limited" banner; two removed props of the details panel), OpenSpecView.tsx (`content.current.scrollTop = 0`), metaproject.css (relation-actions rules, the 700px block). Only the three error lines are this round's; the rest were removed before this round. The removed `generation` guard in rebuild() is replaced by `mounted.current`; that is a logic question, not a security one.
+
+Source to screen of the banner message:
+- Source: `cli_response` in apps/desktop/src-tauri/src/metaproject.rs:197-203 returns the CLI's trimmed stderr verbatim on a non-zero exit, or fixed strings ("unavailable: ..."). `requestMetaproject` (platform/metaproject.ts:57-63) rethrows it, or throws one of two fixed messages. `errMessage` (lib/format.ts:43) returns `e.message` for an Error, else `String(e)`: plain text, no markup handling.
+- Sink: MetaprojectView.tsx:848 `<span>{error.message}</span>` is a React text child, escaped. The only `dangerouslySetInnerHTML` in the file (line 92) belongs to RepositoryMarkdown and is not fed by `error`. So CLI output containing `<script>` or similar renders as text.
+- Disclosure: stderr of the user's own CLI can contain a path of the user's machine (checkout, executable) or an environment-derived string. It is shown only in the user's own Desktop window, the same place and with the same content as before this round (the banner rendered the same string via `{error}`); the object wrapper changes the field name, not the content. Nothing here logs it, sends it to a URL or persists it. Not a new exposure; no attacker input reaches it that the user's own CLI and repository did not already control.
+- Same shape elsewhere (not this round's code): OpenSpecView and `protocolError` render `errMessage` the same way; not in this slice.
+
+Can an event the user did not start remove a failure the user must know about?
+- The only automatic remover is the quiet re-read on return to the view (line 392). It runs `setError(current => current?.source === "catalog" ? null : current)` after `generation === catalogRead.current` and a successful read, so it removes a banner only when the very read that failed has just succeeded. A failed rebuild (`source: "rebuild"`) stays. A failed quiet read sets nothing and removes nothing (line 407 `!quiet`). A superseded read returns before line 392. So the failure disappears only when its cause (an unreadable catalog) is gone, which is the state the banner reported; no failure that still holds is hidden.
+- Residual, already recorded: a catalog failure standing on a graph-ready explorer that has no Refresh control is the F-009 (round 3) condition; it is in `known_findings`, not repeated.
+- Not verified: the native Tauri window (no Rust toolchain here); I read the Rust source only and ran nothing. Tools used: Read, `git show 46c472162`, `keryx ctx rg`.

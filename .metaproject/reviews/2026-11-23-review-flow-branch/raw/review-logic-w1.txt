@@ -1,0 +1,53 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-redesign`
+- Merge-base: `1358d962f4dfc07a9e086a533f51e75aa757dfcd`, head `60cbe1c565f4e478833605b41c49c2827eed2bbf`
+- Scope mode: diff, slice-01 read in full (620 lines; six flow documents: acceptance-criteria.md, context.md, description.md, journal.md, plan.md, tasks.md). It holds no executable code.
+- Spec compliance gate: not run on this slice. It has no code to compare with the 21 criteria; the code slices belong to other waves.
+
+### Summary
+Slice 01 is flow documentation. I found no logic defect that affects a gate or a result. One minor inconsistency: `tasks.md` still carries the task graph from before the flow grew. It was not updated when the journal changed task dependencies and added tasks.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Logic Bugs
+None detected.
+
+### Edge Cases / documentation drift
+
+### [F-001] tasks.md is out of date against flow.json and the journal
+
+- **Severity**: minor
+- **File**: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md:16 (the T4, T9 and T11 rows of the table)
+- **Problem**: The table reads `| T4 | review | Review round on the integrated change | T8, T9, T10, T11 | — |`, `| T9 | docs | … | T8 | AC21 |` and `| T11 | verify | … | T8 | AC5, AC6, AC10, AC20 |`. The journal records the changes: T9 now depends on T12, T13; T11 on T8, T14; T4 on T8, T9, T10, T11, T14, T15, T16. The table has no rows for T12 to T16, which exist in `flow.json` and in `dispatch/`. The header says task statuses live in `flow.json`, and the `task-depends-set` and `task-added` entries show that `flow.json` holds the dependencies as well. The `flow.json` dependsOn entries were not read in full, only counted (27 matches).
+- **Why it matters**: A reader of `tasks.md` alone, such as a reviewer or the person finishing the flow, gets the wrong order and misses five tasks, including T14 and T16, which changed the screen. No gate input is wrong, so the cost is a misleading document.
+- **Fix**: Add the rows T12 to T16 and correct the dependencies of T4, T8, T9, T11 and T15 to match `flow.json`. Or mark `tasks.md` as the initial plan and name `flow.json` as the source of truth.
+
+### Observations that are not findings
+- `plan.md` and `context.md` describe the pre-change state ("920 lines", "182 lines", "Mounts the view at line 586"). They are design inputs, and the code slices cover the result.
+- The journal says the first-green gate and the merge of `main` were done on the tree at head. Those claims match the evidence in the reviewer brief (842 pass, tsc exit 0).
+
+REVIEW_RESULT:
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "line": 16,
+      "title": "tasks.md is out of date against flow.json and the journal",
+      "problem": "The task table still shows T4 depending on T8, T9, T10, T11, T9 on T8 and T11 on T8, and has no rows for T12-T16, although the journal records task-depends-set and task-added entries that change them.",
+      "why_it_matters": "A reader of tasks.md alone gets the wrong order and misses five tasks; no gate input is wrong.",
+      "suggested_fix": "Add the rows T12-T16 and correct the dependencies to match flow.json, or label tasks.md as the initial plan with flow.json as the source of truth."
+    }
+  ]
+}
+```

@@ -1,0 +1,38 @@
+STATUS: DONE
+
+## High-Load Review (review-highload, round 4, slice-03)
+
+Scope: `slice-03.diff` read in full (removed lines only: 10 hunks across MetaprojectView.tsx, OpenSpecView.tsx, metaproject.css). This round's three lines are in MetaprojectView.tsx: `const [error, setError] = useState("");` (hunk @@ 310,315), `setError("");` in rebuild() together with `const generation = project.current;` (hunk @@ 676,676) and `if (generation === project.current) setError(errMessage(cause));` (hunk @@ 681,681). All other hunks (GRAPH_PADDING, RepositoryMarkdown `nodes`, catalog-limited banner, `problem=` and `onDraft` props, OpenSpecView scrollTop, the relation-actions and 700px media CSS) predate this round and were reviewed in round 2; not re-reviewed. Read against head 744d9ef75: MetaprojectView.tsx 300-430, 665-695, 843-853, and the writers of `error` (grep: lines 380, 392, 407, 677, 681; reader 846-849).
+
+Writers of `error` at head: (W1) effect start of a non-quiet read, `setError(null)` at 380; (W2) the same effect's success continuation of a quiet read, `setError(current => current?.source === "catalog" ? null : current)` at 392; (W3) the effect's catch, `{source:"catalog"}` only when `generation === catalogRead.current && !quiet`, 407; (W4) rebuild start `setError(null)` 677; (W5) rebuild catch `{source:"rebuild"}` guarded by `mounted.current`, 681.
+
+Facts the interleavings rest on:
+- W2 sits at 392, after the `generation !== catalogRead.current` return at 389, with no await between. Anything newer than the quiet read (every effect re-run, including unmount cleanup) has already bumped `catalogRead`, so a superseded quiet read never reaches W2.
+- A quiet read starts only when `loaded.current && !catalogPending.current` (348), so at most one quiet read is in flight, and none starts while a read is pending.
+- React applies queued updaters in enqueue order. W2's updater is enqueued before any write by a read that starts later, so it sees the earlier value and cannot run after a later one.
+
+Interleavings, outcome on screen, and whether it is the truth:
+1. Rebuild fails while a quiet read is in flight. W5 sets `rebuild`. The quiet read then succeeds: W2's updater sees source `rebuild` and returns it. The rebuild banner stands. Truth (last rebuild failed). If the quiet read finishes first it sees null (or whatever W4 left) and clears nothing that matters.
+2. Reverse order: a rebuild failure already stands, the user returns, the quiet read succeeds. W2 keeps `rebuild`. The banner stands, and it is true. If the quiet read fails, nothing is written (407 needs `!quiet`) and the banner stands.
+3. A read that is not quiet fails while a quiet read is in flight. It cannot start earlier than the quiet read and be pending (348 blocks the quiet read). If the non-quiet read starts later (Retry, Refresh, rebuild's reload), its effect cleanup raises `catalogRead`, so the quiet read is dropped at 389 (success) or at 407's generation test (failure), and its `finally` does not touch `catalogPending` or `loading`. The non-quiet read clears at 380 and its failure sets `catalog`. Truth: the loud read superseded the quiet one. A rebuild reload that fails the same way is the same.
+4. A quiet read succeeds after Retry was pressed. Retry bumps `revision`, the cleanup retires the quiet read, and the quiet read is dropped before W2. If the quiet read resolves before the press, it clears a `catalog` error and the Retry button goes away with it. Truth: the last catalog read succeeded.
+5. Two returns in a row. The second return while the first quiet read is pending is ignored (348). After the first has finished, the second starts a new quiet read, and W2 is idempotent. Truth.
+6. A quiet read that succeeds after unmount. The cleanup raises `catalogRead` first, so 389 returns before W2. Rebuild's writes are behind `mounted.current`. Nothing writes. A project change remounts, which is the same path.
+7. Can W2 clear a `catalog` error that a newer read just set? No. A newer read's W3 is enqueued only after that read's effect ran, which means the quiet read's generation check at 389 has already failed; or, if the quiet read passed 389, W2 was enqueued first and W3 follows it in the update queue. Because the check and the enqueue are synchronous, there is no window between them.
+Residual single-slot cases, all by design and the same as before this round: a loud catalog read clears a standing rebuild error at its start (380), and a rebuild failure overwrites a standing catalog error; the banner shows the latest failure of either kind. The failed-quiet-read case (banner keeps an older message) is known F-009 and is not reported again.
+
+The removed `generation === project.current` guard on rebuild's catch is replaced by `mounted.current`, which matches the comment at 668-669 (a rebuild outlives catalog reloads, only leaving the explorer silences it). A rebuild failure after a Retry or a quiet read therefore still shows, which is the truth about that rebuild. I found no sequence that leaves a stale banner or hides a true one.
+
+Summary: no concurrency defect in this round's change. The only second writer of `error`, the quiet read's functional update, is ordered behind the generation check and the update queue, so it cannot clear a newer read's catalog error, and it never touches a rebuild error. Nothing was run (read-only, budget 0); the live checks listed as unverified in the brief are not covered by this review.
+
+Clean Areas: Part A (shared state, check-then-act on `catalogRead` / `catalogPending`), Part B (timers and listeners in the effect: none added), Part F (no retry loop added; Retry is user-driven).
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice-03 read in full; this round's three removed lines (string `error` state, `setError(\"\")` and the generation-guarded `setError` in rebuild()) are the half of T24's change whose other half was checked at head. All seven interleavings of the two writers of `error` end in a banner that is the truth about the last read or rebuild of its kind, and the quiet read's functional update cannot clear a newer read's catalog error. No findings.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "slice-03 read in full: 11 hunks (9 in MetaprojectView.tsx, 1 in OpenSpecView.tsx, 1 in metaproject.css). Only three removed lines belong to this round's range (46c472162): the `useState(\"\")` of `error`, the `setError(\"\")` in rebuild() and the rebuild's `setError(errMessage(cause))` (the slice shows it with a `generation === project.current` guard that was already gone at 8e0f656fb). At head the object-shaped `error` has three writers and one reader, all consistent; nothing refers to what the other hunks removed. No findings.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Hunk placement (checked with `git diff --stat 8e0f656fb HEAD` on the three files: only MetaprojectView.tsx changed, 12 insertions and 8 deletions; OpenSpecView.tsx and metaproject.css are unchanged in the range):
+
+IN this round's range (MetaprojectView.tsx, commit 46c472162):
+- `const [error, setError] = useState("");` -> `useState<{ source: "catalog" | "rebuild"; message: string } | null>(null)`.
+- `setError("");` in rebuild() -> `setError(null);`.
+- the rebuild catch's `setError(errMessage(cause))` -> `setError({ source: "rebuild", message: errMessage(cause) })`. The slice line `if (generation === project.current) setError(errMessage(cause));` and the `const generation = project.current;` line are not this round's: at 8e0f656fb rebuild() already read `if (mounted.current) setError(errMessage(cause))`. The `const generation = project.current;` at 8e0f656fb line 694 belongs to the wiki-link lookup, not to rebuild().
+
+OUT of range (already absent at 8e0f656fb, removed before round 3's head):
+- `GRAPH_PADDING` constant; `nodes` prop of `RepositoryMarkdown` (two hunks); the `catalog.truncated` "Catalog is limited" banner; the `problem=` prop line of the details panel; the `onDraft={catalog.graph === "ready" && ...}` gate; in OpenSpecView.tsx the `scrollTop = 0` line before `if (!controlledCollection) setSelected(next)`; in metaproject.css the `.metaproject-relation-actions` rules and the `@media (max-width: 700px)` block. None of these appear in the 8e0f656fb copies of the three files.
+
+Nothing still refers to a removed item, checked at head with `keryx ctx rg` over apps/desktop/src (tests included): no `GRAPH_PADDING`, `relation-actions`, `max-width: 700px`, `problem=` or `problem?:`. `<RepositoryMarkdown ... openPath=...>` (MetaprojectView.tsx:754) passes no `nodes`. The details panel receives `documentsProblem=` (line 973) and `onDraft={graphState.graph === "ready" && !documents?.truncated ? onDraft : undefined}` (line 985), the current forms. OpenSpecView.tsx keeps its scroll reset at line 83, after `onLocation?.(next)`, as the post-removal form of choose().
+
+The in-range change through my lens (React state, effect and banner), checked against head: `error` is written at MetaprojectView.tsx:380 (loud catalog read start, null), :392 (quiet success, functional updater that clears only `source === "catalog"`, after the `generation !== catalogRead.current` return so a superseded read cannot clear it), :407 (loud failure, source catalog, same generation guard), :677 (rebuild start, null) and :681 (rebuild failure, source rebuild, `mounted.current` guard). The only reader, the banner, uses `error.message`, and its Retry starts a loud read that clears at its start. A stale quiet read cannot clear a newer error; a rebuild failure survives a quiet success, as the comment says; the `error &&` test works for the object form. No cell found that the worker's table lacks within my lens.
+
+Not verified: tests were not run (read-only, exec_budget_s 0); the orchestrator's evidence (tsc, 931 tests, vite build) was taken as stated, not re-run.

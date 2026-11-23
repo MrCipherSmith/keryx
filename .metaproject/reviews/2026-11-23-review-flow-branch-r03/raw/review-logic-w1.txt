@@ -1,0 +1,50 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 (the flow record of T22 and T23) was read in full. Every file a dispatch or request names exists at head; the result files' claims agree with commits a37719ff2 and 8f5bf6d14 (files, test counts 71/81, 13, 3, the cited production lines); the journal's counts agree with round 2's findings.json, mutation-2.md (18 killed, 16 survived) and verifications.json (10 confirmed, 3 unverifiable). Two defects in the record: tasks.md still gives T4 the dependencies it had before T22 and T23 were added (the class round 1 found), and the journal's T23 entry says its own-script mutant check passed without naming the script, which exists only in a session scratch directory.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "confidence": "high",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "line": 12,
+      "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 | — |",
+      "problem": "The task table was extended for T22 and T23 (two new rows, a Review paragraph and a Fix round 2 section) but the T4 row was not updated. flow.json at head has T4 dependsOn [T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23] (set by the history event 'task-depends-set: T4: dependsOn ... T22, T23 — the review task closes after fix round 2 (T22, T23) and a clean round'). tasks.md says T4 waits for T21 only. Checked mechanically: parsing the table and flow.json, T4 is the only one of 23 rows whose dependency column differs from flow.json (kinds, and the dependencies of T22 '—' and T23 'T22', all agree). This is the class round 1 found in this file (the table no longer following flow.json), one row wide.",
+      "why_it_matters": "Whoever reads tasks.md to see what must finish before the review task closes is told T21; flow.json, which the CLI enforces, also holds the review back until T22 and T23 are done. The two records of the same dependency disagree in the file a human opens first.",
+      "suggested_fix": "Change the T4 row's dependency cell to 'T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23'.",
+      "class_scope": {
+        "sites": [],
+        "enumeration_method": "Parsed every '| Tn | kind | title | deps | ACs |' row of tasks.md against flow.json tasks[].kind and dependsOn; 23 rows each side; one difference (T4)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+      "line": null,
+      "quote": "the five branches T22 added (the two `!quiet` gates, the `catalogPending` check and its reset, the `!quietRead.current` gate in the cleanup), mutated by the orchestrator's own script, are all killed, four of them by T22's tests.",
+      "problem": "The journal's T23 acceptance entry says R2-14 and R2-23 'killed on their new lines' and five of T22's branches 'killed' by 'the orchestrator's own script' and names no script. The result file names it as 'own_mutants.py (scratchpad)'; the dispatch files name scratch_check2.py by an absolute path under /private/tmp/claude-502/.../scratchpad/. Neither script is a tracked file (git ls-files finds neither); they exist only in one session's temporary directory. The mutants themselves (anchor and replacement for R2-14, R2-23 and T23-1..T23-5) are written nowhere in the record. The only persisted evidence of these runs is the round-3 package's research-evidence/moved-mutants-1.txt, which the journal cannot cite because it was written later. The T22 entry has the same shape: 'in a scratch copy with the two production files put back to HEAD, seven of the new tests fail' names neither the tool nor the command (the result file names scratch_check2.py red --restore ...).",
+      "why_it_matters": "A statement that something was verified has to name what verified it, so the next editor can run it again. Here the claim 'all killed' for the branches T22 added (the branches whose tests T23 chose not to add: 'No T22 branch survived, so no test was added for them') cannot be re-run from the repository; the next reviewer re-derives the mutants from prose.",
+      "suggested_fix": "In the T23 entry, name the script and where it is kept (or write the seven mutants, file:line and replacement, into the entry or into a tracked file next to it); in the T22 entry name scratch_check2.py red with its --restore arguments. Or say the runs rest on the worker's report."
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+
+## Checked and found consistent (no finding)
+
+- Names at head: T22 and T23 dispatch context_refs, files_to_read and resolved_context_file (context.md, plan.md, acceptance-criteria.md, resolved/T22|T23.implement.json, dispatch/T22|T23.request.json, results/T17|T18.result.json, r02 report.md, findings.json, research-evidence/mutation-2.md, the guide, NodeDetailsPanel.tsx and the other source files) all exist; results/T22.result.json and results/T23.result.json exist. The round-1 defect (a named resolved/result file that does not exist) does not recur.
+- flow.json against tasks.md: T22 (implement, no deps, AC7 AC10 AC14 AC16 AC19) and T23 (test, T22, AC10 AC14 AC19 AC20) agree in kind, dependencies and ACs, and with the request.json acceptance_criteria lists. The request.json 'dependencies: []' for T23 matches the convention of T17, T20 and T21 (fix tasks carry [] there).
+- Result files against the commits: commit a37719ff2 changed exactly the four files T22 lists; 8f5bf6d14 changed App.dom.test.tsx, App.tsx and MetaprojectView.dom.test.tsx, exactly T23's files_modified (MetaprojectView.tsx untouched, as T23's not_touched says). Test counts at head: MetaprojectView.dom.test.tsx 81 (71 + the ten tests at lines 1456 to 1618), RelationshipList.dom.test.tsx 13, App.dom.test.tsx 3; T22's six new explorer tests are at 1321 to 1434. The production lines both result files cite (MetaprojectView.tsx 190-193, 212, 326-337, 346, 361, 373-416, 588, 619, 646-660, 694-695, 716, 812; App.tsx 55, 161, 172, 618; NodeDetailsPanel.tsx 199, 242, 265) hold the code they describe.
+- Journal against round 2's package: 13 findings, 9 minor and 4 info (findings.json); 16 of 34 mutants survived and 18 were killed (mutation-2.md; the survivors R2-12 and R2-30 are the two judged redundant, leaving T23's 14); 10 confirmed (4 by execution, 6 by site check), 3 unverifiable (verifications.json); T23's mutant ids, their killed, invalid and survived split (10 killed, R2-14 and R2-23 invalid, R2-18 survived), and the R2-6/R2-7 swap noted in its result agree with mutation-2.md. The journal's T22 and T23 entries agree with their result files (what changed, seven red tests, the two operator-default choices, the MetaprojectWork seam).
+- The guide sentence quoted in T22's third behavior_changes entry ('neither listed nor counted', line 158, wrapped over two lines) and the table row 'A page has no **Relationships** section' (line 278) exist.
+
+## Not verified
+
+I ran nothing (read-only, exec budget 0): no test, no mutant. The counts of passing tests in the result files and the journal rest on the files' own reports; I confirmed only that the test counts at head equal 81, 13 and 3. 'None of the 129 wiki pages links to itself' (journal, round 2) was not checked.

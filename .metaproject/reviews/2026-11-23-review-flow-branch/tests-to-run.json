@@ -1,0 +1,47 @@
+[
+  {
+    "file": "apps/desktop/src/panels/ChromeView.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/panels/SidePanels.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/session/ActivityPanel.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/session/CommandCard.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/session/Composer.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/remote/format-html.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  }
+]

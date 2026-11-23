@@ -1,0 +1,46 @@
+{
+ "mutants": [
+  {
+   "id": "R5-1",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (generation === catalogRead.current && !quiet) setError({ source: \"catalog\"",
+   "replacement": "if (generation === catalogRead.current) setError({ source: \"catalog\""
+  },
+  {
+   "id": "R5-2",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if ((await onRebuild()) && mounted.current) setRevision(",
+   "replacement": "if ((await onRebuild())) setRevision("
+  },
+  {
+   "id": "R5-3",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        if (generation === catalogRead.current) {\n          catalogPending.current = false;\n          setLoading(false);\n        }",
+   "replacement": "        {\n          catalogPending.current = false;\n          setLoading(false);\n        }"
+  },
+  {
+   "id": "R5-4",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!returned || !loaded.current || catalogPending.current) return;",
+   "replacement": "if (!returned || !loaded.current) return;"
+  },
+  {
+   "id": "R5-5",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!quietRead.current) project.current++;",
+   "replacement": "project.current++;"
+  },
+  {
+   "id": "R5-6",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result",
+   "replacement": "        if (quiet) setError(null);\n        if (quiet && result"
+  },
+  {
+   "id": "R5-7",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "    if (!loaded.current) setLoading(true);",
+   "replacement": "    setLoading(true);"
+  }
+ ]
+}

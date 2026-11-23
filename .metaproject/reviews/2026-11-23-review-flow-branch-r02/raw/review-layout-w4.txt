@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Slice-04 is removals only (unused GRAPH_PADDING, a dead `nodes` prop, the old catalog banners, `.metaproject-relation-actions` and the `@media (max-width: 700px)` block). No removed CSS rule is still referenced: `keryx ctx rg relation-actions apps/desktop docs` finds 0 matches. The 700px viewport rule is superseded by the `@container metaproject (max-width: 760px)` block, and the desktop window minimum is 720px, so no supported host reached it. No layout defect found; nothing measured by me (read-only run, exec_budget_s 0).",
+  "findings": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Notes (not findings): the stacked-pane layout below 700px viewport width no longer exists in the browser dev build; unverified, and it is not a supported host (window minimum 720px per metaproject.css). The probe that would settle it is the dev build at 600px width.

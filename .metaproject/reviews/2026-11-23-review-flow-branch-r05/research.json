@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The same words name two different cases within four titles. In this file and in T24's banner table a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx)",
+      "reason": "review-style-w1 F-001 is carried through as canonical finding F-001; one finding per defect across reviewers.",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (fix-round-3.md, whose form this file follows, says 'on the tree that became commit `46c472162`'. Thi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-003 (info, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md)",
+      "reason": "review-style-w1 F-002 is carried through as canonical finding F-003; one finding per defect across reviewers.",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (Mutant R5-7 (`if (!loaded.current) setLoading(true);` -> `setLoading(true);`) SURVIVED: bun test of ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-002 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-testing-practices-w1 F-001 is carried through as canonical finding F-002; one finding per defect across reviewers.",
+      "finding": "F-002"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "priorDispositions": {
+      "F-001": "closed",
+      "F-002": "closed",
+      "F-003": "closed",
+      "F-005": "closed"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:f39b00b10a5f",
+        "rawEvidence": "raw/review-frontend-w1.txt#sha256:f39b00b10a5f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:cd31ab9a5eca",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:cd31ab9a5eca",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:f377271be317",
+        "rawEvidence": "raw/review-regression-w1.txt#sha256:f377271be317",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/opus",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:aaf3061ecc7b",
+        "rawEvidence": "raw/review-style-w1.txt#sha256:aaf3061ecc7b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:17b02e34230d",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:17b02e34230d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:routed-out:f475fe3bc833",
+        "status": "complete",
+        "scopeComplete": true,
+        "routedOut": true,
+        "coveredSlices": [],
+        "rawEvidence": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles",
+        "ruleEvidence": [
+          ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/manifest.json#roles"
+        ],
+        "executionRequired": false,
+        "executionReason": "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch",
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        }
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 5,
+    "known": 0,
+    "unknown": 5,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

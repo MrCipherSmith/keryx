@@ -1,0 +1,63 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "F-001 (Filters popover clipped at 720x480 with Details expanded) is closed: placeFiltersPopover() bounds the popover by the room on the side it takes, and the journal's live measurements in Chromium 156 and WKWebView (box 98 to 327 and 135 to 327, window 480) match the code's arithmetic exactly (inline bottom 153 = 480 - 331 + 4; max-height 243 = 480 - 8 - 229). The cases the measurements do not cover (button near the top, window shorter than the popover, a page scroll under the button) cannot put the popover outside the window by the code; two follow-ups are unmeasured and filed as info: content growth while open (Reset filters footer) and no re-placement when the button moves. I could not run a layout engine (read-only, exec budget 0), so nothing here is a new measurement.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "const place = () => setPosition(placeFiltersPopover(anchor.getBoundingClientRect(), panel.current?.scrollHeight ?? 0));",
+      "problem": "UNVERIFIED (derived from code and the journal's numbers). The popover is placed on open and on window resize only, from the content height at that moment. The footer `{filtersChanged && (<div className=\"menu-footer metaproject-filters-pop-footer\">` adds a Reset filters row the first time Direction, Depth or a type chip is changed while the popover is open. Case 720x480, one-line banner, Chromium 156 as measured in the journal: placed below, top 229, content 229, max-height 243 (= 480 - 8 - 229). A Reset row of roughly 30 to 40 px (not measured) makes the content about 260 to 270, above the 243 cap, so the popover gains an inner scroll on the first filter change and Reset filters sits below the fold of the popover. The popover itself stays inside the window (the cap holds), so this is not the F-001 defect; it is the same shape with a smaller amount, reachable by scrolling inside the popover.",
+      "impact": "At the smallest window, with the one-line banner, the first change of a filter makes the popover scroll and moves Reset filters out of sight until the user scrolls it. Recoverable; the controls stay in the window. With Details expanded the popover opens above with 319 px of room, so the added row fits there.",
+      "suggested_fix": "Either re-place on content change (a ResizeObserver on the popover content that calls place()), or count the footer in the height used for the flip (always render the footer row, disabled when nothing changed). To settle it: browser dev build at 720x480, one-line banner, open Filters, change Direction, read clientHeight and scrollHeight of [role=dialog][aria-label=\"Graph filters\"] and the Reset filters button's getBoundingClientRect().bottom against 472.",
+      "confidence": "low"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "window.addEventListener(\"resize\", place);",
+      "problem": "UNVERIFIED (derived from code; the T17 worker lists it under noticed_not_touched). Nothing places the popover again when the page or the content pane scrolls under its button, when the freshness banner changes height (Details toggled while the popover is open is a press outside, so it closes it; a catalog or banner update that arrives while it is open is not), or when the explorer layout changes without a window resize. The popover is position: fixed with the coordinates of the open moment, so it stays inside the window (its edge and max-height were computed against window.innerHeight) but no longer sits against its button.",
+      "impact": "A wheel or keyboard scroll of .metaproject-content with the popover open leaves the popover where it was while the button moves (and may leave the window). No clipping of the popover, so not F-001; a detached popover only.",
+      "suggested_fix": "Listen for scroll with capture (window.addEventListener(\"scroll\", place, true)) and re-place, or close the popover on scroll of an ancestor. To settle it: at 720x480 with Details expanded, open the popover, scroll .metaproject-content by 40 px and compare the dialog's bottom with the button's top.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+
+## F-001 disposition: closed
+
+Fix read at head: `placeFiltersPopover(rect, needed)` (MetaprojectView.tsx 184-194), `FiltersPopover` re-places on `resize`. `.menu` is `overflow-y: auto` and `* { box-sizing: border-box }` (styles.css 3 and 143), so an inline max-height bounds the outer box and the overflow scrolls inside.
+
+Arithmetic check against the journal's measurements (T17 entry, 720x480):
+- Details expanded, button 331 to 355: below = 480 - 8 - 359 = 113; above = 331 - 4 - 8 = 319; needed 229 > 113 and above > below, so it goes above: bottom = 480 - 331 + 4 = 153 (journal: inline bottom 153), max-height min(420, 319) = 319, box = 229 high, 98 to 327 (journal: 98 to 327). Matches. WKWebView 135 to 327 is the same bottom with a shorter content (192), consistent.
+- One-line banner: button bottom 225: below = 480 - 8 - 229 = 243 (journal: top 229, max-height 243), needed 229 fits, so it goes below. Matches.
+- The round-1 clip (bottom 531, 51 px past the window) cannot recur at either state: the box edge is bounded by the window height minus 8 by construction.
+
+Cases the measurements do not cover:
+1. Button near the top, little room on both sides: derived from code. If above is not larger than below, the popover goes below with max-height min(420, below), scrolling inside; if above is larger it goes above with max-height above. Either way the box is inside the window and scrolls. E.g. window 300, button 140 to 164: below 124, above 128, goes above, 128 px, bottom edge 4 px above the button. Button at the very top (top 10): above is -2, below 434, goes below, no flip. Degenerate only when both sides are negative (a button outside the window): the upward branch could then emit a negative max-height, which the browser ignores, leaving the `.menu` cap. Not reachable in a 720x480 window; not filed.
+2. Window shorter than the popover (content 229 against, say, 300 px of window): derived from code, as case 1; the cap is the room on the chosen side, and the popover scrolls inside (the unit test 'stays 8 px inside a short window, scrolls inside and is placed again on resize' pins top + max-height = innerHeight - 8, at 480 and at 400 after a resize, with stubbed layout). The inline max-height replaces `.menu`'s `min(420px, 100vh - 80px)` rather than combining with it; the new cap is the tighter bound only when the room is smaller, otherwise up to 420 where the CSS gave 400 at 480 px of height, still inside the window. Not measured in an engine with a window shorter than 480 (below the supported minimum).
+3. Content height changing while open: derived from code, see LY-001. Bounded by the cap (never leaves the window), not re-placed; the flip decision is not revisited. The symbol-layer note is static per catalog and chip wrapping is fixed by the 320 px width, so neither changes while open; the Reset filters row does.
+4. Page scroll under the button: derived from code, see LY-002; no scroll listener exists. The popover keeps a window-valid fixed position, so no clipping.
+
+Also derived: `scrollHeight` is measured in the layout effect on first render with the popover parked at -9999; scrollHeight is the full content height independent of max-height or transforms, and the `.menu` has no border, so `needed` is exact. A resize re-places on the latest window height. The F-002 refutation (displacement (0, 0) in both engines, round 1) is the premise that the viewport coordinates are right; the T17 entry repeats it for the new placement.
+
+## Other hunks of slice-03, through the layout lens
+
+- NodeDetailsPanel fact row (`relationFact` with the second-step count): measured by the orchestrator at depth 2, 1024x768, panel 380 px: '0 incoming · 13 outgoing · 337 second-step · limited' wraps to two lines in the 240 px value column, no horizontal overflow or clipping. The value column is `.info-val { flex: 1; min-width: 0 }` and `.info-val` is in the overflow-wrap group (styles.css 17), so a wrap at the 300 px minimum panel width (about 190 px of value column, derived) should add a line, not overflow; not measured at 300 px. Not filed.
+- RelationshipList: the second-step row now always renders both 'Open' buttons (`to.id !== from.id` guard removed because self-loops no longer reach it). Layout unchanged for other rows. No finding.
+- App.tsx `visible` prop, OpenSpecView scroll order, the lookup token, `seenNodes` effect: no layout surface. The popover is mounted only while `visible && filtersOpen && filtersAnchor`, so a hidden (display: none) explorer never positions it from a zero rect.
+- Test files and the guide: no rendered layout; the guide's popover sentence ('below the button, or above it when there is no room below') matches the code. The unit tests for placement stub window.innerHeight, getBoundingClientRect and scrollHeight (happy-dom has no layout), so they pin the arithmetic, not the rendering; the rendering rests on the journal's live measurements.
+
+## Not verified by me
+
+Read-only run, no engine: I measured nothing. Every number above is from the journal or derived from the code. Unverified: the Reset row's height and the popover scroll after a filter change at 720x480 (LY-001); scroll under the button (LY-002); the fact row at the 300 px panel width; the light theme and the native Tauri window; WebKit older than macOS 26.

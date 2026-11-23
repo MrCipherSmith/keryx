@@ -1,0 +1,65 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "summary": "Slice-05 read in full (diff lines 1-2512: App.tsx, GraphNodePanel.tsx deletion, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css). Two minor degradations versus base, both caused by keeping the explorer mounted while hidden (RetainedView): (1) the catalog is never re-read when the user returns to the view; (2) the Filters popover, if left open, stays registered on the global Escape stack and overlayOpen() while its view is hidden. One info on per-render work. No criteria supplied beyond the payload's AC1-AC21; most behaviour changes (Wiki no longer falling back to first page while searching, default tab always Relationships, docked panel no longer taking focus, Wiki relationship reads using fixed defaults, rebuild guard via mounted ref) are the intended ACs (AC8, AC12, AC13, AC14) and are not filed. Graph consumer list: 2 of 2 (main.tsx, test/app-navigation.fixture.tsx, both import App.tsx only); cap dropped none; 46 changed files are absent from the graph so their blast radius is unknown, and for the changed exports of the metaproject modules I used search-derived enumeration. Tests were not part of this slice (slice-05 holds only source files), so no blind-test judgement was made. Nothing was run (read-only, exec budget 0).\n\nVerified clean: (a) App.tsx RetainedView: first-visit mount, hidden prop, and Suspense unchanged; `workView` is `settings ? settingsReturn : view` (App.tsx:481), so on base the explorer unmounted on any switch to Session/Review/Flows/Issues, the retained path is intentional (AC10). (b) RelationshipGraph hidden-container handling: fit() returns when computeViewport is not usable, and the ResizeObserver refits on becoming visible. (c) refreshTheme fires on documentElement data-theme/data-palette/style mutations; the only style writers are prefs.ts:252-255 (font/mono/text-scale/measure), so it is not a hot path. (d) select()/openHit/navigate: re-selecting the shown node adds no history entry, matching AC11. (e) GraphNodePanel/isOpenSpecNode: no remaining importers (rg over apps/desktop/src, docs, src finds only NodeDetailsPanel's own export). (f) onCollection no longer clears `query` (MetaprojectView.tsx, was `{ ...current, collection, location: null, query: \"\" }`); OpenSpecView receives query from the route and filters by it, so this is a visible change but I found no evidence it is unintended and the journal does not flag it; left as a note, not a finding. (g) relationship effect deps use relationDepth/relationDirection/relationKinds, which are stable constants in Wiki mode, so no extra reads per render.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "return visited || active ? <div className=\"view\" hidden={!visible}>{children}</div> : null;",
+      "problem": "Base: `{workView === \"metaproject\" && <div className=\"view\" ...><MetaprojectView/></div>}` unmounted the explorer whenever the user left it (workView = view except while in Settings, App.tsx:481), so every return re-ran the catalog read and refreshed the 'Graph is stale/missing' freshness banner, node list and counts. Head keeps Explorer mounted; the catalog effect in MetaprojectView.tsx (`useEffect(() => { if (protocol === null) return; const generation = ++project.current; ... read(cwd, { action: \"catalog\" })`) depends only on protocol/cwd/read/revision, and RetainedView passes the explorer no visibility or 'returned' signal. After the first visit the catalog is read again only on cwd change, Retry/Refresh/Rebuild or revision bump.",
+      "impact": "User opens Metaproject, goes to a session where the agent (or the user) rebuilds the graph or changes the repo, and returns: the list, counts and freshness banner still show the old snapshot, including a stale 'Graph is stale' banner after a rebuild done elsewhere. The state self-corrects only when a later read returns a different snapshotId (which raises the 'Project knowledge changed' banner with Refresh catalog); a plain look at the list shows old data with no hint. If true for you: minor, a stale view, recoverable with one click once the banner shows.",
+      "suggested_fix": "Give the retained explorer a refresh trigger on becoming visible again (pass `visible` through and bump `revision` on a hidden-to-visible transition when the catalog was loaded earlier than a threshold, or re-read the catalog silently and keep the selection when the snapshot id is unchanged). Alternatively state in the guide that the catalog is not refreshed on return.",
+      "confidence": "medium",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "useEscape(() => close.current());",
+      "problem": "FiltersPopover registers on the app-wide Escape stack (components/ui.tsx:44-70: window keydown listener, `e.preventDefault(); top.current?.()` for the top entry) and so makes `overlayOpen()` true (ui.tsx:81). On base the explorer was unmounted when the user left the view, taking any popover with it. On head the explorer is mounted but hidden (RetainedView), and `filtersOpen` is deliberately kept across view switches (comment 'Open or closed is explorer state ... survives a view or tab switch'). The only close paths are Escape, a mousedown outside, or the button. A keyboard user can Tab to the sidebar nav and press Enter (no mousedown, popover has no focus-out close) and arrive in another view with the popover open but hidden.",
+      "impact": "While that hidden popover is registered: the first Escape in the other view is consumed by it (preventDefault, then focuses a hidden anchor), so Escape does not reach the visible view; AppShell's view shortcuts back off (AppShell.tsx:84 and :112 return when overlayOpen()); App.tsx:360 and BrowserPanel.tsx:114 (`show = ... && !overlayOpen()`) also treat an overlay as open, so the native browser view hides. Nothing on screen explains it; a second Escape clears it. If true for you: minor (recoverable, needs the keyboard path described).",
+      "suggested_fix": "Close the popover when its view is hidden: pass the RetainedView `visible` flag into MetaprojectView and call setFiltersOpen(false) on becoming hidden, or mount FiltersPopover only while visible. Add a test that switches view with the popover open and checks overlayOpen() is false.",
+      "confidence": "medium",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "degradation_class": "performance",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "for (const node of nodes) remember(node);",
+      "problem": "Every Explorer render walks the whole merged `nodes` array and writes each node into `seenNodes` (a Map that is never pruned). Base did one `nodes.find` per render for the active node plus a single remembered node. Explorer re-renders on every search keystroke (setRoute query), so the added work is O(catalog size) Map writes per keystroke, and the map keeps node objects of earlier catalogs after a rebuild (activeNode prefers `nodes.find` first, so stale entries only show for ids absent from the live set).",
+      "impact": "Small for a few thousand nodes; scales with catalog size. If true: minor, only on very large catalogs.",
+      "suggested_fix": "Remember nodes only where they are acquired (catalog load, hits, projection) or populate seenNodes in an effect keyed on `nodes` instead of each render; clear it on catalog snapshot change.",
+      "confidence": "low",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+Summary: no blocker or major. Two minor degradations (F-001 stale catalog after the explorer stays mounted, F-002 hidden Filters popover holding the global Escape/overlay state) and one info (F-003 per-render seenNodes walk). Slice-05 read in full; not run, read-only. Consumers traced: both graph consumers of App.tsx (main.tsx, test/app-navigation.fixture.tsx) import it only to mount the shell; cap dropped none; 46 changed files are absent from the graph, so metaproject-module consumers were enumerated by search.

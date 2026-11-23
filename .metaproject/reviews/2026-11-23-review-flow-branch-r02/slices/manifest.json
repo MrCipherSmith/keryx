@@ -1,0 +1,458 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 146171,
+      "contentHash": "2a7bff612ac1b4ea4c4524370fc5abf4426b9720f05d537ad66637b032eb1945",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T19.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T19.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T20.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T20.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T21.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T21.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T15.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T17.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json"
+      ],
+      "domain": ".metaproject",
+      "split": "file",
+      "roles": [
+        "review-degradation",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "docs, tests, config or generated files only",
+          "fix slice: answers 18 prior finding(s) F-001, F-003, F-004, F-005, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "F-001",
+        "F-003",
+        "F-004",
+        "F-005",
+        "F-006",
+        "F-007",
+        "F-008",
+        "F-009",
+        "F-010",
+        "F-011",
+        "F-012",
+        "F-013",
+        "F-014",
+        "F-018",
+        "F-019",
+        "F-020",
+        "F-021",
+        "F-022"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 107940,
+      "contentHash": "bfc020a676f1bd698e70911b49be06b60083aa29c98667fe0a7e4d02883f72af",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T19.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T20.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T15.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T19.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T20.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T21.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+      ],
+      "domain": ".metaproject, .metaproject [docs]",
+      "split": "file",
+      "roles": [
+        "review-degradation",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "docs, tests, config or generated files only",
+          "fix slice: answers 18 prior finding(s) F-001, F-003, F-004, F-005, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "F-001",
+        "F-003",
+        "F-004",
+        "F-005",
+        "F-006",
+        "F-007",
+        "F-008",
+        "F-009",
+        "F-010",
+        "F-011",
+        "F-012",
+        "F-013",
+        "F-014",
+        "F-018",
+        "F-019",
+        "F-020",
+        "F-021",
+        "F-022"
+      ]
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 128602,
+      "contentHash": "1456d4ae4a697298e0d28cf3d92f6ccafc5c0f562342eccf741f17a98d0b71e3",
+      "files": [
+        "apps/desktop/src/App.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+        "apps/desktop/src/metaproject/graphLayout.test.ts",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "apps/desktop/src/metaproject/OpenSpecView.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "docs/docs/guides/desktop-metaproject.md"
+      ],
+      "domain": "apps [test], apps, docs [docs]",
+      "split": "domain",
+      "roles": [
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/App.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/NodeDetailsPanel.tsx (+2)",
+          "fix slice: answers 17 prior finding(s) F-001, F-003, F-004, F-005, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "F-001",
+        "F-003",
+        "F-004",
+        "F-005",
+        "F-006",
+        "F-007",
+        "F-008",
+        "F-010",
+        "F-011",
+        "F-012",
+        "F-013",
+        "F-014",
+        "F-018",
+        "F-019",
+        "F-020",
+        "F-021",
+        "F-022"
+      ]
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 3775,
+      "contentHash": "ef5194bdec5833526368da7f680cd908b99092cc830bc90b03566d533baa7bc8",
+      "files": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/metaproject.css",
+        "docs/docs/guides/desktop-metaproject.md"
+      ],
+      "domain": "apps, docs [docs]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/App.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 80731,
+      "contentHash": "718106364bd9eb29ed31e8977e0919f979e07eb8034afd44c68f026dfa75ae0b",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 145496,
+      "contentHash": "ec25b58b4c64fd3712313b84169dd867fea00b92542ea6399d7fbd6acc3c84af",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json"
+      ],
+      "domain": ".metaproject",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 146286,
+      "contentHash": "bf570fd146884fca37b32186bbdf0b826e14d1da356730a8af0a0829090ba17a",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T12.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T14.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json"
+      ],
+      "domain": ".metaproject",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 114456,
+      "contentHash": "64214b38617a7ee02866d5ec1eec347833ae0825336a25f75af9247bb51d8285",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+        "apps/desktop/src/App.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+        "apps/desktop/src/metaproject/graphLayout.test.ts"
+      ],
+      "domain": ".metaproject, apps [test]",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-09",
+      "path": "slice-09.diff",
+      "bytes": 148958,
+      "contentHash": "bdb09ed7dc3316f0b0b1ee88f2b81e38c6c0ca329873efc3de28c73eefa9b62a",
+      "files": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "apps/desktop/src/metaproject/graph.css",
+        "apps/desktop/src/metaproject/graphLayout.ts",
+        "apps/desktop/src/metaproject/labels.ts"
+      ],
+      "domain": "apps",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/App.tsx, apps/desktop/src/metaproject/GraphNodePanel.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx (+5)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-10",
+      "path": "slice-10.diff",
+      "bytes": 35282,
+      "contentHash": "ef0dc40c981e9fbf0084ef4d5258c0b6c28b90162502e4655e750ac53aa67f8d",
+      "files": [
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/metaproject/nodePanel.css",
+        "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+        "docs/docs/guides/desktop-metaproject.md"
+      ],
+      "domain": "apps, docs [docs]",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/useExplorerNavigation.ts",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [
+    {
+      "path": "docs/docs/images/desktop-metaproject/graph.jpg",
+      "reason": "binary",
+      "detail": "binary: the diff carries no reviewable text for this file",
+      "bytes": 0
+    },
+    {
+      "path": "docs/docs/images/desktop-metaproject/wiki.jpg",
+      "reason": "binary",
+      "detail": "binary: the diff carries no reviewable text for this file",
+      "bytes": 0
+    }
+  ],
+  "totals": {
+    "slices": 10,
+    "bytes": 1057697,
+    "files": 87,
+    "omittedFiles": 2,
+    "omittedBytes": 0,
+    "droppedBlocks": 1
+  },
+  "host": "claude-code"
+}

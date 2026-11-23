@@ -1,0 +1,918 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout; 4 branch package(s) not on this branch line: 2026-09-23-ingest-feat-agent-platform-expansion, 2026-09-24-ingest-feat-agent-platform-expansion, 2026-09-23-ingest-feat-agent-platform-expansion-r02, 2026-09-02-branch-fix-tui-foreground-operation-cancellatio"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days); 4 branch package(s) not on this branch line: 2026-09-23-ingest-feat-agent-platform-expansion-r02, 2026-09-23-ingest-feat-agent-platform-expansion, 2026-09-24-ingest-feat-agent-platform-expansion, 2026-09-02-branch-fix-tui-foreground-operation-cancellatio"
+    },
+    {
+      "source": "github-block",
+      "result": "not-consulted",
+      "detail": "the target is not a pull request"
+    },
+    {
+      "source": "github-comments",
+      "result": "not-consulted",
+      "detail": "the target is not a pull request"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "1358d962f4dfc07a9e086a533f51e75aa757dfcd",
+    "head": "60cbe1c565f4e478833605b41c49c2827eed2bbf"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 39
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "startLine": 1,
+      "endLine": 130
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+      "startLine": 1,
+      "endLine": 61
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.dispatch.json",
+      "startLine": 1,
+      "endLine": 81
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.request.json",
+      "startLine": 1,
+      "endLine": 48
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.dispatch.json",
+      "startLine": 1,
+      "endLine": 80
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.request.json",
+      "startLine": 1,
+      "endLine": 47
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.dispatch.json",
+      "startLine": 1,
+      "endLine": 84
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.request.json",
+      "startLine": 1,
+      "endLine": 46
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.dispatch.json",
+      "startLine": 1,
+      "endLine": 79
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.request.json",
+      "startLine": 1,
+      "endLine": 37
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.dispatch.json",
+      "startLine": 1,
+      "endLine": 77
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.request.json",
+      "startLine": 1,
+      "endLine": 42
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.dispatch.json",
+      "startLine": 1,
+      "endLine": 85
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.request.json",
+      "startLine": 1,
+      "endLine": 46
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.dispatch.json",
+      "startLine": 1,
+      "endLine": 89
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.request.json",
+      "startLine": 1,
+      "endLine": 45
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.dispatch.json",
+      "startLine": 1,
+      "endLine": 91
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.request.json",
+      "startLine": 1,
+      "endLine": 48
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json",
+      "startLine": 1,
+      "endLine": 97
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json",
+      "startLine": 1,
+      "endLine": 50
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+      "startLine": 1,
+      "endLine": 82
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.request.json",
+      "startLine": 1,
+      "endLine": 37
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+      "startLine": 1,
+      "endLine": 735
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+      "startLine": 1,
+      "endLine": 97
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "startLine": 1,
+      "endLine": 213
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json",
+      "startLine": 1,
+      "endLine": 140
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json",
+      "startLine": 1,
+      "endLine": 140
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json",
+      "startLine": 1,
+      "endLine": 114
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json",
+      "startLine": 1,
+      "endLine": 112
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json",
+      "startLine": 1,
+      "endLine": 139
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json",
+      "startLine": 1,
+      "endLine": 113
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json",
+      "startLine": 1,
+      "endLine": 131
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json",
+      "startLine": 1,
+      "endLine": 150
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T12.result.json",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json",
+      "startLine": 1,
+      "endLine": 62
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T14.result.json",
+      "startLine": 1,
+      "endLine": 49
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json",
+      "startLine": 1,
+      "endLine": 39
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json",
+      "startLine": 1,
+      "endLine": 76
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+      "startLine": 1,
+      "endLine": 75
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json",
+      "startLine": 1,
+      "endLine": 52
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+      "startLine": 1,
+      "endLine": 56
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "startLine": 1,
+      "endLine": 62
+    },
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "startLine": 1,
+      "endLine": 44
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 147,
+      "endLine": 153
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 593,
+      "endLine": 594
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 601,
+      "endLine": 601
+    },
+    {
+      "file": "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 30,
+      "endLine": 47
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 58,
+      "endLine": 58
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 97,
+      "endLine": 108
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 278,
+      "endLine": 279
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 289,
+      "endLine": 291
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 372,
+      "endLine": 372
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 376,
+      "endLine": 376
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "startLine": 424,
+      "endLine": 794
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 29,
+      "endLine": 32
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 42,
+      "endLine": 44
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 46,
+      "endLine": 59
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 63,
+      "endLine": 63
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 65,
+      "endLine": 65
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 68,
+      "endLine": 68
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 70,
+      "endLine": 71
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 129,
+      "endLine": 130
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 139,
+      "endLine": 139
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 147,
+      "endLine": 150
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 155,
+      "endLine": 202
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 209,
+      "endLine": 210
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 217,
+      "endLine": 218
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 220,
+      "endLine": 220
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 222,
+      "endLine": 222
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 225,
+      "endLine": 226
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 229,
+      "endLine": 229
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 231,
+      "endLine": 231
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 233,
+      "endLine": 237
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 239,
+      "endLine": 239
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 243,
+      "endLine": 243
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 245,
+      "endLine": 247
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 251,
+      "endLine": 251
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 255,
+      "endLine": 269
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 427,
+      "endLine": 427
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 432,
+      "endLine": 433
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 458,
+      "endLine": 458
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 508,
+      "endLine": 513
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 529,
+      "endLine": 538
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 542,
+      "endLine": 542
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 556,
+      "endLine": 557
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 587,
+      "endLine": 593
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 594,
+      "endLine": 594
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 598,
+      "endLine": 598
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 600,
+      "endLine": 600
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 602,
+      "endLine": 602
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 605,
+      "endLine": 629
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 631,
+      "endLine": 650
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 660,
+      "endLine": 662
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 664,
+      "endLine": 664
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 669,
+      "endLine": 728
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 745,
+      "endLine": 746
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 750,
+      "endLine": 767
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 775,
+      "endLine": 777
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 784,
+      "endLine": 784
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 787,
+      "endLine": 787
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 791,
+      "endLine": 800
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 804,
+      "endLine": 804
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 806,
+      "endLine": 807
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 811,
+      "endLine": 811
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 815,
+      "endLine": 815
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 817,
+      "endLine": 817
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 819,
+      "endLine": 819
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 821,
+      "endLine": 821
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 835,
+      "endLine": 835
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 837,
+      "endLine": 838
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 843,
+      "endLine": 849
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 851,
+      "endLine": 854
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 856,
+      "endLine": 857
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 863,
+      "endLine": 863
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 868,
+      "endLine": 873
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 875,
+      "endLine": 875
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 877,
+      "endLine": 883
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 884,
+      "endLine": 884
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 890,
+      "endLine": 890
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 891,
+      "endLine": 891
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "startLine": 895,
+      "endLine": 895
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "startLine": 1,
+      "endLine": 245
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "startLine": 1,
+      "endLine": 386
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "startLine": 1,
+      "endLine": 277
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+      "startLine": 1,
+      "endLine": 363
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "startLine": 1,
+      "endLine": 131
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "startLine": 1,
+      "endLine": 221
+    },
+    {
+      "file": "apps/desktop/src/metaproject/graph.css",
+      "startLine": 1,
+      "endLine": 94
+    },
+    {
+      "file": "apps/desktop/src/metaproject/graphLayout.test.ts",
+      "startLine": 1,
+      "endLine": 491
+    },
+    {
+      "file": "apps/desktop/src/metaproject/graphLayout.ts",
+      "startLine": 1,
+      "endLine": 688
+    },
+    {
+      "file": "apps/desktop/src/metaproject/labels.ts",
+      "startLine": 1,
+      "endLine": 24
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 12,
+      "endLine": 17
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 29,
+      "endLine": 29
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 33,
+      "endLine": 33
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 83,
+      "endLine": 96
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 109,
+      "endLine": 109
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 114,
+      "endLine": 114
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 119,
+      "endLine": 120
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "startLine": 126,
+      "endLine": 138
+    },
+    {
+      "file": "apps/desktop/src/metaproject/nodePanel.css",
+      "startLine": 1,
+      "endLine": 196
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 15,
+      "endLine": 17
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 19,
+      "endLine": 22
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 26,
+      "endLine": 29
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 37,
+      "endLine": 42
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 44,
+      "endLine": 49
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 51,
+      "endLine": 52
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 54,
+      "endLine": 54
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 58,
+      "endLine": 72
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 74,
+      "endLine": 74
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 76,
+      "endLine": 78
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 80,
+      "endLine": 80
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 109,
+      "endLine": 109
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "startLine": 111,
+      "endLine": 111
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 5,
+      "endLine": 10
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 41,
+      "endLine": 44
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 70,
+      "endLine": 72
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 91,
+      "endLine": 97
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 102,
+      "endLine": 104
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 107,
+      "endLine": 181
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 184,
+      "endLine": 184
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 189,
+      "endLine": 199
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 201,
+      "endLine": 202
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "startLine": 204,
+      "endLine": 204
+    }
+  ],
+  "carried": [],
+  "mergeBase": "1358d962f4dfc07a9e086a533f51e75aa757dfcd"
+}

@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Read slice-06 in full (graphLayout.ts, labels.ts, metaproject.css, nodePanel.css, useExplorerNavigation.ts, the user guide). No performance finding: layout runs once per projection change on a server-bounded set (about 200 nodes and 269 edges; at most 12 drawn nodes per column), not per frame or keystroke; the navigation hook holds history at 40 entries, uses stable callbacks and refs, and cleans up its observer and listeners; the CSS adds one inline-size container and cheap selectors.",
+  "findings": [],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Performance Review
+
+### Scope
+- Branch feat/desktop-metaproject-redesign, merge-base 1358d962f, head 60cbe1c56. Slice-06 only. Read-only; no command run, nothing measured by me.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Clean Areas (checked, no finding)
+- Hot paths in graphLayout.ts: `layoutNeighborhood` is a pure function over one projection; its worst passes are `secondStep` (O(E x chain depth), bounded by the 269-edge test projection) and sorts with `localeCompare` over at most a few hundred entries. It runs once per projection or text-scale change; I saw no per-frame or per-keystroke caller in this slice. `Math.min(...boxes.map())` in `boundsOf` spreads at most about 60 boxes (12 per column x 5 columns plus captions), far below the argument limit. `distinctTitles` copies an array per duplicate title, quadratic only in the same-title group and small.
+- `parseColor` and `toOpaqueColor`: regex literals are inline but the calls run per colour token on a theme change, not in a loop of size.
+- useExplorerNavigation.ts: history is capped by HISTORY_LIMIT = 40 (unbounded growth avoided); callbacks are memoised with `useCallback` over refs, so the identity stays stable; the MutationObserver and the wheel, pointerdown and keydown listeners are removed in `stop`, which the effect cleanup returns. The observer-until-settled pattern predates this diff (only the pane selector and the dependency list changed), so it is outside the diff.
+- CSS: `container: metaproject / inline-size` and the `:has(.metaproject-details:not(.compact))` grid rule are cheap on a small subtree; no layout-thrash patterns, no animation beyond a one-shot `slide-in`.
+- labels.ts: constant maps. Docs: no code.
+- Not covered by me: slice-05 TSX components (wave 1), cytoscape lifecycle in RelationshipGraph.tsx.

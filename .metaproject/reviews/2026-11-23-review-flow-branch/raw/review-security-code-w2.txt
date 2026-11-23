@@ -1,0 +1,25 @@
+STATUS: DONE
+
+## Security Review
+
+Scope: slice-05 (App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx), read in full. Head 60cbe1c56.
+
+### Clean Areas
+- XSS / HTML injection: the only `dangerouslySetInnerHTML` in the slice's files (RepositoryMarkdown, MetaprojectView.tsx:92) is unchanged and fed by `renderRepositoryMarkdown`, which sanitizes with an attribute allowlist (components/Markdown.tsx:39). Everything new (node titles, paths, evidence lines, preview text, unresolved-link message, graph captions and legend) renders as React text. The new preview is plain text built by `markdownPreview` and rendered as a text node.
+- Wiki link resolution: `resolveRepositoryPath` percent-decodes, resolves `..` with a pop that clamps at the repository root, and never reads a file. The result is only matched against loaded nodes or sent as a `search` query to the existing read bridge; non-http(s) hrefs (including `javascript:`) are prevented by the unchanged click handler and treated as paths. The path appears in the message as escaped text.
+- Copy path: writes the selected node's own repository path to the clipboard via `copyText`; no secrets, no remote sink.
+- Draft prompt: `JSON.stringify(node.path)` embedded in the draft task is carried over unchanged from the removed GraphNodePanel; the session shows proposed changes before writing files. Not changed by this diff.
+- Cytoscape: stylesheet and elements come from typed constants and projection data; labels are drawn on canvas, not as HTML. No eval, no postMessage, no storage, no secrets in URLs, no crypto.
+- App.tsx RetainedView: keeps a view mounted but hidden after first visit; no auth or data-exposure change (same cwd-scoped component).
+
+Not verified: `platform/metaproject.ts` request validation (outside the slice); the hidden-hunk parts of MetaprojectView.tsx were read at head only where the click handler is concerned.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Read all of slice-05. The change adds no injection, traversal, redirect or secret-handling weakness: preview and link-resolution text is rendered through React, the one innerHTML sink is unchanged and sanitized, and the link resolver only searches already-indexed nodes. No findings.",
+  "findings": [],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

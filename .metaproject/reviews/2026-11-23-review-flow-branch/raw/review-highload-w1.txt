@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-redesign, merge-base 1358d962f4dfc07a9e086a533f51e75aa757dfcd, head 60cbe1c565f4e478833605b41c49c2827eed2bbf, diff mode. Slice read in full: slice-03 (dispatch/T8.request.json, T9.dispatch.json, T9.request.json; flow.json; resolved/T5-T8, T12-T14, T16 .implement.json; results/T5-T7, T12-T14, T16 .result.json). Load profile: not provided. Concrete trigger used: parallel implementer lanes sharing one worktree and one dev server (Part 0). The slice contains no runtime code, only flow-package gate inputs, so the Part A-G request-path checks do not apply.
+Summary: Nothing in this slice races, grows without bound or retries. The flow.json history is monotonic and consistent with task state (every task-attempt precedes its task-done; updatedAt equals the last event). One info note on a shared-checkout practice recorded in two results.
+Stats: blocker 0 | major 0 | minor 0 | info 1
+
+Findings:
+
+CLI / Multi-Session
+- [F-001] (info) Red checks swapped tracked source files in the shared worktree under a live dev server.
+  - File: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json (notes: "it served the committed MetaprojectView.tsx for the few seconds of the red check"); same practice in results/T14.result.json (notes: "it picked up the file changes, including the few seconds while the HEAD versions were swapped in for the red check").
+  - Pattern: Multi-session 0 - several sessions on one checkout.
+  - Failure mode: T14 and T16 temporarily overwrote MetaprojectView.tsx (and RelationshipGraph.tsx in T14) with HEAD copies, then restored them. Any other lane or live check reading that file or the dev server during the swap sees the old code, and a crash between swap and restore would leave the tree on the old version. flow.json history shows T15 (guide and screenshots) and T16 both started at 08:36:10 and T15 finished 08:37:57, so a screenshot taken in that window could have captured the pre-change screen. No evidence in this slice that it did; T15's result file is not in this slice. Rated info because no concrete corrupted outcome is shown.
+  - Fix: run red checks in a scratch copy (as the T12 result describes for its zz-red-* staging, or a throwaway worktree) rather than swapping tracked files in the shared tree.
+
+Concurrency & Races: None detected. Parallel lanes T5/T6/T7, T12/T13 and T15/T16 own disjoint files per their dispatches; the one shared file (labels.ts, T12/T13) is reported byte-identical and committed once (T12 result, not_touched).
+Resources: None detected.
+Caching: None detected.
+Lock Contention: None detected.
+Async / Queues: None detected.
+Retry / Timeout / Circuit Breaker: None detected (attempts counters in flow.json are 1 per task, no retry loop).
+Idempotency & Distributed Invariants: None detected.
+
+Clean Areas: Parts A-G reviewed, no findings; Part 0 has the one info note above.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "round": 1,
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json",
+      "line": 38,
+      "pattern": "Multi-session 0 - several sessions on one checkout",
+      "title": "Red checks swapped tracked source files in the shared worktree under a live dev server",
+      "evidence": "\"it served the committed MetaprojectView.tsx for the few seconds of the red check\" (T16 notes); T14 result notes: \"it picked up the file changes, including the few seconds while the HEAD versions were swapped in for the red check\"",
+      "failure_mode": "Another lane or live check reading the swapped file or the dev server during the swap sees old code; a crash between swap and restore leaves the tree on the old version. T15 (guide and screenshots) ran beside T16 in flow.json history (both started 08:36:10). No corrupted outcome is shown, so info.",
+      "suggested_fix": "Run red checks in a scratch copy or throwaway worktree instead of swapping tracked files in the shared tree."
+    }
+  ]
+}
+```

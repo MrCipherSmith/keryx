@@ -1,0 +1,46 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "No finding. The four new tests (end of MetaprojectView.dom.test.tsx) flush every update a held or rejected promise causes inside act, leave no promise pending at the end, catch every rejection inside the component's own try/catch, and assert outcomes that follow from React's order (cleanup of the previous catalog effect run before the next body; the superseded-read guard at line 389 and the latest-read guard at line 407). Round 4's F-001, F-002, F-003 and F-005 are closed.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Frontend Review (round 5, read-only; nothing was run)
+
+Covered: all of slice-01 (1235 lines), the four tests at head (MetaprojectView.dom.test.tsx 1815-1893), the file's mount/unmount scaffolding (lines 18-26, 1314-1319) and MetaprojectView.tsx 316-420 and 670-685 at head.
+
+### act and held promises
+- Each click, release and rejection sits inside `await act(async () => { ... })`: Rebuild/Retry clicks, `finish(false)`, `releaseQuiet()`, `failFirstReload()`. The setState calls that follow (setRebuilding, setError, setRevision, setLoading, setCatalog) therefore land in the act scope, and the asserts after each act read a flushed DOM.
+- Test 3 (quiet read superseded): sequence checked against the code. Return -> quiet read 2 held. Rebuild click -> onRebuild resolves true -> setRevision -> the effect cleanup runs `catalogRead.current++` (read 2 is now stale) and, since quietRead is false, `project.current++`; the body takes generation 3, clears, read 3 rejects, the catch writes the catalog-source banner. `releaseQuiet()` resolves read 2, which returns at line 389 and skips the `finally` reset, so the banner stands. Moving the clear above line 389 (R4-8) would clear it. The assertion follows.
+- Test 4 (loud read superseded): the first reload is held, the second Rebuild click is possible because `rebuilding` is false again after the first rebuild resolved. Its cleanup retires generation 2, read 3 succeeds, then read 2 rejects; the catch guard `generation === catalogRead.current` fails, so no banner. Without the guard (R4-7) the banner would show. The assertion follows.
+- Tests 1 and 2: Retry is a revision bump, so the effect body's `setError(null)` (line 380) clears a rebuild-source banner; a second rebuild's `setError(null)` at line 677 clears it while `Rebuilding…` shows. Both asserts follow.
+
+### Leak across tests
+- Every held promise is released or rejected inside its own test (`finish`, `releaseQuiet`, `failFirstReload`); none is left pending at the end.
+- `root` is one shared root; `beforeEach` renders `null` inside act, which unmounts the view and runs the effect cleanup (`catalogRead.current++`, and `mounted.current = false` in rebuild's effect). Even a promise left pending would be dropped by the generation guard or the `mounted.current` check. The new tests add no shared module state and patch no global.
+
+### Unhandled rejections
+- Test 1's `onRebuild` throws inside an async function, test 2's `Promise.reject` is awaited at once inside `rebuild()`'s try/catch (line 678-681); test 3's rejection is consumed by the effect's try/catch; test 4's `reject` is created for a read the effect awaits in its own try/catch. No rejected promise is created and left unobserved.
+
+### Prior findings
+- F-001 (closed): tests 1 and 2 build `source: "rebuild"` and then drive Retry and a second Rebuild; they cover R4-10 and R4-11 as the record claims, and the sequences above agree.
+- F-002 (closed): tests 3 and 4 hold a read in flight and release it after a later read, as the finding asked; they cover R4-8 and R4-7.
+- F-003 (closed): in the T24.result.json hunk the cell now cites T26's two tests, says the earlier test does not fail a rebuild and that the cell was reworded after acceptance.
+- F-005 (closed): fix-round-3.md now says the 86 + 1 run is the orchestrator's on the committed file of 87 tests and that the result file's 85 is one test fewer. Whether the worker's run was made before its last test was added is an inference, and the record says it is not recorded.
+
+### Not verified
+- No test, type check or mutant run by me (read-only, exec budget 0); I rely on the orchestrator's recorded runs (935 pass; mutant run t26-mutants-1.txt) and on reading the code.
+- The record hunks (journal, flow.json, tasks.md, dispatch, resolved context) were read but are outside this lens; no defect noted.
+
+Routing audit: graph_used: not-relevant (one test file, no navigation beyond it); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg); raw_rg_used: no.

@@ -1,0 +1,26 @@
+Live measurement by the orchestrator, 2026-11-23, head 60cbe1c56, browser dev build
+(`bun run dev:browser` from apps/desktop, http://localhost:1420), dark theme, window 1024x768,
+Metaproject > Graph, Filters popover open, read 1.5 s after the click with getBoundingClientRect in the page.
+Engine: Chrome/156.0.8078.75 (the desktop app's built-in browser pane). NOT WebKit.
+
+Question: does `.metaproject { container: metaproject / inline-size; }` make the explorer section the
+containing block of the `position: fixed` Filters popover, so that it is drawn offset from its button?
+
+  section `.flows.metaproject`: left 60, top 77, 964x691; computed container-type "inline-size",
+      contain "none", transform "none", filter "none", will-change "auto"
+  Filters button (anchor):      left 836, right 907, bottom 235
+  popover inline style:         left 587px, top 239px   (the code: top = anchor.bottom + 4, left = anchor.right - 320)
+  popover getBoundingClientRect: left 587, top 239, 320x229; transform none; no running animation;
+      offsetParent null
+
+Result in this engine: the rendered rect equals the inline coordinates (offset 0, 0). The popover is positioned
+against the viewport, not against the section whose origin is (60, 77). The offset the finding describes does
+not occur in Chromium 156.
+
+Note on the earlier file live-filters-popover-720x480.txt: the 3 px / 5 px differences and the 310x222 size it
+records were read while the `pop-in` animation (a scale) was still applied; 320x229 is the settled size.
+
+Not measured: WebKit. The shipped desktop app runs in the system WKWebView (Tauri), whose version follows the
+macOS version; engines that still apply layout containment for `container-type` would make the section the
+fixed containing block. No Rust toolchain is available on this machine, so the Tauri window with this branch
+was not built or opened.

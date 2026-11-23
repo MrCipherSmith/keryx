@@ -1,0 +1,61 @@
+{
+ "verifier": "review-verifier",
+ "verification_mode": "annotate",
+ "branch": "feat/desktop-metaproject-redesign",
+ "base_sha": "1358d962f4dfc07a9e086a533f51e75aa757dfcd",
+ "head_sha": "60cbe1c565f4e478833605b41c49c2827eed2bbf",
+ "findings": [
+  {
+   "id": "F-001",
+   "severity": "major",
+   "title": "Filters popover is clipped by 51 px at the 720x480 minimum window when the stale banner is expanded, and cannot scroll",
+   "file": "apps/desktop/src/metaproject/metaproject.css",
+   "quote": ".metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }",
+   "problem": "The popover is a fixed-position .menu whose top is computed once as anchor.bottom + 4 (MetaprojectView.tsx FiltersPopover: `setPosition({ left, top: rect.bottom + 4 })`). The only height limit is the shared .menu max-block-size of 400px, a fixed number, not a function of the room below the anchor. The rule above adds no max-block-size or overflow clamp tied to the window, so when the anchor sits low the popover runs past the window edge. Its content (229 px) is below 400 px, so it never becomes scrollable either and the last row is unreachable.",
+   "measurement": "Orchestrator live probe, browser dev build, 720x480, dark, Graph, 'Agent Bus', depth 1, getBoundingClientRect (research-evidence/live-filters-popover-720x480.txt). One-line banner: button bottom 225, popover top 232 bottom 455, 25 px of room, not cut. Banner with Details expanded (banner 122 px): button bottom 301, popover top 308 bottom 531, window 480, cut by 51 px; scrollHeight equals clientHeight (229), so no scroll; the 'Not available: ...' note and the lower chips are outside the window. Not measured: light theme, 1180x780 and 1440x900 with the popover open, the native Tauri window, window resize while open.",
+   "why_it_matters": "At the smallest supported window (720x480), a developer with a stale graph who opens Details and then Filters cannot reach the lower relationship-type chips, the symbol-layer reason or Reset filters. A stale graph is the state the flow journal calls the one a developer is in most of the time. Any state that pushes the header down further (a longer reason, a second banner, a larger text scale) moves the cut up. The position is computed once on open, so a resize while it is open is not tracked (unmeasured).",
+   "fix": "Bound the popover by the room below its anchor: compute `maxHeight = window.innerHeight - top - 8` next to `top` in FiltersPopover and set `max-block-size: min(400px, that)` with `overflow-y: auto`; or flip it above the anchor when there is more room there. Re-measure at 720x480 with Details expanded: popover bottom at or below 472 and scrollHeight greater than clientHeight.",
+   "class_scope": {
+    "sites": [
+     "apps/desktop/src/metaproject/metaproject.css:.metaproject-filters-pop",
+     "apps/desktop/src/metaproject/MetaprojectView.tsx:FiltersPopover (the only user of the class)"
+    ],
+    "enumeration_method": "keryx ctx rg for `metaproject-filters-pop` under apps/desktop/src/metaproject: one rendering site, the FiltersPopover component (MetaprojectView.tsx:196); the shared .menu in apps/desktop/src/styles.css:142 supplies the 400px cap and is not changed by this diff."
+   },
+   "source_id": "LY-001",
+   "global_id": "2026-11-23-review-flow-branch#F-001",
+   "reviewer": "review-layout"
+  },
+  {
+   "id": "F-002",
+   "severity": "major",
+   "repo": "keryx",
+   "file": "apps/desktop/src/metaproject/metaproject.css",
+   "quote": ".metaproject { container: metaproject / inline-size; }",
+   "problem": "The explorer root `<section className=\"flows metaproject\">` becomes a size container. container-type inline-size applies layout containment, and an element with layout containment is the containing block of its `position: fixed` descendants. The Filters popover (`FiltersPopover` in MetaprojectView.tsx, rendered inside that section, class `menu`, which `styles.css` sets to `position: fixed`) is placed with viewport coordinates from `anchor.getBoundingClientRect()` (`left`, `top: rect.bottom + 4`). With the new container, those values are resolved against the section's padding box, not the viewport, so the popover is shifted by the section's own viewport offset (sidebar width, toolbar height) and the Escape/outside-press logic and the horizontal clamp to `window.innerWidth` no longer match where it is drawn.",
+   "impact": "Where the section is not at viewport (0,0) the Filters popover opens displaced from its button, and can fall partly outside the window. The only live measurement (720x480) shows the popover top 3 px below the 4 px the code intends (button bottom 225, popover top 232), which is consistent with a small offset, but no measurement was taken with the sidebar visible (1180x780, 1440x900) or in the native window.",
+   "suggested_fix": "Render the popover through a portal to document.body (the other `.menu` users are not inside a size container), or move the container off the ancestor of the popover (for example put `container-type` on `.metaproject-panes`, and leave the header, banner and popover outside it), or compute the position relative to `root.current.getBoundingClientRect()`. Add a DOM-free check or a live probe at 1180x780 with the popover open that compares popover.left to anchor.right - 320.",
+   "evidence": "Read: metaproject.css line `.metaproject { container: metaproject / inline-size; }` (slice-06, hunk 1); MetaprojectView.tsx:171-201 (FiltersPopover, fixed-position `.menu` placed from getBoundingClientRect, rendered at :684 inside the section opened at :730); styles.css:142-143 (`.menu { position: fixed; ... }`); research-evidence/live-filters-popover-720x480.txt (top 232 vs button bottom 225). CSS Containment: container-type size/inline-size applies layout containment, which makes the element a containing block for fixed descendants. Not run: read-only tools and no browser, so the displacement is derived from the spec and the code, not measured at a width where the sidebar is visible.",
+   "confidence": "medium",
+   "reviewer": "review-frontend",
+   "dedupe_key": "css-container-type-breaks-fixed-filters-popover",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "class_scope": {
+    "sites": [
+     "apps/desktop/src/metaproject/metaproject.css:9 (container on .metaproject)",
+     "apps/desktop/src/metaproject/MetaprojectView.tsx:196 (the only position:fixed descendant of the section)"
+    ],
+    "enumeration_method": "keryx ctx rg \"position: fixed|createPortal|<Menu|components/Menu\" apps/desktop/src/metaproject: no other fixed or portalled descendant of the section; the details panel's `.compact` drawer is position:absolute inside `.metaproject-graph-panes` and is unaffected."
+   },
+   "source_id": "FE-W3-001",
+   "global_id": "2026-11-23-review-flow-branch#F-002"
+  }
+ ],
+ "context_files": [
+  ".metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/verify-F-001-1.txt",
+  ".metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/verify-F-002-1.txt",
+  ".metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/live-filters-popover-720x480.txt",
+  ".metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/live-filters-popover-containing-block.txt"
+ ]
+}

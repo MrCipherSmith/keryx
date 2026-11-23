@@ -1,0 +1,86 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "13 findings checked at head b1538097e. 10 confirmed (F-006 to F-009 by the recorded mutation-2 run, mutation-2.md table matched id by id; F-001, F-003, F-004, F-005, F-010, F-013 by site-check of the quoted lines and named sites, every quote and cited line found at head; F-009 is execution). 3 unverifiable (F-002 needs an in-flight lookup and a return, F-011 needs a render to measure the Reset row, F-012 needs a render to show the popover detaching; the code facts behind them were checked). 0 refuted. Nothing was run beyond the recorded mutation runs; no tests were executed by this verifier.",
+  "verifications": [
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "RelationshipList.tsx:55 skips self-loops in groupRelationships; RelationshipList.tsx:217 gates the empty note on projection.edges.length === 0 (quote matches exactly); MetaprojectView.tsx:923 gates the Wiki disclosure on edges.length > 0 and :925 labels it with edges.length. A projection whose only edges are self-loops therefore reaches an empty group list with no note. Producer edge confirmed at metaproject-explorer.ts:162 (push of kind links with no from/to comparison) and the link pattern at :79. Not rendered."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-002",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Code facts confirmed: visible effect MetaprojectView.tsx:334-343 sets quietRead and bumps revision on return; catalog effect deps include revision (:400) and starts with const generation = ++project.current (:367), cleanup project.current++ (:398); openPath captures generation = project.current (:678) and current() checks it (:679, quote matches); loadMoreSearch checks projectGeneration (:630, :638, :644). The claimed loss needs a lookup in flight across a hide and show, which no recorded run exercises. Settling test: the dom test proposed in the finding (renderFilters visible false then true, resolve the lookup, expect the target to open)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-003",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.tsx:370 setError('') and :391-392 catch with setError(errMessage(cause)) guarded only by generation === project.current (quote matches at :392); the quiet flag is read at :368 and consulted only at :379, not in the catch. Banner at :820-825 renders the error with Retry. The failing quiet read path therefore shows the loud error. Not rendered."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-004",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.tsx:569 declares remember (seenNodes.current.set(node.id, node)); :572 inlines the same write in the effect (quote matches); :603 uses remember. Same operation under two spellings, three lines apart."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-005",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg for F-0 and AC6 in the four test files: RelationshipGraph.dom.test.tsx:314 (F-012), :351 (F-013), :402 (F-013, AC6); graphLayout.test.ts:508 (F-021); NodeDetailsPanel.dom.test.tsx:119 (F-007 comment). MetaprojectView.dom.test.tsx:1019 carries the comment 'Test strength after review round 1 (T20)'. All six sites found as cited."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-006",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.md table (keryx review mutate, head b1538097e, six test files per mutant): R2-2, R2-4, R2-5, R2-6, R2-7, R2-9 Result survived; R2-1, R2-3, R2-8, R2-10, R2-11 Result killed. Mutant sites match the code: MetaprojectView.tsx:189-193 and :211-212. Test fixture descriptions in the finding were not separately read."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-007",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.md: R2-14, R2-16, R2-17, R2-18, R2-19, R2-26 survived; R2-15 and R2-25 killed. Mutant sites match the code: :340 (!loaded.current), :379 (quiet && snapshot match), :384 (setFreshness(null)), :355 (freshness ?? catalog), :368-369 (quietRead), :790 (freshnessOpen). Surviving set matches the finding exactly."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-008",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.md: R2-23 (delete the effect body, MetaprojectView.tsx:572) survived; R2-24 (drop the [nodes] dependency, :573) killed. Test title at MetaprojectView.dom.test.tsx:974 matches the quote."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-009",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.md: R2-28 (remove visible={view === 'metaproject'} at App.tsx:596) survived across the six files, including App.dom.test.tsx. App.tsx:596 line matches the quote. The finding's remark that App.dom.test.tsx renders only RetainedView was not separately read."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-010",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.tsx:335 const returned = visible && !wasVisible.current (quote matches) and :342 setRevision on each return; a revision bump re-runs the catalog effect (:400). platform/metaproject.ts:57 invokes metaproject_request per call (confirmed). Generation guard at :377. The per-call CLI process on the Rust side was not read; the waste claim is confirmed only as far as the invoke-per-return path. Cost not measured."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-011",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Placement quote matches MetaprojectView.tsx:209 and the footer element at :784 (menu-footer metaproject-filters-pop-footer) exists. The claim that the Reset row adds 30 to 40 px and pushes content past the 243 px cap needs a render at 720x480 with the one-line banner; none was recorded. Settling measurement is the one the finding names (clientHeight and scrollHeight of the Graph filters dialog after one filter change)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-012",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "MetaprojectView.tsx:211 window.addEventListener('resize', place) is the only scroll or resize listener in the file (rg --all), so nothing re-places the popover on scroll (site found). Whether the popover visibly detaches from its button is a render question; none was recorded. Settling check: scroll .metaproject-content by 40 px at 720x480 and compare the dialog's bottom with the button's top."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r02#F-013",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "catalog.graph read at MetaprojectView.tsx:496 (quote matches); graphState derived at :355 takes the quiet re-read's value while its snapshotId matches; graphState read at :704 and :959 (mutants R2-20 and R2-21 name those lines). Producer: metaproject-explorer.ts:174 hashes nodes, edges, page digests and layerStats (:166 for symbols.jsonl, calls.jsonl, wiki-pages.jsonl), so a flip to or from missing changes the id. Unreachability argument read from code, not run."
+    }
+  ],
+  "stats": { "confirmed": 10, "refuted": 0, "unverifiable": 3, "not_checked": 0 }
+}

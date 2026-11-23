@@ -1,0 +1,18 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Slice-05 read in full (App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx). Each dependent the blast-radius brief lists for these files was checked against what moved. No regression at major or above: the removed exports (GraphNodePanel, isOpenSpecNode, and RelationshipList from MetaprojectView.tsx) have no importers left outside the changed files. OpenSpecView.tsx still calls onLocation/onCollection only from user actions, so routing onLocation through navigate() adds no history entries from effects. graph.css selectors are all scoped under .metaproject-rgraph. The RetainedView change in App.tsx leaves no document-level DOM query or window listener of the explorer active while hidden, except the one noted below. The radius is not complete: the record says 25 of 75 candidates were cut by blast_radius_max_files=40 (its NOT CHECKED line says 26, cap plus pre-filter). 46 changed files (flow package, docs, images) are absent from the code graph, so their radius is unknown, not empty. Most hop-1 edges in the set (for example Composer.tsx -> MetaprojectView.tsx) are text-hub links, not imports. Sub-major observation for scope A, not filed: FiltersPopover in MetaprojectView.tsx registers useEscape, so while it is open overlayOpen() is true. With the explorer now kept mounted by RetainedView, an async setView that needs no DOM mousedown (for example issueWork.showSession in App.tsx) can leave the popover open in the hidden view. The App.tsx Cmd+1..5/K/N shortcuts and the BrowserPanel native view then stand down until the first click anywhere or Escape, and that Escape is used up closing the hidden popover. It recovers on the next interaction.",
+  "findings": [],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Checks behind this result (read-only; no tests run, exec_budget_s 0):
+- Removed exports: `keryx ctx rg "GraphNodePanel|isOpenSpecNode|RelationshipList" apps/desktop/src src docs --glob '!*.test.*'` finds only NodeDetailsPanel.tsx, MetaprojectView.tsx and RelationshipList.tsx, all of them changed files.
+- OpenSpecView.tsx (dependent listed at hop 1): choose() is called at lines 85, 88, 93, 234, 356 and 377, all from click or link handlers. `.metaproject-controls`, which it uses at line 293, is still defined in metaproject.css:73. The onCollection change no longer clears the query: that is a deliberate behaviour change in a changed file, not a broken dependent.
+- Global side effects of the explorer kept mounted while hidden: `keryx ctx rg "addEventListener|setInterval|useEscape\(" apps/desktop/src/metaproject` finds only the root-scoped listeners in useExplorerNavigation.ts, the RelationshipGraph matchMedia/MutationObserver theme refresh (harmless while hidden; fit() skips a zero-sized container), and the FiltersPopover useEscape plus window mousedown, which exist only while the popover is open. There are no document.querySelector calls that could hit the hidden `.flows.metaproject` section (only Composer.tsx's useId-based getElementById).
+- overlayOpen consumers: App.tsx:360, AppShell.tsx:84/112, BrowserPanel.tsx:114/130, ReviewBoard.tsx:247/258. These are the sites the sub-major observation above reaches.
+- Already run per the brief: whole desktop suite 842 pass, tsc exit 0.

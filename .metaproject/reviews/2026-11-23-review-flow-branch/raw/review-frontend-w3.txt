@@ -1,0 +1,58 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+ "status": "DONE_WITH_CONCERNS",
+ "reviewer": "review-frontend",
+ "summary": "Read all hunks of slice-06 (graphLayout.ts, labels.ts, metaproject.css, nodePanel.css, useExplorerNavigation.ts, the user guide). The layout maths, the style mapping, the hook's history and scroll handling and the CSS tokens (all defined; reduced motion handled through --dur) check out. One major: `container-type: inline-size` on the explorer root makes it the containing block of the position:fixed Filters popover, which is placed from viewport coordinates. Out of slice, from the brief's live measurement: the popover is cut 51 px at the bottom at 720x480 with the freshness details open because it is only clamped horizontally; that belongs to the MetaprojectView.tsx wave.",
+ "findings": [
+  {
+   "id": "FE-W3-001",
+   "severity": "major",
+   "repo": "keryx",
+   "file": "apps/desktop/src/metaproject/metaproject.css",
+   "quote": ".metaproject { container: metaproject / inline-size; }",
+   "problem": "The explorer root `<section className=\"flows metaproject\">` becomes a size container. container-type inline-size applies layout containment, and an element with layout containment is the containing block of its `position: fixed` descendants. The Filters popover (`FiltersPopover` in MetaprojectView.tsx, rendered inside that section, class `menu`, which `styles.css` sets to `position: fixed`) is placed with viewport coordinates from `anchor.getBoundingClientRect()` (`left`, `top: rect.bottom + 4`). With the new container, those values are resolved against the section's padding box, not the viewport, so the popover is shifted by the section's own viewport offset (sidebar width, toolbar height) and the Escape/outside-press logic and the horizontal clamp to `window.innerWidth` no longer match where it is drawn.",
+   "impact": "Where the section is not at viewport (0,0) the Filters popover opens displaced from its button, and can fall partly outside the window. The only live measurement (720x480) shows the popover top 3 px below the 4 px the code intends (button bottom 225, popover top 232), which is consistent with a small offset, but no measurement was taken with the sidebar visible (1180x780, 1440x900) or in the native window.",
+   "suggested_fix": "Render the popover through a portal to document.body (the other `.menu` users are not inside a size container), or move the container off the ancestor of the popover (for example put `container-type` on `.metaproject-panes`, and leave the header, banner and popover outside it), or compute the position relative to `root.current.getBoundingClientRect()`. Add a DOM-free check or a live probe at 1180x780 with the popover open that compares popover.left to anchor.right - 320.",
+   "evidence": "Read: metaproject.css line `.metaproject { container: metaproject / inline-size; }` (slice-06, hunk 1); MetaprojectView.tsx:171-201 (FiltersPopover, fixed-position `.menu` placed from getBoundingClientRect, rendered at :684 inside the section opened at :730); styles.css:142-143 (`.menu { position: fixed; ... }`); research-evidence/live-filters-popover-720x480.txt (top 232 vs button bottom 225). CSS Containment: container-type size/inline-size applies layout containment, which makes the element a containing block for fixed descendants. Not run: read-only tools and no browser, so the displacement is derived from the spec and the code, not measured at a width where the sidebar is visible.",
+   "confidence": "medium",
+   "reviewer": "review-frontend",
+   "dedupe_key": "css-container-type-breaks-fixed-filters-popover",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "class_scope": {
+    "sites": [
+     "apps/desktop/src/metaproject/metaproject.css:9 (container on .metaproject)",
+     "apps/desktop/src/metaproject/MetaprojectView.tsx:196 (the only position:fixed descendant of the section)"
+    ],
+    "enumeration_method": "keryx ctx rg \"position: fixed|createPortal|<Menu|components/Menu\" apps/desktop/src/metaproject: no other fixed or portalled descendant of the section; the details panel's `.compact` drawer is position:absolute inside `.metaproject-graph-panes` and is unaffected."
+   }
+  },
+  {
+   "id": "FE-W3-002",
+   "severity": "info",
+   "repo": "keryx",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "quote": "previousRoutes.current = history;",
+   "problem": "`back` reads `previousRoutes.current`, which is refreshed from `history` only on render, while `enter` updates `current.current` eagerly but not `previousRoutes.current`. Two calls in one event tick, `navigate`/`visit` then `back`, would pop the entry before the one just pushed.",
+   "impact": "No caller in the slice does this; user events render between clicks. Noted only because the ref pair (`current`, `previousRoutes`) is half-eager.",
+   "suggested_fix": "In `enter`, also set `previousRoutes.current = [...previousRoutes.current.slice(1 - HISTORY_LIMIT), leaving]` so both refs move together.",
+   "evidence": "Read useExplorerNavigation.ts `enter` and `back` (slice-06). No call path found that triggers both in one tick.",
+   "confidence": "low",
+   "reviewer": "review-frontend",
+   "dedupe_key": "explorer-nav-previousroutes-ref-lag",
+   "blocking_merge": false,
+   "location_class": "in-diff"
+  }
+ ],
+ "slices": [
+  "slice-06"
+ ],
+ "stats": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0,
+  "info": 1
+ }
+}

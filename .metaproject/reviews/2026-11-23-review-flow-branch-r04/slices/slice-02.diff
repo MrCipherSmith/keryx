@@ -1,0 +1,1047 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.dispatch.json
+@@ 1,92 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T24",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
++    "description": "Five minor findings of review round 3: one behaviour defect that fix round 2 left, and four gaps in the tests fix round 2 added. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text and the evidence are in findings.json, and every mutant (file:line, anchor, replacement, killed or survived) in research-evidence/mutation-2.md. The task is done when every finish line below holds, the three test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 2's F-003). The explorer keeps one `error` state for two different failures: a catalog read that failed and a rebuild that failed. Task T22 was told that a quiet re-read neither shows nor clears the error banner, which is right for a rebuild's failure and wrong for a catalog read's: when a read the user started fails (Retry, Refresh catalog, the reload after a rebuild) and the banner with Retry shows, and the user then leaves the view and returns once the catalog can be read, the quiet re-read succeeds, the catalog or its freshness is current, and the failure banner still stands above it. Finish line: a quiet re-read that succeeds removes the banner of a failed catalog read, whether the snapshot changed or not; a rebuild's failure message is still left alone by a quiet re-read, as the existing test pins; a quiet re-read that fails still neither shows nor removes anything; every read that is not quiet behaves as today. A test shows the stale banner on the current production file (`scratch_check3.py red`) and its absence with the fix.\nF-002. The list's `empty` test is pinned for the all-empty case only: R3-7 (the second-step term dropped) and R3-9 (`&&` to `||`) survive. F-003. The Wiki disclosure's count has no fixture with a second-step row: R3-4 survives. F-004. T22 split the counter that retires pending work, and the tests pin only that a quiet read does not retire it; nothing pins that a read which is not quiet still does: R3-17 and R3-18 (the guards of openPath and loadMoreSearch dropped) and R3-19 and R3-20 (either `project.current++` removed) survive. F-005. The test of `MetaprojectWork` pins the `visible` the explorer is given and nothing else: R3-10 (the wrapper's own `visible`, so the explorer would stay on screen under Settings), R3-14 (the default explorer replaced by nothing), R3-16 (the Suspense fallback removed), R3-15 (`onRebuild` not passed on) and R3-13 (the call site in ProjectWindow) survive.\n\nFinish line for F-002 to F-005: `scratch_check3.py mutants --ids R3-4,R3-17,R3-18,R3-19,R3-20 --tests src/metaproject/MetaprojectView.dom.test.tsx`, `--ids R3-7,R3-9 --tests src/metaproject/RelationshipList.dom.test.tsx` and `--ids R3-10,R3-13,R3-14,R3-15,R3-16 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant whose anchor your own change moved, the result names the line that now carries the behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost it says why; for R3-13 the reviewer accepts a statement that the call site rests on the live check, and the flow journal already records that check after T23. R3-6 and R3-11 also survive and are not in this task: the reviewer judged them equivalent and near-equivalent. Then mutate what you added for F-001 yourself (the condition that tells the two failures apart, and each place that clears or keeps the banner), in a scratch copy made the way `scratch_check3.py`'s `make_copy()` does, and add a test for any that survives; report them as `T24-1` onward with file, anchor and replacement, so that the next reader can re-run them.\n\nA test added here asserts what a user or a caller can observe: rendered text, roles, the requests the explorer sends, a callback's arguments. If F-001 changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
++    "intent": "fix"
++  },
++  "acceptance_criteria": [
++    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r03/report.md",
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r03/findings.json",
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r03/research-evidence/mutation-2.md",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/App.dom.test.tsx",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/metaproject/RelationshipList.dom.test.tsx, apps/desktop/src/App.dom.test.tsx, apps/desktop/src/App.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, docs/**, package.json or any lockfile. No new dependencies.",
++    "If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check3.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
++    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "The fix context (each finding's id, file, the reviewer's message and suggested fix, and the premise judge's verdict) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json under fix_context.review_feedback.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T11:39:21Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json
+@@ 1,107 @@
++{
++  "task": {
++    "task_id": "fix-24",
++    "task_name": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
++    "task_type": "fix",
++    "complexity": "high",
++    "dependencies": [],
++    "description": "Five minor findings of review round 3: one behaviour defect that fix round 2 left, and four gaps in the tests fix round 2 added. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text and the evidence are in findings.json, and every mutant (file:line, anchor, replacement, killed or survived) in research-evidence/mutation-2.md. The task is done when every finish line below holds, the three test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 2's F-003). The explorer keeps one `error` state for two different failures: a catalog read that failed and a rebuild that failed. Task T22 was told that a quiet re-read neither shows nor clears the error banner, which is right for a rebuild's failure and wrong for a catalog read's: when a read the user started fails (Retry, Refresh catalog, the reload after a rebuild) and the banner with Retry shows, and the user then leaves the view and returns once the catalog can be read, the quiet re-read succeeds, the catalog or its freshness is current, and the failure banner still stands above it. Finish line: a quiet re-read that succeeds removes the banner of a failed catalog read, whether the snapshot changed or not; a rebuild's failure message is still left alone by a quiet re-read, as the existing test pins; a quiet re-read that fails still neither shows nor removes anything; every read that is not quiet behaves as today. A test shows the stale banner on the current production file (`scratch_check3.py red`) and its absence with the fix.\nF-002. The list's `empty` test is pinned for the all-empty case only: R3-7 (the second-step term dropped) and R3-9 (`&&` to `||`) survive. F-003. The Wiki disclosure's count has no fixture with a second-step row: R3-4 survives. F-004. T22 split the counter that retires pending work, and the tests pin only that a quiet read does not retire it; nothing pins that a read which is not quiet still does: R3-17 and R3-18 (the guards of openPath and loadMoreSearch dropped) and R3-19 and R3-20 (either `project.current++` removed) survive. F-005. The test of `MetaprojectWork` pins the `visible` the explorer is given and nothing else: R3-10 (the wrapper's own `visible`, so the explorer would stay on screen under Settings), R3-14 (the default explorer replaced by nothing), R3-16 (the Suspense fallback removed), R3-15 (`onRebuild` not passed on) and R3-13 (the call site in ProjectWindow) survive.\n\nFinish line for F-002 to F-005: `scratch_check3.py mutants --ids R3-4,R3-17,R3-18,R3-19,R3-20 --tests src/metaproject/MetaprojectView.dom.test.tsx`, `--ids R3-7,R3-9 --tests src/metaproject/RelationshipList.dom.test.tsx` and `--ids R3-10,R3-13,R3-14,R3-15,R3-16 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant whose anchor your own change moved, the result names the line that now carries the behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost it says why; for R3-13 the reviewer accepts a statement that the call site rests on the live check, and the flow journal already records that check after T23. R3-6 and R3-11 also survive and are not in this task: the reviewer judged them equivalent and near-equivalent. Then mutate what you added for F-001 yourself (the condition that tells the two failures apart, and each place that clears or keeps the banner), in a scratch copy made the way `scratch_check3.py`'s `make_copy()` does, and add a test for any that survives; report them as `T24-1` onward with file, anchor and replacement, so that the next reader can re-run them.\n\nA test added here asserts what a user or a caller can observe: rendered text, roles, the requests the explorer sends, a callback's arguments. If F-001 changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
++    "target_files": [
++      "apps/desktop/src/metaproject/MetaprojectView.tsx",
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++      "apps/desktop/src/App.dom.test.tsx",
++      "apps/desktop/src/App.tsx"
++    ],
++    "acceptance_criteria": [
++      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
++    ],
++    "context": "Flow 515 in the Keryx repository, fix round after review round 3. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. Review round 3 read the commits of fix round 2 (tasks T22 and T23) as new code; its package is .metaproject/reviews/2026-11-23-review-flow-branch-r03: report.md (the round's report), findings.json (every finding with its file, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-2.md (the 20 mutants of that code: file:line, anchor, replacement, killed or survived) and research-evidence/mutants-r3.json (the same mutants as data). Finding ids in this task are round 3's; where a finding of an earlier round is meant, the text says `round 1's F-0NN` or `round 2's F-0NN`. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check3.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies round 3's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
++    "existing_tests": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++      "apps/desktop/src/App.dom.test.tsx"
++    ],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json"
++  },
++  "fix_context": {
++    "review_feedback": [
++      {
++        "id": "F-001",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "Answering round 2's F-003, a quiet re-read neither clears `error` at its start (`if (!quiet) { project.current++; setError(\"\"); }`) nor sets it on failure. The `error` state holds two unrelated things: a failed catalog read and a failed rebuild (rebuild() sets it at line 677). Keeping it across a quiet read is right for the rebuild failure, which the test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins. For a catalog-read failure it is wrong: a quiet read that succeeds has just shown that the catalog can be read, and neither of its success branches (the unchanged-snapshot branch above, or `setCatalog(result)` below it) touches `error`.",
++        "suggested_fix": "Record where the standing error came from (a `catalogFailed` ref or a field on the error state: 'catalog' or 'rebuild'). On a successful quiet read, clear the error only when it came from a catalog read; leave a rebuild error. Add a test: reload fails, hide and show with a working read, expect no catalog error banner.",
++        "reviewer": "review-logic",
++        "line": 390,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-002",
++        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
++        "severity": "WARNING",
++        "message": "The `empty` test T22 added (answering F-001 of round 2) is pinned on one side only. Mutants run in a scratch copy of apps/desktop at 8e0f656fb, tests RelationshipList.dom.test.tsx and MetaprojectView.dom.test.tsx (baseline exit 0): R3-9 (`&&` -> `||`, so the note shows whenever any one group is empty) SURVIVED; R3-7 (the `!groups.secondStep.length` term dropped, so a projection with only second-step rows says 'No relationships') SURVIVED; R3-8 (back to `projection.edges.length === 0`) killed by 'a projection whose every edge is left out says it has no relationships'. No fixture builds a projection that has rows in some groups but not in others and asserts the note is absent; the only 'not empty' fixtures have all three groups filled. R3-7 is not equivalent: groupRelationships (RelationshipList.tsx:54-62) puts an edge between two non-root nodes into secondStep, so a projection with no root-adjacent edge and one such edge lists a row.",
++        "suggested_fix": "In RelationshipList.dom.test.tsx add a projection with incoming rows only (outgoing empty) and one with a single second-step edge and no adjacent edge; assert the note is absent and the matching group heading present.",
++        "reviewer": "review-testing-practices",
++        "line": 213,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-003",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "The Wiki disclosure's count, which the comment above it says 'counts the rows its list shows', is pinned for incoming/outgoing rows only. R3-4 (`+ wikiRelationships.secondStep` dropped from the sum) SURVIVED the MetaprojectView and RelationshipList DOM tests. The fixtures in 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' carry a self-link and one root-adjacent `describes` edge; none carries a second-step edge, so the list's 'Second step N' group and the label can disagree unseen. Killed for contrast: R3-2 (condition back to `currentProjection.edges.length > 0`), R3-3 (label back to `edges.length`), R3-5 (`> 0` -> `>= 0`). R3-6 (drop `mode === \"wiki\" &&` in the memo) survived and is equivalent: the value is read only inside the Wiki branch.",
++        "suggested_fix": "Add a second-step edge between two non-root nodes to the second `readWith` in that test and assert the label is '2' with 'Second step' group rows present.",
++        "reviewer": "review-testing-practices",
++        "line": 716,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-004",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "T22 split `project.current` so that only a non-quiet catalog read retires pending wiki-link lookups and pages of results. The tests added pin the new direction (a quiet read must not retire: T23-1 and T23-5 killed by 'a wiki-link lookup in flight ... still settles' and 'a page of results in flight ... is still appended') but nothing pins the old direction, that a real read still retires them. In the scratch copy: R3-20 (cleanup bump removed: `if (!quietRead.current) project.current++;` -> ``) SURVIVED all of MetaprojectView.dom.test.tsx (exit 0); R3-19 (the `project.current++;` inside `if (!quiet) {` removed) SURVIVED (exit 0); R3-17 (`generation === project.current &&` dropped from openPath's `current()`) and R3-18 (`projectGeneration !== project.current` replaced by `false` in loadMoreSearch) SURVIVED (exit 0). No test starts a lookup or a load-more, then runs Refresh, Retry or Rebuild, and asserts the late answer is dropped.",
++        "suggested_fix": "Hold a wiki-link lookup (as the T23 lookup test does), click Refresh catalog (or Rebuild with onRebuild returning true), release the lookup, and assert its target does not open and no 'No indexed project file' message shows; the same for a held load-more page.",
++        "reviewer": "review-testing-practices",
++        "line": 414,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-005",
++        "file": "apps/desktop/src/App.dom.test.tsx",
++        "severity": "WARNING",
++        "message": "The stand-in explorer pins `visible` handed to the explorer, and nothing else of MetaprojectWork, so the test would pass if MetaprojectWork stopped rendering the real explorer in the app. Mutants in a scratch copy, App.dom.test.tsx (baseline exit 0): R3-14 (default `explorer = LazyMetaprojectView` -> a component returning null) SURVIVED; R3-13 (ProjectWindow's `<MetaprojectWork cwd={cwd} view={view} workView={workView}` -> `view={workView}`) SURVIVED, since no test renders ProjectWindow; R3-10 (RetainedView `visible={view === \"metaproject\"}` -> `visible={workView === \"metaproject\"}`) SURVIVED: the Settings step of the test asserts only `given.at(-1)` is false, not that the wrapper is hidden, so the explorer would stay on screen under Settings; R3-15 (`onRebuild={onRebuild}` -> `async () => false`) SURVIVED, and R3-16 (Suspense fallback removed) SURVIVED. R3-12 (explorer `visible` -> workView) and, from round 2, R2-28 are killed. R3-11 (RetainedView `active` -> `view === ...`) survived and is near-equivalent: it differs only for a first mount while Settings is shown.",
++        "suggested_fix": "In the Settings step add `expect(host.querySelector(\"p\")?.closest(\"[hidden]\")).not.toBeNull()` (kills R3-10). For the default explorer, render MetaprojectWork once without `explorer` and assert the Suspense fallback 'Loading Metaproject…' shows (kills R3-14 and R3-16 without a module mock). The call-site mutant R3-13 needs either a test of ProjectWindow or stating that it rests on the live check.",
++        "reviewer": "review-testing-practices",
++        "line": 68,
++        "premise_verdict": "upheld"
++      }
++    ],
++    "original_task_ids": [
++      "task-22",
++      "task-23"
++    ],
++    "iteration": 3
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "515",
+   "slug": "desktop-metaproject-graph-panel",
+   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+   "status": "in-progress",
+   "createdAt": "2026-11-23T07:14:05.302Z",
+-  "updatedAt": "2026-11-23T11:14:40.285Z",
++  "updatedAt": "2026-11-23T11:53:58.193Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "outcomeAuthor": "agent",
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 78,143 @@
+     {
+       "id": "T4",
+       "title": "Self-review and prepare draft PR",
+       "kind": "review",
+       "origin": "scaffold",
+       "status": "todo",
+       "dependsOn": [
+         "T8",
+         "T9",
+         "T10",
+         "T11",
+         "T14",
+         "T15",
+         "T16",
+         "T17",
+         "T18",
+         "T19",
+         "T20",
+         "T21",
+         "T22",
+-        "T23"
++        "T23",
++        "T24",
++        "T25"
+       ],
+       "attempts": {
+-        "count": 2,
++        "count": 4,
+         "log": [
+           {
+             "at": "2026-11-23T10:12:37.125Z",
+             "outcome": "started",
+             "detail": "review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
+           },
+           {
+             "at": "2026-11-23T10:52:22.579Z",
+             "outcome": "failed",
+             "detail": "review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
++          },
++          {
++            "at": "2026-11-23T11:15:31.676Z",
++            "outcome": "started",
++            "detail": "review round 3 on the head that holds fix round 2 (T22, T23)"
++          },
++          {
++            "at": "2026-11-23T11:39:20.414Z",
++            "outcome": "failed",
++            "detail": "review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
+           }
+         ]
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {}
+     },
+     {
+       "id": "T5",
+       "title": "Graph layout module and RelationshipGraph component (new files)",
+       "kind": "implement",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-23T07:25:40.538Z",
+             "outcome": "started",
+             "detail": "515-T5"
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 582,669 @@
+       ],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-23T11:04:34.114Z",
+             "outcome": "started",
+             "detail": "515-T23 (fix round 2)"
+           }
+         ]
+       },
+       "acRefs": [
+         "AC10",
+         "AC14",
+         "AC19",
+         "AC20"
+       ],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed"
++    },
++    {
++      "id": "T24",
++      "title": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:39:22.052Z",
++            "outcome": "started",
++            "detail": "515-T24 (fix round 3)"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC10",
++        "AC14",
++        "AC16",
++        "AC19"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T25",
++      "title": "Fix round 3: flow record (F-006, F-007, F-008)",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:41:39.242Z",
++            "outcome": "started",
++            "detail": "515-T25 (fix round 3, the orchestrator's own record)"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "tasks.md follows flow.json again, verification/fix-round-2.md written, one sentence of results/T22.result.json reworded"
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-23T07:14:05.302Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-23T07:21:57.079Z",
+       "event": "task-added",
+       "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
+     },
+     {
+       "at": "2026-11-23T07:21:57.264Z",
+       "event": "task-added",
+       "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
+     },
+     {
+       "at": "2026-11-23T07:21:57.446Z",
+       "event": "task-added",
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 995,1079 @@
+     },
+     {
+       "at": "2026-11-23T10:53:40.447Z",
+       "event": "task-attempt",
+       "detail": "T22: started (attempt 1) — 515-T22 (fix round 2)"
+     },
+     {
+       "at": "2026-11-23T11:04:12.196Z",
+       "event": "task-done",
+       "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
+     },
+     {
+       "at": "2026-11-23T11:04:34.114Z",
+       "event": "task-attempt",
+       "detail": "T23: started (attempt 1) — 515-T23 (fix round 2)"
+     },
+     {
+       "at": "2026-11-23T11:14:40.285Z",
+       "event": "task-done",
+       "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
++    },
++    {
++      "at": "2026-11-23T11:15:31.676Z",
++      "event": "task-attempt",
++      "detail": "T4: started (attempt 3) — review round 3 on the head that holds fix round 2 (T22, T23)"
++    },
++    {
++      "at": "2026-11-23T11:39:20.414Z",
++      "event": "task-attempt",
++      "detail": "T4: failed (attempt 4) — review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
++    },
++    {
++      "at": "2026-11-23T11:39:20.600Z",
++      "event": "task-added",
++      "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
++    },
++    {
++      "at": "2026-11-23T11:39:20.777Z",
++      "event": "task-added",
++      "detail": "T25: Fix round 3: flow record (F-006, F-007, F-008)"
++    },
++    {
++      "at": "2026-11-23T11:39:20.963Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23) — review round 3 asked for changes; the review task closes after fix round 3 (T24, T25) and a clean round"
++    },
++    {
++      "at": "2026-11-23T11:39:22.052Z",
++      "event": "task-attempt",
++      "detail": "T24: started (attempt 1) — 515-T24 (fix round 3)"
++    },
++    {
++      "at": "2026-11-23T11:41:39.242Z",
++      "event": "task-attempt",
++      "detail": "T25: started (attempt 1) — 515-T25 (fix round 3, the orchestrator's own record)"
++    },
++    {
++      "at": "2026-11-23T11:41:39.455Z",
++      "event": "task-done",
++      "detail": "T25: Fix round 3: flow record (F-006, F-007, F-008)"
++    },
++    {
++      "at": "2026-11-23T11:53:58.193Z",
++      "event": "task-done",
++      "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
+     }
+   ],
+   "origin": {
+     "kind": "human-request",
+     "quote": "в графе тоже не понятно что, в деталях ноды визуально все сливается",
+     "source": "operator session, 2026-11-23"
+   },
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+     },
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json
+@@ 1,105 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.dom.test.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/App.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json
+@@ 1,85 @@
++{
++  "task_id": "fix-24",
++  "task_name": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
++  "task_type": "fix",
++  "status": "success",
++  "description": "F-001: the explorer's error state now records whether a catalog read or a rebuild failed; a quiet re-read that succeeds removes a failed catalog read's banner and leaves a rebuild's. F-002 to F-005: tests that pin a partly empty relationship list, a second-step row in the Wiki disclosure count, the retirement of a pending wiki-link lookup and page of results by a rebuild's reload, and MetaprojectWork's hidden wrapper, callbacks and lazy default explorer.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/App.dom.test.tsx"
++  ],
++  "files_created": [],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not applicable: ESLint does not cover apps/desktop",
++  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit, exit 0)",
++  "test_result": "MetaprojectView.dom.test.tsx 87 pass 0 fail; RelationshipList.dom.test.tsx 14 pass 0 fail; App.dom.test.tsx 5 pass 0 fail; NodeDetailsPanel.dom.test.tsx 24 pass 0 fail; each in its own process",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all of the task's finish lines; AC19's whole-suite run (bun test src) was not run here, only the four named files",
++  "skill_drift": "none",
++  "project_context_applied": [
++    {
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "how": "followed"
++    },
++    {
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "how": "read"
++    },
++    {
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "how": "read"
++    }
++  ],
++  "noticed_not_touched": [
++    {
++      "what": "The two `project.current++` bumps (catalog effect body when not quiet, and its cleanup when the next run is not quiet) fire together on every non-quiet re-run, so each alone is redundant (R3-19 and R3-20 cannot be killed one at a time). A follow-up could keep one bump and state which event it stands for.",
++      "where": "apps/desktop/src/metaproject/MetaprojectView.tsx:379 and :418"
++    },
++    {
++      "what": "If a change of the read function (protocol or request prop) lands in the same commit as a return to the view, the visible effect sets quietRead before the catalog effect body runs, so that read runs quiet (no error clear, no start bump); the setRevision it queued then runs a second, loud read. Two catalog reads for one return; only reachable when props change during the return.",
++      "where": "apps/desktop/src/metaproject/MetaprojectView.tsx visible effect (:341-352) and catalog effect (:373-420)"
++    }
++  ],
++  "assumptions": [
++    "A rebuild that the user starts still clears whatever banner stands (catalog or rebuild), as before this task; the new test pins that rather than changing it."
++  ],
++  "behavior_changes": [
++    {
++      "description": "After a catalog read the user started fails (Retry, Refresh catalog, or the reload after a rebuild) and the user leaves the Metaproject view and returns once the catalog can be read, the failure banner with Retry is gone, whether the snapshot changed or not. A failed rebuild's banner still stays after such a return, and a quiet re-read that fails still shows and removes nothing.",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": [
++        "Keep every standing banner across a quiet re-read (round 2's behaviour, the defect F-001 names).",
++        "Clear every banner, the rebuild's included, on a successful quiet re-read (contradicts the existing rebuild test and the finish line)."
++      ]
++    }
++  ],
++  "not_touched": [
++    {
++      "path": "apps/desktop/src/App.tsx",
++      "reason": "F-005 is a test gap; MetaprojectWork already passes visible, onRebuild, onDraft and the lazy default, and the new App.dom tests pin them. R3-13 (the ProjectWindow call site) rests on the live check."
++    }
++  ],
++  "notes": "F-001 banner table (one `error` state, now {source: \"catalog\" | \"rebuild\", message} | null; MetaprojectView.tsx:318).\nWriters at head after this change: catalog effect start, not quiet -> null (:380); catalog effect catch, latest read and not quiet -> {catalog} (:407); quiet success -> clear only a {catalog} error (:392, new); rebuild() start -> null (:677); rebuild() catch -> {rebuild} (:681). Reader: the banner render only (:846-851, `error.message`, Retry = loud read). No other reader in the repo (searched `setError`, `error` in apps/desktop/src/metaproject).\nStanding banner x following event -> banner after (test that pins it):\n- failed first read x return: no quiet read starts (loaded is false), banner stays (existing 'a return after a failed first catalog read starts no read...').\n- failed Retry/Refresh/post-rebuild reload x quiet re-read succeeds, same snapshot: banner GOES (new, was: stays) ('a quiet re-read that succeeds after a failed catalog reload removes its banner...').\n- same x quiet re-read succeeds, changed snapshot: banner GOES, new catalog shown (same new test, Retry path).\n- same x quiet re-read fails: banner stays with its own message, the quiet failure is not shown (same new test).\n- same x loud read succeeds: cleared at the read's start, as before (existing 'a return after a failed first catalog read...' Retry step).\n- same x successful rebuild: cleared at the rebuild's start, as before; a rebuild that reloads nothing leaves it gone (new 'a rebuild the user starts removes a failed catalog read's banner...').\n- failed rebuild x quiet re-read succeeds (either snapshot): stays (existing 'a standing error, such as a failed rebuild's, survives a quiet re-read on return'; the clear sits before the snapshot branch, so both branches share it).\n- failed rebuild x quiet re-read fails: stays (same code path as the catalog row above).\n- failed rebuild x loud read that was already in flight then succeeds: stays, as before (new 'a failed rebuild's message outlives a catalog read that was already in flight and then succeeds').\n- failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before ('after a quiet re-read on return, a rebuild's failed catalog reload is still shown').\nWhy this form: the reviewer's suggested_fix (record the source) was followed, as a field on the state rather than a separate ref, so the source cannot drift from the message; the clear is a functional update so it reads the error standing when the read lands, and it runs before the unchanged/changed-snapshot branch so both success branches share one site. Only quiet reads get it, so a loud read behaves exactly as before (mutant T24-10 shows a loud success that cleared everything would be caught).\nWho else reads what changed: `error` is read only by the banner; `setError` is called only by the catalog effect and rebuild(). The comment on quietRead and the one on `error` were updated. App.tsx was not changed. No guide sentence changes: docs/docs/guides/desktop-metaproject.md lines 10-11 ('It also re-reads the catalog quietly, so the graph freshness banner is current.') says nothing about the error banner; the change makes the page agree better with 'current'.\nRed run of F-001's test against HEAD's MetaprojectView.tsx (scratch_check3.py red --restore src/metaproject/MetaprojectView.tsx --tests src/metaproject/MetaprojectView.dom.test.tsx): 'restored to HEAD in the copy: src/metaproject/MetaprojectView.tsx / == src/metaproject/MetaprojectView.dom.test.tsx: exit 1; 85 pass | 1 fail / (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not'. Green with the change: 87 pass, 0 fail.\nRound-3 mutants (scratch_check3.py mutants, run after all changes): R3-4 killed by 'a Wiki page's Relationships disclosure counts a second-step row with the adjacent ones'; R3-17 killed by 'a rebuild's catalog reload retires a wiki-link lookup in flight...'; R3-18 killed by 'a rebuild's catalog reload retires a page of results in flight...'; R3-7 and R3-9 killed by 'a projection with rows in some groups only lists them and does not say it is empty' (RelationshipList.dom.test.tsx); R3-10 killed by 'the Metaproject explorer is told it is hidden while another view or Settings is shown...' (new hidden-wrapper assertion in its Settings step); R3-14 and R3-16 killed by 'without a stand-in, the app's explorer is loaded lazily behind a visible loading status'; R3-15 killed by 'the Metaproject explorer is given the app's rebuild and draft callbacks'.\nR3-19: invalid after this change (its anchor held `setError(\"\")`, now `setError(null)`); re-run moved in MetaprojectView.tsx anchor '      project.current++;\\n      setError(null);' -> '      setError(null);' (line 379): SURVIVED. R3-20 (line 418, 'if (!quietRead.current) project.current++;' -> ''): SURVIVED. Not killable on their own: every non-quiet re-run of the catalog effect runs both bumps in the same commit (the cleanup bumps because quietRead is false, then the body bumps because the read is not quiet), so either alone still retires pending work before any lookup or page can settle; the only run with one bump is unmount (cleanup only), where the late setState calls are no-ops, and the first run after protocol is known (body only), when no lookup or page can exist. Removing both (T24-7) is killed by the new lookup test, so the retirement itself is now pinned. R3-13 (App.tsx:618 call site in ProjectWindow) survived: no test renders ProjectWindow; it rests on the live check recorded in journal.md line 159 after fix round 2 (explorer hidden and mounted once on leaving, one catalog read on return).\nOwn mutants (MetaprojectView.tsx, scratch copy made as make_copy() does, tests MetaprojectView.dom.test.tsx, runner scratchpad own_mutants.py):\nT24-1 anchor '        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\\n' -> '' : killed by 'a quiet re-read that succeeds after a failed catalog reload removes its banner...'.\nT24-2 'current?.source === \"catalog\" ? null : current' -> 'null' : killed by 'a standing error, such as a failed rebuild's, survives a quiet re-read on return'.\nT24-3 'if (quiet) setError(current =>' -> 'setError(current =>' : survived, equivalent: a loud read already cleared the error at its start, and a catalog error can only be set by the latest read's own failure, so at a loud success the only error that can stand is a rebuild's, which the condition keeps.\nT24-4 'setError({ source: \"catalog\", message' -> 'setError({ source: \"rebuild\", message' : killed by the F-001 test.\nT24-5 'setError({ source: \"rebuild\", message' -> 'setError({ source: \"catalog\", message' : killed by 'a standing error, such as a failed rebuild's, survives...'.\nT24-6 'if (generation === catalogRead.current && !quiet) setError(' -> 'if (generation === catalogRead.current) setError(' : killed by 'a failed quiet re-read on return shows no error and leaves the explorer as it was'.\nT24-7 (R3-19 moved and R3-20 together) : killed by 'a rebuild's catalog reload retires a wiki-link lookup in flight...'.\nT24-8 '      project.current++;\\n      setError(null);\\n    }' -> '      project.current++;\\n    }' : killed by 'a return after a failed first catalog read starts no read, and its failure and Retry stay'.\nT24-9 '    setRebuilding(true);\\n    setError(null);' -> '    setRebuilding(true);' : first survived; killed after adding 'a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone'.\nT24-10 'if (quiet) setError(current => current?.source === \"catalog\" ? null : current);' -> same + ' else setError(null);' : killed by 'a failed rebuild's message outlives a catalog read that was already in flight and then succeeds'.\nsuggested_fix diverged: F-004 — used Rebuild graph (onRebuild resolving true) as the loud read for both the lookup and the page, not Refresh catalog; Refresh needs a snapshot mismatch, which would also trip the lookup's own snapshot guard and so not isolate project.current. F-003 — added a new test rather than editing the existing disclosure test's second readWith, so its self-link assertions stay as they were. F-005 — R3-14 and R3-16 killed by a synchronous render of MetaprojectWork without a stand-in, removed in the same test before the lazy module resolves, so the real explorer never reads the CLI.\nNot verified: the whole suite (bun test src), vite build, and the browser dev build; the four named DOM files and tsc were run. keryx health/test commands of Phase 5 were not run; the dispatch's own check commands were used instead. ESLint does not cover apps/desktop."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md
+@@ 1,356 @@
++# Verification runs of fix round 3 (T24)
++
++What the orchestrator ran before it accepted T24, written out so that the runs can be repeated from this file.
++The runs were made on 2026-11-23 on the tree that became commit `46c472162`. How a scratch copy, a red check and a
++mutant run are made is in `fix-round-2.md` beside this file; the orchestrator's scripts (`scratch_check3.py`,
++`t24_mutants.py`) are not tracked.
++
++## The new test is red without the fix
++
++Production file put back to the previous commit: `apps/desktop/src/metaproject/MetaprojectView.tsx`.
++
++`MetaprojectView.dom.test.tsx`: 86 pass, 1 fail: “a quiet re-read that succeeds after a failed catalog reload removes its
++banner, whether the snapshot changed or not”.
++
++## Review round 3's surviving mutants
++
++Ids are review round 3's (`R3-n`). R3-6 and R3-11 were judged equivalent and near-equivalent by the reviewer and were not
++in the task. R3-19's anchor was moved by T24 and is in the next section.
++
++### R3-4 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep
++```
++
++Replacement:
++
++```
++wikiRelationships.incoming + wikiRelationships.outgoing
++```
++
++Result (test file `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`): **killed** by “a Wiki page's Relationships disclosure counts a second-step row with the adjacent ones”.
++
++### R3-7 — `apps/desktop/src/metaproject/RelationshipList.tsx`
++
++Anchor:
++
++```
++const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;
++```
++
++Replacement:
++
++```
++const empty = !groups.incoming.length && !groups.outgoing.length;
++```
++
++Result (test file `apps/desktop/src/metaproject/RelationshipList.dom.test.tsx`): **killed** by “a projection with rows in some groups only lists them and does not say it is empty”.
++
++### R3-9 — `apps/desktop/src/metaproject/RelationshipList.tsx`
++
++Anchor:
++
++```
++const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;
++```
++
++Replacement:
++
++```
++const empty = !groups.incoming.length || !groups.outgoing.length || !groups.secondStep.length;
++```
++
++Result (test file `apps/desktop/src/metaproject/RelationshipList.dom.test.tsx`): **killed** by “a projection with rows in some groups only lists them and does not say it is empty”.
++
++### R3-10 — `apps/desktop/src/App.tsx`
++
++Anchor:
++
++```
++<RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
++```
++
++Replacement:
++
++```
++<RetainedView active={workView === "metaproject"} visible={workView === "metaproject"}>
++```
++
++Result (test file `apps/desktop/src/App.dom.test.tsx`): **killed** by “the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return”.
++
++### R3-13 — `apps/desktop/src/App.tsx`
++
++Anchor:
++
++```
++<MetaprojectWork cwd={cwd} view={view} workView={workView}
++```
++
++Replacement:
++
++```
++<MetaprojectWork cwd={cwd} view={workView} workView={workView}
++```
++
++Result (test file `apps/desktop/src/App.dom.test.tsx`): **survived**. No test renders `ProjectWindow`, where this call site is. It rests on the live check: in the browser dev build the explorer is hidden while another view is shown and one `catalog` request leaves on return (journal, the entries on T23 and T24).
++
++### R3-14 — `apps/desktop/src/App.tsx`
++
++Anchor:
++
++```
++explorer: MetaprojectView = LazyMetaprojectView }
++```
++
++Replacement:
++
++```
++explorer: MetaprojectView = (() => null) as ComponentType<ExplorerProps> }
++```
++
++Result (test file `apps/desktop/src/App.dom.test.tsx`): **killed** by “without a stand-in, the app's explorer is loaded lazily behind a visible loading status”.
++
++### R3-15 — `apps/desktop/src/App.tsx`
++
++Anchor:
++
++```
++onRebuild={onRebuild} onDraft={onDraft} />
++```
++
++Replacement:
++
++```
++onRebuild={async () => false} onDraft={onDraft} />
++```
++
++Result (test file `apps/desktop/src/App.dom.test.tsx`): **killed** by “the Metaproject explorer is given the app's rebuild and draft callbacks”.
++
++### R3-16 — `apps/desktop/src/App.tsx`
++
++Anchor:
++
++```
++<Suspense fallback={<p role="status">Loading Metaproject…</p>}>
++        <MetaprojectView cwd
++```
++
++Replacement:
++
++```
++<Suspense fallback={null}>
++        <MetaprojectView cwd
++```
++
++Result (test file `apps/desktop/src/App.dom.test.tsx`): **killed** by “without a stand-in, the app's explorer is loaded lazily behind a visible loading status”.
++
++### R3-17 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++generation === project.current && shownSelection.current === from
++```
++
++Replacement:
++
++```
++shownSelection.current === from
++```
++
++Result (test file `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`): **killed** by “a rebuild's catalog reload retires a wiki-link lookup in flight: it neither opens its target nor names a path”.
++
++### R3-18 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++projectGeneration !== project.current
++```
++
++Replacement:
++
++```
++false
++```
++
++Result (test file `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`): **killed** by “a rebuild's catalog reload retires a page of results in flight: it is not appended”.
++
++### R3-20 — `apps/desktop/src/metaproject/MetaprojectView.tsx`
++
++Anchor:
++
++```
++if (!quietRead.current) project.current++;
++```
++
++Replacement:
++
++_(the anchor is deleted)_
++
++Result (test file `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`): **survived**. Alone it changes nothing a test can see: a read that is not quiet moves `project.current` twice, once in the cleanup and once in the body, and either move retires pending work. See R3-19 and T24-7 below.
++
++## Mutants of T24's own change, and the two moves of `project.current`
++
++File: `apps/desktop/src/metaproject/MetaprojectView.tsx`; test file: `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx`.
++The ids `T24-n` are the T24 worker's (its result file lists ten; T24-3 and T24-10 were run by the worker only: T24-3, the
++`if (quiet)` before the clear dropped, survives as equivalent, and T24-10, an added `else setError(null)`, is killed).
++
++### R3-19, on the line T24 moved it to (the body's move of `project.current` removed)
++
++Anchor:
++
++```
++      project.current++;
++      setError(null);
++```
++
++Replacement:
++
++```
++      setError(null);
++```
++
++Result: **survived**. Alone it changes nothing a test can see, for the reason given under R3-20.
++
++### T24-7 (R3-19 and R3-20 together: both moves removed)
++
++Anchor:
++
++```
++      project.current++;
++      setError(null);
++```
++
++Replacement:
++
++```
++      setError(null);
++```
++
++Anchor:
++
++```
++if (!quietRead.current) project.current++;
++```
++
++Replacement:
++
++_(the anchor is deleted)_
++
++Result: **killed**; the first failing test: “a rebuild's catalog reload retires a wiki-link lookup in flight: it neither opens its target nor names a path”.
++
++### T24-1 (the clear on a quiet success removed)
++
++Anchor:
++
++```
++        if (quiet) setError(current => current?.source === "catalog" ? null : current);
++```
++
++Replacement:
++
++_(the anchor is deleted)_
++
++Result: **killed**; the first failing test: “a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not”.
++
++### T24-2 (a quiet success clears any error)
++
++Anchor:
++
++```
++current?.source === "catalog" ? null : current
++```
++
++Replacement:
++
++```
++null
++```
++
++Result: **killed**; the first failing test: “a standing error, such as a failed rebuild's, survives a quiet re-read on return”.
++
++### T24-4 (a failed catalog read recorded as a rebuild's)
++
++Anchor:
++
++```
++setError({ source: "catalog", message: errMessage(cause) });
++```
++
++Replacement:
++
++```
++setError({ source: "rebuild", message: errMessage(cause) });
++```
++
++Result: **killed**; the first failing test: “a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not”.
++
++### T24-5 (a failed rebuild recorded as a catalog read's)
++
++Anchor:
++
++```
++setError({ source: "rebuild", message: errMessage(cause) });
++```
++
++Replacement:
++
++```
++setError({ source: "catalog", message: errMessage(cause) });
++```
++
++Result: **killed**; the first failing test: “a standing error, such as a failed rebuild's, survives a quiet re-read on return”.
++
++### T24-6 (a failed quiet read sets the error)
++
++Anchor:
++
++```
++if (generation === catalogRead.current && !quiet) setError(
++```
++
++Replacement:
++
++```
++if (generation === catalogRead.current) setError(
++```
++
++Result: **killed**; the first failing test: “a failed quiet re-read on return shows no error and leaves the explorer as it was”.
++
++### T24-8 (a read that is not quiet no longer clears the error at its start)
++
++Anchor:
++
++```
++      project.current++;
++      setError(null);
++```
++
++Replacement:
++
++```
++      project.current++;
++```
++
++Result: **killed**; the first failing test: “a return after a failed first catalog read starts no read, and its failure and Retry stay”.
++
++### T24-9 (a rebuild no longer clears the error at its start)
++
++Anchor:
++
++```
++    setRebuilding(true);
++    setError(null);
++```
++
++Replacement:
++
++```
++    setRebuilding(true);
++```
++
++Result: **killed**; the first failing test: “a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone”.

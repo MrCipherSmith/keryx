@@ -1,0 +1,47 @@
+[
+ {
+  "id": "F-001",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+  "line": null,
+  "quote": "test(\"a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands\", async () => {",
+  "problem": "The same words name two different cases within four titles. In this file and in T24's banner table a 'failed rebuild' is one whose onRebuild rejects (error source \"rebuild\"): the two new titles just above say 'a failed rebuild's banner' and 'the first one's failure banner', and the older 'a failed rebuild's message outlives a catalog read ...' means the same. In this test onRebuild resolves true and it is the catalog reload after the rebuild that fails (error source \"catalog\"), which the T24 table calls 'a rebuild's failed catalog reload'. 'A failed rebuild reload' reads as 'the reload of a failed rebuild', which is the other case. The title also says 'it' twice over two readings ('when it lands' is the quiet read, 'that reload's banner' is the reload's). The body is right and its comment ('the reload after the rebuild, started meanwhile, fails') says what the title should; the same title is copied into T26's result file notes, the journal entry for T26 and tasks.md, so the wording spreads.",
+  "impact": "A reader who scans the file's titles for the failed-rebuild cases (source \"rebuild\") will take this test for one and look for the failed-rebuild x superseded-read cell in it; the next editor who adds a test for a rejecting onRebuild with a quiet read held in flight has no title that tells him this one is not it. No wrong behaviour; a naming cost only.",
+  "suggested_fix": "Name the case by what fails: \"a quiet re-read that a rebuild's failed catalog reload superseded leaves that reload's banner when it lands\" (the T24 table's own phrase). If the title is changed, change the copies in results/T26.result.json, the journal and verification/fix-round-4.md in the same edit, since they cite it by exact title.",
+  "evidence": "Introduced or left by the work that answered round 4's F-002. review-testing-practices noted the same wording in its notes and did not file it.",
+  "confidence": "medium",
+  "reviewer": "review-style",
+  "location_class": "in-diff",
+  "global_id": "2026-11-23-review-flow-branch-r05#F-001"
+ },
+ {
+  "id": "F-002",
+  "severity": "info",
+  "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+  "line": null,
+  "quote": "if (!loaded.current) setLoading(true);",
+  "problem": "Mutant R5-7 (`if (!loaded.current) setLoading(true);` -> `setLoading(true);`) SURVIVED: bun test of MetaprojectView.dom.test.tsx, 91 pass, exit 0. With the mutation every catalog read after the first, quiet re-reads on return and reloads after a rebuild included, would raise the 'Loading project knowledge…' status (line 877) until it lands. No test asserts that status is absent while a later read is held. The new tests hold a quiet read (test 3) and a reload (test 4) in flight, which is the place the assertion would sit, and none looks for the status. This gate is older than fix round 4 and no production line changed this round, so it is a gap the new fixtures could close, not a defect the fix introduced.",
+  "impact": "The next editor who simplifies the effect body (the condition reads like a redundant guard) shows a loading banner on every return to the explorer and every reload with the suite green. The cost is a flash of status text over a catalog that is already on screen; no data or state is lost, hence info.",
+  "suggested_fix": "In 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands' (or its sibling), add `expect(document.body.textContent).not.toContain(\"Loading project knowledge…\")` after `expect(catalogReads).toBe(2)` while the quiet read is held, after the catalog has first loaded.",
+  "evidence": "Own mutant run in a scratch copy made as scratch_check4.py make_copy() does, my script scratchpad/r5/run.py, one mutant at a time, `bun test src/metaproject/MetaprojectView.dom.test.tsx`: baseline 91 pass 0 fail; R5-7 survived (exit 0). The orchestrator re-ran the reviewer's 7 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-1.md, spec mutants-r5.json: 4 killed, 3 survived, 0 invalid). The gated line predates the branch's fix rounds; no production line changed in this round.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "pre-existing",
+  "global_id": "2026-11-23-review-flow-branch-r05#F-002"
+ },
+ {
+  "id": "F-003",
+  "severity": "info",
+  "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+  "line": null,
+  "quote": "The runs were made on 2026-11-23 on the tree that became the T26 commit. How a scratch copy and a mutant run are made is",
+  "problem": "fix-round-3.md, whose form this file follows, says 'on the tree that became commit `46c472162`'. This file says 'the T26 commit' without a hash, so the one fact that lets a person check out the tree and repeat the runs is a description, not an id. The file exists, as its first sentence says, so that the runs can be repeated from it.",
+  "impact": "A person repeating the mutant runs has to find the commit from the task id (git log, the journal, or T26's boundary commit message) instead of reading it from the file; the brief for this round lists it as c8db67492.",
+  "suggested_fix": "Add the hash after the commit is known, as fix-round-3.md has it: 'on the tree that became commit `c8db67492`'.",
+  "evidence": "Introduced or left by the work that answered the flow record of fix round 4.",
+  "confidence": "high",
+  "reviewer": "review-style",
+  "location_class": "in-diff",
+  "global_id": "2026-11-23-review-flow-branch-r05#F-003"
+ }
+]

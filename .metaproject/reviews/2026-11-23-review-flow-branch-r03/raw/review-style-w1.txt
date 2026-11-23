@@ -1,0 +1,44 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-01 (flow 515 dispatch, request, resolved-context and result files of T22 and T23, flow.json, journal.md, tasks.md) read in full. The journal entries follow the form of their predecessors and the round-2 entries name which round's ids they mean. One hand-written file was not brought along with flow.json: tasks.md still lists T4 without T22 and T23 and says T17-T21 are the last added tasks. Two naming points about ids in the result files are minor or info.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "line": 12,
+      "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 | — |",
+      "problem": "The commit adds the rows for T22 and T23 and the 'Fix round 2' section, but leaves the T4 row and the sentence above the table untouched. flow.json at head has T4 depending on 'T21', 'T22', 'T23' (its history entry 'task-depends-set' says so), while this row stops at T21; and line 4-5 says 'T12–T16 were added while the screen was tuned on a live preview, T17–T21 after review round 1; the journal records why', with no word on T22 and T23 (added after review round 2). The file claims 'The table follows `flow.json`'.",
+      "why_it_matters": "A reader of tasks.md (the table is what people open to see the flow's shape) concludes that the review task T4 closes once T21 is done and that the flow has no tasks after review round 1; the two fix-round-2 tasks look unrelated to T4, although the journal says the review task closes only after them. Also a statement in the file about itself is false at head.",
+      "suggested_fix": "Append 'T22, T23' to the T4 'Depends on' cell and extend the sentence: 'T17–T21 after review round 1, T22–T23 after review round 2'."
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+      "line": 63,
+      "quote": "The F-005 token rule in openPath (lookup.current) is untouched.",
+      "problem": "The same `notes` string uses round 2's ids for the four findings it answers (F-001 to F-004) and here F-005 for round 1's finding (Wiki-link lookups settled by arrival order; the dispatch says 'round 1's F-005 rule'). Round 2 also has an F-005, the one the operator dismissed ('finding ids in test names', named in tasks.md and in the journal). The sentence does not say which round it means, and no id in this file is marked with its round.",
+      "why_it_matters": "A later reader who looks up F-005 in the round-2 package finds the dismissed test-naming finding and reads 'untouched' as a statement about it; the actual guard (the lookup token of round 1's F-005 in `openPath`) is not found from the sentence.",
+      "suggested_fix": "Write 'round 1's F-005 token rule in openPath (lookup.current) is untouched', as the dispatch does."
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+      "line": 50,
+      "quote": "T22's branches (own_mutants.py): T23-1 :376 `if (!quiet) {` -> `{` killed by T22's lookup-in-flight, page-in-flight and standing-error tests;",
+      "problem": "Mutants of code that T22 added are given the ids T23-1 to T23-5, a prefix that is T23's own task id, next to round 2's mutant ids R2-n which name the review round that proposed them. The journal's T23 entry describes the same five mutants ('the five branches T22 added ... mutated by the orchestrator's own script') without any id, and names no script, so the ids can be matched to the journal only through this notes field.",
+      "why_it_matters": "'T23-3' reads as a mutant of T23's tests or a third item of T23, not as a mutant of T22's `catalogPending` guard; the same five mutants have an id in one file and none in the other.",
+      "suggested_fix": "Name them for what they mutate (for example T22-m1 to T22-m5) or say 'ids of this task's own mutants' once, and give the journal entry the same ids."
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+
+Checked and found consistent (no finding): journal entries of T22 and T23 follow the form of the entries before them ('- 2026-11-23 - orchestrator: ...' prose entry plus the tool-written timestamp lines); the round-2 entries say 'round 2's F-002', 'round 2's F-001' where a round-1 id could be meant; tasks.md's new 'Fix round 2' section states 'The finding ids below are round 2's'; task titles and finding ids of T22 and T23 are identical across tasks.md, flow.json, dispatch, request and result files; counts in the journal (71 + 10 = 81 tests, 2 + 1 = 3 App tests, 14 surviving mutants, 8 minors) agree with the result files. flow.json and the resolved-context files were not judged (tool-written).

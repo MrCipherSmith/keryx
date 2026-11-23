@@ -1,0 +1,39 @@
+STATUS: DONE
+
+## Logic Review
+
+Slice-03 is the flow-515 package (dispatch, flow.json, resolved-context and result files for T5-T16). Every hunk was read. The flow.json task graph, AC kinds, history and results agree with the journal. Two small gaps remain between what the package names and what exists at head.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Read all of slice-03 (flow package files). Task states, dependsOn edges, acRefs and acKinds in flow.json agree with the journal and the result files. Two minor gaps: a defect the T7 worker recorded and left (OpenSpec Back scroll) is still live at head, and the T9 dispatch names a resolved-context file and result file that do not exist.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "title": "Recorded OpenSpec scroll defect still live: choose() zeroes the content pane before the history entry is recorded",
+      "file": "apps/desktop/src/metaproject/OpenSpecView.tsx:80",
+      "problem": "T7's result lists under noticed_not_touched that OpenSpecView choose() sets the content scrollTop to 0 before calling onLocation, so the entry being left records scroll 0. At head the code is unchanged: `if (content.current) content.current.scrollTop = 0;` runs before `onLocation?.(next)`. useExplorerNavigation.enter calls remember(leaving), which reads `pane?.scrollTop` of `.metaproject-content` (PANES index CONTENT_PANE) at that moment. The content ref in OpenSpecView is that same element (`<section ref={content} className=\"metaproject-content\"`). The T8 dispatch listed OpenSpecView.tsx among its target_files, but nothing in slice-03 shows this item was taken or declined.",
+      "why_it_matters": "Back to a previous OpenSpec entry returns to the top of its document, not where the reader was. This is a silent wrong restore, not data loss, and AC11 covers only Graph selections.",
+      "suggested_fix": "In choose(), do not reset scrollTop before onLocation; let navigate(..., { resetContent: true }) seed the new entry at 0 (the hook already supports it), or record the offsets before zeroing. Or record the item as accepted in the journal."
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "title": "T9 dispatch names files as existing that are absent at head, and requires a result file the journal says was not requested",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+      "problem": "T9.dispatch.json has context_refs entry `resolved/T9.implement.json` with \"exists\": true and output_contract.artifact_path `results/T9.result.json`, and a constraint to validate that result against the resolved file. Neither file is in the flow folder at head (resolved/ holds T5-T8, T12-T14, T16; results/ holds T5-T8, T12-T14, T16), and git history has no record of them. The journal entry for T9 says \"No result JSON was requested for this docs task\", which contradicts the dispatch. T15 (also docs, flow.json status done) has no result or resolved file either. flow.json marks both T9 and T15 done with disposition completed.",
+      "why_it_matters": "A gate input that says a file exists when it does not, and a done task with no result artifact, mean a later reader or the review-flow gate cannot check T9 and T15 against the contract the dispatch states; the evidence is only the journal prose.",
+      "suggested_fix": "Either record in flow.json dispositionReason for T9 and T15 that the docs workers returned inline and no result artifact exists, or remove the stale context_refs entry and output_contract from T9.dispatch.json. Do not edit flow.json by hand; use the keryx flow CLI."
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+
+### Notes
+- Checked at head: GraphNodePanel.tsx is absent; labels.ts, NodeDetailsPanel.tsx, RelationshipList.tsx exist; seenNodes in MetaprojectView.tsx (line 510) covers the "map of nodes already seen" item of T8, which answers T7's second noticed_not_touched item.
+- Not verified: result files' test counts (read-only run, exec budget 0); T8.result.json is outside this slice.
+- The resolved-context files are rule lists; the T5 and T7 files promote security-baseline and async-patterns by task-text match, which is harmless.

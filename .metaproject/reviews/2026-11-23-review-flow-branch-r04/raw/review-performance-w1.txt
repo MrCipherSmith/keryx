@@ -1,0 +1,32 @@
+STATUS: DONE
+
+## Performance Review
+
+Slice: slice-03, read in full (118 lines, removed lines only). This round's hunks are three: the old `const [error, setError] = useState("");` (hunk @@ 310,315), the old `setError("");` in rebuild() (hunk @@ 676,676) and the old `setError(errMessage(cause))` (hunk @@ 681,681). The other hunks (GRAPH_PADDING, the `nodes` prop of RepositoryMarkdown, the old catalog banners, the 700px media block, the scrollTop line in OpenSpecView, the relation-actions CSS) were removed before this round; I did not re-review them. Removed code costs nothing to run, so none of those hunks has a performance reading.
+
+The change those three lines are half of (46c472162, MetaprojectView.tsx, read with `git show` and at head, lines 316-420, 674-684, 846-849):
+
+- Frequency. The new `setError(current => current?.source === "catalog" ? null : current)` at line 392 runs only when a quiet read succeeds and is the current generation. A quiet read starts only on a hidden-to-shown change after the first load, with no catalog read pending (lines 343-350). So it runs at most once per return to the view, and not at all for a loud read.
+- Functional update returning the same value. For `null`, and for a `rebuild`-source object, it returns `current` unchanged. React 18.3.1 (apps/desktop/package.json:25) bails out of a same-value state: either eagerly, when the fiber has no queued update, or while rendering, when the component re-renders but its children and effects are skipped. Here it is moot, because the call sits in an async continuation after `await read(...)`. React 18 batches every setState of that continuation, and the `finally` block (`setLoading(false)`) runs synchronously on the same tick, so all of them share one render pass.
+- Renders per return. Unchanged snapshot: round 3's head did `setFreshness(new object)` and `setLoading(false)` (a no-op when loading is already false), which is one render. Now `setError` joins that batch, so it is still one render, and one more only if a `catalog`-source banner was standing and is cleared in the same pass. Changed snapshot: round 3's head did `setCatalog`, `setFreshness(null)`, `setSnapshotMismatch(false)`, `setRoute(...)` in one batch. It is the same one batch now, with `setError` inside it. The count is unchanged, 1 before and 1 after, and the extra cost is one queue entry and one closure per return.
+- Does the object-valued `error` reach a dependency array or memo? No. `keryx ctx rg --all "\berror\b"` finds five matches in the file: the comments at 316 and 338, the declaration at 318, `{error && (` at 846 and `error.message` at 848. `error` is read only by the banner's JSX. It is not in any `useEffect`/`useMemo`/`useCallback` dependency list and is not passed as a prop, so a new object per failure cannot retrigger an effect or invalidate a memo. A new object is created only on a failed loud catalog read or a failed rebuild (user-started, rare), never per render.
+- Other costs of the change: none. No new read, no new timer, no new listener, no loop. The effect's dependency array `[cwd, read, revision, protocol, setRoute]` is unchanged. The cleanup and the generation guard are unchanged, so no stale-write or leak path is added.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None.
+
+### Clean Areas
+CLI/TUI hot paths, re-renders and memo identity (the object-valued `error` is read only by the banner), expensive computation, redundant API calls (one catalog read per return, as before; round 2's F-010 covers the absence of coalescing), memory leaks and cleanup (unchanged), bundle imports, synchronous blocking: checked, nothing to report. Not verified: a render count measured in a running app (read-only run, `exec_budget_s: 0`); the counts above are reasoned from React 18 batching and the code.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-03 holds removed lines only; three of them (the old string `error` state, its reset in rebuild() and its set on failure) are this round's, the removed half of T24's change. The one production change adds a functional setError that runs at most once per return to the view, inside the same React 18 batch as the existing freshness or catalog update, so renders per return stay at one for both an unchanged and a changed snapshot. The object-valued `error` is read only by the banner JSX and reaches no dependency array or memo.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

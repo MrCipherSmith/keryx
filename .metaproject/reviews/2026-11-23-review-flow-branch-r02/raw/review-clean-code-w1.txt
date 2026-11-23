@@ -1,0 +1,50 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Read all of slice-03. The fixes are small, commented against the statement they sit above, and under the solid-principles thresholds; the Filters placement is a pure function with named constants, and the lookup token, quiet re-read and self-loop rule each have one clear owner. One minor finding: review-package ids (F-0NN, T20, 'review round 1') were written into test names and comments, where they stop meaning anything once the package is archived.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "line": 314,
+      "quote": "describe(\"RelationshipGraph viewport (F-012)\", () => {",
+      "principle": "Clean Code — comments",
+      "problem": "Fix-round bookkeeping is written into test names and comments: describe(\"... (F-012)\"), describe(\"... (F-013)\"), describe(\"... (F-013, AC6)\") in RelationshipGraph.dom.test.tsx:314/351/402, describe(\"layoutNeighborhood — review round 1 fixtures (F-021)\") in graphLayout.test.ts:508, the banner comment \"Test strength after review round 1 (T20)\" in MetaprojectView.dom.test.tsx:1019, and \"(second-step counts: F-007 test below)\" in NodeDetailsPanel.dom.test.tsx:119. The ids name findings of one review package and one flow task; finding ids restart per round (this round's reviewers number from F-001 again), and the package under .metaproject/reviews is a work record, not part of the source. The test titles say where a test came from, not what it pins.",
+      "impact": "Cost: a later reader of the test report or of a failing test sees 'F-013' with no referent in the source tree, and the id can point at a different finding in another round. The AC6 reference is the only one that names something durable (the flow's acceptance criterion). No behaviour risk.",
+      "suggested_fix": "Name the groups by behaviour (\"RelationshipGraph viewport\", \"RelationshipGraph interaction and styling\", \"layoutNeighborhood edge cases\") and drop the ids; in the NodeDetailsPanel comment say 'see the second-step test below'; keep AC6 if wanted. The finding-to-test mapping stays in the flow journal."
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" },
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+
+## Clean Code Review
+
+### Summary
+All hunks of slice-03 read. No threshold of solid-principles.mdc is crossed by the fixes; doc comments match the statements they sit above (placeFiltersPopover, FiltersPopover, the `visible` prop, the filters-open comment, choose() in OpenSpecView, groupRelationships). Prior dispositions were checked against the code in the diff only: F-001 popover bounded and re-placed on resize; F-003 popover mounted only while visible and closed on hide; F-005 token in openPath's current(); F-006 seenNodes filled in an effect keyed on nodes; F-008 onLocation now runs before the scrollTop reset. Behavioural correctness is review-logic's; "closed" means the defect as stated is gone in the code, not a verdict on test strength.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+#### Comments
+[F-001] see above (minor).
+#### Functions / SRP / DRY / Error handling
+No issues found. Noted, not reported (under threshold): MENU_MAX_HEIGHT = 420 restates the CSS `.menu` cap, but its comment names the source; the seenNodes write now exists twice (the effect and `remember`, still used at MetaprojectView.tsx:603), below the 3-copy bar.
+
+### Clean Areas
+Popover placement (pure function, named margins), quiet catalog re-read (one ref, one state), lookup token, self-loop rule in RelationshipList, relationFact assembly, OpenSpecView choose().
+
+Not verified: nothing run (read-only, exec budget 0); no git history read.

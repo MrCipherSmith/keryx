@@ -1,0 +1,47 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "F-003 is closed: a failed quiet re-read on return no longer sets or clears `error`, and every path out of the catalog effect I traced resets or hands on `catalogPending` (superseded read, unmount, protocol never returns to null once set). Two outcomes are worse than round 2's head and no worse than base (a quiet read never reports a failure; a catalog-read error survives a later successful quiet read), filed as info. The Wiki Relationships disclosure is hidden only where its list would hold no rows. Read-only: nothing was run, and the slice's tests were not re-run. The graph's consumer list was not walked because the changed symbols are local refs and one exported component; users of `summarizeRelationships` and `groupRelationships` were read in the slice and at head.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 403,
+      "quote": "if (generation === catalogRead.current && !quiet) setError(errMessage(cause));",
+      "problem": "The quiet re-read on return can no longer report a failure, and one `error` state serves two causes. (a) Trigger: the catalog cannot be read at all (CLI missing or crashing) and the user returns to the view. Outcome: every return fails quietly; the banner keeps the last freshness read (for example no banner when the graph was ready), and a graph-ready explorer has no visible Refresh control (the Rebuild button exists only while graph !== 'ready', line 876). Round 2's head showed the CLI message with Retry. (b) Trigger: a loud catalog read fails after the first load (the reload after a rebuild, a Retry or Refresh), then the user leaves and returns while the CLI works again. Outcome: the quiet read succeeds and may replace the catalog, but the standing banner with its CLI message and Retry stays, because `error` is cleared only by a loud read (line 378) or by rebuild() (line 673). Round 2's head cleared it on that read. Refute: on the base branch nothing was read on return, so (a) showed nothing and (b) kept its banner until Retry, so neither is worse than base. Other reads (search, detail, relationships) still show their own errors, and Retry on the banner works.",
+      "impact": "Nothing is lost: a user with an unreadable catalog sees other panes fail with their own messages, and a stale banner clears with one Retry click. It is the price of the decision the T22 worker marked as needing the operator, and of sharing one `error` between catalog reads and rebuild failures: the explorer cannot tell a rebuild failure (which a successful read does not cure) from a catalog failure (which it does).",
+      "fix": "Optional: let a quiet read that succeeds clear an error only when it came from a catalog read (a separate `catalogError` beside the rebuild's), and surface a quiet failure after N consecutive ones. Not worth a third fix round on its own.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "F-003",
+      "disposition": "closed"
+    }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+Disposition detail for F-003 (closed): the catch at MetaprojectView.tsx:403 sets `error` only for `!quiet`, and the effect clears it only inside `if (!quiet)` (line 377-379), so a failed quiet read changes neither the banner nor the loaded catalog; the trigger of round 2 (CLI failing on return) now shows nothing, as the comment at line 335-337 states. It is pinned by 'a failed quiet re-read on return shows no error and leaves the explorer as it was' (asserts no banner, freshness banner kept, selection and panel kept), 'a standing error ... survives a quiet re-read on return' and 'a return while a catalog reload is in flight ...'. The side effects judged above are in F-001.
+
+Verified clean (what I traced and found no finding):
+- `catalogPending` exits. Set true in the effect body (line 380-ish, after `setLoading`), reset only in `finally` when `generation === catalogRead.current`. Superseded read: the cleanup bumps `catalogRead`, so its `finally` does nothing, and the successor effect run sets and later resets the flag itself (every cleanup is followed by a run when the dependencies change; the only run that returns early is `protocol === null`, and `setProtocol` is only ever called with a value from negotiation, line 266-269, so protocol never goes back to null once set; before that no catalog read and no pending). Unmount: the component is gone, so the ref is moot. A read that throws: `finally` resets it. A quiet read that returns at `generation !== catalogRead.current` leaves the flag to its successor. No path leaves the flag true with no read in flight, so a return always re-reads once the in-flight read finishes.
+- Cost of the guard (not a finding): a return while a quiet read from an earlier return is still in flight starts no second read, so a change that landed between the two reads waits for the next return. The window is one local CLI read.
+- `project.current` vs `catalogRead.current`: the cleanup's `if (!quietRead.current) project.current++` runs before the next body resets `quietRead`, and `quietRead` is set only together with the revision bump of the visible effect, so a loud re-run (Retry, Refresh, rebuild reload, protocol or cwd change) always retires lookups and pages (F-002 fix) and a quiet one does not. Readers of `project.current` are openPath (line 690) and loadMoreSearch (line 660 area) only, as before.
+- Wiki Relationships disclosure (lines 966-972 and the render at 1016-1020): count and visibility now come from `summarizeRelationships`, which calls `groupRelationships`, the grouping `RelationshipList` itself renders, so the disclosure is hidden exactly when the list would hold no rows. Before, it also showed for a projection of only self-loops, edges with a missing end, or edge kinds outside METAPROJECT_EDGE_KINDS_V2 (the list drew only the empty note; and for a truncated projection the 'limited' note), which is the F-001 (round 2) defect, not a hidden useful disclosure. Wiki depth is 1, so second-step is 0 in the count.
+- `RelationshipList` `empty` (line 1065): derived from the same three groups it renders; the other raw-count reader is gone. NodeDetailsPanel's callers of `summarizeRelationships` are unchanged in behaviour.
+- `remember` as a stable `useCallback([], ...)`: the only other use is the node-memory write in `viewInGraph` (line 603 of the round 2 listing); identity stability changes nothing for it. The effect now depends on `[nodes, remember]`; `remember` never changes, so it runs exactly when `nodes` changes.
+- `MetaprojectWork` extraction in App.tsx: same props to RetainedView and the explorer as the inline block (`visible={view === "metaproject"}`, `active={workView === "metaproject"}`); `explorer` defaults to the lazy view and ProjectWindow passes none, so the app's behaviour matches round 2's head; the lazy const rename touches no other reference in the slice.
+- Tests: the new tests for F-003 would fail on the regression (each asserts the absence or presence of the banner and the read count); 'a standing error ... survives' pins the choice in finding F-001 (b) on purpose.
+
+Not verified: the slice's tests and the live browser claims were not run by me (read-only run, exec budget 0); a lookup in flight across leaving and returning and a page that links to itself were not seen live, as the brief says.
+
+Routing audit: graph_used: no (the changed symbols are local refs; the slice's two importers of `summarizeRelationships` are in the slice), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg), raw_rg_used: no.

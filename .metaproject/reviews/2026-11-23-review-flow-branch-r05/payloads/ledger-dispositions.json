@@ -1,0 +1,23 @@
+[
+ {
+  "id": "review-style-w1:F-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx)",
+  "reason": "review-style-w1 F-001 is carried through as canonical finding F-001; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-002 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-testing-practices-w1 F-001 is carried through as canonical finding F-002; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-style-w1:F-002",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-003 (info, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md)",
+  "reason": "review-style-w1 F-002 is carried through as canonical finding F-003; one finding per defect across reviewers."
+ }
+]

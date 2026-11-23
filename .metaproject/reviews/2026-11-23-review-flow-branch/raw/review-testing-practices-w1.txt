@@ -1,0 +1,309 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices, round 1, slice-04 (flow 515)
+
+Slice read in full: slice-04 (1899 lines: T8.result.json, App.dom.test.tsx, MetaprojectView.dom.test.tsx hunks, NodeDetailsPanel.dom.test.tsx, RelationshipGraph.dom.test.tsx, RelationshipList.dom.test.tsx, graphLayout.test.ts). Production files read at head to name the gates: App.tsx (RetainedView, usage at 594), NodeDetailsPanel.tsx, RelationshipList.tsx, RelationshipGraph.tsx, graphLayout.ts, useExplorerNavigation.ts, MetaprojectView.tsx. graph.css / metaproject.css lines checked for the one CSS-text test.
+
+## How the mutation pass ran (honest account)
+
+- `keryx review mutate` was tried first (spec in the scratchpad, `--package` in the scratchpad): its baseline failed on an unmodified copy because its scratch copy does not carry `apps/desktop/node_modules` ("Cannot find module '@happy-dom/global-registrator'"). Exit 1, no mutant ran, nothing written in the reviewed tree except the tool's own empty, git-ignored `.metaproject/data/review/mutate-scratch/` directory.
+- I then built my own scratch copy outside the tree (scratchpad `tree/`: `apps/desktop/src` + package.json + tsconfig copied with rsync, `apps/desktop/node_modules`, `node_modules` and `src` symlinked to the worktree, so the reviewed tree was only read). Baselines in that copy, each file in its own `bun test` process, all green: App.dom 1 pass; NodeDetailsPanel.dom 13 pass; RelationshipList.dom 8 pass; graphLayout 41 pass; RelationshipGraph.dom 17 pass; MetaprojectView.dom 39 pass; 0 fail anywhere.
+- Each mutant: one exact-anchor replacement in the copy, nearest suite, `bun test --bail <file>` (exit 1 = RED, 0 = GREEN), file restored afterwards. A driver script in the scratchpad (`mut.py`, `mutants.json`) did this; total test time 29.3 s of the 300 s budget.
+- Cap: 82 mutants proposed, 82 run, 0 not reached. `mutants.json` format of `keryx review mutate` differs from my driver spec; the full list with anchors and replacements is in `mutant_candidates` below, so the main session can re-run it through its own tool where `apps/desktop/node_modules` resolves.
+- Commands run, with exit state: `keryx review mutate --spec ... --test "cd apps/desktop && bun test src/App.dom.test.tsx"` exit 1 (baseline failure, tool limitation above); `bun test src/App.dom.test.tsx` in the real `apps/desktop` exit 0 (1 pass); the baselines above exit 0; the driver `python3 -I mut.py` exit 0.
+- Not verified: the full desktop suite and tsc (the brief already holds them: 842 pass, tsc 0); the live browser measurements (AC5, AC6, AC10, AC20 are judged, not read by me).
+
+## Mutation table (survivors and casualties)
+
+Casualties (suite went RED, the gate is pinned):
+
+| id | mutation | result |
+|---|---|---|
+| P2 | NodeDetailsPanel: drop `if (!compact) return;` (docked panel would take focus) | RED: "Escape closes, the resize handle answers the keyboard, and the docked panel leaves focus alone" |
+| L5 | RelationshipList: drop the by-title sort | RED: "groups root-adjacent relationships by direction…" |
+| L6 | RelationshipList: drop `if (!lines.length) return null;` | RED: "evidence is a closed disclosure…" |
+| Y19 | graphLayout: incoming neighbour overwrites outgoing (drop `if (!result.has(id))`) | RED: "incoming-only neighbours sit left…" |
+| G6 | RelationshipGraph: zoomBy guard reduced to `!cy \|\| !viewport` | RED: "a zero-sized container is never fitted" |
+| V18 | re-selecting the shown node becomes a history entry | RED: "Back steps through graph selections…" |
+| V19 | drop "No indexed project file at …" message | RED: "a wiki link outside the loaded nodes…" |
+| V21 | rebuild no longer bumps the catalog revision | RED: "a rebuild re-enables its control…" |
+| V21b | rebuild never re-enables its control | RED: same test |
+| V22 | protocol error not cleared on success | RED: "a failed protocol negotiation offers Retry…" |
+| V23 | "Loading project knowledge…" shown during a protocol error | RED: same test |
+| V24 | selected list row not scrolled into view | RED: "the selected list row is scrolled into view…" |
+| V26 | graph never marked busy | RED: "the previous graph stays rendered and busy…" |
+| V27 | Defines / Calls chips not disabled without a symbol layer | RED: "Graph mode shows the relationship list in the panel…" |
+| V28 | Reset filters always shown | RED: same test |
+
+Survivors (suite stayed GREEN, the gate is unpinned):
+
+| id | mutation | result |
+|---|---|---|
+| A1 | RetainedView `hidden={!visible}` -> `hidden={!active}` | **green** |
+| P1 | Escape handler ignores `defaultPrevented` | **green** |
+| P3 | draft re-entry guard `drafting` removed | **green** (the button is also `disabled={drafting}`; low value) |
+| P4 | preview applied without `detail.node.id !== firstId` | **green** |
+| P5 | tab choice no longer scoped to the node (`tabChoice?.node === node.id`) | **green** |
+| P6 | ArrowRight on the tab list stays on the current tab | **green** |
+| P7 | Wiki tab count includes the suggested page | **green** |
+| P8 | "Copied" state no longer scoped to the node | **green** |
+| P9 | failed copy still reads "Copied" | **green** |
+| P11 | `choose()` no longer clears `draftError` | **green** |
+| P13 | drag-resize sign flipped | **green** |
+| P14 | ArrowRight resize direction flipped | **green** |
+| P17 | preview not cut at PREVIEW_LIMIT | **green** |
+| P18 | list used before prose (`blocks[0]` instead of first non-list block) | **green** |
+| P20 | fenced code not skipped in the preview | **green** |
+| P21 | preview read with no `firstId` | **green** |
+| L1 | dangling edge (end node not in projection) not skipped | **green** |
+| L2 | "and N more" shown at 0 hidden (`hidden >= 0`) | **green** |
+| L3 | second-step self-loop shows a second "Open" button | **green** |
+| L8 | count label shown next to the toggle as well | **green** |
+| Y1 | self-loop edge counted as a first-step neighbour | **green** |
+| Y2 | self-loop edge counted in incoming/outgoing and drawn | **green** |
+| Y3 | second-step nodes no longer prefer a drawn first-step anchor | **green** |
+| Y4 | chained second-step attachment (`while (candidates(false, attached))`) removed | **green** |
+| Y5 | edge width ignores `count` | **green** |
+| Y6 | alpha not clamped | **green** |
+| Y7 | viewport pan always root-centred, never bounds-centred | **green** |
+| Y8 | percentage colour channels not parsed | **green** |
+| Y9 | non-integer `columnCap` accepted | **green** |
+| Y12 | negative `textScale` accepted | **green** |
+| Y16 | 3- and 4-digit hex colours not expanded | **green** |
+| Y18 | edge weight takes the last count instead of the maximum | **green** |
+| G1 | "+N more" calls `onShowHidden` for any `side` value | **green** |
+| G2 | hover no longer fades non-neighbours | **green** |
+| G3 | `prefers-color-scheme` listener removed | **green** |
+| G4 | `data-palette` removed from the observed attributes | **green** |
+| G5 | `if (!target.usable) return;` removed from `fit` | **green** |
+| G7 | root border width no longer `max(2, …)` | **green** |
+| G8 | second-step edges lose the `second-step` class | **green** |
+| G9 | user zoom no longer clamped to 0.3 .. 2.5 | **green** (unreachable: happy-dom `clientWidth` is 0, the guard returns first) |
+| G10 | hover highlight runs for the overflow entry too | **green** |
+| G11 | pointer cursor not set | **green** |
+| V1 | Wiki relationships read uses the Graph direction | **green** |
+| V2 | list header total not raised to the row count | **green** |
+| V3 | Wiki-mode list header uses files+wiki+modules | **green** |
+| V4 | a failed read no longer drops the stale graph | **green** |
+| V5 | graph drawn only when graph is not missing (protocol 2 case removed) | **green** |
+| V6 | Draft offered while the graph is not ready or documents are truncated | **green** |
+| V7 | panel documents "pending" ignores snapshot mismatch and problem | **green** |
+| V8 | `+N more` no longer bumps `revealRelationships` | **green** |
+| V8b | `+N more` no longer opens the panel | **green** |
+| V9 | lookup result from another snapshot used | **green** |
+| V10 | undecodable href treated as a path | **green** |
+| V11 | late lookup result applied after the user moved on | **green** |
+| V12 | unresolved-link message shown for every selection | **green** |
+| V13 | Filters count ignores a changed Direction | **green** |
+| V14 | press on the Filters button counts as an outside press | **green** |
+| V15 | popover position not clamped inside the window | **green** |
+| V16 | Wiki empty-state final wording drops the searched text and the "Choose a result" branch | **green** |
+| V17 | Wiki Relationships disclosure shown with 0 edges | **green** |
+| V30 | Wiki reads use the protocol-1 kinds under protocol 2 | **green** |
+| V31 | `current()` staleness check always true | **green** |
+| N1 | Back history not capped at 40 | **green** |
+| N2 | restored pane `.metaproject-details-body` reverted to `.metaproject-node-body` | **green** |
+| N3 | `enter()` no longer ignores the same route | **green** |
+| N4 | `resetContent` no longer resets the content pane scroll | **green** |
+| N5 | `switchView` to the current mode adds a history entry | **green** |
+
+Equivalent or low-value survivors are marked in the table (P3, G9); the findings below name the ones that matter for this change.
+
+## Findings (all minor or info; no blocker, no major)
+
+### [F-001] RetainedView test cannot tell "active" from "visible"
+- Severity: minor. File: apps/desktop/src/App.dom.test.tsx. Mutant A1 (`hidden={!visible}` -> `hidden={!active}` in App.tsx `RetainedView`): 1/1 green.
+- Problem: the test drives both props from one value, `root.render(React.createElement(RetainedView, { active, visible: active, children: React.createElement(Draft) }))`, so no fixture builds the input that separates the two. App.tsx:594 passes different values (`active={workView === "metaproject"}`, `visible={view === "metaproject"}`): the case that matters is Settings open over the work view (active true, visible false). The component has no other test, and App.tsx wiring is not tested at all.
+- Why it matters: the gate was added so the explorer stays mounted but hidden; swapping to `active` would show it over Settings, with the suite green.
+- Fix: render with `{ active: true, visible: false }` and assert the wrapper is `hidden` while the input is kept; and `{ active: false, visible: false }` before the first visit asserts nothing is mounted.
+
+### [F-002] "a zero-sized container is never fitted" asserts only a falsy state; the fit and zoom success paths never run
+- Severity: minor. File: apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx. Mutants G5 (drop `if (!target.usable) return;`) green; G9 (drop the 0.3 .. 2.5 clamp) green; G6 (drop the `clientWidth` guard in `zoomBy`) red.
+- Problem: in happy-dom `clientWidth` is always 0, so the test compares `zoom()` before and after and gets 1 either way; `computeViewport` returns zoom 1 for a zero box, so removing the `usable` gate leaves it green. No test gives the container a size, so `cy.viewport({ zoom, pan })` and the zoom clamp are never exercised (AC5 measures this live only).
+- Why it matters: "no positive artifact that the path ran" (skill row 4): the test passes when `fit` does nothing at all.
+- Fix: stub `clientWidth/clientHeight` (as the NodeDetailsPanel test already does for `host`) on the viewport element, assert `zoom()` and `pan()` after Fit and after repeated Zoom in beyond 2.5; keep the zero-size case as the negative half.
+
+### [F-003] RelationshipGraph: theme attributes, hover and style classes unpinned
+- Severity: minor. File: apps/desktop/src/metaproject/RelationshipGraph.tsx. Mutants G4, G3, G1, G2, G10, G11, G7, G8: 8/8 green.
+- Problem: AC6 names `data-theme` or `data-palette`; the only theme test sets `data-theme` and `--fg`, so removing `"data-palette"` from `attributeFilter` stays green, as does removing the `prefers-color-scheme` listener. Hover highlight (fade, cursor), the `side` guard of `isSide`, the root border width and the `second-step` edge class have no assertion: the tests tap nodes but never emit `mouseover`, and the style test reads colour and font size only.
+- Why it matters: AC6 is a stated acceptance criterion with one of its two triggers unpinned; the rest is how the next edit to this file goes unprotected.
+- Fix: in the theme test also flip `data-palette` and assert the colour changes; add one test that emits `mouseover`/`mouseout` on a node and checks the `faded`/`highlight` classes, and one that checks `cy.$(".second-step")` and the root `border-width` with `styleEnabled`.
+- Quote anchor: `themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "style"] });`
+
+### [F-004] useExplorerNavigation: no test of the scroll restore, including the selector changed in T8
+- Severity: minor. File: apps/desktop/src/metaproject/useExplorerNavigation.ts. Mutants N2, N1, N3, N4, N5: 5/5 green (the hook is reached only through MetaprojectView tests).
+- Problem: T8 changed the restored pane from `.metaproject-node-body` to `.metaproject-details-body` (T8.result.json item 9). Reverting that selector leaves the whole suite green; so does removing the 40-entry cap, the same-route guard, the content-scroll reset and the same-mode guard of `switchView`. No test sets a `scrollTop` and then goes Back.
+- Why it matters: this is a gate added in this change; the regression it prevents (a panel that scrolls to the top on Back) is user-visible and was fixed by a one-token edit.
+- Fix: a DOM test that scrolls `.metaproject-details-body`, selects another node, presses Back and asserts the restored `scrollTop` (set `scrollTop` as a plain property under happy-dom); one for the history cap with 41 selections.
+- Quote anchor: `const PANES = [".metaproject-panes", ".metaproject-list", ".metaproject-content", ".metaproject-details-body"];`
+
+### [F-005] AC13 test varies depth and kinds but not direction, and runs protocol 1 only
+- Severity: minor. File: apps/desktop/src/metaproject/MetaprojectView.tsx. Mutants V1 and V30: 2/2 green.
+- Problem: "the Wiki relationships read uses fixed defaults whatever the Graph filters are" sets depth 2 and unticks Imports; Direction stays "both", so `const relationDirection = mode === "wiki" ? "both" : direction;` -> `direction` passes, though AC13 requires direction "both" with the Graph filters changed. The protocol-2 branch of `relationKinds` (`WIKI_KINDS_V2`) is not exercised.
+- Why it matters: AC13 is a stated acceptance criterion; one of its three parts has no fixture that separates it.
+- Fix: set the Direction select to "incoming" before switching to Wiki, and add one protocol-2 run (`requestV2` injected) asserting `kinds` equals the V2 list.
+
+### [F-006] `+N more` -> panel wiring unpinned
+- Severity: minor. File: apps/desktop/src/metaproject/MetaprojectView.tsx. Mutants V8 and V8b: 2/2 green.
+- Problem: T8 item 3 states that the graph's `onShowHidden` opens the panel and bumps `revealRelationships`. RelationshipGraph.dom.test only checks that `onShowHidden("outgoing")` is called on a mock; NodeDetailsPanel.dom.test checks the `revealRelationships` prop. The line between them, `showHidden`, is not driven by any test.
+- Why it matters: removing either half leaves all three suites green and breaks the only way to reach hidden neighbours.
+- Fix: in a MetaprojectView test with the headless cytoscape, close the panel, tap the overflow node, assert the panel is open on the Relationships tab.
+- Quote anchor: `setRevealRelationships(value => value + 1);`
+
+### [F-007] MetaprojectView gates added by T8 survive deletion
+- Severity: minor. File: apps/desktop/src/metaproject/MetaprojectView.tsx. Mutants V2, V3, V4, V5, V6, V7, V13, V14, V15, V17: 10/10 green.
+- Problem: the list header test uses counts (40, 9, 3) larger than the row count and Graph mode only, so `Math.max(shownTotal, results.length)` and the Wiki-mode count `catalog.counts.wiki` are unpinned (`const shownTotal = catalog ? mode === "wiki" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;`). The busy-graph test covers the success path only, not "dropped on a failed read" (V4); no test uses a missing graph with protocol 2 (V5); the Draft gate `catalog.graph === "ready" && !documents?.truncated` and the documents-pending flags have no assertion (V6, V7); the Filters count ignores Direction in no fixture (V13); the popover tests use `.click()`, which fires no `mousedown`, so a press on the Filters button counting as an outside press (V14: it would close the popover and the click would re-open it) is not seen, and the clamp to the window (V15) is invisible at rect 0.
+- Why it matters: each gate was written in the T8 integration; the next edit to any of them is unprotected.
+- Fix: one test per gate listed, in the existing file, using the fixtures already there (a Wiki-mode header, a failed neighbours read after a successful one, `mousedown` on the Filters button).
+
+### [F-008] Link lookup and Wiki empty-state: guards and final wording unpinned (AC12, AC16)
+- Severity: minor. File: apps/desktop/src/metaproject/MetaprojectView.tsx. Mutants V9, V10, V11, V12, V16, V31: 6/6 green (V19 red).
+- Problem: the AC16 test covers a found path, an unknown path and a percent-encoded path, but not an undecodable href (`if (!resolved)`), a lookup answered for another snapshot, a lookup that returns after the user changed selection (`if (!current()) return;`), or the message following the selection (`unresolvedLink?.selection === selection`). The AC12 test asserts the in-flight state only (it says so in a comment); the settled states `No Wiki page matches “…”` and `Choose a result for “…”` have no test, so dropping the searched text from the final title stays green although AC12 requires the empty state to name it.
+- Why it matters: AC12 and AC16 are stated acceptance criteria; the settled half of AC12 is unpinned.
+- Fix: run the 250 ms debounce (the file already stubs `setTimeout` elsewhere) and assert the final title; add a malformed `%E0%A4%A` link and a late-resolving lookup.
+- Quote anchor: `if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }`
+
+### [F-009] NodeDetailsPanel: keyboard, per-node state and preview gates unpinned
+- Severity: minor. File: apps/desktop/src/metaproject/NodeDetailsPanel.tsx. Mutants P1, P3-P9, P11, P13, P14, P17, P18, P20, P21: 15/15 green (P2 red).
+- Problem: the tab choice is scoped to the node (`const tab: Tab = tabChoice?.node === node.id ? tabChoice.value : "relationships";`) but no test selects another node after choosing a tab; the tab list's arrow keys, the drag resize, ArrowRight resize and the failed-copy message are not driven; the Wiki tab count excluding the suggested page, the stale-preview guard, the 360-character cut, "list used only when the page has no prose" (the fixture has prose before its list) and fenced-code skipping have no fixture.
+- Why it matters: AC7 to AC9 are covered on their main path; each gate listed is code the diff added and the next edit to it is unprotected.
+- Fix: add a fixture page with a leading list and a fenced block, a 400-character paragraph, a second node rendered after a tab choice, and ArrowRight/Home/End on the tab list.
+
+### [F-010] RelationshipList: dangling edge, exact-two evidence, self-loop, count label unpinned
+- Severity: minor. File: apps/desktop/src/metaproject/RelationshipList.tsx. Mutants L1, L2, L3, L8: 4/4 green (L5, L6 red).
+- Problem: `if (!from || !to) continue;` is commented "left out, as the old list did" but no fixture has an edge whose end is missing from `nodes`; with exactly two evidence lines `hidden > 0` is the only thing between "and 0 more" and nothing (fixtures have 1 and 3 lines); a second-step self-loop and the rule that the count label is shown only when there are no evidence lines have no fixture.
+- Why it matters: the dangling-edge gate protects against a render crash on a truncated projection (the explorer routinely shows truncated ones).
+- Fix: one projection with a dangling edge, one edge with two evidence lines, one second-step self-loop.
+- Quote anchor: `if (!from || !to) continue;`
+
+### [F-011] graphLayout: second-step anchoring and self-loop gates unpinned (AC3)
+- Severity: minor. File: apps/desktop/src/metaproject/graphLayout.ts. Mutants Y1, Y2, Y3, Y4, Y5, Y6, Y7, Y8, Y9, Y12, Y16, Y18: 12/12 green (Y19 red).
+- Problem: AC3's test checks that each second-step node's `via` is a first-step id and its column matches, which holds with or without the preference for drawn anchors (Y3) and without chained attachment (Y4); the 269-edge fixture's second-step nodes are attached by construction to first-step nodes, so no node needs the chain. A self-loop (Y1, Y2) would make the root its own neighbour; edge width, the fit-case pan (`computeViewport` only checks zoom for the small layout), percentage and 3-digit colours, alpha clamping and the `columnCap` integer check have no fixture.
+- Why it matters: the self-loop and second-step rules are what keep the layout free of overlaps for truncated projections.
+- Fix: a fixture with a root self-loop, a second-step node reachable only through another second-step node, an edge with `count: 16`, and a `pan` assertion for a layout that fits.
+- Quote anchor: `while (candidates(false, attached));`
+
+### [F-012] "G8" asserts stylesheet text, not behaviour
+- Severity: info. File: apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx.
+- Problem: the test reads `graph.css` and asserts `expect(block).toContain("min-block-size: 200px;");` while `metaproject.css` (container query, line 137) sets `.metaproject-graph-panes .metaproject-content > .metaproject-rgraph { min-block-size: 160px; }`; happy-dom has no layout, so the effective height at 720x480 (AC20) is judged live, as the brief says. The test would fail on a harmless rewording and pass if the narrow rule broke.
+- Why it matters: a convention preference with no effect on signal beyond a brittle string match.
+- Fix: leave the layout claim to the live check, or assert both declarations by selector so the pair is pinned.
+
+## Fixture-shape and substrate notes (no finding)
+- Fixtures named for a scenario were compared with their builders: `depthOneModule` (30 neighbours: 18 contained, 3 of them also importing, 12 importers) matches its comment and AC1; `depthTwoProjection` is 200 nodes / 269 edges / truncated as stated (asserted by the test itself). `catalog` (graph "missing") is overridden to "ready" or "stale" wherever a drawn graph is claimed.
+- Network boundary: MetaprojectView tests inject `request` and `negotiate`, the explorer's own boundary, and run the real components; cytoscape comes through the documented test seam. No real network or clock; the one timer test stubs `setTimeout`.
+- One DOM test file per process was respected; every baseline above ran that way.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "No blocker or major. 82 mutants run (82 proposed, 0 not reached) in a scratch copy: 15 killed, 67 survived. The suites pin the AC paths they name, but several gates added in this change survive deletion: RetainedView active vs visible, the explorer's restored pane selector, the AC13 direction part, the AC6 data-palette trigger, the settled AC12 wording and the +N-more wiring.",
+  "slices": ["slice-04"],
+  "findings": [
+    {"id": "F-001", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/App.dom.test.tsx", "quote": "root.render(React.createElement(RetainedView, { active, visible: active, children: React.createElement(Draft) }));", "problem": "The RetainedView test passes one value for both props, so `hidden={!visible}` -> `hidden={!active}` leaves it green (mutant A1). App.tsx:594 passes different values (workView vs view), the Settings-over-work-view case.", "impact": "The explorer could show over Settings with the suite green.", "suggested_fix": "Render with active true and visible false and assert the wrapper is hidden and the input is kept.", "evidence": "mutant A1 in a scratch copy: bun test src/App.dom.test.tsx -> GREEN (1 pass).", "confidence": "high", "dedupe_key": "testing:retainedview-active-visible"},
+    {"id": "F-002", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx", "quote": "test(\"a zero-sized container is never fitted\", async () => {", "problem": "Asserts only an unchanged zoom; deleting `if (!target.usable) return;` (G5) or the zoom clamp (G9) leaves it green, and no test gives the container a size, so fit and zoom success paths never run.", "impact": "A falsy-state test with no positive artifact: it passes when fit does nothing.", "suggested_fix": "Stub clientWidth/clientHeight on the viewport, assert zoom and pan after Fit and clamped zoom after repeated Zoom in.", "evidence": "mutants G5 and G9 GREEN; G6 RED.", "confidence": "high", "dedupe_key": "testing:graph-fit-falsy-only"},
+    {"id": "F-003", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "quote": "themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: [\"data-theme\", \"data-palette\", \"style\"] });", "problem": "AC6 names data-theme or data-palette; the theme test sets data-theme only. Removing data-palette, the colour-scheme listener, the hover fade/cursor, the isSide guard, the root border width or the second-step class leaves the suite green.", "impact": "One trigger of a stated acceptance criterion and the hover behaviour are unprotected.", "suggested_fix": "Flip data-palette in the theme test; emit mouseover/mouseout and check classes; check second-step class and root border-width with styleEnabled.", "evidence": "mutants G1,G2,G3,G4,G7,G8,G10,G11 all GREEN.", "confidence": "high", "dedupe_key": "testing:graph-theme-hover-style"},
+    {"id": "F-004", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "quote": "const PANES = [\".metaproject-panes\", \".metaproject-list\", \".metaproject-content\", \".metaproject-details-body\"];", "problem": "No test restores a scroll position; reverting the selector T8 changed (.metaproject-details-body -> .metaproject-node-body), the history cap, the same-route guard, the content reset and the switchView guard all stay green.", "impact": "The Back scroll restore fixed in T8 can regress unseen.", "suggested_fix": "DOM test that scrolls the details body, selects another node, presses Back and asserts scrollTop; one for the 40-entry cap.", "evidence": "mutants N1..N5 all GREEN in MetaprojectView.dom.test.tsx.", "confidence": "high", "dedupe_key": "testing:explorer-nav-scroll"},
+    {"id": "F-005", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "quote": "const relationDirection = mode === \"wiki\" ? \"both\" : direction;", "problem": "The AC13 test changes depth and kinds but leaves Direction at \"both\", and runs protocol 1 only; the direction part and the V2 kinds branch are unpinned.", "impact": "AC13 has one of three parts with no separating fixture.", "suggested_fix": "Set Direction to incoming before switching to Wiki; add a protocol-2 run asserting the V2 kinds.", "evidence": "mutants V1 and V30 GREEN.", "confidence": "high", "dedupe_key": "testing:ac13-direction"},
+    {"id": "F-006", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "quote": "setRevealRelationships(value => value + 1);", "problem": "showHidden (open panel + reveal Relationships) is driven by no test; the graph test checks a mock callback and the panel test checks the prop.", "impact": "Removing either half leaves all suites green and breaks the way to hidden neighbours.", "suggested_fix": "MetaprojectView test with headless cytoscape: close the panel, tap the overflow node, assert panel open on Relationships.", "evidence": "mutants V8 and V8b GREEN.", "confidence": "high", "dedupe_key": "testing:showhidden-wiring"},
+    {"id": "F-007", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "quote": "const shownTotal = catalog ? mode === \"wiki\" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;", "problem": "T8 gates survive deletion: list-header floor and Wiki-mode total, dropping a stale graph on a failed read, protocol-2 showGraph, Draft gate, documents-pending flags, Direction in the Filters count, Filters-button mousedown, popover clamp, Wiki disclosure with 0 edges.", "impact": "Each gate was added in this change and its next edit is unprotected.", "suggested_fix": "One test per gate with the existing fixtures (Wiki-mode header, failed second read, mousedown on the Filters button).", "evidence": "mutants V2,V3,V4,V5,V6,V7,V13,V14,V15,V17 all GREEN.", "confidence": "high", "dedupe_key": "testing:metaprojectview-gates"},
+    {"id": "F-008", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "quote": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }", "problem": "AC16/AC12 guards unpinned: undecodable href, snapshot mismatch on lookup, late lookup after selection change, message scoped to selection, and the settled Wiki empty-state wording naming the searched text (the test asserts the in-flight state only).", "impact": "The settled half of AC12 and three AC16 sub-claims have no failing test.", "suggested_fix": "Run the debounce and assert the final title; add a malformed %E0%A4%A link and a late-resolving lookup.", "evidence": "mutants V9,V10,V11,V12,V16,V31 GREEN; V19 RED.", "confidence": "high", "dedupe_key": "testing:lookup-and-empty-state"},
+    {"id": "F-009", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "quote": "const tab: Tab = tabChoice?.node === node.id ? tabChoice.value : \"relationships\";", "problem": "Per-node tab reset, tab-list arrow keys, drag and ArrowRight resize, failed-copy message, suggested-page count, stale-preview guard, 360-char cut, list-after-prose rule and fenced-code skipping have no fixture.", "impact": "Next edit to any of these is unprotected.", "suggested_fix": "Fixtures: a leading-list page with a fenced block, a 400-char paragraph, a second node after a tab choice, ArrowRight/Home/End on the tab list.", "evidence": "mutants P1,P3,P4,P5,P6,P7,P8,P9,P11,P13,P14,P17,P18,P20,P21 GREEN; P2 RED.", "confidence": "high", "dedupe_key": "testing:details-panel-gates"},
+    {"id": "F-010", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "quote": "if (!from || !to) continue;", "problem": "No fixture has a dangling edge, exactly two evidence lines, a second-step self-loop, or a count label beside evidence lines.", "impact": "The dangling-edge gate protects against a render crash on truncated projections and is unprotected.", "suggested_fix": "Add one projection with a dangling edge, one edge with two evidence lines, one second-step self-loop.", "evidence": "mutants L1,L2,L3,L8 GREEN; L5,L6 RED.", "confidence": "high", "dedupe_key": "testing:relationshiplist-gates"},
+    {"id": "F-011", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/graphLayout.ts", "quote": "while (candidates(false, attached));", "problem": "AC3 test passes without the drawn-anchor preference and without chained second-step attachment; self-loops, edge width, fit-case pan, percentage and 3-digit colours, alpha clamp and columnCap integer check have no fixture.", "impact": "Layout rules that keep truncated projections overlap-free are unprotected.", "suggested_fix": "Fixtures: root self-loop, second-step node reachable only via another second-step node, edge count 16, a fitting layout with a pan assertion.", "evidence": "mutants Y1,Y2,Y3,Y4,Y5,Y6,Y7,Y8,Y9,Y12,Y16,Y18 GREEN; Y19 RED.", "confidence": "high", "dedupe_key": "testing:graphlayout-gates"},
+    {"id": "F-012", "severity": "info", "reviewer": "review-testing-practices", "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx", "quote": "expect(block).toContain(\"min-block-size: 200px;\");", "problem": "G8 matches stylesheet source text; metaproject.css sets 160px for the narrow container, so the effective minimum at 720x480 is not what the test pins.", "impact": "Brittle string match with no effect on signal beyond the declaration.", "suggested_fix": "Leave the layout claim to the live check, or pin both declarations by selector.", "evidence": "graph.css:6 min-block-size: 200px; metaproject.css:137 min-block-size: 160px.", "confidence": "medium", "dedupe_key": "testing:css-text-assertion"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 11, "info": 1},
+  "mutant_candidates": [
+    {"id": "A1", "file": "apps/desktop/src/App.tsx", "anchor": "hidden={!visible}", "replacement": "hidden={!active}"},
+    {"id": "P1", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "event.defaultPrevented || event.nativeEvent.isComposing", "replacement": "event.nativeEvent.isComposing"},
+    {"id": "P2", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "    if (!compact) return;\n    const before", "replacement": "    const before"},
+    {"id": "P3", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "if (!onDraft || drafting) return;", "replacement": "if (!onDraft) return;"},
+    {"id": "P4", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "if (!active || detail.node.id !== firstId) return;", "replacement": "if (!active) return;"},
+    {"id": "P5", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "tabChoice?.node === node.id ? tabChoice.value : \"relationships\"", "replacement": "tabChoice ? tabChoice.value : \"relationships\""},
+    {"id": "P6", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "ArrowRight: TABS[(index + 1) % TABS.length],", "replacement": "ArrowRight: TABS[index],"},
+    {"id": "P7", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "wiki: documents ? wikiDocuments.filter(item => !item.suggested).length : undefined,", "replacement": "wiki: documents ? wikiDocuments.length : undefined,"},
+    {"id": "P8", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "const copyState = copied?.node === node.id ? copied.ok", "replacement": "const copyState = copied ? copied.ok"},
+    {"id": "P9", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "copied.ok ? \"Copied\" : \"Could not copy\"", "replacement": "\"Copied\""},
+    {"id": "P11", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "    setDraftError(\"\");\n    if (focus)", "replacement": "    if (focus)"},
+    {"id": "P13", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "resize(start.width + start.x - event.clientX)", "replacement": "resize(start.width - start.x + event.clientX)"},
+    {"id": "P14", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "ArrowRight: currentWidth - RESIZE_STEP", "replacement": "ArrowRight: currentWidth + RESIZE_STEP"},
+    {"id": "P17", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "return text.length > PREVIEW_LIMIT ? `${text.slice(0, PREVIEW_LIMIT - 1).trimEnd()}…` : text;", "replacement": "return text;"},
+    {"id": "P18", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "(blocks.find(block => !block.list) ?? blocks[0])?.text", "replacement": "blocks[0]?.text"},
+    {"id": "P20", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "    if (fenced) continue;\n", "replacement": "\n"},
+    {"id": "P21", "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx", "anchor": "if (!firstId) return;\n    let active = true;", "replacement": "let active = true;"},
+    {"id": "L1", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "    if (!from || !to) continue;\n", "replacement": "\n"},
+    {"id": "L2", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "{hidden > 0 && <li>", "replacement": "{hidden >= 0 && <li>"},
+    {"id": "L3", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "{to.id !== from.id && <button", "replacement": "{true && <button"},
+    {"id": "L5", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": ".sort((a, b) => a.node.title.localeCompare(b.node.title))", "replacement": ""},
+    {"id": "L6", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "if (!lines.length) return null;", "replacement": ""},
+    {"id": "L8", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "{lines.length === 0 && countLabel &&", "replacement": "{countLabel &&"},
+    {"id": "Y1", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "if (edge.from === edge.to) continue;", "replacement": ""},
+    {"id": "Y2", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "if (edge.from === edge.to) return;", "replacement": ""},
+    {"id": "Y3", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": " || (preferDrawn && !drawnFirst.has(other))", "replacement": ""},
+    {"id": "Y4", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "while (candidates(false, attached));", "replacement": ""},
+    {"id": "Y5", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "1 + Math.min(2, Math.log2(edge.count) / 2)", "replacement": "1"},
+    {"id": "Y6", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "const alpha = Math.min(1, Math.max(0, fg.a));", "replacement": "const alpha = fg.a;"},
+    {"id": "Y7", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "(high - low) * zoom <= inner ? (low + high) / 2 : rootAt", "replacement": "rootAt"},
+    {"id": "Y8", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "return value.endsWith(\"%\") ? (Number.parseFloat(value) / 100) * scale : Number.parseFloat(value);", "replacement": "return Number.parseFloat(value);"},
+    {"id": "Y9", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "if (!Number.isInteger(cap) || cap < 1)", "replacement": "if (cap < 1)"},
+    {"id": "Y12", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "options.textScale && options.textScale > 0 ? options.textScale : 1", "replacement": "options.textScale ?? 1"},
+    {"id": "Y16", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "hex.length <= 4 ?", "replacement": "false ?"},
+    {"id": "Y18", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "seen.weight = Math.max(seen.weight, edge.count ?? 0);", "replacement": "seen.weight = edge.count ?? 0;"},
+    {"id": "Y19", "file": "apps/desktop/src/metaproject/graphLayout.ts", "anchor": "if (!result.has(id)) result.set(id, { side: \"incoming\"", "replacement": "result.set(id, { side: \"incoming\""},
+    {"id": "G1", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "if (isSide(side)) showHiddenRef.current?.(side);", "replacement": "showHiddenRef.current?.(side as GraphSide);"},
+    {"id": "G2", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "cy.elements().not(near).not(\"node.caption\").addClass(\"faded\");", "replacement": ""},
+    {"id": "G3", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "scheme?.addEventListener(\"change\", refreshTheme);", "replacement": ""},
+    {"id": "G4", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "[\"data-theme\", \"data-palette\", \"style\"]", "replacement": "[\"data-theme\", \"style\"]"},
+    {"id": "G5", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "if (!target.usable) return;", "replacement": ""},
+    {"id": "G6", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "if (!cy || !viewport || !viewport.clientWidth || !viewport.clientHeight) return;", "replacement": "if (!cy || !viewport) return;"},
+    {"id": "G7", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "item.role === \"root\" ? Math.max(2, style.borderWidth) : style.borderWidth", "replacement": "style.borderWidth"},
+    {"id": "G8", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "classes: item.secondStep ? \"second-step\" : \"\",", "replacement": "classes: \"\","},
+    {"id": "G9", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "Math.min(USER_ZOOM.max, Math.max(USER_ZOOM.min, cy.zoom() * factor))", "replacement": "cy.zoom() * factor"},
+    {"id": "G10", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "if (!event.target.hasClass(\"graph-node\")) return;", "replacement": ""},
+    {"id": "G11", "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "anchor": "viewport.style.cursor = \"pointer\";", "replacement": ""},
+    {"id": "V1", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "const relationDirection = mode === \"wiki\" ? \"both\" : direction;", "replacement": "const relationDirection = direction;"},
+    {"id": "V2", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "Math.max(shownTotal, results.length)", "replacement": "shownTotal"},
+    {"id": "V3", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "catalog ? mode === \"wiki\" ? catalog.counts.wiki : catalog.counts.files", "replacement": "catalog ? catalog.counts.files"},
+    {"id": "V4", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (mode !== \"graph\" || relationshipError) lastGraph.current = null;", "replacement": "if (mode !== \"graph\") lastGraph.current = null;"},
+    {"id": "V5", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "(catalog.graph !== \"missing\" || protocol === 2)", "replacement": "(catalog.graph !== \"missing\")"},
+    {"id": "V6", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "onDraft={catalog.graph === \"ready\" && !documents?.truncated ? onDraft : undefined}", "replacement": "onDraft={onDraft}"},
+    {"id": "V7", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "documentsPending={documents?.root !== selection && !snapshotMismatch && !documentProblem}", "replacement": "documentsPending={documents?.root !== selection}"},
+    {"id": "V8", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "    setRevealRelationships(value => value + 1);\n", "replacement": "\n"},
+    {"id": "V8b", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "    setRoute(current => current.mode === \"graph\" && !current.panelOpen ? { ...current, panelOpen: true } : current);\n", "replacement": "\n"},
+    {"id": "V9", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }", "replacement": ""},
+    {"id": "V10", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (!resolved) { unresolved(", "replacement": "if (false) { unresolved("},
+    {"id": "V11", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (!current()) return;", "replacement": ""},
+    {"id": "V12", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "{unresolvedLink?.selection === selection && (", "replacement": "{unresolvedLink && ("},
+    {"id": "V13", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "(direction !== \"both\" ? 1 : 0) + ", "replacement": ""},
+    {"id": "V14", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (panel.current?.contains(target) || anchor.contains(target)) return;", "replacement": "if (panel.current?.contains(target)) return;"},
+    {"id": "V15", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "const left = Math.max(8, Math.min(rect.right - POPOVER_WIDTH, window.innerWidth - POPOVER_WIDTH - 8));", "replacement": "const left = rect.right - POPOVER_WIDTH;"},
+    {"id": "V16", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": ": results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`", "replacement": ": `No Wiki page matches`"},
+    {"id": "V17", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "currentProjection && mode === \"wiki\" && currentProjection.edges.length > 0 && (", "replacement": "currentProjection && mode === \"wiki\" && currentProjection.edges.length >= 0 && ("},
+    {"id": "V18", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (id === shownSelection.current) {", "replacement": "if (false) {"},
+    {"id": "V19", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "else unresolved(`No indexed project file at ${path}.`);", "replacement": ""},
+    {"id": "V21", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);", "replacement": "await onRebuild();"},
+    {"id": "V21b", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (mounted.current) setRebuilding(false);", "replacement": ""},
+    {"id": "V22", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "      setProtocolError(\"\");\n", "replacement": "\n"},
+    {"id": "V23", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "loading && !protocolError &&", "replacement": "loading &&"},
+    {"id": "V24", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "list.current?.querySelector<HTMLElement>('[aria-current=\"true\"]')?.scrollIntoView?.({ block: \"nearest\" });", "replacement": ""},
+    {"id": "V26", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "const graphBusy = graphProjection !== null && graphProjection !== currentProjection;", "replacement": "const graphBusy = false;"},
+    {"id": "V27", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "disabled={unavailable}", "replacement": "disabled={false}"},
+    {"id": "V28", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "{filtersChanged && (", "replacement": "{true && ("},
+    {"id": "V30", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "mode === \"wiki\" ? protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1 : kinds", "replacement": "mode === \"wiki\" ? WIKI_KINDS_V1 : kinds"},
+    {"id": "V31", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "const generation = project.current;\n    const current = () =>", "replacement": "const generation = project.current;\n    const current = () => true ||"},
+    {"id": "N1", "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "anchor": "[...entries.slice(1 - HISTORY_LIMIT), leaving]", "replacement": "[...entries, leaving]"},
+    {"id": "N2", "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "anchor": "\".metaproject-details-body\"]", "replacement": "\".metaproject-node-body\"]"},
+    {"id": "N3", "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "anchor": "if (next === leaving) return;", "replacement": ""},
+    {"id": "N4", "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "anchor": "options.resetContent && index === CONTENT_PANE ? 0 : top", "replacement": "top"},
+    {"id": "N5", "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "anchor": "if (mode !== current.current.mode) enter(", "replacement": "enter("}
+  ],
+  "follow_ups": [
+    "Run the mutant_candidates list through `keryx review mutate` once its scratch copy resolves apps/desktop/node_modules (its baseline failed here with 'Cannot find module @happy-dom/global-registrator'); all 82 ran in a manual scratch copy, results in the table above."
+  ]
+}
+```
+
+Routing audit: graph_used no (slice paths given; production files read directly); wiki_used no (not-relevant: test review, intent in the flow documents and acceptance criteria of the payload); ctx_used yes (`keryx ctx rg`); raw_rg_used no.

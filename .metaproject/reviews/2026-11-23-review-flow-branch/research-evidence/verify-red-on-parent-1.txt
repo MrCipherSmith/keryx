@@ -1,0 +1,77 @@
+# keryx review verify-run
+finding: red-on-parent
+command: sh /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/red-on-parent.sh /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign 1358d962f4dfc07a9e086a533f51e75aa757dfcd /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/red-on-parent
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign
+time: 2026-11-23T09:18:44.900Z
+exit: 0
+
+--- stdout ---
+head: 60cbe1c565f4e478833605b41c49c2827eed2bbf  base: 1358d962f4dfc07a9e086a533f51e75aa757dfcd
+kept at head (test): apps/desktop/src/App.dom.test.tsx
+restored from base: apps/desktop/src/App.tsx
+restored from base (deleted by the change): apps/desktop/src/metaproject/GraphNodePanel.tsx
+kept at head (test): apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+restored from base: apps/desktop/src/metaproject/MetaprojectView.tsx
+kept at head (test): apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx
+removed (new in the change): apps/desktop/src/metaproject/NodeDetailsPanel.tsx
+kept at head (test): apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx
+removed (new in the change): apps/desktop/src/metaproject/RelationshipGraph.tsx
+kept at head (test): apps/desktop/src/metaproject/RelationshipList.dom.test.tsx
+removed (new in the change): apps/desktop/src/metaproject/RelationshipList.tsx
+removed (new in the change): apps/desktop/src/metaproject/graph.css
+kept at head (test): apps/desktop/src/metaproject/graphLayout.test.ts
+removed (new in the change): apps/desktop/src/metaproject/graphLayout.ts
+removed (new in the change): apps/desktop/src/metaproject/labels.ts
+restored from base: apps/desktop/src/metaproject/metaproject.css
+removed (new in the change): apps/desktop/src/metaproject/nodePanel.css
+restored from base: apps/desktop/src/metaproject/useExplorerNavigation.ts
+== src/App.dom.test.tsx
+exit: 1
+   2 error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: undefined. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+   1  1 fail
+   1  0 pass
+failing tests listed: 1
+passing tests listed: 0
+== src/metaproject/MetaprojectView.dom.test.tsx
+exit: 1
+1149                   SyntaxError: [class SyntaxError extends Error],
+ 358                 SyntaxError: [class SyntaxError extends Error],
+ 165               SyntaxError: [class SyntaxError extends Error],
+  57             SyntaxError: [class SyntaxError extends Error],
+  23           SyntaxError: [class SyntaxError extends Error],
+  18 error: Could not create canvas of type 2d
+   9         SyntaxError: [class SyntaxError extends Error],
+   3       SyntaxError: [class SyntaxError extends Error],
+failing tests listed: 22
+passing tests listed: 0
+== src/metaproject/NodeDetailsPanel.dom.test.tsx
+exit: 1
+   1 error: Cannot find module './NodeDetailsPanel' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/red-on-parent/apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx'
+   1  2 fail
+   1  0 pass
+failing tests listed: 2
+passing tests listed: 0
+== src/metaproject/RelationshipGraph.dom.test.tsx
+exit: 1
+   1 error: Cannot find module './RelationshipGraph' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/red-on-parent/apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx'
+   1  2 fail
+   1  0 pass
+failing tests listed: 2
+passing tests listed: 0
+== src/metaproject/RelationshipList.dom.test.tsx
+exit: 1
+   1 error: Cannot find module './RelationshipList' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/red-on-parent/apps/desktop/src/metaproject/RelationshipList.dom.test.tsx'
+   1  2 fail
+   1  0 pass
+failing tests listed: 2
+passing tests listed: 0
+== src/metaproject/graphLayout.test.ts
+exit: 1
+   1 error: Cannot find module './graphLayout' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/red-on-parent/apps/desktop/src/metaproject/graphLayout.test.ts'
+   1  1 fail
+   1  1 error
+   1  0 pass
+failing tests listed: 0
+passing tests listed: 0
+--- stderr ---
+

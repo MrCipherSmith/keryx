@@ -1,0 +1,97 @@
+{
+ "F-001": {
+  "raw": "review-logic-w3",
+  "source_id": "F-001",
+  "merged": [
+   [
+    "review-regression-w3",
+    "F-001",
+    "review-regression"
+   ],
+   [
+    "review-ui-ux-w3",
+    "F-001",
+    "review-ui-ux"
+   ]
+  ],
+  "answers": "F-022"
+ },
+ "F-002": {
+  "raw": "followup-review-logic-w3",
+  "source_id": "F-003",
+  "merged": [
+   [
+    "review-regression-w3",
+    "F-002",
+    "review-regression"
+   ]
+  ],
+  "answers": "F-004"
+ },
+ "F-003": {
+  "raw": "review-degradation-w4",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "F-004"
+ },
+ "F-004": {
+  "raw": "review-style-w2",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "F-006"
+ },
+ "F-005": {
+  "raw": "review-clean-code-w1",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "F-011 to F-021"
+ },
+ "F-006": {
+  "raw": "review-testing-practices-w3",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "F-001"
+ },
+ "F-007": {
+  "raw": "review-testing-practices-w3",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "F-004"
+ },
+ "F-008": {
+  "raw": "review-testing-practices-w3",
+  "source_id": "F-003",
+  "merged": [],
+  "answers": "F-006"
+ },
+ "F-009": {
+  "raw": "review-testing-practices-w3",
+  "source_id": "F-004",
+  "merged": [],
+  "answers": "F-003 and F-004"
+ },
+ "F-010": {
+  "raw": "review-highload-w3",
+  "source_id": "F-001",
+  "merged": [],
+  "answers": "F-004"
+ },
+ "F-011": {
+  "raw": "review-layout-w3",
+  "source_id": "LY-001",
+  "merged": [],
+  "answers": "F-001"
+ },
+ "F-012": {
+  "raw": "review-layout-w3",
+  "source_id": "LY-002",
+  "merged": [],
+  "answers": "F-001"
+ },
+ "F-013": {
+  "raw": "review-logic-w3",
+  "source_id": "F-002",
+  "merged": [],
+  "answers": "F-004"
+ }
+}

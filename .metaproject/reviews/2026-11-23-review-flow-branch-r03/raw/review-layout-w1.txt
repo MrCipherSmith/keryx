@@ -1,0 +1,47 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Read slice-02 in full. The slice changes no stylesheet and no placement code. The DOM that stylesheet selectors and the @container metaproject query depend on is unchanged: MetaprojectWork renders RetainedView > Suspense > explorer exactly as the inline block did, with no added element. The five new placement tests assert numbers that follow from placeFiltersPopover() as written (recomputed by hand below). One unverified info finding names where the tests pin arithmetic a real layout could contradict. Nothing was measured in a real engine (read-only run, no app); every geometry statement is derived from code and marked as such.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "quote": "stubBox(filtersButton(), { left: 544, top: 478, right: 615, bottom: 502 });",
+      "problem": "UNVERIFIED (derived from code; no real-layout measurement exists for these inputs). The T23 placement tests pin placeFiltersPopover() arithmetic against inputs happy-dom invents. (1) stubPopoverContentHeight returns one constant scrollHeight for the popover; in a browser scrollHeight is also the full content height under a max-height, so the model matches, but the constants (229, 500) are fixed numbers and do not follow a content change (the known Reset-filters row, F-011). The stub also answers scrollHeight only, so an edit that read offsetHeight (capped by max-height) instead would pass every test. (2) The bottom-edge test puts the button at top 478 / bottom 502 in a 480 px window, so the button's own box lies partly outside the window. A real Filters button sits inside the explorer's .view and is in the window when the popover opens; the branch the test pins (bottom = max(8, 480 - 478 + 4) = 8) is reachable in a real layout only when the page has scrolled the button under the window edge. The Math.max(POPOVER_MARGIN, ...) floor is pinned by an input a real layout reaches rarely, and a button inside the window with less than 4 px under it is the case the floor really serves. (3) The 30 px window test leaves scrollHeight at happy-dom's 0; with a real content height the result is the same (above -12 is not greater than below -6), so that one holds.",
+      "impact": "No user-visible defect is claimed. The tests would stay green if the content-height source changed to a capped measure, and they pin the 8 px floor with an off-window button. Probe that would settle it: in the browser dev build at 720x480, open Filters with the freshness Details open and read the popover's scrollHeight, offsetHeight and getBoundingClientRect() before and after a resize to 700x480, and compare with the top and maxHeight the code sets.",
+      "suggested_fix": "Optional, tests only: give the scrollHeight stub an offsetHeight twin that honours the inline max-height, and add one case whose button box lies inside the window with under 4 px below it. No production change."
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+Checks behind the result (read from the slice and the files at head; nothing was run):
+
+DOM equivalence of App.tsx. Before: RetainedView(active, visible) > Suspense(fallback p[role=status]) > MetaprojectView. After: MetaprojectWork returns the same three nested nodes. The lazy component is now the module-level const LazyMetaprojectView, the default of the `explorer` prop, so its identity is stable and Suspense does not remount. RetainedView still renders `<div className="view" hidden={!visible}>`, and `.view { height: 100%; min-height: 0 }` (styles.css:139) keeps the same parent. MetaprojectWork adds no wrapper element, so a selector or the container query that reaches the explorer sees the DOM it saw before. F-009 closed: `visible={view === "metaproject"}` now sits inside a component a DOM test renders.
+
+Empty note (RelationshipList.tsx). `empty` is computed from the three groups, as the rows are. NodeDetailsPanel.tsx:265-266 adds its own note only when `relationships` is null, so the two notes never show together. A truncated, empty projection shows both the "limited" status note and the empty note, as it did for edges.length === 0. F-001 closed at both sites (list note; Wiki disclosure counted by summarizeRelationships).
+
+Wiki disclosure (MetaprojectView.tsx). Hidden when wikiRelationshipRows is 0; the label counts the rows the list shows. A truncated projection with no listable row shows no disclosure and so no "limited" note; no layout consequence.
+
+T23 placement arithmetic, recomputed from placeFiltersPopover (margin 8, gap 4, cap 420; below = H - 8 - (bottom + 4), above = top - 4 - 8):
+- Neither side fits, less above (H 480, top 150, bottom 174, needed 500): below 294, above 138; above > below is false, so top 178, maxHeight 294 = 480 - 8 - 178. Test asserts these. Holds.
+- Tall window (H 900, 100/124, needed 229): below 764, so top 128, maxHeight min(420, 764) = 420. Then 800/824: below 64, above 788, so bottom max(8, 900 - 800 + 4) = 104, maxHeight 420. Test asserts 128, 420, no top, 104, 420. Holds.
+- Bottom edge (H 480, 478/502, needed 229): below -34, above 466, bottom max(8, 6) = 8. Holds (see LY-001 on the input).
+- Short window (H 30, 0/24, needed 0): below -6, above -12; above > below is false, so top 28, maxHeight max(0, min(420, -6)) = 0. Holds.
+- Resize listener: place() runs once on open and once per resize while open; the effect cleanup removes the listener on close, so the count stays at `closed`. Holds.
+F-006 closed on this hand-check of the five gates; I did not re-run the mutants.
+
+Not verified: any real-engine geometry (no app, exec_budget_s 0); the T23 numbers rest on the journal's 720x480 measurement.
+
+Routing audit: graph_used no (not-relevant, slice-bounded); wiki_used no (not-relevant); ctx_used yes; raw_rg_used no.

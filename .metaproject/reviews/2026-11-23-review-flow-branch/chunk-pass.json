@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "totals": {
+    "chunks": 15,
+    "files": 25,
+    "done": 2,
+    "failed": 0,
+    "pending": 13
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "apps/desktop/src/review/PullRequestAutomation.tsx",
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/review/ReviewWatcher.tsx",
+        "apps/desktop/src/session/RunsTab.tsx",
+        "apps/desktop/src/session/SchedulesTab.tsx",
+        "apps/desktop/src/shell/Welcome.tsx",
+        "apps/desktop/src/styles/flows.css",
+        "apps/desktop/src/styles/panels.css",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl"
+      ],
+      "state": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "chunk-014",
+      "files": [
+        "apps/desktop/src-tauri/src/pick.js",
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/test/app-navigation.fixture.tsx"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-015",
+      "files": [
+        "src/gdskills/bundled/stacks/php-laravel/governance/eval.json"
+      ],
+      "state": "pending",
+      "attempts": 0
+    }
+  ],
+  "uncoveredFiles": [
+    ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl",
+    ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl",
+    "src/gdskills/bundled/stacks/php-laravel/governance/eval.json"
+  ],
+  "findings": []
+}

@@ -1,0 +1,12 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "No degradation found in slice-01. Read every hunk, and the catalog effect, rebuild() and the banner of MetaprojectView.tsx at head. The `error` object has four writers and one reader, and the banner string and Retry are the same as in round 3's head. A quiet re-read clears only a source `catalog` error, and only on its success, so a rebuild's message stays where it used to be. Verified clean: (1) A failed loud catalog read, then a quiet read that succeeds: the banner goes. Both reads are `action: catalog`, so the success contradicts the failure, and the earlier banner was the stale string. Against base, the explorer read nothing on return and kept the banner until Retry, so this is an improvement and not a loss of a needed error. (2) A failed catalog read whose cause still holds: the quiet read fails too, its catch is silent because of `!quiet`, and the banner stays. The next read the user starts reports it as before. (3) First-load failure (loaded.current false): no quiet read starts, so the banner stays. (4) A quiet read never overlaps a loud read in flight (catalogPending guard in the visible effect), and a superseded quiet result returns before the clear (generation check at line 389), so a stale quiet success cannot remove a newer loud failure. (5) A rebuild failure keeps source `rebuild` through a quiet success and a rebuild clears a catalog error at its start; this matches round 3's head. (6) `error` is read only by the banner (`error.message`, lines 846-848); no other consumer of the string exists in the file. (7) The nine added tests were read; each asserts a state the code produces and none pins a neighbour of the changed symbol. No cap or graph consumer list applied to this slice (one component, no changed shared export). Not run: read-only limits; the failed-then-quiet-success cell was not seen live, as the brief says.",
+  "findings": [],
+  "prior_dispositions": [ { "id": "F-001", "disposition": "closed" } ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

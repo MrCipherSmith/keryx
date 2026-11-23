@@ -1,0 +1,372 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r02",
+  "target": {
+    "kind": "branch",
+    "ref": "branch",
+    "base": "60cbe1c565f4e478833605b41c49c2827eed2bbf",
+    "head": "b1538097e636d9ec4c08f013b196e716ba09b18d"
+  },
+  "round": {
+    "number": 2,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-11-23-review-flow-branch",
+    "range": {
+      "base": "60cbe1c565f4e478833605b41c49c2827eed2bbf",
+      "head": "b1538097e636d9ec4c08f013b196e716ba09b18d"
+    },
+    "fixHunks": 88,
+    "newHunks": 0,
+    "priorFindings": 29,
+    "carried": 11,
+    "line": "round 2 (source: local-package; previous 2026-11-23-review-flow-branch at 60cbe1c565f4; delta 60cbe1c565f4..b1538097e636)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T19.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T19.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T20.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T20.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T21.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T21.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T15.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T17.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-degradation",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-testing-practices",
+          "review-ui-ux"
+        ],
+        "findingIds": [
+          "F-001",
+          "F-003",
+          "F-004",
+          "F-005",
+          "F-006",
+          "F-007",
+          "F-008",
+          "F-009",
+          "F-010",
+          "F-011",
+          "F-012",
+          "F-013",
+          "F-014",
+          "F-018",
+          "F-019",
+          "F-020",
+          "F-021",
+          "F-022"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T19.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T20.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T15.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T19.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T20.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T21.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-degradation",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ],
+        "findingIds": [
+          "F-001",
+          "F-003",
+          "F-004",
+          "F-005",
+          "F-006",
+          "F-007",
+          "F-008",
+          "F-009",
+          "F-010",
+          "F-011",
+          "F-012",
+          "F-013",
+          "F-014",
+          "F-018",
+          "F-019",
+          "F-020",
+          "F-021",
+          "F-022"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "apps/desktop/src/App.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+          "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+          "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+          "apps/desktop/src/metaproject/graphLayout.test.ts",
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+          "apps/desktop/src/metaproject/OpenSpecView.tsx",
+          "apps/desktop/src/metaproject/RelationshipList.tsx",
+          "docs/docs/guides/desktop-metaproject.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ],
+        "findingIds": [
+          "F-001",
+          "F-003",
+          "F-004",
+          "F-005",
+          "F-006",
+          "F-007",
+          "F-008",
+          "F-010",
+          "F-011",
+          "F-012",
+          "F-013",
+          "F-014",
+          "F-018",
+          "F-019",
+          "F-020",
+          "F-021",
+          "F-022"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-04",
+        "files": [
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/metaproject.css",
+          "docs/docs/guides/desktop-metaproject.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-ui-ux"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-05",
+        "files": [
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-06",
+        "files": [
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-07",
+        "files": [
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.request.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T12.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T14.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-08",
+        "files": [
+          ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+          "apps/desktop/src/App.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+          "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+          "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+          "apps/desktop/src/metaproject/graphLayout.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-09",
+        "files": [
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+          "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+          "apps/desktop/src/metaproject/RelationshipList.tsx",
+          "apps/desktop/src/metaproject/graph.css",
+          "apps/desktop/src/metaproject/graphLayout.ts",
+          "apps/desktop/src/metaproject/labels.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-10",
+        "files": [
+          "apps/desktop/src/metaproject/metaproject.css",
+          "apps/desktop/src/metaproject/nodePanel.css",
+          "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+          "docs/docs/guides/desktop-metaproject.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 53,
+  "minutes": {
+    "min": 28,
+    "max": 70
+  },
+  "split": {
+    "fix": {
+      "slices": 3,
+      "dispatches": 29
+    },
+    "new": {
+      "slices": 1,
+      "dispatches": 12
+    },
+    "secondLook": {
+      "slices": 6,
+      "dispatches": 12
+    }
+  },
+  "overThreshold": true,
+  "overReasons": [
+    "53 dispatches > 40"
+  ],
+  "planKey": "487f9329f4c92447",
+  "warnings": [],
+  "next": "confirm plan (card review_confirm_plan / keryx review confirm-plan)"
+}

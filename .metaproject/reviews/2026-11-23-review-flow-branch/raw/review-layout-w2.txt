@@ -1,0 +1,49 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Slice-06 read in full. The layout maths (graphLayout.ts) and the explorer and panel CSS agree with the live measurements in the journal (no overlaps, labels 9.6-13.8 px, 140 px graph floor met at 720x480). One measured defect: the Filters popover has no window-height clamp and is cut at the bottom by 51 px at 720x480 when the stale banner is expanded, and it does not scroll. One unmeasured observation (a container-query rule that looks unreachable) is filed as info.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "major",
+      "title": "Filters popover is clipped by 51 px at the 720x480 minimum window when the stale banner is expanded, and cannot scroll",
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "quote": ".metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }",
+      "problem": "The popover is a fixed-position .menu whose top is computed once as anchor.bottom + 4 (MetaprojectView.tsx FiltersPopover: `setPosition({ left, top: rect.bottom + 4 })`). The only height limit is the shared .menu max-block-size of 400px, a fixed number, not a function of the room below the anchor. The rule above adds no max-block-size or overflow clamp tied to the window, so when the anchor sits low the popover runs past the window edge. Its content (229 px) is below 400 px, so it never becomes scrollable either and the last row is unreachable.",
+      "measurement": "Orchestrator live probe, browser dev build, 720x480, dark, Graph, 'Agent Bus', depth 1, getBoundingClientRect (research-evidence/live-filters-popover-720x480.txt). One-line banner: button bottom 225, popover top 232 bottom 455, 25 px of room, not cut. Banner with Details expanded (banner 122 px): button bottom 301, popover top 308 bottom 531, window 480, cut by 51 px; scrollHeight equals clientHeight (229), so no scroll; the 'Not available: ...' note and the lower chips are outside the window. Not measured: light theme, 1180x780 and 1440x900 with the popover open, the native Tauri window, window resize while open.",
+      "why_it_matters": "At the smallest supported window (720x480), a developer with a stale graph who opens Details and then Filters cannot reach the lower relationship-type chips, the symbol-layer reason or Reset filters. A stale graph is the state the flow journal calls the one a developer is in most of the time. Any state that pushes the header down further (a longer reason, a second banner, a larger text scale) moves the cut up. The position is computed once on open, so a resize while it is open is not tracked (unmeasured).",
+      "fix": "Bound the popover by the room below its anchor: compute `maxHeight = window.innerHeight - top - 8` next to `top` in FiltersPopover and set `max-block-size: min(400px, that)` with `overflow-y: auto`; or flip it above the anchor when there is more room there. Re-measure at 720x480 with Details expanded: popover bottom at or below 472 and scrollHeight greater than clientHeight.",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/metaproject.css:.metaproject-filters-pop",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:FiltersPopover (the only user of the class)"
+        ],
+        "enumeration_method": "keryx ctx rg for `metaproject-filters-pop` under apps/desktop/src/metaproject: one rendering site, the FiltersPopover component (MetaprojectView.tsx:196); the shared .menu in apps/desktop/src/styles.css:142 supplies the 400px cap and is not changed by this diff."
+      }
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "title": "Narrow-host container rule for the docked panel looks unreachable (unverified)",
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "quote": "  .metaproject-graph-panes:has(.metaproject-details:not(.compact)) { grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) auto; }",
+      "problem": "This rule sits inside `@container metaproject (max-width: 760px)` and matches only while the panel is docked (not .compact). NodeDetailsPanel.tsx sets compact when `availableWidth < COMPACT_BELOW` (820, lines 11 and 154). If availableWidth is the width of the panes area, it is not wider than the .metaproject container, so a docked panel implies a container of about 820 px or more, outside the 760 px query, and the narrower 150-180 px list column may never apply.",
+      "measurement": "UNVERIFIED. No measurement covers a host between 760 and 820 px. Probe that would settle it: browser dev build at 780 and 800 px wide, Graph with the panel open; read the computed grid-template-columns of .metaproject-graph-panes, the container's inline size and whether .metaproject-details has the compact class; read NodeDetailsPanel.tsx to see which element availableWidth measures.",
+      "why_it_matters": "If unreachable it is dead CSS suggesting a narrow docked layout that does not exist; if reachable nothing is wrong. No rendered defect is claimed.",
+      "fix": "Settle with the probe; if dead, remove the rule."
+    }
+  ],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+
+Summary (markdown)
+
+Read in full: slice-06 (graphLayout.ts, labels.ts, metaproject.css, nodePanel.css, useExplorerNavigation.ts, the guide). Checked against head: MetaprojectView.tsx:171-201 (popover position and style), NodeDetailsPanel.tsx:11 and :154 (compact threshold), styles.css:142 (.menu).
+
+Sound, per the journal measurements (browser dev build, 1180x780 and 720x480, dark and light): graph stage 438x528 at 1180x780 with the panel open, labels 13.3 px, 0 overlaps; at 720x480 panel closed the graph box is 434x330 (the 140 px floor holds); banner one line, 46 px; the compact drawer leaves 272 px of content. The layout maths put each column flush against the root-facing edge with a fixed columnGap and cumulative spans, so overlaps are excluded by construction; computeViewport clamps zoom to 0.8-1.15 and centres on the root when an axis does not fit, which the operator accepted.
+
+Not measured, so not filed: node, caption and overflow heights (24, 16, 20) are not scaled by textScale while widths are, so a large text scale could clip labels (the geometry comment says "at --text-scale 1"); relationship-list rows (.metaproject-rel-title 60% max, .metaproject-rel-path min 4ch) at the narrowest panel width; the `14ch` facts key column against "Relationships" in a proportional font; the 1440x900 depth-2 case after T14 (the journal says it was not re-measured); RTL (the new CSS uses logical properties; graph columns place incoming left and outgoing right by physical x, a stated design choice).

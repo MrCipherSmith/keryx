@@ -1,0 +1,43 @@
+# keryx review verify-run
+finding: F-002
+command: keryx ctx rg 'container:|container-type|position: fixed|createPortal' apps/desktop/src/metaproject apps/desktop/src/styles.css
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign
+time: 2026-11-23T09:10:15.067Z
+exit: 0
+
+--- stdout ---
+# gdctx rg summary
+
+Command: `rg --with-filename --line-number --column --no-heading -- container:|container-type|position: fixed|createPortal apps/desktop/src/metaproject apps/desktop/src/styles.css`
+Exit code: `0`
+Matches: `8`
+Files: `5`
+Raw lines: `8`
+Scope: `ripgrep defaults` — NOT searched: hidden paths not named on the command line (any dot-directory, `.metaproject/` included); `.gitignore`d files; binary files (anything holding a NUL byte, which ripgrep always skips silently). There, a nil result means "not looked at", not "not present". Widen with `--hidden` / `--no-ignore`.
+Completeness: `complete` — every one of the 8 matches ripgrep emitted is listed below.
+
+## Top Files
+
+- apps/desktop/src/styles.css: 3
+- apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx: 2
+- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx: 1
+- apps/desktop/src/metaproject/RelationshipGraph.tsx: 1
+- apps/desktop/src/metaproject/metaproject.css: 1
+
+## Matches
+
+- apps/desktop/src/styles.css
+  - 143:3 position: fixed; z-index: 70; padding: 4px; max-height: min(420px, calc(100vh - 80px)); overflow-y: auto;
+  - 416:76 position: relative; display: flex; flex-direction: column; min-width: 0; container-type: inline-size; container-name: composer;
+  - 584:3 position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 32px;
+- apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx
+  - 26:11 const { container: _container, ...rest } = options;
+  - 242:21 const { container: _container, ...rest } = options;
+- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+  - 44:13 const { container: _container, ...rest } = options;
+- apps/desktop/src/metaproject/RelationshipGraph.tsx
+  - 256:7 container: viewport,
+- apps/desktop/src/metaproject/metaproject.css
+  - 9:16 .metaproject { container: metaproject / inline-size; }
+--- stderr ---
+

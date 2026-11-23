@@ -1,0 +1,103 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "15 findings checked: 13 confirmed (F-002 to F-005 by the recorded mutation run research-evidence/mutation-2.json on head 8e0f656fb; 9 by site-check of the named lines, quotes and record entries: F-001, F-006, F-007, F-008, F-009, F-011, F-012, F-014, F-015), 0 refuted, 2 unverifiable (F-010 and F-013, which need a render or a run nobody recorded). No finding was checked by a run beyond the recorded mutation-2 run; the site-check verdicts state the scope of what was read.",
+  "verifications": [
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'setError(' on MetaprojectView.tsx gives four writers: 378 (loud read start), 403 (catch, guarded by !quiet), 673 and 677 (rebuild). The quiet success path (387-400: setFreshness at 390, setCatalog at 393, setFreshness(null) at 394, setSnapshotMismatch(false) at 395) writes no error. The banner that reads error is at 842-847. The quoted line is at 390 and matches. The rendered banner was not run; the outcome follows from the writer list."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.json (head 8e0f656fb2aa, baseline exit 0): R3-7 (RelationshipList.tsx:213, drop !groups.secondStep.length) survived, exit 0; R3-9 (line 213, && to ||) survived, exit 0; R3-8 (line 219, back to projection.edges.length === 0) killed, exit 1. Line 213 holds the quoted const empty; groupRelationships at RelationshipList.tsx:54-61 puts a non-root edge into secondStep, so R3-7 is not equivalent. The only empty-note test (RelationshipList.dom.test.tsx:129-141) has all edges left out, and its note checks (125, 139) cover the all-empty side only."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-003",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mutation-2.json: R3-4 (MetaprojectView.tsx:716, drop + wikiRelationships.secondStep) survived, exit 0; R3-2 (line 945), R3-3 (line 947) and R3-5 (line 945) killed, exit 1. R3-6 (line 713, drop mode === 'wiki') survived, exit 0; equivalent because wikiRelationships is read only at 716 and wikiRelationshipRows only under mode === 'wiki' at 945. The named test (MetaprojectView.dom.test.tsx:1321-1342) has a self-link and one describes edge (page to file) and no second-step edge."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-004",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mutation-2.json: R3-17 (MetaprojectView.tsx:695), R3-18 (line 654), R3-19 (line 377) and R3-20 (line 414) all survived, exit 0 each, over all six test files. Lines match: 695 holds generation === project.current, 654 holds projectGeneration !== project.current, 377 holds project.current++ inside if (!quiet), 414 holds if (!quietRead.current) project.current++. Minor inaccuracy in the finding: moved-mutants-2.txt records one killing test per T23 mutant (T23-1 and T23-5 both by the wiki-link lookup test), not a page test and a standing-error test; this does not change the survivals."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-005",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mutation-2.json on App.dom.test.tsx and the other five files: R3-10 (App.tsx:170, visible uses workView) survived, exit 0; R3-13 (App.tsx:618, view={workView}) survived; R3-14 (App.tsx:161, default explorer) survived; R3-15 (App.tsx:172, onRebuild) survived; R3-16 (App.tsx:171, Suspense fallback) survived; R3-12 (App.tsx:172, visible uses workView) killed, exit 1. The named test is App.dom.test.tsx:68-87; its Settings step (85-86) asserts only given.at(-1) false, and the wrapper hidden check (80) is in the flows step only. App.dom.test.tsx imports only RetainedView and MetaprojectWork from ./App, so no test renders App's ProjectWindow (the one ProjectWindow in tests is a local function in shell/ProjectNavigation.dom.test.tsx)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-006",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "tasks.md line 12, T4 row: dependency cell 'T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21'. flow.json T4 dependsOn (lines 84-99) lists the same twelve plus T22 and T23. Compared the other 22 rows of the table with flow.json dependsOn (T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 to T23, T1 to T3, T5 to T7): all agree, so T4 is the only differing row."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-007",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "journal.md line 158 (T23 entry) reads 'mutated by the orchestrator's own script, are all killed, four of them by T22's tests' and names no script; journal.md line 154 (T22 entry) names no tool for 'seven of the new tests fail'. The names appear only in results and dispatch files: T22.result.json test_result (scratch_check2.py red) and T23.result.json (own_mutants.py). keryx ctx rg --hidden --files with globs *mutants* and *scratch_check* finds no file named scratch_check2.py, moved_mutants.py or own_mutants.py in the working tree (gitignored files not searched; git ls-files was not run)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-008",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T22.result.json notes (line 112 of the file) contain 'The F-005 token rule in openPath (lookup.current) is untouched.' The same notes use round 2's ids F-001 to F-004 for the fixes, and round 2's F-005 (finding ids in test names) was dismissed by the operator (journal.md line 146), so the sentence is ambiguous as the finding says."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-009",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Mechanism of part (a) confirmed by the code: the catch at MetaprojectView.tsx:403 sets error only when !quiet, and the rebuild button is inside the graph !== 'ready' block (line 876, Rebuild graph at 887). So a failed quiet re-read sets no banner. Not checked: the outcome with the CLI failing, and the base-branch comparison in the finding's Refute line, which needed a base checkout and a run. Part (b) rests on F-001 (checked above)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-010",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "The named sites exist: openPath captures snapshotId at MetaprojectView.tsx:693, compares at 701 with the quoted line, and setSnapshotMismatch(false) is at 395 on replacement. The user-visible outcome (a banner showing after a click, leave and return within one read) needs a run that no one recorded; nothing was run."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-011",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.tsx:347-348: the visible effect sets quietRead.current = true, then bumps revision. Line 375 resets quietRead in the catalog effect body. Lines 413-414: the cleanup comment says 'Leaving the explorer ... retires its pending work' and the condition reads quietRead.current, which at that moment holds the successor run's intent (React runs the cleanup before the next body). The comment does not say so."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-012",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "The same three-field sum appears at MetaprojectView.tsx:716 (quoted line, exact) and NodeDetailsPanel.tsx:242 (summary.incoming + summary.outgoing + summary.secondStep). The empty const at RelationshipList.tsx:213 is a third form of the rule. The count of copies is as the finding states."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-013",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Constants at MetaprojectView.tsx:170-175 (POPOVER_WIDTH 320, POPOVER_MARGIN 8, POPOVER_GAP 4, MENU_MAX_HEIGHT 420) and the arithmetic at 186-193 match the finding's bottom = max(8, 480 - 478 + 4) = 8. The stub constants 229 and 500 are at MetaprojectView.dom.test.tsx lines 849, 1458 and 1473, and the bottom-edge fixture (line 1496) matches the quote. Whether the tests would miss an offsetHeight change, and how the popover lays out in a real browser, needs a measurement that the finding itself says was not recorded."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-014",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "graphLayout.ts:638 builds edgeKinds from projection.edges with no filter (quoted line, exact). layoutNeighborhood skips self-loops at line 506 (also 216 in groupRelationships path). legendFor filters lines by edgeKinds (644), and EDGE_LINE_STYLES maps links to dashed (605) with label 'Dashed line' (614). The mechanism that the legend lists a line style the layout does not draw is confirmed by the code; the drawn result was not rendered."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r03#F-015",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T23.result.json notes contain the quoted text: \"T22's branches (own_mutants.py): T23-1 :376 ... killed by T22's lookup-in-flight, page-in-flight and standing-error tests;\". The ids T23-1 to T23-5 appear there and in moved-mutants-2.txt; journal.md line 158 describes the same five mutants without ids. The naming problem is as the finding states."
+    }
+  ],
+  "stats": {
+    "confirmed": 13,
+    "refuted": 0,
+    "unverifiable": 2,
+    "not_checked": 0
+  }
+}

@@ -1,0 +1,109 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "All seven prior findings of this reviewer (F-003, F-008, F-010, F-013, F-015, F-018, F-022) are closed against the code at head, and F-001, F-004, F-005, F-006, F-007 checked on the way also hold. The quiet catalog re-read, the lookup token, the choose() order, placeFiltersPopover() and the self-loop skip are correct for the inputs I could construct. One new minor defect came with the F-022 fix: a projection whose only edges are self-loops (or edges with an end missing from the projection) renders an empty Relationships body with no 'No relationships' note, and the Wiki disclosure counts the omitted edges. One info finding on two readers of the graph state. No acceptance criterion stopped holding.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "line": 217,
+      "quote": "{projection.edges.length === 0 && <p className=\"metaproject-rel-note\">No relationships for these filters.</p>}",
+      "problem": "Answering F-022, groupRelationships() now drops every self-loop (`if (edge.from === edge.to) continue;`), but the empty state still tests `projection.edges.length === 0`, the raw edge count. A projection whose only edges are self-loops (or edges with an end absent from the projection, which groupRelationships already dropped) has edges.length > 0 and groups that are all empty: no note, no group, an empty `<div class=\"metaproject-rel\">`. The same raw count feeds the Wiki disclosure label at MetaprojectView.tsx:925, `<summary>Relationships <span className=\"count-label\">{currentProjection.edges.length}</span></summary>`, so that label counts edges the list now omits. This is the F-022 class (a count that disagrees with the list beside it) at two sites the fix did not reach.",
+      "impact": "Trigger: select a wiki page whose only relationship is a `links` edge to itself (the F-022 example), in Graph with the panel open on Relationships, or in Wiki. The panel's fact row says '0 incoming · 0 outgoing', the tab count is 0, and the tab body is blank with no explanation. In Wiki the disclosure reads 'Relationships 1' and opens onto nothing. Before the fix the self-loop row was listed, so the blank state is new. No data is lost; the user cannot tell whether the list failed to load.",
+      "suggested_fix": "Decide the empty note from the groups, not the raw edges: `const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;` and render the note when `empty`. In MetaprojectView.tsx show the disclosure and its count from `summarizeRelationships(currentProjection)` (incoming + outgoing), or from the same groups, not from `edges.length`.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/RelationshipList.tsx:217",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:923",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:925"
+        ],
+        "enumeration_method": "keryx ctx rg for groupRelationships|summarizeRelationships over apps/desktop/src/metaproject excluding tests: callers are RelationshipList.tsx:76 (summarize), :210 (RelationshipList) and NodeDetailsPanel.tsx:199, all of which read the groups and so skip self-loops; then keryx ctx rg for `edges.length` in MetaprojectView.tsx and RelationshipList.tsx: two readers still use the raw count (RelationshipList.tsx:217 and MetaprojectView.tsx:923/925). Read from code, not run."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 496,
+      "quote": "if (catalog.graph === \"missing\" && protocol !== 2) return;",
+      "problem": "Two readers of the graph state now use different sources. The relationships effect (lines 488 and 496) reads `catalog.graph` and `catalog.truncated`; the freshness banner, `showGraph` (line 704), `onDraft` (line 959) and `freshnessOpen` read `graphState`, which takes the quiet re-read's value while its snapshotId equals the catalog's. They can differ only if a quiet re-read returns the same snapshotId with a different `graph` value.",
+      "impact": "Not reachable through the producer as read: src/integrations/metaproject-explorer.ts:174 hashes nodes, edges, page digests and the stat of symbols.jsonl, calls.jsonl and wiki-pages.jsonl into snapshotId, and explorerGraphFreshness (line 208) says freshness never contributes. A flip to or from 'missing' changes the graph-derived nodes or the layer files, hence the snapshotId, and takes the full path (setCatalog, setFreshness(null)). Only a graph with no files, no edges and no layer files would keep the id. Only 'stale', 'ready' and 'unknown' can differ with the same id, and none of those is read at line 496. If it did happen (protocol 1, catalog 'missing', quiet 'ready'), the graph slot would say a graph exists while no relationships read was ever started. Noted so the next edit that reads `catalog.graph` for a decision picks the right source.",
+      "suggested_fix": "Use `graphState?.graph` at line 496, or add a comment there that only a snapshot change can leave 'missing'.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" },
+    { "id": "F-010", "disposition": "closed" },
+    { "id": "F-013", "disposition": "closed" },
+    { "id": "F-015", "disposition": "closed" },
+    { "id": "F-018", "disposition": "closed" },
+    { "id": "F-022", "disposition": "closed" },
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" },
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-redesign`, range `60cbe1c565f4..b1538097e636` (round 2, fix round, `slice-03` read in full, 2114 lines of the diff)
+- Spec compliance gate: ran against the 21 acceptance criteria of the payload; no criterion stopped holding. AC6, AC12, AC13 now have tests that separate their parts.
+- Tool limits kept: read-only, no command that runs code. Not read: `apps/desktop/src/metaproject/metaproject.css` (in the file list, not in this slice), the files of slice-04.
+
+### Dispositions of prior findings (checked against head, not the commit messages)
+- F-003 closed. `filters = visible && filtersOpen && filtersAnchor && ...` unmounts FiltersPopover in the same render in which `visible` turns false, so its `useEscape` layer and mousedown listener go; the effect also sets `filtersOpen` false, so the return shows it closed and moves no focus. The test checks `overlayOpen()` false and an unprevented Escape while hidden. Settings over the work view reaches the same path because App.tsx passes `visible={view === "metaproject"}`.
+- F-008 closed. `choose()` calls `onLocation` first; `navigate()` calls `update` and `enter()` synchronously, `enter()` calls `remember(leaving)` which reads `.metaproject-content` scrollTop, and only then does `choose()` zero the pane. OpenSpecView's `<section ref={content} className="metaproject-content">` is that pane (the only one in OpenSpec mode). The new entry is seeded with 0 by `resetContent`. Line 235 and line 357 callers (links inside a document, artifact buttons) get the same fix. A re-click on the current location (`update` returns null) still zeroes the pane; that was true before.
+- F-010 closed. At head `resolved/T9.implement.json`, `resolved/T15.implement.json`, `results/T9.result.json` and `results/T15.result.json` exist; each result says in `notes` that it was written during T21 because the file was missing. The record is honest about the late write. The guide hunks of this slice are consistent with the code (popover placement, close on leave, quiet re-read, second-step fact, self-loop).
+- F-013 closed for AC6. `changing data-palette alone re-colours labels in place` changes only `data-palette` and checks the new `--fg` on the mounted instance without a second instance; removing `"data-palette"` from the observer filter fails it. The mutation re-run lists G1, G2, G3, G4, G7, G8, G10 and G11 as killed.
+- F-015 closed. The protocol-2 test sets Direction to incoming and Depth 2 first, then checks the last `neighbors` read in Wiki is depth 1, direction both, and exactly the non-symbol V2 kinds; V1 and V30 killed.
+- F-018 closed. The settled AC12 state is pinned by running the held debounce and asserting the empty-state heading names `src/client.ts` and no `article` renders; the undecodable href, the snapshot mismatch, the unresolved message scoped to its page and V9 to V12, V16, V19, V31 are killed. The test replaces `window.setTimeout` and keeps only the last callback, so it depends on the debounce being the last timer set; it passes at head.
+- F-022 closed for what it named. groupRelationships skips `edge.from === edge.to` before any other test, and layoutNeighborhood skips self-loops for counting (graphLayout.ts:216, 506); the panel, fact row, tab count and caption now agree. See new F-001 for the empty state this change leaves behind.
+- Also checked: F-001 (placeFiltersPopover bounds the popover to 8 px inside the window on the side chosen and re-places on resize; the numbers in the tests follow from the code), F-004 (quiet re-read), F-005 (token), F-006 (effect), F-007 (second-step in the fact row): closed.
+
+### Fix code read hardest
+- Quiet re-read (`quietRead`, `freshness`, `graphState`): the visible effect sets the flag and bumps `revision` only when hidden-to-visible and `loaded.current`; the catalog effect consumes the flag in the same run it starts, so a stale flag cannot survive. Same snapshotId: only `freshness` changes, so `catalog`, `graphIndex`, the projections and details do not reload. Different snapshotId: the old full path (setCatalog, selection reset, setFreshness(null)). A non-quiet read superseded by a quiet one is the same snapshot or falls to the full path, so no reload is lost. A rebuild in flight is untouched. A failed quiet read shows the existing error banner with Retry and leaves state. `showGraph`, banner, `onDraft` and `freshnessOpen` use `graphState`; the relationships effect uses `catalog.graph`; they agree as the producer defines snapshotId (see F-002, info).
+- Lookup token: every openPath call takes a token; only the latest lookup may settle; a later click on a loaded or invalid link also supersedes a pending lookup, which is the stated rule. `current()` still guards project, selection and mode.
+- `placeFiltersPopover`: below when it fits or there is no more room above, else above with `bottom`, each bounded by the room on that side and capped at 420 px; `scrollHeight` is the full content height whatever the inline max-height, so re-placing on resize is stable. The popover is placed on open and on resize only; a keyboard-only toggle of the freshness Details while it is open moves the button and leaves the popover where it was (cosmetic, bounded inside the window; not filed).
+- `groupRelationships` with self-loops: the self-loop row and the `to.id !== from.id` guard in SecondStepGroup are both gone, consistent; see F-001 for the empty state.
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+F-001 (minor), F-002 (info).
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+See F-001.
+
+### Suggested Patches
+```diff
+--- RelationshipList.tsx
+-      {projection.edges.length === 0 && <p className="metaproject-rel-note">No relationships for these filters.</p>}
++      {!groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length && <p className="metaproject-rel-note">No relationships for these filters.</p>}
+```
+
+Not verified: nothing was run (read-only, budget 0); F-001 is read from code. Back in OpenSpec restoring the scroll rests on its DOM test, as the brief says.

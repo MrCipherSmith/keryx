@@ -1,0 +1,134 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "The 18 added tests are sound as tests: each has a positive artifact, its fixture drives the case its title names, and every global helper (innerHeight, scrollHeight, Map.prototype.set, debounce) restores in a finally. F-006, F-007 and F-008 are closed; F-009 is partial. Of 20 mutants of the lines T22 changed, 11 were killed and 9 survived. Three survivors concern the Wiki count and the list's empty test (secondStep term, `&&`), two the unpinned retirement of pending work (`project.current++`), and the rest the stand-in explorer's wiring in MetaprojectWork/App.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "line": 213,
+      "quote": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;",
+      "problem": "The `empty` test T22 added (answering F-001 of round 2) is pinned on one side only. Mutants run in a scratch copy of apps/desktop at 8e0f656fb, tests RelationshipList.dom.test.tsx and MetaprojectView.dom.test.tsx (baseline exit 0): R3-9 (`&&` -> `||`, so the note shows whenever any one group is empty) SURVIVED; R3-7 (the `!groups.secondStep.length` term dropped, so a projection with only second-step rows says 'No relationships') SURVIVED; R3-8 (back to `projection.edges.length === 0`) killed by 'a projection whose every edge is left out says it has no relationships'. No fixture builds a projection that has rows in some groups but not in others and asserts the note is absent; the only 'not empty' fixtures have all three groups filled. R3-7 is not equivalent: groupRelationships (RelationshipList.tsx:54-62) puts an edge between two non-root nodes into secondStep, so a projection with no root-adjacent edge and one such edge lists a row.",
+      "impact": "A later edit of the condition keeps both RelationshipList and the Wiki disclosure green while showing 'No relationships for these filters.' above a populated list. No runtime defect today: the gate is correct.",
+      "suggested_fix": "In RelationshipList.dom.test.tsx add a projection with incoming rows only (outgoing empty) and one with a single second-step edge and no adjacent edge; assert the note is absent and the matching group heading present.",
+      "evidence": "Mutation: R3-9 and R3-7 survived (anchor `const empty = ...`, replacement as above); R3-8 killed. Same gate class as round 2's F-001, which the fix pinned only on the all-empty side.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 716,
+      "quote": "const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;",
+      "problem": "The Wiki disclosure's count, which the comment above it says 'counts the rows its list shows', is pinned for incoming/outgoing rows only. R3-4 (`+ wikiRelationships.secondStep` dropped from the sum) SURVIVED the MetaprojectView and RelationshipList DOM tests. The fixtures in 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' carry a self-link and one root-adjacent `describes` edge; none carries a second-step edge, so the list's 'Second step N' group and the label can disagree unseen. Killed for contrast: R3-2 (condition back to `currentProjection.edges.length > 0`), R3-3 (label back to `edges.length`), R3-5 (`> 0` -> `>= 0`). R3-6 (drop `mode === \"wiki\" &&` in the memo) survived and is equivalent: the value is read only inside the Wiki branch.",
+      "impact": "Round 2's F-001 was a count that disagreed with the list beside it; the secondStep term is the one place where that can recur without a failing test.",
+      "suggested_fix": "Add a second-step edge between two non-root nodes to the second `readWith` in that test and assert the label is '2' with 'Second step' group rows present.",
+      "evidence": "Mutation R3-4 survived; R3-2, R3-3, R3-5 killed.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 414,
+      "quote": "if (!quietRead.current) project.current++;",
+      "problem": "T22 split `project.current` so that only a non-quiet catalog read retires pending wiki-link lookups and pages of results. The tests added pin the new direction (a quiet read must not retire: T23-1 and T23-5 killed by 'a wiki-link lookup in flight ... still settles' and 'a page of results in flight ... is still appended') but nothing pins the old direction, that a real read still retires them. In the scratch copy: R3-20 (cleanup bump removed: `if (!quietRead.current) project.current++;` -> ``) SURVIVED all of MetaprojectView.dom.test.tsx (exit 0); R3-19 (the `project.current++;` inside `if (!quiet) {` removed) SURVIVED (exit 0); R3-17 (`generation === project.current &&` dropped from openPath's `current()`) and R3-18 (`projectGeneration !== project.current` replaced by `false` in loadMoreSearch) SURVIVED (exit 0). No test starts a lookup or a load-more, then runs Refresh, Retry or Rebuild, and asserts the late answer is dropped.",
+      "impact": "The counter that T22 re-wired, and its two readers, can be deleted or broken with the suite green: a lookup begun before a Refresh would then apply after it. No defect today; the next editor of this counter is unprotected in exactly the direction round 2's F-002 was about.",
+      "suggested_fix": "Hold a wiki-link lookup (as the T23 lookup test does), click Refresh catalog (or Rebuild with onRebuild returning true), release the lookup, and assert its target does not open and no 'No indexed project file' message shows; the same for a held load-more page.",
+      "evidence": "Mutation R3-17, R3-18, R3-19, R3-20 all survived; T23-1 and T23-5 (no --bail) fail exactly the lookup, page and standing-error tests.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "line": 63,
+      "quote": "test(\"the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return\", async () => {",
+      "problem": "The stand-in explorer pins `visible` handed to the explorer, and nothing else of MetaprojectWork, so the test would pass if MetaprojectWork stopped rendering the real explorer in the app. Mutants in a scratch copy, App.dom.test.tsx (baseline exit 0): R3-14 (default `explorer = LazyMetaprojectView` -> a component returning null) SURVIVED; R3-13 (ProjectWindow's `<MetaprojectWork cwd={cwd} view={view} workView={workView}` -> `view={workView}`) SURVIVED, since no test renders ProjectWindow; R3-10 (RetainedView `visible={view === \"metaproject\"}` -> `visible={workView === \"metaproject\"}`) SURVIVED: the Settings step of the test asserts only `given.at(-1)` is false, not that the wrapper is hidden, so the explorer would stay on screen under Settings; R3-15 (`onRebuild={onRebuild}` -> `async () => false`) SURVIVED, and R3-16 (Suspense fallback removed) SURVIVED. R3-12 (explorer `visible` -> workView) and, from round 2, R2-28 are killed. R3-11 (RetainedView `active` -> `view === ...`) survived and is near-equivalent: it differs only for a first mount while Settings is shown.",
+      "impact": "F-009 asked that the `visible` wiring be pinned; the prop is, but the wrapper's own hidden state under Settings, the app's call site and the default explorer are covered by the live check only. The hidden-under-Settings case is the one the test's own last step names.",
+      "suggested_fix": "In the Settings step add `expect(host.querySelector(\"p\")?.closest(\"[hidden]\")).not.toBeNull()` (kills R3-10). For the default explorer, render MetaprojectWork once without `explorer` and assert the Suspense fallback 'Loading Metaproject…' shows (kills R3-14 and R3-16 without a module mock). The call-site mutant R3-13 needs either a test of ProjectWindow or stating that it rests on the live check.",
+      "evidence": "Mutation R3-10, R3-13, R3-14, R3-15, R3-16 survived; R3-12 killed. The `explorer` prop is the T23 seam (App.tsx:161).",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" },
+    { "id": "F-009", "disposition": "partial" }
+  ],
+  "mutant_candidates": [
+    { "id": "R3-1", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "  }, [nodes, remember]);", "replacement": "  });" },
+    { "id": "R3-2", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "currentProjection && mode === \"wiki\" && wikiRelationshipRows > 0 && (", "replacement": "currentProjection && mode === \"wiki\" && currentProjection.edges.length > 0 && (" },
+    { "id": "R3-3", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "{wikiRelationshipRows}</span>", "replacement": "{currentProjection.edges.length}</span>" },
+    { "id": "R3-4", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep", "replacement": "wikiRelationships.incoming + wikiRelationships.outgoing" },
+    { "id": "R3-5", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "wikiRelationshipRows > 0 &&", "replacement": "wikiRelationshipRows >= 0 &&" },
+    { "id": "R3-6", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "() => mode === \"wiki\" && currentProjection ? summarizeRelationships(currentProjection) : null", "replacement": "() => currentProjection ? summarizeRelationships(currentProjection) : null" },
+    { "id": "R3-7", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;", "replacement": "const empty = !groups.incoming.length && !groups.outgoing.length;" },
+    { "id": "R3-8", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "{empty && <p", "replacement": "{projection.edges.length === 0 && <p" },
+    { "id": "R3-9", "file": "apps/desktop/src/metaproject/RelationshipList.tsx", "anchor": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;", "replacement": "const empty = !groups.incoming.length || !groups.outgoing.length || !groups.secondStep.length;" },
+    { "id": "R3-10", "file": "apps/desktop/src/App.tsx", "anchor": "<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>", "replacement": "<RetainedView active={workView === \"metaproject\"} visible={workView === \"metaproject\"}>" },
+    { "id": "R3-11", "file": "apps/desktop/src/App.tsx", "anchor": "<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>", "replacement": "<RetainedView active={view === \"metaproject\"} visible={view === \"metaproject\"}>" },
+    { "id": "R3-12", "file": "apps/desktop/src/App.tsx", "anchor": "<MetaprojectView cwd={cwd} visible={view === \"metaproject\"} onRebuild={onRebuild} onDraft={onDraft} />", "replacement": "<MetaprojectView cwd={cwd} visible={workView === \"metaproject\"} onRebuild={onRebuild} onDraft={onDraft} />" },
+    { "id": "R3-13", "file": "apps/desktop/src/App.tsx", "anchor": "<MetaprojectWork cwd={cwd} view={view} workView={workView}", "replacement": "<MetaprojectWork cwd={cwd} view={workView} workView={workView}" },
+    { "id": "R3-14", "file": "apps/desktop/src/App.tsx", "anchor": "explorer: MetaprojectView = LazyMetaprojectView }", "replacement": "explorer: MetaprojectView = (() => null) as ComponentType<ExplorerProps> }" },
+    { "id": "R3-15", "file": "apps/desktop/src/App.tsx", "anchor": "onRebuild={onRebuild} onDraft={onDraft} />", "replacement": "onRebuild={async () => false} onDraft={onDraft} />", "kind": "behavior" },
+    { "id": "R3-16", "file": "apps/desktop/src/App.tsx", "anchor": "<Suspense fallback={<p role=\"status\">Loading Metaproject…</p>}>\n        <MetaprojectView cwd", "replacement": "<Suspense fallback={null}>\n        <MetaprojectView cwd", "kind": "presentation" },
+    { "id": "R3-17", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "generation === project.current && shownSelection.current === from", "replacement": "shownSelection.current === from" },
+    { "id": "R3-18", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "projectGeneration !== project.current", "replacement": "false" },
+    { "id": "R3-19", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "      project.current++;\n      setError(\"\");", "replacement": "      setError(\"\");" },
+    { "id": "R3-20", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (!quietRead.current) project.current++;", "replacement": "" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 0 }
+}
+
+## Summary
+
+### Commands run (all in scratch copies; the reviewed tree was not written)
+- Reads only of the brief, skill, payload, mutation-1.md, moved-mutants-1.txt, T23.result.json and slice-02.diff (read in full, 1080 lines).
+- `python3 .../scratchpad/r3/mut_r3.py` (my script, copies apps/desktop as moved_mutants.py does): baselines exit 0 for MetaprojectView.dom.test.tsx, App.dom.test.tsx, RelationshipList.dom.test.tsx; mutants R3-1..R3-16 below; the script ended exit 0.
+- `mut_r3b.py` (T23-1 and T23-5 without --bail, R3-17, R3-18) and `mut_r3c.py` (R3-19, R3-20): exit 0 as scripts; per-mutant bun exit codes in the table.
+- The first attempt with `timeout 295` failed (`timeout` not found on this Mac); nothing ran. Total run time well inside the 300 s budget.
+
+### Mutation table (mine, run at head 8e0f656fb2aa)
+| id | mutation | result |
+|---|---|---|
+| R3-1 | R2-24 moved: `[nodes, remember]` deps removed | killed ("a render that changes no node list leaves the explorer's node memory alone") |
+| R3-2 | Wiki disclosure condition back to `edges.length > 0` | killed (self-link test) |
+| R3-3 | disclosure label back to `edges.length` | killed (self-link test) |
+| R3-4 | `secondStep` dropped from the disclosure count | SURVIVED |
+| R3-5 | `wikiRelationshipRows > 0` -> `>= 0` | killed ("a Wiki page without relationships shows no Relationships disclosure") |
+| R3-6 | `mode === "wiki"` dropped from the memo | survived, equivalent (value read only in the Wiki branch) |
+| R3-7 | `secondStep` dropped from `empty` | SURVIVED |
+| R3-8 | `empty` back to `edges.length === 0` | killed ("a projection whose every edge is left out ...") |
+| R3-9 | `empty` `&&` -> `||` | SURVIVED |
+| R3-10 | RetainedView `visible` -> workView | SURVIVED |
+| R3-11 | RetainedView `active` -> view | survived, near-equivalent |
+| R3-12 | explorer `visible` -> workView | killed (App.dom.test) |
+| R3-13 | call site `view={workView}` | SURVIVED |
+| R3-14 | default explorer replaced by null component | SURVIVED |
+| R3-15 | `onRebuild` not passed through | SURVIVED |
+| R3-16 | Suspense fallback removed | SURVIVED (presentation) |
+| R3-17 | openPath `generation === project.current` dropped | SURVIVED |
+| R3-18 | loadMore `projectGeneration !== project.current` -> false | SURVIVED |
+| R3-19 | `project.current++` in `if (!quiet)` removed | SURVIVED |
+| R3-20 | cleanup `project.current++` removed | SURVIVED |
+
+Reached all 20; none left for the main session. Round 2 table taken from mutation-1.md (28 killed, 3 survived, 3 invalid) and moved-mutants-1.txt (R2-14, R2-23 and T23-1..5 killed); I re-ran T23-1 and T23-5 without --bail: T23-1 fails the lookup test, the load-more test and the standing-error test; T23-5 fails the lookup and load-more tests.
+
+### Prior dispositions
+- F-006 closed: R2-2, 4, 5, 6, 7, 9 killed. Each of the five tests drives the case its title names (arithmetic checked against placeFiltersPopover: 294 below / 138 above; 764 below; 64 below / 788 above; bottom 6 -> 8; window 30 -> maxHeight 0). stubWindowHeight and stubPopoverContentHeight restore the own descriptor or delete it, all inside try/finally; the resize test stubs only an element instance.
+- F-007 closed: R2-14 (on its moved line), R2-16, R2-17, R2-19, R2-26 killed. R2-18 judged equivalent: `setCatalog(result); setFreshness(null);` are consecutive in one async callback (batched), `setFreshness(value)` is called only with `result.snapshotId === loadedSnapshot.current`, which is the loaded catalog's id, and catalog is set in one place; so freshness is null or of the loaded snapshot and `freshness ?? catalog` gives the same value for every reachable state. The guard is dead code, not a testable gate. R2-12 and R2-30 not re-judged (not mine this round).
+- F-008 closed: R2-23 (moved) killed by the search-hit Back test, R3-1 (R2-24 moved) killed by the Map.prototype.set test, which keeps its writes==0 assertion beside the new positive test.
+- F-009 partial: the `visible` prop is pinned (R2-28 and R3-12 killed), but the stand-in leaves the wrapper's hidden state under Settings (R3-10), the call site (R3-13), the default explorer (R3-14) and the pass-through of onRebuild (R3-15) unpinned; see F-004.
+
+### The 18 added tests as tests
+Each asserts rendered DOM, banners, call counts of the injected reader or style values the popover sets; each negative assertion (no banner, no error text) has a positive artifact (a read count, an aria-current row, a panel title). Fixtures match their titles; no fixture inherits another scenario's shape. The one spy on a DOM method (`getBoundingClientRect` call count in the closed-popover test) is the only way to observe a leaked resize listener; I judged it acceptable. Global helpers restore (innerHeight, scrollHeight descriptors, Map.prototype.set, holdDebounce in finally). Not verified: that a test fails alone rather than via shared state when run in a different order (each file runs in one process, in file order).
+
+### Routing audit
+graph_used: not-relevant (slice and test files read directly); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg/read for searches); raw_rg_used: no. Raw cat/sed were used with the hook's escape marker only for files assigned in the brief.

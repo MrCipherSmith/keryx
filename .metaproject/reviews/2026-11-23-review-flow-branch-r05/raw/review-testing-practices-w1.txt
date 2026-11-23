@@ -1,0 +1,78 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "The four tests T26 added each drive the sequence their title names (read counters traced), assert rendered banner text, and leave no held promise pending; I re-ran R4-7, R4-8, R4-10 and R4-11 myself in a scratch copy and each is killed by exactly the test the record names. Round 4's F-001 and F-002 are closed. Seven new mutants of the catalog effect and rebuild() were run: four killed, three survived; one survivor (the `if (!loaded.current)` gate on the loading banner) is filed as info because it is older than this round and no production line changed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "confidence": "high",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 382,
+      "quote": "if (!loaded.current) setLoading(true);",
+      "problem": "Mutant R5-7 (`if (!loaded.current) setLoading(true);` -> `setLoading(true);`) SURVIVED: bun test of MetaprojectView.dom.test.tsx, 91 pass, exit 0. With the mutation every catalog read after the first, quiet re-reads on return and reloads after a rebuild included, would raise the 'Loading project knowledge…' status (line 877) until it lands. No test asserts that status is absent while a later read is held. The new tests hold a quiet read (test 3) and a reload (test 4) in flight, which is the place the assertion would sit, and none looks for the status. This gate is older than fix round 4 and no production line changed this round, so it is a gap the new fixtures could close, not a defect the fix introduced.",
+      "impact": "The next editor who simplifies the effect body (the condition reads like a redundant guard) shows a loading banner on every return to the explorer and every reload with the suite green. The cost is a flash of status text over a catalog that is already on screen; no data or state is lost, hence info.",
+      "suggested_fix": "In 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands' (or its sibling), add `expect(document.body.textContent).not.toContain(\"Loading project knowledge…\")` after `expect(catalogReads).toBe(2)` while the quiet read is held, after the catalog has first loaded.",
+      "evidence": "Own mutant run in a scratch copy made as scratch_check4.py make_copy() does, my script scratchpad/r5/run.py, one mutant at a time, `bun test src/metaproject/MetaprojectView.dom.test.tsx`: baseline 91 pass 0 fail; R5-7 survived (exit 0)."
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" }
+  ],
+  "mutant_candidates": [
+    { "id": "R5-1", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (generation === catalogRead.current && !quiet) setError({ source: \"catalog\"", "replacement": "if (generation === catalogRead.current) setError({ source: \"catalog\"", "kind": "behavior" },
+    { "id": "R5-2", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if ((await onRebuild()) && mounted.current) setRevision(", "replacement": "if ((await onRebuild())) setRevision(", "kind": "behavior" },
+    { "id": "R5-3", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "        if (generation === catalogRead.current) {\n          catalogPending.current = false;\n          setLoading(false);\n        }", "replacement": "        {\n          catalogPending.current = false;\n          setLoading(false);\n        }", "kind": "behavior" },
+    { "id": "R5-4", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (!returned || !loaded.current || catalogPending.current) return;", "replacement": "if (!returned || !loaded.current) return;", "kind": "behavior" },
+    { "id": "R5-5", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (!quietRead.current) project.current++;", "replacement": "project.current++;", "kind": "behavior" },
+    { "id": "R5-6", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result", "replacement": "        if (quiet) setError(null);\n        if (quiet && result", "kind": "behavior" },
+    { "id": "R5-7", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "    if (!loaded.current) setLoading(true);", "replacement": "    setLoading(true);", "kind": "behavior" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+## Mutation table (all run by me; scratch copy of apps/desktop, test file MetaprojectView.dom.test.tsx alone, `bun test --bail`, one mutant at a time; baseline 91 pass 0 fail, exit 0)
+
+| id | mutation | result |
+|---|---|---|
+| R4-7 | drop `generation === catalogRead.current &&` before the failure write | killed by 'a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded' |
+| R4-8 | move the quiet clear above the superseded-read return | killed by 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands' |
+| R4-10 | effect-body `setError(null)` keeps a rebuild error | killed by 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds' |
+| R4-11 | rebuild() `setError(null)` keeps a rebuild error | killed by 'a second rebuild removes the first one's failure banner while it runs' |
+| R5-1 | drop `&& !quiet` on the failure write | killed by 'a failed quiet re-read on return shows no error and leaves the explorer as it was' |
+| R5-2 | drop `&& mounted.current` before `setRevision` in rebuild() | SURVIVED. Equivalent in effect: a state setter on an unmounted React 18 component is a no-op, nothing a user can see changes. Not filed. |
+| R5-3 | finally block resets `catalogPending` and `loading` for a superseded read too | SURVIVED. A superseded read landing could clear `catalogPending` while a later read is pending, so a return then starts a quiet read that supersedes it. Needs a hide/show between two overlapping loud reads; I did not build that input, so not filed as a defect. Pre-existing guard (T22). |
+| R5-4 | drop `|| catalogPending.current` in the visibility effect | killed by 'a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown' |
+| R5-5 | cleanup bumps `project.current` always | killed by 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' |
+| R5-6 | quiet success clears every error, not only a catalog one | killed by 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' |
+| R5-7 | `setLoading(true)` on every read | SURVIVED (F-001, info) |
+
+Cap: 11 mutants run (4 re-runs of round 4's, 7 of my own), none left unrun. R4-1, R4-6 and R4-12 were not re-run; they are recorded as equivalent or older than the branch's fixes, and I did not doubt that record.
+
+## The four new tests, read as tests
+
+1. 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds'. Counter: read 1 on mount, Retry makes read 2 (asserted `catalogReads === 2`). The rebuild failure is shown first (positive artifact), then the banner is absent and the 'Client' row is listed. Asserts rendered text and rows. The only clear that can remove the banner here is the effect body's (the rebuild's own is long past); R4-10 confirms it.
+2. 'a second rebuild removes the first one's failure banner while it runs'. Rebuild 1 rejects (banner shown), rebuild 2 is held: asserts the 'Rebuilding…' button is disabled and the banner is absent while held, then `finish(false)` releases the promise, so nothing is left pending; the control is enabled again and still no banner. No read follows a `false`, so the clear can only be rebuild()'s. R4-11 confirms.
+3. 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands'. Counter traced: mount = read 1, hide, show = read 2 (quiet, held, asserted 2), Rebuild graph click with `onRebuild` true = read 3 (asserted 3, rejects). The banner is shown before the quiet read is released, so the final assertion is not a bare falsy check; `releaseQuiet()` is called, nothing stays pending. The title says 'failed rebuild reload': the rebuild succeeded and the reload failed. Wording only.
+4. 'a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded'. Counter: mount = 1, rebuild click = read 2 (held, asserted 2), second click = read 3 (resolves, asserted 3), then read 2 rejects via `failFirstReload()`. Read 2 is the superseded one. The assertion is the absence of a banner, which alone would pass if the path never ran; the test rules that out with the `catalogReads` asserts and the fact that R4-7 turns it red, and it also asserts the catalog row. Held promise is rejected in the test, none leaks.
+
+All four render into the shared root that beforeEach resets, with local promises; the file ran 91 pass in one process.
+
+## Commands run (all from the worktree root, exit state)
+
+- `python3 .../scratchpad/r5/run.py` (my copy of scratch_check4's make_copy/run_tests with the 11 mutants above): first attempt exit 2 (it imported scratch_check4, which parses argv at import); fixed to exec the helper section only; second run exit 0, output as in the table.
+- `git diff 744d9ef7542f..857036d02174 -- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx` (raw, to read the 82 added lines of test): exit 0. `git diff --stat` same range: exit 0.
+- `keryx ctx rg` over the slice and production file: exit 0 except one search of the slice for `^diff --git` (exit 1, no match; the slice has no git headers). `keryx ctx rg` with `-A8` refused by the tool.
+- A first `Bash` heredoc was refused by the shell hook (raw `cat`), nothing ran; I wrote the script with the Write tool instead.
+
+## Not verified
+
+The native Tauri window; the whole suite (`bun test src`), `tsc` and `vite build` (the orchestrator's evidence holds them, I did not repeat them); the live behaviour of any mutant. Slice reading: every hunk of slice-01 was read except the second half of fix-round-4.md in the slice (lines 944-1235 of the diff), which I read in the file itself and which matches the mutant list in `t26-mutants-1.txt`. The record files (journal, tasks, flow.json, T24 and T26 results, fix-round-3.md) were read for claims about the tests; I found none that disagrees with what the tests do.
+
+F-001 (round 4): closed, by the code and the run: R4-10 and R4-11 each killed by one of the two new tests.
+F-002 (round 4): closed: R4-7 and R4-8 each killed by one of the other two; both fixtures hold a read in flight and release it.

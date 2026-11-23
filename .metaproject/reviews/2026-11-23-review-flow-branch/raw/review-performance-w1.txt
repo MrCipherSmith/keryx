@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-metaproject-redesign`, merge-base `1358d962f4dfc07a9e086a533f51e75aa757dfcd`, head `60cbe1c565f4e478833605b41c49c2827eed2bbf`, slice-05 only (App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx). Read in full (2513 lines). Read-only tools; nothing run.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+### [F-001] Per-render walk over every catalog node to fill `seenNodes`
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectView.tsx:512
+- **Hot path**: runs in the `Explorer` render body, so on every Explorer render: each search keystroke (`setRoute`), and each `pointermove` of the details-panel resize drag (`onResize={setPanelWidth}`, line 888, which re-renders the whole Explorer). N = `nodes` = catalog nodes + hits + projection nodes. The catalog size is not stated in the payload; no timing was supplied.
+- **Problem**: `for (const node of nodes) remember(node);` does one `Map.set` per node on every render. `nodes` is already memoized and changes rarely, so the write is redundant on all renders where it did not change. The same Map is never pruned.
+- **Why it matters**: an O(N) write that could run once per change of `nodes`. Unmeasured and off any proven-slow path, so `minor`: cost to whoever tunes the explorer next, not a defect today.
+- **Fix**: fill the map in an effect or in the same `useMemo` that builds `nodes` (keyed on `[catalog, hits, projection]`), not in the render body.
+
+### Clean Areas
+- Retained explorer (`RetainedView`, App.tsx): one cytoscape instance and one ResizeObserver stay alive while hidden; `fit` skips a zero-sized container (`target.usable`), the popover's window `mousedown` listener exists only while it is open. No growth per visit.
+- RelationshipGraph lifecycle: cytoscape created once (`[fit]` deps), `destroy()`, ResizeObserver, MutationObserver and matchMedia listener all cleaned up; elements are replaced in one `cy.batch` only when `layout` changes; layout and legend are memoized on `projection`. Hover highlight touches at most the ~200-node graph. The theme observer fires only on `data-theme`, `data-palette` or root `style` changes (prefs write four properties, batched into one callback).
+- Neighbour requests: `relationKinds`/`relationDepth`/`relationDirection` are module constants or state, so the effect does not refetch per render; `preview` is `useCallback`-stable, so the panel's preview effect does not loop.
+- NodeDetailsPanel: summary and linked-document lists are `useMemo`'d; preview parsing (`markdownPreview`) is a single pass over one page, run once per `firstId`.
+- RelationshipList: `groupRelationships` is not memoized and re-runs per render, but its input is bounded by the projection (about 200 nodes / 269 edges in the cited case); not worth a finding.
+- Sync I/O, N+1 queries, large-library imports (the old top-level `cytoscape` import moved into RelationshipGraph, which is in the same lazy-loaded MetaprojectView chunk), polling: none in the slice.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 512,
+      "title": "Per-render walk over every catalog node to fill seenNodes",
+      "evidence": "for (const node of nodes) remember(node);",
+      "problem": "One Map.set per node in the Explorer render body, on every render (search keystroke, each pointermove of the panel resize drag), although `nodes` is memoized and changes rarely.",
+      "suggested_fix": "Populate seenNodes in the useMemo that builds `nodes`, or in an effect keyed on `nodes`."
+    }
+  ]
+}
+```

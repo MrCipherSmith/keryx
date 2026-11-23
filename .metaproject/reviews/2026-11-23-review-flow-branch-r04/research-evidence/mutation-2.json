@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+  "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 2433
+  },
+  "mutants": [
+    {
+      "id": "R4-1",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n",
+      "replacement": "        setError(current => current?.source === \"catalog\" ? null : current);\n",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 392,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 2064
+    },
+    {
+      "id": "R4-2",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setCatalog(result);\n",
+      "replacement": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setError(current => current?.source === \"catalog\" ? null : current);\n        setCatalog(result);\n",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 391,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 890
+    },
+    {
+      "id": "R4-3",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setCatalog(result);\n",
+      "replacement": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          setError(current => current?.source === \"catalog\" ? null : current);\n          return;\n        }\n        setCatalog(result);\n",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 391,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 845
+    },
+    {
+      "id": "R4-4",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "current?.source === \"catalog\" ? null : current",
+      "replacement": "current?.source === \"rebuild\" ? null : current",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 392,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 836
+    },
+    {
+      "id": "R4-5",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "<span>{error.message}</span>",
+      "replacement": "<span>{error.source}</span>",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 848,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 629
+    },
+    {
+      "id": "R4-6",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "if (mounted.current) setError({ source: \"rebuild\"",
+      "replacement": "setError({ source: \"rebuild\"",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 681,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1502
+    },
+    {
+      "id": "R4-7",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "if (generation === catalogRead.current && !quiet) setError(",
+      "replacement": "if (!quiet) setError(",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 407,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1483
+    },
+    {
+      "id": "R4-8",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "        if (generation !== catalogRead.current) return;\n        loaded.current = true;\n        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n",
+      "replacement": "        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (generation !== catalogRead.current) return;\n        loaded.current = true;\n        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 389,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1518
+    },
+    {
+      "id": "R4-9",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "<span>{error.message}</span>\n          <button className=\"btn btn-sm\" onClick={() => setRevision(value => value + 1)}>",
+      "replacement": "<span>{error.message}</span>\n          <button className=\"btn btn-sm\" onClick={() => {}}>",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 848,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 832
+    },
+    {
+      "id": "R4-10",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "      project.current++;\n      setError(null);\n",
+      "replacement": "      project.current++;\n      setError(current => current?.source === \"rebuild\" ? current : null);\n",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 379,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1490
+    },
+    {
+      "id": "R4-11",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "    setRebuilding(true);\n    setError(null);\n",
+      "replacement": "    setRebuilding(true);\n    setError(current => current?.source === \"rebuild\" ? current : null);\n",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 676,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1536
+    },
+    {
+      "id": "R4-12",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "setError({ source: \"catalog\", message: errMessage(cause) });",
+      "replacement": "setError({ source: quiet ? \"rebuild\" : \"catalog\", message: errMessage(cause) });",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 407,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1510
+    }
+  ],
+  "totals": {
+    "killed": 5,
+    "survived": 7,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-23T12:08:27.250Z",
+  "head": "744d9ef7542f94e3442b120fe265d97f11923ea1",
+  "treeHash": "6793495198720612a5011a17df46530b18b3dcd475616026281eb4c126615a9f",
+  "loadavg": [
+    6.560546875,
+    11.66796875,
+    11.8291015625
+  ],
+  "provenanceMs": 803,
+  "copyMs": 24630,
+  "mutantsMs": 15135
+}
