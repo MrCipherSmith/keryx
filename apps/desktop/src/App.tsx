@@ -660,6 +660,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       {issueWork.chooser}
       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+          sessions={state.sessions}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
       </div>}
       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { issueViewerKey, type IssuePage, type IssueScope, type IssueSummary, type IssueViewer } from "../../../../src/integrations/issues-contract";
+import { issueViewerKey, type IssueListSource, type IssuePage, type IssueSummary, type IssueViewer } from "../../../../src/integrations/issues-contract";
 import { errMessage } from "../lib/format";
 import { requestIssues } from "../platform/issues";
 import { mergeRows, type Filters, type ProjectBoard, type ProjectSource, type Row } from "./model";
@@ -17,7 +17,7 @@ export function isAccessError(reason: string) {
   return /(?:^|\b)(?:access|account_mismatch|source_unavailable):/i.test(reason);
 }
 
-export function useIssueCollection(cwd: string, login: string, source: IssueScope | "project", target: ProjectSource | null,
+export function useIssueCollection(cwd: string, login: string, source: IssueListSource | "project", target: ProjectSource | null,
   filters: Filters, verified: IssueViewer, denied: (reason: string) => void, request: typeof requestIssues) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(true);

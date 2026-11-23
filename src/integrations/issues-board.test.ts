@@ -147,12 +147,14 @@ test("AC5 GitHub state, Project Status and Keryx stage stay independent on refre
   const refreshed = mergeRows([openDone, closedActive], [
     { ...closedActive, issue: { ...closedActive.issue, work: {stage: "needs_answer", reason: "Choose the execution branch"} } },
   ]);
-  expect(groupForRow(openDone, false)).toBe("done");
+  // Without a Project the board groups by GitHub state; the Keryx stage never picks the lane (R3).
+  expect(groupForRow(openDone, false)).toBe("open");
   expect(groupForRow(openDone, true)).toBe("in-progress");
-  expect(groupForRow(closedActive, false)).toBe("active");
+  expect(groupForRow(closedActive, false)).toBe("closed");
   expect(visibleRows(refreshed, defaultFilters)).toEqual([openDone]);
   const shown = visibleRows(refreshed, { ...defaultFilters, state: "all" }).find(r => issueKey(r.issue.ref) === selected)!;
-  expect(groupForRow(shown, false)).toBe("needs_answer");
+  expect(groupForRow(shown, false)).toBe("closed");
+  expect(shown.issue.work?.stage).toBe("needs_answer");
   expect(shown.issue.work?.reason).toBe("Choose the execution branch");
   expect(shown.issue.state).toBe("closed");
 });

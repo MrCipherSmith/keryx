@@ -9,6 +9,9 @@
 .issue-labels { color: var(--fg-muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issue-actions { flex-wrap: wrap; }
 .issue-move { max-width: 12em; min-height: 26px; }
+/* Two slots (Flow, session) in the PR work row's fixed-height look (styles/review.css). */
+.issue-work-row { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--sp-1); }
+.issue-table .issue-work-row { min-width: 220px; margin-top: 0; }
 .issues-notice { margin: var(--sp-3) var(--sp-5); color: var(--fg-muted); }
 .issues-notice button { margin-left: var(--sp-2); }
 .issue-more { align-self: flex-start; margin: var(--sp-2) var(--sp-5); }

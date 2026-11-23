@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
+import type { SessionInfo } from "../acp/types";
 import { Icon } from "../components/Icon";
 import { errMessage, relativeTime } from "../lib/format";
 import { requestIssues } from "../platform/issues";
 import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
 import { IssueFilters } from "./IssueFilters";
-import { defaultFilters, groupForRow, issueName, readPreferences, SOURCES, STAGES, visibleRows, type Filters, type ProjectBoard, type ProjectSource, type Row } from "./model";
+import { IssueWorkRow } from "./IssueWorkRow";
+import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, readPreferences, SOURCES, STAGES, visibleRows,
+  type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
 import { isAccessError, useIssueCollection } from "./useIssueCollection";
 import "./IssuesBoard.css";
 
 interface Props extends WorkProps {
   cwd: string; login: string; onAccessDenied?: () => void; onSettings: () => void; request?: typeof requestIssues;
+  /** The project's sessions; the work row counts those bound to an issue through their `subject`. */
+  sessions?: readonly SessionInfo[];
 }
-type Source = keyof typeof SOURCES;
+type Source = IssueSource;
+const NO_SESSIONS: readonly SessionInfo[] = [];
 
 function stored(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -55,7 +61,7 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
   const [denied, setDenied] = useState("");
   const [source, setSource] = useState<Source>(() => {
     const value = stored(account + ".source");
-    return value && Object.hasOwn(SOURCES, value) ? value as Source : "assigned";
+    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
   });
   const [target, setTarget] = useState<ProjectSource | null>(() => {
     try {
@@ -111,7 +117,8 @@ interface CollectionProps extends Props {
   viewer: IssueViewer; clear: (reason: string) => void; remember: (project: ProjectBoard) => void;
 }
 
-function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues }: CollectionProps) {
+function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues,
+  sessions = NO_SESSIONS }: CollectionProps) {
   const [prefs, setPrefs] = useState(() => readPreferences(prefsKey));
   const { filters, list } = prefs;
   const [filterDialog, setFilterDialog] = useState(false);
@@ -211,29 +218,23 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
     } finally { activeMove.current = false; if (alive.current) setMoving(null); }
   }
 
-  /** The issue's actions, each with visible text on the card, the list row and the panel alike. */
+  /** The issue's work row and actions, each with visible text on the card, the list row and the panel alike. */
   function workActions(row: Row) {
     const issue = row.issue;
-    const stage = issue.work?.stage ?? "none";
     const pending = working !== null;
-    const flowLabel = stage === "none" ? "Create Flow" : "Open Flow";
-    const sessionLabel = stage === "needs_answer" ? "Open question" : "Open in session";
-    return <div className="card-actions issue-actions">
-      <button className="btn btn-sm" aria-label={sessionLabel + " for " + issueName(issue)}
-        title={stage === "needs_answer" ? "Open question in Sessions" : "Open in session"} disabled={pending} onClick={() => void act("open-session", issue.ref)}>
-        <Icon name="chat" size={13} />{sessionLabel}</button>
-      <button className="btn btn-sm" aria-label={flowLabel + " for " + issueName(issue)} title={flowLabel}
-        disabled={pending} onClick={() => void act(stage === "none" ? "prepare-flow" : "open-flow", issue.ref)}>
-        <Icon name="branch" size={13} />{flowLabel}</button>
-      {issue.work?.canResumePreparation && <button className="btn btn-sm"
-        aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
-        onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={13} />Resume preparation</button>}
-      {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
-    </div>;
+    const more = issue.work?.canResumePreparation || project;
+    return <>
+      <IssueWorkRow issue={issue} sessions={sessions} pending={pending} onAction={action => void act(action, issue.ref)} />
+      {more && <div className="card-actions issue-actions">
+        {issue.work?.canResumePreparation && <button className="btn btn-sm"
+          aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
+          onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={13} />Resume preparation</button>}
+        {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
+      </div>}
+    </>;
   }
 
-  const groups = project ? [...project.options.map(o => ({ id: o.id, label: o.name })), { id: "unassigned", label: "No status" }]
-    : Object.entries(STAGES).map(([id, label]) => ({ id, label }));
+  const groups = issueGroups(project, filters.state);
   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "text" && v !== defaultFilters[k as keyof Filters]);
   const setFilters = (f: Filters) => setPrefs(p => ({ ...p, filters: f }));
   const dragItem = useRef<Row | null>(null);
@@ -281,7 +282,6 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
               <span className="flow-id">{issueName(r.issue)}</span><span className="flow-title">{r.issue.title}</span>
               <span className="flow-meta">
                 <span className="badge">{r.issue.state}</span>
-                {project && <span>{STAGES[r.issue.work?.stage ?? "none"]}</span>}
                 <span>{r.issue.assignees.join(", ") || "Unassigned"}</span>
               </span>
               {r.issue.labels.length > 0 && <span className="issue-labels" title={r.issue.labels.join(", ")}>{r.issue.labels.join(" · ")}</span>}

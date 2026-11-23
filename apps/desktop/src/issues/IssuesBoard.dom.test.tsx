@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
 import type { IssueSummary } from "../../../../src/integrations/issues-contract";
+import type { SessionInfo } from "../acp/types";
 import type { IssuesAction, requestIssues } from "../platform/issues";
 import { registerDom, unregisterDom } from "../test/dom";
 
@@ -29,11 +30,13 @@ beforeEach(async () => { await act(() => root.render(null)); localStorage.clear(
 afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
 
 type Read = (login: string, action: IssuesAction, args: object) => Promise<unknown>;
-function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}) {
+function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[]) {
   const request: typeof requestIssues = async <T,>(_cwd: string, account: string, action: IssuesAction, args: object) => (action === "viewer" ? { viewer: { ...viewer, login: account, nodeId: account === viewer.login ? viewer.nodeId : "U_b" } } : await read(account, action, args)) as T;
   return act(async () => { root.render(createElement(Board, { cwd: "/fixture", login, request,
-    onSettings: () => {}, onWork: async action => onWork(action) })); });
+    onSettings: () => {}, onWork: async action => onWork(action), ...(sessions ? { sessions } : {}) })); });
 }
+const account = "keryx.issues." + JSON.stringify([viewer.host, viewer.nodeId]);
+const lanes = () => [...host.querySelectorAll(".issue-lanes .lane")].map(lane => lane.getAttribute("aria-label"));
 function button(label: string) {
   const result = [...host.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
   if (!result) throw new Error("Missing button: " + label);
@@ -53,7 +56,7 @@ test("board and list open one detail panel; comments load on demand and Flow sta
     throw new Error("Unexpected " + action);
   }, viewer.login, a => work.push(a));
   expect(calls).toEqual(["list"]);
-  expect(host.querySelector('[aria-label="Done"] .flow-card')?.textContent).toContain("open");
+  expect(host.querySelector('[aria-label="Open"] .flow-card')?.textContent).toContain("open");
   await click(button("List"));
   expect(calls).toEqual(["list"]);
   const trigger = host.querySelector<HTMLButtonElement>("tbody button.review-list-link")!;
@@ -64,7 +67,7 @@ test("board and list open one detail panel; comments load on demand and Flow sta
   expect(content.includes("See") && content.indexOf("See") < content.indexOf("More context")).toBe(true);
   expect(detail.querySelector('a[href="https://github.com/org/sample/issues/42"]')).not.toBeNull();
   expect(detail.querySelector('a[href="https://github.com/org/sample/blob/HEAD/docs/README.md"]')).not.toBeNull();
-  await click(button("Open Flow for org/sample#3"));
+  await click(button("Flow · Done for org/sample#3"));
   expect(work).toEqual(["open-flow"]);
   await click(button("Close issue"));
   expect(host.querySelector("aside")).toBeNull();
@@ -133,9 +136,8 @@ test("AC2 refreshing page one leaves a selected later-page issue open and revali
 });
 
 test("AC14 keyboard Project Status control uses observed value and surfaces a conflicting move", async () => {
-  const acc = 'keryx.issues.' + JSON.stringify([viewer.host, viewer.nodeId]);
-  localStorage.setItem(acc + ".source", "project");
-  localStorage.setItem(acc + ".project", JSON.stringify({owner: "demo", number: 18}));
+  localStorage.setItem(account + ".source", "project");
+  localStorage.setItem(account + ".project", JSON.stringify({owner: "demo", number: 18}));
   let moves = 0;
   await render(async (_login, action, args) => {
     if (action === "project") return { ...page([{ issue, itemId: "item", optionId: "todo" }]),
@@ -175,7 +177,7 @@ test("AC11 busy session leaves its Flow openable and its unsent preparation retr
   expect(host.textContent).toContain("The conversation is busy.");
   const retrySelector = 'button[aria-label="Resume preparation for org/sample#3"]';
   expect(host.querySelector(".flow-card " + retrySelector)).not.toBeNull();
-  expect(button("Open Flow for org/sample#3")).not.toBeUndefined();
+  expect(button("Flow · Preparing for org/sample#3")).not.toBeUndefined();
   await click(button("List"));
   expect(host.querySelector("tbody " + retrySelector)).not.toBeNull();
   await click(host.querySelector<HTMLButtonElement>("tbody .review-list-link")!);
@@ -318,12 +320,106 @@ test("every action on an Issue card and list row has visible text", async () => 
     const containers = [...host.querySelectorAll(mode === "Board" ? ".issue-lanes .flow-card" : ".issue-table tbody tr")];
     expect(containers.length).toBe(2);
     for (const container of containers) {
-      const controls = [...container.querySelectorAll(".card-actions button, .card-actions a")];
+      const controls = [...container.querySelectorAll(".issue-work-row button, .card-actions button, .card-actions a")];
       expect(controls.length).toBeGreaterThan(1);
       for (const control of controls) expect(control.textContent?.trim()).not.toBe("");
     }
   }
   expect(button("Open in session for org/sample#3").textContent).toBe("Open in session");
+  expect(button("Flow · Done for org/sample#3").textContent).toBe("Flow · Done");
   expect(button("Create Flow for org/sample#4").textContent).toBe("Create Flow");
   expect(button("Resume preparation for org/sample#4").textContent).toBe("Resume preparation");
+});
+
+const other = (number: number, patch: Partial<IssueSummary> = {}): IssueSummary => ({ ...issue, ...patch,
+  ref: { ...issue.ref, nodeId: "I_" + number, number, url: "https://github.com/org/sample/issues/" + number } });
+
+test("AC13 the project repository is the default source; the other sources stay selectable", async () => {
+  const sources: unknown[] = [];
+  await render(async (_login, action, args) => {
+    if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
+    throw new Error("Unexpected " + action);
+  });
+  expect(sources).toEqual(["repository"]);
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+  expect(select.value).toBe("repository");
+  expect([...select.options].map(o => o.textContent)).toEqual(["Project repository", "Assigned to me", "Created by me", "Mentioned", "Subscribed", "GitHub Project"]);
+  await act(async () => { select.value = "assigned"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(sources).toEqual(["repository", "assigned"]);
+  expect(localStorage.getItem(account + ".source")).toBe("assigned");
+});
+
+test("AC13 a stored source preference wins over the project repository default", async () => {
+  localStorage.setItem(account + ".source", "assigned");
+  const sources: unknown[] = [];
+  await render(async (_login, action, args) => {
+    if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
+    throw new Error("Unexpected " + action);
+  });
+  expect(sources).toEqual(["assigned"]);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
+});
+
+test("AC11 issues without a Flow spread over Open and Closed; Closed appears only when the state filter includes it", async () => {
+  const rows = [other(5, { work: { stage: "none" } }), other(6, { state: "closed", work: { stage: "none" } }), other(7, { work: { stage: "active" } })];
+  const read: Read = async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    const { state } = args as { state: string };
+    return page(rows.filter(r => state === "all" || r.state === state));
+  };
+  await render(read);
+  expect(lanes()).toEqual(["Open"]);
+  expect(host.querySelectorAll('[aria-label="Open"] .flow-card')).toHaveLength(2);
+  // The Flow stage is a link on the card, never a column.
+  expect(host.querySelector('[aria-label="Open"] [data-slot="flow"] button')?.textContent).toBe("Create Flow");
+  expect(button("Flow · In progress for org/sample#7").closest('[aria-label="Open"]')).not.toBeNull();
+
+  await act(() => root.render(null));
+  localStorage.setItem(account + ".filters." + JSON.stringify(["repository", null]), JSON.stringify({ filters: { state: "all" }, list: false }));
+  await render(read);
+  expect(lanes()).toEqual(["Open", "Closed"]);
+  expect(host.querySelector('[aria-label="Closed"] .flow-card')?.textContent).toContain("org/sample#6");
+  expect(host.querySelectorAll('[aria-label="Open"] .flow-card')).toHaveLength(2);
+});
+
+test("AC11 the Flow stage filter is gone and a stored stage preference is ignored", async () => {
+  localStorage.setItem(account + ".filters." + JSON.stringify(["repository", null]), JSON.stringify({ filters: { stage: "done", label: "sync" }, list: false }));
+  await render(async (_login, action) => {
+    if (action === "list") return page([other(5, { work: { stage: "none" } })]);
+    throw new Error("Unexpected " + action);
+  });
+  expect(host.textContent).toContain("org/sample#5");
+  expect(host.querySelector('button[aria-label="Remove stage filter"]')).toBeNull();
+  expect(host.querySelector('button[aria-label="Remove label filter"]')).not.toBeNull();
+  await click(button("Filters (1)"));
+  expect(host.textContent).not.toContain("Keryx stage");
+  expect(host.textContent).not.toContain("All stages");
+});
+
+test("AC12 the work row has a Flow slot and a session slot counted from sessions bound through subject", async () => {
+  const subject = (number: number, kind = "issue", repo = "Org/Sample") => ({ kind, repo, number, url: "https://github.com/org/sample/issues/" + number });
+  const session = (id: string, keryx: Record<string, unknown>): SessionInfo =>
+    ({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id, _meta: { keryx } }) as SessionInfo;
+  const sessions = [
+    session("1", { subject: subject(5) }), session("2", { subject: subject(5) }),
+    session("3", { subject: subject(5), archivedAt: "2026-11-04" }), session("4", { subject: subject(5, "pr") }),
+    session("5", { subject: subject(6) }), session("6", { flow: "001-unrelated" }),
+  ];
+  const work: string[] = [];
+  await render(async (_login, action) => {
+    if (action === "list") return page([other(5, { work: { stage: "needs_answer" } }), other(6, { work: { stage: "none" } }), other(7)]);
+    throw new Error("Unexpected " + action);
+  }, viewer.login, a => work.push(a), sessions);
+  const row = (n: number) => [...host.querySelectorAll<HTMLElement>(".issue-work-row")].find(r => r.getAttribute("aria-label") === "Keryx work for org/sample#" + n)!;
+  const slots = (n: number) => [...row(n).querySelectorAll("[data-slot] button")].map(b => [b.closest("[data-slot]")!.getAttribute("data-slot"), b.textContent]);
+  expect(slots(5)).toEqual([["flow", "Flow · Needs an answer"], ["session", "2 sessions"]]);
+  expect(slots(6)).toEqual([["flow", "Create Flow"], ["session", "Session"]]);
+  expect(slots(7)).toEqual([["flow", "Flow · Done"], ["session", "Open in session"]]);
+  await click(button("2 sessions for org/sample#5"));
+  await click(button("Create Flow for org/sample#6"));
+  await click(button("Flow · Done for org/sample#7"));
+  await click(button("Open in session for org/sample#7"));
+  expect(work).toEqual(["open-session", "prepare-flow", "open-flow", "open-session"]);
+  await click(button("List"));
+  expect(host.querySelectorAll(".issue-table tbody .issue-work-row")).toHaveLength(3);
 });
