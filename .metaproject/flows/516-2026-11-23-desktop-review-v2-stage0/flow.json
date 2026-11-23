@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T12:07:08.461Z",
+  "updatedAt": "2026-11-23T12:35:18.533Z",
   "source": {
     "type": "description",
     "ref": null
@@ -501,6 +501,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:22:16.055Z",
+            "outcome": "started",
+            "detail": "516-T24 PR review round 5 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -816,6 +837,21 @@
       "at": "2026-11-23T12:07:08.461Z",
       "event": "task-done",
       "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
+    },
+    {
+      "at": "2026-11-23T12:22:15.865Z",
+      "event": "task-added",
+      "detail": "T24: PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover"
+    },
+    {
+      "at": "2026-11-23T12:22:16.055Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 516-T24 PR review round 5 fixes"
+    },
+    {
+      "at": "2026-11-23T12:35:18.533Z",
+      "event": "task-done",
+      "detail": "T24: PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover"
     }
   ],
   "acKinds": {

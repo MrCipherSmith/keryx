@@ -163,3 +163,14 @@
 - Not done: no review round on T22 and T23; no scenario reproduced in the app with real data; nothing pushed.
 
 - 2026-11-23T12:10:55.684Z - decision d-mwt85gki-34a400 [review override-reviewers, ordinary]: chose override; no recommendation
+- 2026-11-23T12:22:15.865Z - task-added: T24: PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover
+- 2026-11-23T12:22:16.055Z - task-attempt: T24: started (attempt 1) — 516-T24 PR review round 5 fixes
+- 2026-11-23T12:35:18.533Z - task-done: T24: PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover
+
+## 2026-11-23 — PR review round 5 and T24 (orchestrator)
+
+- Round 5 on `8e6ecf1aa`, seven reviewers of fifteen by operator decision. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05`. Result: no blocker or major; 6 minor (F-034 return to an earlier account misses open requests; F-035 hint miscounts on a stale Open fallback; F-036 bare count without a unit for assistive technology; F-037 hint label and focus; F-038 seed restarted per historical load; F-039 eight executed mutations of the new code survived), 1 info (F-040). All six upheld by the premise judge. The tool screened F-038 out as scope B; kept in the fix list. The code graph was built in this worktree to compute the blast radius for ingest.
+- Operator: fix them.
+- T24 (worker, flagship tier): all seven addressed; one seed-guard clause removed as redundant with an argument (a seed answer for the current, unseeded identity holds all its open pull requests whoever asked). Orchestrator checks: diff read; `bun test src` 778 pass; `bunx tsc --noEmit` exit 0; sixteen mutations re-run by the orchestrator (the eight that survived round 5, the worker's own fixes, the write-back, the stale guard and the seed request) each fail at least one test. Toolbar re-measured with the new hint text: `-r05/research-evidence/layout-measurements-t24.md`; with the hint shown the toolbar wraps at 340-646, 810-908 and 1150-1290px, never clips; deviation (c) updated.
+- Not done: no review round on T24; no scenario in the app with real data; no screen reader; nothing pushed.
+
