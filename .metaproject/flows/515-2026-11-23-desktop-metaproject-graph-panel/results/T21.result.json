@@ -1,0 +1,71 @@
+{
+  "task_id": "task-21",
+  "task_name": "Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "Guide aligned with the review-round-1 fixes (T17, T18): the intro says Back also restores the reading place in an earlier OpenSpec document and that on return to Metaproject the explorer is as left and re-reads the catalog quietly so the freshness banner is current; the Filters popover opens below the button or above it when there is no room, and closes when you leave the Metaproject tab with filters kept; the details panel Relationships fact shows the second-step count when present (2 incoming · 2 outgoing · 1 second-step) and a relationship from an item to itself is neither listed nor counted; three wrapped lines re-flowed. F-010: wrote results/T9.result.json and results/T15.result.json from the two guide commits.",
+  "files_modified": [
+    "docs/docs/guides/desktop-metaproject.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T15.result.json"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: documentation file; ESLint does not cover it",
+  "type_check_result": "not applicable: no TypeScript changed",
+  "test_result": "bun run docs:check passed: 0 broken links, 0 undeclared retired spellings, 67 tests pass, 0 fail",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/activity/implement.mdc",
+      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/frontend-assistant.mdc",
+      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/api-contracts.mdc",
+      "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/cli-interface-design.mdc",
+      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
+      "how": "n/a"
+    }
+  ],
+  "noticed_not_touched": [],
+  "not_touched": [],
+  "notes": "F-010 reproduced: neither result file existed. suggested_fix diverged: it proposed a flow.json dispositionReason or removing stale dispatch fields; the dispatch asked for the result files instead, so flow.json and the dispatch files were not touched. F-009 is not in this task's fix_context and was not addressed here. No must_read rule asked for anything the guide did not meet. Rules that do not apply to a Markdown guide are cited n/a: implement.mdc: followed, followed for a docs change: files and code read before writing, one owned file, no back-compat surface touched; tdd-workflow.mdc: n/a, no logic changed, so no test to write; the guide is checked by bun run docs:check; error-handling.mdc: n/a, no code with failure paths written; the guide only describes the Retry control and unresolved-link message the UI already has; solid-principles.mdc: n/a, applies to classes and functions; a Markdown guide has none; coding-style.mdc: n/a, applies to TypeScript source; no TS file changed; frontend-assistant.mdc: followed, only its answer-format line applies: code samples stay in labelled fenced blocks and the change stays to what was asked; api-contracts.mdc: n/a, no HTTP endpoint designed or changed; async-patterns.mdc: n/a, promoted by the word retry in the task text (the Retry button); no async code written; cli-interface-design.mdc: n/a, promoted by the word CLI in the task text; no keryx command, flag, exit code or --json shape changed, and the guide's CLI section was not edited. Not verified: no browser check that the popover flips above its button or that the fact row reads as quoted; both are taken from the T17/T18 results and the TSX strings. The statement that the popover stays open across Graph, Wiki and OpenSpec was left out: no reader acts on it and the Filters button sits in the Graph header."
+}

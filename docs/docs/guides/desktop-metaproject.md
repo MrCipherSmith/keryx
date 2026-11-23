@@ -4,10 +4,12 @@ Open **Metaproject** in a project window, or press **⌘5**. Use **Graph** to
 trace relationships between project objects and **Wiki** to read articles.
 Each view remembers its own search and selection. **Back** steps back through
 the items you selected, not only through view switches, and restores the
-search and scroll position of each step. If you leave the Metaproject tab and
-return, the explorer keeps its view, search, selection and filters. The
-explorer reads the open checkout locally and works without a GitHub account or
-a model provider.
+search and scroll position of each step, including the place you were reading
+in an earlier OpenSpec document. If you leave the Metaproject tab and return,
+the explorer is as you left it, with its view, search, selection and filters.
+It also re-reads the catalog quietly, so the graph freshness banner is
+current. The explorer reads the open checkout locally and works without a
+GitHub account or a model provider.
 
 ## Browse OpenSpec
 
@@ -119,8 +121,10 @@ header row above the graph shows its caption, the zoom controls and the
    what points to it and what it points at. Use **Filters** to follow only one
    direction.
 2. Select **Filters** in the header row of the graph, next to the zoom
-   controls. A popover opens with the graph visible behind it, and every change
-   applies at once. Press **Escape** or click outside to close it.
+   controls. A popover opens below the button, or above it when there is no
+   room below, with the graph visible behind it, and every change applies at
+   once. Press **Escape** or click outside to close it. It also closes when you
+   leave the Metaproject tab. Your filter choices are kept.
    - **Direction**: **Outgoing** follows dependencies or links, **Incoming**
      shows what points to the item, and **Both** includes each direction.
    - **Depth**: start at **1 step** for direct neighbors. Use **2 steps** to
@@ -143,12 +147,16 @@ header row above the graph shows its caption, the zoom controls and the
    dashed or dotted, with the relationship types that use it. The legend lists
    only what the current graph contains. Meaning never depends on color alone.
 5. Use the zoom in, zoom out and fit controls in the graph's header row to
-   move around a large neighborhood. Click an item to select it. The graph re-centers on it,
-   and while its relationships load the previous graph stays on screen,
-   dimmed. **Back** returns to the item you selected before.
+   move around a large neighborhood. Click an item to select it. The graph
+   re-centers on it, and while its relationships load the previous graph stays
+   on screen, dimmed. **Back** returns to the item you selected before.
 6. Read the details panel for the selected item. It shows the kind, the title
    and the path, with a **Copy path** control. Below are the facts: the
-   module, the page type, the status and the relationship counts. Drag the
+   module, the page type, the status and the relationships, as in
+   `14 incoming · 4 outgoing`. When the neighborhood also has second-step
+   relationships, their count follows, as in `2 incoming · 2 outgoing · 1
+   second-step`. A relationship from an item to itself is neither listed nor
+   counted. Drag the
    divider, or focus it and use the arrow keys, to change the panel width.
    Press **Escape** to close it. Three tabs, each with a count, follow the
    facts:
@@ -160,8 +168,8 @@ header row above the graph shows its caption, the zoom controls and the
      any. For module imports it reads the count, such as **7 imports**;
      otherwise it reads **N examples**. Relationships between two second-step
      items sit in a **Second step** disclosure, closed until you open it. Each
-     relationship offers an **Open** button for each endpoint. Check the direction before
-     following a dependency.
+     relationship offers an **Open** button for each endpoint. Check the
+     direction before following a dependency.
    - **Wiki** previews the linked Wiki page. **Open in Wiki** opens the full
      page. When no page is linked, **Find a Wiki page** searches for one and
      **Draft Wiki page** starts a session that prepares a draft.
@@ -192,8 +200,8 @@ Select **Wiki** in the view switcher to read a page. Wiki keeps its own
 search and selection, separate from Graph. Expand **Relationships** below the
 article to follow related pages or files. This block always shows the direct
 relationships of every type except **Defines** and **Calls**, and does not
-follow the Graph filters. The
-article also supports links to headings and indexed items in the project. A
+follow the Graph filters. The article also supports links to headings and
+indexed items in the project. A
 link to a page or file that is not loaded yet is looked up and opened. If a
 link cannot be resolved, the article says which path it could not find. HTTP
 and HTTPS links open in your browser.
@@ -201,8 +209,8 @@ and HTTPS links open in your browser.
 When a search from **Find a Wiki page** in the details panel has no match, the
 Wiki says that no page matches and offers **Clear search**.
 
-To trace a page in **Graph**, select it there or use **View in Graph**. To give an agent the same
-context, use the path shown under the title in a session prompt. For example,
+To trace a page in **Graph**, select it there or use **View in Graph**. To
+give an agent the same context, use the path shown under the title in a session prompt. For example,
 “Read `.metaproject/wiki/architecture/agent-bus.md` and trace the incoming
 imports of `src/bus/leases.ts`.” The [agent context guide](give-an-agent-context.md)
 covers how agents use the same wiki and graph data.

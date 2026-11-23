@@ -1,0 +1,92 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T21",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)",
+    "description": "Two things, both in files of the documentation lane. The task is done when both finish lines hold, `bun run docs:check` passes from the repository root, and nothing outside the owned files changed.\n\n1. The guide after the fixes of review round 1. Tasks T17 and T18 changed what a user sees (their result files say exactly what; the strings are in the TSX at head): the Relationships fact of the details panel also shows the second-step count when there are second-step relationships (`2 incoming · 2 outgoing · 1 second-step`); a relationship from a node to itself is neither listed nor counted; the Filters popover opens above its button when there is no room below it, closes when you leave the Metaproject view, and stays open across Graph, Wiki and OpenSpec; on return to Metaproject from another view everything is as you left it and the catalog is re-read quietly, so the freshness banner is current; Back to an earlier OpenSpec document returns to the place you were reading. Finish line: every sentence of docs/docs/guides/desktop-metaproject.md that describes one of these parts of the screen matches the screen, and a reader is told what they need to use it; the guide stays a task-oriented guide, not a list of changes, so a detail no reader acts on is left out. The constraints of the earlier guide tasks stay: do not touch the paragraph that starts 'Desktop sends read requests', the section 'Inspect the module from the CLI', or the table under 'Recover from common problems'; keep the image paths, the stated limits, the guide's voice and second person. AC21 keeps holding.\n\n2. Finding F-010. The dispatch files of T9 and T15 name `resolved/T<n>.implement.json` as existing and require `results/T<n>.result.json`; neither file was ever written, so both guide tasks ran without a resolved-context file and were accepted on the orchestrator's own checks. The orchestrator has now written the two resolved-context files, on the current head. Finish line: `results/T9.result.json` and `results/T15.result.json` exist and each passes `keryx skills contracts validate <result> --schema task-implementer-output --resolved <its resolved file>`. Each says what that task changed in the guide (commit 5955bf547 is T9, commit be1e15e8d is T15: read them with `git show`), cites every must_read entry of its resolved file in `project_context_applied` as read now, and says in `notes` that the result was written during T21, after the task had been accepted, because review round 1 found the file missing. Where a must_read rule asks for something the guide at head does not meet, fix it in the guide under point 1 and say so; where a rule does not apply to a documentation file, say why in its citation.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix.",
+    "intent": "fix"
+  },
+  "acceptance_criteria": [
+    "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T21.request.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/reviews/2026-11-23-review-flow-branch/report.md",
+    ".metaproject/reviews/2026-11-23-review-flow-branch/findings.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T15.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json",
+    "docs/docs/guides/desktop-metaproject.md",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/OpenSpecView.tsx"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only docs/docs/guides/desktop-metaproject.md, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T15.result.json. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
+    "Parallel lanes: other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
+    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "The fix context (each finding's id, file, line, the reviewer's message and suggested fix, and the operator's answer for an upheld held finding) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T21.request.json under fix_context.review_feedback.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T21.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T21.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T21.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T10:03:49Z",
+    "created_by": "flow-orchestrator"
+  }
+}
