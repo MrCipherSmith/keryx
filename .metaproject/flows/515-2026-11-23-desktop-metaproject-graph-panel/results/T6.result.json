@@ -1,0 +1,75 @@
+{
+  "task_id": "task-6",
+  "task_name": "NodeDetailsPanel and RelationshipList components (new files)",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "New files only, nothing wired in. RelationshipList.tsx exports RelationshipList ({projection, select}, same name and props as the MetaprojectView export) plus pure helpers groupRelationships / summarizeRelationships and a NodeKindBadge. It groups root-adjacent relationships into Incoming and Outgoing (h3 with count), then by relationship kind in METAPROJECT_EDGE_KINDS_V2 order (h4 with count), rows sorted by title; a row is a button with the neighbour's title, a node-kind text badge and its monospace path and calls select(id); edges between two non-root nodes form a 'Second step' group whose rows name both ends and offer quiet 'Open <title>' buttons for either end; at most two evidence lines plus 'and N more'; provenance digests are never shown; limited and empty states have messages. NodeDetailsPanel.tsx exports NodeDetailsPanel with exactly the plan.md props and isOpenSpecNode, plus markdownPreview. Header: kind badge with icon, close, h2 title, monospace path with a 'Copy path' icon button (lib/format copyText) and an inline 'Copied' / 'Could not copy' status. Facts (.info-section/.info-row): module, page type, status badge, line, and 'N incoming · M outgoing[ · limited]' from summarizeRelationships. One underline .tabs bar (Relationships default, Wiki, OpenSpec) with .tab-count counts and arrow/Home/End keys. Relationships body: loading row while null+pending, inline-banner alert + Retry (onRetry) on a problem, else RelationshipList with onSelect. A change of revealRelationships switches to Relationships and scrolls the body into view. Wiki/OpenSpec bodies carry over GraphNodePanel: linked documents from `documents`, suggested component page, preview of the first document, Open (first one primary, others ghost), pending/problem/Retry, EmptyState with Find (primary) and Draft (ghost), the unsupported-CLI message. Carried over: resize separator with pointer and ArrowLeft/ArrowRight/Home/End, Escape to close, compact mode below an 820 px host. Docked it does not move focus; compact it is a right-anchored drawer (min(380px, 100% - 72px)) that focuses its close button and returns focus on close/unmount. markdownPreview drops front matter, headings, rules, tables, fenced code and metadata lines (Covers, Version, Type, Status, ...), strips blockquote, list, bold/italic (* and _), strike, link and backtick markers, prefers the first prose paragraph, caps at 360 chars. nodePanel.css holds only metaproject-details-* / metaproject-rel-* classes on top of shared .badge, .tabs/.tab/.tab-count, .info-section/.info-row, .activity-row, .btn/.btn-ghost/.btn-primary, .icon-btn, .inline-banner, .loading-row, .empty-state, .side-resize; tokens only, no raw colours.",
+  "files_modified": [],
+  "files_created": [
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/nodePanel.css"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop (task context); automation.verify_lint is false",
+  "type_check_result": "pass for owned files: `cd apps/desktop && bunx tsc --noEmit` reports 0 errors in NodeDetailsPanel*, RelationshipList*, nodePanel.css; 11 errors remain in files owned by other lanes (src/App.dom.test.tsx x2 RetainedView missing, src/metaproject/graphLayout.test.ts x8 matcher typings, src/metaproject/MetaprojectView.dom.test.tsx:484 'negotiate' prop)",
+  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx` 17 passed, 0 failed (11 + 6); RED confirmed before implementation (modules missing)",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "missing: apps/desktop/src/metaproject has no project-skill (keryx skills route returned only generic catalog skills)",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "followed" }
+  ],
+  "noticed_not_touched": [
+    { "what": "After T8 swaps GraphNodePanel for NodeDetailsPanel, the test 'a graph node opens its linked Wiki in place and Back restores the graph selection' clicks 'Open in Wiki' directly; Relationships is now the default tab, so the test must first activate the Wiki tab ([role=tab][data-tab=wiki]).", "where": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:343-359" },
+    { "what": "The test 'direction, depth and type controls filter the accessible relationship list' asserts the old row text 'Guide → describes → Client' and 'Client → imports → Server'; the new RelationshipList renders grouped rows (title, badge, path) and second-step rows as 'Client imports Server' with 'Open Client' / 'Open Server' buttons, so these assertions need updating when T8 switches the import.", "where": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:75-88" },
+    { "what": "The .metaproject-node-panel / .metaproject-node-* / .metaproject-relations rules become dead once T8 removes GraphNodePanel and the old RelationshipList; the new components do not use them.", "where": "apps/desktop/src/metaproject/metaproject.css:149-192" }
+  ],
+  "assumptions": [
+    "The Relationships tab count is the number of listed edges (incoming + outgoing + second step); the Wiki count excludes the suggested component page; counts are hidden while their projection is null.",
+    "The aside keeps aria-label 'Graph node details' and the close button 'Close graph node details' so the explorer's existing tests and selectors keep working after T8.",
+    "A self-loop on the root counts once, as outgoing; an edge whose ends are not in the projection is left out (as the old list did)."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Copy path feedback is an inline status next to the button ('Copied' with a check icon, or 'Could not copy') that clears after 2 s, not a toast: the panel then needs no ToastProvider.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["toast via useToast like SessionInfoPanel's CopyButton", "no feedback beyond the icon change"]
+    },
+    {
+      "description": "The chosen tab is remembered per node: selecting another node returns the panel to the Relationships tab (the old panel also reset per node, to Wiki or OpenSpec by kind).",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["keep the chosen tab across node selections"]
+    },
+    {
+      "description": "Second-step rows show 'From kind To' with two quiet 'Open <title>' buttons rather than the whole row being a button; evidence beyond two lines is summarised as 'and N more'; a module import with a count shows '<count> imports' under the path.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["make each end title itself the button", "hide edge counts", "expandable full evidence list"]
+    },
+    {
+      "description": "In compact mode the drawer is min(380px, host width - 72px) wide with the sheet shadow and a slide-in animation (disabled under prefers-reduced-motion by the global rule); there is no scrim and Tab is not trapped, since part of the content stays visible and usable.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["use the stored panel width in compact mode too", "add a scrim and focus trap like Sheet"]
+    },
+    {
+      "description": "The facts row for relationship counts is labelled 'Relations' (fits the shared 74-76 px .info-key column); module is shown as the raw module id because the panel receives no catalog to resolve its title.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["label 'Relationships' with a wider key column", "resolve the module title from the projection nodes when present"]
+    }
+  ],
+  "notes": "Extra exports beyond plan.md's interface (allowed: additive only): RelationshipList.tsx also exports NodeKindBadge, groupRelationships, summarizeRelationships and their types; NodeDetailsPanel.tsx also exports markdownPreview. The required exports match plan.md 'Interfaces between tasks' exactly. Not verified: the live render (spacing, contrast in all palettes, drawer overlap at 720x480, scrollIntoView behaviour) - happy-dom has no layout, so visual checks are left to the orchestrator's browser pass (T11). nodePanel.css uses a few raw px sizes for geometry (2px gaps, 6px code top padding to align with the 28px copy button, 32px row min-height, 380px drawer cap, 76px fact key column), as the shared stylesheets do; no raw colour values. Tests never wait on wall-clock time; the 2 s copy-feedback timer is not exercised. No commits (auto_commit false)."
+}
