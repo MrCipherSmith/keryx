@@ -100,8 +100,8 @@ export function laneReason(c: ReviewCard) {
   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);
   if (attention) return attention;
-  const outdated = reviewNote(c);
-  if (outdated) return outdated;
+  const note = reviewNote(c);
+  if (note) return note;
   if (c.decision) return DECISION_LABEL[c.decision];
   if (c.draft) return "Draft pull request";
   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";

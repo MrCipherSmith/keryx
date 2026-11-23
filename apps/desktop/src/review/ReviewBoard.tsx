@@ -228,14 +228,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       const loaded = snapshot;
       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
-      setCarriedAttention(previousSet => {
-        const next = new Set(replaceAttention ? [] : previousSet);
-        for (const card of loaded.cards) {
-          if (needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))) next.add(card.number);
-          else next.delete(card.number);
-        }
-        return next;
-      });
+      if (replaceAttention) setCarriedAttention(new Set());
       const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
       if (filterKey.current !== nextFilterKey) {
         filterKey.current = nextFilterKey;
@@ -353,6 +346,10 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     }
     return next;
   }, [carriedAttention, snapshot, receiptVersion]);
+  // Removals seen in the shown snapshot must survive a scope switch to a view that does not replace the set.
+  useEffect(() => {
+    if (snapshot && (attentionPrs.size !== carriedAttention.size || [...attentionPrs].some(n => !carriedAttention.has(n)))) setCarriedAttention(attentionPrs);
+  }, [snapshot, attentionPrs, carriedAttention]);
   const active = filterSummary(filters);
   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
   const error = read.scope === scope ? read.error : "";

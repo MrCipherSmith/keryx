@@ -1003,6 +1003,23 @@ test("a card-only refresh does not drop the tab signal of a PR whose only reason
   expect(seen.at(-1)).toBe("attention");
 });
 
+test("a request handled after the load stays out of the tab signal when the scope switches to a historical view", async () => {
+  const card: ReviewCard = { ...pr, number: 481, reviewers: [], decision: null, addressedReplyIds: ["handled-1"] };
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged" ? [] : [card]);
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/handled-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  await act(async () => { markRepliesRead("ann", "repo1", card.number, ["handled-1"]); await new Promise(resolve => setTimeout(resolve, 5)); });
+  expect(indicators.at(-1)).toBeNull();
+  await click(button("Filters"));
+  await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+  await click(button("Apply filters"));
+  expect(indicators.at(-1)).toBeNull();
+});
+
 test("visible cards keep snapshot order when a later card has an active review", async () => {
   const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
   await render(async () => snapshot(cards));
