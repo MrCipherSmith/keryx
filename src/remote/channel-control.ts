@@ -8,6 +8,7 @@ import { fail, ok, readJsonBody } from "./http-surface";
 import { isRenderMode } from "./rendering-mode";
 import { Pairing, type PairingOptions } from "./pairing";
 import type { BotApi } from "./types";
+import type { ChannelsStatusResponse } from "./protocol";
 
 export interface ChannelControlOptions {
   dir?: string | undefined;
@@ -21,11 +22,21 @@ export interface ChannelControlOptions {
 
 export class ChannelControl {
   private readonly fence: ChannelOperationFence;
+  private lastFailure: ChannelsStatusResponse["lastActivationFailure"];
   private pending: { id: string; revision: number | null; pairing?: Pairing; token?: string; api?: BotApi; sameBot?: boolean; activating?: boolean } | undefined;
   constructor(private readonly options: ChannelControlOptions) { this.fence = new ChannelOperationFence(options.dir); }
 
   pendingOperation(): { operationId: string; revision: number | null } | undefined {
     return this.pending === undefined ? undefined : { operationId: this.pending.id, revision: this.pending.revision };
+  }
+
+  lastActivationFailure(): ChannelsStatusResponse["lastActivationFailure"] {
+    return this.lastFailure;
+  }
+
+  private failActivation(reason: string): Response {
+    this.lastFailure = { reason, at: Date.now() };
+    return fail(503, "activation-failed", reason);
   }
 
   async handle(request: Request): Promise<Response> {
@@ -133,17 +144,26 @@ export class ChannelControl {
       const api = this.pending.api;
       if ((!sameBot && (!pairing.isReady() || snapshot.userId === undefined || snapshot.chatId === undefined)) || token === undefined || api === undefined) return fail(409, "pairing-incomplete", "Complete pairing before confirming.");
       this.pending.activating = true;
-      await pairing.stop();
-      const existing = loadChannelRecord(this.options.dir);
-      if (!existing.ok) { this.clear(doc.operationId); return fail(503, "unavailable", existing.reason); }
-      if (sameBot && (existing.value?.state !== "connected" || existing.value.bot?.id !== pairing.identity().id)) { this.clear(doc.operationId); return fail(409, "conflict", "Channel identity changed."); }
-      const config: RemoteConfig = existing.value?.state === "connected"
-        ? (sameBot ? existing.value.config : { ...existing.value.config, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!] })
-        : { schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!], orphanMs: DEFAULT_ORPHAN_MS, runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS, permissionMode: DEFAULT_REMOTE_PERMISSION_MODE, approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS };
-      const result = await this.options.activate({ token, api, bot: pairing.identity(), config, expectedRevision: revision, stillOwned: () => this.fence.check(doc.operationId as string, revision).ok && this.pending?.pairing === pairing, stillActive: () => this.pending?.id === doc.operationId && this.pending?.pairing === pairing });
-      this.clear(doc.operationId);
-      if (!result.ok) return fail(503, "activation-failed", result.reason);
-      return ok({ operationId: doc.operationId, revision: result.revision, state: "connected" });
+      try {
+        await pairing.stop();
+        const existing = loadChannelRecord(this.options.dir);
+        if (!existing.ok) return this.failActivation(existing.reason);
+        if (sameBot && (existing.value?.state !== "connected" || existing.value.bot?.id !== pairing.identity().id)) {
+          this.lastFailure = { reason: "Channel identity changed.", at: Date.now() };
+          return fail(409, "conflict", this.lastFailure.reason);
+        }
+        const config: RemoteConfig = existing.value?.state === "connected"
+          ? (sameBot ? existing.value.config : { ...existing.value.config, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!] })
+          : { schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION, chatId: snapshot.chatId!, allowedUserIds: [snapshot.userId!], orphanMs: DEFAULT_ORPHAN_MS, runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS, permissionMode: DEFAULT_REMOTE_PERMISSION_MODE, approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS };
+        const result = await this.options.activate({ token, api, bot: pairing.identity(), config, expectedRevision: revision, stillOwned: () => this.fence.check(doc.operationId as string, revision).ok && this.pending?.pairing === pairing, stillActive: () => this.pending?.id === doc.operationId && this.pending?.pairing === pairing });
+        if (!result.ok) return this.failActivation(result.reason);
+        this.lastFailure = undefined;
+        return ok({ operationId: doc.operationId, revision: result.revision, state: "connected" });
+      } catch {
+        return this.failActivation("An unexpected local service error interrupted Telegram activation.");
+      } finally {
+        this.clear(doc.operationId);
+      }
     }
     if (this.pending.sameBot) return ok({ operationId: doc.operationId, revision, state: "same-bot-ready" });
     await pairing.recheck();

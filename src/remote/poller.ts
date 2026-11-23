@@ -154,7 +154,8 @@ export class UpdatePoller {
       try {
         updates = await this.api.getUpdates({
           ...(confirm === undefined ? {} : { offset: confirm }),
-          timeoutSec: this.timeoutSec,
+          // Staged activation needs a prompt readiness result even with an empty queue.
+          timeoutSec: this.resolveFirstPoll !== undefined && this.holdAfterFirstResponse !== undefined ? 0 : this.timeoutSec,
           signal,
         });
         firstSuccess = this.resolveFirstPoll !== undefined;

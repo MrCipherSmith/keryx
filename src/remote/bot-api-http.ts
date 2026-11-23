@@ -248,7 +248,9 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
       await call<boolean>("answerCallbackQuery", body);
     },
     async getMe() {
-      return call<BotIdentity>("getMe", {});
+      const { id, username } = await call<BotIdentity>("getMe", {});
+      // Telegram returns a full User. Channel records accept only the bot identity.
+      return username === undefined ? { id } : { id, username };
     },
     async getChat(params) {
       return call<BotChatInfo>("getChat", { chat_id: params.chatId });

@@ -3,6 +3,7 @@ import { makeRig } from "./remote.http.test-helpers";
 import { stageChannelToken } from "./channel-staging";
 import { loadChannelRecord } from "./channel-record";
 import { BotApiError } from "./types";
+import { createHttpBotApi } from "./bot-api-http";
 import { FAKE_CHAT_ID, until } from "./remote.test-helpers";
 
 const code = "ABCD2345";
@@ -10,6 +11,12 @@ function request(body: object): Request { return new Request("http://localhost",
 test("first setup commits only after candidate runtime readiness", async () => {
   const rig = makeRig({ configured: false });
   try {
+    const identity = await rig.api.getMe();
+    const http = createHttpBotApi({
+      token: "fixture",
+      fetchImpl: Object.assign(async () => Response.json({ ok: true, result: { ...identity, is_bot: true, first_name: "Fixture bot", can_join_groups: true } }), { preconnect: () => {} }),
+    });
+    rig.api.getMe = http.getMe;
     const serve = await rig.startServe({ service: { experimentalChannelControl: true, pairing: { code, pollTimeoutSec: 0 }, pollTimeoutSec: 0 } });
     const staged = stageChannelToken("123456:abcdefghijklmnopqrstuv", rig.dir);
     if (!staged.ok) throw new Error("staging failed");
@@ -28,6 +35,7 @@ test("first setup commits only after candidate runtime readiness", async () => {
     expect(confirmed.status).toBe(200);
     const record = loadChannelRecord(rig.dir);
     expect(record.ok && record.value?.state).toBe("connected");
+    expect(record.ok && record.value?.state === "connected" && record.value.bot).toEqual(identity);
     expect(serve.service.hub()).toBeDefined();
   } finally { await rig.cleanup(); }
 });
@@ -49,6 +57,10 @@ test("candidate poll failure leaves the committed record absent", async () => {
     await until(async () => await state() === "ready", "pairing ready");
     rig.api.failNext("getUpdates", new BotApiError("network", "fixture failure"));
     expect((await call({ version: 1, action: "confirm", expectedRevision: null, operationId })).status).toBe(503);
+    const status = await serve.service.surface.handle("channels-status", new Request("http://localhost"), { untimed: () => {} });
+    const channel = await status.json();
+    expect(channel.pendingOperation).toBeUndefined();
+    expect(channel.lastActivationFailure).toEqual({ at: expect.any(Number), reason: "Candidate poller readiness could not be confirmed." });
     expect(loadChannelRecord(rig.dir)).toEqual({ ok: true, value: null });
     expect(serve.service.hub()).toBeUndefined();
   } finally { await rig.cleanup(); }

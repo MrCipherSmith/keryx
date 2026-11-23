@@ -19,8 +19,9 @@ Object.defineProperty(navigator, "clipboard", {
 const calls: Array<{ command: string; args: unknown }> = [];
 let pairing: Record<string, unknown> = { state: "waiting-for-user", code: "ABCDEFGH", botUsername: "example_bot", expiresAt: Date.now() + 600_000, problems: [] };
 const operationId = "00000000-0000-4000-8000-000000000001";
+let lastActivationFailure: { reason: string; at: number } | undefined;
 function currentChannelStatus() {
-  return { ok: true, value: { capabilities: capability ? { desktopTelegram: 1 } : {}, revision: connected ? 1 : null, ...(pending ? { pendingOperation: { operationId, revision: null } } : {}), telegram: { state: connected ? "connected" : "not-connected", sessions: 0 } } };
+  return { ok: true, value: { capabilities: capability ? { desktopTelegram: 1 } : {}, revision: connected ? 1 : null, ...(pending ? { pendingOperation: { operationId, revision: null } } : {}), lastActivationFailure, telegram: { state: connected ? "connected" : "not-connected", sessions: 0 } } };
 }
 let nextStatus: Promise<ReturnType<typeof currentChannelStatus>> | undefined;
 mockIPC((command, args) => {
@@ -121,6 +122,10 @@ try {
   assert.ok(button("Confirm connection"));
   await act(async () => { button("Cancel pairing")?.click(); });
   assert.equal(host.querySelector('svg[aria-label="Pairing QR code"]'), null);
+  lastActivationFailure = { reason: "Candidate poller readiness could not be confirmed.", at: Date.now() };
+  await mount();
+  assert.match(host.textContent ?? "", /Last connection attempt failed.*Candidate poller readiness/);
+  lastActivationFailure = undefined;
   connected = true;
   await mount();
   await act(async () => { button("Test connection")?.click(); });

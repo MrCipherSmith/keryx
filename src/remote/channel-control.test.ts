@@ -68,7 +68,7 @@ test("a distinct verified bot pairs in isolation without interrupting the active
   } finally { await control.stop(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("account claim must be confirmed before group events are accepted", async () => {
+test("a group event received before account confirmation is inspected only after confirmation", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "channel-confirm-"));
   const api = new FakeBotApi();
   const control = new ChannelControl({ dir, hasActiveHub: () => false, openCandidate: () => api, pairing: { code: "ABCD2345", pollTimeoutSec: 0, pollSleep: async () => { await new Promise((resolve) => setTimeout(resolve, 1)); } } });
@@ -78,17 +78,17 @@ test("account claim must be confirmed before group events are accepted", async (
     const begun = await control.handle(request({ version: 1, action: "begin", expectedRevision: null, stagingId: staged.value }));
     const { operationId } = await begun.json() as { operationId: string };
     const status = () => control.handle(request({ version: 1, action: "status", expectedRevision: null, operationId }));
-    const { until, settle } = await import("./remote.test-helpers");
+    const { until } = await import("./remote.test-helpers");
     api.pushPrivateMessage({ fromId: 42, text: "/start ABCD2345" });
     await until(async () => (await (await status()).json() as { pairing: { state: string } }).pairing.state === "waiting-for-confirmation", "account claim");
     api.pushMyChatMember({ fromId: 42 });
-    await settle();
+    await until(async () => (await (await status()).json() as { pairing: { membership?: { last: string } } }).pairing.membership?.last === "deferred", "group event to be queued");
     const before = await (await status()).json() as { pairing: { state: string; code?: string; userId: number } };
-    expect(before.pairing).toMatchObject({ state: "waiting-for-confirmation", userId: 42 });
+    expect(before.pairing).toMatchObject({ state: "waiting-for-confirmation", userId: 42, membership: { received: 1, last: "deferred" } });
     expect(before.pairing.code).toBeUndefined();
     expect(api.callCount("getChat", "default")).toBe(0);
     expect((await control.handle(request({ version: 1, action: "confirm-account", expectedRevision: null, operationId }))).status).toBe(200);
-    expect((await (await status()).json() as { pairing: { state: string } }).pairing.state).toBe("waiting-for-group");
+    expect((await (await status()).json() as { pairing: { state: string } }).pairing).toMatchObject({ state: "ready", membership: { received: 1, last: "inspecting" } });
   } finally { await control.stop(); rmSync(dir, { recursive: true, force: true }); }
 });
 

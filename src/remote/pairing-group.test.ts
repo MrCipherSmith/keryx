@@ -65,6 +65,41 @@ describe("the group id comes from the event", () => {
     await until(() => pairing.snapshot().state === "ready", "the group to be accepted");
     expect(pairing.snapshot().chatId).toBe(GROUP);
   });
+
+  test("an already configured forum can be nominated by the confirmed administrator", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const groupMember = api.getChatMember.bind(api);
+    let operatorIsAdmin = false;
+    api.getChatMember = async (params) => params.userId === OPERATOR
+      ? { status: operatorIsAdmin ? "creator" : "member" }
+      : groupMember(params);
+    const result = await Pairing.open({ api, requireConfirmation: true, timers: new ManualClock(), code: CODE });
+    if (!result.ok) throw new Error(result.reason);
+    const pairing = result.pairing;
+    open.push(pairing);
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "waiting-for-confirmation", "the operator's account claim");
+    expect(pairing.snapshot().forumCode).toBeUndefined();
+    expect(await pairing.confirmAccount()).toBe(true);
+    const { forumCode } = pairing.snapshot();
+    if (!forumCode) throw new Error("Forum challenge missing");
+
+    api.pushMessage({ fromId: STRANGER_ID, text: `/keryx_pair_forum ${forumCode}`, chatType: "supergroup" });
+    api.pushMessage({ fromId: OPERATOR, text: `/keryx_pair_forum@wrong_bot ${forumCode}`, chatType: "supergroup" });
+    api.pushMyChatMember({ fromId: STRANGER_ID, status: "administrator" });
+    await until(() => pairing.snapshot().membership?.last === "different-account", "ignored membership event");
+    expect(api.callCount("getChat", "default")).toBe(0);
+    expect(pairing.snapshot().membership).toEqual({ received: 1, last: "different-account" });
+
+    api.pushMessage({ fromId: OPERATOR, text: `/keryx_pair_forum ${forumCode}`, chatType: "supergroup" });
+    await until(() => pairing.snapshot().problems.length > 0, "operator rights to be checked");
+    expect(pairing.snapshot().problems).toEqual([expect.stringContaining("confirmed Telegram account")]);
+    expect(pairing.snapshot().chatId).toBeUndefined();
+    operatorIsAdmin = true;
+    await pairing.recheck();
+    expect(pairing.snapshot()).toMatchObject({ state: "ready", chatId: GROUP });
+    expect(pairing.snapshot().forumCode).toBeUndefined();
+  });
 });
 
 describe("what is missing is named", () => {

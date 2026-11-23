@@ -308,7 +308,7 @@ export class FakeBotApi implements BotApi {
   }
 
   /** Simulate an operator or an attacker writing in a topic. */
-  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number; replyToMessageId?: number; replyToText?: string }): BotUpdate {
+  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number; chatType?: string; replyToMessageId?: number; replyToText?: string }): BotUpdate {
     const message = {
       message_id: ++this.messageSeq,
       ...(input.threadId === undefined ? {} : { message_thread_id: input.threadId }),
@@ -316,7 +316,7 @@ export class FakeBotApi implements BotApi {
         ? {}
         : { reply_to_message: { message_id: input.replyToMessageId, ...(input.replyToText === undefined ? {} : { text: input.replyToText }) } }),
       from: { id: input.fromId },
-      chat: { id: input.chatId ?? this.chatId },
+      chat: { id: input.chatId ?? this.chatId, ...(input.chatType === undefined ? {} : { type: input.chatType }) },
       date: Math.floor(this.now() / 1000),
       text: input.text,
     };
