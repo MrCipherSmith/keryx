@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T12:27:32.433Z",
+  "updatedAt": "2026-11-23T12:45:05.928Z",
   "source": {
     "type": "description",
     "ref": null
@@ -80,7 +80,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T9",
@@ -102,7 +102,7 @@
         "T27"
       ],
       "attempts": {
-        "count": 6,
+        "count": 7,
         "log": [
           {
             "at": "2026-11-23T10:12:37.125Z",
@@ -133,12 +133,19 @@
             "at": "2026-11-23T12:19:08.921Z",
             "outcome": "failed",
             "detail": "review round 4 on 744d9ef75: no blocker or major, 4 minor to address and 1 held for the operator (F-004), 5 info; fix round 4 follows (T26, T27)"
+          },
+          {
+            "at": "2026-11-23T12:28:14.527Z",
+            "outcome": "started",
+            "detail": "review round 5 on the head that holds fix round 4 (T26, T27)"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "five review rounds run, the loop's limit; round 5 on 857036d02: 0 blocker, 0 major, 1 minor (a test title's wording, F-001), 2 info; open findings carried to the completion report"
     },
     {
       "id": "T5",
@@ -1164,6 +1171,16 @@
       "at": "2026-11-23T12:27:32.433Z",
       "event": "task-done",
       "detail": "T27: Fix round 4: flow record (F-003, F-004, F-005)"
+    },
+    {
+      "at": "2026-11-23T12:28:14.527Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 7) — review round 5 on the head that holds fix round 4 (T26, T27)"
+    },
+    {
+      "at": "2026-11-23T12:45:05.928Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "origin": {
