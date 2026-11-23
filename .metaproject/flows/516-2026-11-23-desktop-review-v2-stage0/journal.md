@@ -174,3 +174,11 @@
 - T24 (worker, flagship tier): all seven addressed; one seed-guard clause removed as redundant with an argument (a seed answer for the current, unseeded identity holds all its open pull requests whoever asked). Orchestrator checks: diff read; `bun test src` 778 pass; `bunx tsc --noEmit` exit 0; sixteen mutations re-run by the orchestrator (the eight that survived round 5, the worker's own fixes, the write-back, the stale guard and the seed request) each fail at least one test. Toolbar re-measured with the new hint text: `-r05/research-evidence/layout-measurements-t24.md`; with the hint shown the toolbar wraps at 340-646, 810-908 and 1150-1290px, never clips; deviation (c) updated.
 - Not done: no review round on T24; no scenario in the app with real data; no screen reader; nothing pushed.
 
+- 2026-11-23T13:22:25.721Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1294 (warning: PR is not a draft)
+
+## 2026-11-23 — Merged (orchestrator)
+
+- Operator: merge stage 0 into main and update the plan for the next stages. The plan gained the section "Передача следующим этапам" (`b0f5023d8`).
+- CI on `b0f5023d8`: `Core tests (1/4, offline)` failed before the tests ran (`apt-get install ripgrep`: package not found on the Ubuntu runner); the two aggregate jobs failed only because of it. The failed jobs were re-run (attempt 2) and passed. PR #1294 was merged by auto-merge as merge commit `ee824720f` from the MrCipherSmith account, at the operator's request.
+- Flow marked implemented with the PR. `keryx flow check-complete 516 --merged ee824720f` passes every gate except `review`: the review rounds are recorded under `.metaproject/reviews/` per pull request, not under this flow's `reviews/`, and the external-comment record was collected at round 1's head. The flow is not completed; that needs either the review packages bound to the flow with a fresh comment collection, or an operator-accepted gate exception.
+
