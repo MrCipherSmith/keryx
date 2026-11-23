@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T07:47:51.679Z",
+  "updatedAt": "2026-11-23T08:11:50.862Z",
   "source": {
     "type": "description",
     "ref": null
@@ -85,7 +85,9 @@
         "T8",
         "T9",
         "T10",
-        "T11"
+        "T11",
+        "T14",
+        "T15"
       ],
       "attempts": {
         "count": 0,
@@ -179,7 +181,7 @@
       "id": "T8",
       "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -188,34 +190,55 @@
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:54:41.505Z",
+            "outcome": "started",
+            "detail": "515-T8"
+          }
+        ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC17",
+        "AC18",
+        "AC19"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Update the Desktop Metaproject guide",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
-        "T8"
+        "T12",
+        "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:56:19.119Z",
+            "outcome": "started",
+            "detail": "515-T9"
+          }
+        ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC21"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Desktop typecheck and full desktop test suite pass",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -225,7 +248,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "cd apps/desktop && bunx tsc --noEmit exit 0; bun test src 833 pass, 0 fail on the tree committed as 8cd85cdec; keryx health run --changed PASS"
     },
     {
       "id": "T11",
@@ -233,7 +258,8 @@
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
-        "T8"
+        "T8",
+        "T14"
       ],
       "attempts": {
         "count": 0,
@@ -247,7 +273,7 @@
       "id": "T12",
       "title": "Graph polish from the isolated live preview",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -261,15 +287,21 @@
           }
         ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Panel and relationship list polish from the isolated live preview",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -282,6 +314,49 @@
             "detail": "515-T13"
           }
         ]
+      },
+      "acRefs": [
+        "AC7",
+        "AC8",
+        "AC9"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Compact filter bar and one-row header on narrow hosts",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:11:50.862Z",
+            "outcome": "started",
+            "detail": "515-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Align the guide with the final screen and refresh its screenshots",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -416,6 +491,71 @@
       "at": "2026-11-23T07:47:51.679Z",
       "event": "task-done",
       "detail": "T7: Explorer navigation and state fixes D1-D7"
+    },
+    {
+      "at": "2026-11-23T07:51:36.145Z",
+      "event": "task-done",
+      "detail": "T13: Panel and relationship list polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:54:41.305Z",
+      "event": "task-done",
+      "detail": "T12: Graph polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:54:41.505Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 515-T8"
+    },
+    {
+      "at": "2026-11-23T07:56:18.905Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T12, T13 (was T8) — The guide describes behaviour fixed by the plan and the T8 dispatch, and touches only the guide file, so it runs beside T8 instead of after it"
+    },
+    {
+      "at": "2026-11-23T07:56:19.119Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 515-T9"
+    },
+    {
+      "at": "2026-11-23T07:58:34.745Z",
+      "event": "task-done",
+      "detail": "T9: Update the Desktop Metaproject guide"
+    },
+    {
+      "at": "2026-11-23T08:06:08.524Z",
+      "event": "task-done",
+      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
+    },
+    {
+      "at": "2026-11-23T08:06:50.450Z",
+      "event": "task-done",
+      "detail": "T10: Desktop typecheck and full desktop test suite pass"
+    },
+    {
+      "at": "2026-11-23T08:11:49.484Z",
+      "event": "task-added",
+      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
+    },
+    {
+      "at": "2026-11-23T08:11:49.658Z",
+      "event": "task-added",
+      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
+    },
+    {
+      "at": "2026-11-23T08:11:49.842Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T8, T14 (was T8) — The live check is repeated after the filter bar fix"
+    },
+    {
+      "at": "2026-11-23T08:11:50.028Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15 (was T8, T9, T10, T11) — The review round runs on the final verified change"
+    },
+    {
+      "at": "2026-11-23T08:11:50.862Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 515-T14"
     }
   ],
   "origin": {

@@ -1,0 +1,37 @@
+{
+  "task": {
+    "task_id": "task-9",
+    "task_name": "Update the Desktop Metaproject guide",
+    "task_type": "mixed",
+    "complexity": "low",
+    "dependencies": [],
+    "description": "Bring the user guide docs/docs/guides/desktop-metaproject.md in line with the redesigned Graph screen of the Desktop Metaproject explorer. What ships is in the code named under files_to_read and, for the part being integrated right now, in the T8 dispatch description. The guide is written for a developer using the app; keep its voice, its second person and its level of detail.\n\nWhat changed and must be described:\n- Graph: a local neighbourhood in columns. What points at the selected item is on its left, what it points at is on its right, second-step items are further out. Each group has a caption with the relationship type and a count; a column shows at most 12 items and collapses the rest into a '+N more' entry that opens the relationship list; item shape and border show its kind and line style shows the relationship family, both explained by the legend under the graph; zoom in, zoom out and fit controls; clicking an item selects it.\n- Details panel: kind, title, path with a Copy path control, facts (module, page type, status, relationship counts), and three tabs with counts: Relationships (the default; grouped into Incoming and Outgoing, then by type; a row selects that item; examples open from the control at the end of a row), Wiki and OpenSpec (linked documents with a preview, Open, Find, Draft).\n- Filters carry readable names (Imports, Assets, Describes, Wiki links, Contains, Defines, Calls, Changes spec, Spec context); Defines and Calls are disabled until the symbol layer is enabled.\n- The list header shows how many catalog items are shown out of the total.\n- Back steps through the items you selected, not only through view switches; the explorer keeps its view, search, selection and filters when you leave the Metaproject tab and return.\n- Wiki: the Relationships block of an article always shows direct relationships of every type and no longer follows the Graph filters; a link to a page or file that is not loaded yet is looked up and opened, and an unresolved link says which path it could not find; 'Find a Wiki page' with no match says so and offers to clear the search.\n- A failed check of the selected CLI shows its error with Retry.\n\nConstraints on the edit:\n- The guide must no longer say or imply that the Wiki view shows the same search and selection as Graph (each view keeps its own); this includes the alt text of the wiki image.\n- The relationship-type table keeps every existing row and gains rows for `changes-spec` and `spec-context`, with the readable name next to each id.\n- Another branch has already edited this file in three places; do not touch them, so the two branches merge cleanly: the paragraph in 'Data, checkout boundaries and limits' that starts 'Desktop sends read requests', the whole section 'Inspect the module from the CLI', and the table under 'Recover from common problems' (add no row to it and change none).\n- Leave the two image files and their paths alone; the orchestrator replaces the screenshots separately. Update only their alt texts to describe the new screen.\n- Limits stated in the guide (200 items, 200 nodes, 400 edges, two steps) stay as they are.",
+    "target_files": [
+      "docs/docs/guides/desktop-metaproject.md"
+    ],
+    "acceptance_criteria": [
+      "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

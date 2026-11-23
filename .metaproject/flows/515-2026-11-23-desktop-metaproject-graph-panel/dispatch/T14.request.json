@@ -1,0 +1,43 @@
+{
+  "task": {
+    "task_id": "task-14",
+    "task_name": "Compact filter bar and one-row header on narrow hosts",
+    "task_type": "ui_component",
+    "complexity": "medium",
+    "dependencies": [],
+    "description": "The orchestrator opened the integrated explorer in a browser on this repository. The graph, the panel, Back, the kept state and the theme switch all work. One defect blocks AC20: the filter bar is too tall. Measured: 131 px at a 796 px wide content column, 158 px at 440 px (panel open, default 1180x780 window), 190 px once 'Reset filters' shows, 182 px at the minimum window. At 720x480 with the panel closed and no banner only 114 px of the graph box are visible (the criterion asks for at least 140): the header takes 91 px in two rows and the filter bar 182 px.\n\n1. Filter bar in one row. Direction select, Depth select and a 'Types' disclosure button that states how many relationship types are on, for example 'Types · 7 of 9' (`aria-expanded`, `aria-controls`). The chips are hidden until that button is opened. Opened, a second row appears in the flow below the first with the chips, the symbol-layer reason (only while Defines and Calls are disabled) and 'Reset filters' (only while the filters differ from their defaults). Closed is the default; the open or closed state lives with the explorer's other state, so it survives leaving the tab. While the filters differ from their defaults and the row is closed, the Types button looks active (the pressed chip treatment), so a changed filter is never invisible. Closed, the bar is one row at every content width from 400 px up.\n2. Header in one row on a narrow host. Inside the explorer's existing narrow container query the 'Metaproject' heading is visually hidden but stays in the accessibility tree, so Back, the search field and the view switch share one row.\n3. Result to reach: at the minimum window (720x480, a 660 px wide host) with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling. The orchestrator measures it again in the browser.\n\nTests: the filter tests of AC17 open the Types row first; new tests cover closed by default, the count on the button, opening and closing, the active look when filters differ from the defaults, and Reset.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/metaproject.css",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}
