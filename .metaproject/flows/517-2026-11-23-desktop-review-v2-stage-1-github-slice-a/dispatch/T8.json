@@ -1,0 +1,85 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "517",
+  "dispatch_id": "517-T8",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "PR work row, signed actions, PR-bound sessions, /review and Create Flow from session",
+    "description": "Plan slice 4. (a) Work row: on every PR card (ReviewResults board tile) and list row render a Keryx work row with exactly three slots in fixed order review | Flow | session, same DOM structure when empty or filled, fixed height in apps/desktop/src/styles/review.css (height, not min-height; text truncates). Review slot: when card.localReview has state, a link-button with text \"Review · <state>\" from localReview (queued, running, needs your answer, ready, partial, publication pending, failed/stopped, outdated via reviewNote) with NO round number and NO behind count; click calls the existing openReview(card) (current review panel). Empty: labelled action \"Run review\" -> openReview. CardReviewProgress may move into or under the row but must not change the row height. Flow slot: flows for the PR = flows whose prUrl matches card.url (existing match in ReviewBoard) UNION flows whose dir equals sessionFlags(session).flow for a non-archived session whose subject is this PR (sameSubject from apps/desktop/src/acp/types.ts); text \"Flow #<id> · <stage>\" (stage label from flows/model laneOf or status) -> onOpenFlow(dir); empty: \"Create Flow\" action. Session slot: non-archived sessions with subject matching the PR (kind pr, repo = snapshot.repo, number); text \"Session\" or \"<n> sessions\" opens the newest; a small adjacent menu button (labelled, aria-haspopup=menu) lists the sessions by title and \"New session\"; empty: \"Open in session\". (b) Signed actions: every card/list action control has visible text (Open on GitHub, Subscribe/Following); remove the icon-only ReviewAction buttons that the row replaces. Do not add \"Fix review comments\". (c) Props: ReviewBoard gets sessions (SessionInfo[]) and callbacks onOpenSubjectSession(card, target: \"latest\"|\"new\"|sessionId) and onCreateFlow(card); keep onOpenSession compat only if still used. (d) App.tsx + useAcpSession.ts: subject binding like pendingFlow/applyPendingFlow: a new session gets pending subject {kind:\"pr\", repo, number, url, repositoryId} sent through _keryx/session_flags (SESSION_FLAGS) with subject; retried after first turn like pendingFlow; if keryx replies without subject (older keryx) show a notice via s.notify(\"warn\"|...) that the binding was not saved, but still open the session. Open in session: latest -> loadSession newest non-archived bound session; none or \"new\" -> new session + pending subject + prefill composer with PR URL (fillComposer; never send). Keep linking to an existing Flow that has this prUrl (as today) as well. (e) Session header: when the shown session has a subject, AppShell title area shows a link-button \"PR owner/repo#N\" (or \"Issue owner/repo#N\") that returns to the card: PR -> switch to review view and open that PR detail panel (add a ReviewBoard prop like focus={number, nonce} that sets selected); Issue -> existing openIssueOrigin({sessionId}). Also show a \"Flow #id\" link when the session has a flow flag (opens Flow). (f) /review: when draftReview.target is empty and the draft session has a PR subject, pass the subject URL as initialTarget to ReviewLaunchDialog. The run it starts already reaches the board via publishSessionReview/subscribeSessionReview: verify the card review slot updates (test). (g) Create Flow: opens the PR-bound session (latest or new) and prefills the composer with a flow prompt naming the PR URL, e.g. \"Create a Keryx flow for <url> with flow-orchestrator.\"; record a pending flow-link {sessionId, knownDirs:set of current flow dirs}; when flows.cards later contains exactly one dir not in knownDirs and the session has no flow flag, link it via the existing session_flags flow path and clear the pending entry; when several new dirs appear, link none and clear. (h) Tests: DOM tests in src/review for the row (structure same at 0 and 3 links, labels, click targets, no round/behind text), signed actions (every action control has non-empty text), session slot menu; App-level or hook-level tests for subject binding (open twice -> same session, new session, older keryx notice), /review preselect, Create Flow linking (one new dir links, two do not). Find existing App/useAcpSession tests with keryx ctx rg and follow their harness. Do not touch the attention set in ReviewBoard.tsx (carriedAttention, seeded, seedFor, attentionPrs, stale, needsViewerAttention); list any line you must edit. Do not add elements to .flows-toolbar.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC5: Every PR card and list row renders a Keryx work row with exactly three slots (review, Flow, session) whose DOM structure is the same with zero and with three links, and the row has a fixed height in `apps/desktop/src/styles/review.css`; the review slot shows the state from `localReview` without a round number or behind count and opens the current review panel; the Flow slot shows \"Flow #<id> · <stage>\" and opens the Flow; empty slots show the labelled actions \"Run review\", \"Create Flow\", \"Open in session\" (R4 part, R7, spec AC14) [verify: exec `cd apps/desktop && bun test src/review`]",
+    "AC6: Every action on a PR card, PR list row and Issue card has a visible text label (a DOM test asserts non-empty text content for each action control); \"Fix review comments\" is not shown in this stage (R7 part, spec AC15 part) [verify: exec `cd apps/desktop && bun test src/review src/issues`]",
+    "AC7: \"Open in session\" on a PR with no bound session creates a new session bound to the PR Subject and prefills the composer with the PR URL without sending it; pressing it again opens the same session (newest non-archived bound session); the session slot menu lists the bound sessions and \"New session\", which creates another bound session (R5, spec AC8 part) [verify: exec `cd apps/desktop && bun test src`]",
+    "AC8: Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]",
+    "AC9: \"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]",
+    "AC10: In a PR-bound session, `/review` without a target opens the launch dialog with that PR preselected, and the review started there appears as the review link on that PR card without a manual refresh (R6, spec AC9) [verify: exec `cd apps/desktop && bun test src`]",
+    "AC14: The Pull requests tab attention set and indicator are preserved: `ReviewBoard.dom.test.tsx` passes, and every edited line in `carriedAttention`, `seeded`, `seedFor`, `attentionPrs` or `stale` handling has a recorded one-line mutation that fails a test (journal) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+    "AC17: The Pull requests toolbar keeps the stage 0 behaviour: no element added to `.flows-toolbar`, or, if one is added, the board toolbar is re-measured at the stage 0 widths and the result recorded in the journal [verify: judged]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T8.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/desktop/src/review/ReviewResults.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/model.ts",
+    "apps/desktop/src/review/ReviewProgress.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/session/useAcpSession.ts",
+    "apps/desktop/src/acp/types.ts",
+    "apps/desktop/src/shell/AppShell.tsx",
+    "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+    "apps/desktop/src/flows/model.ts",
+    "apps/desktop/src/styles/review.css"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T8.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1 && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "Other workers edit other files of this checkout at the same time: touch only files in your task's area, never revert or reformat files you did not change.",
+    "No Rust changes (apps/desktop/src-tauri): no local toolchain."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T20:00:29.377Z",
+    "created_by": "flow-orchestrator"
+  }
+}

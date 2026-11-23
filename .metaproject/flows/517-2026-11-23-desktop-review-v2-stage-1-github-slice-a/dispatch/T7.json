@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "517",
+  "dispatch_id": "517-T7",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "PR board GitHub-only lanes, grouping, quick filters, GitHub reason",
+    "description": "Plan slice 3 (R1, R2, D6). In apps/desktop/src/review/model.ts replace LANES/reviewLane: grouping \"status\" lanes draft, waiting (no decision or REVIEW_REQUIRED), changes (CHANGES_REQUESTED), approved (APPROVED), merged, closed; grouping \"role\" lanes requested (viewer login in reviewers), mine (author is viewer), others. The lane function reads no localReview field. Lanes excluded by the current filters are not drawn (generalise stateFilterShowsDone: e.g. state filter [open] hides draft? no: draft is an open PR with draft=true, state filter values are open/draft/closed/merged; decision filter hides decision lanes it excludes). Quick filters requestedFromMe, mine, ciFailed are Filters fields (persisted with reviewFilterStorage, counted in filterSummary) and toggled from buttons in the .review-context row, NOT in .flows-toolbar. Grouping select (Status / My role) also in the .review-context row, persisted per filter key. Sort cards by updatedAt descending. laneReason becomes GitHub-only (decision, review requested, CI failed, draft, closed/merged, new reply to you); remove Keryx texts from it; keep reviewNote exported for the work row of T8 but do not render Keryx state on the card in this task except keep CardReviewProgress and the existing ReviewAction review button untouched (T8 replaces them). Remove secondaryNote usage only if it becomes dead. ReviewBoard.tsx: pass viewer and grouping to ReviewResults; DO NOT change the attention-set logic (carriedAttention, seeded, seedFor, attentionPrs, stale, needsViewerAttention): if a change there is unavoidable, list every edited line in the result so the orchestrator mutation-checks it. Update model.test.ts (AC1 test iterating local review states -> same lane; lanes per grouping; hidden lanes) and ReviewBoard.dom.test.tsx expectations that referenced removed lanes (Needs attention, In review); add a DOM test for AC2 (localReview update keeps lane and index) and for the no-bypass filter case. Keep the hidden-attention hint and its tests working.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC1: The PR lane function reads no field of the local review: a model test iterates every local review state (none, queued, running, awaiting answer, ready, partial, publication pending, outdated) for the same GitHub card and gets the same lane; the attention lane and the Keryx \"In review\" lane no longer exist (R1, D6, spec AC1) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/model.test.ts`]",
+    "AC2: On the Pull requests board, a local review starting, finishing or being published changes neither the lane, the position nor the visibility of the card (a DOM test updates `localReview` on a shown card and asserts the same lane and index); cards are ordered by `updatedAt` descending (R1) [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+    "AC3: Default grouping \"Status\" shows Draft · Waiting for review (no decision or REVIEW_REQUIRED) · Changes requested · Approved, with Merged and Closed only when the state filter includes them; grouping \"My role\" shows Requested from me · Mine · Others; quick filters \"Requested from me\", \"Mine\" and \"CI failed\" narrow the board; every shown card satisfies all filters and the search (no active-review bypass, a test with an active review and a non-matching author shows nothing); a lane that cannot hold a card under the current filters is not drawn (R2, spec AC2, AC13) [verify: exec `cd apps/desktop && bun test src/review`]",
+    "AC4: The card reason line is derived from GitHub data only; Keryx review state appears only in the work row [verify: exec `cd apps/desktop && bun test src/review`]",
+    "AC14: The Pull requests tab attention set and indicator are preserved: `ReviewBoard.dom.test.tsx` passes, and every edited line in `carriedAttention`, `seeded`, `seedFor`, `attentionPrs` or `stale` handling has a recorded one-line mutation that fails a test (journal) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+    "AC17: The Pull requests toolbar keeps the stage 0 behaviour: no element added to `.flows-toolbar`, or, if one is added, the board toolbar is re-measured at the stage 0 widths and the result recorded in the journal [verify: judged]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T7.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/desktop/src/review/model.ts",
+    "apps/desktop/src/review/model.test.ts",
+    "apps/desktop/src/review/ReviewResults.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewFilters.tsx",
+    "apps/desktop/src/review/reviewFilterStorage.ts",
+    "apps/desktop/src/styles/review.css"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T7.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1 && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "Other workers edit other files of this checkout at the same time: touch only files in your task's area, never revert or reformat files you did not change.",
+    "No Rust changes (apps/desktop/src-tauri): no local toolchain."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T19:48:49.723Z",
+    "created_by": "flow-orchestrator"
+  }
+}
