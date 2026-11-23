@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReviewRule } from "../../../../src/review/review-rule-types";
 import { Icon } from "../components/Icon";
 import { Dialog, Spinner } from "../components/ui";
@@ -59,7 +60,7 @@ function RulesDialog({ onClose, ...props }: RulesProps & { onClose: () => void }
   const [confirmDelete, setConfirmDelete] = useState<ReviewRule | null>(null);
   return <Dialog title="Review rules" icon="checklist" width={580} onClose={onClose} focusRoot
     footer={<button className="btn" onClick={onClose}>Close</button>}>
-    <div className="project-review-rules">
+    <div className="project-review-rules" data-review-board-dialog>
       <p><strong>{props.target.repo}</strong> · {props.target.viewer}</p>
       <p className="review-detail-muted">Enabled rules use the PR watcher’s schedule. Turn on the watcher to run reviews in the background.</p>
       {error && <p className="inline-banner tone-warn" role="alert">{error} <button className="btn btn-sm" disabled={saving} onClick={refresh}>Refresh rules</button></p>}
@@ -91,6 +92,6 @@ function RulesDialog({ onClose, ...props }: RulesProps & { onClose: () => void }
 
 export function ProjectReviewRules(props: RulesProps) {
   const [open, setOpen] = useState(false);
-  return <><button className="btn btn-sm" onClick={() => setOpen(true)} aria-haspopup="dialog"><Icon name="checklist" size={14} /> Review rules</button>
-    {open && <RulesDialog {...props} onClose={() => setOpen(false)} />}</>;
+  return <><button className="btn btn-sm" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Review rules" title="Review rules"><Icon name="shieldCheck" size={14} /> <span className="toolbar-label">Review rules</span></button>
+    {open && createPortal(<RulesDialog {...props} onClose={() => setOpen(false)} />, document.body)}</>;
 }

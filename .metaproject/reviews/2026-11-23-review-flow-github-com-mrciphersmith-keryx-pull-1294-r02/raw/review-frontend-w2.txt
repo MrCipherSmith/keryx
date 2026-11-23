@@ -1,0 +1,51 @@
+STATUS: DONE_WITH_CONCERNS
+
+Frontend review, round 2 (slice-01 fix slice, slice-02 and slice-03 new code), read at head 33fd9647a. One new minor finding (a regression from the F-008 fix); the other fixes check out.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-frontend",
+  "summary": "F-001, F-002, F-003, F-005, F-007, F-010 hold up in the code. One new minor: deriving attentionPrs with useMemo no longer persists read-receipt removals into the carried set, so after a scope switch the tab indicator can light again for a reply the user already read.",
+  "findings": [
+    {
+      "id": "F-R2-001",
+      "severity": "minor",
+      "reviewer": "review-frontend",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 346,
+      "quote": "const next = new Set(carriedAttention);",
+      "problem": "The F-008 fix derives attentionPrs in a useMemo from carriedAttention plus the shown snapshot. carriedAttention is written only by the load callback (and cleared by accessLost). The deletions the old effect made when a read receipt or discussion note changed (next.delete(c.number)) now exist only in the derived value and are no longer written back to state.",
+      "impact": "Open view, card #A has an unread reply, so it is in carriedAttention from the load. The user reads the reply: the memo drops #A and the indicator clears. The user then changes the PR state filter (for example to Merged only, or open to all). In the first render of the new scope snapshot is null, so the memo returns carriedAttention unchanged and #A is back; for a merged-only load replaceAttention is false and #A is not among the loaded cards, so it stays in the set. The tab indicator shows attention for a reply that was already read until an open/all load replaces the set. This is the indicator flicker class that round 1 F2 fixed. Not run, found by reading.",
+      "suggested_fix": "Keep the set a pure projection but persist removals: in an effect over [snapshot, receiptVersion] call setCarriedAttention with the memo result only when it differs from the previous set, or drop entries from carriedAttention when the shown snapshot says they no longer need attention. Add a DOM test: read a reply, switch the state filter, assert the indicator stays off.",
+      "evidence": "ReviewBoard.tsx 231-238 (only writer of carriedAttention besides accessLost), 283 (snapshot is null while read.scope !== scope), 346-355 (memo falls back to carriedAttention). The round-1 effect (removed in this delta) used setAttentionPrs and persisted the result.",
+      "confidence": "medium",
+      "dedupe_key": "carried-attention-stale-after-receipt",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `flex-wrap: nowrap` override is gone, so the shared .flows-toolbar wrap applies; .search-field is `flex: 1 1 96px; max-width: 260px`; .toolbar-label hidden under 1100px; .count-label and .watcher-indicator hidden under 760px. Read only; the orchestrator's measurements are not re-run, and the open detail panel with real data is not measured." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx inBoardOverlay(): clearPrivateView now uses it; it matches the workspace dialogs and detail panel, and a body-level role=dialog that contains .project-review-rules or .review-watcher (ProjectReviewRules.tsx:63, ReviewWatcher.tsx:103). New DOM test covers both portaled dialogs." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason returns attentionReason before the outdated text (new reviewNote, ranked after attention); ReviewResults.tsx secondaryNote shows it as .review-note on card and in the list when it differs from the reason, merged and closed ones included as the operator decided. model.test and DOM test cover it." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx uses the shieldCheck icon (exists in Icon.tsx:48); the filter count is a separate .filter-count span outside .toolbar-label; .count-label is hidden only under 760px. .btn is inline-flex with a 6px gap, so no joined 'Filters(2)'." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts asserts reviewLane(quiet(pr)) is 'open' and stays 'open' with an outdated localReview; the old vacuous comparison is gone." },
+    { "id": "F-008", "disposition": "partial", "evidence": "The set is derived once with useMemo and only carriedAttention stays as state, so the two same-predicate writers are gone; but the derivation does not persist removals, see F-R2-001." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts flagged CTE: finished requires base IS NOT NULL AND head IS NOT NULL, matching the row mapping (result only when both are present)." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan (new section 'Состояние этапа 0' with deviations a and b), PRD R12, specification indicator line and roadmap 0.29.38 now say stage 0 is implemented and teams are not matched." },
+    { "id": "F-006", "disposition": "closed", "evidence": "One MATERIALIZED scoped CTE parses each run once; flagged/picked keep the newest finished run per card only when no run supersedes it. By reading, equivalent to localBadge (board-badges.ts:35-42: outdated only when no latest run and not ready). Timing not re-run by me." },
+    { "id": "F-009", "disposition": "partial", "evidence": "desk-run-store.test.ts shows decoys (other PR, other repo, deleted, imported, run without result) and a new batch test for per-card suppression; the viewer lowercase, label order, hidden merged PR and reload cases are not visible in my slices, not re-checked." },
+    { "id": "F-011", "disposition": "open", "evidence": "ProjectReviewRules and ReviewWatcher still portal to body; PrSubscriptionDialog (also .review-watcher) and Filters stay inside the workspace. Unchanged, info." },
+    { "id": "F-012", "disposition": "open", "evidence": "attentionPrs still iterates all snapshot.cards while visible is filtered (ReviewBoard.tsx 346-355 vs 337-344). Unchanged, accepted by the operator decision." },
+    { "id": "F-013", "disposition": "open", "evidence": "ReviewResults.tsx:36 still 'Review changes' and ReviewRuns.tsx:38 the same wording; unchanged." },
+    { "id": "F-014", "disposition": "open", "evidence": "visible() in desk-run-store.ts still spells source IN ('manual','scheduled') separately from localBadge's source !== 'existing'; unchanged." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: no tests, no render and no SQL run (read-only budget); the equivalence of the new SQL with the old lookup is by reading, not by execution; the CSS fix is judged from the stylesheet and the orchestrator's evidence, not measured by me; the flow, journal and resolved-context files in slice-02 were skimmed only as context.

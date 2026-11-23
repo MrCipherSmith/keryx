@@ -1,0 +1,79 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round 2, read-only, no mutant run. F-007 is closed: model.test.ts now builds a neutral card (quiet(pr): no decision, no reviewers, CI passed) and asserts lane \"open\" with and without the outdated badge. The new tests pin the fixes well: portaled-dialog focus restore (both dialogs, fails closed), laneReason ranking and reviewNote wording, the secondary line in board and list, and a batch SQL test with a differential check against localBadge. F-009 stays open (info): none of its gaps was closed. Two new unpinned gates (info): the `requested` term of the SQL supersedes rule, and the secondaryNote de-duplication plus the merged/closed note decision.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "coalesce(r.state IN ('running','cancelling','queued') OR requested OR",
+      "problem": "The `requested` term of `supersedes` (a run requested for the card's range that is neither active nor finished on that range, e.g. failed or cancelled) has no fixture that separates it from the two terms beside it. In the new batch test the suppressing runs are a queued run (covered by the state term) and a finished run on the card range (covered by the third term).",
+      "impact": "Deleting `requested OR` leaves the batch test and the store tests green; a card whose newest run for its own range failed would then show an outdated badge from an older head, which localBadge would not. By reading, not run, hence info.",
+      "suggested_fix": "In the batch test add a card whose only run for the `next` range ended failed (or cancelled) next to a finished older-head run, and expect no outdated badge, matching localBadge. Run mutant n1.",
+      "evidence": "desk-run-store.test.ts new test 'in one batch, an active run or a reviewed range suppresses...': busy = queued, done = finished with reviewed=next; `flagged` CTE in the SQL. Not executed.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "degradation_class": "behaviour-delta"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "return note && note !== reason ? note : null;",
+      "problem": "No test builds the input that separates the `note !== reason` de-duplication: every DOM fixture with an outdated badge is the attention card `pr`, so the note always differs from the reason. A neutral card (reason equals note) is tested only at model level. The operator decision that the note also shows on merged and closed cards has no test either: no fixture has state merged with an outdated badge.",
+      "impact": "Dropping the de-duplication would print the same text twice on neutral cards while the suite stays green; a later change hiding the note for closed cards would also pass. By reading, not run.",
+      "suggested_fix": "Add a DOM case with a neutral outdated card expecting one occurrence of the text, and one with state merged expecting `.review-note`.",
+      "evidence": "ReviewBoard.dom.test.tsx new test 'an outdated review shows as a secondary line...' uses `{...pr, localReview}`; model.test.ts covers reviewNote only for the attention card.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "degradation_class": "behaviour-delta"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "slices": ["slice-01", "slice-02"],
+  "prior_dispositions": [
+    {
+      "id": "F-007",
+      "disposition": "closed",
+      "evidence": "model.test.ts: `const neutral = quiet(pr)` (decision null, reviewers []), asserts reviewLane(neutral) is \"open\" and reviewLane with the outdated localReview is still \"open\"; with CI passed and state open, attentionReason is null, so a change that moved outdated cards to attention or review would now fail. The other outdated fixtures also use quiet(pr)."
+    },
+    {
+      "id": "F-009",
+      "disposition": "open",
+      "evidence": "None of its gaps is closed in the delta I read. (1) o.repo and state filter of the outdated lookup: the SQL was rewritten (scoped/flagged/picked), the repo predicate is still `WHERE r.repo=?2`; the decoys are number+1, another viewer, delete, imported and resultless runs; no other-repository run and no failed run with a recorded result were added. (2) viewer lowercase in needsViewerAttention: no new fixture. (3) outdated vs partial label order: laneReason still has the partial line before attention and outdated after it; no fixture with runState partial plus outdated. (4) merged card hidden under the default filter: model.test.ts has no assertion for it, though the docs now record the operator decision. (5) reload in the carry-over test: unchanged. Info only; no defect."
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "n1", "file": "src/review/desk-run-store.ts", "anchor": "OR requested OR\n            (r.state IN ('completed','partial','budget') AND base=wb AND head=wh),0) AS supersedes", "replacement": "OR\n            (r.state IN ('completed','partial','budget') AND base=wb AND head=wh),0) AS supersedes", "kind": "behavior" },
+    { "id": "n2", "file": "src/review/desk-run-store.ts", "anchor": "WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible(\"r\")}", "replacement": "WHERE r.viewer=?3 AND r.pr=w.n AND ${visible(\"r\")}", "kind": "behavior" },
+    { "id": "n3", "file": "src/review/desk-run-store.ts", "anchor": "r.state IN ('completed','partial','budget') AND base IS NOT NULL AND head IS NOT NULL AS finished", "replacement": "base IS NOT NULL AND head IS NOT NULL AS finished", "kind": "behavior" },
+    { "id": "n4", "file": "src/review/desk-run-store.ts", "anchor": "AND base IS NOT NULL AND head IS NOT NULL AS finished", "replacement": "AND head IS NOT NULL AS finished", "kind": "behavior" },
+    { "id": "n5", "file": "src/review/desk-run-store.ts", "anchor": "NOT max(supersedes) OVER (PARTITION BY card)", "replacement": "1", "kind": "behavior" },
+    { "id": "n6", "file": "src/review/desk-run-store.ts", "anchor": "row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1", "replacement": "row_number() OVER (PARTITION BY card,finished ORDER BY created ASC,seq ASC)=1", "kind": "behavior" },
+    { "id": "n7", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "return note && note !== reason ? note : null;", "replacement": "return note;", "kind": "behavior" },
+    { "id": "n8", "file": "apps/desktop/src/review/model.ts", "anchor": "const outdated = reviewNote(c);\n  if (outdated) return outdated;\n", "replacement": "", "kind": "behavior" },
+    { "id": "n10", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "return !!el.closest('[role=\"dialog\"]')?.querySelector(PORTALED_DIALOG_CONTENT);", "replacement": "return false;", "kind": "behavior" },
+    { "id": "n11", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "const next = new Set(carriedAttention);", "replacement": "const next = new Set<number>();", "kind": "behavior" },
+    { "id": "n12", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "{active.length > 0 && <span className=\"filter-count\">({active.length})</span>}", "replacement": "", "kind": "presentation" }
+  ]
+}
+```
+
+Round-1 mutant candidates, from reading only (predictions, nothing ran):
+- Newly pinned: the lane mutant behind F-007 (sending outdated cards to attention or review) now fails the neutral-card assertions. The wording candidates M-004 and M-005 now sit in `reviewNote`; same-head wording and the partial/budget wording are pinned by the quiet(pr) base-moved test. The ranking (outdated after attention) is pinned by the stale-card test in model.test.ts. The old SQL candidates for order, head not null, visibility and viewer (m5, m7, m8, m9) now map to `scoped`/`picked`; the newer-decoy fixtures and the new batch test look to pin them.
+- Still unpinned: M-001 (viewer lowercase), M-003 (outdated vs partial order), the merged-card-hidden-by-default decision, m3 (repo predicate, n2), m4 (state filter, n3: a failed run with a recorded result).
+- New gates: n10 (portaled-dialog branch of inBoardOverlay) is pinned by the new DOM test, which would leave focus on body. n1 and n7 look unpinned. n11 and n12 were not seen pinned in my slices.
+
+Mutation pass: not run (`exec_budget_s: 0`). 11 candidates listed (ids skip n9), 0 executed, 11 not reached.
+
+Not verified: no test or SQL execution; round-1 candidates were not re-run; strict ordering of createdAt in the store tests; the existing cross-scope-retention DOM test was not re-read, so n11 is open; the parts of ReviewBoard.dom.test.tsx and desk-run-store.test.ts outside the diff hunks; CSS behaviour (container queries) cannot be tested in the DOM environment and no layout test exists for F-001/F-005; evidence files were not opened.
+
+Routing audit: graph_used: no (not-relevant, diff-hunk test review); wiki_used: no (not-relevant); ctx_used: no (Read on package files only, no code search); raw_rg_used: no.

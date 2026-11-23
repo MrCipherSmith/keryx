@@ -150,7 +150,7 @@ test("historic result survives a push, and retry and stop target the correct att
     return { version: 1, runs: [{ ...next, state: "cancelled", reason: "Stopped by user" }, complete] };
   };
   await show(command, newer);
-  await click("Review changes");
+  await click("Review again");
   expect(document.querySelectorAll("article.desk-run")).toHaveLength(1);
   expect(document.body.textContent).not.toContain("Earlier revision");
   await click("Stop review");
@@ -183,8 +183,8 @@ test("a stale range keeps the board refresh action through status polling; denie
     onRefreshBoard: () => { refreshed++; },
     onAccessLost: message => { denied = message; },
   });
-  await click("Review changes");
-  expect(btn("Review changes").disabled).toBe(true);
+  await click("Review again");
+  expect(btn("Review again").disabled).toBe(true);
   await click("Refresh runs");
   await click("Refresh board");
   expect(refreshed).toBe(1);

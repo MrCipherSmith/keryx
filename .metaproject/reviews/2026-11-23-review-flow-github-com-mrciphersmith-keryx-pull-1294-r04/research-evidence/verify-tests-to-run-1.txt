@@ -1,0 +1,15 @@
+# keryx review verify-run
+finding: tests-to-run
+command: cd apps/desktop && bun test src/review
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit
+time: 2026-11-23T11:38:02.466Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+ 102 pass
+ 0 fail
+ 714 expect() calls
+Ran 102 tests across 6 files. [796.00ms]

@@ -1,0 +1,81 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "No measured layout defect. The orchestrator's three measurements (toolbar 820, 1080, 1380 px, no board data) show one row and no overflow, and the toolbar rule is scoped to .review-board, so other flows boards are untouched. Not covered by those measurements: toolbar widths below 820 px and the 1100 px label breakpoint with real data. The widest unmeasured risk is the default 1180 px window with the detail panel open, where the board is about 560 px wide while the toolbar is now nowrap with flex:none items. I could not measure (read-only, exec budget 0), so all four findings are info and unverified.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board .flows-toolbar { flex-wrap: nowrap; }",
+      "problem": "The toolbar was changed from wrap to nowrap and every child except the spacer and the search field is flex:none. Below some board width the fixed content (h1 'Pull requests', 3 icon buttons, Review rules icon, PR watcher icon plus its indicator text, Board/List icons, Refresh icon, search at its 96px minimum, padding) no longer fits and nothing can shrink or wrap, so it spills past the board edge under or over the detail panel. Board width with the panel open is workspace width minus panel width: ReviewDetail.css gives the panel min 360px and default 560px, and the board is hidden only when the workspace is 680px or less. The shipped default window is 1180px wide (src-tauri/tauri.conf.json, minWidth 720) and the rail is 60px, so the default window with the panel at its default 560px leaves a board of about 560px. Before the change the toolbar wrapped to two rows there.",
+      "impact": "Unverified. If confirmed: at the default window size with a pull request open, the right-hand toolbar buttons (Board/List, Refresh, possibly PR watcher) are clipped or hidden behind the detail panel and unreachable by mouse. Arithmetic from the supplied measurement: at 820px the orchestrator reports 62px of slack with no board data. Going to 560px removes 260px; the search field can give back at most about 104px (200px basis to 96px minimum), leaving at least about 94px of overflow, and the Review rules button that appears with data adds about 40px more.",
+      "suggested_fix": "Add a second container rule below roughly 720px of toolbar width that restores flex-wrap: wrap (or makes the toolbar overflow-x: auto), and keep nowrap only above it. Alternatively let the heading and the watcher indicator text shrink or hide below that width.",
+      "evidence": "Supplied measurements: toolbar widths 820, 1080 and 1380 px only, Vite dev build, Chromium, no board data, no open detail panel. Not measured: any width under 820 px, any width with the Review rules button, the panel actually open. Reads: apps/desktop/src/review/ReviewDetail.css lines 1-14 (workspace container, panel min 360px / default 560px, board hidden at 680px or less), apps/desktop/src-tauri/tauri.conf.json (width 1180, minWidth 720), apps/desktop/src/styles/tokens.css (--rail-w 60px). What would settle it: resize the dev build to a 1180px window, open a pull request, with board data loaded, and read scrollWidth against clientWidth of .flows-toolbar; repeat at a 960px window.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout-toolbar-nowrap-narrow-board"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": "@container (max-width: 1100px) {",
+      "problem": "The label breakpoint is 1100px of the toolbar's content box (container queries measure the content box; the toolbar has about 40px of horizontal padding), so labels return when the board is about 1141px wide. With data the labels-on content (count label, Filters (N), Review rules, PR watcher with its status text, Board, List, Refresh) is about 410px wider than the labels-off content measured at 820px. A rough sum gives the labels-on minimum at roughly 1100 to 1150px with the search field at 96px, so a thin band just above the breakpoint may overflow, more so when the PR watcher status text is the longest one ('Status unavailable').",
+      "impact": "Unverified and thin. If confirmed, a band of roughly 10 to 50px of board width above the breakpoint spills the last button out of the nowrap row. The round 1 finding F6 (overflow between 980 and about 1070 px) was moved to this breakpoint, not shown closed with data.",
+      "suggested_fix": "Measure with data at 1141 to 1200px with the longest watcher status. If it overflows, raise the breakpoint, or hide the count label and the watcher status text at a higher width than the button labels.",
+      "evidence": "Supplied: 1080px labels hidden, 1380px labels shown, no data. Not measured: 1100 to 1200px, any width with data. Arithmetic is an estimate from the 820px slack figure, not a measurement.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout-toolbar-breakpoint-band"
+    },
+    {
+      "id": "LY-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "line": null,
+      "quote": "</Dialog>, document.body)}",
+      "problem": "Only two of the board's four dialogs are portaled. The Review rules and PR watcher dialogs now render in document.body, so their position:fixed .overlay (components.css) covers the whole window including the 60px rail. The Filters dialog and the PR subscription dialog are still rendered inside .review-workspace, which has container-type: inline-size (ReviewDetail.css line 1, not changed by this diff); layout containment makes the workspace the containing block of their fixed overlay, so their backdrop covers only the workspace.",
+      "impact": "Unverified in a browser for the two non-portaled dialogs. Probable result: opening Filters leaves the rail unshaded and clickable, opening PR watcher or Review rules dims the rail too; the same toolbar's dialogs behave differently, and a dialog opened from the detail panel is also workspace-scoped.",
+      "suggested_fix": "Decide one behaviour. Either portal ReviewFilters and PrSubscriptionDialog to document.body as well, or drop container-type from .review-workspace by using a ResizeObserver or a media query for the 680px rule.",
+      "evidence": "Supplied: the PR watcher overlay is a child of document.body and covers the full viewport. Not measured: the Filters or subscription overlay box. Read: ReviewBoard.tsx render tree (ReviewFilters and PrSubscriptionDialog are children of .review-workspace), ReviewDetail.css line 1, components.css lines 161-164.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout-dialog-portal-inconsistent",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "LY-004",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+      "problem": "Not a layout defect, outside this lens; passed to review-frontend. Portaling the Review rules and PR watcher dialogs to document.body takes their role=dialog node out of .review-workspace, so this closest() no longer matches focus inside them. clearPrivateView (identity change or access loss) therefore stops marking focus for restoration when one of those two dialogs is open.",
+      "impact": "Unverified. When the viewer or repository changes while the Rules or PR watcher dialog has focus, the dialog unmounts (its key is derived from the target) and focus is left on body instead of returning to the search field, as it still does for Filters.",
+      "suggested_fix": "Match the portaled dialogs in the selector too (for example mark them with a class), or compare against a ref to the dialog set.",
+      "evidence": "Read only: ReviewBoard.tsx lines 122 and 254, ui.tsx Dialog (role=dialog), the two createPortal calls in this diff. No test or run.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "dedupe_key": "restore-focus-portaled-dialogs"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 4 },
+  "slices": ["slice-01"],
+  "follow_ups": [
+    "Measure .flows-toolbar scrollWidth against clientWidth with board data at board widths 560, 700, 820 (panel open at the default 1180px window) and 1141 to 1200 (labels just back on, longest watcher status).",
+    "Measure the Filters and PR subscription overlay boxes against the viewport."
+  ]
+}
+```
+
+What I did: read the shared brief, the driver, the review-layout skill and layout-rendering rule, the full diff of slice-01 from the source part (the flow-package files at the start of the slice are context and were skimmed only), and the CSS they interact with (flows.css, components.css, ReviewDetail.css, tauri.conf.json, ui.tsx Dialog).
+
+What I did not verify: nothing was measured by me (read-only, no browser, exec budget 0). The brief's measurements cover only toolbar widths 820, 1080 and 1380 px with no board data. Not covered: widths below 820 px (including the default 1180 px window with the detail panel open, about 560 px), the 1100 to 1200 px band with data, the Review rules button, a card with an outdated badge, the Filters and subscription overlay boxes, RTL and translated labels (the labels are English literals, no catalog; the diff adds no physical-direction properties). The figures in LY-001 and LY-002 are arithmetic from the supplied 62px slack, not measurements.
+
+Routing audit: graph_used no (not-relevant, CSS review); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg); raw_rg_used no.

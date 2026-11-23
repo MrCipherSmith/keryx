@@ -1,0 +1,53 @@
+STATUS: DONE
+
+## Architecture Review (round 2, delta 53c96b8af..33fd9647a)
+
+Stack: React (TSX, hooks) plus a Bun/SQLite store. Slices read in full: slice-01 (fix), slice-02, slice-03 (new code). The F-001..F-014 dispositions below cover the sites that fall in those slices.
+
+Verdict: no layer, dependency-direction or module-boundary violation introduced. The fixes hold. F-008 is only partly done, because the load callback and the derived memo still evaluate the same predicate. The SQL rewrite in `desk-run-store.ts` mirrors the `localBadge` supersede rule, and I found no divergence by reading.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Delta introduces no layer or dependency-direction violation. F-001, F-002, F-003, F-004, F-005, F-006, F-007 and F-010 are closed in code (F-005 with a narrowing); F-008 is partial because two evaluations of one predicate remain. One info finding about class-name coupling in the focus-restore helper.",
+  "findings": [
+    {
+      "id": "A-001",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 598,
+      "quote": "const PORTALED_DIALOG_CONTENT = \".project-review-rules, .review-watcher\";",
+      "problem": "The board identifies the two portaled dialogs by the internal content class names of ProjectReviewRules and ReviewWatcher, so the parent knows child-internal CSS classes. Renaming either class silently disables the focus restore for that dialog; the new DOM test would catch it, but only for those two dialogs.",
+      "impact": "Maintainability only; a coupling between the board and two sibling components' markup. Behaviour is correct today.",
+      "suggested_fix": "Give the shared Dialog a data attribute or prop (for example data-board-overlay) that the two portaled dialogs set, and select on that.",
+      "evidence": "ReviewBoard.tsx inBoardOverlay and PORTALED_DIALOG_CONTENT; the classes exist in review.css and the two components.",
+      "confidence": "medium",
+      "degradation_class": "behaviour-delta"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `flex-wrap: nowrap` override is deleted, so the shared wrap rule applies again; search field is `flex: 1 1 96px; max-width: 260px`; `.toolbar-label` hidden under 1100px; `.count-label` and `.watcher-indicator` hidden under 760px (both classes exist). Layout measurements are the orchestrator's, not re-run by me; real board data and an open detail panel were not measured." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx: `restoreFocus.current = inBoardOverlay(document.activeElement)`; `inBoardOverlay` also matches a `[role=dialog]` whose subtree holds `.project-review-rules` or `.review-watcher`. A new DOM test focuses a button inside each portaled dialog, changes the account, and expects focus on the search field. See A-001 for the class-name coupling." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts: `laneReason` returns `attentionReason` before the outdated text, which now comes from the exported `reviewNote(card)`; ReviewResults.tsx `secondaryNote` renders it on card and list row when it differs from the lane reason. Tests: model.test.ts (Changes requested leads, note is 'Outdated review · abcdef0') and a DOM test for board and list. The operator-decided scope (every card with the badge) is as implemented." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan, specification, PRD R12 and the roadmap 0.29.38 entry now say stage 0 is implemented (Flow 516, PR #1294); implementation-plan.md has a stage 0 status section recording the team-request deviation and the local-review indicator deviation." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx uses `Icon name=\"shieldCheck\"` (exists in Icon.tsx), distinct from Filters (`checklist`); the active-filter count is its own `<span className=\"filter-count\">` outside `.toolbar-label`; `.count-label` now collapses only under 760px instead of 1100px. The pull request count is still hidden at the narrowest widths: a narrowing of the suggested fix, accepted." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: `scoped AS MATERIALIZED` parses each run's `details` once per requested card; `flagged` and `picked` keep rows with window functions; the final SELECT joins `runs` by rowid only for kept rows. By reading, the keep rule equals `localBadge`: outdated is suppressed by an active run, a run requested for the card's range, or a finished run that reviewed it. A new store test compares three cards with `localBadge(store.history(k).runs, next)`. The 395 ms vs 770 ms figures are the worker's measurement; I did not re-run them." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts: `quiet(pr)` (no decision, no reviewers, CI passed) makes `reviewLane` return 'open' with and without the outdated badge; a change that moved outdated cards to attention would now fail." },
+    { "id": "F-008", "disposition": "partial", "evidence": "ReviewBoard.tsx: the effect writing `attentionPrs` is gone; `attentionPrs` is a `useMemo` over `carriedAttention`, the snapshot and `receiptVersion`, and `carriedAttention` is the only state (cleared in `accessLost`). Remaining: the load callback still calls `needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))` to maintain `carriedAttention`, and the memo calls it again, so the predicate is evaluated at two sites. The stale-second-writer cause of the flicker is removed; the duplication is smaller but not gone." },
+    { "id": "F-009", "disposition": "partial", "evidence": "Outside the architecture lens. desk-run-store.test.ts now has decoys for another PR, another repository (`finishFor(other, ...)`), a deleted run, an imported run and a run without a result, and a batch test for active and reviewed-range suppression. Not mutation-checked by me; the model and DOM cases listed in F-009 are not in my slices." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts: `finished` is `state IN (completed,partial,budget) AND base IS NOT NULL AND head IS NOT NULL`, so a candidate needs both reviewed SHAs, matching the row projection (`result: row.base && row.head ? ...`). The live-history path of `localBadge` accepts any non-null `reviewed` object; the journal records that as left open, and no producer writes a head without a base." },
+    { "id": "F-011", "disposition": "open", "evidence": "Unchanged by the delta: ReviewWatcher and ProjectReviewRules are portaled, the Filters and PR subscription dialogs are not." },
+    { "id": "F-012", "disposition": "open", "evidence": "Unchanged: the attention set is computed from all snapshot cards while `visible` is filtered; the useMemo keeps that behaviour (a consequence of the operator decision)." },
+    { "id": "F-013", "disposition": "open", "evidence": "The 'Review changes' label chain is outside the diff lines in my slices; not seen changed." },
+    { "id": "F-014", "disposition": "open", "evidence": "desk-run-store.ts `visible()` still hard-codes `source IN ('manual','scheduled')` while `localBadge` uses `source !== 'existing'`. The delta adds a second mirrored rule (the supersede predicate in `flagged`) that must stay equal to `localBadge`; the new `localBadge` parity assertions in the store test are the only guard." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: no test or build was run (read-only budget); the layout measurements, the SQL timings and the "identical badge output" claim are the worker's and orchestrator's, not mine. The SQL was checked by reading against `board-badges.ts` `localBadge`, not executed, so edge cases such as runs with a null `createdAt` were not exercised. The graph and wiki layers were not used.
+
+Routing audit: graph_used: no (not-relevant, diff-scoped review); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx read`, `keryx ctx rg`); raw_rg_used: no.

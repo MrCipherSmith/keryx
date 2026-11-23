@@ -1,0 +1,266 @@
+**No blockers, merge-ready — 5 Minor, 1 question.** Seven of the eight fixes hold in the code, including the toolbar and the badge SQL; the fix for F-008 introduced one small regression in the tab indicator, and the pull request description still describes the branch before the fixes.
+Reviewed `33fd9647a` against `1b994df18` · round 2 (delta `53c96b8af..33fd9647a`) · 18 files, +562/−60 · CI red: `client matrix (cancel-resume)` (fails in `src/rewind/shadow-isolation.test.ts`, a file this pull request does not touch; not re-run), `AC8 remaining tests` pending, 25 passed.
+Evidence level: ran — the test files of the round's blast radius (two `keryx review verify-run` records, both exit 0), `bun test src` in `apps/desktop` (755 pass), both typechecks, and browser measurements of the toolbar on a board without data; reviewers themselves were static only; did not run: the F-015 scenario in the app, mutation pass, the SQL timing (the implementing worker's numbers), the app with board data.
+
+### Prior findings
+
+| Id | Finding | Status | Evidence |
+|---|---|---|---|
+| F-001 | Toolbar overflows at 560px board | closed | no `nowrap` override; measured one row, no overflow at 560–1380px |
+| F-002 | Focus not returned to search | closed | `inBoardOverlay()` matches both portaled dialogs; DOM test |
+| F-003 | Outdated text hides attention reason | closed | ranked after `attentionReason`; `.review-note` line |
+| F-004 | Docs say nothing is implemented | closed | stage 0 marked implemented; remainder is F-019, F-026 |
+| F-005 | Twin icons, counts dropped | partial | icon and filter count fixed; PR count hidden under 760px (F-020) |
+| F-006 | Outdated lookup doubled SQL cost | closed | one materialized CTE; worker timing ~395 ms vs ~405 ms base |
+| F-007 | Vacuous lane test | closed | neutral card asserts lane `open` |
+| F-008 | Attention set has two writers | regressed | derived with `useMemo`; removals no longer persisted — F-015 |
+| F-009 | Test gaps (info) | partial | decoys added; repo predicate, failed run with result unpinned |
+| F-010 | Lookup checked reviewed head only (info) | closed | SQL needs both SHAs; `localBadge` still accepts head alone |
+| F-011 | Only two dialogs portaled (info) | open | unchanged |
+| F-012 | Indicator counts filtered-out cards (question) | open | unchanged, accepted in round 1 |
+| F-013 | "Review changes" wording (question) | open | unchanged, no answer recorded |
+| F-014 | Source rule written in SQL and TS (info) | open | unchanged |
+
+## Regressions the fixes introduced
+
+- **F-015 (regressed from F-008).** See Minor.
+
+### Minor
+
+- **F-015. The tab indicator can light again for something already handled** (regressed from F-008) — [`apps/desktop/src/review/ReviewBoard.tsx`](https://github.com/MrCipherSmith/keryx/blob/33fd9647afea1cb7795ca56dd168405c1db8d21a/apps/desktop/src/review/ReviewBoard.tsx). The attention set is now derived in a `useMemo` from `carriedAttention`, which only the load callback writes. A removal that happens after a load — a reply read, a question answered — is not saved. Open filter: read the reply on a pull request, the indicator clears; switch the state filter to Merged only, and the indicator comes back and stays until an Open or All load. At `53c96b8af` it stayed off. Write the derived set back when the shown snapshot or receipts change, and add a DOM test for this sequence. Traced in code by three reviewers; not reproduced in the app.
+- **F-025. The pull request description describes the branch before the fixes** — PR body. "Toolbar on one row" is no longer exact (it wraps below about 400px; the count and watcher status hide under 760px); `Outdated review · <sha>` is the card's reason only when nothing ranks above it, otherwise a second line; Verification says 752 tests (now 755) and "no second round ran"; the SQL rewrite is not mentioned. Update the What, Verification and Not verified sections.
+- **F-016. The list row computes the reason four times** — [`apps/desktop/src/review/ReviewResults.tsx`](https://github.com/MrCipherSmith/keryx/blob/33fd9647afea1cb7795ca56dd168405c1db8d21a/apps/desktop/src/review/ReviewResults.tsx). The Reason cell calls `laneReason(c)` four times and `secondaryNote` twice; `ReviewTile` in the same file computes each once. Use two locals.
+- **F-017. `outdated` names a string in `laneReason`** — [`apps/desktop/src/review/model.ts`](https://github.com/MrCipherSmith/keryx/blob/33fd9647afea1cb7795ca56dd168405c1db8d21a/apps/desktop/src/review/model.ts). The local holds the note text; elsewhere in the module `outdated` is the badge object. Rename it to `note`.
+- **F-018. Run-state lists are repeated inside the new SQL** — [`src/review/desk-run-store.ts`](https://github.com/MrCipherSmith/keryx/blob/33fd9647afea1cb7795ca56dd168405c1db8d21a/src/review/desk-run-store.ts). `flagged` spells the active and the finished state lists twice each and reuses the alias `r` for `scoped`. Compute `active` and `finished` once in `scoped`, or interpolate named fragments as the file does for `visible`.
+
+### Questions
+
+- **F-020.** Below a 760px toolbar — which includes the default window with the detail panel open — the pull request count and the watcher status text are hidden. Accept, or keep the bare number visible?
+
+<details><summary><b>Pre-existing (not blocking)</b></summary>
+
+- **F-011, F-014** — unchanged from round 1, see the table.
+
+</details>
+
+<details><summary><b>Verified clean</b></summary>
+
+- The rewritten `attachBadges` statement: every value is bound, the repository, viewer and pull request scope is kept, each run is parsed once, and the rule that keeps the outdated row equals the condition under which `localBadge` reports it (security, backend, logic, performance, highload, regression, degradation — by reading; the store test compares against `localBadge`).
+- Toolbar: no overflow at 560, 700, 820, 1101, 1380px and a clean wrap at 340px (measured without board data).
+- Focus restore for both portaled dialogs, with a DOM test; `Review rules` renders only while the tab is active.
+- `reviewLane` is untouched by the F-003 fix: no card changes lane.
+- Info notes kept in the findings block: the docs still say the toolbar never wraps (F-019) and "awaiting merge" (F-026); `publication()` is called for the outdated row (F-021); three test gaps of the delta (F-022); the portal detection and the note de-duplication depend on class names and string equality (F-023, F-024).
+
+</details>
+
+<details><summary><b>How this review was run</b></summary>
+
+- **Workflow:** `review-orchestrator`; severity per the canonical rubric in the skill.
+- **Scope:** delta `53c96b8af..33fd9647a` of PR #1294, round 2 (previous round found in the local package). Six slices: one fix, two new, three second-look. Unchecked commits: none.
+- **Models:** opus — review-logic and review-security-code on the fix and new slices, review-premise. sonnet — every other dispatch.
+- **Tools:** `keryx review plan`, `comments collect`, `context-collect`, `verify-run`, `next`, `ingest`, `ledger build`; `gh` for PR state and checks.
+- **Skills:** review-orchestrator, the fourteen reviewer skills of the roster, review-pr-contract, review-premise.
+- **Subagents:** 19 reviewer dispatches (waves of one reviewer merged into one dispatch) and one premise judge.
+- **Fallback:** every reviewer via `general-purpose` with its `SKILL.md` path, because the host has no agent type per reviewer.
+- **Not run:** review-verifier — no blocker or major. Mutation pass — 11 candidates proposed, none executed. `keryx review ci-triage` for the failed check — not enabled. The failed CI check was not re-run.
+- **Selection:** reviewers — full roster (operator); models — chosen by the orchestrator.
+- **Verification:** annotate. No review-verifier pass ran. F-015 rests on a code trace by three reviewers, the premise judge and the orchestrator, without a reproduction.
+Not verified: 1
+- **Stage counts:** 36 raw findings from 19 dispatches (most written twice, once per merged wave); 12 retained after merging duplicates; none refuted or narrowed.
+- **Context:** `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/`
+- **Follow-up file:** none
+- **Reviewed at:** 2026-11-23T10:55Z
+
+</details>
+
+```json keryx:findings
+[
+ {
+  "id": "F-015",
+  "reviewer": "review-logic",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/ReviewBoard.tsx",
+  "line": 355,
+  "quote": "}, [carriedAttention, snapshot, receiptVersion]);",
+  "problem": "Regressed from F-008. The tab's attention set is now derived in a useMemo from carriedAttention plus the shown snapshot, and carriedAttention is written only by the load callback (and cleared by accessLost). The effect removed by the F-008 fix wrote the judged set back into state; removals that happen after a load (a reply read, an answered review question, a badge poll) now exist only in the derived value.",
+  "impact": "Open filter: PR #A has an unread reply, so the load put it into carriedAttention. The viewer reads the reply, the derived set drops #A and the tab indicator clears. The viewer switches the state filter to Merged only: while the new scope loads the snapshot is null and the memo returns carriedAttention, which still holds #A; the merged-only load does not replace the set (replaceAttention is false) and does not contain #A, so the indicator stays on for something already handled until an open or all load replaces the set. At 53c96b8af the indicator stayed off.",
+  "suggested_fix": "Persist removals: when the shown snapshot or the receipts change, write the derived set back into carriedAttention if it differs, or prune carriedAttention against the cards of the shown snapshot. Add a DOM test: read a reply, switch the state filter to Merged, assert the indicator stays off.",
+  "evidence": "ReviewBoard.tsx:188 and 231-238 are the only writers of carriedAttention; :230 replaceAttention is false for merged-only, closed-only and period loads; :283 snapshot is null while read.scope !== scope; :346-355 the memo starts from carriedAttention. Traced by three reviewers and re-read by the orchestrator; not reproduced in the app, no test written.",
+  "confidence": "medium",
+  "dedupe_key": "carried-attention-stale-after-receipt",
+  "blocking_merge": false,
+  "degradation_class": "behaviour-delta",
+  "evidence_kind": "consumer-trace"
+ },
+ {
+  "id": "F-016",
+  "reviewer": "review-clean-code",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/ReviewResults.tsx",
+  "quote": "{secondaryNote(c, laneReason(c)) && <span className=\"review-note\">{secondaryNote(c, laneReason(c))}</span>}",
+  "problem": "The list row's Reason cell calls laneReason(c) four times and secondaryNote twice per row, while ReviewTile in the same file computes both once into locals. Introduced by the F-003 fix.",
+  "impact": "No wrong output. The same derivation is spelled several times in one cell, so a later change to one call can leave the others behind; the tile and the list row already differ in shape.",
+  "suggested_fix": "Compute `const reason = laneReason(c); const note = secondaryNote(c, reason);` once per row, as ReviewTile does.",
+  "evidence": "Read by review-style and review-clean-code; ReviewResults.tsx list row against ReviewTile.",
+  "confidence": "high",
+  "dedupe_key": "style-list-cell-repeated-calls",
+  "blocking_merge": false,
+  "degradation_class": "behaviour-delta"
+ },
+ {
+  "id": "F-017",
+  "reviewer": "review-style",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/model.ts",
+  "quote": "const outdated = reviewNote(c);",
+  "problem": "In laneReason the local `outdated` now holds the note text returned by reviewNote, while everywhere else in the module `outdated` names the badge object `localReview.outdated`.",
+  "impact": "A reader of laneReason takes `outdated` for the badge object. Naming only; no behaviour.",
+  "suggested_fix": "Rename the local to `note`, or return `reviewNote(c) ?? …` without a local.",
+  "evidence": "Read by review-style; model.ts laneReason and reviewNote.",
+  "confidence": "high",
+  "dedupe_key": "style-laneReason-outdated-string-name",
+  "blocking_merge": false,
+  "degradation_class": "behaviour-delta",
+  "line": 103
+ },
+ {
+  "id": "F-018",
+  "reviewer": "review-clean-code",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.ts",
+  "line": 415,
+  "quote": "coalesce(r.state IN ('running','cancelling','queued') OR requested OR (base=wb AND head=wh),0) AS kept,",
+  "problem": "The new `flagged` CTE spells the active-state list and the finished-state list twice each and repeats `active OR requested` in `kept` and `supersedes`; with activeReviewNumbers and the other statements the same state sets are now written five times in the file. The CTE also reuses the alias `r` for `scoped`, the alias the outer query uses for `runs`.",
+  "impact": "A new run state has to be added in several string literals; missing one changes which run supersedes the outdated badge without a type error. The reused alias makes `r.state` in `flagged` read as the runs table.",
+  "suggested_fix": "Compute `active` and `finished` once as columns of `scoped` (or interpolate two named SQL fragments as the file already does with `scheduledReservation` and `visible`), and alias `scoped` as `s` in `flagged`.",
+  "evidence": "desk-run-store.ts:415-419, :471. Read by review-clean-code and review-style.",
+  "confidence": "medium",
+  "dedupe_key": "sql-state-lists-repeated",
+  "blocking_merge": false,
+  "degradation_class": "behaviour-delta"
+ },
+ {
+  "id": "F-025",
+  "reviewer": "review-pr-contract",
+  "severity": "minor",
+  "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+  "quote": "## Состояние этапа 0",
+  "problem": "The pull request description was not updated after the fix round and several statements in it are now wrong. What: the toolbar is no longer forced onto one row (it wraps below about 400px; the count label and watcher status hide under 760px); `Outdated review · <sha>` is the card's reason only when nothing ranks above it and is otherwise a secondary line, shown on every card with an outdated badge. Verification: `bun test src` is 755 pass, not 752; 'no second round ran' is no longer true — a pull request round with 14 findings ran and was fixed in 626bf776d, 964047588 and e08743ab4; the toolbar was re-measured at 560-1380px and 340px with stand-ins; the rewritten badge SQL and its worker-only timing are not mentioned.",
+  "impact": "A maintainer reading the description to decide whether the branch was reviewed after the fixes, or what a card shows, gets the state before the fix round. The code is correct; the description is stale.",
+  "suggested_fix": "Rewrite the two What bullets and the Verification and Not verified sections for head 33fd9647a: the wrap and collapse widths, the secondary outdated line, 755 tests, the pull request review round and its three fix commits, what is still unmeasured (real board data, detail panel open, SQL timing not re-run).",
+  "evidence": "PR body (pr-context.md): '- **Toolbar on one row.** Labels collapse to icons when the board is narrow; …', '`cd apps/desktop && bun test src` - 752 pass', 'no second round ran on that commit' — against review.css:85-96, model.ts:84-104, ReviewResults.tsx and the flow journal. The PR body is not a repository file; the quoted line is the in-repo section that records the stage 0 status the description should match. Reported by review-pr-contract (two findings merged).",
+  "confidence": "high",
+  "dedupe_key": "pr-description-stale-after-fixes",
+  "blocking_merge": false,
+  "degradation_class": "diff-vs-description",
+  "line": 16
+ },
+ {
+  "id": "F-019",
+  "reviewer": "review-degradation",
+  "severity": "info",
+  "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+  "line": 150,
+  "quote": "Не переносится на вторую строку при открытой панели PR: второстепенные элементы уходят в меню.",
+  "problem": "The specification and the implementation plan still say the toolbar never wraps and that secondary items move into a menu. After the F-001 fix the toolbar wraps again at narrow widths (measured at 340px), labels are hidden by container queries and there is no menu. The new stage 0 status section records two deviations; this is not one of them.",
+  "impact": "The requirement reads as met as written; it is met by hiding labels between 560 and 1380px and not below about 400px.",
+  "suggested_fix": "Record a third stage 0 deviation: labels collapse under 1100px, the count label and watcher status hide under 760px, the toolbar may wrap below about 400px, no overflow menu.",
+  "evidence": "review.css has no nowrap override; layout-measurements.md section 'After the fix' shows two rows at 340px. Reported by review-logic and review-degradation.",
+  "confidence": "medium",
+  "dedupe_key": "docs-toolbar-no-wrap-overstated",
+  "blocking_merge": false,
+  "degradation_class": "diff-vs-description",
+  "evidence_kind": "base-diff"
+ },
+ {
+  "id": "F-020",
+  "reviewer": "review-ui-ux",
+  "severity": "info",
+  "file": "apps/desktop/src/styles/review.css",
+  "quote": ".review-board .flows-toolbar .count-label, .review-board .flows-toolbar .watcher-indicator { display: none; }",
+  "problem": "The remaining part of F-005: below a 760px toolbar the pull request count and the watcher status text are hidden. That range includes the 560px board of the default 1180px window with the detail panel open.",
+  "impact": "With the detail panel open at the default window size the board shows neither how many pull requests are listed nor whether the watcher is on; the watcher state stays in the button's accessible name and title.",
+  "suggested_fix": "Accept, or keep a short count (the number alone) visible below 760px.",
+  "evidence": "review.css container query; layout-measurements.md. Reported by review-ui-ux; the same remainder named by review-layout, review-logic, review-degradation, review-security-code under F-005.",
+  "confidence": "high",
+  "dedupe_key": "toolbar-count-hidden-under-760",
+  "blocking_merge": false,
+  "line": 94
+ },
+ {
+  "id": "F-021",
+  "reviewer": "review-logic",
+  "severity": "info",
+  "file": "src/review/desk-run-store.ts",
+  "line": 452,
+  "quote": "const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);",
+  "problem": "attachBadges calls this.publication() for every returned row with a recorded result, including the single outdated candidate per card. localBadge never uses the publication of a run on another range.",
+  "impact": "One receipt file read and one existsSync per card with an outdated badge on every board load; bounded, no wrong result.",
+  "suggested_fix": "Skip the call when the row's reviewed range differs from the card's range.",
+  "evidence": "desk-run-store.ts:452; board-badges.ts publicationPending requires the same range. Read by review-logic (second look).",
+  "confidence": "medium",
+  "dedupe_key": "outdated-row-publication-io",
+  "blocking_merge": false
+ },
+ {
+  "id": "F-022",
+  "reviewer": "review-testing-practices",
+  "severity": "info",
+  "file": "src/review/desk-run-store.test.ts",
+  "line": 516,
+  "quote": "in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card",
+  "problem": "Tests of the delta leave three things unpinned: (a) the `requested` term of the SQL `supersedes` rule — a failed or cancelled run requested on the card's range would separate it; (b) the batch test compares badge output, which is identical whether or not the SQL drops the outdated row for a superseded card, so the saving of the F-006 fix is not asserted; (c) the `note !== reason` de-duplication and the operator decision that the note shows on merged and closed cards have no DOM test.",
+  "impact": "A change that returns the lookup to reading rows for superseded cards, or that hides the note on merged cards, keeps the suite green. No wrong badge today.",
+  "suggested_fix": "Add a fixture with a failed run requested on the card's range; keep the measurement script as the guard for the cost or count rows through a seam; add a DOM fixture with an outdated badge on a merged card.",
+  "evidence": "Read, no mutant run. Reported by review-testing-practices (two findings) and review-degradation.",
+  "confidence": "medium",
+  "dedupe_key": "delta-tests-unpinned",
+  "blocking_merge": false,
+  "degradation_class": "blind-test"
+ },
+ {
+  "id": "F-023",
+  "reviewer": "review-architecture",
+  "severity": "info",
+  "file": "apps/desktop/src/review/ReviewBoard.tsx",
+  "quote": "const PORTALED_DIALOG_CONTENT = \".project-review-rules, .review-watcher\";",
+  "problem": "Focus-restore detection identifies the two portaled dialogs by class names owned by ProjectReviewRules.tsx and ReviewWatcher.tsx; nothing at those sites says the board depends on them.",
+  "impact": "Renaming either class silently breaks the focus restore of F-002; the DOM test would catch it only for the two dialogs it loops over.",
+  "suggested_fix": "Mark the portaled dialogs with one shared data attribute and match on it.",
+  "evidence": "Read by review-architecture and review-clean-code.",
+  "confidence": "medium",
+  "dedupe_key": "portal-detection-by-class-name",
+  "blocking_merge": false
+ },
+ {
+  "id": "F-024",
+  "reviewer": "review-clean-code",
+  "severity": "info",
+  "file": "apps/desktop/src/review/ReviewResults.tsx",
+  "quote": "return note && note !== reason ? note : null;",
+  "problem": "The secondary line is shown or hidden by comparing the note text with the lane reason text, which couples laneReason and secondaryNote through exact string equality.",
+  "impact": "A wording change in one of the two places makes the note appear twice on a card. No defect today.",
+  "suggested_fix": "Have laneReason report whether it returned the review note, or derive both from one function.",
+  "evidence": "Read by review-clean-code.",
+  "confidence": "medium",
+  "dedupe_key": "note-dedup-by-string-equality",
+  "blocking_merge": false
+ },
+ {
+  "id": "F-026",
+  "reviewer": "review-pr-contract",
+  "severity": "info",
+  "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+  "line": 5,
+  "quote": "Статус: этап 0 реализован (Flow 516, PR #1294, ожидает слияния)",
+  "problem": "Commit 626bf776d writes 'awaiting merge' as a present-tense status into implementation-plan.md, README.md and the specification status line. After the pull request merges these lines are false.",
+  "impact": "After merge the requirements package says stage 0 is awaiting merge. No runtime effect.",
+  "suggested_fix": "Drop 'ожидает слияния' and keep the Flow number, or edit the lines in the merge step.",
+  "evidence": "Read by review-pr-contract.",
+  "confidence": "medium",
+  "dedupe_key": "docs-awaiting-merge-status",
+  "blocking_merge": false,
+  "degradation_class": "diff-vs-description"
+ }
+]
+```

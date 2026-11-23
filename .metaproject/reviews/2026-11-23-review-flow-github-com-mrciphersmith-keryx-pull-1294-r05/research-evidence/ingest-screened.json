@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "screened": [
+    {
+      "id": "F-038",
+      "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-038",
+      "reviewer": "review-regression",
+      "rule": "non-regression-severity",
+      "detail": "severity `minor` is below the scope-B floor `major`. Under the canonical rubric `minor` states that the code behaves correctly and `info` names neither a trigger nor an outcome; neither can be a claim that the change broke an existing behaviour."
+    }
+  ]
+}

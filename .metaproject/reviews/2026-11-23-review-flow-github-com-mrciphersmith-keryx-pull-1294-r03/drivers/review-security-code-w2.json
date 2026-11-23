@@ -1,0 +1,22 @@
+{
+ "reviewer": "review-security-code",
+ "wave": 2,
+ "waves": 4,
+ "slices": [
+  "slice-05"
+ ],
+ "slicePaths": [
+  {
+   "id": "slice-05",
+   "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-05.diff",
+   "bytes": 146633
+  }
+ ],
+ "result": "raw/review-security-code-w2.txt",
+ "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+ "model": {
+  "inherit": false,
+  "tier": "standard",
+  "model": "sonnet"
+ }
+}

@@ -1,0 +1,64 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review (review-logic, wave 1, slice-01)
+
+Spec compliance gate: ran against AC1-AC4, AC6 and the plan matrix (the UI parts). AC1 (no filter bypass), AC2 (no active-first sort), AC3 (Done lane gated by `stateFilterShowsDone`), AC4 (`needsViewerAttention`) and the card text of AC6 are implemented in the diff. No spec gap found. I traced that no card can land in the "done" lane while that lane is hidden: a closed/merged card passes the state filter only when the filter lists closed/merged, which is exactly when `stateFilterShowsDone` is true. The attention-sync effect, the moved reply carry-over (`latest` ref) and the `laneReason` ordering read as correct. Only minor and info items remain; no blocker or major.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Stage-0 Desktop board logic is sound: filter bypass and active-first sort are gone, Done lane is gated consistently with the state filter (no card can be lost), attention set is kept in step with the snapshot and receipts, reply carry-over via the latest ref matches the old behaviour. Remaining items: portaling two dialogs out of .review-workspace breaks the focus-restore selector in clearPrivateView; dialog overlay extent now differs between portaled and non-portaled dialogs; toolbar one-row claim is unmeasured with real data in the 1100-1250px range.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+      "problem": "clearPrivateView decides whether to return focus to the search field by testing whether the focused element is inside `.review-workspace [role=\"dialog\"]`. This change portals the Review rules dialog (ProjectReviewRules.tsx) and the PR watcher dialog (ReviewWatcher.tsx) to document.body, so focus inside them no longer matches the selector.",
+      "impact": "Scenario: the PR watcher or Review rules dialog is open with focus in it, a refresh reports access lost or a different viewer/repository (accessLost / identity change -> clearPrivateView). Before the change restoreFocus was true and the search field was focused once the dialog unmounted; now restoreFocus is false and focus falls to document.body, so a keyboard user loses their place. Only the Filters/Subscription dialogs and the detail panel still match.",
+      "suggested_fix": "Widen the selector to cover portaled dialogs, e.g. `.review-workspace [role=\"dialog\"], .review-detail-panel, body > .overlay [role=\"dialog\"]`, or mark the two portaled dialogs with a data attribute the selector also tests.",
+      "evidence": "ReviewBoard.tsx clearPrivateView (selector above); ProjectReviewRules.tsx `createPortal(<RulesDialog .../>, document.body)`; ReviewWatcher.tsx `createPortal(<Dialog title=\"PR watcher\" .../>, document.body)`. Test files were not searched for a focus-restore case with those dialogs open.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "line": null,
+      "quote": "</Dialog>, document.body)}",
+      "problem": "`.review-workspace` carries `container-type: inline-size` (ReviewDetail.css line 1), which makes it the containing block of fixed descendants. Dialogs rendered inside it (ReviewFilters, PrSubscriptionDialog) therefore have an overlay covering only the workspace, while the two portaled dialogs (PR watcher, Review rules) now cover the whole window including the app sidebar.",
+      "impact": "Inconsistent overlay extent across dialogs of the same screen; no functional failure found. Reported because the round-1 note says the portal was chosen to escape the toolbar container, and the workspace container was not mentioned.",
+      "suggested_fix": "None required; if consistency matters, portal all board dialogs the same way, or leave as is and record the choice.",
+      "evidence": "ReviewDetail.css:1 `.review-workspace { ... container-type: inline-size; }`; ReviewBoard.tsx renders ReviewFilters and PrSubscriptionDialog as children of `.review-workspace` outside the toolbar.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": "@container (max-width: 1100px) {",
+      "problem": "Labels and the count label reappear as soon as the toolbar container is wider than 1100px, while every toolbar child is `flex: none` and only the search field can shrink (min-width 96px). With board data the toolbar holds the heading, count label, Filters, Review rules, PR watcher label plus state text, the Board/List control and Refresh. The live check had no board data (no count label, no Review rules button), so the 1101 to about 1250px range with everything shown was not measured.",
+      "impact": "If the summed natural widths of the labelled controls exceed the toolbar width just above 1100px, the nowrap toolbar overflows instead of wrapping; AC7 (one row at 1440px with the detail panel open, a board of about 820px) is met by the icon-only state, but the upper edge of the labelled state is unverified. I could not compute widths from the CSS alone.",
+      "suggested_fix": "Measure with real data at 1101, 1150 and 1250px; raise the breakpoint if the row overflows.",
+      "evidence": "review.css `.review-board .flows-toolbar > * { flex: none; }`, search-field `flex: 1 1 200px; min-width: 96px`; the brief states measurements at 820, 1080 and 1380px without data.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": ["slice-01"]
+}
+```
+
+## Not verified
+- No tests, servers or browser run (read-only, exec budget 0); behaviour of the portaled dialogs, focus restore and toolbar widths is reasoned from code and CSS only.
+- Backend (`src/review/*`, SQL, `localBadge`) and test files are outside slice-01; `board-badges.ts` was seen only through search hits, not the SQL.
+- Rust `review.rs` passthrough was not read.
+- Flow, journal and resolved/*.json files in the slice were read as context; no secret or personal data found in them.
+- Routing audit: graph_used no (not-relevant), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no.

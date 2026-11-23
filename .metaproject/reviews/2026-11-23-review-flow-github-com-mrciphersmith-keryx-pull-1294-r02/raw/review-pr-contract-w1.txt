@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "The code at 33fd9647a does what the PR title and the stage 0 intent say, but the description was not updated and several of its statements are now wrong or incomplete: 'Toolbar on one row', the text of the outdated-review line, the Verification test count, and the Not verified paragraph about the review round. The body has no checklist boxes, so claims were checked as prose. Of the 9 prior findings whose sites were read, 8 are closed and 1 (F-005) is partial.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "pr-context.md (PR body, What section)",
+      "line": 1,
+      "quote": "- **Toolbar on one row.** Labels collapse to icons when the board is narrow; the Review rules and PR watcher dialogs are portaled to the document body.",
+      "problem": "Claims in the What section no longer match the head. (1) The toolbar is not forced onto one row: the nowrap override is gone (apps/desktop/src/styles/review.css:85-88 has no 'flex-wrap: nowrap'), so the shared wrapping returns and the toolbar wraps to two rows at about 340px (previous package research-evidence/layout-measurements.md, After the fix); it stays on one row at 560-1380px. (2) 'Labels collapse to icons when the board is narrow' omits that the pull request count and the watcher status text are hidden under a 760px container (review.css:93-95) while labels hide under 1100px; the filter count stays visible in its own '.filter-count' element. (3) The Review rules button now uses the 'shieldCheck' icon (ProjectReviewRules.tsx), distinct from Filters. Second bullet: 'Outdated review stays on the card ... the card shows `Outdated review · <sha>`' is wrong in two ways. The text is the card's lane reason only when no higher reason applies (model.ts:94-104 ranks it after attentionReason and after the partial-run label). Otherwise it is a secondary '.review-note' line (ReviewResults.tsx ReviewTile and list view), shown on every card with an outdated badge, merged and closed ones included (operator decision in the flow journal). Neither the secondary line nor the ranking is in the description.",
+      "impact": "A reader trusts that the toolbar never wraps and that an outdated review always is the reason line. Someone checking a Needs attention card will not find 'Outdated review · <sha>' as its reason; it is the secondary line. The code is correct; only the description is stale.",
+      "suggested_fix": "Rewrite the two bullets: toolbar on one row from about 560px and wrapping below, labels hidden under 1100px, count and watcher text under 760px, Review rules has its own icon; the outdated review is the card's reason only when nothing else applies, otherwise a secondary line, on every card with an outdated badge including merged and closed ones.",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "pr-context.md (PR body, Verification and Not verified)",
+      "line": 1,
+      "quote": "- `cd apps/desktop && bun test src` - 752 pass",
+      "problem": "Verification and Not verified describe the branch before the fix round. (1) The count is now 755 pass (orchestrator run at this head, journal T13). (2) The body says of the earlier review round: 'Its six findings are fixed in `985f8ecbc`; no second round ran on that commit'. It says nothing of the later PR review round (package ...-pull-1294, 14 findings: 1 major, 7 minor, 6 info) whose fixes are 626bf776d, 964047588 and e08743ab4, nor that review-verifier and the mutation pass did not run in it. (3) The live toolbar check is listed at 820, 1080 and 1380 px; it was redone at 560, 700, 820, 1101, 1380 and 340 px, but with stand-ins for the Review rules button and count label, so real board data and the open detail panel are still unmeasured (the body lists these as unverified only for the earlier round). (4) The SQL change is not mentioned: the badge read was rewritten as one materialized CTE with window functions, with a worker measurement (200 PRs x 30 runs, about 405 ms base, 770 ms round-1 head, 395 ms now) that the orchestrator did not re-run. The statement 'the badge SQL returns at most one extra row per card' stays true at this head (desk-run-store.ts picked CTE, row_number()=1 among finished runs per card, none when a run supersedes), but it now describes different SQL than the one in the first review.",
+      "impact": "A maintainer deciding whether the branch was reviewed after the fixes reads 'no second round ran' and 752 when the current state is a delta round and 755.",
+      "suggested_fix": "Update the Verification counts; add the PR review round, its 14 findings and the three fix commits; state what is still unmeasured (real board data, Review rules dialog, detail panel open, SQL timing not re-run).",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description"
+    },
+    {
+      "id": "PC-003",
+      "severity": "info",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "line": 5,
+      "quote": "Статус: этап 0 реализован (Flow 516, PR #1294, ожидает слияния)",
+      "problem": "Commit 626bf776d writes 'awaiting merge' and the PR number as present-tense status into implementation-plan.md (status line and 'Состояние этапа 0'), README.md:4 and the specification status line. After the pull request merges these lines are false.",
+      "impact": "After merge the requirements package says stage 0 is awaiting merge. No runtime effect.",
+      "suggested_fix": "Drop 'ожидает слияния' and keep the Flow number, or edit the lines in the merge step.",
+      "confidence": "medium",
+      "degradation_class": "diff-vs-description"
+    }
+  ],
+  "stats": { "files_reviewed": 14, "findings": 3, "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-02", "slice-03"],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css:85-88 no longer sets 'flex-wrap: nowrap'; search field 'flex: 1 1 96px; max-width: 260px'; labels hide under 1100px, count label and watcher status under 760px. Measurements in the previous package: one row at 560-1380px, wrapped without clipping at 340px. Not measured with real board data or the detail panel open." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx clearPrivateView calls inBoardOverlay(), which also matches a dialog containing '.project-review-rules, .review-watcher'; the new DOM test focuses a button in each portaled dialog, changes the viewer and expects the search field to hold focus." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts:94-104 laneReason ranks reviewNote after attentionReason; reviewNote(card) is new (model.ts:84); ReviewResults.tsx renders '.review-note' in the board tile and the list view; model.test.ts:85-92 and the DOM test cover the attention-reason case. Operator upheld, line shown on merged and closed cards too." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README.md:4, implementation-plan.md (new 'Состояние этапа 0' with deviations a and b), prd.md R12, specification.md indicator section and roadmap 0.29.38 now say stage 0 is implemented and record the team-request exclusion. New wording issue: PC-003." },
+    { "id": "F-005", "disposition": "partial", "evidence": "ProjectReviewRules.tsx uses 'shieldCheck' while Filters keeps 'checklist' (ReviewBoard.tsx:411); the active-filter count is a separate '.filter-count' element and is not hidden. The pull request count ('.count-label', ReviewBoard.tsx:402) still hides under a 760px container (review.css:93-94), which the finding asked to keep outside the collapsing set; a trade against F-001." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts:401-444: one 'scoped AS MATERIALIZED' CTE parses each run's details once; flagged/picked CTEs use window functions; only kept rows plus the newest finished run per card with no superseding run are read again. The new batch test covers an active run and a reviewed range per card. The measurement is the worker's, not re-run." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts:78-82 builds neutral = quiet(pr) (no decision, no reviewers) and asserts reviewLane is 'open' with and without the outdated badge." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx: state renamed carriedAttention (cross-scope retention only); the shown set is derived with useMemo over carriedAttention, snapshot and receiptVersion; the second writer effect is removed." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts:416 requires both reviewed base and head for a finished candidate ('base IS NOT NULL AND head IS NOT NULL'), matching the row projection at line 456. The journal leaves open whether localBadge should also require both SHAs; not tested." }
+  ]
+}
+```
+
+Not verified: the code was read only; no test, server or browser was run. The 755 test count, the toolbar measurements and the SQL timings come from the brief and the journal and were not re-run. I did not read the previous package's report.md or canonical-findings.json, my round-1 raw results, or the GitHub page of the PR (only pr-context.md). Documents outside the diff were read only where the delta touches them (README, plan, prd, specification, roadmap). Whether the 'shieldCheck' name exists in the Icon component was not checked. The PR body has no checklist boxes, so the checklist form had no rows.
+
+Routing audit: graph_used no (not-relevant: description-versus-diff check), wiki_used no (not-relevant), ctx_used yes (rg, read), raw_rg_used no; one `git diff --name-only` ran with a raw marker to list changed file names.

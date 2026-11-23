@@ -1,0 +1,135 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1294",
+    "base": "1b994df180fb89c82b6164e516ad3ff27b2453fa",
+    "head": "53c96b8af161a9aa7550f6d8f7c2ed739baaf110"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "1b994df180fb89c82b6164e516ad3ff27b2453fa",
+      "head": "53c96b8af161a9aa7550f6d8f7c2ed739baaf110"
+    },
+    "fixHunks": 0,
+    "newHunks": 165,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T12.implement.json",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json",
+          ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json",
+          "apps/desktop/src/review/ProjectReviewRules.tsx",
+          "apps/desktop/src/review/ReviewBoard.tsx",
+          "apps/desktop/src/review/ReviewResults.tsx",
+          "apps/desktop/src/review/ReviewWatcher.tsx",
+          "apps/desktop/src/review/model.ts",
+          "apps/desktop/src/styles/review.css"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+          "apps/desktop/src/review/model.test.ts",
+          "docs/requirements/keryx-desktop-review-v2/README.md",
+          "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+          "docs/requirements/keryx-desktop-review-v2/prd.md",
+          "docs/requirements/keryx-desktop-review-v2/specification.md",
+          "docs/requirements/roadmap.md"
+        ],
+        "depth": "light",
+        "roles": [
+          "review-frontend",
+          "review-logic",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/review/board-badges.test.ts",
+          "src/review/desk-run-store.test.ts",
+          "src/review/board-badges.ts",
+          "src/review/board-types.ts",
+          "src/review/desk-run-store.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 16,
+  "minutes": {
+    "min": 8,
+    "max": 20
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "67697a6a8d6ebf62",
+  "warnings": [],
+  "next": "dispatch"
+}

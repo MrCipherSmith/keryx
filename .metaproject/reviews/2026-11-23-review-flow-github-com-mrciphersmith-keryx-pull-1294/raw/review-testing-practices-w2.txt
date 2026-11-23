@@ -1,0 +1,60 @@
+STATUS: DONE
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "slice-03 tests (board-badges.test.ts, desk-run-store.test.ts) are well built: unit tests pin each JS gate in localBadge, and the store tests drive the real SQLite attachBadges path with newer decoy runs for other PR, other viewer, delete, imported and resultless runs, plus a differential check against localBadge. No mutation was run (read-only dispatch); 12 mutant_candidates listed. Two SQL predicates have no fixture that separates them (reading only, reported as info).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "WHERE o.repo=?2 AND o.viewer=?3 AND o.pr=w.n AND o.state IN ('completed','partial','budget')",
+      "problem": "The repo predicate (o.repo=?2) of the new outdated subquery looks unpinned. The only foreign-account fixture, `other = { ...key, viewer: 'colleague' }` in desk-run-store.test.ts, differs by viewer only; repositoryId stays 'gid'. No test builds a newer finished run in another repository for the same viewer and PR number.",
+      "impact": "Dropping or breaking the repo predicate would leak another repository's newest finished head into a card's outdated badge while the suite stays green. Prediction from reading, not a run mutation.",
+      "suggested_fix": "In 'the outdated lookup ignores newer finished runs...' add finishFor({ ...key, repositoryId: 'other-repo' }, 'd') with a newer finished run, and keep the existing expectation. Run mutant m3 via keryx review mutate to confirm.",
+      "evidence": "desk-run-store.test.ts defines other as { ...key, viewer } (line 17); the decoys in slice-03 are number+1, other (viewer), delete, existing, no result. None varies repositoryId. Not executed.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "o.state IN ('completed','partial','budget')",
+      "problem": "The state filter inside the SQL outdated lookup looks unpinned. localBadge re-filters with runFinished, so a failed or cancelled run that carries result.reviewed and is newer than the wanted run would be selected by the SQL (LIMIT 1) and then discarded in JS, losing the older finished result. No fixture builds a failed or cancelled run with a recorded result: finishFor(..., recorded=false) and the 'failed' runs end with result null.",
+      "impact": "If the state filter were removed or widened, a newer failed or cancelled run with a result would hide the outdated badge from the board while the suite stays green. Prediction from reading, not a run mutation.",
+      "suggested_fix": "Add a newer 'failed' (or 'cancelled') run with result.reviewed set on another head to the decoy list of the second store test and assert the outdated badge still names the wanted run.",
+      "evidence": "Slice-03 finishFor and finishAt: state failed always passes result: null; only 'completed'/'partial'/'budget' carry reviewed. Not executed.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "slices": ["slice-03"],
+  "mutant_candidates": [
+    { "id": "m1", "file": "src/review/board-badges.ts", "anchor": "const stale = latest || ready ? undefined :", "replacement": "const stale = ready ? undefined :" },
+    { "id": "m2", "file": "src/review/board-badges.ts", "anchor": "const stale = latest || ready ? undefined :", "replacement": "const stale = latest ? undefined :" },
+    { "id": "m3", "file": "src/review/desk-run-store.ts", "anchor": "WHERE o.repo=?2 AND o.viewer=?3 AND o.pr=w.n", "replacement": "WHERE o.viewer=?3 AND o.pr=w.n" },
+    { "id": "m4", "file": "src/review/desk-run-store.ts", "anchor": "o.state IN ('completed','partial','budget') AND ${visible(\"o\")}", "replacement": "${visible(\"o\")}" },
+    { "id": "m5", "file": "src/review/desk-run-store.ts", "anchor": "ORDER BY json_extract(o.details,'$.createdAt') DESC,o.rowid DESC LIMIT 1", "replacement": "ORDER BY json_extract(o.details,'$.createdAt') ASC,o.rowid ASC LIMIT 1" },
+    { "id": "m6", "file": "src/review/desk-run-store.ts", "anchor": "AND NOT (json_extract(o.details,'$.result.reviewed.baseSha') IS w.wb AND json_extract(o.details,'$.result.reviewed.headSha') IS w.wh)", "replacement": "" },
+    { "id": "m7", "file": "src/review/desk-run-store.ts", "anchor": "AND json_extract(o.details,'$.result.reviewed.headSha') IS NOT NULL", "replacement": "" },
+    { "id": "m8", "file": "src/review/desk-run-store.ts", "anchor": "const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')", "replacement": "const visible = (r: string) => `1=1" },
+    { "id": "m9", "file": "src/review/desk-run-store.ts", "anchor": "o.viewer=?3 AND o.pr=w.n", "replacement": "o.pr=w.n" },
+    { "id": "m10", "file": "src/review/desk-run-store.ts", "anchor": "(base=wanted.wb AND head=wanted.wh) OR\n          r.id=wanted.outdated)", "replacement": "(base=wanted.wb AND head=wanted.wh))" },
+    { "id": "m11", "file": "src/review/board-badges.ts", "anchor": "runs = runs.filter(run => run.source !== \"existing\" &&", "replacement": "runs = runs.filter(run =>" },
+    { "id": "m12", "file": "src/review/board-badges.ts", "anchor": "const ready = runs.some(run => runFinished(run) && !!run.result && sameRange(run.result.reviewed, revision));", "replacement": "const ready = runs.some(run => runFinished(run) && !!run.result);" }
+  ]
+}
+```
+
+Mutation pass: not run (read-only dispatch, exec_budget_s 0). 0 of 12 mutants executed; all 12 not reached and left for the main session via mutants.json. From reading only: m1, m2, m5, m7, m8 and m9 look pinned by named fixtures (2nd and 3rd board-badges tests; store tests with a newer completed run, other PR, other viewer, resultless, existing/delete/archive decoys); m3 and m4 look unpinned (F-001, F-002). These are predictions, not results.
+
+Not verified: no test execution, no SQL execution, no check that createdAt timestamps in the store tests strictly order (rowid tie-break assumed), no read of the rest of desk-run-store.test.ts beyond the diff hunks and the `key`/`other` definitions (store isolation per test assumed), and `save()` persistence of decision/source edits assumed from the test intent. Strengths: differential assertion against localBadge on the SQL path, positive artifacts before negative assertions, no real clock or network.
+
+Routing audit: graph_used: no (not-relevant, test-only slice); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

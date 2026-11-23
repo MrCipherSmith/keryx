@@ -1,0 +1,107 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage0`, round 4 (delta, fix round), head `be26765ae`, merge base `1b994df18`
+- New subject: `20b535531`, `251d494ac`, `f72f23f73`, `be26765ae` (read with `git show --stat` and in the slices); changed files read at head where needed (`ReviewBoard.tsx` 85-424, `board-badges.ts` whole, `desk-run-store.ts` 320-384 and the attachBadges hunk, `model.ts` 15-64, `reviewFilterStorage.ts` whole)
+- Slices read in full: slice-01, slice-02, slice-03
+- Spec compliance gate: skipped (fix round; AC are context only)
+
+### Summary
+The F-027 fix seeds the carried attention set from every replacing load and closes the reported case (first mount with saved Merged/Closed/period filters: the first load of a mount always uses EMPTY_FILTERS, i.e. the open scope). Traced across the whole state machine, the remaining gap is the assumption that a replacing load is an open load: `replaceAttention` is also true when the identity is unknown or changed, and after `accessLost` (which keeps the state filter) or an identity change detected on a historical scope, the set is seeded from a Merged/Closed/period snapshot that cannot hold the open requests, and no open load follows when saved filters keep that scope. This is pre-existing on the merge base, but it is the next case of the F-027 shape (minor). One info: the unavailable-error path shows a cached older snapshot of the scope, and the write-back now persists attention judged on that stale snapshot. The backend change `be26765ae` cannot change `localBadge` output: its only reader of `publication` requires the same reviewed range that the new guard checks, and the `cardByPr` lookup is built per 200-card chunk from the same `cards` slice the query was given.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Logic Bugs
+[F-001] minor — a replacing load that is not an open load seeds the carried set from a historical snapshot (access loss, identity change).
+[F-002] info — unavailable error re-shows a cached snapshot and the write-back persists its attention verdicts.
+
+### Async & Concurrency / Error Handling / Null Safety / Type Contracts / Edge Cases
+None detected beyond the above.
+
+### Backend `be26765ae` (checked, no finding)
+- Readers of `publication` in `src/review/board-badges.ts`: one, line 49: `...(same && latest.publication === "pending" && sameRange(latest.result?.reviewed ?? null, revision) && { publicationPending: true })`. `revision` is the card (attachBadges calls `localBadge(runs, card)`), and the row's `result.reviewed` is built from `row.base`/`row.head` only when both are truthy — the same precondition the guard keeps. The new guard `card?.baseSha === row.base && card.headSha === row.head` is exactly `sameRange(result.reviewed, card)`, so every skipped row is a row whose publication line 49 can never read. `ready`, `outdated`, `runState`, `awaitingAnswer`, `progress` do not read `publication`. `this.publication()` (desk-run-store.ts:325-334) only reads files, no side effect is lost. Output identical.
+- `cardByPr`: built from `cards = snapshot.cards.slice(i, i + 200)`, the same slice passed to `json_each(?1)`; rows can only carry `pr` values of that chunk (`r.pr=w.n`), so a lookup never misses a card of another chunk. `row.pr` (INTEGER column) and `card.number` are both JS numbers. Duplicate card numbers inside one chunk would make the Map keep the last card, but a board snapshot carries one card per PR, and `byPr` already merges such rows under one number.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "F-027's reported case is closed: a replacing load now seeds the carried set, and the first load of a mount is always the open scope. The seed still assumes a replacing load is an open load. replaceAttention is also true for an unknown or changed identity, so after accessLost (which keeps the state filter) or an identity change detected on a Merged/Closed/period scope, the set is seeded from a snapshot that cannot hold open requests and, with saved historical filters, no open load follows (pre-existing, minor). The unavailable-error path re-shows a cached older snapshot whose verdicts the write-back now persists (info). be26765ae cannot change localBadge output; cardByPr is correct per 200-card chunk.",
+  "slices": ["slice-01", "slice-02", "slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "const replaceAttention = identity.current !== nextIdentity || (!period && (state === \"open\" || state === \"all\"));",
+      "problem": "Sibling of F-027 that the fix leaves. Seeding at :231 is correct only if a replacing load contains every open pull request. The first disjunct makes any load with an unknown or changed identity replacing, whatever its scope. Two paths reach such a load on a historical scope: (1) accessLost (:182-193) sets identity.current = \"\" and filterKey = undefined and calls clearPrivateView() with resetState=false, which keeps `state: old.state`; the next load (Refresh, watcher poll) runs on the kept Merged/Closed scope (or the kept open+period scope), replaces the set with the cards of that snapshot (needsViewerAttention is false for every non-open card, model.ts:38), and then setFilters(readReviewFilters(nextFilterKey)) applies the saved filters, which for a viewer who picked that view are the same scope (applyFilters saves every change), so the scope does not change and no open load follows. (2) An identity change detected on a historical-scope load: clearPrivateView(true) resets to EMPTY_FILTERS but readReviewFilters of the new key overrides it in the same batch; if the new identity's saved filters are historical, again no open load runs. On a fresh mount this cannot happen because filters start at EMPTY_FILTERS (open), which is the only case 20b535531 and its test cover.",
+      "impact": "Viewer has saved filter State = Merged. A badge poll, the rules dialog or the watcher reports an `access:`/`configuration:` error (accessLost), the viewer presses Refresh after re-authenticating. An open pull request that requests review from the viewer is not in the merged snapshot; the carried set is replaced with the empty verdicts of merged cards and the tab indicator shows nothing until the viewer switches to an Open or All view. Same for a saved open + 7/30/90-day period (requests on PRs not updated in the period are dropped). The indicator is the stage 0 deliverable 'narrow the tab indicator to events addressed to the user'. Pre-existing: the merge base has the same `replaceAttention` (base :199), the same state-keeping clearPrivateView (base :115) and the same saved-filter read (base :211).",
+      "suggested_fix": "Seed only from a scope that can hold every open request, and make sure such a load happens once per identity: keep a ref `seededIdentity`; in the load callback replace on `!period && (state === \"open\" || state === \"all\")` only; when `identity.current !== nextIdentity` and the scope is not replacing, clear the set and start a one-off `load(cwd, \"open\", repo, controller.signal, expectedViewer)` whose result only seeds carriedAttention (guarded by the same sequence check). A smaller alternative for path (1) only: call clearPrivateView(true) in accessLost so the first load after recovery is open, as on mount. DOM test: apply Merged, make the next load throw `access: …`, then make load return [] for merged and an open card requesting the viewer for open, press Refresh, assert the last indicator is 'attention'.",
+      "evidence": "ReviewBoard.tsx at be26765ae: :128-136 clearPrivateView keeps `state: old.state` unless resetState; :182-193 accessLost clears identity, filterKey, carried set and calls clearPrivateView() without reset; :207-209 identity change calls clearPrivateView(true); :230 replaceAttention; :231 seed from `loaded` only; :232-236 setFilters(readReviewFilters(nextFilterKey)) in the same batch; :253 the load effect re-runs only when state/period/scope change. model.ts:37-38 needsViewerAttention returns false for non-open cards; reviewFilterStorage.ts:14-34 returns the saved filters. Base check: `git grep` at 1b994df18 shows the same three lines (:115, :199, :211). Traced, not reproduced in the app, no test written.",
+      "confidence": "medium",
+      "dedupe_key": "carried-attention-seeded-from-historical-replacing-load",
+      "blocking_merge": false,
+      "location_class": "pre-existing",
+      "evidence_kind": "consumer-trace",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/ReviewBoard.tsx:230 (replaceAttention, identity disjunct)",
+          "apps/desktop/src/review/ReviewBoard.tsx:188-191 (accessLost -> clearPrivateView() keeps state)",
+          "apps/desktop/src/review/ReviewBoard.tsx:207-209 (identity change -> clearPrivateView(true), overridden by :235)"
+        ],
+        "enumeration_method": "Every writer of identity.current and filterKey.current in ReviewBoard.tsx (read :111-253): identity is reset only by accessLost (:185) and set only by the load callback (:240); filterKey is reset only by accessLost (:186) and set only at :234. The three entries are every way a load can run with identity.current !== nextIdentity; the mount path is excluded because filters start at EMPTY_FILTERS (:97)."
+      }
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? snapshots.current.get(scope) ?? null, error: message, loading: false }));",
+      "problem": "On an `unavailable:` error after a scope switch, the board shows the cached snapshot of that scope from an earlier visit. The attentionPrs memo judges it as current and the write-back effect (:350-352) copies the result into carriedAttention. A PR observed as merged in the meantime (and removed by the write-back while the merged view was shown) is re-added from the older open snapshot and stays carried after the viewer leaves the open view.",
+      "impact": "Open view seeds #7 (review requested). Viewer switches to Merged: #7 shows as merged and is removed. Viewer switches back to Open and GitHub is unavailable: the cached open snapshot (with #7 open) is shown with an error and #7 is carried again; if the viewer now picks a period view that also fails with no cache, the indicator stays 'attention' for a merged PR until the next successful open load. While the stale board is shown, the indicator matches what is on screen, so the cost is only the persistence. At the merge base the set was written only by successful loads, so an error never changed it.",
+      "suggested_fix": "Skip the write-back while the shown snapshot is an error fallback (`read.error` non-empty), or carry the snapshot's fetch time and let only a snapshot newer than the one that last wrote the set write back.",
+      "evidence": "ReviewBoard.tsx :124-126 caches every shown snapshot per scope; :247 re-shows it on `unavailable:`; :276 `snapshot` is that cached object; :339-348 the memo judges it; :350-352 the effect writes it back. Traced only.",
+      "confidence": "medium",
+      "dedupe_key": "attention-writeback-from-stale-cached-snapshot",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "prior_dispositions": [
+    { "id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx:350-352 writes the derived set back into carriedAttention whenever a snapshot is shown and the sets differ; the handled-request DOM test now keeps a second request (#482) and asserts 'attention' after the switch and null after #482 is observed merged; orchestrator mutation (write-back removed) fails it." },
+    { "id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx list row computes `const reason = laneReason(c); const note = secondaryNote(c, reason);` once per row." },
+    { "id": "F-017", "disposition": "closed", "evidence": "model.ts laneReason uses `const note = reviewNote(c); if (note) return note;`." },
+    { "id": "F-018", "disposition": "closed", "evidence": "desk-run-store.ts `scoped` computes `active` and `done` once; `flagged`/`picked` read the columns and no longer alias `scoped` as `r`. activeReviewNumbers still spells the active list in its own statement." },
+    { "id": "F-019", "disposition": "closed", "evidence": "implementation-plan.md records deviation (c) (labels hidden under 1100px, count and watcher text under 760px, wrap at 340px, no menu); specification.md toolbar line points to it." },
+    { "id": "F-021", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges calls this.publication() only when `card?.baseSha === row.base && card.headSha === row.head`; equivalent to the only reader, board-badges.ts:49." },
+    { "id": "F-022", "disposition": "partial", "evidence": "(a) closed by the `requested` fixture (failed and cancelled runs on the card's range) in the new store test; (c) closed by the two DOM tests for a merged card's note and the note-as-reason case; (b) still open: no test asserts that the SQL drops the outdated row for a superseded card (outputs equal either way)." },
+    { "id": "F-023", "disposition": "closed", "evidence": "PORTALED_DIALOG_CONTENT = \"[data-review-board-dialog]\"; the attribute is on ProjectReviewRules.tsx:63 and ReviewWatcher.tsx:103, the only two portaled board dialogs found by `keryx ctx rg`." },
+    { "id": "F-026", "disposition": "closed", "evidence": "`keryx ctx rg \"ожидает слияния\" docs/requirements/keryx-desktop-review-v2` returns no match; README.md and implementation-plan.md status lines no longer carry it." },
+    { "id": "F-027", "disposition": "closed", "evidence": "ReviewBoard.tsx:231 seeds carriedAttention from the replacing load's cards; the mount path always loads the open scope first (filters start at EMPTY_FILTERS), and the new DOM test 'saved historical filters on the first load still seed the tab signal' pins it (orchestrator mutation: seeding removed -> fails). The same shape on the access-loss and identity-change paths is reported as new F-001 (pre-existing)." },
+    { "id": "F-028", "disposition": "partial", "evidence": "The handled-request test now keeps #482 and fails without the write-back. Still open: the 5 ms sleep after markRepliesRead (ReviewBoard.dom.test.tsx, `setTimeout(resolve, 5)`), and the reset on a replacing load (union instead of replace) was not run as a mutation and no test visibly pins it." },
+    { "id": "F-029", "disposition": "partial", "evidence": "New store test adds a run requested on one range that reviewed the card's range (`reviewed` without `requested`) and a repository fixture; no fixture with NULL requested SHAs was added." }
+  ],
+  "follow_ups": [
+    "F-020, F-024, F-025 not dispositioned: their sites (review.css, ReviewResults.tsx secondaryNote, the GitHub PR body) were not read in this round."
+  ]
+}
+```
+
+### Not verified
+- Nothing was run (read-only, exec budget 0): F-001 and F-002 are traces, not reproduced in the app and without a failing test.
+- Whether accessLost is reachable without the board remounting in the real app shell (I followed ReviewBoard.tsx only; an outer remount on access loss would hide path (1) of F-001).
+- Whether the reset-on-replace of the carried set is pinned by any existing DOM test (not run as a mutation by me or the orchestrator).
+- The four SQL mutations the backend worker reported; the SQL timing after be26765ae.
+- F-020, F-024, F-025 (sites not read).
+
+Routing audit: graph_used: no (not-relevant: delta of four known commits, files named by the brief); wiki_used: no (not-relevant: behaviour read from code); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`, `keryx ctx run -- git show/git grep`); raw_rg_used: no.

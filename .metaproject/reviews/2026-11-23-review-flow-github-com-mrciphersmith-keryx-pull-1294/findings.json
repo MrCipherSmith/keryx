@@ -1,0 +1,378 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-layout",
+    "severity": "major",
+    "problem": "The board toolbar changed from wrap to nowrap with every child flex:none except the spacer and the search field (min 96px). At a board width of 560px - the default 1180px window minus the 60px rail minus the 560px detail panel - the toolbar content is wider than the toolbar.",
+    "impact": "At the default window size with the detail panel open, the right-hand toolbar buttons are pushed past the toolbar edge and under the detail panel; on the base commit the toolbar wrapped to a second row and nothing was clipped. Measured without board data: scrollWidth 567 vs clientWidth 560, Refresh ends 7px past the toolbar. With data the toolbar also holds the Review rules button, so the overflow is larger and starts at a wider board.",
+    "suggested_fix": "Below a container width where the collapsed toolbar no longer fits (about 760px) restore flex-wrap: wrap, or let the search field and the watcher status text shrink to zero and hide the watcher status text in the collapsed state. Re-measure at 560, 700 and 820px with board data.",
+    "evidence": "research-evidence/layout-measurements.md: viewport 620x800, toolbar clientWidth 560, scrollWidth 567, last child right 627 vs toolbar right 620; 760x800 fits with 24px to spare, without the Review rules button. tauri.conf.json default window 1180, minWidth 720; ReviewDetail default width 560.",
+    "confidence": "high",
+    "file": "apps/desktop/src/styles/review.css",
+    "line": 85,
+    "quote": ".review-board .flows-toolbar { flex-wrap: nowrap; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "toolbar-nowrap-overflow-narrow-board",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/styles/review.css: `.review-board .flows-toolbar { flex-wrap: nowrap; }` — the Pull requests board toolbar rendered by apps/desktop/src/review/ReviewBoard.tsx (`<div className=\"flows-toolbar\">`)"
+      ],
+      "enumeration_method": "`keryx ctx rg \"flex-wrap: nowrap|flows-toolbar\" apps/desktop/src`: every `.flows-toolbar` user (FlowsBoard.tsx, IssuesBoard.tsx, MetaprojectView.tsx, ReviewBoard.tsx) and every `flex-wrap: nowrap` rule. Only the review board overrides the shared `.flows-toolbar { flex-wrap: wrap }` of flows.css to nowrap; Flows, Issues and Metaproject keep wrapping. The other nowrap rule, `.sheet-actions.review-detail-actions` in ReviewDetail.css, predates this change and is not a toolbar of the board."
+    },
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The one-row toolbar is a choice this branch introduces (flow description item 6, AC7 judged at a 1440px window), so it cannot ratify itself, and it never asked for clipping. The default window is 1180px (tauri.conf.json:18) and the detail panel defaults to 560px (ReviewBoard.tsx:385), so the 560px board is the common case, where the base wrapped and the head overflows. Accepted practice (WCAG 2.1 SC 1.4.10 Reflow) is against content pushed out of view; the suggested fix keeps one row where it fits and stays consistent with the rest of the toolbar."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-frontend",
+    "severity": "minor",
+    "problem": "clearPrivateView decides whether to return focus to the search field by testing whether focus is inside `.review-workspace [role=\"dialog\"]`. This change portals the Review rules and PR watcher dialogs to document.body, so focus inside them no longer matches the selector.",
+    "impact": "When the board identity changes (account switch, access lost) while one of those two dialogs holds focus, the dialog unmounts and focus falls to body instead of the search field; before the change it was restored. Keyboard and screen-reader users lose their place. No data effect; narrow trigger.",
+    "suggested_fix": "Detect the portaled dialogs too: use overlayOpen(), or a marker class on the two dialogs, instead of an ancestor selector under .review-workspace.",
+    "evidence": "ReviewBoard.tsx clearPrivateView selector (unchanged line) vs createPortal(..., document.body) in ProjectReviewRules.tsx and ReviewWatcher.tsx. Read, not run. Reported independently by seven reviewers.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 122,
+    "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "restore-focus-selector-portaled-dialogs",
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "base-diff",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The ancestor selector at ReviewBoard.tsx:122 is unchanged code, and nothing at the site marks the portaled dialogs as excluded on purpose. Portaling Review rules and PR watcher to document.body (ProjectReviewRules.tsx:96, ReviewWatcher.tsx:101) is new in this branch and silently takes them out of the focus restore. overlayOpen() is already used beside it (ReviewBoard.tsx:254, 265), so the suggested fix follows the file's own pattern."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-ui-ux",
+    "severity": "minor",
+    "problem": "laneReason returns the outdated-review text before attentionReason, while reviewLane still places the card by attentionReason. An open pull request with an outdated review and a GitHub reason (review requested, changes requested, failed checks, unread reply) sits in Needs attention but shows only \"Outdated review · sha\".",
+    "impact": "The card and the list Reason column no longer say why the card is in Needs attention; \"New reply to you\" has no other cue on the card. The ordering was chosen by the implementing worker (journal, T7), not by the operator.",
+    "suggested_fix": "Rank the outdated text after attentionReason, or show it as a secondary line or badge beside the lane reason.",
+    "evidence": "model.ts laneReason order vs reviewLane; journal.md \"T7 decision: the outdated reason ranks ... before every GitHub-derived reason\". Not seen on a render.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/model.ts",
+    "line": 89,
+    "quote": "const outdated = c.localReview?.outdated;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "lane-reason-outdated-masks-attention",
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-003",
+    "premise": {
+      "verdict": "owner-decision",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/review/model.ts:97",
+          "says": "pre-existing at base 1b994df18: the local \"Partial review · incomplete coverage\" text already ranks before attentionReason, so a local review state hiding the GitHub reason predates this change"
+        },
+        {
+          "ref": "apps/desktop/src/review/model.ts:67-68",
+          "says": "pre-existing: attentionReason itself puts the local review states (publication pending, result available) before every GitHub reason"
+        },
+        {
+          "ref": "journal.md T7 decision",
+          "says": "the outdated reason ranks after live run states and closed/merged, before every GitHub-derived reason; chosen by the worker, not asked of the operator (branch-introduced, so not counted as prior intent)"
+        }
+      ],
+      "reasoning": "The fact reproduces: reviewLane ignores outdated while laneReason returns the outdated text before attentionReason, so a Needs attention card can lose its \"New reply to you\" or \"Review requested\" reason. But the existing code already puts local review text ahead of GitHub reasons (the partial-run line), so the new placement matches a sibling. Moving only the outdated text after attentionReason makes it differ from that sibling. Which label wins on a card is a product choice the code does not settle, and the operator was never asked.",
+      "question": "A card in Needs attention with an outdated review shows only \"Outdated review · sha\", as a partial run already hides the GitHub reason. Which should the card show?",
+      "options": [
+        "uphold — the lane reason (review requested, new reply, failed checks) wins, with the outdated review as a secondary line or badge",
+        "dismiss — keep local review text first, as the partial-run label already does; revisit with the stage 1 lanes"
+      ]
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "README, implementation-plan and the roadmap 0.29.38 entry state that nothing in the package is implemented, while this pull request implements stage 0 of that plan. PRD R12, the specification indicator section and acceptance criterion 16 say the tab indicator lights for a request to the user or their team, while stage 0 deliberately matches the login only.",
+    "impact": "After merge a reader of the requirements package is told the board still has the bypass, the sort and the empty Done lane, and nothing records that stage 0 drops team requests on purpose.",
+    "suggested_fix": "Mark stage 0 as implemented in README, implementation-plan and the roadmap entry, and record the team-request exclusion as a stage 0 deviation in the plan.",
+    "evidence": "slice-02: README.md line 4, roadmap changelog 0.29.38, prd.md R12, specification.md indicator section and criterion 16 vs model.ts needsViewerAttention and the DOM test expecting null for org/team.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+    "line": 4,
+    "quote": "Ничего из этого пакета не реализовано.",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "docs-stage0-status-team-indicator",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-004",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "docs/requirements/keryx-desktop-review-v2/README.md:4 says nothing in the package is implemented, which this pull request makes false for stage 0, and the team-request exclusion is recorded only in the flow (description.md Out of Scope), not in the requirements package that outlives the flow. The operator's decision to exclude teams settles the behaviour, not the missing record; no signal says the docs were meant to stay stale."
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-ui-ux",
+    "severity": "minor",
+    "problem": "Below a toolbar width of 1100px the labels and the count label are hidden. Filters and Review rules both use the checklist icon, so they become identical glyphs, and the active-filter count and the pull request count disappear with the labels.",
+    "impact": "With the detail panel open in a 1440px window (toolbar about 820px) the user cannot tell the two buttons apart without hovering and loses both counts. Accessible names stay correct.",
+    "suggested_fix": "Give Review rules a distinct icon, keep the filter count as a badge on the icon, and keep the pull request count outside the collapsing set.",
+    "evidence": "ReviewBoard.tsx and ProjectReviewRules.tsx both render Icon name=\"checklist\"; review.css container query hides .toolbar-label and .count-label. Not measured with board data.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 403,
+    "quote": "<Icon name=\"checklist\" size={14} /> <span className=\"toolbar-label\">Filters",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "collapsed-toolbar-identical-icons-counts",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-005",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "On the base the labels were always shown, so two checklist glyphs were told apart by text; hiding the labels below 1100px is new in this branch. Accepted practice for icon-only buttons (Material Design 3 — Icon buttons; Apple HIG — Buttons, icon-only buttons) wants a distinct, recognisable symbol per action. There is no signal that collapsing to identical glyphs and dropping the counts was intended; the fix makes the toolbar more consistent with that practice."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-performance",
+    "severity": "minor",
+    "problem": "The outdated lookup runs for every requested card, including cards that already have an active or current-range run, where localBadge discards its result. For each finished run of the pull request it evaluates json_extract on `details` about six times, and `details` embeds the review report. No query plan or timing was produced for the new statement.",
+    "impact": "attachBadges runs on every board load and refresh in chunks of 200 cards. The added cost is a multiple of the previous per-row parse cost, proportional to cards x finished runs per pull request x report size; whether it is noticeable on a large store is unmeasured.",
+    "suggested_fix": "Measure EXPLAIN QUERY PLAN and wall time on a store with a few hundred pull requests and large reports. If it matters, read the JSON fields once per row and skip the lookup for pull requests that have an active run.",
+    "evidence": "slice-03 desk-run-store.ts attachBadges hunk; board-badges.ts drops the result when latest or ready; index review_history(repo, viewer, pr) bounds the scan to one pull request. Not executed. Runtime SQLite is 3.51.0 on this host (research-evidence/verify-sqlite-version-1.txt), so MATERIALIZED is supported here.",
+    "confidence": "medium",
+    "file": "src/review/desk-run-store.ts",
+    "line": 403,
+    "quote": "WITH wanted AS MATERIALIZED (",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "outdated-subquery-per-card-cost",
+    "blocking_merge": false,
+    "degradation_class": "performance",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-006",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The plan bounds the SQL to at most one extra row per card and no report text (plan.md Risks), which the LIMIT 1 meets, but it says nothing about evaluation cost, and the journal records the query plan on a large store as not verified (T6). No intent signal or practice source shrinks it; the finding already states its impact as unmeasured and asks for a measurement first."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The assertion that an outdated badge does not change the lane compares against `pr`, which is CHANGES_REQUESTED with a requested reviewer, so both sides are \"attention\" whatever the outdated branch does.",
+    "impact": "A change that sends outdated cards to Needs attention would keep the suite green, although the plan says lanes are out of scope for this stage.",
+    "suggested_fix": "Use a neutral card (no decision, no reviewers, CI passed) whose lane is \"open\".",
+    "evidence": "slice-02 model.test.ts; read, no mutation run.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/model.test.ts",
+    "line": 77,
+    "quote": "expect(reviewLane(outdated(\"completed\"))).toBe(reviewLane(pr))",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "vacuous-lane-assertion",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-007",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The fixture pr (model.test.ts:5-9) has decision CHANGES_REQUESTED and a requested reviewer, so reviewLane is \"attention\" on both sides whatever outdated does, and reviewLane (model.ts:76-81) never reads outdated. The assertion cannot fail, and nothing marks it as a deliberate smoke check. A neutral fixture is the usual idiom."
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "attentionPrs is derivable from the snapshot and the read receipts but is stored as state and written from two places with the same predicate (the load callback and the new effect), plus a render-time ref write.",
+    "impact": "Two writers must be kept in step by hand; changing the predicate or the replace rule in one place reintroduces the indicator flicker fixed in this branch. Maintainability only.",
+    "suggested_fix": "Derive the set once with useMemo over the snapshot and the receipt version, keeping only the cross-scope retention as state.",
+    "evidence": "Two needsViewerAttention call sites in ReviewBoard.tsx.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 342,
+    "quote": "if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "attention-derived-state-two-writers",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-008",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Holding attentionPrs as state is pre-existing and deliberate for cross-scope retention (the base comment at ReviewBoard.tsx:220: closed/merged-only views cannot replace the open snapshot), but the finding already keeps that retention as state. The second writer with the same predicate (ReviewBoard.tsx:337-347) is new in this branch, so it carries no prior intent. React's own guidance (react.dev — Choosing the State Structure, avoid redundant state; You Might Not Need an Effect) agrees with the finding."
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "Test gaps, from reading only: no fixture separates the o.repo predicate or the state filter of the outdated subquery; the viewer-side lowercase in needsViewerAttention, the order of the outdated and partial labels, the hidden merged pull request under the default filter and the reload in the reply carry-over test are not pinned either.",
+    "impact": "Dropping one of those predicates would keep the suite green. Predictions, not mutation results: the mutation pass did not run.",
+    "suggested_fix": "Add a newer finished run in another repository and a newer failed run with a recorded result to the store decoys; add the listed model and DOM cases; run the proposed mutants.",
+    "evidence": "review-testing-practices w1 F-002..F-005 and w2 F-001, F-002 with 23 mutant candidates; none executed.",
+    "confidence": "medium",
+    "file": "src/review/desk-run-store.ts",
+    "line": 406,
+    "quote": "WHERE o.repo=?2 AND o.viewer=?3 AND o.pr=w.n AND o.state IN ('completed','partial','budget')",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "test-gaps-unpinned-predicates",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-009"
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The outdated-candidate subquery requires only a reviewed head, while the row projection keeps a result only when both base and head are present. A run with a reviewed head and no base would be selected and then dropped, so the SQL path and the live-history path could disagree.",
+    "impact": "Parity break with no known trigger: no producer writes a reviewed range without a base.",
+    "suggested_fix": "Also require a non-null reviewed base in the subquery.",
+    "evidence": "desk-run-store.ts subquery predicate vs the row mapping in the same method.",
+    "confidence": "medium",
+    "file": "src/review/desk-run-store.ts",
+    "line": 407,
+    "quote": "AND json_extract(o.details,'$.result.reviewed.headSha') IS NOT NULL",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "outdated-subquery-head-only-predicate",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-010"
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-layout",
+    "severity": "info",
+    "problem": "Only the Review rules and PR watcher dialogs are portaled to the body. The Filters and PR subscription dialogs stay inside .review-workspace, which already has container-type: inline-size, so their fixed overlay is confined to the workspace.",
+    "impact": "Dialogs opened from the same screen dim different areas. The confinement of the non-portaled dialogs predates this change and was not measured.",
+    "suggested_fix": "Portal all board dialogs alike, or record why only these two need it.",
+    "evidence": "ReviewDetail.css line 1; ReviewBoard.tsx renders ReviewFilters and PrSubscriptionDialog inside .review-workspace. Measured only for the watcher dialog.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+    "line": 148,
+    "quote": "</Dialog>, document.body)}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "dialog-portal-inconsistent",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-011"
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "The tab indicator is computed over all snapshot cards while the list is filtered. With the active-review filter bypass removed, a card awaiting the viewer can be hidden by a saved filter while the tab shows attention.",
+    "impact": "The indicator may point at a card the board does not show. It follows from the operator decision to remove the bypass.",
+    "suggested_fix": "Accept and document, or show a \"N hidden by filters need you\" hint.",
+    "evidence": "attentionPrs is fed from snapshot.cards; visible applies filterReviews afterwards.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 342,
+    "quote": "if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "indicator-points-at-filtered-card",
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-012"
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "The action label \"Review changes\" on a card with an outdated review does not say that it starts a new run on the updated head.",
+    "impact": "Wording ambiguity; the detail panel uses the same label for the same case.",
+    "suggested_fix": "Decide on one wording for both places, for example \"Re-run review\".",
+    "evidence": "ReviewAction label chain in the diff; ReviewRuns.tsx launchAction returns \"Review changes\".",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewResults.tsx",
+    "line": 36,
+    "quote": "card.localReview?.outdated ? \"Review changes\" : \"Run review\";",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "outdated-action-label",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-013"
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The set of runs that count for a badge is expressed twice: in SQL as source IN (manual, scheduled) and in TypeScript as source !== \"existing\". They agree for the three current values.",
+    "impact": "A new source value would make the SQL path and localBadge disagree.",
+    "suggested_fix": "Share one predicate or add a guard test over the source union.",
+    "evidence": "board-badges.ts localBadge filter; desk-run-store.ts visible(); desk-run-types.ts source union.",
+    "confidence": "high",
+    "file": "src/review/desk-run-store.ts",
+    "line": 399,
+    "quote": "json_extract(${r}.details,'$.source') IN ('manual','scheduled')",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "visible-source-duplication",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-014"
+  }
+]

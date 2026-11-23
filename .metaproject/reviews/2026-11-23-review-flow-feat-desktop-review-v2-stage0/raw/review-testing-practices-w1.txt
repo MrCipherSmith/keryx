@@ -1,0 +1,104 @@
+STATUS: DONE_WITH_CONCERNS
+
+Mutation pass: SKIPPED. allowed_tools is read-only and exec_budget_s is 0, so no mutant was run. Nothing below is a result I observed; the candidates are listed for the main session to run via `keryx review mutate`. Mutants run: 0; candidates proposed: 14; not reached: 14.
+
+## Would the tests fail if the fix were reverted? (by reading; not executed)
+
+| AC | Pinned by | Verdict |
+|---|---|---|
+| AC1 | model.test.ts "an active local review does not bypass any selected filter" (author, state, ci, plus a positive control) | Pinned. Restoring `if (c.localReview?.active) return true` makes three expectations fail. |
+| AC2 | ReviewBoard.dom.test.tsx "visible cards keep snapshot order..." (List view, active card second) | Pinned. Re-adding the sort in `visible` fails it. Only List is asserted, but board and list share `visible`. |
+| AC3 | DOM "the Done lane is drawn only when..." (default 3 lanes; closed, [] and merged+draft show 4) | Pinned for `showDone`/`stateFilterShowsDone`. The `lanes.done.length > 0` clause is not pinnable (F-002). |
+| AC4 | DOM "the tab signal is attention only for..." (other login, team, own PR without changes requested, active run, merged, login case, unread/read replies) plus the rewritten indicator tests | Pinned clause by clause. The rewritten tests keep their original intent (watcher/refresh/historical-filter sequences); only fixtures moved to the viewer's login. |
+| AC5 | board-badges.test.ts (outdated, precedence, exclusions, newest wins) and desk-run-store.test.ts "a finished review of an earlier head reaches the board as outdated..." (SQL path compared with `localBadge` on the same rows, archived newest run skipped, newest outdated wins, active run precedence) | Pinned for `localBadge` and for ordering and archive in SQL. Gaps in the SQL gates: F-001. |
+| AC6 | model.test.ts laneReason; DOM "an outdated review shows its short SHA and a Review changes action..." in board and list; `badgesEqual` direct test (headSha, state, presence both ways) | Pinned. Known gap: `badgesEqual` is not exercised through the badge poll (F-003). |
+| AC7 | none (judged) | Not testable; the CSS and `.toolbar-label` markup have no test. |
+
+Rewritten tests: model.test.ts (the old `merged` bypass assertion became `state: []`; it still pins lane "attention" for a merged card awaiting an answer, and the bypass is now pinned by the new test), DOM "a merged PR awaiting a Keryx answer stays actionable..." (now selects the merged state through saved filters; intent, actionability from either view, kept) and the three indicator tests (fixtures moved to viewer-owned data; intent kept). No test was deleted. localStorage is cleared in `beforeEach`, so `markRepliesRead` does not leak between tests.
+
+Matrix cells with no direct test: "card with active review / author pushes a commit" (other-revision badge; unchanged behaviour, covered only by pre-existing tests); "outdated review / review finishes -> label replaced by the new result" is covered only as `ready:true, runState:completed` on the current range (store `badge(revision)`), not as a transition on one card.
+
+## Mutation table
+
+| mutation | result |
+|---|---|
+| (none run: read-only dispatch, budget 0) | not run |
+
+## Findings
+
+### F-001 (info) SQL outdated lookup: four gates have no input that separates them
+- File: src/review/desk-run-store.ts, the `wanted` CTE: `WHERE o.repo=?2 AND o.viewer=?3 AND o.pr=w.n AND o.state IN (...) AND ${visible("o")} AND json_extract(o.details,'$.result.reviewed.headSha') IS NOT NULL`
+- Problem: the new store test builds one PR (`key.number`), one account with runs, and only terminal runs that carry a reviewed range. No fixture gives (a) a second PR or second account whose newer finished run would win the `LIMIT 1` slot if `o.pr=w.n` or `o.viewer=?3` were dropped, (b) a newer `completed`/`partial` run with `result: null` that would shadow the real older result if `IS NOT NULL` were dropped, (c) a `delete` decision or an `existing`-source run inside the outdated subquery (only `archive` is built). The "another account" assertion uses a key with no runs at all, so it passes with or without the viewer predicate in the subquery. The main query's own `r.pr`/`r.viewer` predicates would still hide a foreign row, so a wrong run is selected, then discarded, and the card loses its outdated badge.
+- Why it matters: this is the new SQL; the `LIMIT 1` makes a wrong pick lose the badge, and the next edit to these predicates is unprotected. Evidence class: structural reading, not an executed mutation, hence info.
+- Fix: in the store test add a second PR and a second viewer with a newer finished run on another head, one newer `completed` run whose result is null, and one `delete`d and one `existing`-source finished run; expect the original card's outdated to stay unchanged.
+- Confidence: medium.
+
+### F-002 (info) `lanes.done.length > 0` in the Done-lane gate cannot be tested
+- File: apps/desktop/src/review/ReviewResults.tsx: `lane !== "done" || showDone || lanes.done.length > 0`
+- Problem: a card lands in Done only when `state !== "open"` and it has no active or awaiting run. Under any state filter that leaves `showDone` false (non-empty, only open/draft), `filterReviews` already removes every non-open card, so `lanes.done` is empty there. The third operand is unreachable; its comment ("never hidden, whatever the state filter says") describes a guarantee the code gets from the filter; deleting it is an equivalent mutant. Not a defect, but a reader will take it as protection no test provides.
+- Fix: delete the clause and the comment, or keep it and say it is defensive.
+- Confidence: high.
+
+### F-003 (info) `badgesEqual(outdated)` is pinned only by a direct call (known gap, restated)
+- File: apps/desktop/src/review/ReviewBoard.dom.test.tsx "a badge whose only change is the outdated review counts as changed"
+- Problem: the test proves the function, not that a changed `outdated` reaches the card. The poll covers active cards only, where `outdated` cannot be present, so deleting the `outdated` terms from `badgesEqual` fails only this unit test; no board-level test would notice. Accepted by the implementers; recorded so the gap is explicit.
+- Confidence: high.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "AC1-AC6 are each pinned by a test that would fail if the fix were reverted (by reading; nothing was executed, budget 0). Rewritten tests kept their intent. Gaps: SQL outdated-lookup predicates lack separating fixtures, one Done-lane clause is unreachable, badgesEqual is covered only by a direct call. AC7 has no test. Mutation pass skipped (read-only).",
+  "findings": [
+    {
+      "id": "F-001", "severity": "info", "file": "src/review/desk-run-store.ts", "line": null,
+      "quote": "WHERE o.repo=?2 AND o.viewer=?3 AND o.pr=w.n AND o.state IN ('completed','partial','budget') AND ${visible(\"o\")}",
+      "problem": "The outdated-run subquery predicates o.pr, o.viewer, reviewed.headSha IS NOT NULL, and the delete/existing parts of visible() have no fixture that separates them; the store test has one PR, one account with runs, no null-result finished run, and only an archive decision.",
+      "impact": "Dropping one of them leaves the suite green; a wrong run wins LIMIT 1, the main query then discards it, and the card silently loses its outdated badge.",
+      "suggested_fix": "Add a second PR and viewer with newer finished runs on other heads, a newer completed run with result null, a delete-decision run and an existing-source run; assert the card's outdated is unchanged.",
+      "evidence": "Reading slice-02 store test 'a finished review of an earlier head reaches the board as outdated...'; predicted, not executed.",
+      "confidence": "medium", "reviewer": "review-testing-practices", "dedupe_key": "outdated-sql-gates-unpinned"
+    },
+    {
+      "id": "F-002", "severity": "info", "file": "apps/desktop/src/review/ReviewResults.tsx", "line": null,
+      "quote": "lane !== \"done\" || showDone || lanes.done.length > 0",
+      "problem": "The third operand is unreachable: a card is in Done only when not open, and every state filter with showDone=false has already removed non-open cards.",
+      "impact": "Equivalent mutant; its comment promises protection that comes from the filter, and no test can pin it.",
+      "suggested_fix": "Remove the clause and comment, or mark it defensive.",
+      "evidence": "reviewLane (done iff state !== open and not active/awaiting) combined with filterReviews state matching prState.",
+      "confidence": "high", "reviewer": "review-testing-practices", "dedupe_key": "done-lane-dead-clause"
+    },
+    {
+      "id": "F-003", "severity": "info", "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx", "line": null,
+      "quote": "a badge whose only change is the outdated review counts as changed",
+      "problem": "badgesEqual's outdated comparison is tested by a direct call only; the badge poll covers active cards where outdated cannot occur.",
+      "impact": "Removing the comparison fails only the unit test; no board-level test shows a changed outdated reaching the card. Known gap.",
+      "suggested_fix": "If a refresh path that merges badges onto non-active cards exists, drive it with an outdated change; otherwise accept.",
+      "evidence": "T7 journal note and the test body.",
+      "confidence": "high", "reviewer": "review-testing-practices", "dedupe_key": "badgesequal-direct-only", "publication": "question"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M1", "file": "src/review/board-badges.ts", "anchor": "const stale = latest || ready ? undefined :", "replacement": "const stale = latest ? undefined :", "kind": "behavior"},
+    {"id": "M2", "file": "src/review/board-badges.ts", "anchor": "const stale = latest || ready ? undefined :", "replacement": "const stale = ready ? undefined :", "kind": "behavior"},
+    {"id": "M3", "file": "src/review/board-badges.ts", "anchor": "runFinished(run) && !!run.result?.reviewed", "replacement": "!!run.result?.reviewed", "kind": "behavior"},
+    {"id": "M4", "file": "src/review/board-badges.ts", "anchor": "runs.filter(run => run.source !== \"existing\" && run.decision", "replacement": "runs.filter(run => run.decision", "kind": "behavior"},
+    {"id": "M5", "file": "src/review/desk-run-store.ts", "anchor": "AND o.pr=w.n", "replacement": "", "kind": "behavior"},
+    {"id": "M6", "file": "src/review/desk-run-store.ts", "anchor": "o.repo=?2 AND o.viewer=?3", "replacement": "o.repo=?2", "kind": "behavior"},
+    {"id": "M7", "file": "src/review/desk-run-store.ts", "anchor": "AND json_extract(o.details,'$.result.reviewed.headSha') IS NOT NULL", "replacement": "", "kind": "behavior"},
+    {"id": "M8", "file": "src/review/desk-run-store.ts", "anchor": "ORDER BY json_extract(o.details,'$.createdAt') DESC,o.rowid DESC LIMIT 1", "replacement": "ORDER BY json_extract(o.details,'$.createdAt') ASC,o.rowid ASC LIMIT 1", "kind": "behavior"},
+    {"id": "M9", "file": "src/review/desk-run-store.ts", "anchor": "NOT IN ('archive','delete')", "replacement": "NOT IN ('archive')", "kind": "behavior"},
+    {"id": "M10", "file": "apps/desktop/src/review/model.ts", "anchor": "unreadReplies > 0 ||", "replacement": "", "kind": "behavior"},
+    {"id": "M11", "file": "apps/desktop/src/review/model.ts", "anchor": "(c.author.toLowerCase() === login && c.decision === \"CHANGES_REQUESTED\")", "replacement": "c.decision === \"CHANGES_REQUESTED\"", "kind": "behavior"},
+    {"id": "M12", "file": "apps/desktop/src/review/model.ts", "anchor": "outdated.state === \"partial\" || outdated.state === \"budget\"", "replacement": "outdated.state === \"partial\"", "kind": "presentation"},
+    {"id": "M13", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "a?.outdated?.state === b?.outdated?.state && ", "replacement": "", "kind": "behavior"},
+    {"id": "M14", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "lane !== \"done\" || showDone || lanes.done.length > 0", "replacement": "lane !== \"done\" || showDone", "kind": "behavior"}
+  ],
+  "slices": ["slice-01", "slice-02"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 3}
+}
+```
+
+Routing audit: graph_used no (not-relevant: diff review of slices); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg for the test setup); raw_rg_used no.
+Not verified: nothing executed; M-candidates untested; the recorded test evidence files and the orchestrator's 749/114 pass counts were taken as given, not re-read.

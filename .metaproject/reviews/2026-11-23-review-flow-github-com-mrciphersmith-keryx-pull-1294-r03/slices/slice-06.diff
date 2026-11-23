@@ -1,0 +1,388 @@
+--- src/review/board-badges.test.ts
+@@ 1,60 @@
++import { expect, test } from "bun:test";
++import { localBadge } from "./board-badges";
++import type { DeskRevision, DeskRun } from "./desk-run-types";
++
++const base = "a".repeat(40);
++const old = { baseSha: base, headSha: "b".repeat(40) };
++const older = { baseSha: base, headSha: "d".repeat(40) };
++const current = { baseSha: base, headSha: "c".repeat(40) };
++
++type Run = Parameters<typeof localBadge>[0][number];
++const run = (range: DeskRevision, state: DeskRun["state"], extra: Partial<Run> = {}): Run => ({
++  ...range, state, source: "manual",
++  result: ["completed", "partial", "budget"].includes(state) ? { reviewed: range } : null,
++  ...extra,
++});
++
++test("a finished review of an earlier head is reported as outdated without counting as ready", () => {
++  const badge = localBadge([run(old, "completed", { publication: "pending" })], current);
++  expect(badge).toEqual({ active: false, ready: false, outdated: { headSha: old.headSha, state: "completed" } });
++  expect(badge.runState).toBeUndefined();
++  expect(badge.publicationPending).toBeUndefined();
++});
++
++test("a run on the current range takes precedence over an outdated result", () => {
++  expect(localBadge([run(current, "failed"), run(old, "completed")], current))
++    .toEqual({ active: false, ready: false, runState: "failed" });
++  expect(localBadge([run(current, "partial"), run(old, "completed")], current))
++    .toEqual({ active: false, ready: true, runState: "partial" });
++  // A run requested on another range whose reviewed range is the current one also counts.
++  expect(localBadge([run(old, "completed", { result: { reviewed: current } }), run(older, "completed")], current).outdated)
++    .toBeUndefined();
++});
++
++test("an active run on any range takes precedence over an outdated result", () => {
++  expect(localBadge([run(older, "running"), run(old, "completed")], current))
++    .toEqual({ active: true, ready: false, runState: "other-revision" });
++  expect(localBadge([run(current, "queued"), run(old, "completed")], current))
++    .toEqual({ active: true, ready: false, runState: "queued" });
++});
++
++test("archived, deleted, imported, unfinished and resultless runs never become outdated", () => {
++  const decision = (action: "archive" | "delete") => ({ decision: { action, reason: "", at: "" } });
++  expect(localBadge([
++    run(old, "completed", decision("archive")),
++    run(old, "completed", decision("delete")),
++    run(old, "completed", { source: "existing" }),
++    run(old, "failed"),
++    run(old, "cancelled"),
++    run(old, "partial", { result: null }),
++    run(old, "budget", { result: { reviewed: null } }),
++  ], current)).toEqual({ active: false, ready: false });
++});
++
++test("the newest of several outdated results wins", () => {
++  expect(localBadge([run(old, "budget"), run(older, "completed")], current).outdated)
++    .toEqual({ headSha: old.headSha, state: "budget" });
++  // History is newest first; a skipped newer run does not hide an older finished one.
++  expect(localBadge([run(old, "completed", { source: "existing" }), run(older, "partial")], current).outdated)
++    .toEqual({ headSha: older.headSha, state: "partial" });
++});
+
+--- src/review/desk-run-store.test.ts
+@@ 435,555 @@
+   const a = started();
+   a.run.reviewerProgress = { planned: 3, wave: 2, finished: 2, sessions: [
+     { id: "old", reviewer: "review-logic", wave: 1, state: "failed" },
+     { id: "retried", reviewer: "review-logic", wave: 1, state: "completed" },
+     { id: "stopped", reviewer: "review-logic", wave: 2, state: "cancelled" },
+     { id: "later", reviewer: "review-logic", wave: 3, state: "planned" },
+   ] };
+   store.end(a, { state: "partial", phase: "Stopped", reason: "", result: null });
+   const badge = () => {
+     const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...revision }];
+     store.attachBadges({ ...key, cards });
+     expect(cards[0]!.localReview).toEqual(localBadge(store.history(key).runs, revision));
+     return cards[0]!.localReview;
+   };
+   expect(badge()).toMatchObject({ runState: "partial", progress: { planned: 3, completed: 1, finished: 2 } });
+   const retry = started();
+   store.end(retry, finish);
+   expect(badge()).toMatchObject({ active: false, ready: true, runState: "completed" });
+ });
+ 
++test("a finished review of an earlier head reaches the board as outdated until a run covers the new head", async () => {
++  const { localBadge } = await import("./board-badges");
++  const badge = (range = next) => {
++    const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...range }];
++    store.attachBadges({ ...key, cards });
++    expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, range));
++    return cards[0]?.localReview;
++  };
++  const finishAt = (range: typeof revision, state: DeskFinish["state"]) => {
++    store.request("/project", key, range);
++    const a = store.queued(key)!;
++    store.end(a, { ...finish, state, result: { ...finish.result!, reviewed: range } });
++    return a;
++  };
++  finishAt({ ...revision, headSha: "d".repeat(40) }, "partial");
++  finishAt(revision, "completed");
++  const archived = finishAt({ ...revision, headSha: "e".repeat(40) }, "budget");
++  archived.run.decision = { action: "archive", reason: "", at: "" };
++  store.save(archived);
++  expect(badge()).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
++  expect(badge(revision)).toMatchObject({ active: false, ready: true, runState: "completed" });
++  expect(badge(revision)?.outdated).toBeUndefined();
++  // Another account's history stays out.
++  const colleague: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
++  store.attachBadges({ ...other, cards: colleague });
++  expect(colleague[0]?.localReview).toBeUndefined();
++  // An active run on the new head takes precedence; once it fails, the current-range run still wins.
++  store.request("/project", key, next);
++  expect(badge()).toEqual({ active: true, ready: false, runState: "queued" });
++  const current = store.queued(key)!;
++  store.end(current, { ...finish, state: "failed", result: null });
++  expect(badge()).toEqual({ active: false, ready: false, runState: "failed" });
++});
++
++test("the outdated lookup ignores newer finished runs of another PR, another viewer, hidden runs and runs without a result", async () => {
++  const { localBadge } = await import("./board-badges");
++  const finishFor = (k: typeof key, head: string, state: DeskFinish["state"] = "completed", recorded = true) => {
++    const range = { ...revision, headSha: head.repeat(40) };
++    store.request("/project", k, range);
++    const a = store.queued(k)!;
++    store.end(a, { ...finish, state, result: recorded ? { ...finish.result!, reviewed: range } : null });
++    return a;
++  };
++  const wanted = finishFor(key, "b");
++  // Each of these is newer than the wanted run and would win the lookup if its own predicate were dropped.
++  finishFor({ ...key, number: key.number + 1 }, "d");
++  finishFor(other, "e");
++  const deleted = finishFor(key, "f");
++  deleted.run.decision = { action: "delete", reason: "", at: "" };
++  store.save(deleted);
++  const imported = finishFor(key, "1");
++  imported.run.source = "existing";
++  store.save(imported);
++  finishFor(key, "2", "completed", false);
++  const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
++  store.attachBadges({ ...key, cards });
++  expect(cards[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: "b".repeat(40), state: "completed" } });
++  expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, next));
++  expect(store.byId(wanted.run.id)?.run.state).toBe("completed");
++});
++
++test("in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card", async () => {
++  const { localBadge } = await import("./board-badges");
++  const ranOn = (k: typeof key, range: typeof revision) => {
++    store.request("/project", k, range);
++    store.end(store.queued(k)!, { ...finish, result: { ...finish.result!, reviewed: range } });
++  };
++  const busy = { ...key, number: key.number + 1 }, done = { ...key, number: key.number + 2 };
++  for (const k of [key, busy, done]) ranOn(k, revision);
++  store.request("/project", busy, next);
++  ranOn(done, next);
++  const cards: import("./board-badges").BadgeCard[] = [key, busy, done].map(({ number }) => ({ number, ...next }));
++  store.attachBadges({ ...key, cards });
++  expect(cards.map(card => card.localReview)).toEqual([
++    { active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } },
++    { active: true, ready: false, runState: "queued" },
++    { active: false, ready: true, runState: "completed", publicationPending: true },
++  ]);
++  for (const [i, k] of [key, busy, done].entries()) expect(cards[i]?.localReview).toEqual(localBadge(store.history(k).runs, next));
++});
++
+ test("a new queued revision shows its own starting state while an earlier revision is still running", () => {
+   started();
+   store.request("/fixture", key, next);
+   const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+   store.attachBadges({ ...key, cards });
+   expect(cards[0]?.localReview).toMatchObject({ active: true, runState: "queued" });
+ });
+ 
+ test("question and activity badges follow the account, pinned range, answer and cancellation", () => {
+   const { run } = started();
+   const badge = (viewer = key.viewer, range = revision) => {
+     const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...range }];
+     store.attachBadges({ ...key, viewer, cards });
+     return cards[0]?.localReview;
+   };
+   expect(badge()?.lastActivityAt).toBeUndefined();
+   const logDir = path.join(store.directory(run.id), "run");
+   mkdirSync(logDir, { recursive: true });
+   writeFileSync(path.join(logDir, "events.ndjson"), "{}\n");
+   const at = store.history(key).runs[0]?.lastActivityAt;
+
+--- src/review/board-badges.ts
+@@ 1,55 @@
+ import type { ReviewCard } from "./board-types";
+ import type { DeskRevision, DeskRun } from "./desk-run-types";
+ 
+ export type LocalBadge = NonNullable<ReviewCard["localReview"]>;
+ export type BadgeCard = DeskRevision & { number: number; localReview?: LocalBadge };
+ export interface BadgeSnapshot {
+   version: 1;
+   repositoryId: string;
+   viewer: string;
+   cards: BadgeCard[];
+ }
+ 
+ export const runActive = (run: Pick<DeskRun, "state">) => run.state === "running" || run.state === "queued" || run.state === "cancelling";
+ export const sameRange = (a: DeskRevision | null, b: DeskRevision) => a?.baseSha === b.baseSha && a.headSha === b.headSha;
++export const runFinished = (run: Pick<DeskRun, "state">) => run.state === "completed" || run.state === "partial" || run.state === "budget";
+ 
+ type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
+   decision?: DeskRun["decision"];
+   result: { reviewed: DeskRevision | null } | null;
+   reviewerProgress?: LocalBadge["progress"];
+   pendingQuestion?: DeskRun["pendingQuestion"];
+   pendingQuestions?: DeskRun["pendingQuestions"];
+   publication?: DeskRun["publication"];
+   awaitingAnswer?: boolean;
+   lastActivityAt?: string | undefined;
+ };
+ 
+ /** Both Desktop's live history and SQLite's projected rows use the same ordering and revision rules. */
+ export function localBadge(runs: readonly BadgeRun[], revision: DeskRevision): LocalBadge {
+-  runs = runs.filter(run => run.decision?.action !== "archive" && run.decision?.action !== "delete");
+-  const active = runs.filter(run => run.source !== "existing" && runActive(run));
++  runs = runs.filter(run => run.source !== "existing" && run.decision?.action !== "archive" && run.decision?.action !== "delete");
++  const active = runs.filter(runActive);
+   const current = active.find(run => sameRange(run, revision)) ?? active[0];
+   // History is newest first. A review on an older range belongs in the lane but
+   // its percentage must not be attributed to the current PR revision.
+-  const latest = current ?? runs.find(run => run.source !== "existing" && sameRange(run, revision));
++  const latest = current ?? runs.find(run => sameRange(run, revision));
+   const same = !!latest && sameRange(latest, revision);
+   const awaiting = latest?.awaitingAnswer ?? (latest?.pendingQuestions ? latest.pendingQuestions.length > 0 : !!latest?.pendingQuestion);
+   const roster = same ? latest.reviewerProgress : undefined;
++  const ready = runs.some(run => runFinished(run) && !!run.result && sameRange(run.result.reviewed, revision));
++  // Outdated is a fallback only: any run on this range, or any active run, says more about the card.
++  const stale = latest || ready ? undefined : runs.find(run => runFinished(run) && !!run.result?.reviewed);
++  const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state } : undefined;
+   return {
+     active: !!current,
+-    ready: runs.some(run => run.source !== "existing" && ["completed", "partial", "budget"].includes(run.state)
+-      && !!run.result && sameRange(run.result.reviewed, revision)),
++    ready,
+     ...(latest ? { runState: same ? latest.state : "other-revision" } : {}),
++    ...(outdated && { outdated }),
+     ...(same && latest.state === "running" && latest.source === "manual" && awaiting && { awaitingAnswer: true }),
+     ...(same && latest.publication === "pending" && sameRange(latest.result?.reviewed ?? null, revision) && { publicationPending: true }),
+     ...(same && latest.state === "running" && latest.lastActivityAt && { lastActivityAt: latest.lastActivityAt }),
+     ...(roster ? { progress: { planned: roster.planned, finished: roster.finished, wave: roster.wave,
+       ...(roster.completed !== undefined && { completed: roster.completed }),
+     } } : {}),
+   };
+ }
+
+--- src/review/board-types.ts
+@@ 1,38 @@
+ // Read-only Review board protocol shared by the CLI and the Desktop hosts.
+ import type { DeskReviewerProgress, DeskRunState } from "./desk-run-types";
+ 
+ export type ReviewBoardState = "open" | "closed" | "merged" | "all";
+ export type ReviewCi = "passed" | "failed" | "pending" | "none" | "unknown";
+ 
+ export interface ReviewCard {
+   localReview?: {
+     active: boolean;
+     ready: boolean;
+     awaitingAnswer?: true;
+     publicationPending?: true;
+     lastActivityAt?: string;
+     runState?: DeskRunState | "other-revision";
+     progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;
++    /** Newest finished result for another range. Present only when no run covers this range and none is active;
++     * `runState` is then absent, because a finished `runState` means a result for this revision exists. */
++    outdated?: { headSha: string; state: DeskRunState };
+   };
+   /** GitHub message node IDs addressed to this snapshot’s viewer. */
+   addressedReplyIds?: string[];
+   number: number;
+   title: string;
+   changeStats?: { files: number; additions: number; deletions: number };
+   url: string;
+   state: Exclude<ReviewBoardState, "all">;
+   draft: boolean;
+   author: string;
+   assignees: string[];
+   assigneesComplete?: boolean;
+   reviewersComplete?: boolean;
+   /** Logins for users and organization/slug for teams. */
+   reviewers: string[];
+   /** Present on watcher polls to recognize a re-request between two observations. */
+   reviewRequestIds?: Record<string, string>;
+   watcherMergeState?: string;
+   watcherReviews?: { id: string; login: string; state: string }[];
+   decision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+
+--- src/review/desk-run-store.ts
+@@ 371,406 @@
+       if (run.result) {
+         const publication = run.result.reviewed && run.source !== "existing" && run.decision?.action !== "archive" &&
+           this.publication(run.id, run.state, run.result.coverage);
+         if (publication) run.publication = publication;
+         run.result.report = row.report;
+         if (id === undefined && row.bytes > 0 && !row.report) run.result.reportDeferred = true;
+         if (id !== undefined && row.chars > 524288) {
+           run.result.report +=
+             "\n\nPreview truncated. Full result: " +
+             path.join(this.directory(run.id), "execution-result.json");
+         }
+       }
+       return run;
+     });
+     return { version: 1, runs };
+   }
+ 
+   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
+       head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
+-    // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs or
+-    // other revisions never cross the SQLite boundary. No reports or session histories are returned.
++    // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
++    // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
++    // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
+     // Older read-only stores predate interactive review questions.
+     const tables = this.db.query<{ name: string }, []>(
+       "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('review_questions','reviewer_questions')",
+     ).all();
+     const pending = tables.map(({ name }) => `EXISTS(SELECT 1 FROM ${name} q WHERE q.run_id=r.id AND q.answer IS NULL)`).join(" OR ") || "0";
++    const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')
++        AND coalesce(json_extract(${r}.details,'$.decision.action'),'') NOT IN ('archive','delete')`;
++    // Each run of a requested PR is parsed once in `scoped`: `details` embeds the report, so a second
++    // pass for the outdated lookup doubled the cost. Only the kept rows are read again for progress.
++    // The outdated row is kept only when no row makes localBadge ignore it: an active run, a run
++    // requested for the card's range, or a finished run that reviewed it.
+     const query = this.db.query<Row, [string, string, string]>(`
++      WITH scoped AS MATERIALIZED (
+
+--- src/review/desk-run-store.ts
+@@ 409,415 @@
++          json_extract(r.details,'$.baseSha')=w.wb AND json_extract(r.details,'$.headSha')=w.wh AS requested,
++          json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
++          w.wb, w.wh
++        FROM (SELECT key,json_extract(value,'$.number') AS n,json_extract(value,'$.baseSha') AS wb,json_extract(value,'$.headSha') AS wh
++          FROM json_each(?1)) w CROSS JOIN runs r
++        WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible("r")}
++      ), flagged AS (
+
+--- src/review/desk-run-store.ts
+@@ 419,419 @@
++      ), picked AS (
+
+--- src/review/desk-run-store.ts
+@@ 423,424 @@
++        SELECT seq, created, kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND
++          row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
+
+--- src/review/desk-run-store.ts
+@@ 426,435 @@
++      )
+       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
+         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+         json_extract(r.details,'$.source') AS source,
+         json_extract(r.details,'$.result.coverage') AS coverage,
+         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
+         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
+         json_extract(r.details,'$.reviewerProgress.finished') AS finished,
+         json_extract(r.details,'$.reviewerProgress.wave') AS wave,
+
+--- src/review/desk-run-store.ts
+@@ 445,466 @@
++      WHERE p.wanted
++      ORDER BY p.created DESC,p.seq DESC`);
+     for (let i = 0; i < snapshot.cards.length; i += 200) {
+       const cards = snapshot.cards.slice(i, i + 200);
+       const rows = query.all(JSON.stringify(cards.map(({number, baseSha, headSha}) => ({number,baseSha,headSha}))), snapshot.repositoryId, snapshot.viewer);
+       const byPr = new Map<number, Parameters<typeof localBadge>[0][number][]>();
+       for (const row of rows) {
+         const runs = byPr.get(row.pr) ?? [];
+         if (!runs.length) byPr.set(row.pr, runs);
+         const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);
+         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
+           ...(publication && { publication }),
+           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
+           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
+           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,
+             ...(row.completed !== null && { completed: row.completed }),
+           } });
+       }
+       for (const card of cards) {
+         const runs = byPr.get(card.number);
+         if (runs) card.localReview = localBadge(runs, card);
+       }

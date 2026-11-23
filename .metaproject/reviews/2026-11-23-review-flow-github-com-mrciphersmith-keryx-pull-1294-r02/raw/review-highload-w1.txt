@@ -1,0 +1,29 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "No new concurrency or load defects in the delta. The attachBadges rewrite is one synchronous read-only statement (no shared mutable state, no retry, no queue). I traced its window-function logic against localBadge in board-badges.ts and found it equivalent to the old two-pass lookup for the active, requested-range, reviewed-range and stale cases. Cost: the scoped CTE parses each run once and only kept rows are re-read, so a 200-card batch stays near the base cost (worker-measured 395 ms vs 405 ms base; not re-run). Residual note, not a finding: the batch runs synchronously on the event loop, about 0.4 s per 200 cards on the stressed store, once per 6 s poll; that equals the base commit. Prior findings F-001..F-008, F-010, F-012, F-014 judged; F-009 partial.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css 85-96: the nowrap override is gone, so the shared .flows-toolbar wrap applies; search field flex 1 1 96px, max-width 260px; .toolbar-label hidden under 1100px, .count-label and .watcher-indicator under 760px. Read, not measured with board data." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx 64-70: inBoardOverlay also matches a [role=dialog] that contains .project-review-rules or .review-watcher; clearPrivateView (line 131) uses it. Both classes exist in the dialog content." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason ranks the outdated text after attentionReason (operator: uphold); reviewNote(card) is exported and rendered in ReviewResults.tsx lines 78 and 114 as .review-note; model.test.ts pins both. Showing it on merged and closed cards is the stated operator decision." },
+    { "id": "F-004", "disposition": "closed", "evidence": "docs README is version 0.1.2 and its status line says stage 0 implemented, stages 1-4 draft; plan, prd, specification and roadmap are touched in the delta. Only the README hunk was read in full." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx uses the shieldCheck icon (present in the icon set); ReviewBoard.tsx renders the active-filter count in a separate span.filter-count outside .toolbar-label, so it stays visible. The count-label still hides under 760px, as the fix states." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: scoped (MATERIALIZED) parses each run once; flagged/picked keep the newest finished run per card only when no run of that card supersedes it (max(supersedes) OVER card), and the final select re-reads only wanted rows. The logic matches localBadge (active, requested range, ready, stale ordering by createdAt DESC, rowid DESC). Timing is the worker's, not re-run." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts now uses quiet(pr), a neutral card, and asserts reviewLane is open with and without the outdated badge." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx 346-355 derives attentionPrs with useMemo over carriedAttention, snapshot and receiptVersion; setCarriedAttention keeps only cross-scope retention (lines 188, 231). The predicate still appears in the load callback and the memo, but the memo is the single source for the shown snapshot." },
+    { "id": "F-009", "disposition": "partial", "evidence": "desk-run-store.test.ts now has decoys for another PR, another viewer (other = viewer colleague), archive/delete, source existing and a run without a result. Still unpinned: a newer finished run in another repository (the r.repo predicate) and a failed run with a recorded result (the state filter). Model-side gaps of F-009 are outside my slices." },
+    { "id": "F-010", "disposition": "closed", "evidence": "flagged.finished requires both base IS NOT NULL and head IS NOT NULL, matching the row projection." },
+    { "id": "F-012", "disposition": "open", "evidence": "ReviewBoard.tsx 346-355: the attention set is still computed over snapshot.cards, not the filtered visible set. Accepted info; unchanged." },
+    { "id": "F-014", "disposition": "open", "evidence": "desk-run-store.ts visible() still hardcodes source IN ('manual','scheduled') while localBadge filters source !== 'existing'; no shared predicate or guard test. Info, unchanged." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: nothing was executed (read-only round). Not re-run: the SQL timing, the EXPLAIN QUERY PLAN or the use of the runs (repo, viewer, pr) index under the CROSS JOIN; whether JSON parse caching applies depends on the SQLite build the packaged backend uses (3.51.0 seen on the host). Toolbar layout with real board data and the detail panel open was not rendered. Slice-02 is mostly flow-journal and resolved-context files, read as context only; its code hunks were checked against the files at head. F-011 and F-013 sites are not in my slices and are not dispositioned.

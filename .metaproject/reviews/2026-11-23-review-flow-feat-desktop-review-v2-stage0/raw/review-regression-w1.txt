@@ -1,0 +1,40 @@
+STATUS: DONE_WITH_CONCERNS
+
+Summary: read slice-01 in full (1979 lines) and the context files board-badges.ts, flows.css, components.css, ui.tsx (Dialog). Behaviour listed as deliberate (filter bypass removed, no active-first sort, Done lane on demand, narrowed tab indicator, hidden merged+running PR) was not treated as regression. The model.ts / ReviewBoard.tsx / ReviewResults.tsx logic matches the plan matrix and AC1-AC6; I found no defect there (outdated is a fallback in localBadge only when no same-range run and no active run exists, so it cannot coexist with runState; badgesEqual compares it; the attention effect re-adds carried unread replies after the card-only refresh). One regression is reported, in the CSS added for AC7. No blast-radius set or cap record was supplied to this dispatch: the set was not used; I walked the dependents of the changed CSS rule by hand. Not verified: nothing was run (read-only, exec_budget_s 0), so the finding below rests on CSS containment semantics, not on a rendered check; T8's live check also never opened a dialog.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "One regression: `.review-board { container-type: inline-size }` (added for the one-row toolbar) makes the board section the containing block of position:fixed descendants, and two modal dialogs are rendered inline inside that section. No other regression found in slice-01 against AC1-AC6 and the plan matrix.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board { container-type: inline-size; }",
+      "problem": "container-type: inline-size applies layout containment, which makes `section.review-board` the containing block for position:fixed descendants. The shared `Dialog` (components/ui.tsx) renders `.overlay` (components.css: `position: fixed; inset: 0; z-index: 50`) inline, not through a portal. `RulesDialog` (opened by the 'Review rules' button) and the PR watcher `Dialog` (opened by 'PR watcher') are both rendered inside the toolbar, i.e. inside `section.review-board`. After this change their overlay is sized and centred against the board section instead of the window, and is stacked inside the section's own stacking context.",
+      "impact": "Behaviour changed for the existing Review rules and PR watcher modals: the scrim no longer covers the whole window (side rail, and the detail sheet when open, stay visible and unobscured), the dialog centres on the board area, and its z-index no longer wins over siblings of the section such as the detail sheet (`sheet-scrim`, z-index 40, a sibling of the section). Modal intent (aria-modal, focus trap) is unchanged, so the visual and the semantics disagree. Other dialogs of this tab (Filters, PR subscription, detail sheet) are rendered outside the section and are not affected. Confidence is medium: derived from CSS containment rules and the markup, not from a rendered check (none was possible, and T8's live check never opened a dialog).",
+      "suggested_fix": "Do not put container-type on an ancestor of inline dialogs. Either put `container-type: inline-size` on a wrapper around the toolbar only (the @container rule only needs the toolbar's width), or portal the two dialogs to document.body, or replace the container query with a media/ResizeObserver rule.",
+      "evidence": "slice-01.diff review.css hunk adds `.review-board { container-type: inline-size; }`; ReviewBoard.tsx toolbar renders `<ProjectReviewRules/>` and `<ReviewWatcher/>` inside `section.review-board`; ProjectReviewRules.tsx returns `{open && <RulesDialog/>}` next to the button; ReviewWatcher.tsx returns `{active && open && <Dialog .../>}` next to the button; ui.tsx Dialog returns `<div className=\"overlay\">` with no createPortal; components.css `.overlay { position: fixed; inset: 0; z-index: 50 }`.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/ProjectReviewRules.tsx (RulesDialog, rendered from ProjectReviewRules inside the toolbar)",
+          "apps/desktop/src/review/ReviewWatcher.tsx (Dialog 'PR watcher', rendered inside the toolbar)"
+        ],
+        "enumeration_method": "every element rendered inside section.review-board in ReviewBoard.tsx whose subtree can render Dialog/.overlay or another position:fixed node: toolbar children ProjectReviewRules and ReviewWatcher (both inline dialogs, affected); ReviewFilters, PrSubscriptionDialog, ReviewDetail are siblings of the section inside .review-workspace (not affected); ReviewResults cards and lanes contain no fixed-position node (checked against the styles grep for position: fixed|absolute in apps/desktop/src/styles). Changed rule: review.css `.review-board { container-type: inline-size; }`."
+      }
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: UI slice read in full, dependents checked by targeted search); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg for CSS and Dialog usage); raw_rg_used: no.

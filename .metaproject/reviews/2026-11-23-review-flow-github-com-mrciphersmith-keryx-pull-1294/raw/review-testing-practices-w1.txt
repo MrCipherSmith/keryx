@@ -1,0 +1,125 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "The stage-0 tests pin most added gates: filter bypass removal (3 dimensions), Done-lane predicate (4 inputs), tab-signal reasons (login, team, author+decision, state, unread/read), outdated/base-moved wording and badgesEqual. Gaps found by reading only (exec_budget_s=0; no mutation was run): a vacuous lane assertion for outdated cards (minor), and info-level notes on an unexercised viewer case-normalisation, an unpinned outdated-vs-partial ordering, an unpinned operator decision (merged+active hidden by default), a carry-over test with no proof the refresh ran, docs-vs-code mismatch, and CSS-only toolbar coverage. The mechanical host->document.body rewrite in ReviewBoard.dom.test.tsx is consistent with the portal change; the new portal test fails closed when no dialog is rendered.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/model.test.ts",
+      "line": null,
+      "quote": "expect(reviewLane(outdated(\"completed\"))).toBe(reviewLane(pr));",
+      "problem": "The assertion that an outdated review does not change the lane compares against `reviewLane(pr)`, but `pr` is decision CHANGES_REQUESTED with a team reviewer, so both sides are \"attention\" regardless of localReview.outdated. A fixture built for a different scenario (a card already in the attention lane) is reused to pin 'outdated leaves the lane unchanged'.",
+      "impact": "If reviewLane were changed to send outdated cards to \"attention\" (or \"review\"), this test stays green for the attention case; the next author reads it as coverage that outdated does not move cards between columns, which R1 of the requirements package cares about. Reading-based; the mutation was not run.",
+      "suggested_fix": "Use a neutral card whose lane is not attention, e.g. `{ ...pr, decision: null, reviewers: [], ci: \"passed\" }` (lane \"open\"), and assert reviewLane of the same card with `localReview.outdated` is still \"open\".",
+      "evidence": "model.test.ts new test 'an outdated review names the reviewed commit...' last line; fixture `pr` in model.test.ts sets decision CHANGES_REQUESTED, reviewers [\"example/team\"]; model.ts reviewLane: attentionReason(c) returns DECISION_LABEL.CHANGES_REQUESTED for pr. Not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": null,
+      "quote": "const login = viewer.toLowerCase();",
+      "problem": "needsViewerAttention lowercases the viewer login, but every fixture uses viewer \"ann\" (already lowercase) via snapshot(). The case variation in the tests is only on the card side (\"ANN\", \"Ann\"). No fixture builds the input that separates `viewer.toLowerCase()` from `viewer`.",
+      "impact": "Deleting the viewer normalisation would leave the suite green; a GitHub login with capitals (viewer \"Ann\" vs reviewers [\"ann\"]) would silently stop lighting the tab. Predicted from reading, not run, hence info.",
+      "suggested_fix": "Add one signal case with `{...snapshot(cards), viewer: \"Ann\"}` and a card reviewers [\"ann\"] expecting \"attention\".",
+      "evidence": "ReviewBoard.dom.test.tsx 'the tab signal is attention only for...' and snapshot() at the top of the file; model.ts:39. Mutant candidate M-001, not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": null,
+      "quote": "if (c.localReview?.runState === \"partial\") return \"Partial review · incomplete coverage\";",
+      "problem": "The outdated block sits before the runState === \"partial\" line and the tests pin its order against awaiting/queued/merged/attention reasons, but no fixture has `localReview.runState: \"partial\"` together with `outdated`. Which label wins for that pair is not pinned.",
+      "impact": "Moving the outdated block below the partial line leaves model.test.ts green. Whether both can co-occur depends on the SQL in attachBadges (another slice). Not run.",
+      "suggested_fix": "Add a case with runState \"partial\" plus outdated and assert the intended label, or comment that the pair cannot occur.",
+      "evidence": "model.test.ts outdated tests (no runState partial); model.ts:89-97. Mutant candidate M-003, not run.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/review/model.test.ts",
+      "line": null,
+      "quote": "expect(filterReviews([merged], { ...EMPTY_FILTERS, state: [] }, \"\")).toEqual([merged]);",
+      "problem": "The operator decision that a merged/closed PR with a running review is hidden under the default Open+Draft filter is not asserted anywhere. The old assertion was replaced by one with state: [], proving visibility only for an empty state filter; the new 'does not bypass' test uses an open active card with state [\"merged\"]. The DOM test now saves state [\"merged\"] to keep the card visible, so it no longer shows the default-filter case either.",
+      "impact": "A deliberate behaviour change has no positive pin; a later change that re-adds a state-only exception would pass. Coverage of a decided behaviour only, no defect.",
+      "suggested_fix": "Add `expect(filterReviews([merged], EMPTY_FILTERS, \"\")).toEqual([])` to the active-review test in model.test.ts.",
+      "evidence": "model.test.ts diff: 'active Keryx runs precede...' and 'an active local review does not bypass any selected filter'.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": null,
+      "quote": "expect(seen.slice(before).filter(value => value !== \"attention\")).toEqual([]);",
+      "problem": "In 'a card-only refresh does not drop the tab signal...' the key assertion is falsy-only (a filtered list equals empty) and seen.at(-1) already equals \"attention\" before the click. Nothing proves the refresh reloaded cards = [base] (no load counter, no assertion that seen grew).",
+      "impact": "If the Refresh click did not trigger a load, the test passes without exercising the carry-over path it names. Other tests show the click does reload, so the risk is low.",
+      "suggested_fix": "Count loads in the `load` callback and assert it incremented after the click.",
+      "evidence": "Test body in slice-02.diff lines 1096-1110; the first tab-signal test asserts `reads`.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "line": null,
+      "quote": "Статус — draft. Ничего из этого пакета не реализовано.",
+      "problem": "Docs and code disagree on two points after this PR. (1) README, implementation-plan and the roadmap changelog say nothing is implemented, while the same PR implements stage 0. (2) PRD R12, the spec indicator section and criterion 16 say the Pull requests tab lights for a review request on the user 'or their team'; the stage-0 code matches the login only (needsViewerAttention comment: teams are not matched) and the DOM test pins reviewers [\"org/team\"] -> null. The docs do not mark the deviation.",
+      "impact": "A reader of the package expects team requests to light the indicator; the stage-0 test says the opposite. The operator decided it; the package does not record it.",
+      "suggested_fix": "Mark stage 0 as implemented in README, plan and roadmap, and add a one-line note under R12 that team requests are excluded in stage 0.",
+      "evidence": "prd.md R12; model.ts:33-43; test 'the tab signal is attention only for...'. Docs are context in this round; reported only for the mismatch with code.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": null,
+      "quote": "expect(button(\"PR watcher · Off\").getAttribute(\"title\")).toBe(\"PR watcher · Off\");",
+      "problem": "The one-row toolbar goal (container query, labels hidden under 1100px) is CSS-only and cannot be asserted in the DOM test environment. The test pins the accessible title only for the watcher button; a collapse that hides another label without a title would not fail.",
+      "impact": "Coverage of the toolbar work rests on the orchestrator's live measurement, which CI does not repeat. Filters, Refresh, Board/List, Clear filters already set title in ReviewBoard.tsx; the Review rules button title was not confirmed.",
+      "suggested_fix": "Optional: assert title on the 'Review rules' button in the same test.",
+      "evidence": "ReviewBoard.tsx:402-450 titles; ReviewBoard.dom.test.tsx portal test.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 6 },
+  "slices": ["slice-02"],
+  "mutant_candidates": [
+    { "id": "M-001", "file": "apps/desktop/src/review/model.ts", "anchor": "const login = viewer.toLowerCase();", "replacement": "const login = viewer;", "kind": "behavior" },
+    { "id": "M-002", "file": "apps/desktop/src/review/model.ts", "anchor": "if (c.state !== \"open\") return false;", "replacement": "", "kind": "behavior" },
+    { "id": "M-003", "file": "apps/desktop/src/review/model.ts", "anchor": "if (c.localReview?.runState === \"partial\") return \"Partial review · incomplete coverage\";", "replacement": "", "kind": "behavior" },
+    { "id": "M-004", "file": "apps/desktop/src/review/model.ts", "anchor": "if (outdated.headSha === c.headSha) return", "replacement": "if (false) return", "kind": "behavior" },
+    { "id": "M-005", "file": "apps/desktop/src/review/model.ts", "anchor": "const partial = outdated.state === \"partial\" || outdated.state === \"budget\";", "replacement": "const partial = outdated.state === \"partial\";", "kind": "behavior" },
+    { "id": "M-006", "file": "apps/desktop/src/review/model.ts", "anchor": "return !states.length || states.some((s) => s === \"closed\" || s === \"merged\");", "replacement": "return states.some((s) => s === \"closed\" || s === \"merged\");", "kind": "behavior" },
+    { "id": "M-007", "file": "apps/desktop/src/review/model.ts", "anchor": "(c.author.toLowerCase() === login && c.decision === \"CHANGES_REQUESTED\")", "replacement": "(c.decision === \"CHANGES_REQUESTED\")", "kind": "behavior" },
+    { "id": "M-008", "file": "apps/desktop/src/review/model.ts", "anchor": "unreadReplies > 0 || ", "replacement": "", "kind": "behavior" },
+    { "id": "M-009", "file": "apps/desktop/src/review/model.ts", "anchor": "(!f.state.length || f.state.includes(prState(c)))", "replacement": "true", "kind": "behavior" },
+    { "id": "M-010", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "a?.outdated?.headSha === b?.outdated?.headSha && ", "replacement": "", "kind": "behavior" },
+    { "id": "M-011", "file": "apps/desktop/src/review/model.ts", "anchor": "if (c.state !== \"open\") return STATE_LABEL[c.state];", "replacement": "", "kind": "behavior" }
+  ]
+}
+```
+
+What I did: read the shared brief, driver, skill and slice-02 in full (ReviewBoard.dom.test.tsx, model.test.ts, the review-v2 docs, roadmap) plus the production sources they test (model.ts; ReviewBoard.tsx lines 40-150 and toolbar title attributes).
+
+Mutation pass: not run (`exec_budget_s: 0`, read-only). 11 mutant candidates listed for the main session (M-001 to M-011); 0 mutated, 11 not reached. By reading, M-002, M-004 to M-011 look pinned by existing tests (predictions, not results); M-001 and M-003 look unpinned (F-002, F-003). No survivor or casualty is claimed.
+
+Not verified: the SQL in attachBadges and localBadge (other slices), so whether outdated and runState partial can co-occur; CSS and the container query; any test execution (evidence files not opened); docs beyond the two mismatches named.

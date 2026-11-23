@@ -1,0 +1,20 @@
+STATUS: DONE
+
+REVIEW_RESULT
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "slice-03 (backend badge code) judged as the contract the Desktop frontend consumes. No defect found. localBadge sets `outdated` only when no run covers the card's range, none is active and no finished result covers it; `runState` is absent then, matching the board-types.ts comment and what ReviewResults.tsx reads (runState first, then outdated -> 'Review changes'). The SQLite path (attachBadges: MATERIALIZED `wanted` CTE, ?1/?2/?3 numbered parameters, one newest finished visible run per card) feeds localBadge the same rows the live-history path would give for the decisive cases, and both desk-run-store tests assert equality with localBadge on the live history.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Checked: parameter order (json, repo, viewer) matches ?1/?2/?3; unqualified alias references (baseSha, base, head) still resolve beside the new CTE columns (n, wb, wh, outdated); the `visible()` predicate is identical for candidate and outdated rows (source manual/scheduled, not archived/deleted); the outdated lookup's state set equals runFinished; `recoverable` is excluded from the lookup; moving the `source !== "existing"` filter into the first line of localBadge changes no result for `ready` or `latest`; frontend equality check in ReviewBoard.tsx:60 includes outdated.headSha/state.
+
+Observations, not defects: (1) the SQL outdated lookup requires only `reviewed.headSha` non-null while localBadge needs base and head both; a stored result with a head but no base would be picked by SQL and ignored by TS, masking an older valid one. Writers (desk-run-lifecycle, desk-run-legacy) always write both, so not reachable today. (2) A run requested on the current range but whose reviewed range differs would show a finished `runState` without a result for this revision, contradicting the board-types.ts comment; lifecycle writes reviewed = requested range, so I found no path to it.
+
+Not verified: no tests run (read-only budget); the Desktop frontend beyond ReviewResults.tsx lines 20-60 and grep hits (model.ts, ReviewBoard.tsx) was not read in full; the SQL was not executed against a real database; the finding schema's per-finding fields were not needed (zero findings).

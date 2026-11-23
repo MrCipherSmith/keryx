@@ -1,0 +1,76 @@
+STATUS: DONE
+
+# Backend Review Report (round 4, delta)
+
+## Summary
+Commit `be26765ae` is correct. Skipping `this.publication(...)` cannot change any output, because the only reader of the `publication` field in the badge path needs the same condition that the new guard checks. The new store test builds every fixture through the public API. Each fixture separates the SQL term it names. No finding.
+
+## (1) attachBadges publication gate
+
+`publication()` (`src/review/desk-run-store.ts:325`) is a pure read. It tests state and coverage, then reads a receipt file and checks for a skipped marker. It has no side effect, so a skipped call changes nothing except the I/O.
+
+Readers of the field on the rows `attachBadges` builds:
+- `localBadge` in `src/review/board-badges.ts:49` is the only one. It reads `latest.publication` only inside `same && latest.publication === "pending" && sameRange(latest.result?.reviewed ?? null, revision)`. So the publication of a run matters only when that run's reviewed range equals the card's range.
+- The new guard `card?.baseSha === row.base && card.headSha === row.head`, with `row.base && row.head` truthy, is exactly `sameRange(result.reviewed, card)`. The rows are the same ones, so the output is identical for every row where the call is skipped.
+- `latest` and `ready` use `state`, `result` and `baseSha`/`headSha`, not `publication`. Both are set outside the guard.
+- The other consumers I found (`ReviewRuns.tsx:105,169,171`, `SessionReviewActivity.tsx:76`, `ReviewRunDialog.tsx`) read `run.publication` on history runs. Those come from `history()`/`byId` (`desk-run-store.ts:373-374`), not from `attachBadges`. That path is untouched.
+
+Edge cases:
+- `card.baseSha` or `card.headSha` undefined. `BadgeCard` types them as `DeskRevision` fields, but a JSON card may lack them. `undefined === row.base` is false because the `row.base` guard is already truthy, so the call is skipped. `localBadge` would give `sameRange(...)` false for the same inputs (`a?.baseSha === b.baseSha`, string vs undefined). The output is the same. `JSON.stringify` drops undefined, so SQL sees null: `requested` and `reviewed` are null, `coalesce(...,0)` gives 0, and no row matches the range. That is not new in this commit.
+- Two cards with the same number in one 200-card chunk. `cardByPr` keeps the last one. The SQL joins each card key to every run of that number, so the rows are already duplicated per card key (this predates the commit). `byPr` merges them by number, and every card with that number then gets the merged list. If the two cards had different ranges, the earlier card could lose `publicationPending`, because the guard compares against the later card. A board snapshot holds one card per PR number (the number is the key everywhere else, for example `byPr` itself), so this is not reachable from the snapshot and I report no finding.
+- Chunking: `cardByPr` is built per chunk from the same `cards` slice that the query gets, so every returned row's `pr` has a card in the map.
+- A row whose `row.base`/`row.head` is null stays falsy and gives no publication, as before.
+
+## (2) Store test "each term of the outdated lookup is pinned by its own fixture"
+
+- Public API only. The fixtures use `store.request`, `store.queued`, `store.end`, `store.attachBadges` and `store.history`. There is no raw SQL and no direct write to the runs table. `queued -> end` skips the running state, but that is a public transition the sibling tests already use.
+- Timestamps. `created` is ordered `DESC` with `seq` (rowid) `DESC` as the tie-break (`desk-run-store.ts:424,446`). Fixtures are inserted in the order the comments call "newer", so a tie on `createdAt` resolves in insertion order. The test does not depend on a tie-free clock. It would fail only if the clock ran backwards between two inserts.
+- Each fixture separates its term (checked against the SQL by reading, not by running a mutant):
+  - `requested`: without it the failed or cancelled run is neither live nor finished, so the lookup returns the older finished run and the badge becomes `outdated`. The expectation is `runState: "failed"`/`"cancelled"`.
+  - finished-state filter (`done`): the newer failed run has a recorded result, so without `done` in `finished` it would be the outdated candidate (`headSha d`). The expectation is the older completed run.
+  - `reviewed` without `requested`: the run requested `revision` and reviewed `next`. Dropping `reviewed` from `kept` removes it, and it also stops superseding the newer run of range `d`. That gives no badge or `outdated d`, not `ready: true`. The same fixture covers both the `kept` use and the `supersedes` use.
+  - repository predicate: the `elsewhere` run has the same number and viewer, is newer and finished, and differs only in `repositoryId`. Without `r.repo=?2` it would win and give `outdated d`.
+- Each fixture also asserts `localBadge(store.history(k).runs, range)` equals the SQL result. A failure shows as a mismatch against the history path.
+- Scenario numbers (`key.number`, `+1`, `+2`, `+3`) are distinct, so the scenarios do not interfere. The `elsewhere` run is in another repository and does not leak into the others.
+- The new guard itself is pinned by the existing test "in one batch, an active run or a reviewed range suppresses the outdated badge..." (line ~577): the `done` card expects `publicationPending: true`. A guard that was always false would fail it. This test does not detect a guard that is too wide, which is harmless because the output is the same.
+
+## Observations
+- The `viewer` and `pr` predicates of the lookup are not in this fixture. The preceding test "the outdated lookup ignores newer finished runs of another PR, another viewer..." covers them. This is a coverage note, not a defect.
+
+## Stats
+- blocker: 0
+- major: 0
+- minor: 0
+- info: 0
+
+## Other parts of slice-01 and slice-03
+I read both slices in full. The frontend, docs and `ReviewBoard.tsx` parts are other reviewers' subjects. The SQL refactor from commit `47721a089` was reviewed in round 3 and I did not re-report it. In the slice it matches the commit, and its behaviour matches the test fixtures above.
+
+## Not verified
+- I did not run any test or mutant. The mutant claims above come from reading the SQL, not from running it. I did not repeat the orchestrator's four SQL mutations.
+- I did not measure the query timing or the cost of skipping the file reads.
+- I did not check what happens with a hand-edited store whose rows carry an unusual `createdAt` format.
+- I read the receipt/skip-marker behaviour of `publication()` but did not exercise it.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "slices": ["slice-01", "slice-03"],
+  "summary": "be26765ae is behaviour-neutral: the only badge-path reader of the publication field (localBadge, board-badges.ts:49) needs the reviewed range to equal the card's range, which is exactly the new guard, and publication() is a side-effect-free read. The new store test uses only the public API, orders by createdAt then rowid so ties do not matter, and each fixture separates the SQL term it names. No findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-021", "disposition": "closed", "evidence": "desk-run-store.ts:455-458: this.publication(...) is called only when row.base/row.head equal the card's baseSha/headSha via cardByPr; board-badges.ts:49 is the only badge-path reader and requires sameRange(result.reviewed, revision), so output is unchanged." },
+    { "id": "F-009", "disposition": "closed", "evidence": "desk-run-store.test.ts new test 'each term of the outdated lookup is pinned by its own fixture': one fixture each for requested, finished state, reviewed range and repository, each compared with localBadge(store.history(k).runs, range)." },
+    { "id": "F-022", "disposition": "closed", "evidence": "Same test: the reviewed-without-requested fixture (run requested on revision, reviewed next, newer finished run on d) fails if reviewed is dropped from kept or supersedes in the ranked SQL." },
+    { "id": "F-029", "disposition": "closed", "evidence": "Same test: the repository fixture (same number and viewer, repositoryId 'other-gid', newer finished run) fails if r.repo=?2 is dropped; the earlier test covers pr and viewer." }
+  ],
+  "not_verified": [
+    "No test or mutant was run; the claim that each fixture separates its SQL term comes from reading the query.",
+    "SQL timing and the I/O saved by skipping publication() were not measured.",
+    "Behaviour with two cards of the same number and different ranges in one chunk was reasoned about, not run; a snapshot holds one card per PR number."
+  ]
+}
+```

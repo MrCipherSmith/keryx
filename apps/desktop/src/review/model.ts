@@ -25,6 +25,23 @@ export function stateQuery(states: string[]): ReviewBoardState {
   return "all";
 }
 
+/** The Done lane can only hold closed or merged pull requests; an empty state filter means every state. */
+export function stateFilterShowsDone(states: readonly string[]) {
+  return !states.length || states.some((s) => s === "closed" || s === "merged");
+}
+
+/**
+ * Whether an open pull request needs the viewer: requested from their login (teams are not matched),
+ * their own change with requested changes, unread replies to them, or a Keryx review that waits on them.
+ */
+export function needsViewerAttention(c: ReviewCard, viewer: string, unreadReplies: number) {
+  if (c.state !== "open") return false;
+  const login = viewer.toLowerCase();
+  return c.reviewers.some((r) => r.toLowerCase() === login) ||
+    (c.author.toLowerCase() === login && c.decision === "CHANGES_REQUESTED") ||
+    unreadReplies > 0 || !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending;
+}
+
 export function prState(c: ReviewCard) {
   return c.state === "open" && c.draft ? "draft" : c.state;
 }
@@ -37,7 +54,6 @@ export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
   const q = query.trim().toLowerCase();
   return cards.filter(c => {
     if (q && !c.title.toLowerCase().includes(q) && !String(c.number).includes(q.replace(/^#(?=\d)/, ""))) return false;
-    if (c.localReview?.active) return true;
     return (!f.author.length || f.author.includes(c.author)) &&
       matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
       matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
@@ -64,6 +80,17 @@ export function reviewLane(c: ReviewCard): Lane {
   return attentionReason(c) ? "attention" : "open";
 }
 
+/** The outdated-review text whenever the badge has one, independent of which reason ranks first. */
+export function reviewNote(c: ReviewCard): string | null {
+  const outdated = c.localReview?.outdated;
+  if (!outdated) return null;
+  const partial = outdated.state === "partial" || outdated.state === "budget";
+  const sha = outdated.headSha.slice(0, 7);
+  // Same head, different range: only the base moved, so the reviewed head is not "outdated".
+  if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
+  return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
+}
+
 export function laneReason(c: ReviewCard) {
   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
   if (c.localReview?.runState === "queued") return "Keryx review queued";
@@ -73,6 +100,8 @@ export function laneReason(c: ReviewCard) {
   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);
   if (attention) return attention;
+  const note = reviewNote(c);
+  if (note) return note;
   if (c.decision) return DECISION_LABEL[c.decision];
   if (c.draft) return "Draft pull request";
   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";

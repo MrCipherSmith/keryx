@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ReviewCard } from "./types";
-import { EMPTY_FILTERS, filterReviews, reviewLane, stateQuery } from "./model";
+import { EMPTY_FILTERS, filterReviews, laneReason, reviewLane, reviewNote, stateQuery } from "./model";
 
+const quiet = (c: ReviewCard): ReviewCard => ({ ...c, decision: null, reviewers: [] });
 const pr: ReviewCard = {
   number: 42, title: "Use project settings", url: "https://github.com/example/project/pull/42", state: "open", draft: false,
   author: "ann", assignees: ["lee"], reviewers: ["example/team"], decision: "CHANGES_REQUESTED", ci: "passed",
@@ -52,6 +53,49 @@ test("active Keryx runs precede GitHub attention and available results bring an 
   expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
   const merged = { ...card, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
   expect(reviewLane(merged)).toBe("attention");
-  expect(filterReviews([merged], { ...EMPTY_FILTERS, author: ["someone else"], updatedWithin: 7 }, "")).toEqual([merged]);
+  expect(filterReviews([merged], { ...EMPTY_FILTERS, state: [] }, "")).toEqual([merged]);
   expect(filterReviews([merged], EMPTY_FILTERS, "#999")).toEqual([]);
+});
+
+test("an active local review does not bypass any selected filter", () => {
+  const active = { ...pr, localReview: { active: true, ready: false } };
+  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["someone else"] }, "")).toEqual([]);
+  expect(filterReviews([active], { ...EMPTY_FILTERS, state: ["merged"] }, "")).toEqual([]);
+  expect(filterReviews([active], { ...EMPTY_FILTERS, ci: ["failed"] }, "")).toEqual([]);
+  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["ann"] }, "")).toEqual([active]);
+});
+
+test("an outdated review names the reviewed commit and ranks below live Keryx states, closed PRs and attention reasons", () => {
+  const outdated = (state: "completed" | "partial" | "budget") =>
+    ({ ...quiet(pr), localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+  expect(laneReason(outdated("completed"))).toBe("Outdated review · abcdef0");
+  expect(laneReason(outdated("partial"))).toBe("Outdated partial review · abcdef0");
+  expect(laneReason(outdated("budget"))).toBe("Outdated partial review · abcdef0");
+  expect(laneReason({ ...outdated("completed"), state: "merged" })).toBe("Merged");
+  const awaiting = { ...outdated("completed"), localReview: { ...outdated("completed").localReview, awaitingAnswer: true as const } };
+  expect(laneReason(awaiting)).toBe("Awaiting your answer");
+  expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
+  // A neutral open card: no decision, no reviewers, CI passed.
+  const neutral = quiet(pr);
+  expect(reviewLane(neutral)).toBe("open");
+  expect(reviewLane({ ...neutral, localReview: outdated("completed").localReview })).toBe("open");
+  expect(laneReason({ ...neutral, localReview: outdated("completed").localReview })).toBe("Outdated review · abcdef0");
+});
+
+test("an outdated review stays visible as a note when another reason leads the lane", () => {
+  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+  expect(reviewLane(stale)).toBe("attention");
+  expect(laneReason(stale)).toBe("Changes requested");
+  expect(reviewNote(stale)).toBe("Outdated review · abcdef0");
+  expect(reviewNote({ ...stale, headSha: "abcdef0123456" })).toBe("Review predates base update · abcdef0");
+  expect(reviewNote(pr)).toBeNull();
+});
+
+test("a review of the current head under an older base says the base moved, not that the head is outdated", () => {
+  const baseMoved = (state: "completed" | "partial" | "budget") =>
+    ({ ...quiet(pr), headSha: "abcdef0123456", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+  expect(laneReason(baseMoved("completed"))).toBe("Review predates base update · abcdef0");
+  expect(laneReason(baseMoved("partial"))).toBe("Partial review predates base update · abcdef0");
+  expect(laneReason(baseMoved("budget"))).toBe("Partial review predates base update · abcdef0");
+  expect(laneReason({ ...baseMoved("completed"), headSha: "fedcba9876543" })).toBe("Outdated review · abcdef0");
 });

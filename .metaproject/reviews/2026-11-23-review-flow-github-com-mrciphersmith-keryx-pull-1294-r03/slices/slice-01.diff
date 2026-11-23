@@ -1,0 +1,322 @@
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 986,1042 @@
+   markRepliesRead("ann", "repo1", base.number, ["unread-1"]);
+   expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBeNull();
+ });
+ 
+ test("a card-only refresh does not drop the tab signal of a PR whose only reason is a carried unread reply", async () => {
+   const base: ReviewCard = { ...pr, reviewers: [], decision: null };
+   let cards: ReviewCard[] = [{ ...base, addressedReplyIds: ["carried-1"] }];
+   const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   await act(async () => root.render(createElement(ReviewBoard, {
+     key: ++renderKey, cwd: "/carry", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
+     watcherCommand: watcherDisabled, onIndicatorChange: value => seen.push(value),
+   })));
+   expect(seen.at(-1)).toBe("attention");
+   const before = seen.length;
+   cards = [base];
+   await click(button("Refresh pull requests"));
+   expect(seen.slice(before).filter(value => value !== "attention")).toEqual([]);
+   expect(seen.at(-1)).toBe("attention");
+ });
+ 
++test("a request handled after the load stays out of the tab signal when the scope switches to a historical view", async () => {
++  const card: ReviewCard = { ...pr, number: 481, reviewers: [], decision: null, addressedReplyIds: ["handled-1"] };
++  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
++  const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged" ? [] : [card]);
++  await act(async () => root.render(createElement(ReviewBoard, {
++    key: ++renderKey, cwd: "/handled-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
++    onIndicatorChange: indicator => indicators.push(indicator),
++  })));
++  expect(indicators.at(-1)).toBe("attention");
++  await act(async () => { markRepliesRead("ann", "repo1", card.number, ["handled-1"]); await new Promise(resolve => setTimeout(resolve, 5)); });
++  expect(indicators.at(-1)).toBeNull();
++  await click(button("Filters"));
++  await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
++  await click(button("Apply filters"));
++  expect(indicators.at(-1)).toBeNull();
++});
++
+ test("visible cards keep snapshot order when a later card has an active review", async () => {
+   const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
+   await render(async () => snapshot(cards));
+   await click(button("List"));
+   expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
+ });
+ 
+ test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
+   const lanes = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
+   const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
+   const key = reviewFilterKey("/project", "repo1", "ann");
+   await render(async () => snapshot(cards));
+   expect(lanes()).toEqual(["Needs attention", "In review", "Open"]);
+   saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["closed"] });
+   await render(async () => snapshot(cards));
+   expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
+   saveReviewFilters(key, { ...EMPTY_FILTERS, state: [] });
+   await render(async () => snapshot(cards));
+   expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
+   saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["merged", "draft"] });
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 211,251 @@
+         snapshot = { ...snapshot, cards: snapshot.cards.map(card => {
+           const update = badges.get(card.number);
+           return update && sameRange(card, update) ? { ...card, localReview: update.localReview } : card;
+         }) };
+       }
+       // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+       const previous = latest.current.snapshot;
+       if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+         const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+         if (replies.size) {
+           snapshot = { ...snapshot, cards: snapshot.cards.map(c => {
+             const prior = replies.get(c.number);
+             return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
+               ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
+           }) };
+         }
+       }
+       const loaded = snapshot;
+       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
+       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
+-      setCarriedAttention(previousSet => {
+-        const next = new Set(replaceAttention ? [] : previousSet);
+-        for (const card of loaded.cards) {
+-          if (needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))) next.add(card.number);
+-          else next.delete(card.number);
+-        }
+-        return next;
+-      });
++      if (replaceAttention) setCarriedAttention(new Set());
+       const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
+       if (filterKey.current !== nextFilterKey) {
+         filterKey.current = nextFilterKey;
+         setFilters(readReviewFilters(nextFilterKey));
+       }
+       pendingBadges.current = null;
+       setSelected(current => current && loaded.cards.some(c => c.number === current.number) ? current : null);
+       if (!loaded.warnings.length) setDismissedWarning("");
+       identity.current = nextIdentity;
+       setRead({ scope, snapshot: loaded, error: "", loading: false });
+     }).catch((cause: unknown) => {
+       if (request !== sequence.current) return;
+       pendingBadges.current = null;
+       const message = errMessage(cause);
+       if (/^unavailable:/i.test(message)) {
+         setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? snapshots.current.get(scope) ?? null, error: message, loading: false }));
+       } else {
+         accessLost(message);
+       }
+     });
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 329,372 @@
+   }, [viewer, repositoryId]);
+   const visible = useMemo(() => {
+     if (!snapshot) return [];
+     return filterReviews(snapshot.cards, filters, q).map(card => {
+       if (!card.addressedReplyIds?.length) return card;
+       const ids = unreadIds(snapshot, card);
+       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
+     });
+   }, [snapshot, filters, q, receiptVersion]);
+   // Receipts and discussion notes change after the load that seeded the carried set, so the shown snapshot is judged here.
+   const attentionPrs = useMemo(() => {
+     const next = new Set(carriedAttention);
+     if (snapshot) {
+       for (const c of snapshot.cards) {
+         if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
+         else next.delete(c.number);
+       }
+     }
+     return next;
+   }, [carriedAttention, snapshot, receiptVersion]);
++  // Removals seen in the shown snapshot must survive a scope switch to a view that does not replace the set.
++  useEffect(() => {
++    if (snapshot && (attentionPrs.size !== carriedAttention.size || [...attentionPrs].some(n => !carriedAttention.has(n)))) setCarriedAttention(attentionPrs);
++  }, [snapshot, attentionPrs, carriedAttention]);
+   const active = filterSummary(filters);
+   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
+   const error = read.scope === scope ? read.error : "";
+   const loading = read.scope !== scope || read.loading;
+   const warningKey = snapshot?.warnings.length
+     ? JSON.stringify([snapshot.repositoryId, snapshot.viewer, [...snapshot.warnings].sort()]) : "";
+   const showWarning = !!warningKey && warningKey !== dismissedWarning;
+   const watcherRepo = snapshot?.repo;
+   const watcherRepoId = snapshot?.repositoryId;
+   const watcherViewer = snapshot?.viewer;
+   const watcherTarget = useMemo(() => watcherRepo && watcherRepoId && watcherViewer
+     ? { repo: watcherRepo, repositoryId: watcherRepoId, viewer: watcherViewer } : null, [watcherRepo, watcherRepoId, watcherViewer]);
+   useEffect(() => {
+     if (!tabActive || !watcherTarget) {
+       setSubscriptionNumber(null);
+       return;
+     }
+     let current = true;
+     void rulesCommand(cwd, watcherTarget, { kind: "status" }).then(result => {
+       if (current) setSubscriptions(new Set(result.subscriptions?.map(item => item.number)));
+
+--- apps/desktop/src/review/ReviewResults.tsx
+@@ 91,124 @@
+     <div className="lane-body">
+       {!cards.length && <div className="lane-empty">No pull requests</div>}
+       {cards.slice(0, limit).map((card) => <ReviewTile key={card.number} card={card} {...actions} />)}
+       {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 30)}>Show more ({cards.length - limit})</button>}
+     </div>
+   </section>;
+ }
+ 
+ export const ReviewResults = memo(function ReviewResults({ cards, view, showDone, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list"; showDone: boolean }) {
+   const [limit, setLimit] = useState(150);
+   if (view === "board") {
+     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
+     for (const card of cards) lanes[reviewLane(card)].push(card);
+     const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone);
+     return <div className="board review-lanes">{drawn.map((lane) =>
+       <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
+   }
+   return <div className="flow-list-wrap">
+     <table className="flow-list review-table"><thead><tr>
+       <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
+-    </tr></thead><tbody>{cards.slice(0, limit).map((c) => <tr key={c.number}>
+-      <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
+-      <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={laneReason(c)}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{laneReason(c)}</span>
+-        {secondaryNote(c, laneReason(c)) && <span className="review-note">{secondaryNote(c, laneReason(c))}</span>}
+-        <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+-      <td><ReviewAction card={c} {...actions} /></td>
+-    </tr>)}</tbody></table>
++    </tr></thead><tbody>{cards.slice(0, limit).map((c) => {
++      const reason = laneReason(c);
++      const note = secondaryNote(c, reason);
++      return <tr key={c.number}>
++        <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
++        <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{reason}</span>
++          {note && <span className="review-note">{note}</span>}
++          <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
++        <td><ReviewAction card={c} {...actions} /></td>
++      </tr>;
++    })}</tbody></table>
+     {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({cards.length - limit})</button>}
+   </div>;
+ });
+
+--- apps/desktop/src/review/model.ts
+@@ 83,108 @@
+ /** The outdated-review text whenever the badge has one, independent of which reason ranks first. */
+ export function reviewNote(c: ReviewCard): string | null {
+   const outdated = c.localReview?.outdated;
+   if (!outdated) return null;
+   const partial = outdated.state === "partial" || outdated.state === "budget";
+   const sha = outdated.headSha.slice(0, 7);
+   // Same head, different range: only the base moved, so the reviewed head is not "outdated".
+   if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
+   return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
+ }
+ 
+ export function laneReason(c: ReviewCard) {
+   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
+   if (c.localReview?.runState === "queued") return "Keryx review queued";
+   if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
+   if (c.localReview?.active) return "Keryx review in progress";
+   if (c.state !== "open") return STATE_LABEL[c.state];
+   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
+   const attention = attentionReason(c);
+   if (attention) return attention;
+-  const outdated = reviewNote(c);
+-  if (outdated) return outdated;
++  const note = reviewNote(c);
++  if (note) return note;
+   if (c.decision) return DECISION_LABEL[c.decision];
+   if (c.draft) return "Draft pull request";
+   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";
+ }
+
+--- src/review/desk-run-store.ts
+@@ 387,464 @@
+ 
+   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
+       head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
+     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
+     // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
+     // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
+     // Older read-only stores predate interactive review questions.
+     const tables = this.db.query<{ name: string }, []>(
+       "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('review_questions','reviewer_questions')",
+     ).all();
+     const pending = tables.map(({ name }) => `EXISTS(SELECT 1 FROM ${name} q WHERE q.run_id=r.id AND q.answer IS NULL)`).join(" OR ") || "0";
+     const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')
+         AND coalesce(json_extract(${r}.details,'$.decision.action'),'') NOT IN ('archive','delete')`;
+     // Each run of a requested PR is parsed once in `scoped`: `details` embeds the report, so a second
+     // pass for the outdated lookup doubled the cost. Only the kept rows are read again for progress.
+     // The outdated row is kept only when no row makes localBadge ignore it: an active run, a run
+     // requested for the card's range, or a finished run that reviewed it.
+     const query = this.db.query<Row, [string, string, string]>(`
+       WITH scoped AS MATERIALIZED (
+-        SELECT w.key AS card, r.rowid AS seq, r.state, json_extract(r.details,'$.createdAt') AS created,
++        SELECT w.key AS card, r.rowid AS seq, json_extract(r.details,'$.createdAt') AS created,
++          r.state IN ('running','cancelling','queued') AS active, r.state IN ('completed','partial','budget') AS done,
+           json_extract(r.details,'$.baseSha')=w.wb AND json_extract(r.details,'$.headSha')=w.wh AS requested,
+           json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+           w.wb, w.wh
+         FROM (SELECT key,json_extract(value,'$.number') AS n,json_extract(value,'$.baseSha') AS wb,json_extract(value,'$.headSha') AS wh
+           FROM json_each(?1)) w CROSS JOIN runs r
+         WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible("r")}
+       ), flagged AS (
+-        SELECT seq, created, card, coalesce(r.state IN ('running','cancelling','queued') OR requested OR (base=wb AND head=wh),0) AS kept,
+-          r.state IN ('completed','partial','budget') AND base IS NOT NULL AND head IS NOT NULL AS finished,
+-          coalesce(r.state IN ('running','cancelling','queued') OR requested OR
+-            (r.state IN ('completed','partial','budget') AND base=wb AND head=wh),0) AS supersedes
+-        FROM scoped r
++        SELECT seq, created, card, coalesce(active OR requested,0) AS live, done, coalesce(base=wb AND head=wh,0) AS reviewed,
++          done AND base IS NOT NULL AND head IS NOT NULL AS finished
++        FROM scoped
+       ), picked AS (
++        SELECT seq, created, live OR reviewed AS kept, finished, live OR (done AND reviewed) AS supersedes, card
++        FROM flagged
++      ), ranked AS (
+         SELECT seq, created, kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND
+           row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
+-        FROM flagged
++        FROM picked
+       )
+       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
+         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+         json_extract(r.details,'$.source') AS source,
+         json_extract(r.details,'$.result.coverage') AS coverage,
+         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
+         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
+         json_extract(r.details,'$.reviewerProgress.finished') AS finished,
+         json_extract(r.details,'$.reviewerProgress.wave') AS wave,
+         coalesce(json_extract(r.details,'$.reviewerProgress.completed'),
+           CASE WHEN json_array_length(r.details,'$.reviewerProgress.sessions')>0 THEN (
+             SELECT count(*) FROM (
+               SELECT json_extract(s.value,'$.state') AS outcome,
+                 row_number() OVER (PARTITION BY json_extract(s.value,'$.reviewer'),json_extract(s.value,'$.wave') ORDER BY s.key DESC) AS retry
+               FROM json_each(r.details,'$.reviewerProgress.sessions') s
+             ) WHERE retry=1 AND outcome='completed'
+           ) END) AS completed
+-      FROM picked p JOIN runs r ON r.rowid=p.seq
++      FROM ranked p JOIN runs r ON r.rowid=p.seq
+       WHERE p.wanted
+       ORDER BY p.created DESC,p.seq DESC`);
+     for (let i = 0; i < snapshot.cards.length; i += 200) {
+       const cards = snapshot.cards.slice(i, i + 200);
+       const rows = query.all(JSON.stringify(cards.map(({number, baseSha, headSha}) => ({number,baseSha,headSha}))), snapshot.repositoryId, snapshot.viewer);
+       const byPr = new Map<number, Parameters<typeof localBadge>[0][number][]>();
+       for (const row of rows) {
+         const runs = byPr.get(row.pr) ?? [];
+         if (!runs.length) byPr.set(row.pr, runs);
+         const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);
+         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
+           ...(publication && { publication }),
+           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
+           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
+           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,
+             ...(row.completed !== null && { completed: row.completed }),
+           } });
+       }
+       for (const card of cards) {
+         const runs = byPr.get(card.number);

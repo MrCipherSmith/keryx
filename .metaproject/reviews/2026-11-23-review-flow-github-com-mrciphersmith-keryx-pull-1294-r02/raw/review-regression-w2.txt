@@ -1,0 +1,43 @@
+STATUS: DONE_WITH_CONCERNS
+
+Regression review of the round-2 delta 53c96b8af..33fd9647a (slices 01, 02, 03). One fix-introduced behaviour delta found (the F-008 fix); the other fixes keep the behaviour of the previous head. The SQL rewrite is equivalent to localBadge's outdated rule by reading.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "The F-008 fix (attentionPrs derived with useMemo, cross-scope retention left in carriedAttention) regresses one behaviour of 53c96b8af: attention entries cleared in memory by receipts, badge polls or detail reads no longer stay cleared when the user switches to a scope whose snapshot lacks that card, so the tab indicator can show a stale attention dot. Toolbar CSS, focus restore, laneReason/reviewNote and the attachBadges rewrite keep prior behaviour: supersedes (active, requested range, finished run reviewing the range) mirrors localBadge's latest/ready/stale rule, the visibility predicate and ordering are unchanged, and requiring both reviewed SHAs matches the row mapping that sets result null without both.",
+  "findings": [
+    {
+      "id": "RG-1",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 355,
+      "quote": "}, [carriedAttention, snapshot, receiptVersion]);",
+      "problem": "Introduced by the F-008 fix. At 53c96b8af an effect wrote the judged set back into state (next.delete(c.number) for every card of the shown snapshot), so an entry cleared by a read receipt, a badge poll (awaitingAnswer/publicationPending cleared) or a detail read stayed cleared. Now the useMemo derives the set from carriedAttention plus the shown snapshot and never writes it back; carriedAttention is updated only in the load callback.",
+      "impact": "Open view: PR #7 awaits the viewer's answer, so carriedAttention holds 7. The answer is given, the poll clears awaitingAnswer on the card, the derived set drops 7. The viewer switches the state filter to Merged (stateQuery gives 'merged', replaceAttention is false, the load loop covers only merged cards). The snapshot no longer contains #7, carriedAttention still has 7, so attentionPrs.size > 0 and the tab indicator reads 'attention' for something already handled, until the open scope is shown or reloaded. Same for read receipts of unread replies. Low impact: the indicator self-heals when the open scope is shown again.",
+      "suggested_fix": "Write the judged result back into carriedAttention when the shown snapshot or receipts change (as the removed effect did), or prune carriedAttention against the derived set whenever they differ.",
+      "evidence": "ReviewBoard.tsx load callback (setCarriedAttention, lines ~232-238) is the only writer besides accessLost; needsViewerAttention reads localReview.awaitingAnswer/publicationPending and unread replies, which change outside the load callback. Read, not run.",
+      "confidence": "medium",
+      "evidence_kind": "static"
+    }
+  ],
+  "stats": { "slices_read": 3, "findings": 1, "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `flex-wrap: nowrap` override is removed, so the shared `.flows-toolbar { flex-wrap: wrap }` applies again; search field is `flex: 1 1 96px; max-width: 260px`; toolbar-label hidden under 1100px and count-label plus watcher-indicator under 760px. The PR watcher button keeps its status in aria-label, so hiding the indicator loses no accessible state. Layout not re-measured by me." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx inBoardOverlay: besides the old selector it accepts a focused element whose closest [role=dialog] contains .project-review-rules or .review-watcher; both classes exist in ProjectReviewRules.tsx and ReviewWatcher.tsx. PrSubscriptionDialog also uses .review-watcher, which only widens focus restore to a board dialog. New dom test covers both dialogs." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts: laneReason ranks reviewNote after attentionReason; reviewNote exported; ReviewResults shows it as .review-note in board and list when it differs from the reason. Operator decision (every outdated card, merged included) is what the code does. reviewLane is unchanged, so lane placement is as at 53c96b8af." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules uses Icon shieldCheck (defined in Icon.tsx); Filters keeps the toolbar-label and renders the count in a separate .filter-count span outside the hidden label; aria-label still carries the count." },
+    { "id": "F-006", "disposition": "closed", "evidence": "attachBadges: one MATERIALIZED scoped CTE, then flagged and picked. kept = active OR requested OR reviewed==range, as before; the outdated row is kept only when no run supersedes it (active, requested range of any state, or finished run reviewing the range), which is exactly localBadge's latest/ready condition for ignoring `stale`; newest finished run chosen by createdAt DESC, rowid DESC as before; visible() applied. Equivalent by reading; the new batch test compares against localBadge. Cost not re-measured." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts uses quiet(pr) / a neutral card; the lane assertion is 'open'." },
+    { "id": "F-008", "disposition": "regressed", "evidence": "The derived useMemo removes the effect-driven set churn but no longer persists in-snapshot clearing; see RG-1 (stale attention after switching to a scope without the card)." },
+    { "id": "F-010", "disposition": "closed", "evidence": "SQL requires both reviewed base and head (finished = base IS NOT NULL AND head IS NOT NULL). It matches the row mapping `result: row.base && row.head ? ... : null`, so localBadge sees the same rows. The journal notes the live-history path of localBadge would still report a run with a head and no base; whether DeskRun types allow that was not verified." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: nothing run (read-only, exec budget 0); SQL equivalence is by reading the CTE against localBadge, not by executing on data; toolbar layout with real board data and the detail panel open; docs and flow files in slice-02 were only skimmed for secrets or personal data (none found) and the F-004 docs content was not judged.

@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+Round 3, delta, slice-01 (fix slice). No command was run (`exec_budget_s: 0`, read-only): every mutation below is a candidate for the main session, none has a result. No mutation table exists, so there are no reds or greens to publish. Candidates proposed 7, run 0, not reached 7.
+
+Reading of the new DOM test against ReviewBoard.tsx at head 086335a01 (what the test builds: scope open -> unread reply on #481 -> carried set {481} -> reply read -> scope "merged" whose load returns no cards):
+
+- Remove the write-back effect (ReviewBoard.tsx:350-352): the test should fail. While the merged scope loads, `snapshot` is null (line 276), so the memo returns `carriedAttention`, which still holds 481. The merged load does not replace the set (line 230, state "merged") and holds no card 481, so the set keeps 481 and the last indicator is "attention", against the final `toBeNull()`. This is the mutant the test was written for. Read, not run.
+- Restore the predicate in the load callback (needsViewerAttention + unreadCount over `loaded.cards`): the test will not catch it, and I judge it close to an equivalent mutant. The callback only touches cards of the loaded snapshot. The only post-switch load returns no cards, and the effect stays and writes the removal back first. Predicate and memo are the same function over the same data.
+- Drop the reset on replace (line 231): survives. The carried set is empty at the first load, and the test never loads a replacing scope with a PR that has disappeared. The sibling tests at 912-963 do not build it either: every PR they remove stays in the snapshot (merged or closed, so the memo deletes it) or shares number 101. The case the reset serves (a PR absent from a replacing open/all load, or another repository or viewer) has no assertion on the indicator. The identity-change test (201) and the access-loss tests (96, 182) check DOM text, not the indicator.
+- Unavailable-error path that keeps an old snapshot, access loss, another viewer: not exercised by the new test.
+
+Timing: the 5 ms wait (test line 1015) is not a correctness race, but it is a sleep. `subscribeReviewReads` delivers through `window.setTimeout(..., 0)` (reviewReadState.ts:38), scheduled synchronously inside `markRepliesRead`, so the 0 ms timer is due before the 5 ms one and both fire inside the `act`. The ordering holds on a real timer queue (FIFO by due time). It depends on the global `setTimeout` and the DOM's `window.setTimeout` sharing one clock; if they were two timer sources a slow runner could reorder them. `tdd-workflow.mdc` says no sleeps; a wait on the state removes the dependency. I rate it `info`: no failure scenario was observed.
+
+The positive artifact the skill asks for is there: `indicators.at(-1)` is "attention" before the read, then null after the read, then null after the switch, so the test does not pass trivially.
+
+F-018 SQL against the store tests (term by term vs 33fd9647a, read only):
+- kept: old `coalesce(active OR requested OR (base=wb AND head=wh),0)`; new `live OR reviewed` with `live=coalesce(active OR requested,0)`, `reviewed=coalesce(base=wb AND head=wh,0)`. Checked the NULL combinations of `requested` (NULL when details lack baseSha/headSha) and the `base=wb` comparison (NULL when no result): the results are equal for every combination, because the coalesce moves onto each conjunct and OR with a 0/1 value preserves the old outcome.
+- finished: unchanged expression (done AND base IS NOT NULL AND head IS NOT NULL), never NULL.
+- supersedes: old `coalesce(active OR requested OR (done AND base=wb AND head=wh),0)`; new `live OR (done AND reviewed)`. Equal for every combination unless `r.state` is NULL; I did not read the column's NOT NULL constraint, so that case is not verified.
+- ranked: reads `kept`, `finished`, `supersedes` as before.
+Coverage by existing tests: `desk-run-store.test.ts` 489-514 builds a run with result NULL (base and head NULL, so `reviewed` is NULL -> 0) and compares with `localBadge` over `history`, an independent oracle. 455-487 and 516-534 cover active-run and reviewed-range suppression. No fixture has a run whose `details.baseSha/headSha` are missing (NULL `requested`), and none separates `requested` from `reviewed`: in the fixtures I read, the range the run was requested for equals `result.reviewed` (default `finish.reviewed` is `revision`, and `finishAt` sets both). So the `reviewed` terms in `kept` and `supersedes` look redundant with `live` in the suite, and the NULL branches rest on the equivalence argument above, not on an executed case. This continues prior F-022 item (a). No mutant run, so `info`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-01"],
+  "summary": "The new DOM test pins the write-back effect of the F-015 fix: removing the effect should turn the final assertion red (read, not run). It does not pin the restored load-callback predicate (near-equivalent mutant) nor the reset on replace, and it uses a 5 ms sleep ordered by a 0 ms timer. The F-018 SQL refactor is algebraically equal for the NULL cases of requested, reviewed and the result columns, but no fixture builds a NULL `requested` or separates `requested` from `reviewed`. No mutation was run (read-only budget).",
+  "findings": [
+    {
+      "id": "T-001",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": 1015,
+      "quote": "await new Promise(resolve => setTimeout(resolve, 5));",
+      "problem": "The test waits a fixed 5 ms for the receipt notification, which subscribeReviewReads delivers through setTimeout(0). The order holds only while both timers share one queue.",
+      "impact": "Ordering is deterministic on a real timer queue; split timer sources on a slow runner could read the indicator before the receipt update. A sleep also goes against the no-sleeps rule of tdd-workflow.mdc.",
+      "suggested_fix": "Wait on the state: flush with `await act(async () => {})` until `indicators.at(-1)` is null, or poll inside act with a bound.",
+      "evidence": "reviewReadState.ts:27-38 (dispatch is synchronous, delivery is window.setTimeout(...,0)); test line 1015. Read, not run.",
+      "confidence": "medium",
+      "degradation_class": "blind-test",
+      "dedupe_key": "dom-test-5ms-sleep"
+    },
+    {
+      "id": "T-002",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 231,
+      "quote": "if (replaceAttention) setCarriedAttention(new Set());",
+      "problem": "No test pins the reset on replace. The new test starts from an empty carried set and its only post-switch load returns no cards; the tests at 912-963 only remove PRs that stay in the snapshot as merged or closed, or that share a number. A PR that disappears from a replacing open/all load, or another repository or viewer, is not asserted on the indicator. The restored-predicate mutant of the load callback is near-equivalent and also survives by reading.",
+      "impact": "Deleting the reset keeps the suite green by reading; the stale entry would then keep the tab indicator on for a PR no longer in the board. Predicted, not executed.",
+      "suggested_fix": "Add a DOM test: load [#481 unread] under open, reload open with no cards (or a different viewer) and assert the indicator is not 'attention'.",
+      "evidence": "ReviewBoard.tsx:230-231, 276, 339-352; test lines 912-963 and 1006-1021 read. No mutant run.",
+      "confidence": "medium",
+      "degradation_class": "blind-test",
+      "dedupe_key": "reset-on-replace-unpinned"
+    },
+    {
+      "id": "T-003",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "src/review/desk-run-store.test.ts",
+      "line": 489,
+      "quote": "the outdated lookup ignores newer finished runs of another PR, another viewer, hidden runs and runs without a result",
+      "problem": "The store tests I read never build a run whose details lack baseSha/headSha (NULL `requested`) nor a run whose requested range differs from `result.reviewed`, so the NULL arithmetic of the refactored kept/supersedes terms and the `reviewed` conjunct rest on algebra only. Equivalence with 33fd9647a holds by my term-by-term check except possibly for a NULL `state`, whose column constraint I did not read.",
+      "impact": "A later edit to `reviewed` or `requested` in kept/supersedes can change which run supersedes the outdated badge without a red test. Predicted, not executed; continues prior F-022 (a).",
+      "suggested_fix": "Add two fixtures: a run with details lacking baseSha/headSha, and a run requested at range X whose result.reviewed is range Y, with the card at Y.",
+      "evidence": "desk-run-store.ts attachBadges query against 33fd9647a; test lines 415-534; finish.reviewed defaults to revision (test line 43).",
+      "confidence": "medium",
+      "degradation_class": "blind-test",
+      "dedupe_key": "sql-null-terms-unpinned"
+    }
+  ],
+  "stats": { "findings": 3, "blocker": 0, "major": 0, "minor": 0, "info": 3, "mutants_proposed": 7, "mutants_run": 0, "mutants_not_reached": 7 },
+  "prior_dispositions": [
+    { "id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx:350-352 writes the judged set back and the new DOM test (line 1006) builds the described scenario; by reading, removing the effect fails its last assertion. Render loops and other faults of the effect are for review-logic." },
+    { "id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx list row computes `reason` and `note` once." },
+    { "id": "F-017", "disposition": "closed", "evidence": "model.ts laneReason local renamed to `note`." },
+    { "id": "F-018", "disposition": "closed", "evidence": "`active` and `done` are columns of `scoped`; `flagged`, `picked`, `ranked` spell each term once; NULL handling equal to 33fd9647a by my term-by-term check (NULL state not verified); selected columns unchanged." },
+    { "id": "F-022", "disposition": "open", "evidence": "The delta adds one DOM test and changes no store test; items (a) requested term, (b) saving of the SQL not asserted and (c) note de-duplication remain unpinned. See T-003 for (a)." }
+  ],
+  "mutant_candidates": [
+    { "id": "m1-drop-writeback-effect", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "if (snapshot && (attentionPrs.size !== carriedAttention.size || [...attentionPrs].some(n => !carriedAttention.has(n)))) setCarriedAttention(attentionPrs);", "replacement": "", "kind": "behavior" },
+    { "id": "m2-restore-callback-predicate", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "if (replaceAttention) setCarriedAttention(new Set());", "replacement": "setCarriedAttention(previousSet => { const next = new Set(replaceAttention ? [] : previousSet); for (const card of loaded.cards) { if (needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))) next.add(card.number); else next.delete(card.number); } return next; });", "kind": "behavior" },
+    { "id": "m3-drop-reset-on-replace", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "if (replaceAttention) setCarriedAttention(new Set());", "replacement": "", "kind": "behavior" },
+    { "id": "m4-effect-guard-snapshot", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "if (snapshot && (attentionPrs.size !== carriedAttention.size", "replacement": "if (true && (attentionPrs.size !== carriedAttention.size", "kind": "behavior" },
+    { "id": "m5-replace-always-for-merged", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "(!period && (state === \"open\" || state === \"all\"))", "replacement": "true", "kind": "behavior" },
+    { "id": "m6-drop-reviewed-from-kept", "file": "src/review/desk-run-store.ts", "anchor": "live OR reviewed AS kept", "replacement": "live AS kept", "kind": "behavior" },
+    { "id": "m7-drop-reviewed-from-supersedes", "file": "src/review/desk-run-store.ts", "anchor": "live OR (done AND reviewed) AS supersedes", "replacement": "live AS supersedes", "kind": "behavior" }
+  ]
+}
+```
+
+Not verified: no test or mutant was run (read-only, exec_budget_s 0), so every survivor or casualty above is read, not observed; the worker's claim that the new test failed against 33fd9647a was not repeated. The ordering of the 0 ms and 5 ms timers (global vs DOM `setTimeout`) was not checked in the test DOM setup. The `runs.state` NOT NULL constraint was not read. `desk-run-store.test.ts` outside lines 380-630 and the DOM test file outside lines 1-110 and 905-1067 were not read. Note: m6 and m7 anchors are written against the head SQL text and may need adjusting to the exact line in desk-run-store.ts.

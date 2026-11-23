@@ -1,0 +1,31 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-027",
+      "verdict": "upheld",
+      "reasoning": "See research-evidence/premises.json (identical text)."
+    }
+  ]
+}
+```
+
+Summary: 1 judged (F-027, minor): upheld. F-028 and F-029 (info) not judged (below minor, out of scope).
+
+F-027 — upheld.
+Precondition check (the point the caller asked about):
+- Each RepositoryBoard mount (keyed per cwd/viewer and per repo, ReviewBoard.tsx:80,85) starts with filters = EMPTY_FILTERS (:97); EMPTY_FILTERS.state is ["open","draft"] (model.ts:19) and stateQuery maps it to "open" (model.ts:23). So the first load runs for scope "open/".
+- In that load's callback filterKey.current is still undefined, so setFilters(readReviewFilters(key)) runs (:233-236), in the same async callback as setRead({ scope: "open/", snapshot }) (:241). With React 18 automatic batching both land in one render: scope becomes the saved one ("merged/", "closed/", "open/7" ...), read.scope !== scope, so snapshot is null (:276).
+- The attentionPrs memo then returns carriedAttention unchanged (:339-348) and the write-back effect is gated on snapshot (:351). The callback's only write to the carried set is the reset (:231). So the open snapshot is never shown and never judged; the carried set stays empty.
+- The following load has replaceAttention false (same identity, merged/closed or a period, :230). A merged or closed snapshot cannot contain an open PR; a period snapshot contains it only if updated within the period. The indicator reads attentionPrs (:377), so it stays off, contrary to AC4 / plan "Tab indicator rule".
+History: at 33fd9647a the callback judged loaded cards into the carried set (:231-238 there); the change is from cc42698a3 (F-015 fix, this branch), whose message says only "the load only decides whether to reset the carried set". No recorded decision accepts the hidden-first-load miss; the base comment at :229 argues for keeping open requests. No intent signal or practice source against the finding; the suggested fix restores seeding without undoing the F-015 write-back.
+Nuance (not a premise change): with a saved period on the open state the miss is narrower — only open PRs not updated within the period.
+
+Not verified:
+- Not reproduced in the app or by a test (read-only judge); the batching claim rests on React 18 semantics, not on a run. I did not check the React version in apps/desktop/package.json.
+- 53c96b8af was not re-read; only 33fd9647a was compared.
+- The full journal.md was not read, only searched for F-015/carried/first load/saved filter.

@@ -6,7 +6,7 @@ import { errMessage } from "../lib/format";
 import { reviewUrl } from "./ReviewBrowserLink";
 import { Icon } from "../components/Icon";
 import { absoluteTime, relativeTime } from "../lib/format";
-import { CI_LABEL, DECISION_LABEL, LANES, STATE_LABEL, laneReason, prState, reviewLane, type Lane } from "./model";
+import { CI_LABEL, DECISION_LABEL, LANES, STATE_LABEL, laneReason, prState, reviewLane, reviewNote, type Lane } from "./model";
 import type { ReviewCard } from "./types";
 
 interface ReviewActions {
@@ -33,7 +33,7 @@ function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscription
   const showReview = card.state === "open" || card.localReview?.runState;
   const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
     card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
-    card.localReview?.runState ? "View review result" : "Run review";
+    card.localReview?.runState ? "View review result" : card.localReview?.outdated ? "Review again" : "Run review";
   const browserLabel = `Open PR #${card.number} in browser`;
   const sessionLabel = `Open PR #${card.number} in Sessions`;
   const following = subscriptions?.has(card.number) ?? false;
@@ -54,8 +54,14 @@ function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscription
   </div>;
 }
 
+function secondaryNote(card: ReviewCard, reason: string) {
+  const note = reviewNote(card);
+  return note && note !== reason ? note : null;
+}
+
 function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: ReviewCard }) {
   const reason = laneReason(card);
+  const note = secondaryNote(card, reason);
   return <article className="flow-card">
     <button className="review-card" onClick={() => onOpen(card.number)}>
       <span className="flow-card-top">
@@ -69,6 +75,7 @@ function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: Review
         <span className={'review-ci ci-' + card.ci}>{CI_LABEL[card.ci]}</span>
       </span>
       <span className={card.localReview?.active && !card.localReview.awaitingAnswer ? "review-reason review-live-state" : "review-reason"}>{reason}</span>
+      {note && <span className="review-note">{note}</span>}
       <CardReviewProgress badge={card.localReview} />
       {card.assignees.length > 0 && <span className="review-request">Assigned to {card.assignees.join(", ")}</span>}
       {card.reviewers.length > 0 && <span className="review-request">Requested from {card.reviewers.join(", ")}</span>}
@@ -89,23 +96,29 @@ function ReviewLane({ lane, cards, ...actions }: ReviewActions & { lane: Lane; c
   </section>;
 }
 
-export const ReviewResults = memo(function ReviewResults({ cards, view, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list" }) {
+export const ReviewResults = memo(function ReviewResults({ cards, view, showDone, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list"; showDone: boolean }) {
   const [limit, setLimit] = useState(150);
   if (view === "board") {
     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
     for (const card of cards) lanes[reviewLane(card)].push(card);
-    return <div className="board review-lanes">{(Object.keys(LANES) as Lane[]).map((lane) =>
+    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone);
+    return <div className="board review-lanes">{drawn.map((lane) =>
       <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
   }
   return <div className="flow-list-wrap">
     <table className="flow-list review-table"><thead><tr>
       <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
-    </tr></thead><tbody>{cards.slice(0, limit).map((c) => <tr key={c.number}>
-      <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
-      <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={laneReason(c)}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{laneReason(c)}</span>
-        <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
-      <td><ReviewAction card={c} {...actions} /></td>
-    </tr>)}</tbody></table>
+    </tr></thead><tbody>{cards.slice(0, limit).map((c) => {
+      const reason = laneReason(c);
+      const note = secondaryNote(c, reason);
+      return <tr key={c.number}>
+        <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
+        <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{reason}</span>
+          {note && <span className="review-note">{note}</span>}
+          <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+        <td><ReviewAction card={c} {...actions} /></td>
+      </tr>;
+    })}</tbody></table>
     {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({cards.length - limit})</button>}
   </div>;
 });

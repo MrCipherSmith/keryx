@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294#F-003",
+      "answer": "uphold",
+      "reason": "Operator: the lane reason stays primary, the outdated review is shown as a secondary line or badge",
+      "quote": "uphold",
+      "at": "2026-11-23T09:57:40.564Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "ca70645e1b915fbb51f7ac1e7a57942707d4075d278ffae211d6a0b0aa402a5b"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "ask-premise-f003",
+        "questionText": "Находка F-003: карточка в «Needs attention» с устаревшим ревью показывает только «Outdated review · sha» и скрывает причину GitHub (упавший CI, запрос изменений, новый ответ). Что должна показывать карточка?",
+        "answerText": "uphold",
+        "time": "2026-11-23T09:57:40.564Z"
+      }
+    }
+  ]
+}

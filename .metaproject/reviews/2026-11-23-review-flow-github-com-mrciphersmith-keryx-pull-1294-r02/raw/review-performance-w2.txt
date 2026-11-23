@@ -1,0 +1,56 @@
+STATUS: DONE
+
+## Performance Review (round 2, slices slice-01, slice-02, slice-03)
+
+F-006 is closed: the rewritten `attachBadges` statement parses each run once and the evidence supports the claim that it returns to base cost. No new performance defect was found. Only the F-014 and F-012 dispositions below stay `open`.
+
+### F-006 judgement (src/review/desk-run-store.ts, attachBadges)
+- Parse count. `scoped AS MATERIALIZED` reads `details` once per run of the requested PRs, through the `review_history (repo, viewer, pr)` index. `flagged` and `picked` work only on the extracted scalar columns, so the window functions never touch the report blobs. The final SELECT re-reads `details` only for kept rows through `r.rowid=p.seq`. Those are active runs, runs requested for the card's range, and at most one outdated candidate per card.
+- Plan. The `after` plan in outdated-lookup-measurement.md shows one `SEARCH r USING INDEX review_history`, one `MATERIALIZE scoped`, and a `SEARCH r USING INTEGER PRIMARY KEY (rowid=?)` for the kept rows. It no longer has the per-card correlated subquery with its own `USE TEMP B-TREE`. The temp b-trees that remain sort narrow rows, not report blobs.
+- Timing. The back-to-back run 2 shows about 395-402 ms (after) against 401-411 ms (base) and 741-771 ms (head), with identical badge digests for head and after. That supports "back to base cost". Run 1 (about 450-474 ms) was noisier and ran alone.
+- Semantics against `localBadge` (board-badges.ts). `kept` equals the old WHERE (active, requested range, or reviewed range). `supersedes` mirrors `latest` (active or requested range) plus `ready` (finished with reviewed range = card range). So the outdated row is dropped exactly when `localBadge` would discard it (`stale = latest || ready ? undefined : ...`). `finished` requires both reviewed SHAs, which matches the row mapping `result: row.base && row.head ? ... : null`. NULL card SHAs coalesce to "not requested", which matches the old `IS` handling.
+- Not verified: I did not re-run the measurement or the SQL. The data is one machine, a warm cache and one synthetic shape (30 runs per PR, each on its own head). A PR with hundreds of runs makes `scoped` larger, but the cost still scales linearly in the same way as base.
+
+### Findings
+None new.
+
+Considered and not reported: in the list view, `laneReason` and `secondaryNote` are evaluated up to four times per row. They are string work on at most 150 rows inside a `memo` component, so there is no cost that could count as a finding.
+
+### Clean areas
+- Per-render work: the `attentionPrs` `useMemo` has the same per-card cost as the effect it replaces. It no longer causes a second render. The tab-indicator effect depends on the `indicator` string, not on the Set identity, so a fresh Set each memo run does not retrigger `onIndicatorChange`.
+- `inBoardOverlay` does one `closest` and one `querySelector` only when the private view is cleared (a cold path).
+- Memory and subscriptions: no new listeners, timers or caches.
+- SQL batching: still chunks of 200 cards, one statement per chunk.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "F-006 closed: the rewritten attachBadges statement parses each run once (one materialized scoped CTE, window functions over extracted scalars, details re-read only for kept rows). Its plan and timings (about 395-402 ms against base 401-411 ms and head 741-771 ms, identical badge digests) and its supersede rules match localBadge. F-010 closed. No new performance findings in the UI or SQL delta.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: scoped AS MATERIALIZED reads each run's details once via the review_history index; flagged and picked use only extracted columns; the final SELECT joins kept rows by rowid. The after plan in outdated-lookup-measurement.md has no per-card correlated subquery. Run 2 timings: after about 395-402 ms against base about 401-411 ms and head about 741-771 ms, with identical badge digests. supersedes mirrors localBadge's latest/ready, so the lookup is skipped where localBadge would discard it. The measurement was not re-run by me." },
+    { "id": "F-010", "disposition": "closed", "evidence": "flagged.finished requires base IS NOT NULL AND head IS NOT NULL, matching the row mapping result: row.base && row.head. Not covered by a fixture, as the journal states; the SQL path now ignores a head-only run." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx: attentionPrs is a useMemo over [carriedAttention, snapshot, receiptVersion] with the same needsViewerAttention predicate. The effect and its second setState are gone; only the load callback writes carriedAttention. The tab indicator effect depends on the indicator string, not on Set identity." },
+    { "id": "F-002", "disposition": "closed", "evidence": "inBoardOverlay also matches a dialog containing .project-review-rules or .review-watcher, and the new DOM test covers both portaled dialogs. Judged from code and test reading; I did not run the test." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason now ranks reviewNote after attentionReason; ReviewResults shows reviewNote as .review-note in the tile and the list row. Matches the operator decision to show it on every card with an outdated badge. Outside the performance lens; judged by reading." },
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the nowrap override is removed, the search field is flex 1 1 96px with max-width 260px, labels hide under 1100px, the count label and watcher indicator hide under 760px. Judged from the CSS only; the rendered layout was not measured by me (the orchestrator's layout-measurements.md covers it)." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules uses the shieldCheck icon; ReviewBoard renders the active-filter count as a separate .filter-count span outside .toolbar-label, so it stays visible when labels hide. Judged by reading." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts uses the quiet() neutral card and asserts the lane and reason on it." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, specification, PRD and implementation-plan state that stage 0 is implemented and record deviations (a) and (b) in the 'Состояние этапа 0' section. Docs are outside the performance lens; judged by reading only." },
+    { "id": "F-014", "disposition": "open", "evidence": "visible() still hard-codes source IN ('manual','scheduled') in SQL, while localBadge filters source !== 'existing'. The fix commit did not touch this duplication; it is info only and not a performance matter." },
+    { "id": "F-012", "disposition": "open", "evidence": "The attentionPrs memo still iterates all snapshot.cards, while `visible` applies the filters separately. The indicator can therefore still point at a filtered-out card. Unchanged, and recorded as an accepted consequence of removing the filter bypass." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+### Not verified
+- I ran no SQL, tests or servers (read-only, exec_budget_s 0), and did not re-run the orchestrator's or the worker's measurement.
+- The performance of cards with hundreds of runs per PR, cold-cache and concurrent-writer behaviour were not measured by anyone; the measurement states these limits.
+- F-009 (test gaps), F-011 and F-013 have no site visible in my slices, so I give no disposition. Flow, journal, resolved-context and review-package files in slice-02 were read as context only.
+- The rendering in F-001 and F-005 and the test results were not checked by me.
+
+Routing audit: graph_used: no (not-relevant: diff slices supplied); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

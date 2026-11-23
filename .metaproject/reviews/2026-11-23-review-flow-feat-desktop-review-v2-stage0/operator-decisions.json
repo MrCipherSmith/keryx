@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "reviewer-override",
+      "quote": "yes",
+      "reason": "Operator chose the core reviewer set for a small code diff",
+      "confirmedVia": "host-question",
+      "at": "2026-11-23T08:37:33.065Z",
+      "subject": {
+        "head": "13462d2e3ad56631e28c0c3f44b72af6d52c2553",
+        "items": [
+          "review-architecture",
+          "review-degradation",
+          "review-highload",
+          "review-layout",
+          "review-performance",
+          "review-ui-ux"
+        ]
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "ask-review-roster-2",
+        "questionText": "Для записи в пакет ревью нужен ответ да/нет: запустить ревью без 6 ревьюеров — review-architecture, review-degradation, review-highload, review-layout, review-performance, review-ui-ux?",
+        "answerText": "yes",
+        "time": "2026-11-23T08:37:33.065Z"
+      }
+    }
+  ]
+}

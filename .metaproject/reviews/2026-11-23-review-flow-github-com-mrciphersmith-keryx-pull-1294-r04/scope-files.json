@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+    "apps/desktop/src/review/ProjectReviewRules.tsx",
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewResults.tsx",
+    "apps/desktop/src/review/ReviewWatcher.tsx",
+    "apps/desktop/src/review/model.ts",
+    "docs/requirements/keryx-desktop-review-v2/README.md",
+    "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+    "docs/requirements/keryx-desktop-review-v2/specification.md",
+    "src/review/desk-run-store.test.ts",
+    "src/review/desk-run-store.ts"
+  ],
+  "changedLines": 314
+}

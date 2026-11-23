@@ -1,0 +1,64 @@
+STATUS: DONE
+
+## Performance Review (slice-01, slice-03)
+
+Summary: no major or blocker. One minor (unmeasured SQL cost on a path that runs on every board load) and one info (what a query plan would settle). UI changes in slice-01 (attention effect, portals, CSS container) were checked and are not hot-path costs.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No blocker or major. The new outdated lookup in attachBadges is bounded by the review_history index (repo, viewer, pr) and by LIMIT 1 per card, so it is not an N+1 and not a table scan. Its remaining cost is unmeasured: it parses runs.details (which embeds result.report, up to hundreds of KB) about six times per finished run of every requested PR, and it runs even for cards that already have an active run. No query plan or timing was produced, so cost is a reasoned bound, not a measurement.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 308,
+      "quote": "WITH wanted AS MATERIALIZED (",
+      "problem": "The outdated lookup (CTE `wanted`) runs for every requested card, including cards that already have an active or current-range run, where localBadge discards the result (`stale = latest || ready ? undefined : ...`). For each candidate finished run of the PR it evaluates json_extract on `details` about six times: source and decision.action (visible), result.reviewed.headSha twice, result.reviewed.baseSha, and createdAt in ORDER BY. `details` embeds `$.result.report` (the history query strips it with json_remove and caps previews at 524288 chars, so reports of that size are expected), so each json_extract parses the whole blob unless SQLite's JSON parse cache hits.",
+      "impact": "Execution frequency: attachBadges runs on every board load and refresh, per chunk of up to 200 cards, and the store is reopened per call (line 741). Count: cards x finished runs per PR x ~6 parses x report size. A PR with a long scheduled-run history and large reports pays the most; the pre-existing predicate already parsed details once or twice per row, so this adds a multiple of the old cost, not an order of magnitude. Not measured, so it is a bound, not a proven regression. Whether the JSON parse cache (SQLite 3.42+, bundled with bun) removes the repeats was not checked.",
+      "suggested_fix": "Measure EXPLAIN QUERY PLAN and wall time on a store with a few hundred PRs and large reports before merge. If it matters: read source, decision.action, result.reviewed.* and createdAt once per row in a subquery or CTE, and skip the lookup for PRs that have an active run (NOT EXISTS on state IN running/queued/cancelling). A stored generated column for createdAt or the reviewed head would avoid reparsing but is a schema change and outside stage 0.",
+      "evidence": "slice-03 desk-run-store.ts hunk lines 304-348 (`visible()` and the `wanted` CTE); slice-03 board-badges.ts localBadge `const stale = latest || ready ? undefined : ...` drops the result when an active/current run exists; desk-run-store.ts:344-352 shows details carries result.report and is split with json_remove; index review_history ON runs(repo, viewer, pr) at desk-run-store.ts:110 bounds the scan to one PR's rows.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "degradation_class": "performance",
+      "publication": "finding"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": 308,
+      "quote": "WITH wanted AS MATERIALIZED (",
+      "problem": "Nobody measured the new query: no EXPLAIN QUERY PLAN, no timing. The journal says the same (T6: query plan on a large store not verified).",
+      "impact": "From the SQL text alone: the correlated subquery constrains repo, viewer and pr by equality, so it can use review_history and is not a full scan; ORDER BY ... LIMIT 1 over one PR's rows is O(rows of that PR). Cannot be concluded without a plan: whether the planner picks review_history over active_pr/next_pr_for_viewer for alias o, whether the CTE is materialized once per card, and the real parse cost of large details blobs.",
+      "suggested_fix": "Attach a plan and a before/after timing for a store sized like the operator's (cards x runs per PR x report size) to the PR.",
+      "evidence": "No plan or timing in the package research-evidence (test runs only) or in journal T6/T9 notes.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "degradation_class": "performance",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-01", "slice-03"]
+}
+```
+
+## Clean areas (checked)
+- N+1: the old query was one statement per 200-card chunk; the new one stays one statement per chunk. No per-card statement added.
+- Row volume: at most one extra row per card crosses the SQLite boundary (LIMIT 1); no report text selected.
+- React: the new useEffect over [snapshot, receiptVersion] does O(cards) work, reads localStorage only for cards with addressedReplyIds, and returns the previous Set when unchanged (no extra render). The `visible` memo got cheaper (sort removed). badgesEqual adds two field compares.
+- Portals, CSS container query, toolbar-label spans: no render-frequency cost found.
+- localBadge: a few linear scans over one PR's runs; negligible.
+
+## Not verified
+- No query plan, no timing, no store with real report sizes. Whether bun's bundled SQLite caches the parsed JSON across repeated json_extract on the same details value.
+- Frequency of attachBadges beyond the ReviewBoard grep (badge poll at ~6 s appears limited to active cards; load path covers all cards).
+- Flow/journal/resolved JSON in slice-01 read as context only. Tests in slice-03 not executed (read-only, exec budget 0).

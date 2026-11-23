@@ -1,0 +1,75 @@
+STATUS: DONE
+
+## Security Review — round 2 (fix round), PR MrCipherSmith/keryx#1294
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage0`, head `33fd9647afea1cb7795ca56dd168405c1db8d21a` (confirmed with `git rev-parse HEAD`).
+- Delta: `53c96b8af161..33fd9647afea`; merge base `1b994df180fb89c82b6164e516ad3ff27b2453fa`.
+- Slices read in full: slice-01 (FIX), slice-02 and slice-03 (NEW). One identical reply for drivers w1 and w5.
+- I also read `src/review/desk-run-store.ts:395-466` at head to check that the slice text matches the file, and confirmed the CSS classes that `inBoardOverlay` looks for.
+
+### Summary
+- Blockers: 0 · Major: 0 · Minor: 0 · Info: 0
+- No new security defect in the delta.
+
+### The rewritten `attachBadges` SQL (the check asked for in the dispatch)
+- **Parameter binding.** Every value that comes from outside reaches SQLite as a bound parameter. `?1` is the card batch as a JSON string, read by `json_each`. `?2` is `snapshot.repositoryId` and `?3` is `snapshot.viewer` (desk-run-store.ts:447). The query text interpolates only two things: `visible("r")`, which is only ever called with the literal alias `"r"`, and `pending`, whose table names come from `sqlite_schema` filtered by the literal list `IN ('review_questions','reviewer_questions')` (lines 395-398, unchanged). Values from GitHub (card number, baseSha, headSha) never reach the SQL text, so there is no injection path.
+- **Repository, viewer and pull-request scoping.**
+  - `scoped` is the only CTE that reads `runs`, and it filters on `r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND visible(r)` (line 413).
+  - `flagged` and `picked` read only from `scoped`.
+  - The final `FROM picked p JOIN runs r ON r.rowid=p.seq` (line 442) re-reads `runs` only through rowids that `scoped` produced, so it cannot bring in a run from another repository, viewer or pull request.
+  - The window functions partition by `card` (the `json_each` key), so one card's runs never suppress or pick another card's outdated row. The new test "in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card" covers this.
+  - Viewer matching is still exact equality, as before.
+- **What crosses the SQLite boundary.**
+  - The materialized `scoped` CTE holds only rowid, state, createdAt, the requested and reviewed SHAs, and the card SHAs. It holds no report or session text.
+  - The final projection has the same columns as at round-1 head and base: id, pr, awaitingAnswer, state, source, coverage, the reviewed and requested SHAs, and progress counters.
+  - Rows from other revisions are still limited: active runs, plus at most one newest finished run per card. That run must have both reviewed SHAs and must not be superseded.
+  - No reports or session histories are returned. The boundary is no wider than before.
+- **Read-only.** The statement only reads. It changes no schema, index or write path.
+
+### Other areas of the delta checked
+- **React / XSS.** `reviewNote` text (`outdated.headSha.slice(0, 7)`), the `.review-note` spans and `filter-count` are rendered as React text children. There is no `dangerouslySetInnerHTML`, `eval` or other raw HTML.
+- **`inBoardOverlay`.** It uses a constant selector (`.project-review-rules, .review-watcher`; both classes exist in ProjectReviewRules.tsx:63 and ReviewWatcher.tsx:103). It only reads the DOM and decides where focus goes back to. It handles no data.
+- **Account change and access loss.**
+  - `accessLost` still clears `carriedAttention`, the snapshot cache, `pendingBadges` and the private view.
+  - On an identity change, the load callback replaces the carried set (`replaceAttention` is true when `identity.current !== nextIdentity`).
+  - The derived `attentionPrs` is only PR numbers and is used only for the tab indicator.
+  - Nothing from a previous account survives in the shown set.
+- **localStorage and sessionStorage.** The delta adds no new storage.
+- **Docs, flow and journal files.** They hold no secrets or tokens. They name the repository owner, which is already public in the PR. Nothing in them misstates the security-relevant code.
+
+### Clean areas
+SQL injection, authorization and IDOR scoping, data exposure across the SQLite boundary, XSS, secrets, crypto, path traversal and open redirect (none of the last three is touched), and `postMessage` (none).
+
+### Not verified
+- I ran no tests, `EXPLAIN QUERY PLAN` or timing; the brief allowed reading only. The T14 measurement and the badge-output equivalence come from the worker, not from me.
+- The layout claims (F-001, F-005) were judged from the CSS only, not rendered.
+- I did not do a full check that the new window logic matches `localBadge` for every state combination. That is the logic lens. I checked only that no row escapes its scope.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Fix round, slices 01-03. The rewritten attachBadges SQL binds all external values (?1 card JSON, ?2 repositoryId, ?3 viewer); interpolated text is limited to a literal alias and schema-filtered table names. Scoping by repo, viewer and pr is applied once in the `scoped` CTE, and the final join re-reads runs only by rowids from that CTE. The returned columns are unchanged and include no report or session data. The UI delta renders only React text. No new security findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0, "files_reviewed": 14 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `.review-board .flows-toolbar { flex-wrap: nowrap; }` line is removed (slice-01). The search field is now `flex: 1 1 96px; max-width: 260px`, and `@container (max-width: 760px)` hides .count-label and .watcher-indicator. Judged from the CSS only; no rendering by this reviewer." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx clearPrivateView now calls inBoardOverlay(document.activeElement). This keeps the workspace selector and adds `el.closest('[role=\"dialog\"]')?.querySelector('.project-review-rules, .review-watcher')`. Both classes are the content roots of the portaled dialogs (ProjectReviewRules.tsx:63, ReviewWatcher.tsx:103). A DOM test covers both openers." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason now returns attentionReason(c) before reviewNote(c). ReviewResults.tsx renders the outdated text as a secondary .review-note in board and list via secondaryNote (shown only when it differs from the reason). This matches the operator's uphold." },
+    { "id": "F-004", "disposition": "closed", "evidence": "The README status line, implementation-plan (new section on the stage 0 state with deviations a and b), specification status, the specification and PRD R12 note ('only the login is matched at stage 0') and the roadmap 0.29.38 entry all now say stage 0 is implemented and record the team-request deviation." },
+    { "id": "F-005", "disposition": "partial", "evidence": "Closed: Review rules uses Icon `shieldCheck`; the active-filter count is a separate `<span className=\"filter-count\">` outside .toolbar-label, so it stays visible. Remaining: the pull request count (.count-label) is still in the collapsing set and is hidden under a 760px container, which includes the 560px board with the detail panel open (the F-001 case). It is no longer hidden between 760 and 1100px." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts: the per-card correlated outdated subquery is gone. The `scoped` MATERIALIZED CTE extracts each run's JSON fields once; `flagged` and `picked` choose rows with window functions; only rows with `wanted` set are re-read for progress. Cost reduction per the worker's measurement (not re-run here)." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts uses `quiet(pr)` (decision null, no reviewers) and asserts reviewLane(neutral) and reviewLane(neutral + outdated) are both 'open'. The assertion can now fail if outdated changes the lane." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx: the attentionPrs state is replaced by `useMemo` over carriedAttention, snapshot and receiptVersion. Only carriedAttention (cross-scope retention) stays as state, written by the load callback and reset by accessLost. The separate effect-based writer is removed." },
+    { "id": "F-009", "disposition": "partial", "evidence": "The quoted subquery (desk-run-store.ts:406, round-1 head) no longer exists. The SQL decoys in desk-run-store.test.ts (other PR, other key, deleted, imported source, unfinished run) still separate the scoping predicates, and a new per-card suppression test was added. The UI-side gaps named in F-009 (viewer lowercase, label order, hidden merged PR, reply carry-over reload) are outside this reviewer's lens and were not judged." },
+    { "id": "F-010", "disposition": "closed", "evidence": "flagged.finished is `r.state IN ('completed','partial','budget') AND base IS NOT NULL AND head IS NOT NULL`, so an outdated candidate now needs both reviewed SHAs. The parity question in localBadge (live-history path) remains open per the T14 journal, outside the SQL site." },
+    { "id": "F-012", "disposition": "open", "evidence": "The derived attentionPrs still iterates snapshot.cards, not the filtered `visible` list, so the indicator can point at a card hidden by filters. Unchanged by the delta; info, follows from the operator decision." },
+    { "id": "F-014", "disposition": "open", "evidence": "visible() still has `json_extract(r.details,'$.source') IN ('manual','scheduled')` in SQL, while the TypeScript side keeps its own source filter; no shared predicate or guard test was added in the delta." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the delta is bounded by the slices; the one caller check used `keryx ctx rg`, and the caller at desk-run-store.ts:748 is unchanged). wiki_used: no (not-relevant). ctx_used: yes (`keryx ctx rg` for the attachBadges callers and the dialog CSS classes). raw_rg_used: no.

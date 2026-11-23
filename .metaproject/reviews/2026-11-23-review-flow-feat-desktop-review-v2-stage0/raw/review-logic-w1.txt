@@ -1,0 +1,41 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: feat/desktop-review-v2-stage0, base 1b994df18, head 13462d2e3
+- Scope: slice-01 read in full (flow package files as context; code: model.ts, ReviewBoard.tsx, ReviewResults.tsx, ProjectReviewRules.tsx, ReviewWatcher.tsx, review.css, tests). Current-file context read for ReviewBoard.tsx, ui.tsx Dialog, flows.css.
+- Spec compliance gate: ran against flow 516 acceptance-criteria.md AC1-AC7 (AC5 is the backend slice, not checked here). No unimplemented criterion found in this slice.
+
+### Summary
+The UI changes implement AC1-AC4, AC6 and AC7 as specified; filter bypass and active-first sort are gone, the tab indicator rule matches the plan, outdated reason and badgesEqual are correct. No blocker or major defect found. Minor/info: an unreachable branch, a containing-block change for toolbar dialogs from the new CSS container, a transient tab-indicator drop on card-only refresh, and a nowrap toolbar without overflow fallback.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 3 | info: 1
+
+### Findings
+- F-001 (minor) ReviewResults.tsx: `|| lanes.done.length > 0` in the Done lane condition is unreachable. When showDone is false the state filter holds only open/draft, so every visible card has state "open"; reviewLane returns "done" only for state !== "open" without awaitingAnswer/active. The comment "never hidden, whatever the state filter says" claims a guarantee no input exercises.
+- F-002 (minor) review.css: `.review-board { container-type: inline-size; }` applies layout containment, so `position: fixed` descendants resolve against the board section. ProjectReviewRules and ReviewWatcher render `Dialog` (non-portaled, `.overlay` fixed, inset 0) inside `.flows-toolbar`, inside `.review-board`. Before, the containing block was `.review-workspace` (already a container, ReviewDetail.css:1), spanning board and detail panel; now the scrim and aria-modal dialog cover only the board section, so with the detail panel open the panel stays clickable behind a modal dialog and the dialog centers in the narrower area. Fix: put the container on an element that holds no dialogs, or render those two dialogs outside the section. Not run in a browser (exec budget 0).
+- F-003 (minor) ReviewBoard.tsx (load callback `setAttentionPrs`): on a card-only refresh the fresh snapshot has no `addressedReplyIds`, so a PR whose only attention reason is unread replies is deleted from the set; the carry-over of replies happens in the following `setRead`, and the new `[snapshot, receiptVersion]` effect re-adds it one render later. The indicator derived from `attentionPrs.size` can emit null and then "attention" on a refresh. Fix: leave adds/deletes to the sync effect, or compute from the carried cards. Whether the parent visibly reacts to the intermediate value was not verified.
+- F-004 (info) review.css: the toolbar is `flex-wrap: nowrap` with `flex: none` children and no overflow handling; AC7 holds at the 820 px board width the journal measured, but the detail panel width is user-resizable (`onResize`) and the live check lacked the Review rules button and the real watcher label. A narrower board overflows instead of wrapping.
+
+### Other observations (not defects)
+- laneReason ranks the outdated label above GitHub reasons (documented T7 decision), so a card in the attention lane for failed checks or changes requested shows "Outdated review" as its reason. Matches plan.md.
+- needsViewerAttention requires state open; a merged PR with awaitingAnswer lands in the attention lane but leaves the tab indicator off. Consistent with AC4.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 UI code meets AC1-AC4, AC6, AC7; no blocker or major. Minor: unreachable Done-lane branch, container-type on the board section changes the containing block of toolbar dialogs, transient tab-indicator drop on card-only refresh. Info: nowrap toolbar has no overflow fallback.",
+  "findings": [
+    {"id": "F-001", "severity": "minor", "file": "apps/desktop/src/review/ReviewResults.tsx", "line": null, "quote": "lane !== \"done\" || showDone || lanes.done.length > 0", "problem": "The `lanes.done.length > 0` clause cannot be true when showDone is false: with a filter holding only open/draft every visible card is state open, and reviewLane returns done only for non-open cards.", "impact": "Dead branch; its comment promises a guarantee that no input exercises.", "suggested_fix": "Drop the clause and the comment, or keep it deliberately with a note that it is defensive.", "evidence": "model.ts reviewLane: done only after awaitingAnswer/active checks and state !== open; filterReviews drops closed/merged when the state filter lacks them.", "confidence": "high", "reviewer": "review-logic", "class_scope": {"sites": [], "enumeration_method": "negative enumeration: the only producer of lane done is reviewLane (state !== open); the state filter removes every such card when stateFilterShowsDone is false"}},
+    {"id": "F-002", "severity": "minor", "file": "apps/desktop/src/styles/review.css", "line": null, "quote": ".review-board { container-type: inline-size; }", "problem": "Layout containment from container-type on the board section makes it the containing block of fixed descendants; the Review rules and PR watcher dialogs are rendered non-portaled inside the toolbar, so their overlay now spans only the board, not the workspace.", "impact": "With the detail panel open the modal scrim does not cover the panel; the panel stays interactive behind an aria-modal dialog.", "suggested_fix": "Put the container on a dialog-free element, or render those dialogs outside `.review-board`.", "evidence": "ui.tsx Dialog renders `.overlay` without a portal; components.css .overlay is position fixed inset 0; ProjectReviewRules/ReviewWatcher render Dialog inside the toolbar; ReviewDetail.css:1 shows the previous container was .review-workspace. Not run in a browser.", "confidence": "medium", "reviewer": "review-logic"},
+    {"id": "F-003", "severity": "minor", "file": "apps/desktop/src/review/ReviewBoard.tsx", "line": null, "quote": "if (needsViewerAttention(card, snapshot.viewer, unreadCount(snapshot, card))) next.add(card.number);", "problem": "In the load callback the attention set is computed from the fresh snapshot before the previous addressedReplyIds are carried over, so a PR with only unread replies is removed, then re-added by the new sync effect on the next render.", "impact": "The attentionPrs-derived tab indicator can drop to null for one render on a refresh.", "suggested_fix": "Compute from the carried cards, or leave all adds/deletes to the sync effect.", "evidence": "ReviewBoard.tsx: setAttentionPrs precedes the setRead that merges prior addressedReplyIds; the sync effect depends on [snapshot, receiptVersion].", "confidence": "medium", "reviewer": "review-logic"},
+    {"id": "F-004", "severity": "info", "file": "apps/desktop/src/styles/review.css", "line": null, "quote": ".review-board .flows-toolbar { flex-wrap: nowrap; }", "problem": "nowrap with flex:none children has no overflow fallback below the measured width; detail panel width is user-resizable.", "impact": "Toolbar may overflow horizontally at narrow board widths; AC7 judged only at 1440 px.", "suggested_fix": "Allow wrap below a container width or add overflow handling.", "evidence": "Journal T8 live check measured 820 px without the rules button or the real watcher label.", "confidence": "low", "reviewer": "review-logic"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 1},
+  "slices": ["slice-01"]
+}
+
+Routing audit: graph_used no (not-relevant, diff-bounded); wiki_used no (not-relevant); ctx_used yes; raw_rg_used no. Not run: tests and browser (exec_budget_s 0); verify-tests-to-run-1/2 evidence files not opened.

@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-01", "slice-03"],
+  "summary": "No regression found in the delta 33fd9647a..086335a01. F-015: the attention set now converges, persists removals again and matches 53c96b8af for added, removed and carried cards. F-018: the refactored SQL returns the same rows as 33fd9647a; kept, finished and supersedes are NULL-equivalent term by term. slice-03 holds only lines removed relative to the merge base; none of them is in the delta. No computed blast-radius set was given, so the cap question does not apply; the review rested on the two slices and the changed files at head.",
+  "findings": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0},
+  "prior_dispositions": [
+    {"id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx head: the load callback only does `if (replaceAttention) setCarriedAttention(new Set())`; memo `attentionPrs` judges the shown snapshot; an effect writes the memo back when the sets differ. Convergence: after the write, carried equals the memo result, the memo recomputes the same set, the size/membership check is false, no loop. First render after a scope switch: `snapshot` is null (read.scope !== scope), so the memo returns carried as persisted from the previous shown snapshot; a removal made under the open scope survives into the merged-only view, and the indicator reads the memo, so there is no flash. Replacing loads: setCarriedAttention(new Set()) and setRead run in one async callback and are batched, so the new snapshot is judged against an empty base. Identity change: identity differs, replace is true, set emptied. Access loss: accessLost empties carried and nulls the snapshot in one batch. Unavailable path: a kept old or cached snapshot is judged by the memo and written back, as in 53c96b8af."},
+    {"id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx head computes `reason` and `note` once per row; the markup uses the same values as before."},
+    {"id": "F-017", "disposition": "closed", "evidence": "model.ts laneReason: the local `outdated` is now `note`; same return value."},
+    {"id": "F-018", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges. Old kept = coalesce(active OR requested OR (base=wb AND head=wh),0); new kept = live OR reviewed with live = coalesce(active OR requested,0) and reviewed = coalesce(base=wb AND head=wh,0), both never NULL: kept is true exactly when any term is true, as before. Old supersedes = coalesce(active OR requested OR (done AND base=wb AND head=wh),0); new = live OR (done AND reviewed): same truth condition, never NULL. finished = done AND base IS NOT NULL AND head IS NOT NULL is unchanged and passes through picked and ranked. The `wanted` formula is unchanged. The new columns active and done are plain booleans over r.state with the same NULL behaviour as the inline expressions. Returned columns and ORDER BY are unchanged."},
+    {"id": "F-025", "disposition": "withdrawn", "evidence": "PR description, not code; not judged in my slices."}
+  ],
+  "behaviour_comparison": {
+    "added_cards": "A card that needs attention in a shown snapshot is added by the memo, then stored by the effect. 33fd9647a added it only transiently in the memo (and in the load callback); 53c96b8af stored it. Same indicator in all three.",
+    "removed_cards": "A reply read or discussion note under the open scope is dropped by the memo, then stored by the effect. 33fd9647a did not store it (the F-015 defect: carried kept the entry and it came back after a switch to merged-only); head and 53c96b8af store it.",
+    "carried_across_scope_switch": "Non-replacing load (merged-only or closed-only, no period): carried is kept and only cards present in the loaded snapshot are re-judged, non-open cards dropped; same as 33fd9647a. Replacing load or identity change: emptied before judging, as before."
+  }
+}
+```
+
+Not verified: nothing was run (read-only rules): not the new DOM test, not the F-015 scenario in a running app, not SQL timing, not the SQL on a database. NULL equivalence was derived by hand from SQLite three-valued logic. Not read: the bodies of `needsViewerAttention` and `unreadCount` (assumed pure and deterministic; the convergence argument relies on it). One pre-existing gap, not caused by the delta and below major: a reply read while the new scope is still loading (snapshot null, so `viewer` is undefined and the receipts subscription is off) is not applied to the carried set until a snapshot containing that card is shown; 53c96b8af and 33fd9647a behave the same. slice-03 contained only lines removed relative to the merge base (old load-callback logic, old list-row markup, the `active` filter bypass removed earlier in commit 21e2110b1, the old SQL); none of it is in the 33fd9647a..086335a01 delta, so no new-code finding was possible there.

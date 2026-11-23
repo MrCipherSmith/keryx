@@ -1,0 +1,189 @@
+STATUS: DONE_WITH_CONCERNS
+
+Which prior test notes the new tests close, which production lines would still pass the suites, and what I did not verify.
+
+Mutation table (executed results are the brief's facts; I ran nothing, allowed_tools read-only, exec_budget_s 0):
+
+| mutation | result | source |
+|---|---|---|
+| write-back effect removed | 1 fail (handled-request test) | orchestrator, brief |
+| seeding removed | 1 fail (saved-filter test) | orchestrator, brief |
+| seeding on every load | 3 fail | orchestrator, brief |
+| dialog marker removed from the PR watcher | 1 fail | orchestrator, brief |
+| four SQL mutations | each fails the new store test | backend worker, brief; not repeated |
+
+By reading only (not executed), still green: the publication gate (m1), `supersedes` reduced to `live` (m2), the replace-condition terms (m4-m7), the Rules dialog marker (m9). Cap: 0 mutants run by me; 9 listed in mutant_candidates, none reached.
+
+REVIEW_RESULT
+```json
+{
+ "status": "DONE_WITH_CONCERNS",
+ "reviewer": "review-testing-practices",
+ "summary": "Round 4 delta: the new tests close F-027, F-022(a) and (c) and the write-back half of F-028; F-009, F-022(b), F-028 and F-029 stay partial or open. Four info findings, all unpinned optimisations or terms; no executed mutation by me (read-only round).",
+ "findings": [
+  {
+   "id": "F-T01",
+   "severity": "info",
+   "file": "src/review/desk-run-store.ts",
+   "line": null,
+   "quote": "card?.baseSha === row.base && card.headSha === row.head &&",
+   "problem": "The F-021 gate that reads a publication only for a row whose reviewed range equals the card's range is not pinned. localBadge sets publicationPending only when `same` and sameRange(latest.result.reviewed, revision), so for a row on another range the publication value never reaches the output; deleting the gate changes only how many publication reads happen. The new store test and the batch test compare badge output only and neither counts calls to `publication`.",
+   "impact": "The saving the commit exists for can be lost by the next edit with every suite green.",
+   "suggested_fix": "Count calls: spy on the store's `publication` method in a fixture with a finished run on another range and assert it is not called for that row, and is called for the row that reviewed the card's range.",
+   "evidence": "By reading (localBadge in src/review/board-badges.ts, the batch test and the new test); not executed. A predicted result, hence info.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices"
+  },
+  {
+   "id": "F-T02",
+   "severity": "info",
+   "file": "src/review/desk-run-store.ts",
+   "line": null,
+   "quote": "live OR (done AND reviewed) AS supersedes",
+   "problem": "Prior F-022 (b) stays open. The `supersedes` term only decides whether the outdated candidate row is returned. In the 'reviewed without requested' fixture of the new test, if `supersedes` were reduced to `live`, the newer d-range row would also be returned, and localBadge would still ignore it because `ready` is true; the toEqual on the badge is identical. The same holds for `live` inside `supersedes` in the failed/cancelled fixtures (the failed run on the card's range is `latest`, which suppresses `stale`). So the saving of the F-006 fix is asserted by no test.",
+   "impact": "The F-006 cost fix can regress to the pre-fix row volume with every suite green.",
+   "suggested_fix": "Assert the rows the SQL returns, not the badge: e.g. a test hook or a second query that counts returned rows for the card, or the number of `publication`/progress reads, in the 'reviewed without requested' fixture (expect 1 row, not 2).",
+   "evidence": "By reading; not executed. localBadge: `const stale = latest || ready ? undefined : ...`.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices"
+  },
+  {
+   "id": "F-T03",
+   "severity": "info",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "line": null,
+   "quote": "const replaceAttention = identity.current !== nextIdentity || (!period && (state === \"open\" || state === \"all\"));",
+   "problem": "The terms of replaceAttention that the T18 fix relies on are pinned only for the first load of an open scope. The saved-filter test and the handled-request test both reach a replacing load through `state === \"open\"` on the first load (EMPTY_FILTERS), so the `identity.current !== nextIdentity` term, the `!period` term and the `state === \"all\"` term have no fixture; nor does a pull request that is absent from a later replacing open load (the carried set must lose it).",
+   "impact": "A change to the replace condition, or a reset that no longer drops an absent pull request, leaves the tab signal wrong while the suite stays green; this code was fixed three times with two regressions.",
+   "suggested_fix": "Add: (1) open board, a pull request leaves the open list on Refresh in the open scope, assert the indicator clears; (2) a period filter load must not replace the set; (3) a viewer/repository change while a historical scope is shown must reseed.",
+   "evidence": "By reading; not executed. The brief lists 'reset on replace dropped entirely' as not run.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices"
+  },
+  {
+   "id": "F-T04",
+   "severity": "info",
+   "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+   "line": null,
+   "quote": "await new Promise(resolve => setTimeout(resolve, 5));",
+   "problem": "The handled-request test still waits for the read receipt with a 5 ms sleep (F-028, second half). The assertion after it holds whether or not the receipt was processed, because the check that matters is made after the scope switch; the sleep is therefore not load-bearing for the mutation, but it is the pattern tdd-workflow.mdc forbids and the other tests of the file wait on state.",
+   "impact": "A slow machine cannot make the test fail wrongly here, so the cost is convention and the next author copying the sleep.",
+   "suggested_fix": "Replace the sleep with an awaited act around markRepliesRead only, or wait for the board to re-render (receiptVersion) as the neighbouring tests do.",
+   "evidence": "By reading line 318 of the test file at head.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices"
+  }
+ ],
+ "stats": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0,
+  "info": 4,
+  "total": 4
+ },
+ "prior_dispositions": [
+  {
+   "id": "F-009",
+   "disposition": "partial",
+   "evidence": "Closed for the two items in my slices: the 'Repository predicate' fixture (same number and viewer, another repositoryId, newer finished run) and the 'Finished-state filter' fixture (newer failed run with a recorded result) each produce a different badge if `r.repo=?2` or the `done` filter is dropped, by reading; the worker's four SQL mutations (brief) each failed the new test, executed by the worker, not repeated by me. Still unpinned by reading: the viewer predicate `r.viewer=?3` (no fixture with another viewer). The other items of F-009 (viewer lowercase, partial/outdated label order, hidden merged card, reload in the carry-over test) are outside my slices and not assessed."
+  },
+  {
+   "id": "F-022",
+   "disposition": "partial",
+   "evidence": "(a) closed: first fixture of 'each term of the outdated lookup is pinned by its own fixture' (failed then cancelled run on the card's range over an older completed run) fails if `requested` is dropped from `live`, by reading and the worker's mutations. (b) open: see F-T02, the badge output cannot show the saving. (c) closed: the merged-card test pins reason 'Merged' with exactly one `.review-note` in board and list; the open-quiet test pins `note !== reason` (no `.review-note`, text once); both by reading, the `note !== reason` and merged cases fail if the guard or the note on non-open cards is removed."
+  },
+  {
+   "id": "F-028",
+   "disposition": "partial",
+   "evidence": "Closed for the write-back effect: the handled-request test now holds a second request (482) and asserts attention after the switch and null after 482 is seen merged; the orchestrator's executed mutation 'write-back removed' gives 1 fail (brief). Round 3's by-reading conclusion was wrong at that head, the executed result stands. Open: the 5 ms sleep (F-T04) and the reset of the carried set on a replacing load (F-T03)."
+  },
+  {
+   "id": "F-029",
+   "disposition": "partial",
+   "evidence": "The 'reviewed without requested' fixture (run requested on revision, reviewed next, a newer finished d-run) pins the `reviewed` term of `kept`: without it the row is not returned and `ready` is false, by reading. The `reviewed` term of `supersedes` stays redundant for the output (F-T02). No fixture has a run whose details lack baseSha/headSha, so the NULL branch of `requested` and the `coalesce(...,0)` is not exercised."
+  },
+  {
+   "id": "F-027",
+   "disposition": "closed",
+   "evidence": "Seeding in the load callback is pinned by 'saved historical filters on the first load still seed the tab signal': the first load is open, the saved merged filter switches scope in the same batch, the open snapshot is never shown, and the indicator is 'attention' only because the set was seeded; executed mutation 'seeding removed' gives 1 fail, 'seeding on every load' gives 3 fail (brief)."
+  }
+ ],
+ "slices": [
+  "slice-01",
+  "slice-02"
+ ],
+ "mutant_candidates": [
+  {
+   "id": "m1",
+   "file": "src/review/desk-run-store.ts",
+   "anchor": "card?.baseSha === row.base && card.headSha === row.head &&",
+   "replacement": "",
+   "kind": "behavior",
+   "note": "expect survive: publication gate (F-T01)"
+  },
+  {
+   "id": "m2",
+   "file": "src/review/desk-run-store.ts",
+   "anchor": "live OR (done AND reviewed) AS supersedes",
+   "replacement": "live AS supersedes",
+   "kind": "behavior",
+   "note": "expect survive (F-T02)"
+  },
+  {
+   "id": "m3",
+   "file": "src/review/desk-run-store.ts",
+   "anchor": "r.repo=?2 AND r.viewer=?3",
+   "replacement": "r.repo=?2",
+   "kind": "behavior",
+   "note": "viewer predicate; no fixture with another viewer in the new test (the older store tests may cover it)"
+  },
+  {
+   "id": "m4",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "identity.current !== nextIdentity || (!period",
+   "replacement": "(!period",
+   "kind": "behavior"
+  },
+  {
+   "id": "m5",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "(!period && (state === \"open\" || state === \"all\"))",
+   "replacement": "(state === \"open\" || state === \"all\")",
+   "kind": "behavior"
+  },
+  {
+   "id": "m6",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "|| state === \"all\"",
+   "replacement": "",
+   "kind": "behavior"
+  },
+  {
+   "id": "m7",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "if (replaceAttention) setCarriedAttention(new Set(",
+   "replacement": "if (replaceAttention) setCarriedAttention(prev => new Set([...prev, ",
+   "kind": "behavior",
+   "note": "union instead of reset on a replacing load"
+  },
+  {
+   "id": "m9",
+   "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+   "anchor": "<div className=\"project-review-rules\" data-review-board-dialog>",
+   "replacement": "<div className=\"project-review-rules\">",
+   "kind": "behavior",
+   "note": "the brief lists only the PR watcher marker as mutated; whether a focus test covers the Rules dialog was not established"
+  },
+  {
+   "id": "m10",
+   "file": "apps/desktop/src/review/ReviewResults.tsx",
+   "anchor": "return note && note !== reason ? note : null;",
+   "replacement": "return note;",
+   "kind": "behavior",
+   "note": "expect red: open-quiet test"
+  }
+ ]
+}
+```
+
+Not verified: no test or mutation executed by me; the F-009 items outside slice-01/02 (viewer lowercase, label order, hidden merged card, carry-over reload); whether older store tests cover the viewer predicate; whether another test focuses the Rules dialog; the SQL timing; no running app. Every claim marked 'by reading' is a conclusion from the code, and round 3's own by-reading claim about the handled-request test was disproved by execution, so weigh them accordingly.

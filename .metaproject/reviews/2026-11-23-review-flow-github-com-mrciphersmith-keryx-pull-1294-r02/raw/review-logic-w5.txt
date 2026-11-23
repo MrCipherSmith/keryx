@@ -1,0 +1,70 @@
+STATUS: DONE
+
+## Logic Review (round 2, fix round)
+
+- Branch: `feat/desktop-review-v2-stage0`; delta `53c96b8af161..33fd9647afea`; merge base `1b994df18`.
+- Slices read in full: slice-01 (FIX), slice-02 and slice-03 (NEW). Spec gate: the fixes were checked against the claims in the reviewer brief and the round-1 findings.
+
+### Summary
+The SQL rewrite of `attachBadges` matches `localBadge` exactly. Its `supersedes` flag (an active run, a run requested for the card's range, or a finished run whose reviewed range is the card's range) is the same condition under which `localBadge` drops `stale` (`latest || ready`). Each run is parsed once in `scoped`, and the outdated candidate needs both reviewed SHAs. The UI fixes for F-002, F-003 and F-007 are correct. One new defect: the F-008 fix makes the tab indicator use a stale carried set. Changes that receipts or polling make after a load are no longer kept across a scope switch. An already-read reply lights the indicator again in a Merged- or Closed-only view.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Logic Bugs
+[F-001] minor. The derived attention set drops changes made after a load when the scope switches (introduced by the F-008 fix, commit 964047588). Details are in the JSON.
+
+### Async & Concurrency / Error Handling / Null Safety / Type Contracts / Edge Cases
+None detected.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "The fix round checks out except for one regression. The attachBadges SQL keeps the outdated candidate under exactly the condition localBadge uses, parses each run once and needs both reviewed SHAs. reviewNote and laneReason are ordered correctly. Focus restore finds the portaled dialogs by their content class. The model test uses a neutral card. New minor defect: the attention set derived with useMemo since the F-008 fix holds only what the last load computed. A reply read after that load, or a review that starts waiting on the viewer, is no longer kept across a switch to a Merged- or Closed-only scope or a period scope. The tab indicator then points at a reply that was already read, or misses one that waits.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "    const next = new Set(carriedAttention);",
+      "problem": "Since the F-008 fix, attentionPrs is a useMemo over carriedAttention and the shown snapshot. carriedAttention is written only by the load callback (and cleared by accessLost). Before, the effect wrote receipt-time and poll-time changes back into the state, which survived a scope change. Now changes made after a load, such as a reply read through a receipt (receiptVersion) or a badge that starts awaitingAnswer or publicationPending through polling or updateRunSummary, exist only in the memo. They are lost when the shown snapshot changes scope. A Merged-, Closed- or period-only load does not replace the carried set (replaceAttention is false), so carried entries for open pull requests outside that snapshot keep their load-time value.",
+      "impact": "Scenario: under the default Open filter, PR #101 has an unread reply to the viewer, so carried = {101} and the indicator shows attention. The viewer opens #101 and reads the reply. The receipt bumps receiptVersion, the memo deletes 101, and the indicator turns off. The viewer then sets the PR state filter to Merged only. During the load the snapshot is null, and after it #101 is absent and needsViewerAttention returns false for merged cards, so attentionPrs = carried = {101}. The Pull requests tab shows attention for a reply already read and keeps showing it until the viewer returns to an Open or All scope with no period. On base 53c96b8af the effect had already deleted 101 from the state set, so the indicator stayed off. The opposite case also happens: a review that started waiting on the viewer after the load loses its attention in that scope. The cost is a wrong indicator only, with no data effect.",
+      "suggested_fix": "Write the derived set back into the carried state when the shown snapshot comes from a replacing scope (open or all, no period), for example an effect that calls setCarriedAttention(attentionPrs) when the sets differ. Or apply the receipt and badge updates to carriedAttention where they happen. Add a DOM test: unread reply, then read receipt, then switch to Merged only, and expect the indicator to be null.",
+      "evidence": "ReviewBoard.tsx at 33fd9647a: carriedAttention is set only in the load callback (`setCarriedAttention(previousSet => { const next = new Set(replaceAttention ? [] : previousSet); ...`) and in accessLost. The memo `const attentionPrs = useMemo(() => { const next = new Set(carriedAttention); if (snapshot) {...} return next; }, [carriedAttention, snapshot, receiptVersion]);` never writes back. `const snapshot = read.scope === scope ? read.snapshot : null;` is null while a new scope loads. In model.ts, needsViewerAttention returns false for `c.state !== \"open\"`. Base 53c96b8af had `useEffect(() => { if (!snapshot) return; setAttentionPrs(previous => {...}) }, [snapshot, receiptVersion])`, which kept the change in state (git diff 53c96b8af 33fd9647a). Read only, not run.",
+      "confidence": "high",
+      "dedupe_key": "derived-attention-loses-post-load-updates-across-scope",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `.review-board .flows-toolbar { flex-wrap: nowrap; }` line is removed, so the shared wrap rule applies again. Search field `flex: 1 1 96px; ... max-width: 260px`; count label and watcher indicator hidden under a 760px container. The no-overflow claim rests on the orchestrator's measurements, which I did not repeat." },
+    { "id": "F-002", "disposition": "closed", "evidence": "clearPrivateView now calls inBoardOverlay(document.activeElement). It also matches `el.closest('[role=\"dialog\"]')?.querySelector('.project-review-rules, .review-watcher')`. Both classes are the direct content wrappers inside Dialog (ProjectReviewRules.tsx `<div className=\"project-review-rules\">`, ReviewWatcher.tsx `<div className=\"review-watcher\">`), and a new DOM test covers both openers." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason now returns attentionReason before reviewNote(c). ReviewResults shows reviewNote as `.review-note` in board and list when it differs from the reason, per the operator's 'uphold' and 'all cards'. localBadge never sets both outdated and runState, so the partial-run line cannot collide with it." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan, specification, PRD R12 and roadmap 0.29.38 now say stage 0 is implemented. Deviation (a), login only with no teams, matches needsViewerAttention. Deviation (b), local awaitingAnswer or publicationPending also lights the indicator, matches `!!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending`." },
+    { "id": "F-005", "disposition": "partial", "evidence": "Review rules uses `shieldCheck` (it exists in Icon.tsx), and the filter count is a separate `.filter-count` span outside `.toolbar-label`, so it stays visible. What remains: the pull request `.count-label` is still in the collapsing set, now under a 760px container, which includes the 560px board at the default window with the detail panel open. The Review rules dialog header still uses `icon=\"checklist\"` (cosmetic)." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts: the per-card correlated `wanted` subquery is gone. `scoped AS MATERIALIZED` reads each run's JSON fields once, and window functions in `flagged`/`picked` choose the outdated row only when `max(supersedes)` for the card is 0, so cards with an active or current-range run no longer pay for the lookup. The timing comes from the worker's measurement, which I did not re-run." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts uses `quiet(pr)` (decision null, reviewers []). `expect(reviewLane({ ...neutral, localReview: outdated(\"completed\").localReview })).toBe(\"open\")` would fail if outdated moved the lane." },
+    { "id": "F-008", "disposition": "regressed", "evidence": "The two writers with the same predicate are gone, and attentionPrs is derived with useMemo while carriedAttention keeps the cross-scope retention. But the derived set's post-load changes are no longer persisted, so a scope switch brings back the load-time value (new finding F-001)." },
+    { "id": "F-009", "disposition": "open", "evidence": "The quoted subquery is gone. In its successor `scoped`, the `r.repo=?2` predicate and the finished-state filter still have no separating fixture: the decoy `other` differs only by viewer, and no newer failed run with a recorded result exists. The new test pins per-card suppression only." },
+    { "id": "F-010", "disposition": "partial", "evidence": "SQL now needs `base IS NOT NULL AND head IS NOT NULL` for an outdated candidate (`finished`), so the candidate is no longer selected and then dropped. What remains: board-badges.ts localBadge still takes `run.result?.reviewed` with any base, so for a head-only reviewed run the live path would show that run while SQL shows an older one. No producer writes such a run (journal T14 concern)." },
+    { "id": "F-012", "disposition": "open", "evidence": "The attention set is still computed over all snapshot.cards and is not filtered by the visible list. Unchanged, and it follows from the operator's removal of the bypass." },
+    { "id": "F-014", "disposition": "open", "evidence": "`visible()` still states `source IN ('manual','scheduled')` in SQL, while localBadge filters `source !== \"existing\"`. Unchanged." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+### Not verified
+- Nothing was run (exec budget 0). The SQL equivalence was checked by reading `flagged`/`picked` against localBadge's `latest`/`ready`/`stale` rules, not by executing the query. The performance figures and toolbar measurements are the worker's and the orchestrator's, not mine.
+- The F-001 regression was traced in code only. I wrote no test for it and did not reproduce it in the app.
+- F-011 and F-013 have no disposition here: their sites (ReviewWatcher.tsx:148, ReviewResults.tsx:36) are not in the hunks I read.
+- I did not investigate the `desk-run-executor.test.ts` failures in the combined test run.
+
+Routing audit: graph_used: no (not-relevant; slices were supplied), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg, keryx ctx run git diff), raw_rg_used: no. metaproject index: not re-read, because the brief and drivers supplied the routing.

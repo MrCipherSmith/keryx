@@ -1,0 +1,95 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Seed effect, `stale` field and toolbar hint read as React/DOM code at 91c37c81b and 85bd13a03. No blocker or major. The seed effect is correct on abort, unmount and a late result; `stale` is kept or dropped correctly at every setRead site. Three minor findings and one info finding: the count span is named by aria-label on a role-less span while its visible word is display:none on a narrow board; the hint button unmounts under keyboard focus; a fresh seedFor object restarts an in-flight seed on every non-open load; the hint count includes carried numbers absent from the shown snapshot.",
+  "findings": [
+    {
+      "id": "F-501",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "<span className=\"count-label\" aria-label={countText} title={countText}>",
+      "problem": "The pull request count is named with aria-label on a plain span (generic role, no role attribute). ARIA 1.2 prohibits naming a generic element, and VoiceOver and several other screen readers ignore the attribute. Under the 760px container query the visible word is removed with display:none (.count-word), which also removes it from the accessibility tree.",
+      "impact": "On the narrow board a screen reader user hears a bare number (for example '3') with no unit; before this commit the whole label was hidden. The aria-label is meant to prevent exactly this and does not reliably do so. title adds a mouse-only tooltip.",
+      "suggested_fix": "Keep the word in the tree and hide it visually: style .count-word as visually hidden (clip, 1px) under the container query instead of display:none, and drop aria-label from the span.",
+      "evidence": "ReviewBoard.tsx count span (85bd13a03); styles/review.css `@container (max-width: 760px) { .review-board .flows-toolbar .count-word, ... { display: none; } }`. No visually-hidden class is used for the word.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "degradation_class": "behaviour-delta",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-502",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(\"\"); };",
+      "problem": "The hint button calls reset and is rendered only while hiddenAttention > 0. After reset the hidden count normally drops to 0, so the focused button unmounts. Nothing moves focus afterwards: reset does not set restoreFocus and does not focus the search field, and the restoreFocus effect is keyed on read, not on filters.",
+      "impact": "A keyboard or screen reader user who activates the hint loses focus to document.body and has to tab from the start of the page.",
+      "suggested_fix": "Move focus in the hint's handler: `search.current?.focus()` after the state updates (restoreFocus.current = true plus an effect on filters), or to the first card.",
+      "evidence": "ReviewBoard.tsx: `{snapshot && hiddenAttention > 0 && <button className=\"review-hidden-attention\" onClick={reset} ...>`; restoreFocus is set only in clearPrivateView.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "degradation_class": "behaviour-delta",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-503",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });",
+      "problem": "seedFor is a fresh object on every non-open load of an unseeded identity, and the seed effect depends on object identity. Each such load cleans up the running seed (abort, current=false) and starts a new open request. The catch clears seedFor only when the seed fails, so a seed that keeps failing while main loads succeed is re-requested after every main load.",
+      "impact": "Request count only: with refreshes or scope switches faster than the seed, the seed is restarted each time and may never complete; with a persistently failing seed each main load costs two requests. Late results of a cancelled seed are discarded by `current`, so there is no correctness effect.",
+      "suggested_fix": "Set seedFor only when it is null or names another identity (`setSeedFor(old => old?.identity === nextIdentity ? old : { identity: nextIdentity })`), and optionally remember a failed identity in a ref.",
+      "evidence": "ReviewBoard.tsx seed effect with deps `[seedFor, cwd, repo, expectedViewer, load]` and the else branch of the main load.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "degradation_class": "behaviour-delta",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-504",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n)).length : 0;",
+      "problem": "hiddenAttention counts every number of attentionPrs missing from visible, including carried numbers that are not in the shown snapshot at all (a Merged, Closed or period view, or a PR gone since the last open load). It is a per-render computation (shownNumbers Set, spread, filter) beside memoised visible and attentionPrs. The button name (aria-label and title) is a status sentence and does not say that the click clears all filters and the search.",
+      "impact": "A carried number that reset cannot reveal (a PR closed since) keeps the button visible as a no-op. Per-render cost is O(cards) and small.",
+      "suggested_fix": "Wrap shownNumbers and hiddenAttention in useMemo on [visible, attentionPrs, snapshot]; name the action, for example 'N waiting on you hidden by filters, clear filters'.",
+      "evidence": "ReviewBoard.tsx lines added by 85bd13a03 after `const reset`.",
+      "confidence": "low",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-030", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"},
+    {"id": "F-012", "disposition": "closed"},
+    {"id": "F-020", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 1},
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+## Seed effect and stale, as checked
+
+- Dependencies `[seedFor, cwd, repo, expectedViewer, load]` are complete for what the effect reads (identity and seeded are refs). `load` defaults to `fetchReviewBoard` (stable); the main effect already depends on it, so an unstable prop would already loop there.
+- Cleanup sets `current=false` and aborts, so a late result of a superseded or unmounted seed writes nothing; the catch also checks `current`. No state update after unmount.
+- StrictMode: `main.tsx` does not use it (comment there). Were it on, the seed would run twice, the first result is discarded by `current`, the second applies; harmless apart from one extra request.
+- The result guard (`key !== seedFor.identity || identity.current !== key || seeded.current === key`) rejects another account's seed and a seed that lost the race to an open load. An open load that finishes first calls `setSeedFor(null)`, which aborts the seed.
+- Reply-based attention: the seed uses `attentionNumbers` on a card-only snapshot without `addressedReplyIds`, like any first open load; for an unseeded identity there is nothing to carry. Same blind spot as before, not introduced by T22.
+- `stale` at every setRead site: updateRunSummary, noteDiscussion and the badge poll spread `old` (keep; right, the snapshot is still the cached one); the loading set keeps it when scope and snapshot are unchanged and drops it on a scope change; accessLost spreads `old` but sets snapshot null, so a leftover true is inert and the next loading set drops it; the success set drops it; the unavailable catch sets it only for a cache fallback and leaves a fresh kept snapshot unmarked. No path found that leaves stale true on a fresh snapshot.
+- Known limit, not reported: while stale, a receipt read removes a number from the derived set but does not write back, so a non-replacing view may keep it until the next open load.
+
+## Not verified
+
+- No test, tsc or browser was run (read-only, exec budget 0). Screen reader behaviour (F-501, F-502) rests on ARIA rules and the markup, not on a reader.
+- I read commits 91c37c81b and 85bd13a03 with `git show` and the current ReviewBoard.tsx regions (state, load effect, seed effect, attention memo, toolbar), not the three slice diff files in full; the slices are listed because the brief requires it. ReviewResults.tsx and ReviewRuns.tsx (F-013, "Review again") were not read, so F-013 has no disposition; F-032 and F-033 sites were not read. The new DOM tests were not read.
+- Routing audit: graph_used not-relevant, wiki_used not-relevant, ctx_used yes, raw_rg_used no (raw git show and sed used because the hook offered no routed form for a diff read).

@@ -1,0 +1,39 @@
+STATUS: DONE
+
+## Frontend Review (slice-02: Desktop DOM tests, model tests, requirements docs)
+
+Read slice-02 in full (1684 diff lines): `ReviewBoard.dom.test.tsx`, `model.test.ts`, the four `docs/requirements/keryx-desktop-review-v2/*` files, `roadmap.md`. Test changes are mostly the mechanical `host` -> `document.body` move required by the portaled dialogs, plus new tests for the six stage-0 fixes. I found no defect in the tests: new assertions match the stated behaviour (no filter bypass, snapshot order, Done lane gating, narrowed tab signal, outdated label, base-moved label, `badgesEqual`, dialogs under `document.body`). One docs observation below.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Slice-02 (DOM tests, model tests, v2 requirements docs) has no defects. The host->document.body rewrite is consistent, and the new tests cover each stage-0 fix. One info: the requirements package and roadmap state that nothing is implemented and still describe team requests as lighting the tab indicator, while this PR implements stage 0 and deliberately excludes team requests.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "line": null,
+      "quote": "**Статус — draft. Ничего из этого пакета не реализовано.**",
+      "problem": "The README, roadmap changelog 0.29.38 ('Draft requirements, nothing implemented') and implementation-plan state that nothing is implemented, but this PR implements stage 0. PRD R12, the specification ('Индикатор вкладки') and acceptance criterion 16 say the Pull requests tab indicator lights for a review request to the user 'or his team'. The code and the new DOM test (reviewers ['org/team'] -> null) deliberately exclude team requests in this stage, per the operator decision recorded in the flow journal.",
+      "impact": "A reader of the requirements package gets a wrong picture of what ships: stage 0 reads as unimplemented and the team-request behaviour as current. No runtime effect.",
+      "suggested_fix": "Mark stage 0 as implemented in README, implementation-plan and the roadmap line, and add one line in the PRD/spec indicator text that team requests are excluded in stage 0 (operator decision) and return later.",
+      "evidence": "slice-02 README.md line 4 of the added file, roadmap.md changelog entry 0.29.38, prd.md R12, specification.md section 'Индикатор вкладки', AC 16; ReviewBoard.dom.test.tsx 'the tab signal is attention only for ...' asserts `reviewers: [\"org/team\"]` gives null.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "docs-stage0-status-team-indicator",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": ["slice-02"]
+}
+```
+
+## Not verified
+- Did not run the tests (read-only, exec budget 0); relied on the evidence files named in the brief for pass status.
+- Did not read the production sources (`ReviewBoard.tsx`, `model.ts`, `ReviewResults.tsx`) beyond what the tests assert; behaviour claims for the tests come from the test text only.
+- Happy-dom cannot cover the toolbar one-row layout (container query, label collapse); the toolbar's visual behaviour has no automated test. The brief's live measurements cover it without board data.
+- The Russian requirements text was checked for consistency with the code behaviour described in the brief and tests, not for wording; doc line references to `1b994df18` were not re-checked.

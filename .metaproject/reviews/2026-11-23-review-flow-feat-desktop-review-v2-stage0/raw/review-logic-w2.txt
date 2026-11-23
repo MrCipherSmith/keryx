@@ -1,0 +1,77 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage0`
+- Merge-base: `1b994df180fb89c82b6164e516ad3ff27b2453fa`, head `13462d2e3ad56631e28c0c3f44b72af6d52c2553`
+- Scope mode: explicit-hash-range, supplied slice `slice-02` (read in full, 823 lines)
+- Spec compliance gate: ran against flow 516 `acceptance-criteria.md` (AC5 is the backend criterion) and the state x event matrix in `plan.md`
+
+### Summary
+`localBadge` now drops `existing` runs once, at the top, instead of in each of the three places that filtered them. `active`, `latest`, `ready`, `awaiting` and `roster` come out the same as before. The new `outdated` field is set only when no run has this card's requested range, no run is active and no finished run reviewed this range. All three conditions hold whenever `outdated` appears, so `ready` and `publicationPending` stay false, as AC5 requires. In `attachBadges`, the `wanted` CTE returns at most one extra row per card. That row has the same predicate as the TS fallback: finished state, visible source and decision, a recorded `reviewed`, and a reviewed range other than the card's. So the SQL projection and the Desktop live history path (`ReviewBoard.tsx:128`) produce the same badge. Positional binds `?1..?3` match `query.all(json, repositoryId, viewer)`. `IS` comparisons are null-safe. No report text crosses the boundary. No Rust struct types `localReview` (searched `apps/desktop/src-tauri`, 0 matches), so the packaged app will not drop the new field (plan risk 3). AC5 is met. I found one minor semantic gap and no blockers or majors.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected. AC5: covered by `src/review/board-badges.ts` and by tests in `board-badges.test.ts` and `desk-run-store.test.ts`. Test evidence `verify-tests-to-run-1/2.txt` exit 0 (recorded by the orchestrator, not re-run by me).
+
+### Logic Bugs
+
+#### [F-001] "Outdated" covers any other reviewed range, so a base-only move shows the current head SHA as the outdated commit
+- **Severity**: minor
+- **File**: src/review/board-badges.ts (stale/outdated lines); same predicate in src/review/desk-run-store.ts (`NOT (... IS w.wb AND ... IS w.wh)`)
+- **Problem**: The candidate is any finished run whose reviewed range differs from the card's range. It is not limited to a run whose reviewed head differs. The card's `baseSha` is `pr.baseRefOid` (`src/review/board.ts:90`), which changes when the base branch advances while the PR head stays put. In that case `outdated.headSha === card.headSha`, and `laneReason` (`apps/desktop/src/review/model.ts:92`) renders "Outdated review · <current head short SHA>". The same happens when the reviewed head is newer than the card's (a delayed GitHub snapshot).
+- **Why it matters**: AC5 and the plan matrix define the badge for "an earlier head" and "author pushes a commit". The label tells the user the review was of an older commit, but it names the commit the PR is on now, and nothing in the PR changed. Before this change the result just vanished from the card. Now it is shown with a misleading label.
+- **Fix**: Either carry `baseSha` in `outdated` and have the client say "base moved" when `headSha === card.headSha`, or narrow the candidate to `reviewed.headSha !== revision.headSha` (and `json_extract(...,'$.result.reviewed.headSha') IS NOT w.wh` in SQL). Make the same change in both places so the SQL and history paths stay equal, and add a test case with the same head and a different base.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected. `stale?.result?.reviewed` is guarded. A malformed row whose reviewed head is set but base is null would be picked by SQL and then turned into `result: null` in TS, which hides an older valid outdated run. I could not name an input that writes such a row, so it is not reported.
+
+### Type Contract Violations
+None detected. The `outdated` doc comment in `board-types.ts` matches the behaviour.
+
+### Edge Cases
+See F-001.
+
+### Not verified
+- I did not run tests (exec_budget_s 0). I relied on the recorded evidence.
+- I applied severities from the review-logic skill's mapping table. I did not re-read the full canonical severity section or `.metaproject/rules/activity/review.mdc`.
+- I did not confirm that `store.history` orders runs exactly like the SQL `createdAt DESC, rowid DESC` on equal timestamps. The existing equality tests pass, but they do not build that tie.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Backend outdated badge (board-badges.ts localBadge, desk-run-store.ts attachBadges SQL) meets AC5. The SQL and TS predicates match, ready/publicationPending stay false, and there is at most one extra row per card. One minor gap: the outdated candidate is any other reviewed range, not an earlier head, so a base-only move labels the current head SHA as outdated.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/board-badges.ts",
+      "line": null,
+      "quote": "const stale = latest || ready ? undefined : runs.find(run => runFinished(run) && !!run.result?.reviewed);",
+      "problem": "The outdated candidate is any finished run whose reviewed range differs from the card's range (same predicate in the desk-run-store.ts wanted CTE). Card baseSha is pr.baseRefOid (board.ts:90), which moves when the base branch advances while the head stays the same. Then outdated.headSha equals card.headSha, and laneReason (apps/desktop/src/review/model.ts:92) renders 'Outdated review · <current head SHA>'. The same happens for a reviewed head newer than a delayed snapshot.",
+      "impact": "AC5 and the plan matrix scope the badge to an earlier head after a push. In the base-only case the card says the review was of an older commit but names the PR's current commit, though nothing in the PR changed.",
+      "suggested_fix": "Carry baseSha in outdated and have the client label a same-head case as 'base moved', or restrict the candidate to reviewed.headSha !== revision.headSha in both localBadge and the SQL subquery (json_extract(o.details,'$.result.reviewed.headSha') IS NOT w.wh). Add a same-head, different-base test.",
+      "evidence": "board-badges.ts stale/outdated lines; desk-run-store.ts wanted CTE NOT (baseSha IS w.wb AND headSha IS w.wh); board.ts:90 baseSha: pr.baseRefOid; model.ts:89-92 label from outdated.headSha only.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant, bounded slice supplied); wiki_used: no (not-relevant, flow docs supplied the intent); ctx_used: yes (keryx ctx rg for outdated consumers, card baseSha source, Rust struct check); raw_rg_used: no.

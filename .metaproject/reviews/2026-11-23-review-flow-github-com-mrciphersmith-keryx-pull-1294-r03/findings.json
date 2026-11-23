@@ -1,0 +1,76 @@
+[
+  {
+    "id": "F-027",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Regressed from F-015. The load callback no longer judges the loaded cards; it only clears carriedAttention on a replacing load, and cards are judged only by the attentionPrs memo, which sees the snapshot only while it is shown. The first load of every board mount uses EMPTY_FILTERS (open) and, in the same callback, applies the saved filters. When the saved filters select Merged only, Closed only or a period, the scope changes in the same batched update: the open snapshot is never shown, nothing is written back, and the carried set stays empty. The following merged, closed or period load does not replace the set and does not contain the open pull requests.",
+    "impact": "Saved filter State = Merged (or a 7/30/90-day period). An open pull request requests review from the viewer. The viewer opens the project or picks another repository (the board remounts per cwd, viewer and repo). The tab indicator shows nothing instead of 'attention' and stays that way until the viewer switches to an Open or All view. At 33fd9647a and at 53c96b8af the load callback added the card and the indicator showed 'attention'. This is the reverse of F-015: a missed request instead of a stale one.",
+    "suggested_fix": "Seed the set on a replacing load instead of clearing it: `if (replaceAttention) setCarriedAttention(new Set(loaded.cards.filter(c => needsViewerAttention(c, loaded.viewer, unreadCount(loaded, c))).map(c => c.number)));` and keep the memo and the write-back effect. Add a DOM test: saved filters with state merged, a load that returns an open card requesting the viewer for 'open' and nothing for 'merged', assert the last indicator is 'attention'.",
+    "evidence": "ReviewBoard.tsx at head: :97 useState(EMPTY_FILTERS); :230 replaceAttention true on the first load; :231 the only write in the callback; :233-236 setFilters(readReviewFilters(...)) on the first load of a mount; :276 snapshot is null when read.scope !== scope; :339-352 the memo and the effect act only on a shown snapshot. Traced by review-logic and re-read by the orchestrator; not reproduced in the app, no test written. The shape of the F-015 fix (load callback only resets) was suggested in the orchestrator's own worker brief.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 231,
+    "quote": "if (replaceAttention) setCarriedAttention(new Set());",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 231
+    },
+    "dedupe_key": "carried-attention-unseeded-when-first-load-hidden",
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03#F-027",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The precondition holds in the code at 086335a01. RepositoryBoard is keyed per cwd/viewer and per repo (ReviewBoard.tsx:80,85), so every mount starts with filters = EMPTY_FILTERS (:97), whose state ['open','draft'] maps to stateQuery 'open' (model.ts:19,23), so the first load runs for scope 'open/'. In that load's callback filterKey.current is undefined, so setFilters(readReviewFilters(key)) runs (:233-236) in the same async callback as setRead({ scope: 'open/', snapshot }) (:241); React 18 batches both, so the next render already has the saved scope (e.g. 'merged/' or 'open/7'), snapshot is null because read.scope !== scope (:276), the attentionPrs memo returns carriedAttention unchanged (:339-348) and the write-back effect does nothing (:351). The open snapshot is never shown and nothing is written back, while the callback's only write to the carried set is the reset (:231). The next load for the saved scope has replaceAttention false (same identity; merged/closed or a period, :230), so the carried set stays empty unless the shown snapshot itself holds the card; a merged or closed load never holds an open pull request, and a period load holds it only when it was updated within the period. The tab indicator reads attentionPrs (:377), so it stays off, contrary to AC4 and the plan's tab indicator rule (lit when at least one open pull request needs the viewer). At 33fd9647a the callback judged the loaded cards into the carried set (:231-238 there), so this is a behaviour change introduced by the F-015 fix in this branch (cc42698a3), whose commit message says only that 'the load only decides whether to reset the carried set' and records no decision about hidden first loads; the base comment at :229 ('cannot replace the open snapshot') argues for keeping the open requests, not for dropping them. No intent signal or practice source stands against the finding, and the suggested fix (seed on a replacing load, keep the memo and the write-back) restores the earlier behaviour without undoing F-015's removal persistence. Noted, not a premise change: for a saved period on the open state the miss is narrower (only open pull requests not updated within the period)."
+    }
+  },
+  {
+    "id": "F-028",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "Narrowed from a minor report. The new test alone passes with the write-back effect deleted (the carried set then stays empty for the whole test). The effect is pinned by an existing test instead. Still unpinned: the reset of the carried set on a replacing load, and the 5 ms sleep the new test uses to wait for the read receipt.",
+    "impact": "A reader takes the new test for the guard of the write-back; it guards only against the pre-fix design. Dropping the reset on replace keeps the suite green.",
+    "suggested_fix": "In the new test keep a second pull request that still needs attention and assert the indicator stays 'attention' after the switch; add a case where a pull request absent from a replacing load leaves the indicator; wait on state instead of sleeping.",
+    "evidence": "Orchestrator mutation run at 086335a01: with the effect line removed, `bun test src/review/ReviewBoard.dom.test.tsx` gives 43 pass, 1 fail — the failing test is 'a historical filter retains known open requests and removes them when their PR is observed as merged', the new test passes. File restored afterwards. Reported by review-frontend and review-testing-practices.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "line": 1006,
+    "quote": "test(\"a request handled after the load stays out of the tab signal when the scope switches to a historical view\"",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": 1006
+    },
+    "dedupe_key": "f015-test-does-not-pin-writeback",
+    "blocking_merge": false,
+    "degradation_class": "blind-test",
+    "evidence_kind": "red-test",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03#F-028"
+  },
+  {
+    "id": "F-029",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The store tests have no run whose details lack baseSha/headSha, and in the fixtures the range a run was requested for equals the range it reviewed, so the `reviewed` terms of the refactored statement are redundant with `live` in the suite. Continues F-022 (a).",
+    "impact": "Dropping `reviewed` from `kept` or `supersedes` may keep the suite green. The refactor itself was checked equal term by term by five reviewers.",
+    "suggested_fix": "Add a fixture where a run was requested on one range and reviewed another, and one with NULL requested SHAs.",
+    "evidence": "Read by review-testing-practices; no mutant run.",
+    "confidence": "medium",
+    "file": "src/review/desk-run-store.test.ts",
+    "line": 489,
+    "quote": "test(\"the outdated lookup ignores newer finished runs of another PR, another viewer, hidden runs and runs without a result\", async () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 489
+    },
+    "dedupe_key": "store-tests-reviewed-term-redundant",
+    "blocking_merge": false,
+    "degradation_class": "blind-test",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03#F-029"
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-architecture",
+  "wave": 2,
+  "waves": 2,
+  "slices": [
+    "slice-03"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-03",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-03.diff",
+      "bytes": 5836
+    }
+  ],
+  "result": "raw/review-architecture-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+}

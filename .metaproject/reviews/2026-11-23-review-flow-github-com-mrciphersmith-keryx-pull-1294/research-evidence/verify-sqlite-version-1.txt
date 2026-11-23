@@ -1,0 +1,14 @@
+# keryx review verify-run
+finding: sqlite-version
+command: bun -e "import {Database} from 'bun:sqlite'; const d=new Database(':memory:'); console.log(d.query('select sqlite_version() v').get()); console.log(process.platform, Bun.version)"
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit
+time: 2026-11-23T09:52:44.618Z
+exit: 0
+
+--- stdout ---
+{
+  v: "3.51.0",
+}
+darwin 1.4.4
+--- stderr ---
+

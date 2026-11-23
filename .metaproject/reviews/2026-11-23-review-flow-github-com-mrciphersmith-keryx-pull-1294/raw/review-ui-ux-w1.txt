@@ -1,0 +1,100 @@
+STATUS: DONE
+
+Context: product Keryx Desktop, audience a reviewer working through GitHub pull requests, primary task "see what needs me and act on it", surface type app screen (marketing rows of the slop catalogue do not apply). Mode: code only; no render with board data was supplied. Slop score not computed (app screen, no marketing tells in the diff).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "No blocker or major UX defect found in the diff. Three minor issues: the outdated-review reason replaces the reason a card sits in Needs attention; the narrow toolbar shows two identical checklist icons and drops the pull request count; the focus-restore selector no longer matches the now-portaled Review rules and PR watcher dialogs. Two info items (ambiguous 'Review changes' label; unmeasured toolbar width band). Judged from code only: no render with board data, open detail panel or an outdated card was available.",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "confidence": "high",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": null,
+      "quote": "    return `${partial ? \"Outdated partial review\" : \"Outdated review\"} · ${sha}`;",
+      "problem": "laneReason returns the outdated-review text before it reaches attentionReason. A card that is in the Needs attention lane because of CHANGES_REQUESTED, 'Review requested', failed checks or an unread reply now shows 'Outdated review · <sha>' as its reason, in the card and in the list Reason column.",
+      "impact": "The lane and its stated reason disagree: the user sees a card in Needs attention with a reason that is not why it is there, and loses 'Checks failed' / 'Changes requested' from the reason line. Nielsen #1 (visibility of status). ReviewTags still shows the GitHub decision and 'Review requested' badges, but not failed checks in the Reason column.",
+      "suggested_fix": "Rank the outdated label after attentionReason for open cards (return attention reason first, append ' · outdated review <sha>' as a secondary line), or render outdated as its own badge/secondary line instead of replacing the reason.",
+      "evidence": "model.ts laneReason order in the diff: awaitingAnswer, queued, cancelling, active, state!=open, outdated, partial, attentionReason, decision. The journal records the order as an agent decision (T7), not an operator decision. Code reading only; not seen on a render.",
+      "dedupe_key": "ux:lane-reason-order"
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "confidence": "high",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "<Icon name=\"checklist\" size={14} /> <span className=\"toolbar-label\">Filters{active.length ? ' (' + active.length + ')' : ''}</span>",
+      "problem": "Below a 1100px toolbar width the labels are hidden. Filters and Review rules both render Icon name=\"checklist\" (ProjectReviewRules.tsx uses the same icon), so two adjacent toolbar buttons become identical glyphs told apart only by a hover title. The 'N pull requests' count-label is also hidden at that width, and the active-filter count '(n)' on Filters disappears with its label.",
+      "impact": "With the detail panel open (the scenario this change targets, board about 820px) the user cannot tell Filters from Review rules without hovering, and loses the result count and the number of active filters on the button. Nielsen #6 (recognition over recall), #1. aria-label and title keep the accessible name correct, so this is sighted-user discoverability, not a WCAG name failure.",
+      "suggested_fix": "Give Review rules a distinct icon (for example rules/gear), keep a numeric badge on the Filters icon when filters are active, and keep the count-label (it is short) or move it into the review-context row that is always visible.",
+      "evidence": "ReviewBoard.tsx and ProjectReviewRules.tsx diff lines: both use Icon name=\"checklist\" size={14}; review.css: `@container (max-width: 1100px) { ... .toolbar-label, .count-label { display: none; } }`. Not measured on a render with data.",
+      "dedupe_key": "ux:collapsed-toolbar"
+    },
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+      "problem": "The Review rules and PR watcher dialogs are now portaled to document.body, so they are no longer descendants of .review-workspace. clearPrivateView (run when the signed-in viewer or repository changes) uses this selector to decide whether to return focus to the search field. For a focused element inside a portaled dialog it now yields false.",
+      "impact": "If the viewer or repository changes while one of those dialogs holds focus, the dialog is unmounted (its key depends on watcherTarget) and focus falls to document.body instead of the search field. Keyboard user loses their place. WCAG 2.4.3 (focus order). Narrow trigger, hence minor. Medium confidence: Dialog may restore focus itself on unmount; not read here.",
+      "suggested_fix": "Widen the selector to include the portaled dialogs (for example mark them with a class and match `[role=\"dialog\"]` globally), or test `overlayOpen()` before the reset instead of the ancestor path.",
+      "evidence": "Selector literal above vs createPortal(..., document.body) in ProjectReviewRules.tsx and ReviewWatcher.tsx in the same diff; ReviewDetail.css defines .review-workspace as the board root. Not run.",
+      "dedupe_key": "ux:portal-focus-restore"
+    },
+    {
+      "id": "UX-004",
+      "severity": "info",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "card.localReview?.runState ? \"View review result\" : card.localReview?.outdated ? \"Review changes\" : \"Run review\";",
+      "problem": "An outdated-only card gets the action label 'Review changes' with the generic play icon. The label does not say that a previous review exists or that this starts a new run on the updated head.",
+      "impact": "Wording only; a user may read it as 'open the diff' rather than 'run a fresh review'. Nielsen #2 (real-world language). Unverified: the detail panel's own launch label (ReviewRuns launchAction) was not in this slice.",
+      "suggested_fix": "Use 'Re-run review' (or 'Review latest changes') and keep it consistent with the detail panel's launch label.",
+      "evidence": "ReviewResults.tsx ReviewAction label chain in the diff.",
+      "dedupe_key": "ux:outdated-action-label",
+      "publication": "question"
+    },
+    {
+      "id": "UX-005",
+      "severity": "info",
+      "confidence": "low",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": "@container (max-width: 1100px) {",
+      "problem": "Unverified: labels return at toolbar widths just above 1100px with the toolbar set to nowrap and every child flex: none (search shrinks to 96px). With board data the toolbar adds the count label, the Review rules button and the 'PR watcher <state>' text. The orchestrator measured no overflow at 820, 1080 and 1380px without board data only.",
+      "impact": "If the full-label row with data needs more than about 1100px, the row overflows or the right-hand buttons are clipped in the 1101 to roughly 1300px band. This is pixel geometry, so it belongs to review-layout; filed here as an unmeasured risk, not a defect.",
+      "suggested_fix": "Measure scrollWidth against clientWidth at 1101, 1200 and 1300px with data loaded; raise the breakpoint or let the search field shrink further if it overflows.",
+      "evidence": "No measurement with data exists in this round (brief, 'Not measured').",
+      "dedupe_key": "ux:toolbar-breakpoint-unmeasured",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 },
+  "slices": ["slice-01"]
+}
+```
+
+Checks not run (no render or screenshots supplied, read-only round, exec budget 0):
+- Computed contrast, font and colour tokens: the diff adds no new colours or tokens (CSS adds only layout rules), so none were computed.
+- Rendered toolbar with board data (count label, Review rules button), with the detail panel open, and at 1101 to 1300px.
+- A card with an outdated badge in board and list views (label length, truncation, lane placement).
+- Keyboard pass through the portaled Review rules and PR watcher dialogs (focus trap, return focus, Escape), and whether Dialog restores focus on its own unmount.
+- Reduced-motion, zoom and touch-target checks: the diff adds no motion or target-size changes; toolbar buttons keep the existing btn-sm size.
+- The detail panel launch label (ReviewRuns.tsx) is outside this slice.
+
+Read in full: slice-01 (the diff of flow/package context files and the UI files ProjectReviewRules.tsx, ReviewBoard.tsx, ReviewResults.tsx, ReviewWatcher.tsx, model.ts, review.css). Also read: overlayOpen/.review-workspace search hits to check the focus-restore selector. Not read: ui-anti-slop.mdc and review activity rule (not opened this run), so severities follow the canonical levels by judgement rather than that table.
+
+Routing audit: graph_used no (not-relevant: diff review); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg); raw_rg_used no.

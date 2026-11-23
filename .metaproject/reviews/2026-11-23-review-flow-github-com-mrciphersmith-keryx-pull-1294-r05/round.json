@@ -1,0 +1,1366 @@
+{
+  "v": 1,
+  "round": 3,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "2 round(s): 2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02, 2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294; 2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02 trusted: local registry (ingest at 2026-11-23T10:44:39.712Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02 was committed by 1d3d65420826; 2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294 trusted: local registry (ingest at 2026-11-23T09:59:06.344Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294 was committed by 1d3d65420826; chosen 2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02 (33fd9647afea is an ancestor of 8e6ecf1aa3da)"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02",
+    "reviewedHead": "33fd9647afea1cb7795ca56dd168405c1db8d21a",
+    "packagePath": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02"
+  },
+  "mode": "delta",
+  "range": {
+    "base": "33fd9647afea1cb7795ca56dd168405c1db8d21a",
+    "head": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec"
+  },
+  "fixHunks": [
+    {
+      "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "startLine": 63,
+      "endLine": 63,
+      "findingIds": [
+        "F-022",
+        "F-023"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 755,
+      "endLine": 755,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 765,
+      "endLine": 765,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 780,
+      "endLine": 807,
+      "findingIds": [
+        "F-022",
+        "F-023"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 1034,
+      "endLine": 1226,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 66,
+      "endLine": 66,
+      "findingIds": [
+        "F-022",
+        "F-023"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 385,
+      "endLine": 390,
+      "findingIds": [
+        "F-015"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 426,
+      "endLine": 429,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 441,
+      "endLine": 446,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 36,
+      "endLine": 36,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 111,
+      "endLine": 121,
+      "findingIds": [
+        "F-015",
+        "F-016",
+        "F-017"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+      "startLine": 153,
+      "endLine": 153,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+      "startLine": 186,
+      "endLine": 187,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "startLine": 38,
+      "endLine": 38,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "startLine": 103,
+      "endLine": 103,
+      "findingIds": [
+        "F-022",
+        "F-023"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/model.ts",
+      "startLine": 103,
+      "endLine": 104,
+      "findingIds": [
+        "F-015",
+        "F-016",
+        "F-017"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 94,
+      "endLine": 96,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 98,
+      "endLine": 99,
+      "findingIds": [
+        "F-020"
+      ]
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "startLine": 4,
+      "endLine": 4,
+      "findingIds": [
+        "F-019",
+        "F-026"
+      ]
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 4,
+      "endLine": 4,
+      "findingIds": [
+        "F-019",
+        "F-026"
+      ]
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 18,
+      "endLine": 18,
+      "findingIds": [
+        "F-019",
+        "F-025",
+        "F-026"
+      ]
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 20,
+      "endLine": 20,
+      "findingIds": [
+        "F-019",
+        "F-026"
+      ]
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 24,
+      "endLine": 25,
+      "findingIds": [
+        "F-019",
+        "F-020",
+        "F-026"
+      ]
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "startLine": 151,
+      "endLine": 151,
+      "findingIds": [
+        "F-019",
+        "F-026"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.test.ts",
+      "startLine": 516,
+      "endLine": 551,
+      "findingIds": [
+        "F-021",
+        "F-022"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 407,
+      "endLine": 408,
+      "findingIds": [
+        "F-018"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 416,
+      "endLine": 418,
+      "findingIds": [
+        "F-018"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 420,
+      "endLine": 422,
+      "findingIds": [
+        "F-018"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 425,
+      "endLine": 425,
+      "findingIds": [
+        "F-018"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 444,
+      "endLine": 444,
+      "findingIds": [
+        "F-018"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 451,
+      "endLine": 451,
+      "findingIds": [
+        "F-021",
+        "F-022"
+      ]
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 455,
+      "endLine": 458,
+      "findingIds": [
+        "F-021",
+        "F-022"
+      ]
+    }
+  ],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 336,
+      "endLine": 503
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 699,
+      "endLine": 818
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+      "startLine": 103,
+      "endLine": 164
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 55,
+      "endLine": 56
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 80,
+      "endLine": 81
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 117,
+      "endLine": 119
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 193,
+      "endLine": 193
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 197,
+      "endLine": 197
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 238,
+      "endLine": 247
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 263,
+      "endLine": 266
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 274,
+      "endLine": 290
+    }
+  ],
+  "carried": [
+    {
+      "findingId": "F-024",
+      "disposition": "open"
+    }
+  ],
+  "mergeBase": "1b994df180fb89c82b6164e516ad3ff27b2453fa",
+  "modeReason": "33fd9647afea is an ancestor of 8e6ecf1aa3da",
+  "secondLookHunks": [
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 1,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 15,
+      "endLine": 335
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 504,
+      "endLine": 698
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "startLine": 819,
+      "endLine": 854
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+      "startLine": 1,
+      "endLine": 102
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md",
+      "startLine": 1,
+      "endLine": 38
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T12.implement.json",
+      "startLine": 1,
+      "endLine": 132
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T13.implement.json",
+      "startLine": 1,
+      "endLine": 131
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T14.implement.json",
+      "startLine": 1,
+      "endLine": 128
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json",
+      "startLine": 1,
+      "endLine": 130
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json",
+      "startLine": 1,
+      "endLine": 130
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json",
+      "startLine": 1,
+      "endLine": 130
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md",
+      "startLine": 1,
+      "endLine": 18
+    },
+    {
+      "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "startLine": 95,
+      "endLine": 96
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 27,
+      "endLine": 28
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 61,
+      "endLine": 61
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 66,
+      "endLine": 66
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 82,
+      "endLine": 82
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 89,
+      "endLine": 89
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 91,
+      "endLine": 91
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 93,
+      "endLine": 93
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 102,
+      "endLine": 102
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 105,
+      "endLine": 106
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 109,
+      "endLine": 112
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 122,
+      "endLine": 122
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 124,
+      "endLine": 124
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 128,
+      "endLine": 128
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 135,
+      "endLine": 135
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 148,
+      "endLine": 149
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 151,
+      "endLine": 152
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 163,
+      "endLine": 164
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 173,
+      "endLine": 173
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 178,
+      "endLine": 179
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 191,
+      "endLine": 195
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 197,
+      "endLine": 198
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 210,
+      "endLine": 210
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 212,
+      "endLine": 214
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 218,
+      "endLine": 238
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 252,
+      "endLine": 254
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 264,
+      "endLine": 264
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 274,
+      "endLine": 274
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 292,
+      "endLine": 292
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 297,
+      "endLine": 297
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 302,
+      "endLine": 302
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 327,
+      "endLine": 327
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 331,
+      "endLine": 331
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 340,
+      "endLine": 341
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 346,
+      "endLine": 348
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 352,
+      "endLine": 352
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 354,
+      "endLine": 356
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 369,
+      "endLine": 369
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 372,
+      "endLine": 373
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 385,
+      "endLine": 387
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 390,
+      "endLine": 390
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 412,
+      "endLine": 412
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 417,
+      "endLine": 417
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 437,
+      "endLine": 451
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 456,
+      "endLine": 456
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 461,
+      "endLine": 461
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 486,
+      "endLine": 486
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 501,
+      "endLine": 501
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 504,
+      "endLine": 504
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 517,
+      "endLine": 518
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 520,
+      "endLine": 522
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 540,
+      "endLine": 540
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 544,
+      "endLine": 545
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 564,
+      "endLine": 564
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 566,
+      "endLine": 566
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 568,
+      "endLine": 568
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 571,
+      "endLine": 571
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 575,
+      "endLine": 576
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 582,
+      "endLine": 582
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 602,
+      "endLine": 602
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 607,
+      "endLine": 607
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 615,
+      "endLine": 617
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 619,
+      "endLine": 619
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 627,
+      "endLine": 628
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 632,
+      "endLine": 632
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 634,
+      "endLine": 634
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 646,
+      "endLine": 646
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 649,
+      "endLine": 651
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 660,
+      "endLine": 661
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 663,
+      "endLine": 663
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 668,
+      "endLine": 668
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 671,
+      "endLine": 671
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 676,
+      "endLine": 676
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 686,
+      "endLine": 686
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 718,
+      "endLine": 720
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 722,
+      "endLine": 723
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 745,
+      "endLine": 745
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 756,
+      "endLine": 764
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 766,
+      "endLine": 779
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 808,
+      "endLine": 817
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 849,
+      "endLine": 849
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 856,
+      "endLine": 857
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 861,
+      "endLine": 861
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 864,
+      "endLine": 864
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 867,
+      "endLine": 868
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 871,
+      "endLine": 872
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 900,
+      "endLine": 901
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 904,
+      "endLine": 904
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 912,
+      "endLine": 912
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 928,
+      "endLine": 928
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 932,
+      "endLine": 933
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 940,
+      "endLine": 940
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 945,
+      "endLine": 945
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 963,
+      "endLine": 963
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 972,
+      "endLine": 972
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 974,
+      "endLine": 974
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 977,
+      "endLine": 977
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 983,
+      "endLine": 983
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 993,
+      "endLine": 1033
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 1227,
+      "endLine": 1250
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 1253,
+      "endLine": 1253
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 1256,
+      "endLine": 1257
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "startLine": 1267,
+      "endLine": 1267
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 59,
+      "endLine": 59
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 67,
+      "endLine": 79
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 82,
+      "endLine": 82
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 96,
+      "endLine": 97
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 127,
+      "endLine": 128
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 138,
+      "endLine": 138
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 196,
+      "endLine": 196
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 225,
+      "endLine": 234
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 236,
+      "endLine": 237
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 248,
+      "endLine": 248
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 254,
+      "endLine": 255
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 257,
+      "endLine": 257
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 368,
+      "endLine": 368
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 370,
+      "endLine": 370
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 374,
+      "endLine": 384
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 451,
+      "endLine": 453
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 460,
+      "endLine": 461
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 464,
+      "endLine": 464
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 506,
+      "endLine": 506
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 57,
+      "endLine": 61
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 78,
+      "endLine": 78
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "startLine": 104,
+      "endLine": 105
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "startLine": 98,
+      "endLine": 98
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "startLine": 100,
+      "endLine": 101
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "startLine": 148,
+      "endLine": 148
+    },
+    {
+      "file": "apps/desktop/src/review/model.test.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "apps/desktop/src/review/model.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "apps/desktop/src/review/model.test.ts",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": "apps/desktop/src/review/model.test.ts",
+      "startLine": 59,
+      "endLine": 101
+    },
+    {
+      "file": "apps/desktop/src/review/model.ts",
+      "startLine": 28,
+      "endLine": 44
+    },
+    {
+      "file": "apps/desktop/src/review/model.ts",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": "apps/desktop/src/review/model.ts",
+      "startLine": 83,
+      "endLine": 93
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 20,
+      "endLine": 20
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 84,
+      "endLine": 93
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 97,
+      "endLine": 97
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 100,
+      "endLine": 100
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "startLine": 1,
+      "endLine": 3
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "startLine": 5,
+      "endLine": 37
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 1,
+      "endLine": 3
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 5,
+      "endLine": 17
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 21,
+      "endLine": 23
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 26,
+      "endLine": 61
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/prd.md",
+      "startLine": 1,
+      "endLine": 91
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "startLine": 1,
+      "endLine": 150
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "startLine": 152,
+      "endLine": 253
+    },
+    {
+      "file": "docs/requirements/roadmap.md",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "docs/requirements/roadmap.md",
+      "startLine": 16,
+      "endLine": 17
+    },
+    {
+      "file": "src/review/board-badges.test.ts",
+      "startLine": 1,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/board-badges.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/board-badges.ts",
+      "startLine": 30,
+      "endLine": 31
+    },
+    {
+      "file": "src/review/board-badges.ts",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": "src/review/board-badges.ts",
+      "startLine": 39,
+      "endLine": 42
+    },
+    {
+      "file": "src/review/board-badges.ts",
+      "startLine": 45,
+      "endLine": 45
+    },
+    {
+      "file": "src/review/board-badges.ts",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": "src/review/board-types.ts",
+      "startLine": 16,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/desk-run-store.test.ts",
+      "startLine": 455,
+      "endLine": 515
+    },
+    {
+      "file": "src/review/desk-run-store.test.ts",
+      "startLine": 552,
+      "endLine": 571
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 391,
+      "endLine": 393
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 399,
+      "endLine": 404
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 406,
+      "endLine": 406
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 409,
+      "endLine": 415
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 419,
+      "endLine": 419
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 423,
+      "endLine": 424
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 426,
+      "endLine": 426
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 445,
+      "endLine": 446
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+STATUS: DONE
+
+## Frontend Review
+
+Summary: read slice-01 in full and, for context, ReviewBoard.tsx (load effect, badge poll, indicator effect), ReviewDetail.css, flows.css, components.css, ui.tsx. The new `attentionPrs` effect has no render loop (the equality guard returns `previous`, and `snapshot`/`receiptVersion` are the only deps) and no stale closure (it reads the current `snapshot`). It does interact with the load effect's `replaceAttention`: see F-001. `showDone` is a required boolean and has one caller. `.review-board` is `flex: 1; min-width: 0` (ReviewDetail.css:3), so inline-size containment does not collapse the board width, and the existing `@container (max-width: 680px)` rule targets the board from the workspace container, so it is unaffected. Toolbar buttons whose label is hidden keep accessible names (aria-label equal to the visible text). Nothing was run (read-only, exec_budget_s 0). Not verified: any rendered check of dialogs, or of widths between 980 and about 1070 px.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "No blocker or major in the frontend slice. Two minor and two info points: a transient tab-indicator drop-and-restore caused by the load effect computing attention from a snapshot that lacks the carried unread replies; the dialog containment effect of `.review-board { container-type }` (also reported by review-regression, rated lower here); and two info observations on the collapsed toolbar.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (needsViewerAttention(card, snapshot.viewer, unreadCount(snapshot, card))) next.add(card.number);",
+      "problem": "The load effect computes attention from the freshly loaded `snapshot`, but unread replies for unchanged PRs are only carried into the stored snapshot afterwards, in the `setRead` updater (`addressedReplyIds` copied from the previous snapshot when the loaded card has none). For a card whose only attention reason is an unread reply, `unreadCount` is 0 at load time, so the load's `setAttentionPrs` deletes it; the new effect then re-adds it after commit once the carried snapshot is rendered. Both state updates are batched in one render, so that render has the card absent from `attentionPrs`.",
+      "impact": "On every board refresh or watcher-triggered refresh where the viewer's only attention signal is an unread reply, `indicator` is computed without the card, the effect `onIndicatorChange?.(indicator, viewer)` fires with null (or watching), and the follow-up render from the new effect fires attention again. The parent receives a null/attention pair per refresh (tab dot flicker, or a spurious change event for anything keyed on it). The end state is correct. The added DOM test cannot show it, because it supplies `addressedReplyIds` in the loaded snapshot.",
+      "suggested_fix": "Compute the load-time attention from the same cards that `setRead` will store (apply the carry-over of `addressedReplyIds` before building the set, e.g. build the merged snapshot once and use it for both `setAttentionPrs` and `setRead`), or derive `attentionPrs` only in the new effect and keep the load effect responsible solely for the `replaceAttention` reset.",
+      "evidence": "ReviewBoard.tsx load effect (setAttentionPrs in the `.then`, then `setRead` with the `replies` carry-over a few lines below) and the new effect after `visible`; the indicator effect `useEffect(() => { onIndicatorChange?.(indicator, viewer); }, ...)` runs after both in the same commit.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board { container-type: inline-size; }",
+      "problem": "container-type: inline-size implies layout containment, so `section.review-board` becomes the containing block for position:fixed descendants. `Dialog` (components/ui.tsx) renders `.overlay` (position: fixed; inset: 0; z-index 50) inline with no portal, and `ProjectReviewRules` (RulesDialog) and `ReviewWatcher` (PR watcher Dialog) render it inside the toolbar, i.e. inside the section. Before the change the containing block was `.review-workspace` (already a container), which also holds the detail panel.",
+      "impact": "The Review rules and PR watcher modals now cover and centre on the board section only; the detail panel (a sibling of the section) stays uncovered and interactive under an aria-modal dialog, and the section's own stacking context decides stacking against the panel. Filters, PR subscription and detail sheet dialogs are siblings of the section and are unaffected. Counterpart: review-regression reports the same defect (rated major there); I rate it minor because no data is lost and the dialog stays usable. Derived from CSS containment rules and the markup; not checked in a rendered browser.",
+      "suggested_fix": "Put container-type on a wrapper around the toolbar only (the @container rule needs only the toolbar width), or render the two dialogs outside the section as the other dialogs are.",
+      "evidence": "ReviewDetail.css:1 `.review-workspace { ... container-type: inline-size; }`; components.css overlay `position: fixed; inset: 0; z-index: 50`; ui.tsx has no createPortal; ProjectReviewRules.tsx `{open && <RulesDialog .../>}` and ReviewWatcher.tsx `{active && open && <Dialog .../>}` rendered next to their buttons inside `.flows-toolbar`.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board .flows-toolbar .toolbar-label, .review-board .flows-toolbar .count-label { display: none; }",
+      "problem": "Below 980 px the count label (\"N pull requests\") is removed with display:none and has no replacement, so the number of visible cards is unavailable to sighted and assistive-technology users in that state. The PR watcher button keeps only the clock icon and the `.watcher-indicator` text visually and has an aria-label but, unlike Filters, Board, List and Refresh, no `title`.",
+      "impact": "Information and tooltip loss in the narrow layout; no functional failure.",
+      "suggested_fix": "Keep the count available to AT (visually-hidden class, or an aria-live status elsewhere) and add `title` to the PR watcher button for parity with the other toolbar buttons.",
+      "evidence": "slice-01 review.css container rule; ReviewWatcher.tsx button has `aria-label={'PR watcher · ' + label}` and no title.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board .flows-toolbar { flex-wrap: nowrap; }",
+      "problem": "The toolbar is nowrap with every child `flex: none` except the search field (min 96 px) and the spacer, while labels are shown above 980 px. A rough sum of the label-bearing children (heading + count, search min, Filters, Review rules, PR watcher with indicator, Board/List, Refresh, gaps and padding) comes to about 1000-1070 px, so board widths just above 980 px may overflow to the right without wrapping. This is an estimate from the markup; the orchestrator's measurement covered only 820 px, with the count label and Review rules button absent.",
+      "impact": "Possible clipped Refresh button or horizontal overflow of the toolbar in a 980-1070 px board width band. Not confirmed.",
+      "suggested_fix": "Measure the toolbar with all children present at 981, 1000 and 1050 px; raise the collapse threshold if it overflows.",
+      "evidence": "review.css rules added by the change; T8 journal note that the check had no board data.",
+      "confidence": "low",
+      "reviewer": "review-frontend",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+Clean areas: filterReviews, needsViewerAttention, stateFilterShowsDone, laneReason (no filter bypass, case-insensitive viewer match, merged/closed excluded); showDone wiring and Done-lane rule; badgesEqual includes `outdated`; keys on lanes/cards; toolbar accessible names (aria-label matches the visible text); no API calls added in components; the new effect has no render loop or stale closure.
+
+Routing audit: graph_used: no (not-relevant: UI slice read in full, dependents checked by targeted search); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg / read for CSS, Dialog and callers); raw_rg_used: no.

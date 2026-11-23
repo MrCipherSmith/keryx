@@ -1,0 +1,70 @@
+STATUS: DONE
+
+## Logic Review (slice-03, wave 3)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage0`, base `1b994df1`, head `53c96b8a`, scope_mode: diff (supplied slice text only).
+- Spec compliance gate: ran against the brief's AC summary for the outdated badge (`localReview.outdated`); the backend part is implemented.
+
+### Summary
+`localBadge` now drops imported (`source: "existing"`) runs once, up front. Before, it excluded them at each of its three reads (active, latest, ready), so behaviour is the same. It also adds an `outdated` fallback: the newest finished run with a recorded reviewed range, offered only when no run is active and no run's requested or reviewed range is the card's. The SQL in `attachBadges` adds a per-card materialized lookup (`wanted.outdated`) that brings exactly that one extra row across the SQLite boundary. I traced the SQL against `history()` + `localBadge` and they agree:
+- the same ordering (`createdAt DESC, rowid DESC` in both);
+- the same visibility rules (archive and delete excluded, `existing` excluded, `recoverable` mapped to `failed`);
+- the same gate: any active row or any covering row suppresses `outdated` on both paths;
+- the extra `NOT (reviewed == card)` predicate is redundant but harmless, because such a run makes `ready` true, which suppresses `outdated` anyway.
+
+The tests pin each predicate of the lookup (another PR, another viewer, deleted, imported, no result, ordering). No blocker, major or minor defect found.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 2
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-03 (board-badges.ts, board-types.ts, desk-run-store.ts attachBadges SQL, tests): the outdated-badge fallback is logically sound. SQL and live-history paths agree on ordering, visibility and precedence (active or covering run suppresses outdated); the existing-source refactor is behaviour-preserving. Two info notes: the first use of `AS MATERIALIZED` raises the SQLite floor, and the SQL candidate predicate checks only reviewed.headSha while the row projection needs both SHAs.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "WITH wanted AS MATERIALIZED (",
+      "problem": "This is the first `AS MATERIALIZED` CTE in src/ (keryx ctx rg found one hit). It needs SQLite 3.35+. The pre-existing `sqlite_schema` query in the same method already needs 3.33+. On macOS, bun:sqlite loads the system libsqlite3 unless setCustomSQLite is called, and the repo never calls it. So the minimum macOS SQLite rises from 3.33 to 3.35.",
+      "impact": "On a host whose system SQLite is 3.33–3.34, the query fails to prepare. readLocalBadges then throws, and the board shows no local badges at all, not just no outdated badge. Whether any supported macOS ships 3.33–3.34 was not checked.",
+      "suggested_fix": "Either confirm the supported macOS floor ships SQLite >= 3.35, or drop MATERIALIZED. A plain CTE stays correct; only the once-per-card evaluation guarantee is lost.",
+      "evidence": "desk-run-store.ts attachBadges: `WITH wanted AS MATERIALIZED (`; `keryx ctx rg \"AS MATERIALIZED|setCustomSQLite|sqlite_version\" src` -> one hit, this line.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "AND json_extract(o.details,'$.result.reviewed.headSha') IS NOT NULL",
+      "problem": "The outdated-candidate subquery requires only `result.reviewed.headSha`. The row projection builds `result` only when both `base` and `head` are truthy (`result: row.base && row.head ? ... : null`). Live history uses `!!run.result?.reviewed`. Take a run whose reviewed range has a head but a null or empty base. SQL selects it as `wanted.outdated`, then the projection drops its result, so the card gets no outdated badge. `localBadge(history.runs)` would pick that run, or an older one, instead. The two paths diverge.",
+      "impact": "Parity break between the board's SQLite path and Desktop's live history. I named no producer that writes a reviewed range without baseSha, so I see no trigger today.",
+      "suggested_fix": "Also require `json_extract(o.details,'$.result.reviewed.baseSha') IS NOT NULL` (or `<> ''`) in the subquery, so it selects only rows the projection will keep.",
+      "evidence": "desk-run-store.ts subquery predicate vs the row mapping `result: row.base && row.head ? { reviewed: {...} } : null` in the same method; board-badges.ts `runs.find(run => runFinished(run) && !!run.result?.reviewed)`.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "slices": [ { "id": "slice-03", "status": "DONE", "coverage": "read in full; cross-checked against desk-run-store.ts history() ordering (lines 336-390), readLocalBadges, desk-run-types source union" } ],
+  "inputs_unreadable": []
+}
+```
+
+### Not verified
+- No tests were run (exec_budget 0). I relied on the brief's statement that `verify-tests-to-run-1/2.txt` exit 0 and did not open those files.
+- I did not check the Bun/SQLite version actually linked on supported macOS releases (F-001).
+- I did not read the frontend consumer of `localReview.outdated` (card label, base-update detection by comparing `outdated.headSha` with `card.headSha`). It belongs to other slices.
+- I did not read `pr-context.md`, the flow package or the activity rule `review.mdc` in full; the brief summary was used as the spec.
+
+Routing audit: graph_used: no (not-relevant: three-file slice, callers found by ctx rg); wiki_used: no (not-relevant: the brief states the intent); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

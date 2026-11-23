@@ -1,0 +1,94 @@
+[
+  {
+    "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/model.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "laneReason"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/commands/review-desk-run.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/board.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runReviewBoard"
+    ]
+  },
+  {
+    "file": "src/review/desk-publication.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/desk-run-legacy.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/pr-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/review-rules.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore",
+      "attachDeskRunBadges",
+      "readLocalActiveReviewNumbers",
+      "readLocalBadges"
+    ]
+  }
+]

@@ -1,0 +1,258 @@
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 325,350 @@
+     let active = true;
+     void listRepositories(cwd).then((names) => {
+       if (active) setAlternatives(names);
+     }).catch(() => { if (active) setAlternatives([]); });
+     return () => { active = false; };
+   }, [cwd, needRepositories, listRepositories]);
+   const [receiptVersion, setReceiptVersion] = useState(0);
+   const viewer = snapshot?.viewer;
+   const repositoryId = snapshot?.repositoryId;
+   useEffect(() => {
+     if (viewer && repositoryId) return subscribeReviewReads(viewer, repositoryId, undefined, () => setReceiptVersion(n => n + 1));
+   }, [viewer, repositoryId]);
+   const visible = useMemo(() => {
+     if (!snapshot) return [];
+     return filterReviews(snapshot.cards, filters, q).map(card => {
+       if (!card.addressedReplyIds?.length) return card;
+       const ids = unreadIds(snapshot, card);
+       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
+     });
+   }, [snapshot, filters, q, receiptVersion]);
+-  // Receipts and discussion notes change after the load that seeded the set; keep it in step with the shown snapshot.
+-  useEffect(() => {
+-    if (!snapshot) return;
+-    setAttentionPrs(previous => {
+-      const next = new Set(previous);
++  // Receipts and discussion notes change after the load that seeded the carried set, so the shown snapshot is judged here.
++  const attentionPrs = useMemo(() => {
++    const next = new Set(carriedAttention);
++    if (snapshot) {
+       for (const c of snapshot.cards) {
+         if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 391,431 @@
+ 
+   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+   const [detailWidth, setDetailWidth] = useState(560);
+   const openReview = useCallback((card: ReviewCard) => {
+     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
+   }, []);
+ 
+   return <div className="review-workspace" hidden={!tabActive}>
+     <section className="flows review-board" aria-label="Pull requests">
+     <div className="flows-toolbar">
+       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
+         {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
+       </span>}</div>
+       <label className="search-field"><Icon name="search" size={14} />
+         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+       </label>
+       <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+         aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+-        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters{active.length ? ' (' + active.length + ')' : ''}</span>
++        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
+       </button>
+       <div className="grow" />
+       {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
+       <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
+       <div className="segmented" role="group" aria-label="Review view">
+         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
+           aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
+           onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
+       </div>
+       <button className="btn btn-sm" disabled={loading} onClick={refresh} aria-label="Refresh pull requests" title="Refresh pull requests">
+         {loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
+       </button>
+     </div>
+     {(snapshot || repo || (needRepositories && alternatives.length > 0) || active.length > 0) && <div className="review-context">
+       {snapshot && <>
+         <Icon name="branch" size={14} />
+         {snapshot.repositories.length > 1 ? <select className="select-compact" aria-label="Base repository" value={snapshot.repo}
+           onChange={(e) => selectRepo(e.target.value)}>{snapshot.repositories.map((name) => <option key={name}>{name}</option>)}</select>
+           : <strong>{snapshot.repo}</strong>}
+         <span>Signed in as {snapshot.viewer}</span>
+
+--- apps/desktop/src/review/model.ts
+@@ 63,96 @@
+   });
+ }
+ 
+ function attentionReason(c: ReviewCard): string | null {
+   if (c.localReview?.publicationPending) return "Choose whether to publish on GitHub";
+   if (c.localReview?.ready) return "Keryx review result available";
+   if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
+   if (c.reviewers.length) return "Review requested";
+   if (c.ci === "failed") return "Checks failed";
+   if (c.addressedReplyIds?.length) return "New reply to you";
+   return null;
+ }
+ 
+ export function reviewLane(c: ReviewCard): Lane {
+   if (c.localReview?.awaitingAnswer) return "attention";
+   if (c.localReview?.active) return "review";
+   if (c.state !== "open") return "done";
+   return attentionReason(c) ? "attention" : "open";
+ }
+ 
++/** The outdated-review text whenever the badge has one, independent of which reason ranks first. */
++export function reviewNote(c: ReviewCard): string | null {
++  const outdated = c.localReview?.outdated;
++  if (!outdated) return null;
++  const partial = outdated.state === "partial" || outdated.state === "budget";
++  const sha = outdated.headSha.slice(0, 7);
++  // Same head, different range: only the base moved, so the reviewed head is not "outdated".
++  if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
++  return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
++}
++
+ export function laneReason(c: ReviewCard) {
+   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
+   if (c.localReview?.runState === "queued") return "Keryx review queued";
+
+--- apps/desktop/src/styles/review.css
+@@ 66,86 @@
+ .rule-heading { justify-content: space-between; }
+ .review-rule-editor fieldset { border: 0; min-width: 0; padding: 0; margin: 0; }
+ .review-rule-editor label, .pr-automation label { display: grid; gap: var(--sp-1); font-size: var(--fs-sm); }
+ .review-rule-editor label.rule-check { display: flex; gap: var(--sp-2); align-items: center; }
+ .review-rule-editor input[type=checkbox] { accent-color: var(--accent); }
+ .rule-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: var(--sp-3); }
+ .review-rule-editor input, .review-rule-editor select, .pr-automation select { min-width: 0; max-width: 100%; }
+ .rule-entry, .rule-preview { border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--sp-3); overflow-wrap: anywhere; }
+ .rule-entry { display: grid; gap: var(--sp-2); }
+ .rule-entry small, .automation-history time, .automation-history small { color: var(--fg-muted); }
+ .rule-preview { background: var(--bg-sunken); }
+ .automation-history { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+ .automation-history ol { list-style: none; padding: 0; margin: 0; }
+ .automation-history li { padding-block: var(--sp-2); overflow-wrap: anywhere; }
+ .automation-history h3 { margin-bottom: var(--sp-2); }
+ 
+ .pr-subscription-topics label { display: flex; align-items: center; gap: var(--sp-2); }
+ .pr-subscription-topics input { accent-color: var(--accent); }
+ 
+ .review-board .flows-toolbar { container-type: inline-size; }
+-.review-board .flows-toolbar { flex-wrap: nowrap; }
+ .review-board .flows-toolbar > * { flex: none; }
+
+--- apps/desktop/src/review/model.test.ts
+@@ 75,93 @@
+   const awaiting = { ...outdated("completed"), localReview: { ...outdated("completed").localReview, awaitingAnswer: true as const } };
+   expect(laneReason(awaiting)).toBe("Awaiting your answer");
+   expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
+-  expect(reviewLane(outdated("completed"))).toBe(reviewLane(pr));
++  // A neutral open card: no decision, no reviewers, CI passed.
++  const neutral = quiet(pr);
++  expect(reviewLane(neutral)).toBe("open");
++  expect(reviewLane({ ...neutral, localReview: outdated("completed").localReview })).toBe("open");
++  expect(laneReason({ ...neutral, localReview: outdated("completed").localReview })).toBe("Outdated review · abcdef0");
++});
++
++test("an outdated review stays visible as a note when another reason leads the lane", () => {
++  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
++  expect(reviewLane(stale)).toBe("attention");
++  expect(laneReason(stale)).toBe("Changes requested");
++  expect(reviewNote(stale)).toBe("Outdated review · abcdef0");
++  expect(reviewNote({ ...stale, headSha: "abcdef0123456" })).toBe("Review predates base update · abcdef0");
++  expect(reviewNote(pr)).toBeNull();
+ });
+ 
+
+--- docs/requirements/keryx-desktop-review-v2/README.md
+@@ 1,24 @@
+ # Keryx Desktop Review v2 · разделение Pull Requests и Reviews
+-Version: 0.1.1
++Version: 0.1.2
+ 
+-**Статус — draft. Ничего из этого пакета не реализовано.** Пакет описывает целевое состояние и план перехода. Всё, что названо «сегодня», проверено по коду на коммите `1b994df18`; всё остальное — планируемое.
++**Статус — этап 0 реализован на ветке `feat/desktop-review-v2-stage0` (Flow 516, PR #1294, ожидает слияния); этапы 1–4 — draft, не реализованы.** Пакет описывает целевое состояние и план перехода. Всё, что названо «сегодня», проверено по коду на коммите `1b994df18`; всё остальное — планируемое.
+ 
+ ## Назначение
+ 
+ Review v1 поместил на одну карточку две сущности с разными жизненными циклами: pull request из GitHub и ревью Keryx. Из-за этого карточки меняют колонку и порядок от событий, не связанных с PR, фильтры дают неожиданный результат, а ревью теряет связь с собой, когда автор PR добавляет коммит. v2 разделяет их:
+ 
+ - **Pull requests** и **Issues** — срез работы в GitHub. Колонки, сортировка и фильтры зависят только от GitHub.
+ - **Reviews** — сущность Keryx рядом с Flows: одно ревью на PR и ревьюера, с раундами, сквозными находками и историей публикаций.
+ - Карточки PR и Issue несут только ссылки на работу Keryx — ревью, Flow и сессию — и кнопки её начать.
+ 
+ ## Документы
+ 
+ | Документ | Для кого и зачем |
+ |---|---|
+ | [PRD](prd.md) | Продукт и разработка. Проблема, пользователи, требования R1–R12, критерии выпуска и пользы |
+ | [Спецификация](specification.md) | Разработка и QA. Сущности, состояния, хранение, поведение при смене head, экраны, CLI |
+ | [План реализации](implementation-plan.md) | Команда поставки. Пять этапов, зависимости, принятые решения владельца |
+ 
+ ## Область
+ 
+ Входит: вкладки Pull requests, Issues и новая Reviews в Desktop; модель Review поверх существующих запусков; поведение ревью при новом коммите в PR; привязка сессий к PR и Issue; единый реестр ревью для Desktop и сессии агента.
+
+--- src/review/desk-run-store.ts
+@@ 381,432 @@
+         }
+       }
+       return run;
+     });
+     return { version: 1, runs };
+   }
+ 
+   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
+       head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
+     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
+     // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
+     // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
+     // Older read-only stores predate interactive review questions.
+     const tables = this.db.query<{ name: string }, []>(
+       "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('review_questions','reviewer_questions')",
+     ).all();
+     const pending = tables.map(({ name }) => `EXISTS(SELECT 1 FROM ${name} q WHERE q.run_id=r.id AND q.answer IS NULL)`).join(" OR ") || "0";
+     const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')
+         AND coalesce(json_extract(${r}.details,'$.decision.action'),'') NOT IN ('archive','delete')`;
+-    // MATERIALIZED evaluates the outdated lookup once per card, not once per candidate run.
++    // Each run of a requested PR is parsed once in `scoped`: `details` embeds the report, so a second
++    // pass for the outdated lookup doubled the cost. Only the kept rows are read again for progress.
++    // The outdated row is kept only when no row makes localBadge ignore it: an active run, a run
++    // requested for the card's range, or a finished run that reviewed it.
+     const query = this.db.query<Row, [string, string, string]>(`
+-      WITH wanted AS MATERIALIZED (
+-        SELECT w.n, w.wb, w.wh, (
+-          SELECT o.id FROM runs o
+-          WHERE o.repo=?2 AND o.viewer=?3 AND o.pr=w.n AND o.state IN ('completed','partial','budget') AND ${visible("o")}
+-            AND json_extract(o.details,'$.result.reviewed.headSha') IS NOT NULL
+-            AND NOT (json_extract(o.details,'$.result.reviewed.baseSha') IS w.wb AND json_extract(o.details,'$.result.reviewed.headSha') IS w.wh)
+-          ORDER BY json_extract(o.details,'$.createdAt') DESC,o.rowid DESC LIMIT 1
+-        ) AS outdated
+-        FROM (SELECT json_extract(value,'$.number') AS n,json_extract(value,'$.baseSha') AS wb,json_extract(value,'$.headSha') AS wh
+-          FROM json_each(?1)) w
++      WITH scoped AS MATERIALIZED (
++        SELECT w.key AS card, r.rowid AS seq, r.state, json_extract(r.details,'$.createdAt') AS created,
++          json_extract(r.details,'$.baseSha')=w.wb AND json_extract(r.details,'$.headSha')=w.wh AS requested,
++          json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
++          w.wb, w.wh
++        FROM (SELECT key,json_extract(value,'$.number') AS n,json_extract(value,'$.baseSha') AS wb,json_extract(value,'$.headSha') AS wh
++          FROM json_each(?1)) w CROSS JOIN runs r
++        WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible("r")}
++      ), flagged AS (
++        SELECT seq, created, card, coalesce(r.state IN ('running','cancelling','queued') OR requested OR (base=wb AND head=wh),0) AS kept,
++          r.state IN ('completed','partial','budget') AND base IS NOT NULL AND head IS NOT NULL AS finished,
++          coalesce(r.state IN ('running','cancelling','queued') OR requested OR
++            (r.state IN ('completed','partial','budget') AND base=wb AND head=wh),0) AS supersedes
++        FROM scoped r
++      ), picked AS (
++        SELECT seq, created, kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND
++          row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
++        FROM flagged
+       )
+       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
+         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+         json_extract(r.details,'$.source') AS source,
+         json_extract(r.details,'$.result.coverage') AS coverage,
+         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
+         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
+         json_extract(r.details,'$.reviewerProgress.finished') AS finished,

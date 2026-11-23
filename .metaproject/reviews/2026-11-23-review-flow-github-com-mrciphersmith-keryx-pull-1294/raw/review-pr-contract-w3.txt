@@ -1,0 +1,108 @@
+STATUS: DONE_WITH_CONCERNS
+
+The PR body has no checklist boxes (no "Documentation needed", "Tests updated", "Breaking change", screenshots rows). I worked each claim of "What", "Verification", "Not verified" and "Behaviour change to note" as a row.
+
+Claim table (claim | state | what the diff shows | result)
+- "Filters have no exceptions" | claimed | model.ts drops `if (c.localReview?.active) return true;`; model.test.ts adds "an active local review does not bypass any selected filter" | holds
+- "Stable order" | claimed | ReviewBoard.tsx drops the `.sort(...localReview.active...)`; dom test "visible cards keep snapshot order..." | holds
+- "Done lane on demand" | claimed | `stateFilterShowsDone`, `showDone` prop in ReviewResults; dom test with 4 filter cases | holds
+- "Tab indicator means addressed to me ... Team review requests are not matched yet" | claimed | `needsViewerAttention` matches `reviewers` by login only; test "reviewers: ['org/team']" gives null | holds, but docs in the same PR say otherwise (PC-002)
+- "Outdated review ... `Review predates base update`, `localReview.outdated`, SQL returns at most one extra row per card" | claimed | board-types.ts adds `outdated`; desk-run-store.ts `wanted` CTE picks one `o.id` per card (`LIMIT 1`), joined as `r.id=wanted.outdated`; laneReason has both labels | holds
+- "Toolbar on one row. Labels collapse to icons ...; dialogs portaled to document.body" | claimed | review.css container query, `toolbar-label` spans, createPortal in ReviewWatcher and ProjectReviewRules | holds, but the diff also hides the count label (PC-003)
+- "Also adds the requirements package ... (PRD, specification, implementation plan for stages 0-4)" | claimed | 5 doc files + roadmap 0.29.38 | holds; the package says "nothing implemented" while stage 0 is in this PR (PC-001)
+- "Verification: bun test src - 752 pass; board/desk-run tests; tsc; live 820/1080/1380" | claimed | not checkable from a diff; matches journal T12 (752, tsc exit 0); orchestrator brief confirms the live widths | consistent, not re-run
+- "Not verified: Rust not compiled; no Rust files changed; review_board passes untyped JSON" | claimed | no `.rs` file in the slices. `keryx ctx rg` on apps/desktop/src-tauri/src/review.rs shows `use serde_json::Value;` and `pub async fn review_board(` and no `localReview` or Card struct | consistent
+- "Behaviour change to note: a merged or closed PR with a running review is hidden under Open + Draft" | claimed | model.test.ts changes the merged-PR test filter to `state: []`; dom test saves `state: ["merged"]` before the awaiting-answer test | holds; the list is not complete (PC-004)
+- "review round ... six findings fixed in 985f8ecbc; no second round" | claimed | journal F1-F6 and T12 match the diff (portal, unreadIds/latest ref, base-moved label, SQL fixtures) | holds
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "The PR body's claims match the diff on all six board fixes. Four disagreements between the body, the requirements package and the diff: the new docs call stage 0 unimplemented, the docs still promise team matching for the tab indicator, the count label disappears without being mentioned, and the list of deliberate behaviour changes omits the outdated-over-attention reason order. One info on personal data in a flow file.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "line": null,
+      "quote": "Ничего из этого пакета не реализовано.",
+      "problem": "README.md says nothing in the package is implemented, the roadmap entry says \"Draft requirements, nothing implemented\" (docs/requirements/roadmap.md, 0.29.38) and implementation-plan.md is \"Статус: draft\". The same PR implements stage 0 of that plan (filter bypass removed, active-first sort removed, Done lane on demand, narrowed indicator, outdated badge, one-row toolbar) and the PR body says so. Observations O2-O6 and O9 are stated as \"today\" pinned to commit 1b994df18, but the README status sentence is not pinned.",
+      "impact": "A reader of the docs after merge is told the board still has the bypass, the sort and the empty Done lane, and that stage 0 is not started. The plan's stage 0 row has no done marker.",
+      "suggested_fix": "Mark stage 0 as implemented in implementation-plan.md and the README status line (stage 0 implemented in PR #1294; stages 1-4 not), and say in the roadmap entry that stage 0 is done.",
+      "evidence": "slice-02.diff README.md status line and roadmap.md entry 0.29.38 versus slice-01.diff model.ts (removed bypass line) and ReviewBoard.tsx (removed sort).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/prd.md",
+      "line": null,
+      "quote": "запрос ревью на него или его команду",
+      "problem": "prd.md R12 and specification.md (Pull requests, indicator bullet: review request to the user or the user's team; acceptance criterion 16) say the tab indicator is lit by a review request to the viewer or the viewer's team. The diff implements stage 0 of that plan with `needsViewerAttention` matching only `reviewers.some(r => r.toLowerCase() === login)`, and the test `signal([{ ...base, reviewers: [\"org/team\"] }])` expects null. The PR body and flow description disclose this; the implementation-plan.md stage 0 row (narrow the tab indicator to events addressed to the user) does not carry the team exclusion.",
+      "impact": "The requirements package, the only place a later stage reads, never records that stage 0 knowingly drops team requests, so stage 1 or a reviewer comparing acceptance criterion 16 with the code sees a defect or loses the decision.",
+      "suggested_fix": "Add the team exclusion and the local-review clause (awaitingAnswer, publicationPending, which R12 assigns to the Reviews indicator) to the stage 0 row of implementation-plan.md as known deviations until stage 2.",
+      "evidence": "slice-02.diff prd.md R12 and specification.md section Pull requests; slice-01.diff model.ts needsViewerAttention; slice-02.diff ReviewBoard.dom.test.tsx 'the tab signal is attention only for ...'.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board .flows-toolbar .toolbar-label, .review-board .flows-toolbar .count-label { display: none; }",
+      "problem": "The PR body says \"Labels collapse to icons when the board is narrow\". The same rule also hides `.count-label` (\"N pull requests\") under 1100px of toolbar width. That is a removed piece of information, not a label collapsed to an icon, and the body does not mention it. With a 560px detail panel open in a 1440px window (the case that motivated the change) the board is 820px, so the count is always hidden there.",
+      "impact": "A user with the detail panel open loses the result count with no icon or tooltip in its place.",
+      "suggested_fix": "Name the count-label collapse in the PR body (or keep it visible and let the search field shrink), and cover it in the one-row check.",
+      "evidence": "slice-01.diff review.css container query; PR body \"Toolbar on one row\"; the orchestrator brief says the count label was not measured because no board data was loaded.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-004",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": null,
+      "quote": "const outdated = c.localReview?.outdated;",
+      "problem": "\"Behaviour change to note\" lists only the hidden merged or closed PR with a running review. The diff also changes the card reason for every open PR with an outdated review: `laneReason` returns \"Outdated review · sha\" before `attentionReason`, so a PR with a review request, changes requested, failed CI or an unread reply to the viewer now shows the outdated text as its reason while `reviewLane` still places it in Needs attention for the GitHub reason. The journal records T7's decision (outdated ranks after live run states, before every GitHub-derived reason); the PR body does not.",
+      "impact": "A reader of the PR body does not expect the reason on an attention card to stop saying \"Review requested\" or \"Checks failed\"; the user sees a card in Needs attention whose stated reason is an old review.",
+      "suggested_fix": "Add this ordering to \"Behaviour change to note\", or rank the outdated text below `attentionReason`.",
+      "evidence": "slice-01.diff model.ts laneReason hunk and model.test.ts 'an outdated review names the reviewed commit and ranks above GitHub reasons'; slice-01.diff journal.md T7 decision.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-005",
+      "severity": "info",
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "line": null,
+      "quote": "\"value\": \"Aleksandr Tsaitler\"",
+      "problem": "flow.json records the operator's full name as `owner.value`, and journal.md quotes the operator's chat message. Personal data in a committed file. The same name is the git author, so the added exposure is small.",
+      "impact": "Low: a name already public through commit metadata.",
+      "suggested_fix": "Keep as is if the project accepts owner names in flow files; otherwise use a handle.",
+      "evidence": "slice-01.diff flow.json owner block.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 1},
+  "slices": ["slice-01", "slice-02", "slice-03"],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Not verified:
+- I ran no test, build or the app; "752 pass" and the live toolbar widths are taken from the journal and the orchestrator brief.
+- I searched docs/requirements/keryx-desktop-review (v1) by keyword only (3 hits, none describing the changed behaviour), so no stale-v1-doc finding was filed. The wiki (`keryx wiki ask`) was not queried.
+- Rust: only checked that review.rs has no Card struct or `localReview` text; runtime pass-through of the new field is not verified.
+- CI is "pending" in pr-context.md; I did not wait for it.
+- Slice-03 and slice-02 (code and tests) were read for claim checking; code correctness is other lanes' work.

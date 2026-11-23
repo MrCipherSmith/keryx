@@ -1,0 +1,52 @@
+STATUS: DONE
+
+Second look at slice-04 (flow files, ReviewBoard.tsx, ReviewResults.tsx, ReviewWatcher.tsx, ProjectReviewRules.tsx, model.ts, review.css) and slice-06 (board-badges.ts, board-types.ts, desk-run-store.ts attachBadges), judged against the code at head 33fd9647a, not the slice text (the slice hunks show some pre-fix lines).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "No blocker, major or minor defects found in the second look. The attachBadges CTE chain (scoped/flagged/picked) matches localBadge: an outdated row is selected only when no active run, no run requested for the card's range and no finished run reviewing that range exists, and it needs both reviewed SHAs. Board-side: the attention set is a useMemo over the shown snapshot plus carried cross-scope state, the reply carry-over reads latest.current, and the portaled dialogs are detected by content class. One info-level observation on wasted I/O. Prior findings F-001, F-002, F-005, F-006, F-008, F-010 closed; F-014, F-011, F-012, F-009 still open as info.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/desk-run-store.ts",
+      "line": 478,
+      "quote": "const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);",
+      "problem": "attachBadges computes the publication outcome for every returned row, including the single outdated candidate per card. publication() does a receipt file read and an existsSync for a completed, complete run. For an outdated candidate localBadge never uses it (publicationPending needs same range), so the I/O is discarded.",
+      "impact": "Up to two filesystem calls per card whose newest finished review is on an older head, on every board load and every 6 s badge poll of active cards. Small, bounded by cards per chunk; no wrong result.",
+      "suggested_fix": "Skip publication() when the row's reviewed range is not the card's range (the SQL already knows: base=wb AND head=wh), e.g. expose a same-range column or compare in TS before calling.",
+      "evidence": "desk-run-store.ts attachBadges row loop and private publication(); board-badges.ts publicationPending requires same && sameRange. Read, not measured.",
+      "confidence": "medium",
+      "dedupe_key": "outdated-row-publication-io",
+      "degradation_class": "performance",
+      "evidence_kind": "code-read"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css 85-96: no nowrap override on .flows-toolbar; container-type inline-size on the toolbar; search field flex 1 1 96px max-width 260px; .toolbar-label hidden under 1100px, count-label and watcher-indicator under 760px. Not re-measured; relies on the round-1 measurement table." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx inBoardOverlay(): besides the workspace dialog and detail panel selector it checks that the focused element's [role=dialog] contains .project-review-rules or .review-watcher, the content classes of the two portaled dialogs (ProjectReviewRules.tsx:63, ReviewWatcher.tsx:103); clearPrivateView uses it." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx button uses Icon shieldCheck; ReviewBoard Filters button renders the count in its own span.filter-count outside .toolbar-label; the pull request count hides only under 760px. Visual result not rendered." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts: scoped CTE is MATERIALIZED and parses each run's details once; picked keeps the newest finished run only when max(supersedes) over the card is 0, so cards with an active or current-range run get no extra row. Timing is the implementing worker's measurement, not re-run here." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx attentionPrs is a useMemo over carriedAttention, snapshot and receiptVersion; only the cross-scope retention stays as state, and the load callback only seeds that carried set." },
+    { "id": "F-010", "disposition": "closed", "evidence": "flagged.finished requires base IS NOT NULL AND head IS NOT NULL, the same condition the row mapping uses (result only when row.base && row.head)." },
+    { "id": "F-011", "disposition": "open", "evidence": "ReviewBoard.tsx still renders ReviewFilters and PrSubscriptionDialog inside .review-workspace; only Review rules and PR watcher use createPortal. Info; no behaviour defect shown." },
+    { "id": "F-012", "disposition": "open", "evidence": "attentionPrs is computed over snapshot.cards, while visible applies filterReviews afterwards; the indicator can point at a card hidden by a saved filter. Accepted consequence of the removed bypass; info." },
+    { "id": "F-014", "disposition": "open", "evidence": "SQL visible() still spells source IN ('manual','scheduled') while localBadge filters source !== 'existing'; the union in desk-run-types.ts has exactly those three values so they agree today. Info." },
+    { "id": "F-009", "disposition": "open", "evidence": "The o.repo / state predicates of the old subquery no longer exist in that form; the new scoped/flagged/picked predicates are not shown to be pinned by fixtures in these slices. I did not read the test files; not re-judged." }
+  ],
+  "slices": ["slice-04", "slice-06"]
+}
+```
+
+Checked and found sound (no finding):
+- SQL/TS parity: kept rows (active, requested, or reviewing the card range) plus the one outdated candidate reproduce what localBadge needs; ready, latest, outdated precedence and the source/decision filters agree; ordering created DESC, rowid DESC matches the previous ORDER BY. State 'recoverable' is mapped to failed only in the outer select and is not a finished or active state in either path.
+- Reply carry-over now reads latest.current.snapshot instead of the setRead updater; guarded by same repository and viewer, same range and same updatedAt; identity change clears the view first.
+- ProjectReviewRules is rendered only when tabActive, so its body-portaled dialog cannot outlive a hidden tab; ReviewWatcher gates on active.
+- stateFilterShowsDone and needsViewerAttention behave as documented for empty state filter, teams and closed cards.
+
+Not verified: no tests, SQL or UI were run (read-only budget); query plan and timing not re-measured; F-009 test coverage not re-read; flow, journal and resolved files only skimmed as context; the Rust boundary was not read.

@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 54946,
+      "contentHash": "7a5c3ffa3f0686f16617a7524440c438f3740a31573edbcc0bfea1ba6e312295",
+      "files": [
+        "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/ReviewWatcher.tsx",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "docs/requirements/keryx-desktop-review-v2/README.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "src/review/desk-run-store.test.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "domain": "apps, apps [test], docs [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ProjectReviewRules.tsx, apps/desktop/src/review/ReviewBoard.tsx, apps/desktop/src/review/ReviewResults.tsx (+3)",
+          "fix slice: answers 10 prior finding(s) F-015, F-016, F-017, F-018, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "F-015",
+        "F-016",
+        "F-017",
+        "F-018",
+        "F-019",
+        "F-021",
+        "F-022",
+        "F-023",
+        "F-025",
+        "F-026"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 21002,
+      "contentHash": "29264a81f6a9cb6428a522b378fbc95e175e2fa02f56757c2c7d144998d727fb",
+      "files": [
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx"
+      ],
+      "domain": ".metaproject, .metaproject [docs], apps [test]",
+      "split": "domain",
+      "roles": [
+        "review-frontend",
+        "review-logic",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 5836,
+      "contentHash": "788f7783f3d2ee73854ad1dcaa83c545c4ccbc13dbe2637be4190a40ad62a9b2",
+      "files": [
+        "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/ReviewWatcher.tsx",
+        "apps/desktop/src/review/model.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "domain": "apps, src/review",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ProjectReviewRules.tsx, apps/desktop/src/review/ReviewBoard.tsx, apps/desktop/src/review/ReviewResults.tsx (+3)"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 129859,
+      "contentHash": "9c47becfbd20bd0613b41bd5cd84ab2cf95419ac0f6808f8c82cca0dd4665150",
+      "files": [
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T12.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T13.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T14.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json",
+        "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/ReviewWatcher.tsx",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ProjectReviewRules.tsx, apps/desktop/src/review/ReviewBoard.tsx, apps/desktop/src/review/ReviewResults.tsx (+2)",
+          "second look: unchanged since round 2, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 145708,
+      "contentHash": "29a9109018a5cf65604a379a17c669df74c119b1691f365004026975e002abd9",
+      "files": [
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "docs/requirements/keryx-desktop-review-v2/README.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "docs/requirements/keryx-desktop-review-v2/prd.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "docs/requirements/roadmap.md"
+      ],
+      "domain": "apps [test], docs [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 2, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 20448,
+      "contentHash": "a4c43f5af410f6ff017187ae7e75d4a637fd9ccfc0c4375eb64bd2c7db016fcb",
+      "files": [
+        "src/review/board-badges.test.ts",
+        "src/review/desk-run-store.test.ts",
+        "src/review/board-badges.ts",
+        "src/review/board-types.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "domain": "src/review [test], src/review",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/board-badges.ts, src/review/board-types.ts, src/review/desk-run-store.ts",
+          "second look: unchanged since round 2, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 6,
+    "bytes": 377799,
+    "files": 31,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

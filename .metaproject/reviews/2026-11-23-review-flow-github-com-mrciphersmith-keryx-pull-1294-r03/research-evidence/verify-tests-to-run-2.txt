@@ -1,0 +1,15 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test src/review/desk-run-store.test.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit
+time: 2026-11-23T11:18:57.987Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+ 36 pass
+ 0 fail
+ 186 expect() calls
+Ran 36 tests across 1 file. [1029.00ms]

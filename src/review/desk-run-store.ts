@@ -388,14 +388,42 @@ export class DeskRunStore {
   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
       head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
-    // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs or
-    // other revisions never cross the SQLite boundary. No reports or session histories are returned.
+    // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
+    // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
+    // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
     // Older read-only stores predate interactive review questions.
     const tables = this.db.query<{ name: string }, []>(
       "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('review_questions','reviewer_questions')",
     ).all();
     const pending = tables.map(({ name }) => `EXISTS(SELECT 1 FROM ${name} q WHERE q.run_id=r.id AND q.answer IS NULL)`).join(" OR ") || "0";
+    const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')
+        AND coalesce(json_extract(${r}.details,'$.decision.action'),'') NOT IN ('archive','delete')`;
+    // Each run of a requested PR is parsed once in `scoped`: `details` embeds the report, so a second
+    // pass for the outdated lookup doubled the cost. Only the kept rows are read again for progress.
+    // The outdated row is kept only when no row makes localBadge ignore it: an active run, a run
+    // requested for the card's range, or a finished run that reviewed it.
     const query = this.db.query<Row, [string, string, string]>(`
+      WITH scoped AS MATERIALIZED (
+        SELECT w.key AS card, r.rowid AS seq, json_extract(r.details,'$.createdAt') AS created,
+          r.state IN ('running','cancelling','queued') AS active, r.state IN ('completed','partial','budget') AS done,
+          json_extract(r.details,'$.baseSha')=w.wb AND json_extract(r.details,'$.headSha')=w.wh AS requested,
+          json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+          w.wb, w.wh
+        FROM (SELECT key,json_extract(value,'$.number') AS n,json_extract(value,'$.baseSha') AS wb,json_extract(value,'$.headSha') AS wh
+          FROM json_each(?1)) w CROSS JOIN runs r
+        WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible("r")}
+      ), flagged AS (
+        SELECT seq, created, card, coalesce(active OR requested,0) AS live, done, coalesce(base=wb AND head=wh,0) AS reviewed,
+          done AND base IS NOT NULL AND head IS NOT NULL AS finished
+        FROM scoped
+      ), picked AS (
+        SELECT seq, created, live OR reviewed AS kept, finished, live OR (done AND reviewed) AS supersedes, card
+        FROM flagged
+      ), ranked AS (
+        SELECT seq, created, kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND
+          row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
+        FROM picked
+      )
       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
         json_extract(r.details,'$.source') AS source,
@@ -413,22 +441,21 @@ export class DeskRunStore {
               FROM json_each(r.details,'$.reviewerProgress.sessions') s
             ) WHERE retry=1 AND outcome='completed'
           ) END) AS completed
-      FROM json_each(?) wanted CROSS JOIN runs r
-      WHERE r.repo=? AND r.viewer=? AND r.pr=json_extract(wanted.value,'$.number')
-        AND source IN ('manual','scheduled')
-        AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete') AND
-        (r.state IN ('running','cancelling','queued') OR
-          (baseSha=json_extract(wanted.value,'$.baseSha') AND headSha=json_extract(wanted.value,'$.headSha')) OR
-          (base=json_extract(wanted.value,'$.baseSha') AND head=json_extract(wanted.value,'$.headSha')))
-      ORDER BY json_extract(r.details,'$.createdAt') DESC,r.rowid DESC`);
+      FROM ranked p JOIN runs r ON r.rowid=p.seq
+      WHERE p.wanted
+      ORDER BY p.created DESC,p.seq DESC`);
     for (let i = 0; i < snapshot.cards.length; i += 200) {
       const cards = snapshot.cards.slice(i, i + 200);
       const rows = query.all(JSON.stringify(cards.map(({number, baseSha, headSha}) => ({number,baseSha,headSha}))), snapshot.repositoryId, snapshot.viewer);
       const byPr = new Map<number, Parameters<typeof localBadge>[0][number][]>();
+      const cardByPr = new Map(cards.map(card => [card.number, card]));
       for (const row of rows) {
         const runs = byPr.get(row.pr) ?? [];
         if (!runs.length) byPr.set(row.pr, runs);
-        const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);
+        // localBadge reads a publication only for a run that reviewed the card's own range.
+        const card = cardByPr.get(row.pr);
+        const publication = row.base && row.head && card?.baseSha === row.base && card.headSha === row.head &&
+          this.publication(row.id, row.state, row.coverage);
         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
           ...(publication && { publication }),
           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,

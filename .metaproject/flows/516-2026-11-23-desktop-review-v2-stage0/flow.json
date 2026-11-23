@@ -1,0 +1,890 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "516",
+  "slug": "desktop-review-v2-stage0",
+  "title": "Desktop Review v2 stage 0: PR board fixes without model change",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T08:07:29.420Z",
+  "updatedAt": "2026-11-23T12:35:18.533Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Создавай фло оформляй все и начинай имлементацию",
+    "source": "claude-code session 2026-11-23, operator message"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by plan tasks T5-T11"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by plan tasks T5-T11"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by plan tasks T5-T11"
+    },
+    {
+      "id": "T5",
+      "title": "Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:09:29.940Z",
+            "outcome": "started",
+            "detail": "516-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Outdated review result in the card badge (SQL + localBadge + types)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:09:30.122Z",
+            "outcome": "started",
+            "detail": "516-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Show the outdated review on the card and in the list",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:15:55.067Z",
+            "outcome": "started",
+            "detail": "516-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Keep the board toolbar on one row with the detail panel open",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:18:19.086Z",
+            "outcome": "started",
+            "detail": "516-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Test suites, typecheck, lint and live check in the browser dev build",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:20:59.898Z",
+            "outcome": "started",
+            "detail": "516-T9 orchestrator verification"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "review-orchestrator on the branch",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:35:16.026Z",
+            "outcome": "started",
+            "detail": "516-T10 review round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Requirements package keryx-desktop-review-v2 and roadmap entry",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Review round 1 fixes: dialogs under container CSS, attention flicker, base-moved label, dead Done-lane clause, SQL test fixtures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:43:32.476Z",
+            "outcome": "started",
+            "detail": "516-T12 fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:00:27.843Z",
+            "outcome": "started",
+            "detail": "516-T13 PR review fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "PR review round fixes, backend: F-006 outdated lookup cost and measurement",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:00:28.189Z",
+            "outcome": "started",
+            "detail": "516-T14 PR review fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "PR review round fixes, docs: F-004 stage 0 status and team-request deviation",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:00:28.521Z",
+            "outcome": "started",
+            "detail": "516-T15 PR review fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:46:16.554Z",
+            "outcome": "started",
+            "detail": "516-T16 PR review round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:46:16.741Z",
+            "outcome": "started",
+            "detail": "516-T17 PR review round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:26:25.010Z",
+            "outcome": "started",
+            "detail": "516-T18 PR review round 3 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:33:24.478Z",
+            "outcome": "started",
+            "detail": "516-T19 review info notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:33:24.700Z",
+            "outcome": "started",
+            "detail": "516-T20 review info notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:33:24.978Z",
+            "outcome": "started",
+            "detail": "516-T21 review info notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:53:18.015Z",
+            "outcome": "started",
+            "detail": "516-T22 PR review round 4 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:01:37.881Z",
+            "outcome": "started",
+            "detail": "516-T23 operator answers"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:22:16.055Z",
+            "outcome": "started",
+            "detail": "516-T24 PR review round 5 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T08:07:29.420Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T08:09:15.318Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T08:09:15.519Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T08:09:15.715Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T08:09:15.892Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-23T08:09:16.069Z",
+      "event": "task-added",
+      "detail": "T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator"
+    },
+    {
+      "at": "2026-11-23T08:09:16.260Z",
+      "event": "task-added",
+      "detail": "T6: Outdated review result in the card badge (SQL + localBadge + types)"
+    },
+    {
+      "at": "2026-11-23T08:09:16.456Z",
+      "event": "task-added",
+      "detail": "T7: Show the outdated review on the card and in the list"
+    },
+    {
+      "at": "2026-11-23T08:09:16.647Z",
+      "event": "task-added",
+      "detail": "T8: Keep the board toolbar on one row with the detail panel open"
+    },
+    {
+      "at": "2026-11-23T08:09:16.831Z",
+      "event": "task-added",
+      "detail": "T9: Test suites, typecheck, lint and live check in the browser dev build"
+    },
+    {
+      "at": "2026-11-23T08:09:17.025Z",
+      "event": "task-added",
+      "detail": "T10: review-orchestrator on the branch"
+    },
+    {
+      "at": "2026-11-23T08:09:17.216Z",
+      "event": "task-added",
+      "detail": "T11: Requirements package keryx-desktop-review-v2 and roadmap entry"
+    },
+    {
+      "at": "2026-11-23T08:09:28.819Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T08:09:28.999Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-23T08:09:29.339Z",
+      "event": "task-done",
+      "detail": "T11: Requirements package keryx-desktop-review-v2 and roadmap entry"
+    },
+    {
+      "at": "2026-11-23T08:09:29.940Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 516-T5"
+    },
+    {
+      "at": "2026-11-23T08:09:30.122Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 516-T6"
+    },
+    {
+      "at": "2026-11-23T08:13:16.301Z",
+      "event": "task-done",
+      "detail": "T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator"
+    },
+    {
+      "at": "2026-11-23T08:15:54.694Z",
+      "event": "task-done",
+      "detail": "T6: Outdated review result in the card badge (SQL + localBadge + types)"
+    },
+    {
+      "at": "2026-11-23T08:15:55.067Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 516-T7"
+    },
+    {
+      "at": "2026-11-23T08:18:18.896Z",
+      "event": "task-done",
+      "detail": "T7: Show the outdated review on the card and in the list"
+    },
+    {
+      "at": "2026-11-23T08:18:19.086Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 516-T8"
+    },
+    {
+      "at": "2026-11-23T08:20:59.676Z",
+      "event": "task-done",
+      "detail": "T8: Keep the board toolbar on one row with the detail panel open"
+    },
+    {
+      "at": "2026-11-23T08:20:59.898Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 516-T9 orchestrator verification"
+    },
+    {
+      "at": "2026-11-23T08:22:57.858Z",
+      "event": "task-done",
+      "detail": "T9: Test suites, typecheck, lint and live check in the browser dev build"
+    },
+    {
+      "at": "2026-11-23T08:35:16.026Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 516-T10 review round 1"
+    },
+    {
+      "at": "2026-11-23T08:43:32.284Z",
+      "event": "task-added",
+      "detail": "T12: Review round 1 fixes: dialogs under container CSS, attention flicker, base-moved label, dead Done-lane clause, SQL test fixtures"
+    },
+    {
+      "at": "2026-11-23T08:43:32.476Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 516-T12 fix round 1"
+    },
+    {
+      "at": "2026-11-23T08:52:03.382Z",
+      "event": "task-done",
+      "detail": "T12: Review round 1 fixes: dialogs under container CSS, attention flicker, base-moved label, dead Done-lane clause, SQL test fixtures"
+    },
+    {
+      "at": "2026-11-23T08:52:03.567Z",
+      "event": "task-done",
+      "detail": "T10: review-orchestrator on the branch"
+    },
+    {
+      "at": "2026-11-23T10:00:26.789Z",
+      "event": "task-added",
+      "detail": "T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set"
+    },
+    {
+      "at": "2026-11-23T10:00:27.101Z",
+      "event": "task-added",
+      "detail": "T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement"
+    },
+    {
+      "at": "2026-11-23T10:00:27.456Z",
+      "event": "task-added",
+      "detail": "T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation"
+    },
+    {
+      "at": "2026-11-23T10:00:27.843Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 516-T13 PR review fix round"
+    },
+    {
+      "at": "2026-11-23T10:00:28.189Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 516-T14 PR review fix round"
+    },
+    {
+      "at": "2026-11-23T10:00:28.521Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 516-T15 PR review fix round"
+    },
+    {
+      "at": "2026-11-23T10:02:42.757Z",
+      "event": "task-done",
+      "detail": "T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation"
+    },
+    {
+      "at": "2026-11-23T10:06:34.136Z",
+      "event": "task-done",
+      "detail": "T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set"
+    },
+    {
+      "at": "2026-11-23T10:19:07.733Z",
+      "event": "task-done",
+      "detail": "T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement"
+    },
+    {
+      "at": "2026-11-23T10:45:45.400Z",
+      "event": "task-added",
+      "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
+    },
+    {
+      "at": "2026-11-23T10:45:45.653Z",
+      "event": "task-added",
+      "detail": "T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL"
+    },
+    {
+      "at": "2026-11-23T10:46:16.554Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 516-T16 PR review round 2 fixes"
+    },
+    {
+      "at": "2026-11-23T10:46:16.741Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 516-T17 PR review round 2 fixes"
+    },
+    {
+      "at": "2026-11-23T10:47:45.247Z",
+      "event": "task-done",
+      "detail": "T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL"
+    },
+    {
+      "at": "2026-11-23T10:48:26.557Z",
+      "event": "task-done",
+      "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
+    },
+    {
+      "at": "2026-11-23T11:26:24.820Z",
+      "event": "task-added",
+      "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
+    },
+    {
+      "at": "2026-11-23T11:26:25.010Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 516-T18 PR review round 3 fix"
+    },
+    {
+      "at": "2026-11-23T11:28:05.413Z",
+      "event": "task-done",
+      "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
+    },
+    {
+      "at": "2026-11-23T11:33:23.779Z",
+      "event": "task-added",
+      "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
+    },
+    {
+      "at": "2026-11-23T11:33:23.979Z",
+      "event": "task-added",
+      "detail": "T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card"
+    },
+    {
+      "at": "2026-11-23T11:33:24.199Z",
+      "event": "task-added",
+      "detail": "T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording"
+    },
+    {
+      "at": "2026-11-23T11:33:24.478Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 516-T19 review info notes"
+    },
+    {
+      "at": "2026-11-23T11:33:24.700Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 516-T20 review info notes"
+    },
+    {
+      "at": "2026-11-23T11:33:24.978Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 516-T21 review info notes"
+    },
+    {
+      "at": "2026-11-23T11:34:51.493Z",
+      "event": "task-done",
+      "detail": "T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording"
+    },
+    {
+      "at": "2026-11-23T11:35:49.611Z",
+      "event": "task-done",
+      "detail": "T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card"
+    },
+    {
+      "at": "2026-11-23T11:36:52.340Z",
+      "event": "task-done",
+      "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
+    },
+    {
+      "at": "2026-11-23T11:53:17.826Z",
+      "event": "task-added",
+      "detail": "T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot"
+    },
+    {
+      "at": "2026-11-23T11:53:18.015Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 516-T22 PR review round 4 fixes"
+    },
+    {
+      "at": "2026-11-23T12:00:59.703Z",
+      "event": "task-done",
+      "detail": "T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot"
+    },
+    {
+      "at": "2026-11-23T12:01:37.298Z",
+      "event": "task-added",
+      "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
+    },
+    {
+      "at": "2026-11-23T12:01:37.881Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 516-T23 operator answers"
+    },
+    {
+      "at": "2026-11-23T12:07:08.461Z",
+      "event": "task-done",
+      "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
+    },
+    {
+      "at": "2026-11-23T12:22:15.865Z",
+      "event": "task-added",
+      "detail": "T24: PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover"
+    },
+    {
+      "at": "2026-11-23T12:22:16.055Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 516-T24 PR review round 5 fixes"
+    },
+    {
+      "at": "2026-11-23T12:35:18.533Z",
+      "event": "task-done",
+      "detail": "T24: PR review round 5 fixes: F-034 seed marker on identity change, F-035 hint on a stale snapshot, F-036 count name, F-037 hint label and focus, F-038 seed restarts, F-039 race tests, F-040 hover"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/model.test.ts'"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review'"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "invariant",
+      "check": "sh -c 'cd apps/desktop && bun test src/review && cd ../.. && bun test src/review/desk-run-store.test.ts && bun run typecheck'"
+    }
+  }
+}

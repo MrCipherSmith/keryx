@@ -1,0 +1,23 @@
+{
+  "reviewer": "review-frontend",
+  "wave": 2,
+  "waves": 3,
+  "slices": [
+    "slice-02"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-02",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-02.diff",
+      "bytes": 141532
+    }
+  ],
+  "result": "raw/review-frontend-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+  "model": {
+    "inherit": false,
+    "tier": "standard",
+    "model": "sonnet",
+    "chosen_by": "orchestrator: keryx review tier had no session baseline"
+  }
+}

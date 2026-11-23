@@ -1,0 +1,65 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "reasoning": "The one-row toolbar is a choice this branch introduces (flow description item 6, AC7 judged at a 1440px window), so it cannot ratify itself, and it never asked for clipping. The default window is 1180px (tauri.conf.json:18) and the detail panel defaults to 560px (ReviewBoard.tsx:385), so the 560px board is the common case, where the base wrapped and the head overflows. Accepted practice (WCAG 2.1 SC 1.4.10 Reflow) is against content pushed out of view; the suggested fix keeps one row where it fits and stays consistent with the rest of the toolbar."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "reasoning": "The ancestor selector at ReviewBoard.tsx:122 is unchanged code, and nothing at the site marks the portaled dialogs as excluded on purpose. Portaling Review rules and PR watcher to document.body (ProjectReviewRules.tsx:96, ReviewWatcher.tsx:101) is new in this branch and silently takes them out of the focus restore. overlayOpen() is already used beside it (ReviewBoard.tsx:254, 265), so the suggested fix follows the file's own pattern."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/review/model.ts:97",
+          "says": "pre-existing at base 1b994df18: the local \"Partial review · incomplete coverage\" text already ranks before attentionReason, so a local review state hiding the GitHub reason predates this change"
+        },
+        {
+          "ref": "apps/desktop/src/review/model.ts:67-68",
+          "says": "pre-existing: attentionReason itself puts the local review states (publication pending, result available) before every GitHub reason"
+        },
+        {
+          "ref": "journal.md T7 decision",
+          "says": "the outdated reason ranks after live run states and closed/merged, before every GitHub-derived reason; chosen by the worker, not asked of the operator (branch-introduced, so not counted as prior intent)"
+        }
+      ],
+      "reasoning": "The fact reproduces: reviewLane ignores outdated while laneReason returns the outdated text before attentionReason, so a Needs attention card can lose its \"New reply to you\" or \"Review requested\" reason. But the existing code already puts local review text ahead of GitHub reasons (the partial-run line), so the new placement matches a sibling. Moving only the outdated text after attentionReason makes it differ from that sibling. Which label wins on a card is a product choice the code does not settle, and the operator was never asked.",
+      "question": "A card in Needs attention with an outdated review shows only \"Outdated review · sha\", as a partial run already hides the GitHub reason. Which should the card show?",
+      "options": [
+        "uphold — the lane reason (review requested, new reply, failed checks) wins, with the outdated review as a secondary line or badge",
+        "dismiss — keep local review text first, as the partial-run label already does; revisit with the stage 1 lanes"
+      ]
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "upheld",
+      "reasoning": "docs/requirements/keryx-desktop-review-v2/README.md:4 says nothing in the package is implemented, which this pull request makes false for stage 0, and the team-request exclusion is recorded only in the flow (description.md Out of Scope), not in the requirements package that outlives the flow. The operator's decision to exclude teams settles the behaviour, not the missing record; no signal says the docs were meant to stay stale."
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "upheld",
+      "reasoning": "On the base the labels were always shown, so two checklist glyphs were told apart by text; hiding the labels below 1100px is new in this branch. Accepted practice for icon-only buttons (Material Design 3 — Icon buttons; Apple HIG — Buttons, icon-only buttons) wants a distinct, recognisable symbol per action. There is no signal that collapsing to identical glyphs and dropping the counts was intended; the fix makes the toolbar more consistent with that practice."
+    },
+    {
+      "finding_id": "F-006",
+      "verdict": "upheld",
+      "reasoning": "The plan bounds the SQL to at most one extra row per card and no report text (plan.md Risks), which the LIMIT 1 meets, but it says nothing about evaluation cost, and the journal records the query plan on a large store as not verified (T6). No intent signal or practice source shrinks it; the finding already states its impact as unmeasured and asks for a measurement first."
+    },
+    {
+      "finding_id": "F-007",
+      "verdict": "upheld",
+      "reasoning": "The fixture pr (model.test.ts:5-9) has decision CHANGES_REQUESTED and a requested reviewer, so reviewLane is \"attention\" on both sides whatever outdated does, and reviewLane (model.ts:76-81) never reads outdated. The assertion cannot fail, and nothing marks it as a deliberate smoke check. A neutral fixture is the usual idiom."
+    },
+    {
+      "finding_id": "F-008",
+      "verdict": "upheld",
+      "reasoning": "Holding attentionPrs as state is pre-existing and deliberate for cross-scope retention (the base comment at ReviewBoard.tsx:220: closed/merged-only views cannot replace the open snapshot), but the finding already keeps that retention as state. The second writer with the same predicate (ReviewBoard.tsx:337-347) is new in this branch, so it carries no prior intent. React's own guidance (react.dev — Choosing the State Structure, avoid redundant state; You Might Not Need an Effect) agrees with the finding."
+    }
+  ]
+}

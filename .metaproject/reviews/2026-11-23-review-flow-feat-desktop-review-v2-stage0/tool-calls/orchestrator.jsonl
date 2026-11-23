@@ -1,0 +1,2 @@
+{"time":"2026-11-23T08:35:20.189Z","event":"log-start"}
+{"time":"2026-11-23T09:37:48.135Z","source":"cli","caller":"unattributed","command":"keryx memory search 'desktop pull requests board review badge filters toolbar' --status accepted"}

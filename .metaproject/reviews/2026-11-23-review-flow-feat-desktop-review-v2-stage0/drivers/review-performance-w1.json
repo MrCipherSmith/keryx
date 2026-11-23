@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-performance",
+  "wave": 1,
+  "waves": 2,
+  "slices": [
+    "slice-01"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/slices/slice-01.diff",
+      "bytes": 105067
+    }
+  ],
+  "result": "raw/review-performance-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+}

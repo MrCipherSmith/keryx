@@ -21,7 +21,7 @@ import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
-import { EMPTY_FILTERS, filterReviews, stateQuery, type Filters } from "./model";
+import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
@@ -52,14 +52,36 @@ interface ReadState {
   snapshot: ReviewBoardSnapshot | null;
   error: string;
   loading: boolean;
+  /** The snapshot is a cached fallback from an earlier visit to this scope, not the result of the latest request. */
+  stale?: boolean;
 }
 
-function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
     && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending && a?.lastActivityAt === b?.lastActivityAt
-    && a?.runState === b?.runState && a?.progress?.completed === b?.progress?.completed
+    && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
+
+const PORTALED_DIALOG_CONTENT = "[data-review-board-dialog]";
+/** Focus inside the workspace dialogs, the detail panel, or the Review rules and PR watcher dialogs portaled to the body. */
+function inBoardOverlay(el: Element | null) {
+  if (!el) return false;
+  if (el.closest('.review-workspace [role="dialog"], .review-detail-panel')) return true;
+  return !!el.closest('[role="dialog"]')?.querySelector(PORTALED_DIALOG_CONTENT);
+}
+
+function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
+  if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
+  const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
+  return card.addressedReplyIds.filter(id => !readIds.has(id));
+}
+const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
+const attentionNumbers = (board: ReviewBoardSnapshot) =>
+  new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+/** A load of this scope holds every open PR, so it replaces the carried attention set. */
+const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
+const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
 
 export function ReviewBoard(props: Props) {
   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
@@ -74,7 +96,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
-  const [attentionPrs, setAttentionPrs] = useState<ReadonlySet<number>>(() => new Set());
+  // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+  const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
@@ -94,6 +117,9 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const identity = useRef("");
   const filterKey = useRef<string>();
   const sequence = useRef(0);
+  // The identity whose carried set was last replaced from a load that holds every open PR (open or all, no period).
+  const seeded = useRef("");
+  const [seedFor, setSeedFor] = useState<{ identity: string } | null>(null);
   // A delayed GitHub refresh can carry older local run badges than a just-finished launch.
   const pendingBadges = useRef<Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">> | null>(null);
   const restoreFocus = useRef(false);
@@ -101,6 +127,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const period = filters.updatedWithin;
   const scope = `${state}/${period ?? ""}`;
   const [read, setRead] = useState<ReadState>({ scope, snapshot: null, error: "", loading: true });
+  const latest = useRef(read);
+  latest.current = read;
   const q = useDeferredValue(query);
 
   useEffect(() => {
@@ -110,7 +138,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const clearPrivateView = useCallback((resetState = false) => {
     setSubscriptions(new Set());
     setSubscriptionNumber(null);
-    restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role="dialog"], .review-detail-panel');
+    restoreFocus.current = inBoardOverlay(document.activeElement);
     setQuery("");
     setFilters((old) => resetState ? EMPTY_FILTERS : { ...EMPTY_FILTERS, state: old.state });
     setSelected(null);
@@ -165,9 +193,11 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     // A list request started before a denied detail request cannot restore its private snapshot.
     sequence.current++;
     identity.current = "";
+    seeded.current = "";
     filterKey.current = undefined;
     snapshots.current.clear();
-    setAttentionPrs(new Set());
+    setCarriedAttention(new Set());
+    setSeedFor(null);
     setWatchingTarget(null);
     pendingBadges.current = null;
     clearPrivateView();
@@ -186,62 +216,93 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     void load(cwd, state, repo, controller.signal, expectedViewer, updatedSince).then((snapshot) => {
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
+      // The filters this load leaves in place: they decide whether a load of every open PR follows.
+      let nextFilters: Filters | undefined;
       if (identity.current && identity.current !== nextIdentity) {
         snapshots.current.clear();
         clearPrivateView(true);
+        nextFilters = EMPTY_FILTERS;
       } else if (badges.size) {
         snapshot = { ...snapshot, cards: snapshot.cards.map(card => {
           const update = badges.get(card.number);
           return update && sameRange(card, update) ? { ...card, localReview: update.localReview } : card;
         }) };
       }
-      // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
-      const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
-      setAttentionPrs(previous => {
-        const next = new Set(replaceAttention ? [] : previous);
-        for (const card of snapshot.cards) {
-          if (card.state === "open" && (card.reviewers.length > 0 || card.decision === "CHANGES_REQUESTED")) next.add(card.number);
-          else next.delete(card.number);
+      // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+      const previous = latest.current.snapshot;
+      if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+        const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+        if (replies.size) {
+          snapshot = { ...snapshot, cards: snapshot.cards.map(c => {
+            const prior = replies.get(c.number);
+            return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
+              ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
+          }) };
         }
-        return next;
-      });
-      const nextFilterKey = reviewFilterKey(cwd, snapshot.repositoryId, snapshot.viewer);
+      }
+      const loaded = snapshot;
+      const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
       if (filterKey.current !== nextFilterKey) {
         filterKey.current = nextFilterKey;
-        setFilters(readReviewFilters(nextFilterKey));
+        nextFilters = readReviewFilters(nextFilterKey);
+        setFilters(nextFilters);
+      }
+      // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
+      // a new identity seen there starts from nothing and gets one open load that only seeds the set.
+      if (holdsAllOpen(state, period)) {
+        seeded.current = nextIdentity;
+        setCarriedAttention(attentionNumbers(loaded));
+        setSeedFor(null);
+      } else {
+        if (identity.current !== nextIdentity) {
+          setCarriedAttention(new Set());
+          seeded.current = "";
+        }
+        // Filters reset to an open scope start that load now; a seed would repeat it.
+        if (nextFilters && holdsAllOpen(stateQuery(nextFilters.state), nextFilters.updatedWithin)) setSeedFor(null);
+        else if (seeded.current !== nextIdentity) setSeedFor(old => old?.identity === nextIdentity ? old : { identity: nextIdentity });
       }
       pendingBadges.current = null;
-      setSelected(current => current && snapshot.cards.some(c => c.number === current.number) ? current : null);
-      if (!snapshot.warnings.length) setDismissedWarning("");
+      setSelected(current => current && loaded.cards.some(c => c.number === current.number) ? current : null);
+      if (!loaded.warnings.length) setDismissedWarning("");
       identity.current = nextIdentity;
-      setRead(old => {
-        const previous = old.snapshot;
-        if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
-          // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
-          const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
-          if (replies.size) {
-            const cards = snapshot.cards.map(c => {
-              const prior = replies.get(c.number);
-              return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
-                ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
-            });
-            return { scope, snapshot: { ...snapshot, cards }, error: "", loading: false };
-          }
-        }
-        return { scope, snapshot, error: "", loading: false };
-      });
+      setRead({ scope, snapshot: loaded, error: "", loading: false });
     }).catch((cause: unknown) => {
       if (request !== sequence.current) return;
       pendingBadges.current = null;
       const message = errMessage(cause);
       if (/^unavailable:/i.test(message)) {
-        setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? snapshots.current.get(scope) ?? null, error: message, loading: false }));
+        setRead((old) => {
+          const kept = old.scope === scope ? old.snapshot : null;
+          return { scope, snapshot: kept ?? snapshots.current.get(scope) ?? null, stale: kept ? old.stale : true, error: message, loading: false };
+        });
       } else {
         accessLost(message);
       }
     });
     return () => { sequence.current++; controller.abort(); };
   }, [cwd, expectedViewer, state, period, scope, repo, attempt, load, clearPrivateView, accessLost]);
+
+  useEffect(() => {
+    if (!seedFor) return;
+    let current = true;
+    const controller = new AbortController();
+    void load(cwd, "open", repo, controller.signal, expectedViewer).then((seed) => {
+      if (!current) return;
+      // An answer for the current, unseeded identity holds all its open PRs, whichever identity asked for it.
+      const key = JSON.stringify([seed.repositoryId, seed.viewer]);
+      if (identity.current === key && seeded.current !== key) {
+        seeded.current = key;
+        setCarriedAttention(attentionNumbers(seed));
+      }
+      // Set only while a seed is in flight: an unseeded identity's next load must be able to ask again.
+      setSeedFor(old => old === seedFor ? null : old);
+    }).catch(() => {
+      // The next successful load of an unseeded identity asks again; no retry from here.
+      if (current) setSeedFor(old => old === seedFor ? null : old);
+    });
+    return () => { current = false; controller.abort(); };
+  }, [seedFor, cwd, repo, expectedViewer, load]);
 
   useEffect(() => {
     if (restoreFocus.current && !overlayOpen()) search.current?.focus();
@@ -320,13 +381,29 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   }, [viewer, repositoryId]);
   const visible = useMemo(() => {
     if (!snapshot) return [];
-    return filterReviews(snapshot.cards, filters, q).sort((a, b) => Number(!!b.localReview?.active) - Number(!!a.localReview?.active)).map(card => {
+    return filterReviews(snapshot.cards, filters, q).map(card => {
       if (!card.addressedReplyIds?.length) return card;
-      const readIds = readReplies(snapshot.viewer, snapshot.repositoryId, card.number, card.addressedReplyIds);
-      const ids = card.addressedReplyIds.filter(id => !readIds.has(id));
+      const ids = unreadIds(snapshot, card);
       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
     });
   }, [snapshot, filters, q, receiptVersion]);
+  // Receipts and discussion notes change after the load that seeded the carried set, so the shown snapshot is judged here.
+  const attentionPrs = useMemo(() => {
+    const next = new Set(carriedAttention);
+    if (snapshot) {
+      for (const c of snapshot.cards) {
+        if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
+        else next.delete(c.number);
+      }
+    }
+    return next;
+  }, [carriedAttention, snapshot, receiptVersion]);
+  // Removals seen in the shown snapshot must survive a scope switch to a view that does not replace the set.
+  // A cached fallback may predate what later loads observed, so it never writes back.
+  const stale = !!read.stale;
+  useEffect(() => {
+    if (snapshot && !stale && (attentionPrs.size !== carriedAttention.size || [...attentionPrs].some(n => !carriedAttention.has(n)))) setCarriedAttention(attentionPrs);
+  }, [snapshot, stale, attentionPrs, carriedAttention]);
   const active = filterSummary(filters);
   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
   const error = read.scope === scope ? read.error : "";
@@ -361,7 +438,14 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     setFilters(next);
     if (filterKey.current) saveReviewFilters(filterKey.current, next);
   }
-  const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); };
+  const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); search.current?.focus(); };
+  // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
+  // the reset loads the open scope instead of this fresh one.
+  const shownNumbers = new Set(visible.map(c => c.number));
+  const cardNumbers = new Set(snapshot?.cards.map(c => c.number));
+  const resetLoads = scope !== DEFAULT_SCOPE && !error && !stale;
+  const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n) && (resetLoads || cardNumbers.has(n))).length : 0;
+  const hiddenText = `Show ${hiddenAttention} waiting on you`;
 
   const openDetails = useCallback((number: number) => setSelected({ number }), []);
   const [detailWidth, setDetailWidth] = useState(560);
@@ -374,24 +458,30 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     <section className="flows review-board" aria-label="Pull requests">
     <div className="flows-toolbar">
       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
-        {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
-      </span>}</div>
+        {visible.length}<span className="count-word"> {visible.length === 1 ? "pull request" : "pull requests"}</span>
+      </span>}
+      {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset}
+        aria-label={hiddenText + " — clears filters and search"} title={hiddenText + " — clears filters and search"}>
+        <Icon name="alert" size={13} /> <span className="toolbar-label">{hiddenText}</span><span className="hint-short">{hiddenAttention} hidden</span>
+      </button>}</div>
       <label className="search-field"><Icon name="search" size={14} />
         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
           value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
-      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog">
-        <Icon name="checklist" size={14} /> Filters{active.length ? ' (' + active.length + ')' : ''}
+      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+        aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
       </button>
       <div className="grow" />
       {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
       <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
       <div className="segmented" role="group" aria-label="Review view">
         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
-          onClick={() => setView(mode)}><Icon name={mode} size={14} /> {mode === "board" ? "Board" : "List"}</button>)}
+          aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
+          onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
       </div>
       <button className="btn btn-sm" disabled={loading} onClick={refresh} aria-label="Refresh pull requests" title="Refresh pull requests">
-        {loading ? <Spinner /> : <Icon name="refresh" size={15} />} Refresh
+        {loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
       </button>
     </div>
     {(snapshot || repo || (needRepositories && alternatives.length > 0) || active.length > 0) && <div className="review-context">
@@ -433,7 +523,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
         {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
