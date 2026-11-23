@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: tree navigation in the sidebar",
   "status": "in-progress",
   "createdAt": "2026-11-23T20:02:01.811Z",
-  "updatedAt": "2026-11-23T20:33:40.322Z",
+  "updatedAt": "2026-11-23T20:53:06.658Z",
   "source": {
     "type": "description",
     "ref": null
@@ -151,7 +151,7 @@
       "id": "T7",
       "title": "Desktop: MetaprojectTree component and explorer integration, with tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -167,7 +167,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -178,8 +179,14 @@
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:53:06.658Z",
+            "outcome": "started",
+            "detail": "518-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -328,6 +335,16 @@
       "at": "2026-11-23T20:33:40.322Z",
       "event": "task-attempt",
       "detail": "T7: started (attempt 1) — 518-T7"
+    },
+    {
+      "at": "2026-11-23T20:52:53.486Z",
+      "event": "task-done",
+      "detail": "T7: Desktop: MetaprojectTree component and explorer integration, with tests"
+    },
+    {
+      "at": "2026-11-23T20:53:06.658Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 518-T8"
     }
   ],
   "acKinds": {
