@@ -275,3 +275,186 @@ describe("RelationshipGraph lifecycle", () => {
     expect(instances[0]!.destroyed()).toBe(true);
   });
 });
+
+/** Gives the canvas container a layout size, as a browser would; happy-dom reports 0. */
+function sizeViewport(width: number, height: number): void {
+  const viewport = host.querySelector<HTMLElement>(".metaproject-rgraph-viewport");
+  if (!viewport) throw new Error("Missing graph viewport");
+  Object.defineProperty(viewport, "clientWidth", { configurable: true, value: width });
+  Object.defineProperty(viewport, "clientHeight", { configurable: true, value: height });
+}
+
+async function click(label: string, times = 1): Promise<void> {
+  const button = host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
+  if (!button) throw new Error(`Missing button ${label}`);
+  for (let index = 0; index < times; index++) await act(async () => { button.click(); });
+}
+
+/** A headless instance whose zoom requests are recorded, so the levels the component asks for can be checked. */
+function recordingZoom(levels: number[]): (options: cytoscapeModule.CytoscapeOptions) => cytoscapeModule.Core {
+  return (options) => {
+    const instance = headless(options);
+    const zoom = instance.zoom.bind(instance) as (arg?: unknown) => unknown;
+    const spy = (arg?: unknown) => {
+      if (typeof arg === "object" && arg !== null && "level" in arg) levels.push(Number((arg as { level: unknown }).level));
+      return arg === undefined ? zoom() : zoom(arg);
+    };
+    instance.zoom = spy as unknown as typeof instance.zoom;
+    return instance;
+  };
+}
+
+function styledInstance(options: cytoscapeModule.CytoscapeOptions): cytoscapeModule.Core {
+  const { container: _container, ...rest } = options;
+  const instance = cytoscape({ ...rest, headless: true, styleEnabled: true });
+  instances.push(instance);
+  return instance;
+}
+
+describe("RelationshipGraph viewport (F-012)", () => {
+  test("Fit on a sized container applies the computed zoom and pan", async () => {
+    const projection = moduleProjection();
+    await render({ projection });
+    sizeViewport(440, 194);
+    await click("Fit graph");
+    const expected = layout.computeViewport(layout.layoutNeighborhood(projection), 440, 194);
+    expect(expected.usable).toBeTrue();
+    const cy = instances[0]!;
+    expect(cy.zoom()).toBe(expected.zoom);
+    expect(cy.pan()).toEqual(expected.pan);
+  });
+
+  test("Fit on a zero-sized container leaves the user's viewport alone", async () => {
+    await render({ projection: moduleProjection() });
+    const cy = instances[0]!;
+    cy.viewport({ zoom: 2, pan: { x: 5, y: 7 } });
+    await click("Fit graph");
+    expect(cy.zoom()).toBe(2);
+    expect(cy.pan()).toEqual({ x: 5, y: 7 });
+  });
+
+  test("Zoom in and Zoom out never ask for a level outside 0.3..2.5", async () => {
+    const levels: number[] = [];
+    await render({ projection: moduleProjection(), createCytoscape: recordingZoom(levels) });
+    sizeViewport(440, 194);
+    await click("Zoom in", 12);
+    expect(levels.length).toBe(12);
+    expect(Math.max(...levels)).toBe(2.5);
+    expect(levels[levels.length - 1]).toBe(2.5);
+    levels.length = 0;
+    await click("Zoom out", 20);
+    expect(Math.min(...levels)).toBe(0.3);
+    expect(levels[levels.length - 1]).toBe(0.3);
+  });
+});
+
+describe("RelationshipGraph interaction and styling (F-013)", () => {
+  test("a '+N more' entry without a valid side asks for nothing", async () => {
+    const sides: string[] = [];
+    await render({ projection: moduleProjection(), onShowHidden: (side) => sides.push(side) });
+    const overflow = instances[0]!.nodes(".overflow");
+    overflow.data("side", "sideways");
+    overflow.emit("tap");
+    expect(sides).toEqual([]);
+  });
+
+  test("hovering a node fades everything outside its neighbourhood except captions, and shows a pointer", async () => {
+    await render({ projection: moduleProjection() });
+    const cy = instances[0]!;
+    const viewport = host.querySelector<HTMLElement>(".metaproject-rgraph-viewport")!;
+    cy.$id("file:1").emit("mouseover");
+    expect(viewport.style.cursor).toBe("pointer");
+    expect(cy.$id("file:1").hasClass("highlight")).toBeTrue();
+    expect(cy.$id("module:root").hasClass("faded")).toBeFalse();
+    expect(cy.$id("file:2").hasClass("faded")).toBeTrue();
+    expect(cy.$id("module:0").hasClass("faded")).toBeTrue();
+    expect(cy.nodes(".caption").filter((item) => item.hasClass("faded")).length).toBe(0);
+    cy.$id("file:1").emit("mouseout");
+    expect(viewport.style.cursor).toBe("");
+    expect(cy.elements(".faded, .highlight").length).toBe(0);
+  });
+
+  test("hovering a '+N more' entry shows a pointer but fades nothing", async () => {
+    await render({ projection: moduleProjection() });
+    const cy = instances[0]!;
+    cy.nodes(".overflow").emit("mouseover");
+    expect(host.querySelector<HTMLElement>(".metaproject-rgraph-viewport")!.style.cursor).toBe("pointer");
+    expect(cy.elements(".faded, .highlight").length).toBe(0);
+  });
+
+  test("the root gets at least a 2 px border whatever its kind; other nodes keep their kind's width", async () => {
+    const projection: MetaprojectNeighbors = { ...snapshot, root: "a", nodes: [node("a"), node("b")], edges: [edge("a", "b", "imports")], truncated: false };
+    await render({ projection });
+    const cy = instances[0]!;
+    expect(cy.$id("a").data("borderWidth")).toBe(2);
+    expect(cy.$id("b").data("borderWidth")).toBe(1);
+  });
+
+  test("edges between two non-root nodes carry the second-step class", async () => {
+    const projection: MetaprojectNeighbors = { ...snapshot, root: "a", nodes: [node("a"), node("b"), node("c")], edges: [edge("a", "b", "imports"), edge("b", "c", "imports")], truncated: false };
+    await render({ projection });
+    const cy = instances[0]!;
+    const classed = cy.edges().map((item) => `${item.data("source")}>${item.data("target")}:${item.hasClass("second-step")}`).sort();
+    expect(classed).toEqual(["a>b:false", "b>c:true"]);
+  });
+});
+
+describe("RelationshipGraph theme changes (F-013, AC6)", () => {
+  function themeSheet(css: string): HTMLStyleElement {
+    const sheet = document.createElement("style");
+    sheet.textContent = css;
+    document.head.append(sheet);
+    return sheet;
+  }
+
+  test("changing data-palette alone re-colours labels in place", async () => {
+    const sheet = themeSheet(':root { --fg: #1c2b23; } :root[data-palette="ocean"] { --fg: #e1ece5; }');
+    try {
+      await render({ projection: moduleProjection(), createCytoscape: styledInstance });
+      const cy = instances[0]!;
+      expect(cy.$id("file:1").style("color")).toBe("rgb(28,43,35)");
+      await act(async () => {
+        document.documentElement.setAttribute("data-palette", "ocean");
+        await Promise.resolve();
+      });
+      expect(instances.length).toBe(1);
+      expect(cy.$id("file:1").style("color")).toBe("rgb(225,236,229)");
+    } finally {
+      await act(async () => {
+        document.documentElement.removeAttribute("data-palette");
+        sheet.remove();
+        await Promise.resolve();
+      });
+    }
+  });
+
+  test("a system colour-scheme change re-colours labels and the listener is removed on unmount", async () => {
+    const sheet = themeSheet(":root { --fg: #1c2b23; }");
+    const listeners = new Set<() => void>();
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: (_type: string, listener: () => void) => { listeners.add(listener); },
+      removeEventListener: (_type: string, listener: () => void) => { listeners.delete(listener); },
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await render({ projection: moduleProjection(), createCytoscape: styledInstance });
+      const cy = instances[0]!;
+      expect(cy.$id("file:1").style("color")).toBe("rgb(28,43,35)");
+      expect(listeners.size).toBe(1);
+      sheet.textContent = ":root { --fg: #e1ece5; }";
+      await act(async () => { for (const listener of listeners) listener(); });
+      expect(cy.$id("file:1").style("color")).toBe("rgb(225,236,229)");
+      await act(() => root.render(null));
+      expect(listeners.size).toBe(0);
+    } finally {
+      window.matchMedia = original;
+      sheet.remove();
+    }
+  });
+});

@@ -488,4 +488,88 @@ describe("toOpaqueColor", () => {
   test("an unparsable colour is passed through unchanged", () => {
     expect(toOpaqueColor("color(display-p3 1 0 0)", "#ffffff")).toBe("color(display-p3 1 0 0)");
   });
+
+  test("three-digit hex colours are expanded", () => {
+    expect(toOpaqueColor("#fff", "#000000")).toBe("rgb(255, 255, 255)");
+    expect(toOpaqueColor("#0008", "#ffffff")).toBe("rgb(119, 119, 119)");
+  });
+
+  test("percentage channels and alpha are read as fractions of their range", () => {
+    expect(toOpaqueColor("rgb(100% 0% 50%)", "#ffffff")).toBe("rgb(255, 0, 128)");
+    expect(toOpaqueColor("rgba(0, 0, 0, 50%)", "#ffffff")).toBe("rgb(128, 128, 128)");
+  });
+
+  test("an alpha outside 0..1 is clamped instead of over- or under-shooting the channels", () => {
+    expect(toOpaqueColor("rgba(0, 0, 0, 1.5)", "#ffffff")).toBe("rgb(0, 0, 0)");
+    expect(toOpaqueColor("rgba(0, 0, 0, 150%)", "#ffffff")).toBe("rgb(0, 0, 0)");
+  });
+});
+
+describe("layoutNeighborhood — review round 1 fixtures (F-021)", () => {
+  test("a root self-loop is neither a neighbour, a drawn edge nor a counted relationship", () => {
+    const input = projection("root", [node("root"), node("a")], [edge("root", "root", "imports"), edge("root", "a", "imports")]);
+    const layout = layoutNeighborhood(input);
+    expect(layout.nodes.map((item) => item.id)).toEqual(["a"]);
+    expect(layout.edges.map((item) => `${item.from}>${item.to}`)).toEqual(["root>a"]);
+    expect([layout.incoming, layout.outgoing]).toEqual([0, 1]);
+  });
+
+  test("AC3: a second-step node is attached to a drawn first-step neighbour before a hidden one", () => {
+    const outgoing = Array.from({ length: 13 }, (_, index) => node(`out-${String(index).padStart(2, "0")}`));
+    const input = projection(
+      "root",
+      [node("root"), ...outgoing, node("in-b"), node("x"), node("z")],
+      [
+        ...outgoing.map((item) => edge("root", item.id, "contains")),
+        edge("in-b", "root", "imports"),
+        edge("out-12", "x", "imports"),
+        edge("x", "in-b", "imports"),
+        edge("x", "z", "imports"),
+      ],
+    );
+    const layout = layoutNeighborhood(input);
+    const placed = new Map(layout.nodes.map((item) => [item.id, item]));
+    expect(placed.has("out-12")).toBe(false);
+    expect(placed.get("x")).toMatchObject({ role: "second", via: "in-b", side: "incoming", column: -2 });
+    expect(placed.get("z")).toMatchObject({ role: "second", via: "x", side: "incoming", column: -2 });
+  });
+
+  test("edge width grows with the import count and is capped", () => {
+    const input = projection("root", [node("root"), node("a"), node("b"), node("c")], [
+      { ...edge("root", "a", "imports"), count: 16 },
+      { ...edge("root", "b", "imports"), count: 1 },
+      { ...edge("root", "c", "imports"), count: 1 << 20 },
+    ]);
+    const widths = new Map(layoutNeighborhood(input).edges.map((item) => [item.to, item.width]));
+    expect([widths.get("a"), widths.get("b"), widths.get("c")]).toEqual([3, 1, 3]);
+  });
+
+  test("the group order uses a neighbour's largest count, not its last edge's", () => {
+    const input = projection("root", [node("root"), node("m", "module", "zeta"), node("n", "module", "alpha")], [
+      { ...edge("root", "m", "imports"), count: 50 },
+      edge("root", "m", "contains"),
+      { ...edge("root", "n", "imports"), count: 10 },
+    ]);
+    const right = layoutNeighborhood(input).nodes.filter((item) => item.column === 1).sort((a, b) => a.y - b.y);
+    expect(right.map((item) => item.id)).toEqual(["m", "n"]);
+  });
+
+  test("a layout that fits is centred in the box, not on the root", () => {
+    const layout = layoutNeighborhood(projection("root", [node("root"), node("a", "file", "a-much-longer-neighbour.ts")], [edge("root", "a", "imports")]));
+    const viewport = computeViewport(layout, 800, 600);
+    const renderedLeft = viewport.pan.x + viewport.zoom * layout.bounds.x1;
+    const renderedRight = viewport.pan.x + viewport.zoom * layout.bounds.x2;
+    expect(Math.abs((renderedLeft + renderedRight) / 2 - 400) < 1e-6).toBeTrue();
+    expect(Math.abs(viewport.pan.x - 400) > 1).toBeTrue();
+  });
+
+  test("a non-integer column cap is refused", () => {
+    expect(() => layoutNeighborhood(depthOneModule(), { columnCap: 2.5 })).toThrow("columnCap must be a positive integer, got 2.5");
+  });
+
+  test("a text scale of zero or below falls back to 1", () => {
+    const normal = layoutNeighborhood(depthOneModule());
+    expect(layoutNeighborhood(depthOneModule(), { textScale: 0 })).toEqual(normal);
+    expect(layoutNeighborhood(depthOneModule(), { textScale: -2 })).toEqual(normal);
+  });
 });
