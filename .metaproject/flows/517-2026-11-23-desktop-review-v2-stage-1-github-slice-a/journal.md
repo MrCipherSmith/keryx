@@ -77,3 +77,16 @@ First-green gate (Phase 3 step 4): answered by the dispatching session's brief, 
 
 CI "Lint and typecheck" on #1300 failed: root tsc pulled `apps/desktop/src/platform/*` (Tauri modules) through `issues/model.ts` → `review/prWork.ts`. `boundSessions` moved to `acp/types.ts`. Worker reproduced CI by hiding `@tauri-apps`: HEAD fails, fix passes. Root tsc 0, Desktop tsc 0, Desktop tests 1016/0.
 Broad local root run (src/acp src/session src/integrations src/review): 6976 pass, 5 fail — all ~5s timeouts in rewind/replay/byte-cap tests, outside the change; CI Core tests decide.
+- 2026-11-23T21:21:21.125Z - task-added: T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)
+- 2026-11-23T21:21:21.797Z - task-attempt: T17: started (attempt 1) — 517-T17 fix round 1
+- 2026-11-23T21:40:56.537Z - task-done: T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)
+
+## Review round 1 on PR #1300 (2026-11-24)
+
+Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300`, head 6a2a3031f. Wave 1: 11 reviewers (10 on slice-02, logic and testing-practices on slice-01). Operator chose "Сначала исправить" and then "override": wave 2 (slice-02/03/04 for 12 reviewers incl. review-pr-contract) not run in round 1; recorded in operator-decisions.json. Wave D premise judge not run. Findings ingested: 32 (2 blocker, 6 major, 9 minor, 15 info). Verifier: HL-001 confirmed by execution (research-evidence/verify-F-001-1.txt), HL-002 unverifiable; the verification file was discarded by ingest (format), recorded here instead. Deviations of this round: memory searched twice (second with --json after plan) → readiness `memory-outside-stage` needs an operator waiver; caller token not exported (log read blocked) → readiness item 10 not observable.
+
+## T17 fix round 1 (2026-11-24)
+
+Fixed LG-001 (AC4 blocker), HL-001/DG-001/LG-002 (Create Flow: one request ↔ one package, claimed packages, 15-min window, several → none), HL-002 (subjectOpener in-flight guard), FE-001/DG-002/LG-003 (focus carries repo, cleared by App), TP-001 (App-level AC9 + issue session slot tests), AR-001/DG-005 (one prFlows resolver at 4 sites), PF-001 (prWorkIndex, stable callbacks), DG-003 (onOpenSession prop removed), DG-004 (.review-note removed), UX-001 (outline-offset -2px), UX-002 (warn tone), TP-002, TP-003, LY-001. Mutants M19, M23, M38, M39, M40, M42 now red. Desktop tsc 0, `bun test src` 1034/0, root tsc 0 (orchestrator re-ran). Attention-set lines: 0 edited (diff since 6a2a3031f).
+Behavior changes accepted by the orchestrator, listed for the owner: Create Flow window 15 min (diverged from "next turn": turn end and flow refresh are unordered); review progress only in the slot title, "Transcript updated" stamp gone from the card; a header focus for another repo stays armed until that repo is shown; new PR sessions also link a Flow found via a bound session; launch dialog preselects the newest of several Flows; a repeat press during an open reuses it (flow prompt not applied to that session); warn tone for needs-answer/publication-pending.
+Left: ARCH-2 re-export, IssueWorkRow per-row sessions, refused subject write stays pending (info).

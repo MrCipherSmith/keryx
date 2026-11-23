@@ -1,0 +1,34 @@
+# Decisions
+
+- HL-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- HL-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- AR-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- FE-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- PF-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- AR-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LY-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LY-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LY-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LY-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-006: create follow-up task or learning proposal (valid_followup, standalone_review).
+- PF-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-005: create follow-up task or learning proposal (valid_followup, standalone_review).

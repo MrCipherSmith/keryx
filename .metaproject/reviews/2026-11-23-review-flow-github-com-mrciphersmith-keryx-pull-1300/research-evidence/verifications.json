@@ -1,0 +1,21 @@
+[
+  {
+    "verifier": "review-verifier",
+    "status": "DONE",
+    "summary": "2 findings (both raised by review-highload): 1 executed and confirmed (F-001), 1 unverifiable by reasoning (F-002; no run exists for the click race).",
+    "verifications": [
+      {
+        "finding": "HL-001",
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Orchestrator verify-run saved at .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300/research-evidence/verify-F-001-1.txt: `bun test <scratchpad>/probe-f001.test.ts` (calls resolveFlowLink for pending A and pending B, both knownDirs={500-old}, dirs=[500-old, 517-new-a]) -> exit 0, 1 pass 0 fail, stdout {\"a\":{\"action\":\"link\",\"dir\":\"517-new-a\"},\"b\":{\"action\":\"link\",\"dir\":\"517-new-a\"}}. The defect reproduced: one new package is linked to two requests. Site-check that the hook does reach this per entry with no cross-entry claim: apps/desktop/src/review/usePendingFlowLinks.ts:19-24 computes `dirs` once and calls resolveFlowLink(entry, dirs, ...) inside pending.filter for every entry, invoking linkRef.current(entry.sessionId, step.dir) on each `link`; no claimed-dir set and no expiry exist; `expect` (line 31) keeps entries of other sessions. prWork.ts:96-101 computes `fresh` only against that entry's knownDirs and returns link for fresh.length === 1. App.tsx:404 wires link to s.linkFlow; App.tsx:405-409 createPrFlow is the expect caller. Foreign-package case follows from the same code (any dir not in knownDirs is fresh), not separately executed."
+      },
+      {
+        "finding": "HL-002",
+        "verdict": "unverifiable",
+        "method": "reasoning",
+        "evidence": "Nothing was run; no command reproduces a UI double click against session/new. Read: prWork.ts:121-135 openSubjectSession checks boundSessions, then awaits deps.newSession() and only then deps.bind - no in-flight guard there; useAcpSession.ts:753-762 newSession awaits openNew with no guard; PrWorkRow.tsx:53,58,60 disabled only by {!flow && !createFlow} / {!openSession}, not by a pending request. Counter-observation that the code does not settle: App.tsx:391 openPrSession calls setView(\"session\") synchronously before the await, and the review board lives in App.tsx:671 `<div className=\"view\" hidden={view !== \"review\"}>`, so the PrWorkRow/panel buttons are hidden after the first click; whether a second click on the same Subject can still land during the session/new round-trip (React flush timing of a double click, or another entry point) cannot be decided by reading. Capped at unverifiable."
+      }
+    ]
+  }
+]

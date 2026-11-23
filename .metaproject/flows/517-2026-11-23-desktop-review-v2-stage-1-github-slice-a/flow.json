@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
   "status": "in-progress",
   "createdAt": "2026-11-23T19:41:25.622Z",
-  "updatedAt": "2026-11-23T20:56:23.744Z",
+  "updatedAt": "2026-11-23T21:40:56.537Z",
   "source": {
     "type": "description",
     "ref": null
@@ -336,6 +336,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T21:21:21.797Z",
+            "outcome": "started",
+            "detail": "517-T17 fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -526,6 +547,21 @@
       "at": "2026-11-23T20:56:23.744Z",
       "event": "task-done",
       "detail": "T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork"
+    },
+    {
+      "at": "2026-11-23T21:21:21.125Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
+    },
+    {
+      "at": "2026-11-23T21:21:21.797Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 517-T17 fix round 1"
+    },
+    {
+      "at": "2026-11-23T21:40:56.537Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
     }
   ],
   "acKinds": {

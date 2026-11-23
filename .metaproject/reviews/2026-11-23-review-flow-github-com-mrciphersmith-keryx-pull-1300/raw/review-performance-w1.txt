@@ -1,0 +1,94 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1300, branch `feat/desktop-review-v2-stage1`, base `b147408a8748cdbd8506b371adb5957947e4477a`, head `6a2a3031f740833e60b82856a9a266b5ffab5e10`, scope_mode diff, round 1, wave 1, slice-02 (read in full, 2540 lines: App.tsx, acp/types.ts, issues/*, review/PrWorkRow.tsx, ReviewBoard.tsx, ReviewFilters.tsx, ReviewResults.tsx, review/model.ts, prWork.ts, reviewFilterStorage.ts, usePendingFlowLinks.ts, session/SessionSubjectLinks.tsx, subjectBinding.ts, useAcpSession.ts, shell/AppShell.tsx).
+- Context read outside the slice: `apps/desktop/src/App.tsx` (`workView` definition, line 540) and `apps/desktop/src/session/useAcpSession.ts` (update flush: `requestAnimationFrame`/250 ms timeout batching; the hook returns a fresh object literal every render).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [F-001] Per-card session and Flow derivation runs on every App render; the new `work` memo can never hit
+- **Severity**: minor
+- **File**: apps/desktop/src/review/PrWorkRow.tsx (sites also in ReviewBoard.tsx, App.tsx, IssueWorkRow.tsx)
+- **Hot path**: while the Review view is shown (`active={workView === "review"}`), every App render. App re-renders on every flushed batch of session updates (one per animation frame, or every 250 ms when hidden) whenever any held session is streaming a turn in the background, and on every `session/list` refresh.
+- **Problem**: `PrWorkRow` derives per card, in render, `boundSessions(work.sessions, subject)` (filter + sort over every session, up to 5 pages of `session/list`) and `prFlows(card, work.flows, sessions)` (filter over every Flow with two `replace(/\/$/)` + `toLowerCase()` per Flow that has a `prUrl`, then a sort), plus a `MenuItem[]` built even when the menu is closed. That is O(cards x (sessions + flows)) per render: up to 150 list rows, or up to 30 per lane x 6 lanes. `ReviewBoard` wraps `work` in `useMemo`, but its deps `onCreateFlow` and `onOpenSubjectSession` arrive as inline arrows from App (`onCreateFlow={(card, subject) => void createPrFlow(card, subject)}`), and even their targets `openPrSession`/`createPrFlow` depend on `s` (a new object every `useAcpSession` render) and `flowLinks` (a new `{known, expect}` object every render). So `work` changes identity on every App render, `memo(ReviewResults)` re-renders, and every `PrWorkRow` redoes the derivation. The memo is complexity with no possible effect. `IssueWorkRow` has the same per-row shape (`issueSessions(sessions, issue)` per issue row per render), though there `sessions` is `state.sessions` and `sameSubject` short-circuits on kind/number, so its cost is small.
+- **Why it matters**: reasoned count, not measured: 150 cards x ~200 Flows is ~30k regex replaces and lowercasings, plus 150 sort calls, per frame while a background turn streams and the board is visible. Probably a few milliseconds per frame on a large project, not an outage. Note that `memo(ReviewResults)` was already defeated before this PR (inline `onOpenSession`), so the re-render itself is not new; the per-card derivation is.
+- **Fix**: derive once per `(sessions, flows)` change instead of per card per render: in `ReviewBoard` (or `ReviewResults`), build `Map<subjectKey, SessionInfo[]>` from `sessions` and `Map<normalisedPrUrl, FlowCard[]>` from `flows` in a `useMemo`, and pass the lookup into `PrWorkRow`. Make the callbacks stable so the `work` memo can hit: in App, pass `openPrSession`/`createPrFlow` through refs (as `subjectSessionsRef` already does for sessions) or wrap them so their identity does not depend on `s`/`flowLinks`. Build the menu `items` only when `menu` is open.
+
+### [F-002] A new bound session's first turn now lists sessions twice
+- **Severity**: info
+- **File**: apps/desktop/src/session/useAcpSession.ts
+- **Hot path**: once per newly bound session (its first turn end), not a hot path.
+- **Problem**: after a turn, `applyPendingFlow(...).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions())`. When a subject binding is pending, `subjects.apply` calls `onFlags`, which itself returns `refreshSessions()` (deliberately: the comment says the pending binding is dropped only after the stored list is read), and then `finally` runs `refreshSessions()` again: two `session/list` calls (each up to 5 RPC pages) back to back. The double call is redundant, but it happens once per binding, and the first refresh is a deliberate choice whose reason holds.
+- **Fix** (optional): skip the trailing refresh when `subjects.apply` already refreshed, e.g. have `apply` resolve to whether it refreshed.
+
+### Clean Areas
+- N+1 / DB queries, indexes, pagination: none in this slice (client-side only; `session/list` paging unchanged at 5 pages).
+- Memory leaks: `PendingSubjects` entries are removed on success or replacement; `usePendingFlowLinks` drops entries on link/clear; the focus effect in `ReviewBoard` keeps one ref; no new listeners, timers or subscriptions without cleanup. A pending subject for a session that keryx never stores stays in the map for the window's life; it is bounded by user clicks, so no finding.
+- Bundle imports: `react-dom` `createPortal` is already a dependency; no large-library imports added.
+- Synchronous blocking: `readReviewGrouping`/`saveReviewGrouping` are single `localStorage` calls on snapshot change or user click, not per render.
+- Expensive render work: `newestFirst` is memoized on `cards`; `drawnLanes`, `issueGroups`, `withPendingSubjects` (memoized on `state.sessions`/`pendingSubjects`) are cheap.
+- Redundant API calls: `openSubjectSession` reads sessions through a ref, with no extra fetch; `bindSubject` makes one flags write per bind (plus one retry after the turn).
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-02 read in full. No blocker or major. One minor: PrWorkRow derives bound sessions and Flows per card per render (O(cards x (sessions + flows))), and ReviewBoard's new `work` useMemo can never hit because App passes inline callbacks that also depend on the per-render `s` object, so the board re-derives on every App render (every animation frame while a background turn streams with the Review view open). One info: the first turn of a newly bound session lists sessions twice.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "  const sessions = boundSessions(work.sessions, subject);\n  const flow = prFlows(card, work.flows, sessions)[0];",
+      "problem": "PrWorkRow computes boundSessions (filter + sort over all sessions) and prFlows (filter over all Flows with regex replace + toLowerCase per Flow, then sort) per card in render, plus a MenuItem[] even when the menu is closed. ReviewBoard's `const work = useMemo<PrWork>(...)` cannot hit: its deps onCreateFlow/onOpenSubjectSession are inline arrows created on each App render (`onCreateFlow={(card, subject) => void createPrFlow(card, subject)}`), and openPrSession/createPrFlow depend on `s` (useAcpSession returns a new object literal each render) and `flowLinks` (a new object each render). So memo(ReviewResults) re-renders and every PrWorkRow re-derives on every App render. IssueWorkRow has the same per-row shape via issueSessions, at lower cost.",
+      "impact": "Reasoned count, not measured: with the Review view open, App re-renders once per flushed update batch (requestAnimationFrame, or 250 ms when hidden) while any background session streams. Each render does up to 150 cards x (sessions + flows) comparisons, e.g. ~30k regex replace/lowercase calls at 200 Flows, plus 150 small sorts. Likely a few ms per frame on a large project; jank risk, not an outage. memo(ReviewResults) was already defeated before this PR by the inline onOpenSession, so only the per-card derivation is new.",
+      "suggested_fix": "Index once per (sessions, flows) change: in ReviewBoard/ReviewResults, useMemo a Map from subject key to bound sessions (newest first) and a Map from normalised PR URL to Flows, and pass lookups to PrWorkRow. Stabilise the App callbacks (refs, as subjectSessionsRef already does) so the `work` memo and memo(ReviewResults) can hit, or drop the useMemo if it is not meant to. Build the menu items only when the menu is open.",
+      "evidence": "slice-02: PrWorkRow.tsx render body; ReviewBoard.tsx `const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), flows, sessions, onOpenFlow, onCreateFlow, onOpenSubjectSession }),`; App.tsx `onCreateFlow={(card, subject) => void createPrFlow(card, subject)} onOpenFlow={(dir) => {` and `}, [s, fillComposer, flowForPr]);`; useAcpSession.ts returns an object literal each render and batches updates through flushUpdates (raf / 250 ms timeout); App.tsx:540 `const workView = view === \"settings\" ? settingsReturn.current : view;` so the board renders cards only while the Review view is active. IssueWorkRow.tsx `const bound = issueSessions(sessions, issue).length;` is the sibling site.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "dedupe_key": "desktop-prworkrow-per-render-derivation",
+      "location_class": "in-diff",
+      "degradation_class": "performance",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/PrWorkRow.tsx (boundSessions + prFlows per card)",
+          "apps/desktop/src/review/ReviewBoard.tsx (work useMemo with unstable deps)",
+          "apps/desktop/src/App.tsx (inline onOpenSubjectSession/onCreateFlow; openPrSession/createPrFlow depend on s and flowLinks)",
+          "apps/desktop/src/issues/IssueWorkRow.tsx (issueSessions per issue row)"
+        ],
+        "enumeration_method": "Read every call site of boundSessions/issueSessions/prFlows in slice-02 (PrWorkRow, IssueWorkRow, openSubjectSession on click only, issueSessions via model.ts), and every dep of the `work` memo back to its App definition."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/session/useAcpSession.ts",
+      "line": null,
+      "quote": "void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());",
+      "problem": "With a pending subject binding, subjects.apply -> onFlags already awaits refreshSessions() (deliberate, per its comment), then the finally runs refreshSessions() again: two session/list reads (each up to 5 pages) back to back.",
+      "impact": "One redundant session/list per newly bound session's first turn; not a hot path.",
+      "suggested_fix": "Optional: have PendingSubjects.apply report whether it refreshed, and skip the trailing refresh in that case.",
+      "evidence": "slice-02 useAcpSession.ts: onFlags `return refreshSessions();` and the turn-end chain quoted above.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "desktop-subject-bind-double-session-list",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice is supplied, and the two outside-slice reads were known files); wiki_used: no (not-relevant: performance lens on supplied diff); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no. Not run: tests (read-only dispatch); no timing measured, so the F-001 cost is a reasoned count.

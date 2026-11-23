@@ -1,0 +1,18 @@
+# keryx review verify-run
+finding: F-001
+command: bun test /private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-eager-montalcini-d39bf1/d22cb658-39f6-408e-913b-0e11915d8cec/scratchpad/probe-f001.test.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-23T21:08:23.644Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+{"a":{"action":"link","dir":"517-new-a"},"b":{"action":"link","dir":"517-new-a"}}
+--- stderr ---
+
+../../../../../../../../private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-eager-montalcini-d39bf1/d22cb658-39f6-408e-913b-0e11915d8cec/scratchpad/probe-f001.test.ts:
+
+ 1 pass
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [55.00ms]

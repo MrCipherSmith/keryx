@@ -1,0 +1,1175 @@
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 1,66 @@
+ # План реализации · Review v2
+-Version: 0.1.3
++Version: 0.1.4
+ 
+-Статус: этап 0 реализован и влит в main (Flow 516, PR #1294); этапы 1–4 — draft, готовы к запуску по разделу «Передача следующим этапам». Этапы упорядочены так, чтобы каждый можно было выпустить отдельно. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md).
++Статус: этап 0 реализован и влит в main (Flow 516, PR #1294); этап 1 реализован в Flow 517 (draft PR, см. «Состояние этапа 1»); этапы 2–4 — draft, готовы к запуску по разделу «Передача следующим этапам». Этапы упорядочены так, чтобы каждый можно было выпустить отдельно. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md).
+ 
+ ## Этапы
+ 
+ | Этап | Что делается | Требования | Что показать на выходе |
+ |---|---|---|---|
+ | 0. Исправления текущей доски | Убрать обход фильтров для активного ревью. Убрать подъём активных наверх. Скрывать пустую колонку «Done». Показывать на карточке доски результат прошлого head с пометкой «устарел» (R5 v1 это обещает; сегодня он виден только в истории внутри панели PR). Сузить индикатор вкладки до событий, адресованных пользователю. Убрать перенос панели инструментов (наблюдение при осмотре приложения) | часть R1, R2, R12 | На PR с активным ревью фильтр по другому автору скрывает карточку; после нового коммита карточка на доске показывает прошлый результат как устаревший |
+ | 1. GitHub-срез и ссылки | Колонки Pull requests и Issues только по GitHub. Строка работы Keryx на карточке. «Открыть в сессии» с привязкой Subject и заголовком сессии. Создание ревью и Flow из привязанной сессии. Подписанные действия, кроме «Исправить замечания» | R1–R3, R5, R6, часть R4 (ссылка ревью без номера раунда и отставания), часть R7 | Сценарий «PR без Flow и ревью → сессия → `/review` → ссылка на карточке» |
+ | 2. Сущность Review | Таблица `reviews`, миграция запусков в раунды и попытки. Вкладка Reviews: доска, список, панель. Перенос интерфейса ревью, истории, публикации и правил из панели PR. Ссылка ревью на карточке PR с раундом и отставанием. Индикатор Reviews | R8, остаток R4, R12 | Один PR с тремя историческими запусками виден как один Review с раундами |
+ | 3. Смена head | Проверка head на границе волны. `on_head_move`. Команда раунда обновления и новые правила выбора прошлого раунда. Варианты в диалоге публикации. Перенос ответов по находкам. События `push` вотчера обновляют Review | R9, R10 | Сценарии «коммит после завершения» и «коммит во время раунда» из критериев выпуска |
+ | 4. Единый реестр | Регистрация пакетов сессии как попыток. Общий код публикации. Процедура «Head сдвинулся» в review-orchestrator. Действие «Исправить замечания» как Flow | остаток R7, R11 | Ревью из сессии агента опубликовано из Desktop |
+ 
+ ## Состояние этапа 0
+ 
+ Этап 0 реализован в Flow 516 и влит в main через PR #1294. Ревью: раунд по ветке и пять раундов по PR; после первого раунда ни один не нашёл blocker или major. Пакеты раундов — `.metaproject/reviews/2026-11-23-review-flow-*-pull-1294*`, журнал решений — `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md`.
+ 
+ Три отклонения от PRD сделаны сознательно и записаны здесь:
+ 
+ - (a) R12 говорит, что индикатор вкладки Pull requests загорается для запроса ревью на пользователя «или его команду». На этапе 0 сопоставляется только логин пользователя; запросы на команды не сопоставляются, пока не появится членство в командах (планируется вместе с этапом 1).
+ - (b) До появления вкладки Reviews (этап 2) индикатор вкладки Pull requests загорается также от локального ревью, которое ждёт пользователя (вопрос ревьюера или решение о публикации).
+ - (c) Панель инструментов доски не гарантированно остаётся в одну строку, и меню для второстепенных элементов нет. Вместо этого подписи кнопок скрываются, когда внутренняя ширина панели (без отступов) не больше 1100px — это панель шириной около 1140px; текст состояния вотчера скрывается при внутренней ширине не больше 760px — панель около 800px, а счётчик pull request'ов остаётся голым числом, и поле поиска сужается до 80px; счётчик активных фильтров остаётся видимым. Измерено на разметке панели с реальными стилями и заглушками вместо данных: одна строка без выхода за край при ширине панели 560, 620, 700, 760, 820, 1101, 1180 и 1380px; при 340px — две строки. Когда показана подсказка о скрытых фильтрами запросах (d) («Show N waiting on you», уже 1100px — «N hidden»), панель переходит на вторую строку при ширине 340–646, 810–908 и 1150–1290px, то есть и при панели 560px в окне по умолчанию с открытой панелью PR; ничего не обрезается. В приложении с реальными данными не измерялось.
+ - (d) Решения оператора от 2026-11-23: кнопка на карточке с устаревшим ревью называется «Review again», пока этап 2 не свяжет раунды между собой; индикатор вкладки считает каждый pull request, которому нужен пользователь, а если часть из них скрыта фильтрами, на панели инструментов показывается подсказка с числом скрытых и кнопкой, которая сбрасывает фильтры и поиск.
+ 
+ Решение оператора от 2026-11-23: закрытый или слитый pull request с идущим ревью скрывается при фильтре по умолчанию «Open + Draft».
+ 
++## Состояние этапа 1
++
++Этап 1 реализован в Flow 517 (`.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`), ветка `feat/desktop-review-v2-stage1`; до слияния — draft.
++
++- **Pull requests.** Колонки и порядок только по GitHub: группировка «Status» (Draft · Waiting for review · Changes requested · Approved, Merged и Closed — по фильтру состояния) и «My role» (Requested from me · Mine · Others). Быстрые фильтры «Requested from me», «Mine», «CI failed» и переключатель группировки стоят в строке контекста, не в тулбаре, поэтому замеры отклонения (c) остаются в силе. Колонка внимания и колонка «In review» убраны (D6). Строка причины на карточке — только по GitHub.
++- **Строка работы Keryx** (`apps/desktop/src/review/PrWorkRow.tsx`): три места фиксированной высоты 24px — ревью («Review · <состояние>» из `localReview`, без раунда и отставания; открывает текущую панель ревью), Flow (по `prUrl` или через флаг `flow` привязанной сессии), сессии (число, последняя, меню со всеми и «New session»). Пустое место — подписанное действие. «Fix review comments» не показывается (этап 4).
++- **Привязка сессии к Subject.** `subject` хранится в `flags.json` сессии и пишется через `_keryx/session_flags` (`src/session/organize.ts`); сессия Issue получает `subject` при привязке в `withIssueBinding`. Старый keryx без поддержки `subject`: сессия открывается, в ней появляется уведомление, что привязка не сохранена. Заголовок сессии показывает ссылку на PR или Issue и на Flow.
++- **Создание из сессии.** `/review` без цели в сессии, привязанной к PR, открывает диалог запуска с этим PR. «Create Flow» открывает привязанную сессию с подготовленным текстом; первый новый пакет Flow, появившийся, пока запрос ждёт, привязывается к сессии. Если появилось несколько — не привязывается ни один; если списка Flow ещё не было — тоже.
++- **Issues.** По умолчанию колонки по состоянию GitHub (Open · Closed по фильтру), источник по умолчанию — репозиторий проекта (`keryx issues list` с `source: "repository"`, D5); группировка по статусу GitHub Project не изменилась; фильтр по стадии Flow убран, стадия — ссылка в строке работы.
++
++Отклонения и ограничения этапа 1:
++
++- (a) остаётся открытым: членства в командах этап 1 не ввёл, запросы ревью на команды индикатором не сопоставляются.
++- (b) остаётся: индикатор Pull requests по-прежнему загорается от локального ревью, ждущего пользователя; снимается на этапе 2.
++- (e) У Issue нет выбора другой или новой сессии: бэкенд привязки задачи (`withIssueBinding`) держит одну сессию на задачу и аккаунт. Требование R5 для Issue в части «с выбором другой или новой» не выполнено.
++- (f) Flow, созданный вне окна ожидания «Create Flow» (или в другой сессии), к PR автоматически не привязывается, пока у него нет `prUrl`.
++- Не проверялось в приложении с реальными данными: строка работы в узких колонках, положение меню сессий, ширина списка (1000px).
++
+ ## Передача следующим этапам
+ 
+ Раздел для агента, который начинает этап 1, 2, 3 или 4. Всё, что ниже названо «сейчас», проверено по коду после слияния этапа 0.
+ 
+ ### Как запускать
+ 
+ - Один этап — один Flow через flow-orchestrator (`.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`), ветка от свежего `main`, свой PR. Критерии приёмки замораживаются из строки этапа в таблице «Этапы» и из требований PRD, которые она называет.
+ - Входные документы: [PRD](prd.md) (R1–R12), [спецификация](specification.md), этот план, решения D1–D6 выше. Раздел спецификации «Основания» описывает код на коммите `1b994df18`, то есть до этапа 0; где этап 0 его изменил, верен раздел «Состояние этапа 0» этого плана.
+ - Ревью — review-orchestrator по PR. Составы раундов 3–5 этапа 0 были сокращены решением оператора, и такие пакеты не проходят гейт завершения инструмента; если нужен полный пакет, запускайте полный состав.
+ - Rust-часть Desktop (`apps/desktop/src-tauri`) локально не собирается — проверяется только в CI.
+ 
+ ### Порядок и параллельность
+ 
+ - Этапы 1 и 2 не зависят друг от друга, их можно вести параллельно. Оба трогают карточку PR (`apps/desktop/src/review/ReviewResults.tsx`, `ReviewBoard.tsx`): этап 1 добавляет строку работы Keryx и ссылку на ревью, этап 2 переносит интерфейс ревью из панели PR и добавляет к ссылке раунд и отставание. При параллельной работе договоритесь, какой Flow владеет этими файлами, или ведите этап 2 после слияния этапа 1.
+ - Этап 3 начинается только после слияния этапа 2, этап 4 — после этапов 2 и 3.
+ 
+ ### С чего начать каждый этап
+ 
+ - **Этап 1.** Сначала прочитать, как сейчас хранится связь Issue ↔ сессия ↔ Flow (при подготовке не читалось, см. «Что не проверено»). Ссылка ревью на карточке строится из `localReview` и открывает текущую панель ревью. Здесь же закрывается отклонение (a): сопоставление запросов ревью на команды пользователя, если появится членство в командах. Колонка внимания убирается по D6, Issues по умолчанию показывают репозиторий проекта по D5.
+ - **Этап 2.** Начать с миграции запусков (`src/review/desk-run-store.ts`) в раунды и попытки на копии рабочей базы. После появления вкладки Reviews индикатор вкладки Pull requests перестаёт загораться от локального ревью — это снимает отклонение (b). Подпись «Review again» из решения (d) меняется вместе со связью раундов.
+
+--- src/acp/server.ts
+@@ 2919,2982 @@
+   function listMeta(flags: SessionFlags, messageCount: number): { _meta: { keryx: SessionFlags & { messageCount: number } } } {
+     return { _meta: { keryx: { ...flags, messageCount } } };
+   }
+ 
+   /** The `sessionId` and optional `cwd` of an organise request; `cwd` defaults like `session/list`'s. */
+   function organiseTarget(params: unknown, method: string): { obj: Record<string, unknown>; sessionId: string; cwd: string } {
+     requireInitialized(method);
+     const obj = requireObjectParams(params, method);
+     const sessionId = requireStringField(obj, "sessionId", method);
+     const rawCwd = obj["cwd"];
+     if (rawCwd !== undefined && rawCwd !== null && typeof rawCwd !== "string") {
+       refuse(invalidParams(`${method}: cwd must be a string, null or omitted`, { received: rawCwd }));
+     }
+     return { obj, sessionId, cwd: typeof rawCwd === "string" && rawCwd.length > 0 ? rawCwd : process.cwd() };
+   }
+ 
+   function refuseStore(method: string, sessionId: string, error: unknown): never {
+     refuse(invalidRequest({ reason: `${method}: ${error instanceof Error ? error.message : String(error)}`, method, sessionId }));
+   }
+ 
+-  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow. */
++  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow and a GitHub subject. */
+   function handleSessionFlags(params: unknown): SessionFlags {
+     const method = KERYX_ACP_EXTENSION_METHODS.sessionFlags;
+     const { obj, sessionId, cwd } = organiseTarget(params, method);
+     const change: SessionFlagsChange = {};
+     for (const key of ["archived", "pinned"] as const) {
+       const value = obj[key];
+       if (value === undefined) continue;
+       if (typeof value !== "boolean") refuse(invalidParams(`${method}: ${key} must be a boolean or omitted`, { received: value }));
+       change[key] = value;
+     }
+     const flow = obj["flow"];
+     if (flow !== undefined) {
+       if (flow !== null && typeof flow !== "string") refuse(invalidParams(`${method}: flow must be a string, null or omitted`, { received: flow }));
+       change.flow = flow;
+     }
++    const subject = obj["subject"];
++    if (subject !== undefined) {
++      if (subject !== null && (typeof subject !== "object" || Array.isArray(subject))) {
++        refuse(invalidParams(`${method}: subject must be an object, null or omitted`, { received: subject }));
++      }
++      // Its fields are checked by the store, which refuses a subject that is not a GitHub PR or issue.
++      change.subject = subject as Exclude<SessionFlagsChange["subject"], undefined>;
++    }
+     try {
+       return setSessionFlags(cwd, sessionId, change, options.dataDir);
+     } catch (error) {
+       refuseStore(method, sessionId, error);
+     }
+   }
+ 
+   /**
+    * `_keryx/session_trash` (shell profile): moves a stored session to the
+    * system trash. A held session is released first (no `session_released`
+    * follows: the client asked); a busy or opening one is refused.
+    */
+   async function handleSessionTrash(params: unknown): Promise<{ trashedTo: string }> {
+     const method = KERYX_ACP_EXTENSION_METHODS.sessionTrash;
+     const { sessionId, cwd } = organiseTarget(params, method);
+     refuseIfOpening(method, sessionId);
+     if (registry.get(sessionId) !== undefined) {
+       if (sessionIsBusy(sessionId)) {
+         refuse(
+           invalidRequest({
+
+--- src/acp/shell-session-organize.test.ts
+@@ 56,131 @@
+         expect(Object.keys(cleared?.["_meta"]?.keryx ?? {})).toEqual(["messageCount"]);
+         expect(typeof cleared?.["_meta"]?.keryx?.messageCount).toBe("number");
+ 
+         const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: "495-2026-11-17-cards" });
+         expect(linked.result?.["flow"]).toBe("495-2026-11-17-cards");
+         const withFlow = await call(h, "session/list", { cwd: h.projectDir });
+         const entry = (withFlow.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+         expect(entry?.["_meta"]?.keryx?.flow).toBe("495-2026-11-17-cards");
+         await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: null });
+         expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: 7 })).error?.code).toBe(-32602);
+ 
+         expect((await call(h, FLAGS, { sessionId: id, archived: "yes" })).error?.code).toBe(-32602);
+         expect((await call(h, FLAGS, { sessionId: "missing", cwd: h.projectDir, archived: true })).error).toBeDefined();
+       } finally {
+         await h.end();
+       }
+     },
+     TIMEOUT_MS,
+   );
+ 
++  test(
++    "a subject is linked, listed after a fresh read, unlinked by null; an invalid one is refused",
++    async () => {
++      const h = shellHarness();
++      try {
++        await h.initialize();
++        const id = storedSession(h);
++        const subject = { kind: "pr", repo: "org/repo", number: 12, url: "https://github.com/org/repo/pull/12" };
++        const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject });
++        expect(linked.error).toBeUndefined();
++        expect(linked.result?.["subject"]).toEqual(subject);
++        // session/list reads flags.json again, as after a restart.
++        const listed = await call(h, "session/list", { cwd: h.projectDir });
++        const info = (listed.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
++        expect(info?.["_meta"]?.keryx?.subject).toEqual(subject);
++
++        // Refused at the wire (wrong type) and at the store (URL that does not match).
++        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: "org/repo#12" })).error?.code).toBe(-32602);
++        const mismatch = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: { ...subject, url: "https://github.com/org/repo/issues/12" } });
++        expect(mismatch.error).toBeDefined();
++        expect(mismatch.result).toBeUndefined();
++        // Omitted: a flag change leaves the subject as it is.
++        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, pinned: true })).result?.["subject"]).toEqual(subject);
++
++        const unlinked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: null });
++        expect(unlinked.result?.["subject"]).toBeUndefined();
++        const again = await call(h, "session/list", { cwd: h.projectDir });
++        const cleared = (again.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
++        expect(cleared?.["_meta"]?.keryx?.subject).toBeUndefined();
++      } finally {
++        await h.end();
++      }
++    },
++    TIMEOUT_MS,
++  );
++
+   test(
+     "trash releases an idle held session and moves its folder; a busy one is refused",
+     async () => {
+       const seam = trashSeam();
+       const h = shellHarness({
+         rounds: [toolRound("t1", "shell_exec", { command: "true" }), textRound("done")],
+         serverOptions: seam.serverOptions,
+       });
+       try {
+         await h.initialize();
+         const busy = (await h.newSession()).sessionId;
+         // A turn waiting on its permission question holds the session.
+         const promptId = h.prompt(busy, "run it");
+         const ask = await h.waitFor((f) => f.method === "session/request_permission");
+         const refused = await call(h, TRASH, { sessionId: busy, cwd: h.projectDir });
+         expect(refused.error?.data).toMatchObject({ condition: "session-busy" });
+         h.respond(ask.id, { result: { outcome: { outcome: "selected", optionId: "allow_once" } } });
+         expect((await h.waitFor((f) => f.id === promptId)).error).toBeUndefined();
+ 
+         // Idle now: released and moved, and session/list no longer has it.
+
+--- src/commands/issues.ts
+@@ 35,75 @@
+   });
+   if (!values.login || !values.request || !values.json || values.request.length > 64000) throw new Error(usage);
+   let request: Record<string, unknown>;
+   try {
+     request = JSON.parse(values.request);
+   } catch {
+     throw new Error(usage);
+   }
+   if (!request || Array.isArray(request) || typeof request !== "object") throw new Error(usage);
+   const account = await connectIssueAccount(cwd, values.login);
+   let result;
+   switch (action) {
+     case "viewer":
+       result = { viewer: account.viewer };
+       break;
+     case "origin":
+       result = await readIssueOrigin(cwd, account, request);
+       if (result.issue) await attachStages(cwd, account.viewer, [result.issue]);
+       break;
+     case "list": {
+-      const page = await listIssuePage(account, request as unknown as ListIssueRequest);
++      const page = await listIssuePage(account, request as unknown as ListIssueRequest, cwd);
+       await attachStages(cwd, page.viewer, page.items);
+       result = page;
+       break;
+     }
+     case "project": {
+       const page = await readIssueProject(account, request as ProjectRequest);
+       await attachStages(
+         cwd,
+         page.viewer,
+         page.items.map((item) => item.issue),
+       );
+       result = page;
+       break;
+     }
+     case "move":
+       result = await moveIssueProjectItem(account, request as unknown as MoveRequest);
+       break;
+     case "detail":
+       result = await issueDetail(account, request.ref as IssueRef);
+       break;
+
+--- src/integrations/issues-board.test.ts
+@@ 130,280 @@
+     const payload = JSON.parse(String(opts.body));
+     expect(payload.variables.id).toBe(ref.nodeId);
+     return json({ data: { node: graphIssue } });
+   });
+   expect((await issueDetail(auth, ref)).issue.body).toBe("");
+   await expect(issueDetail(auth, { ...ref, repositoryId: "other" })).rejects.toThrow("access:");
+   await expect(listIssuePage(auth, { source: "assigned" })).rejects.toThrow("configuration:");
+   await expect(issueComments(auth, { ...ref, url: "file:///private/demo" })).rejects.toThrow("configuration:");
+   const badAccount = new IssueGithub("test-other", async () => json({ login: "other", node_id: "U_other" }));
+   await expect(authenticatedAccount("viewer", badAccount)).rejects.toThrow("access:");
+ });
+ 
+ test("AC5 GitHub state, Project Status and Keryx stage stay independent on refresh", async () => {
+   const page = await listIssuePage(await account(async () => json([row("a", "I_a"), row("b", "I_b")])), {source: "assigned"});
+   const openDone: Row = { issue: { ...page.items[0]!, work: { stage: "done" } }, optionId: "in-progress" };
+   const closedActive: Row = { issue: { ...page.items[1]!, state: "closed", work: { stage: "active" } } };
+   const selected = issueKey(closedActive.issue.ref);
+   const refreshed = mergeRows([openDone, closedActive], [
+     { ...closedActive, issue: { ...closedActive.issue, work: {stage: "needs_answer", reason: "Choose the execution branch"} } },
+   ]);
+-  expect(groupForRow(openDone, false)).toBe("done");
++  // Without a Project the board groups by GitHub state; the Keryx stage never picks the lane (R3).
++  expect(groupForRow(openDone, false)).toBe("open");
+   expect(groupForRow(openDone, true)).toBe("in-progress");
+-  expect(groupForRow(closedActive, false)).toBe("active");
++  expect(groupForRow(closedActive, false)).toBe("closed");
+   expect(visibleRows(refreshed, defaultFilters)).toEqual([openDone]);
+   const shown = visibleRows(refreshed, { ...defaultFilters, state: "all" }).find(r => issueKey(r.issue.ref) === selected)!;
+-  expect(groupForRow(shown, false)).toBe("needs_answer");
++  expect(groupForRow(shown, false)).toBe("closed");
++  expect(shown.issue.work?.stage).toBe("needs_answer");
+   expect(shown.issue.work?.reason).toBe("Choose the execution branch");
+   expect(shown.issue.state).toBe("closed");
+ });
+ 
++async function withProject<T>(remote: string | null, use: (cwd: string) => Promise<T>): Promise<T> {
++  const { mkdtemp, rm } = await import("node:fs/promises");
++  const { tmpdir } = await import("node:os");
++  const { join } = await import("node:path");
++  const { execFileSync } = await import("node:child_process");
++  const { fixtureGitEnv, isolateGitDiscovery } = await import("../review/test-git-fixture");
++  const cwd = await mkdtemp(join(tmpdir(), "issues-repository-"));
++  const restore = isolateGitDiscovery();
++  try {
++    const env = fixtureGitEnv();
++    execFileSync("git", ["init", "--quiet"], { cwd, env });
++    if (remote) execFileSync("git", ["remote", "add", "origin", remote], { cwd, env });
++    return await use(cwd);
++  } finally {
++    restore();
++    await rm(cwd, { recursive: true, force: true });
++  }
++}
++function repoRow(repo: string, node: string, number: number) {
++  const { repository: _omitted, ...rest } = row(repo, node);
++  return { ...rest, number, html_url: `https://github.com/org/${repo}/issues/${number}` };
++}
++
++test("AC13 the repository source lists the project's GitHub repository and excludes pull requests", async () => {
++  const requests: URL[] = [];
++  const auth = await account(async (url, options) => {
++    if (url.pathname === "/graphql") {
++      const ids: string[] = JSON.parse(String(options.body)).variables.ids;
++      return json({ data: { nodes: ids.map((id) => ({ id, repository: { id: "R_base", name: "base", owner: { login: "org" } } })) } });
++    }
++    requests.push(url);
++    return json([repoRow("base", "I_1", 1), { ...repoRow("base", "P_2", 2), pull_request: {} }, repoRow("base", "I_3", 3)]);
++  });
++  await withProject("https://github.com/org/base.git", async (cwd) => {
++    const page = await listIssuePage(auth, { source: "repository", state: "all", sort: "asc", labels: ["bug"], updatedSince: "2026-01-01" }, cwd);
++    expect(page.items.map((i) => [i.ref.owner, i.ref.repo, i.ref.number, i.ref.repositoryId])).toEqual([
++      ["org", "base", 1, "R_base"],
++      ["org", "base", 3, "R_base"],
++    ]);
++    expect(page.nextCursor).toBeNull();
++  });
++  expect(requests).toHaveLength(1);
++  const url = requests[0]!;
++  expect(url.pathname).toBe("/repos/org/base/issues");
++  expect(Object.fromEntries(url.searchParams)).toEqual({
++    state: "all",
++    direction: "asc",
++    sort: "updated",
++    per_page: "40",
++    since: "2026-01-01T00:00:00.000Z",
++    labels: "bug",
++  });
++});
++
++test("AC13 a repository cursor follows GitHub's repository links and cannot be replayed for another repository", async () => {
++  const paths: string[] = [];
++  const auth = await account(async (url) => {
++    paths.push(url.pathname + url.search);
++    const n = Number(url.searchParams.get("page") ?? 1);
++    return json(
++      [row("base", "I_" + n)],
++      n < 2 ? { headers: { link: `<https://api.github.com/repositories/42/issues?state=open&page=2>; rel="next"` } } : {},
++    );
++  });
++  const cursor = await withProject("git@github.com:org/base.git", async (cwd) => {
++    const first = await listIssuePage(auth, { source: "repository" }, cwd);
++    expect(first.nextCursor).not.toBeNull();
++    const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
++    expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
++    expect(second.nextCursor).toBeNull();
++    return first.nextCursor;
++  });
++  expect(paths[1]).toStartWith("/repos/org/base/issues?");
++  expect(new URLSearchParams(paths[1]!.split("?")[1]).get("page")).toBe("2");
++  await withProject("https://github.com/org/other.git", async (cwd) => {
++    await expect(listIssuePage(auth, { source: "repository", cursor }, cwd)).rejects.toThrow("Refresh");
++  });
++  await expect(listIssuePage(auth, { source: "assigned", cursor })).rejects.toThrow("Refresh");
++  expect(paths).toHaveLength(2);
++});
++
++test("AC13 the repository source needs a project with a GitHub remote", async () => {
++  let requested = 0;
++  const auth = await account(async () => {
++    requested++;
++    return json([]);
++  });
++  await withProject(null, async (cwd) => {
++    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
++      "configuration: This project has no GitHub.com fetch remote.",
++    );
++  });
++  await withProject("https://gitlab.com/org/base.git", async (cwd) => {
++    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
++  });
++  await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration:");
++  expect(requested).toBe(0);
++});
++
+ test("AC3 source links reopen a private session or legacy Flow only after the selected account can read the ticket", async () => {
+   const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
+   const { tmpdir } = await import("node:os");
+   const { join } = await import("node:path");
+   const { readIssueOrigin } = await import("../session/issues/issue-origin");
+   const { withIssueBinding } = await import("../session/issues/issue-session");
+   const { readSessionFlags } = await import("../session/organize");
+   const { sessionDir } = await import("../session/paths");
+   const root = await mkdtemp(join(tmpdir(), "issue-origin-"));
+   const profile = join(root, "profile");
+   const flowDir = "007-existing-issue";
+   const auth = await account(async (_url, options) => {
+     const variables = JSON.parse(String(options.body)).variables;
+     return json({ data: variables.id
+       ? { node: { ...graphIssue, body: "Authoritative body" } }
+       : { repository: { issue: { ...graphIssue, body: "Authoritative body" } } } });
+   });
+   try {
+     const live = (await issueDetail(auth, ref)).issue;
+     const project = { cwd: root, projectId: "p", cloneId: "c", baseBranch: "main" };
+
+--- src/integrations/issues-board.ts
+@@ 1,44 @@
+ import {
+   isIssueRef,
+   issueKey,
+   type IssueComment,
+   type IssueDetail,
+   type IssuePage,
++  type IssueListSource,
+   type IssueRef,
+-  type IssueScope,
+   type IssueSummary,
+ } from "./issues-contract";
++import { reviewRepositories, selectRepository } from "../review/board-github";
+ import {
+   API,
+   connectIssueAccount,
+   cursorScope,
+   denied,
+   invalidInput,
+   readCursor,
+   scopedCursor,
+   type IssueAccount,
+ } from "./issues-github";
+ 
+ export interface ListIssueRequest {
+-  source: IssueScope;
++  source: IssueListSource;
+   state?: "open" | "closed" | "all";
+   sort?: "asc" | "desc";
+   updatedSince?: string;
+   labels?: string[];
+   cursor?: string | null;
+ }
+ 
+ interface Repository {
+   id: string;
+   name: string;
+   owner: { login: string };
+ }
+ interface Actor {
+   login: string;
+ }
+ export interface GithubIssue {
+   __typename: string;
+   id: string;
+   repository: Repository;
+   number: number;
+
+--- src/integrations/issues-board.ts
+@@ 75,197 @@
+     createdAt: issue.createdAt,
+     updatedAt: issue.updatedAt,
+   };
+ }
+ 
+ interface RestIssue {
+   node_id: string;
+   html_url: string;
+   number: number;
+   title: string;
+   state: "open" | "closed";
+   user: Actor | null;
+   created_at: string;
+   updated_at: string;
+   assignees: Actor[];
+   labels: (string | { name: string })[];
+   repository?: { node_id: string; owner: Actor; name: string };
+   pull_request?: unknown;
+ }
+ 
+-function listUrl(request: ListIssueRequest) {
++const viewerScopes: readonly string[] = ["assigned", "created", "mentioned", "subscribed"];
++const pageKeys = ["page", "after", "before", "since_id"];
++
++function validateListRequest(request: ListIssueRequest): void {
+   const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
+   if (
+-    !["assigned", "created", "mentioned", "subscribed"].includes(source) ||
++    !(viewerScopes.includes(source) || source === "repository") ||
+     !["open", "closed", "all"].includes(state) ||
+     !["asc", "desc"].includes(sort) ||
+     !Array.isArray(labels) ||
+     labels.some((l) => typeof l !== "string" || l.length > 100) ||
+     (updatedSince !== undefined &&
+       (typeof updatedSince !== "string" || !Number.isFinite(Date.parse(updatedSince))))
+   )
+     throw new Error(invalidInput);
+-  const url = new URL("/issues", API);
++}
++
++/** owner/name of the project's GitHub repository, resolved the way the PR board resolves its default. */
++async function projectRepository(cwd: string | undefined): Promise<string> {
++  if (!cwd) throw new Error(invalidInput);
++  const repository = selectRepository(await reviewRepositories(cwd));
++  // The remote parser admits "." and ".." as a name; either would rewrite the request path.
++  if (repository.split("/").some((part) => /^\.+$/.test(part))) throw new Error(invalidInput);
++  return repository;
++}
++
++function listUrl(request: ListIssueRequest, repository: string | null) {
++  const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
++  const url = repository
++    ? new URL("/repos/" + repository.split("/").map(encodeURIComponent).join("/") + "/issues", API)
++    : new URL("/issues", API);
+   url.search = new URLSearchParams({
+-    filter: source,
++    ...(repository ? {} : { filter: source }),
+     state,
+     direction: sort,
+     sort: "updated",
+     per_page: "40",
+-    pulls: "false",
++    ...(repository ? {} : { pulls: "false" }),
+   }).toString();
+   if (updatedSince) url.searchParams.set("since", new Date(updatedSince).toISOString());
+   if (labels.length === 1 && !labels[0]!.includes(",")) url.searchParams.set("labels", labels[0]!);
+   return url;
+ }
+ 
+-function pageLink(link: string, base: URL): string | null {
++/** GitHub answers /repos/{owner}/{repo}/issues with next links under /repositories/{id}/issues. */
++function samePage(next: URL, base: URL, repository: boolean): boolean {
++  if (!repository) return next.pathname === base.pathname;
++  return (
++    next.pathname.toLowerCase() === base.pathname.toLowerCase() ||
++    /^\/repositories\/\d+\/issues$/.test(next.pathname)
++  );
++}
++
++function pageLink(link: string, base: URL, repository: boolean): string | null {
+   const next = /<([^>]+)>;\s*rel="next"/.exec(link)?.[1];
+   if (!next) return null;
+   const url = new URL(next, base);
+-  if (url.origin !== API || url.pathname !== base.pathname || url.username || url.password)
++  if (url.origin !== API || !samePage(url, base, repository) || url.username || url.password)
+     throw new Error(invalidInput);
+   const params = new URLSearchParams();
+-  for (const key of ["page", "after", "before", "since_id"])
+-    if (url.searchParams.has(key)) params.set(key, url.searchParams.get(key)!);
++  for (const key of pageKeys) if (url.searchParams.has(key)) params.set(key, url.searchParams.get(key)!);
+   if (!params.size) throw new Error("unavailable: Invalid GitHub pagination link. Refresh and retry.");
+   return params.toString();
+ }
+ 
++/** `cwd` locates the project whose GitHub repository the "repository" source lists. */
+ export async function listIssuePage(
+   { viewer, api }: IssueAccount,
+   request: ListIssueRequest,
++  cwd?: string,
+ ): Promise<IssuePage<IssueSummary>> {
+-  const base = listUrl(request);
+-  const scope = cursorScope(viewer, "issues", base.search, [...(request.labels ?? [])].sort());
++  validateListRequest(request);
++  const repository = request.source === "repository" ? await projectRepository(cwd) : null;
++  const base = listUrl(request, repository);
++  const labels = [...(request.labels ?? [])].sort();
++  // The repository joins the scope so a cursor cannot be replayed against another project's repository.
++  const scope = repository
++    ? cursorScope(viewer, "issues", base.search, labels, repository.toLowerCase())
++    : cursorScope(viewer, "issues", base.search, labels);
+   const next = readCursor(scope, request.cursor);
+   if (next)
+     for (const [key, value] of new URLSearchParams(next)) {
+-      if (!["page", "after", "before", "since_id"].includes(key)) throw new Error(invalidInput);
++      if (!pageKeys.includes(key)) throw new Error(invalidInput);
+       base.searchParams.set(key, value);
+     }
+   const { data, link } = await api.rest<RestIssue[]>(base);
+   if (!Array.isArray(data)) throw new Error("unavailable: Invalid GitHub issue page.");
+   const issues = data.filter((x) => !x.pull_request);
+   // REST may omit the embedded repository. Hydrate missing identities in one bounded batch.
+   const missing = issues.filter((x) => !x.repository?.node_id);
+   const repositories = new Map<string, Repository>();
+   if (missing.length) {
+     const result = await api.graphql<{ nodes: ({ id: string; repository?: Repository } | null)[] }>(
+       "query($ids:[ID!]!) { nodes(ids:$ids) { id ... on Issue { repository { id name owner { login } } } } }",
+       { ids: missing.map((i) => i.node_id) },
+     );
+     for (const row of result.nodes) if (row?.repository) repositories.set(row.id, row.repository);
+   }
+   const result = new Map<string, IssueSummary>();
+   let incomplete = false;
+   for (const i of issues) {
+     const r = i.repository?.node_id
+       ? { id: i.repository.node_id, name: i.repository.name, owner: i.repository.owner }
+
+--- src/integrations/issues-board.ts
+@@ 216,256 @@
+       url: i.html_url,
+     };
+     if (!isIssueRef(ref)) {
+       incomplete = true;
+       continue;
+     }
+     result.set(issueKey(ref), {
+       ref,
+       title: i.title,
+       state: i.state,
+       author: i.user?.login ?? "",
+       assignees: i.assignees.map((a) => a.login),
+       labels,
+       createdAt: i.created_at,
+       updatedAt: i.updated_at,
+     });
+   }
+   return {
+     viewer,
+     items: [...result.values()],
+-    nextCursor: scopedCursor(scope, pageLink(link, base)),
++    nextCursor: scopedCursor(scope, pageLink(link, base, repository !== null)),
+     incomplete,
+   };
+ }
+ 
+ interface ReadIssue extends GithubIssue {
+   body: string;
+   stateReason: string | null;
+ }
+ function assertRef(ref: IssueRef) {
+   if (!isIssueRef(ref) || ref.host !== "github.com") throw new Error(invalidInput);
+ }
+ function validateNode(
+   ref: IssueRef,
+   node: { __typename: string; id: string; number: number; repository: { id: string } } | null,
+ ) {
+   if (
+     node?.__typename !== "Issue" ||
+     node.id !== ref.nodeId ||
+     node.number !== ref.number ||
+     node.repository.id !== ref.repositoryId
+
+--- src/integrations/issues-contract.ts
+@@ 1,43 @@
+ // Wire types shared by the CLI, ACP shell and Desktop. No platform imports.
+ export interface IssueRef {
+   host: string;
+   nodeId: string;
+   repositoryId: string;
+   owner: string;
+   repo: string;
+   number: number;
+   url: string;
+ }
+ 
+ /** Resolved by an authenticated GitHub request. A login supplied by a caller is only a selector. */
+ export interface IssueViewer {
+   host: string;
+   nodeId: string;
+   login: string;
+ }
+ 
+ export type IssueScope = "assigned" | "created" | "mentioned" | "subscribed";
+ 
++/** What `keryx issues list` reads: a viewer scope, or the GitHub repository of the project's cwd. */
++export type IssueListSource = IssueScope | "repository";
++
+ export interface IssueLocalStage {
+   stage: "none" | "preparing" | "active" | "needs_answer" | "done";
+   reason?: string;
+   /** This viewer has a bound package with an initial turn that can still be submitted. */
+   canResumePreparation?: boolean;
+ }
+ 
+ export interface IssueSummary {
+   ref: IssueRef;
+   title: string;
+   state: "open" | "closed";
+   author: string;
+   assignees: string[];
+   labels: string[];
+   createdAt: string;
+   updatedAt: string;
+   work?: IssueLocalStage;
+ }
+ 
+ export interface IssueDetail extends IssueSummary {
+
+--- src/session/issues/issue-session.test.ts
+@@ 1,76 @@
++import { describe, expect, test } from "bun:test";
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import type { IssueDetail, IssueProjectRef, IssueViewer } from "../../integrations/issues-contract";
++import { readSessionFlags, setSessionFlags, type SessionSubject } from "../organize";
++import { sessionDir } from "../paths";
++import { type BoundIssue, withIssueBinding } from "./issue-session";
++
++const viewer: IssueViewer = { host: "github.com", login: "reader", nodeId: "user-reader" };
++
++function issue(overrides: Partial<IssueDetail["ref"]> = {}): IssueDetail {
++  return {
++    ref: { host: "github.com", nodeId: "I_9", repositoryId: "R_9", owner: "Org", repo: "repo", number: 9, url: "https://github.com/Org/repo/issues/9", ...overrides },
++    title: "Bind me", state: "open", author: "reader", assignees: [], labels: [],
++    createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-02T00:00:00Z", body: "Body",
++  };
++}
++
++/** The bound session's id; every binding in these tests reserves one, so a missing id fails the test. */
++async function boundSessionId(record: BoundIssue): Promise<string> {
++  const id = record.launch.sessionId;
++  if (id === undefined) throw new Error("the binding reserved no session id");
++  return id;
++}
++
++function workspace(): { root: string; dataDir: string; project: IssueProjectRef } {
++  const root = mkdtempSync(path.join(tmpdir(), "keryx-issue-session-"));
++  return { root, dataDir: path.join(root, "data"), project: { cwd: root, projectId: "p", cloneId: "c", baseBranch: "main" } };
++}
++
++describe("withIssueBinding: session subject", () => {
++  test("binding a session writes subject.kind = issue beside the private marker; a rebind keeps it", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
++      const dir = sessionDir(root, sessionId, dataDir);
++      const expected: SessionSubject = { kind: "issue", repo: "Org/repo", number: 9, url: "https://github.com/Org/repo/issues/9", repositoryId: "R_9" };
++      expect(readSessionFlags(dir)).toEqual({ hasIssue: true, subject: expected });
++
++      // The bound session reopened through the same binding keeps the subject and the other flags.
++      await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
++      expect(readSessionFlags(dir).subject).toEqual(expected);
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
++  test("a subject unlinked by the person is not written back by a later open", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
++      const dir = sessionDir(root, sessionId, dataDir);
++      // keryx lists a session only after its first save; write the flag change straight to the store.
++      const { persistHistory, createSession } = await import("../index");
++      const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
++      persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
++      setSessionFlags(root, sessionId, { subject: null }, dataDir);
++      await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
++      expect(readSessionFlags(dir).subject).toBeUndefined();
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
++  test("an issue outside github.com binds without a subject", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      const enterprise = issue({ host: "git.example.com", url: "https://git.example.com/Org/repo/issues/9" });
++      const sessionId = await withIssueBinding({ ...viewer, host: "git.example.com" }, project, enterprise, dataDir, boundSessionId);
++      expect(readSessionFlags(sessionDir(root, sessionId, dataDir))).toEqual({ hasIssue: true });
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++});
+
+--- src/session/organize.test.ts
+@@ 32,125 @@
+     expect(setSessionFlags(cwd, id, { pinned: true }, dataDir, () => t2).pinnedAt).toBe(t1.toISOString());
+ 
+     const handle = createSession({ cwd, dataDir, id, provider: "test", model: "m" });
+     persistHistory(handle, [{ role: "user", content: "again" }], { provider: "test", model: "m" });
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir)).archivedAt).toBe(t1.toISOString());
+ 
+     expect(setSessionFlags(cwd, id, { archived: false, pinned: false }, dataDir)).toEqual({});
+   });
+ 
+   test("a flow link is stored, replaced and cleared; a path-like name is refused", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     expect(setSessionFlags(cwd, id, { flow: "495-2026-11-17-live-cards" }, dataDir).flow).toBe("495-2026-11-17-live-cards");
+     expect(setSessionFlags(cwd, id, { pinned: true }, dataDir).flow).toBe("495-2026-11-17-live-cards");
+     expect(setSessionFlags(cwd, id, { flow: null }, dataDir).flow).toBeUndefined();
+     for (const bad of ["../etc", "a/b", "-x", "a b", ""]) {
+       expect(() => setSessionFlags(cwd, id, { flow: bad }, dataDir)).toThrow(/not a flow package name/);
+     }
+   });
+ 
++  test("a PR subject is stored, survives a restart re-read and later saves, and null unlinks it", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const subject = { kind: "pr" as const, repo: "Org/Repo.name", number: 42, url: "https://github.com/Org/Repo.name/pull/42", repositoryId: "R_kgDOabc" };
++    expect(setSessionFlags(cwd, id, { subject, pinned: true }, dataDir).subject).toEqual(subject);
++    // A fresh read of flags.json, as a restarted keryx does.
++    expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(subject);
++    // Another flag change and a later save of the session keep it.
++    expect(setSessionFlags(cwd, id, { pinned: false }, dataDir).subject).toEqual(subject);
++    const handle = createSession({ cwd, dataDir, id, provider: "test", model: "m" });
++    persistHistory(handle, [{ role: "user", content: "again" }], { provider: "test", model: "m" });
++    expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(subject);
++
++    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
++    expect(setSessionFlags(cwd, id, { subject: issue }, dataDir).subject).toEqual(issue);
++    expect(setSessionFlags(cwd, id, { subject: null }, dataDir).subject).toBeUndefined();
++    expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({});
++  });
++
++  test("an invalid subject is refused on write and the stored one is kept", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const good = { kind: "pr", repo: "org/repo", number: 1, url: "https://github.com/org/repo/pull/1" };
++    setSessionFlags(cwd, id, { subject: good as never }, dataDir);
++    const bad: unknown[] = [
++      "org/repo#1",
++      { ...good, kind: "commit" },
++      { ...good, url: "https://github.com/org/repo/issues/1" },
++      { ...good, url: "http://github.com/org/repo/pull/1" },
++      { ...good, url: "https://evil.example/org/repo/pull/1" },
++      { ...good, url: "https://github.com/org/other/pull/1" },
++      { ...good, url: "https://github.com/org/repo/pull/2" },
++      { ...good, number: 0, url: "https://github.com/org/repo/pull/0" },
++      { ...good, number: 1.5 },
++      { ...good, repo: "org" },
++      { ...good, repo: "../x/y", url: "https://github.com/../x/y/pull/1" },
++      { ...good, repo: "org/re po" },
++      { ...good, repositoryId: 5 },
++      { ...good, repositoryId: "" },
++    ];
++    for (const subject of bad) {
++      expect(() => setSessionFlags(cwd, id, { subject: subject as never }, dataDir)).toThrow(/not a GitHub subject/);
++    }
++    expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(good as never);
++  });
++
++  test("an invalid subject in flags.json reads as absent and leaves the other flags", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const file = path.join(sessionDir(cwd, id, dataDir), "flags.json");
++    writeFileSync(file, JSON.stringify({ pinnedAt: "2026-11-17T10:00:00.000Z", subject: { kind: "pr", repo: "org/repo", number: 3, url: "https://github.com/org/repo/issues/3" } }));
++    expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({ pinnedAt: "2026-11-17T10:00:00.000Z" });
++  });
++
+   test("an unreadable flags file reads as none; an unknown session is refused", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     writeFileSync(path.join(sessionDir(cwd, id, dataDir), "flags.json"), "{not json");
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({});
+     expect(() => setSessionFlags(cwd, "no-such-session", { archived: true }, dataDir)).toThrow(/no session/);
+   });
+ });
+ 
+ describe("trash", () => {
+   test("macOS: the session folder moves to ~/.Trash under a free name", () => {
+     const { cwd, dataDir, home } = project();
+     const a = stored(cwd, dataDir);
+     const dir = sessionDir(cwd, a, dataDir);
+     const to = trashSession(cwd, a, { dataDir, platform: "darwin", home });
+     expect(path.dirname(to)).toBe(path.join(home, ".Trash"));
+     expect(existsSync(dir)).toBe(false);
+     expect(existsSync(path.join(to, "summary.json"))).toBe(true);
+   });
+ 
+
+--- src/session/issues/issue-session.ts
+@@ 1,102 @@
+ import { randomUUID } from "node:crypto";
+ import { existsSync } from "node:fs";
+ import path from "node:path";
+ import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
+ import { withFileLock } from "../../lib/fs";
+ import { createSession, findSession, sessionDir } from "../index";
+-import { readSessionFlags } from "../organize";
++import { parseSessionSubject, readSessionFlags, updateSessionFlagsAt } from "../organize";
+ import { issueDigest, issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "../../integrations/issue-context/service";
+ 
+ export interface BoundIssue {
+   launch: IssueLaunch;
+   /** The independently fetched description is available to the ACP conversation as untrusted external context. */
+   body: string;
+   updatedAt: string;
+   /** Persisted before dispatch so retries survive title, login and issue URL changes or a client upgrade. */
+   preparationPrompt?: string;
+   flowSourceUrl?: string;
+ }
+ 
+ export function issueBindingFile(viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail["ref"], dataDir?: string): string {
+   const key = issueSessionKey("shell", viewer, project.cloneId, issue);
+   return path.join(keryxDataDir(dataDir), "issue-sessions", issueDigest(key) + ".json");
+ }
+ 
+ export function privateJson<T>(file: string): T | undefined {
+   const read = readConfigFile(file);
+   if (read.ok) return JSON.parse(read.text) as T;
+   if (isDefiniteAbsence(read.reason)) return undefined;
+   throw new Error("The local issue-session record could not be read. Check the storage permissions and try again.");
+ }
+ 
+ export function saveBinding(file: string, record: BoundIssue): void {
+   writeOwnerOnlyFileAtomic(file, JSON.stringify(record));
+ }
+ 
+ export function issueContextForSession(dir: string, dataDir?: string): BoundIssue | undefined {
+   const id = privateJson<{ key: string }>(path.join(dir, "issue-link.json"))?.key;
+   if (!id || !/^[0-9a-f]{64}$/.test(id)) return undefined;
+   const binding = privateJson<BoundIssue>(path.join(keryxDataDir(dataDir), "issue-sessions", id + ".json"));
+   return binding?.launch.sessionId === path.basename(dir) && binding.launch.version === 1 ? binding : undefined;
+ }
+ 
++/**
++ * Records the issue as the session's public subject in `flags.json`, so a
++ * client can tell which issue the session works on (the private record above
++ * stays the authority). Written once, when the session is bound: a subject the
++ * person later unlinks is not written back. An issue whose URL is not a
++ * github.com issue page (GitHub Enterprise) has no subject keryx can store.
++ */
++function bindIssueSubject(dir: string, ref: IssueDetail["ref"]): void {
++  const subject = parseSessionSubject({ kind: "issue", repo: `${ref.owner}/${ref.repo}`, number: ref.number, url: ref.url,
++    ...(ref.repositoryId ? { repositoryId: ref.repositoryId } : {}) });
++  if (subject !== undefined) updateSessionFlagsAt(dir, { subject });
++}
++
+ /** Only called after the remote issue and viewer were verified. The intent reserves the UUID before creating the session. */
+ export async function withIssueBinding<T>(
+   viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail, dataDir: string | undefined,
+   apply: (record: BoundIssue, file: string) => Promise<T>,
+ ): Promise<T> {
+   const file = issueBindingFile(viewer, project, issue.ref, dataDir);
+   ensureKeryxSubdir(["issue-sessions"], keryxDataDir(dataDir));
+   return withFileLock(file + ".lock", async () => {
+     let record = privateJson<BoundIssue>(file);
+     if (!record) {
+       const launchId = randomUUID();
+       record = {
+         launch: { version: 1, launchId, issue: issue.ref, viewer, project, stage: "registered",
+           sessionId: randomUUID(), initialTurn: { key: launchId, state: "unsent" } },
+         body: issue.body, updatedAt: issue.updatedAt,
+       };
+       saveBinding(file, record);
+     }
+     const launch = record.launch;
+     if (launch.version !== 1 || issueKey(launch.issue) !== issueKey(issue.ref) || issueViewerKey(launch.viewer) !== issueViewerKey(viewer)
+         || launch.project.cloneId !== project.cloneId || !launch.sessionId) {
+       throw new Error("Invalid issue-session binding. Inspect the session storage before continuing.");
+     }
+     const root = launch.project.cwd;
+     const dir = sessionDir(root, launch.sessionId, dataDir);
+     if (launch.stage !== "registered" && (!findSession(root, launch.sessionId, dataDir) || readSessionFlags(dir).archivedAt)) {
+       throw new Error("The linked session is archived or missing. Restore it in Sessions and retry.");
+     }
+     if (launch.stage === "registered") {
+       // Only the new intent can materialize its reserved UUID, including after a crash at creation.
+       if (!findSession(root, launch.sessionId, dataDir)) {
+         createSession({ cwd: root, id: launch.sessionId, title: `${issue.ref.owner}/${issue.ref.repo}#${issue.ref.number} ${issue.title}`,
+           ...(dataDir !== undefined ? { dataDir } : {}) });
+       }
+       writeOwnerOnlyFileAtomic(path.join(dir, "issue-link.json"), JSON.stringify({ key: path.basename(file, ".json") }));
++      bindIssueSubject(dir, issue.ref);
+       launch.stage = "session_bound";
+     }
+     if (!existsSync(dir)) throw new Error("The linked session is missing. Restore it in Sessions and retry.");
+     if (launch.flow) record.flowSourceUrl ??= launch.issue.url;
+     launch.issue = issue.ref;
+     record.body = issue.body;
+     record.updatedAt = issue.updatedAt;
+     saveBinding(file, record);
+     return apply(record, file);
+   });
+ }
+
+--- src/session/organize.ts
+@@ 6,180 @@
+ // Every client of the store (the desktop app over ACP, later `keryx shell`)
+ // reads the same file.
+ 
+ import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+ import { homedir } from "node:os";
+ import path from "node:path";
+ import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+ import { sessionLeaseState } from "./lease";
+ import { sessionDir } from "./paths";
+ import { findSession, shortSessionId } from "./store";
+ 
+ export interface SessionFlags {
+   /** Derived from the private link marker, without exposing its issue or owner. */
+   hasIssue?: true;
+   /** ISO time the session was archived; absent when it is not. */
+   archivedAt?: string;
+   /** ISO time the session was pinned; absent when it is not. */
+   pinnedAt?: string;
+   /** The flow package (its directory name) this session works on; absent when none. */
+   flow?: string;
++  /** The GitHub pull request or issue this session works on; absent when none. */
++  subject?: SessionSubject;
++}
++
++/** A GitHub pull request or issue a session is bound to. `url` is its github.com page and agrees with `kind`, `repo` and `number`. */
++export interface SessionSubject {
++  kind: "pr" | "issue";
++  /** `owner/name`, as GitHub spells it. */
++  repo: string;
++  number: number;
++  url: string;
++  /** GitHub's node id of the repository, when the binder knows it. */
++  repositoryId?: string;
+ }
+ 
+ export interface SessionFlagsChange {
+   archived?: boolean;
+   pinned?: boolean;
+   /** A flow package directory name to link, or null to unlink. */
+   flow?: string | null;
++  /** A subject to bind, or null to unbind. Refused unless it passes `parseSessionSubject`. */
++  subject?: SessionSubject | null;
+ }
+ 
+ /** A flow package directory name as keryx writes them (`<id>-<date>-<slug>`): no path, no shell metacharacters. */
+ export const FLOW_REF = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$/;
+ 
++/** GitHub's owner (login) and repository-name charsets; `.` and `..` are not names. */
++const REPO_REF = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/(?!\.\.?$)([A-Za-z0-9._-]{1,100})$/;
++const SUBJECT_URL = /^https:\/\/github\.com\/([^/?#]+\/[^/?#]+)\/(pull|issues)\/([1-9][0-9]{0,9})$/;
++const NODE_ID = /^[A-Za-z0-9_=-]{1,200}$/;
++const URL_KIND = { pull: "pr", issues: "issue" } as const;
++
+ const FLAGS_FILE = "flags.json";
+ 
+ function isIso(value: unknown): value is string {
+   return typeof value === "string" && !Number.isNaN(Date.parse(value));
+ }
+ 
+-/** The flags of the session stored in `dir`; an absent or unreadable file reads as none. */
++/**
++ * A subject from untrusted JSON, or undefined when it is not one: kind `pr` or
++ * `issue`, `owner/name` repo, positive integer number, and a
++ * `https://github.com/<repo>/pull|issues/<number>` url that agrees with all
++ * three (the repo compared without case, as GitHub does).
++ */
++export function parseSessionSubject(value: unknown): SessionSubject | undefined {
++  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
++  const raw = value as Record<string, unknown>;
++  const { kind, repo, number, url, repositoryId } = raw;
++  if (kind !== "pr" && kind !== "issue") return undefined;
++  if (typeof repo !== "string" || !REPO_REF.test(repo)) return undefined;
++  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) return undefined;
++  if (typeof url !== "string") return undefined;
++  const match = SUBJECT_URL.exec(url);
++  if (match === null) return undefined;
++  const [, urlRepo = "", urlKind = "", urlNumber = ""] = match;
++  if (URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || urlRepo.toLowerCase() !== repo.toLowerCase() || Number(urlNumber) !== number) return undefined;
++  if (repositoryId !== undefined && (typeof repositoryId !== "string" || !NODE_ID.test(repositoryId))) return undefined;
++  return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };
++}
++
++/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
+ export function readSessionFlags(dir: string): SessionFlags {
+   const origin: SessionFlags = existsSync(path.join(dir, "issue-link.json")) ? { hasIssue: true } : {};
+   const read = readConfigFile(path.join(dir, FLAGS_FILE));
+   if (!read.ok) return origin;
+   try {
+     const raw = JSON.parse(read.text) as Record<string, unknown>;
++    const subject = parseSessionSubject(raw["subject"]);
+     return {
+       ...origin,
+       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
+       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
+       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
++      ...(subject !== undefined ? { subject } : {}),
+     };
+   } catch {
+     return origin;
+   }
+ }
+ 
+ function writeFlags(dir: string, flags: SessionFlags): void {
+-  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify({ archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow }, null, 2)}\n`);
++  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject };
++  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
++}
++
++/**
++ * Applies a change to the flags stored in `dir` and returns them as stored.
++ * For a caller that already holds the session directory, such as a binder
++ * that has just created the session and cannot look it up yet.
++ */
++export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
++  const current = readSessionFlags(dir);
++  const stamp = now().toISOString();
++  const next: SessionFlags = { ...current };
++  if (change.archived === true) next.archivedAt ??= stamp;
++  if (change.archived === false) delete next.archivedAt;
++  if (change.pinned === true) next.pinnedAt ??= stamp;
++  if (change.pinned === false) delete next.pinnedAt;
++  if (typeof change.flow === "string") {
++    if (!FLOW_REF.test(change.flow)) throw new Error(`not a flow package name: ${change.flow}`);
++    next.flow = change.flow;
++  }
++  if (change.flow === null) delete next.flow;
++  if (change.subject !== undefined && change.subject !== null) {
++    const subject = parseSessionSubject(change.subject);
++    if (subject === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(change.subject).slice(0, 300)}`);
++    next.subject = subject;
++  }
++  if (change.subject === null) delete next.subject;
++  writeFlags(dir, next);
++  return next;
+ }
+ 
+ /** The project root and directory of a stored session, by its exact id. */
+ function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
+   const summary = findSession(cwd, sessionId, dataDir);
+   if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
+   return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+ }
+ 
+ /**
+- * Archives or unarchives, pins or unpins a session. A flag already in the
+- * asked state keeps its original time. Returns the flags as stored.
++ * Archives or unarchives, pins or unpins a session, links or unlinks its flow
++ * and subject. A flag already in the asked state keeps its original time.
++ * Returns the flags as stored.
+  */
+ export function setSessionFlags(
+   cwd: string,
+   sessionId: string,
+   change: SessionFlagsChange,
+   dataDir?: string,
+   now: () => Date = () => new Date(),
+ ): SessionFlags {
+   const { dir } = locate(cwd, sessionId, dataDir);
+-  const current = readSessionFlags(dir);
+-  const stamp = now().toISOString();
+-  const next: SessionFlags = { ...current };
+-  if (change.archived === true) next.archivedAt ??= stamp;
+-  if (change.archived === false) delete next.archivedAt;
+-  if (change.pinned === true) next.pinnedAt ??= stamp;
+-  if (change.pinned === false) delete next.pinnedAt;
+-  if (typeof change.flow === "string") {
+-    if (!FLOW_REF.test(change.flow)) throw new Error(`not a flow package name: ${change.flow}`);
+-    next.flow = change.flow;
+-  }
+-  if (change.flow === null) delete next.flow;
+-  writeFlags(dir, next);
+-  return next;
++  return updateSessionFlagsAt(dir, change, now);
+ }
+ 
+ export interface TrashOptions {
+   dataDir?: string | undefined;
+   platform?: NodeJS.Platform;
+   home?: string;
+   env?: NodeJS.ProcessEnv;
+   now?: () => Date;
+ }
+ 
+ /** The folder deleted files go to, or undefined where keryx knows none. */
+ export function trashDirectory(platform: NodeJS.Platform, home: string, env: NodeJS.ProcessEnv): { files: string; info?: string } | undefined {
+   if (platform === "darwin") return { files: path.join(home, ".Trash") };
+   if (platform === "linux") {
+     const base = path.join(env["XDG_DATA_HOME"] || path.join(home, ".local", "share"), "Trash");
+     return { files: path.join(base, "files"), info: path.join(base, "info") };
+   }
+   return undefined;
+ }
+ 

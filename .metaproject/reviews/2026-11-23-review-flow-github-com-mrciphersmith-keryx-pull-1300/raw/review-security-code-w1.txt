@@ -1,0 +1,47 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a`, head `6a2a3031f740833e60b82856a9a266b5ffab5e10`
+- Scope mode: diff (slice-02, read in full: 2539 lines)
+- Changed files reviewed: 22 Desktop files (App.tsx, acp/types.ts, issues/*, review/PrWorkRow, ReviewBoard, ReviewFilters, ReviewResults, model, prWork, reviewFilterStorage, usePendingFlowLinks, session/SessionSubjectLinks, subjectBinding, useAcpSession, shell/AppShell)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas (checked, no finding)
+- XSS / injection: no `dangerouslySetInnerHTML`, `eval`, `Function` or HTML string building in the slice. Subject names, flow titles, session titles and PR/issue text render as React text children or `title`/`aria-label` attributes (escaped).
+- URL handling / open redirect: `SessionSubjectLinks` never navigates to `subject.url`; it focuses the PR panel by number or opens the issue origin by session id. The only external open stays the pre-existing `openPullRequest(reviewUrl(card.url))` path, unchanged in shape.
+- Stored subject trust: a `subject` read from `flags.json` reaches Desktop only after keryx's `parseSessionSubject` (src/session/organize.ts, outside this slice, read for context): kind allowlist, `owner/name` repo regex, positive safe-integer number, a github.com pull/issues URL that must agree with repo/kind/number, node-id regex for `repositoryId`. Desktop-side pending subjects are built in-process from GitHub board data (`prSubject`, `issueSubject`), not from user text.
+- Prompt prefill: `flowPrompt(card.url)` and the PR URL are placed in the composer and never sent (`openSubjectSession` calls `fill`, never `sendPrompt`); the user must send. No agent turn is triggered automatically.
+- `reviewLaunchTarget` only preselects a target in the launch dialog; the run still requires the user's Apply and goes through the existing `reviewRun` path.
+- Session flags RPC: `_keryx/session_flags` with `subject` is sent only over the existing local ACP client with the window's own `cwd`; no new endpoint, no credentials in params, no logging of secrets.
+- Local storage: review filters (`readReviewFilters`) validate every quick-filter value (`true` only, else the whole record is discarded); grouping reads only `"role"`, everything else falls back to `"status"`; issue preferences drop the removed stage key. No secrets stored.
+- Auth/authz, IDOR, crypto, CSRF, path traversal: not applicable to this client-only slice; no server route, file path from input, token handling or randomness introduced. `usePendingFlowLinks` links only a flow dir taken from the project's own flow list.
+
+### Notes
+- Server-side validation lives in slice files not assigned to me (src/session/organize.ts, src/acp/server.ts); I read `parseSessionSubject` only to confirm the trust boundary the Desktop code relies on, not to review it.
+- Not run: tests (exec_budget_s 0). Test evidence relied on: P/research-evidence/verify-tests-to-run-1.txt as reported by the caller (1016 pass, 0 fail), not re-read.
+- Routing audit: graph_used: no (payload layers block supplied affected files; not needed for a client-only security read), wiki_used: not-relevant, ctx_used: yes (`keryx ctx rg` on organize.ts and ReviewLaunchDialog.tsx), raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "round": 1,
+  "slices": ["slice-02"],
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "inputs_unreadable": [],
+  "summary": "No code-level security defects in slice-02. Subject data shown in Desktop is either built from GitHub board data in-process or validated by keryx parseSessionSubject on read/write; prefilled prompts are never auto-sent; localStorage readers validate their values; no HTML injection sinks, external URL navigation, or secrets handling introduced."
+}
+```

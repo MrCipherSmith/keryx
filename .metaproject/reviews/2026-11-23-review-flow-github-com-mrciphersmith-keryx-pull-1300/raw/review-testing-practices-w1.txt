@@ -1,0 +1,267 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices: PR #1300, wave 1, slice-01
+
+I read slice-01 in full: the flow 517 package (acceptance criteria, context, description, plan, tasks, journal, dispatch T5–T9, flow.json, resolved T5–T10). That package claims mutation checks for AC1, AC2/AC3, AC14 and AC16, so I re-ran those claims and mutated every gate the stage added that the claims point to. Everything ran in a scratch worktree at head 6a2a3031f (`bun install --frozen-lockfile` at the root and in apps/desktop). I removed the worktree afterwards and never edited the reviewed checkout.
+
+Baselines: Desktop `bun test src/review src/issues src/acp src/shell src/session` gave 601 pass / 0 fail. Root `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues src/integrations/issues-board.test.ts` gave 25 pass / 0 fail. The full Desktop `bun test src` gave 1016 pass / 0 fail.
+
+Method: I replaced each anchor exactly once (the anchor had to occur exactly once in the file), ran the nearest suite with `bun test --bail`, then restored the file. I wrote the mutations by hand in the scratch worktree and did not use `keryx review mutate`, because that command writes into the package's research-evidence and the main session owns that file.
+
+## Mutation table (45 mutants, all run, 0 not reached)
+
+| id | mutation | suite | result |
+|---|---|---|---|
+| M01 | ReviewBoard `visible` memo: drop `snapshot.viewer` from `filterReviews` (the journal's T12 claim) | ReviewBoard.dom | **red: 67 pass / 2 fail without --bail, the journal's numbers exactly** |
+| M02 | `reviewLane` reads `localReview?.active` (AC1) | review/model.test | red |
+| M03 | `newestFirst` sorts oldest first | src/review | red |
+| M04 | `drawnLanes` merged → always drawn | src/review | red |
+| M05 | role `mine` ignores `requestedFromMe` | src/review | red |
+| M06 | `ciFailed` quick filter → true | src/review | red |
+| M07 | `mine` quick filter → true | src/review | red |
+| M08 | `requestedFromMe` quick filter → true | src/review | red |
+| M09 | `resolveFlowLink` links the first of several new dirs | src/review | red |
+| M10 | `resolveFlowLink` drops the "session already has a Flow" gate | src/review | red |
+| M11 | `openSubjectSession` "latest" never reuses (session reuse, AC16) | src/review src/shell | red |
+| M12 | `openSubjectSession` drops `deps.bind` (binding, AC16) | src/review src/shell | red |
+| M13 | App `/review` initialTarget ignores the subject (preselect, AC16) | src/shell | red |
+| M14 | App drops `publishSessionReview` (publish, AC16) | src/shell | red |
+| M15 | `boundSessions` keeps archived sessions | review/issues/acp/shell | red |
+| M16 | `boundSessions` unsorted | review/issues/acp/shell | red |
+| M17 | `sameSubject` compares repo with case | review/issues/acp/shell | red |
+| M18 | `sameSubject` ignores kind | review/issues/acp/shell | red |
+| M19 | `withPendingSubjects`: `if (!subject \|\| sessionFlags(s).subject)` → `if (!subject)` | src/review src/shell | **green, 162/0** |
+| M19b | `withPendingSubjects` never merges a pending subject | src/review src/shell | red |
+| M20 | `reviewLaunchTarget` uses an issue subject too | src/review src/shell | red |
+| M21 | `reviewSlotState` drops "needs your answer" | src/review | red |
+| M22 | `PendingSubjects` drops the older-keryx notice | src/session src/shell | red |
+| M23 | `PendingSubjects.apply` drops the superseded-bind guard | src/session src/shell | **green, 412/0** |
+| M24 | Issues: Closed lane always drawn | src/issues | red |
+| M25 | Issues: a stored source is ignored (always DEFAULT_SOURCE) | src/issues | red |
+| M26 | `prFlows` ignores a bound session's `flow` | src/review | red |
+| M27 | ReviewResults orders cards with a local review first (AC2 DOM) | ReviewBoard.dom | red |
+| M28 | `parseSessionSubject`: drop the url-repo check | root organize suites | red |
+| M29 | `parseSessionSubject`: drop the url-number check | root organize suites | red |
+| M30 | `parseSessionSubject`: drop the url-kind check | root organize suites | red |
+| M31 | `null` no longer unlinks the subject | root organize suites | red |
+| M32 | `writeFlags` stops persisting `subject` | root organize suites | red |
+| M33 | `withIssueBinding` no longer writes the subject | root organize suites | red |
+| M34 | server `session_flags` accepts any subject type | root organize suites | red |
+| M35 | repository source keeps pull requests | issues-board.test | red |
+| M36 | repository cursor scope drops the repo | issues-board.test | red |
+| M37 | `parseSessionSubject`: drop the positive-integer number check | root organize suites | green, equivalent (see note) |
+| M38 | App `createPrFlow`: drop `flowLinks.expect(id, known)` | full Desktop `bun test src` | **green, 1016/0** |
+| M39 | App `createPrFlow`: `prefillExisting` true → false | full Desktop `bun test src` | **green, 1016/0** |
+| M40 | App `usePendingFlowLinks` callback no longer calls `s.linkFlow` | full Desktop `bun test src` | **green, 1016/0** |
+| M41 | `openSubjectSession` drops `if (prefillExisting) deps.fill(prompt)` | full Desktop | red (unit test only) |
+| M42 | App passes `sessions={[]}` to IssuesView | full Desktop `bun test src` | **green, 1016/0** |
+| M43 | App header `SessionSubjectLinks subject={undefined}` | full Desktop | red |
+| M44 | App drops `focus={reviewFocus}` on ReviewBoard | full Desktop | red |
+
+Note on M37: `SUBJECT_URL` only accepts `([1-9][0-9]{0,9})`, and `Number(urlNumber) !== number` already rejects anything else. A non-positive, non-integer or unsafe number therefore cannot get through, so this mutant is equivalent. It is not reported.
+
+The flow package's own claims, checked:
+- AC14 / T12 (`visible` memo): confirmed, 67 pass / 2 fail, as the journal records.
+- AC16, "four product mutations each break it" (PR body): confirmed. M11 (reuse), M12 (binding), M13 (preselect) and M14 (publish) are each red on the AC16 App test. The journal has no T10 entry recording them; this table is the first recorded evidence.
+- AC1 (marked `sensitive: mutation`): the journal records no mutation. M02 is red here.
+- AC2 / AC3 ("checked by mutations instead of a red run", T7): the journal does not record these mutations. M27 (AC2) and M01, M04–M08 (AC3) are red here.
+
+## Findings
+
+### F-001 [major]: The App-level "Create Flow" wiring (AC9) and the Issues session wiring are pinned by no test
+- File: apps/desktop/src/App.tsx
+- Problem: Each of these edits leaves the full Desktop suite green (1016/0):
+  - M38: deleting `if (id) flowLinks.expect(id, known);`
+  - M40: replacing the `usePendingFlowLinks` callback `(id, dir) => void s.linkFlow(id, dir)` with a no-op
+  - M39: passing `prefillExisting=false`
+  - M42: passing `sessions={[]}` to IssuesView
+
+  AC9's exec gate (`cd apps/desktop && bun test src`) therefore passes while "Create Flow" links nothing and does not prefill an existing bound session. The parts are tested separately: `resolveFlowLink` (M09, M10), `usePendingFlowLinks` in its hook test, `openSubjectSession` prefill (M41) and the card's Flow slot (M26). The App code that joins them has no test. Journal T8 says so ("App-level Create Flow path not end-to-end tested (hook-level only)"), but AC9 is still set up to be confirmed by a suite that cannot fail on it. The same holds for the Issues session slot: IssuesBoard is tested with a `sessions` prop, and nothing checks that App passes it.
+- Rule: tdd-workflow.mdc, Review severities, "New or changed logic with no test … `major` where an acceptance criterion has no test". The App join is the only place AC9's chain composes, and no test reaches it.
+- Fix: Extend the App fixture (`apps/desktop/src/test/app-navigation.fixture.tsx`) with one AC9 scenario in `ProjectNavigation.dom.test.tsx`:
+  1. Press "Create Flow" on a PR card that already has a bound session, and assert the composer holds `flowPrompt(url)`.
+  2. Make the flows list return one new dir, and assert the `_keryx/session_flags` `flow` write for that session and "Flow #<id>" on the card.
+  3. Add a second case with two new dirs and assert that no write happens.
+
+  Add an App-level assertion that an Issue card's session slot counts a session whose subject is that issue. M38, M39, M40 and M42 should then go red.
+
+### F-002 [minor]: The superseded-bind guard in `PendingSubjects.apply` is unpinned
+- File: apps/desktop/src/session/subjectBinding.ts
+- Problem: Deleting `if (this.pending.get(sessionId) !== subject) return;` leaves `src/session src/shell` green (412/0), because no test rebinds a session while the first write is still in flight. I found no reachable wrong outcome: `openSubjectSession` binds each new session id once. The guard is unprotected against the next edit.
+- Fix: In prWork.test.ts, add a test with a deferred `write`:
+  1. Call `bind(id, A)`, then `bind(id, B)` before the first write resolves.
+  2. Resolve A's write first and assert that `onFlags` is not called for A and B stays pending.
+
+### F-003 [minor]: The "stored subject wins over a pending one" clause in `withPendingSubjects` is unpinned
+- File: apps/desktop/src/review/prWork.ts
+- Problem: The mutation `if (!subject || sessionFlags(s).subject) return s;` → `if (!subject) return s;` leaves `src/review src/shell` green (162/0). In the test "pending subjects show as bound sessions until keryx stores them", the session `stored` carries no stored subject, so the clause is never exercised. No reachable wrong outcome was found: a pending binding only targets a new session.
+- Fix: Add a case where `stored` already has a different subject and a pending entry, and assert that the stored subject is kept.
+
+### F-004 [info]: The resolved context for T10 names a test file that does not exist
+- File: .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T10.test.json
+- Problem: It lists `apps/desktop/src/ProjectNavigation.dom.test.tsx`, but the scenario test is `apps/desktop/src/shell/ProjectNavigation.dom.test.tsx`. The context for the T10 test task was resolved against a path that does not exist. It loaded `activity/test.mdc`, `coding-style`, `tdd-workflow` and `async-patterns`, but not `stacks/ts-js-node/testing.mdc`, which T5–T9 received through `glob:**/*.ts`. Process metadata only; the test itself is sound (M11–M14, M43 and M44 are red on it).
+
+### F-005 [info]: Mutation evidence claimed by the flow package is not recorded where `ac confirm` will look
+- File: .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md
+- Problem: AC1 is marked `sensitive: mutation` and has no recorded mutation. The AC2/AC3 mutations (T7) and the four AC16 mutations (PR body) are claimed but not recorded, and every task's `evidenceRefs` is empty. This round's table now supplies all of them (M02, M27, M01/M04–M08, M11–M14), and every one is red. Record them in the journal before `keryx flow ac confirm`.
+
+## Cap
+I mutated 45 gates and reached all of them. Survivors: M19, M23, M38, M39, M40 and M42 (findings), plus M37 (equivalent). I did not mutate the presentation-only changes (CSS fixed height, button text) or `issues-board.ts` pagination beyond the cursor scope (M36).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-testing-practices",
+    "summary": "I ran 45 mutants in a scratch worktree at head; 38 went red. The flow package's mutation claims hold: the AC14 visible memo gives 67 pass / 2 fail as recorded, and the four AC16 mutations (preselect, publish, reuse, binding) are each red. Survivors: the App-level Create Flow wiring (AC9: expect, linkFlow, prefill) and the Issues sessions prop each leave the full Desktop suite green at 1016/0, which is major under tdd-workflow because the AC has no test. Two binding guards are unpinned (minor). M37 is an equivalent mutant.",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "major",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/App.tsx",
+        "line": null,
+        "quote": "if (id) flowLinks.expect(id, known);",
+        "problem": "App-level Create Flow wiring (AC9) and the IssuesView sessions prop (AC12) are covered by no test. Deleting flowLinks.expect (M38), making the usePendingFlowLinks callback skip s.linkFlow (M40), passing prefillExisting=false (M39) or passing sessions={[]} to IssuesView (M42) each leaves the full Desktop suite green (1016 pass / 0 fail).",
+        "impact": "AC9's exec gate (`cd apps/desktop && bun test src`) passes while Create Flow links no Flow to the session and does not prefill an existing bound session. A regression in the only code that composes the AC9 chain ships green. Journal T8 acknowledges that the App path is tested only at hook level.",
+        "suggested_fix": "Add an AC9 scenario to apps/desktop/src/shell/ProjectNavigation.dom.test.tsx with the shared App fixture. Press Create Flow on a PR card with a bound session and assert the composer holds flowPrompt(url). Return one new flow dir and assert the session_flags flow write and 'Flow #<id>' on the card; return two new dirs and assert no write. Add an App-level check that an Issue card's session slot counts a session bound to that issue. Then re-run M38, M39, M40 and M42 and confirm each goes red.",
+        "evidence": "Scratch worktree at 6a2a3031f; the full Desktop `bun test src` stays green at 1016/0 under each of M38, M39, M40 and M42. The same harness makes M11–M14, M43 and M44 red on the AC16 App test, so the App test harness can catch App wiring. Rule: tdd-workflow.mdc Review severities, 'New or changed logic with no test … major where an acceptance criterion has no test'.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "dedupe_key": "testing:app-wiring-create-flow-issue-sessions-unpinned",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/App.tsx: if (id) flowLinks.expect(id, known);",
+            "apps/desktop/src/App.tsx: (id, dir) => void s.linkFlow(id, dir)",
+            "apps/desktop/src/App.tsx: openPrSession(card, \"latest\", subject, flowPrompt(card.url), true)",
+            "apps/desktop/src/App.tsx: sessions={state.sessions} (IssuesView)"
+          ],
+          "enumeration_method": "Mutated every App.tsx call site the diff added that feeds the work rows and session binding (openSubjectSession latest/bind, the /review initialTarget, publishSessionReview, SessionSubjectLinks subject, ReviewBoard focus, createPrFlow expect/prefill, the usePendingFlowLinks callback, the IssuesView sessions prop; sites located with keryx ctx rg) and ran each against the full Desktop suite. 10 sites: 6 red (M11–M14, M43, M44), 4 green (listed)."
+        }
+      },
+      {
+        "id": "F-002",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/session/subjectBinding.ts",
+        "line": null,
+        "quote": "if (this.pending.get(sessionId) !== subject) return;",
+        "problem": "The superseded-bind guard in PendingSubjects.apply is unpinned. Deleting it (M23) leaves src/session and src/shell green (412/0), because no fixture rebinds a session while its first write is in flight.",
+        "impact": "The guard is correct today and I found no reachable wrong outcome (each new session id is bound once). The next edit to it is unprotected.",
+        "suggested_fix": "In prWork.test.ts, use a deferred write: call bind(id, A), then bind(id, B), then resolve A's write first. Assert that onFlags is not called for A and that B stays pending.",
+        "evidence": "M23 GREEN, 412 pass / 0 fail, in a scratch worktree at 6a2a3031f.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "dedupe_key": "testing:pending-subjects-superseded-guard-unpinned"
+      },
+      {
+        "id": "F-003",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "if (!subject || sessionFlags(s).subject) return s;",
+        "problem": "The stored-subject-wins clause is unpinned. M19 (remove `|| sessionFlags(s).subject`) leaves src/review and src/shell green (162/0). In the test 'pending subjects show as bound sessions until keryx stores them', the 'stored' session has no stored subject, so the clause is never exercised.",
+        "impact": "Coverage gap only: a pending binding targets only new sessions, and I found no reachable wrong output.",
+        "suggested_fix": "Give the 'stored' fixture a different stored subject plus a pending entry, and assert that the stored subject is kept.",
+        "evidence": "M19 GREEN, 162/0. Over the same clause, M19b (never merge) is RED, so only the stored-subject half is unpinned.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "dedupe_key": "testing:with-pending-subjects-stored-wins-unpinned"
+      },
+      {
+        "id": "F-004",
+        "severity": "info",
+        "reviewer": "review-testing-practices",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T10.test.json",
+        "line": null,
+        "quote": "\"apps/desktop/src/ProjectNavigation.dom.test.tsx\",",
+        "problem": "The resolved context for the T10 test task names a file that does not exist. The scenario test is apps/desktop/src/shell/ProjectNavigation.dom.test.tsx. T10 got no stacks/ts-js-node/testing.mdc entry, which T5–T9 received.",
+        "impact": "Process metadata only. The test itself pins the scenario: M11–M14, M43 and M44 are red on it.",
+        "suggested_fix": "Resolve the T10 context against the real path, or note the miss in the journal.",
+        "evidence": "`ls apps/desktop/src/ProjectNavigation.dom.test.tsx` fails with 'No such file'; the shell/ path exists.",
+        "confidence": "high",
+        "location_class": "pr-process",
+        "dedupe_key": "testing:t10-resolved-context-wrong-path"
+      },
+      {
+        "id": "F-005",
+        "severity": "info",
+        "reviewer": "review-testing-practices",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "line": null,
+        "quote": "DOM tests for AC2/AC3 were written after code and checked by mutations instead of a red run.",
+        "problem": "AC1 (sensitive: mutation), AC2/AC3 (T7) and AC16 (four mutations, PR body) claim mutation checks that the journal does not record, and evidenceRefs is empty for every task. Only AC14 (T12) has a recorded mutation.",
+        "impact": "`keryx flow ac confirm` would rest on unrecorded evidence. This round supplies it: M02 (AC1), M27 (AC2), M01/M04–M08 (AC3) and M11–M14 (AC16) are all red.",
+        "suggested_fix": "Record these mutations and their results in the journal, or reference this review's table, before confirming AC1, AC2, AC3 and AC16.",
+        "evidence": "Journal T7, T10 and T12 entries and flow.json evidenceRefs, read in slice-01; the mutation table in this report.",
+        "confidence": "high",
+        "location_class": "pr-process",
+        "dedupe_key": "testing:flow517-mutation-evidence-unrecorded"
+      }
+    ],
+    "mutant_candidates": [
+      {"id": "M01", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "filterReviews(snapshot.cards, filters, q, snapshot.viewer)", "replacement": "filterReviews(snapshot.cards, filters, q)", "kind": "behavior"},
+      {"id": "M02", "file": "apps/desktop/src/review/model.ts", "anchor": "  if (c.decision === \"APPROVED\") return \"approved\";\n  return \"waiting\";", "replacement": "  if (c.decision === \"APPROVED\") return \"approved\";\n  return c.localReview?.active ? \"approved\" : \"waiting\";", "kind": "behavior"},
+      {"id": "M03", "file": "apps/desktop/src/review/model.ts", "anchor": "[...cards].sort((a, b) => time(b) - time(a))", "replacement": "[...cards].sort((a, b) => time(a) - time(b))", "kind": "behavior"},
+      {"id": "M04", "file": "apps/desktop/src/review/model.ts", "anchor": "merged: includes(f.state, \"merged\"),", "replacement": "merged: true,", "kind": "behavior"},
+      {"id": "M05", "file": "apps/desktop/src/review/model.ts", "anchor": "mine: !f.requestedFromMe && viewerAuthor,", "replacement": "mine: viewerAuthor,", "kind": "behavior"},
+      {"id": "M06", "file": "apps/desktop/src/review/model.ts", "anchor": "(!f.ciFailed || c.ci === \"failed\")", "replacement": "true", "kind": "behavior"},
+      {"id": "M07", "file": "apps/desktop/src/review/model.ts", "anchor": "(!f.mine || authoredBy(c, viewer)) &&", "replacement": "true &&", "kind": "behavior"},
+      {"id": "M08", "file": "apps/desktop/src/review/model.ts", "anchor": "(!f.requestedFromMe || requestedFrom(c, viewer)) &&", "replacement": "true &&", "kind": "behavior"},
+      {"id": "M09", "file": "apps/desktop/src/review/prWork.ts", "anchor": "fresh.length === 1 && fresh[0] ?", "replacement": "fresh[0] ?", "kind": "behavior"},
+      {"id": "M10", "file": "apps/desktop/src/review/prWork.ts", "anchor": "  if (sessionFlow) return { action: \"clear\" };\n", "replacement": "", "kind": "behavior"},
+      {"id": "M11", "file": "apps/desktop/src/review/prWork.ts", "anchor": "target === \"latest\" ? bound[0]?.sessionId :", "replacement": "target === \"latest\" ? undefined :", "kind": "behavior"},
+      {"id": "M12", "file": "apps/desktop/src/review/prWork.ts", "anchor": "  deps.bind(id, subject);\n", "replacement": "", "kind": "behavior"},
+      {"id": "M13", "file": "apps/desktop/src/App.tsx", "anchor": "initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)}", "replacement": "initialTarget={draftReview.target}", "kind": "behavior"},
+      {"id": "M14", "file": "apps/desktop/src/App.tsx", "anchor": "            publishSessionReview(cwd, key, result);\n", "replacement": "", "kind": "behavior"},
+      {"id": "M15", "file": "apps/desktop/src/acp/types.ts", "anchor": "sessionFlags(s).archivedAt === undefined && sameSubject", "replacement": "sameSubject", "kind": "behavior"},
+      {"id": "M16", "file": "apps/desktop/src/acp/types.ts", "anchor": ".sort((a, b) => unsaved(b) - unsaved(a));", "replacement": ";", "kind": "behavior"},
+      {"id": "M17", "file": "apps/desktop/src/acp/types.ts", "anchor": "a.repo.toLowerCase() === b.repo.toLowerCase()", "replacement": "a.repo === b.repo", "kind": "behavior"},
+      {"id": "M18", "file": "apps/desktop/src/acp/types.ts", "anchor": "return a.kind === b.kind && a.number", "replacement": "return a.number", "kind": "behavior"},
+      {"id": "M19", "file": "apps/desktop/src/review/prWork.ts", "anchor": "if (!subject || sessionFlags(s).subject) return s;", "replacement": "if (!subject) return s;", "kind": "behavior"},
+      {"id": "M19b", "file": "apps/desktop/src/review/prWork.ts", "anchor": "if (!subject || sessionFlags(s).subject) return s;", "replacement": "return s;", "kind": "behavior"},
+      {"id": "M20", "file": "apps/desktop/src/review/prWork.ts", "anchor": "return subject?.kind === \"pr\" ? subject.url : typed;", "replacement": "return subject ? subject.url : typed;", "kind": "behavior"},
+      {"id": "M21", "file": "apps/desktop/src/review/prWork.ts", "anchor": "  if (badge.awaitingAnswer) return \"needs your answer\";\n", "replacement": "", "kind": "behavior"},
+      {"id": "M22", "file": "apps/desktop/src/session/subjectBinding.ts", "anchor": "    if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED);\n", "replacement": "", "kind": "behavior"},
+      {"id": "M23", "file": "apps/desktop/src/session/subjectBinding.ts", "anchor": "    if (this.pending.get(sessionId) !== subject) return;\n", "replacement": "", "kind": "behavior"},
+      {"id": "M24", "file": "apps/desktop/src/issues/model.ts", "anchor": "...(state === \"open\" ? [] : [{ id: \"closed\", label: \"Closed\" }])", "replacement": "...[{ id: \"closed\", label: \"Closed\" }]", "kind": "behavior"},
+      {"id": "M25", "file": "apps/desktop/src/issues/IssuesBoard.tsx", "anchor": "return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;", "replacement": "return DEFAULT_SOURCE;", "kind": "behavior"},
+      {"id": "M26", "file": "apps/desktop/src/review/prWork.ts", "anchor": "return flows.filter(flow => samePrUrl(flow.prUrl, card.url) || dirs.has(flow.dir))", "replacement": "return flows.filter(flow => samePrUrl(flow.prUrl, card.url))", "kind": "behavior"},
+      {"id": "M27", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "useMemo(() => newestFirst(cards), [cards])", "replacement": "useMemo(() => newestFirst(cards).sort((a, b) => Number(!!b.localReview) - Number(!!a.localReview)), [cards])", "kind": "behavior"},
+      {"id": "M28", "file": "src/session/organize.ts", "anchor": "urlRepo.toLowerCase() !== repo.toLowerCase() || ", "replacement": "", "kind": "behavior"},
+      {"id": "M29", "file": "src/session/organize.ts", "anchor": " || Number(urlNumber) !== number) return undefined;", "replacement": ") return undefined;", "kind": "behavior"},
+      {"id": "M30", "file": "src/session/organize.ts", "anchor": "if (URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || ", "replacement": "if (", "kind": "behavior"},
+      {"id": "M31", "file": "src/session/organize.ts", "anchor": "if (change.subject === null) delete next.subject;", "replacement": "if (false) delete next.subject;", "kind": "behavior"},
+      {"id": "M32", "file": "src/session/organize.ts", "anchor": "flow: flags.flow, subject: flags.subject };", "replacement": "flow: flags.flow };", "kind": "behavior"},
+      {"id": "M33", "file": "src/session/issues/issue-session.ts", "anchor": "if (subject !== undefined) updateSessionFlagsAt(dir, { subject });", "replacement": "void subject;", "kind": "behavior"},
+      {"id": "M34", "file": "src/acp/server.ts", "anchor": "if (subject !== null && (typeof subject !== \"object\" || Array.isArray(subject))) {", "replacement": "if (false) {", "kind": "behavior"},
+      {"id": "M35", "file": "src/integrations/issues-board.ts", "anchor": "data.filter((x) => !x.pull_request)", "replacement": "data", "kind": "behavior"},
+      {"id": "M36", "file": "src/integrations/issues-board.ts", "anchor": "? cursorScope(viewer, \"issues\", base.search, labels, repository.toLowerCase())", "replacement": "? cursorScope(viewer, \"issues\", base.search, labels)", "kind": "behavior"},
+      {"id": "M37", "file": "src/session/organize.ts", "anchor": "if (typeof number !== \"number\" || !Number.isSafeInteger(number) || number < 1) return undefined;", "replacement": "if (typeof number !== \"number\") return undefined;", "kind": "behavior"},
+      {"id": "M38", "file": "apps/desktop/src/App.tsx", "anchor": "if (id) flowLinks.expect(id, known);", "replacement": "void known;", "kind": "behavior"},
+      {"id": "M39", "file": "apps/desktop/src/App.tsx", "anchor": "openPrSession(card, \"latest\", subject, flowPrompt(card.url), true)", "replacement": "openPrSession(card, \"latest\", subject, flowPrompt(card.url), false)", "kind": "behavior"},
+      {"id": "M40", "file": "apps/desktop/src/App.tsx", "anchor": "(id, dir) => void s.linkFlow(id, dir)", "replacement": "(id, dir) => void [id, dir]", "kind": "behavior"},
+      {"id": "M41", "file": "apps/desktop/src/review/prWork.ts", "anchor": "    if (prefillExisting) deps.fill(prompt);\n", "replacement": "", "kind": "behavior"},
+      {"id": "M42", "file": "apps/desktop/src/App.tsx", "anchor": "          sessions={state.sessions}\n", "replacement": "          sessions={[]}\n", "kind": "behavior"},
+      {"id": "M43", "file": "apps/desktop/src/App.tsx", "anchor": "titleLinks={<SessionSubjectLinks subject={shownSubject}", "replacement": "titleLinks={<SessionSubjectLinks subject={undefined}", "kind": "behavior"},
+      {"id": "M44", "file": "apps/desktop/src/App.tsx", "anchor": "sessions={subjectSessions} focus={reviewFocus}", "replacement": "sessions={subjectSessions}", "kind": "behavior"}
+    ],
+    "mutation_results": {
+      "run": 45, "not_reached": 0, "red": 38,
+      "green": ["M19", "M23", "M37 (equivalent)", "M38", "M39", "M40", "M42"],
+      "worktree": "scratch at 6a2a3031f, removed after the run; the reviewed checkout was not edited",
+      "suites": {"desktop_nearest_baseline": "601/0", "desktop_full_baseline": "1016/0", "root_baseline": "25/0"}
+    },
+    "follow_ups": [
+      "M38, M39, M40 and M42 were run only against the full Desktop suite; re-run them after the F-001 test is added."
+    ],
+    "needs_context": [],
+    "inputs_unreadable": [],
+    "stats": {"blocker": 0, "major": 1, "minor": 2, "info": 2}
+  }
+}
+```
+
+Routing audit: graph_used: no (layers.affected was empty for slice-01; I found the gate sites with keryx ctx rg). wiki_used: not-relevant (testing lens, no domain question). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no. I used a few `awk` line-range reads with a `keryx:raw` marker, to copy exact mutation anchors.

@@ -1,0 +1,93 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 (Desktop app, 21 files) adds the PR/Issue work rows, Subject bindings on sessions, GitHub-only lanes and quick filters. Structure is mostly sound: the new orchestration (openSubjectSession, resolveFlowLink, PendingSubjects) is pure or takes injected deps, the board and issues models stay free of platform imports, and dependency direction is inward (review/issues -> acp/types, flows/model; acp/types imports nothing). One minor: the 'Flow of a PR' rule now has four implementations with two different meanings, so the card's work row and the PR panel can name different Flows. One info: boundSessions is reachable through two import paths. No blocker or major.",
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "ARCH-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "flow.prUrl?.replace(/\\/$/, \"\").toLowerCase() === url.replace(/\\/$/, \"\").toLowerCase()), [flows.cards]);",
+      "problem": "This change adds a resolver for the Flow of a PR, `prFlows` in review/prWork.ts. It matches the PR URL or a Flow linked to a bound session, newest first. The same change also adds a second resolver, `flowForPr` in App.tsx, which is a `prUrl`-only first match. Two older copies are still used: the PR panel's `flow` prop (ReviewBoard.tsx) and the launch dialog's `linked` (ReviewLaunchDialog.tsx). Both match on `prUrl` only, and the panel's copy does not strip a trailing slash from `card.url`. So one rule now has four implementations with two meanings. The `samePrUrl` helper that the new resolver uses is module-private, so the other sites cannot reuse it.",
+      "impact": "Trigger: the PR card's 'Create Flow' links the new package to the bound session, and the package has no `prUrl` yet (the PR body names this window). The card's work row then shows 'Flow #N · stage', but ReviewBoard passes `flow=undefined` to ReviewDetail. The panel's associatedFlow fallback, and so the Flow a review started from the panel is tied to, misses the Flow the card shows. When two Flows name the PR, the row picks the newest and the panel and App.flowForPr pick the first in list order. Round obligation 7 (one rule, one implementation).",
+      "suggested_fix": "Export a single resolver from review/prWork.ts, for example `prFlow(card, flows, boundSessions)` built on `samePrUrl`. Use it in PrWorkRow, in App.openPrSession (instead of flowForPr) and for ReviewBoard's `flow={...}` prop. ReviewBoard already has `sessions` and `work`. Point ReviewLaunchDialog's `linked` at the same URL predicate. If the panel should deliberately keep the prUrl-only meaning, state that next to the prop and use the shared `samePrUrl` anyway.",
+      "evidence": "Diff: App.tsx flowForPr (added), prWork.ts samePrUrl/prFlows (added), PrWorkRow.tsx `prFlows(card, work.flows, sessions)[0]` (added). Unchanged sites read at head: ReviewBoard.tsx `flow={flows.find((flow) => flow.prUrl?.replace(/\\/$/, \"\").toLowerCase() === card.url.toLowerCase())}` and ReviewLaunchDialog.tsx:218. ReviewDetail.tsx:207-209 uses `flow` as the associatedFlow fallback. Enumeration: `keryx ctx rg -n \"prUrl\\?\\.replace|samePrUrl|flowForPr|prFlows\\(\" apps/desktop/src` returned exactly these four production sites (plus prWork.test.ts).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "desktop-pr-flow-resolution-duplicated",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/App.tsx:386 (flowForPr, added)",
+          "apps/desktop/src/review/prWork.ts:35-40 (samePrUrl/prFlows, added)",
+          "apps/desktop/src/review/ReviewBoard.tsx:594 (panel flow prop, pre-existing, context line of the diff)",
+          "apps/desktop/src/review/ReviewLaunchDialog.tsx:218 (linked flow, pre-existing)"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"prUrl\\?\\.replace|samePrUrl|flowForPr|prFlows\\(\" apps/desktop/src at head 6a2a3031f"
+      }
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "info",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "line": null,
+      "quote": "export { boundSessions };",
+      "problem": "boundSessions moved to acp/types.ts in 23844b08e, which I read. The stated reason is that pure models such as the issues board must not reach a platform module, and it holds: acp/types.ts has no imports, while prWork.ts imports flows/model and through it platform/commands. prWork.ts still re-exports the function, so PrWorkRow imports it from ./prWork while issues/model and prWork itself import it from ../acp/types. The same symbol now has two import paths.",
+      "impact": "No defect. A later change to the binding rule has two import paths to follow.",
+      "suggested_fix": "Optional: have PrWorkRow import boundSessions from ../acp/types and drop the re-export.",
+      "evidence": "git show 23844b08e (keryx ctx run). PrWorkRow.tsx imports `boundSessions` from \"./prWork\"; issues/model.ts imports it from \"../acp/types\".",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a`, head `6a2a3031f740833e60b82856a9a266b5ffab5e10`
+- Scope mode: diff (supplied slice-02, read in full, 2539 lines)
+- Stack detected: React (Desktop app, hooks, no MobX)
+
+### Summary
+The work-row and Subject-binding features follow the project's layering. Decisions such as session choice, flow-link resolution and pending bindings are pure functions or small classes with injected dependencies (`SubjectSessionDeps`, `SubjectBindingDeps`). App.tsx only wires them. The one structural cost is the split rule for "the Flow of this PR" (ARCH-1).
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Layer Violations
+None found. The domain helpers `sameSubject` and `boundSessions` now live in the ACP types module. That is deliberate (commit 23844b08e) and the stated reason holds: `acp/types.ts` has no imports, so issues/model.ts stays free of platform modules.
+
+### Dependency Direction
+None found. Checked: review/prWork.ts imports acp/types, flows/model and the platform/commands type. flows/model imports only a type from platform/commands. acp/types imports nothing. issues/model.ts imports acp/types and the root issues-contract (the existing pattern). There are no cycles among prWork, PrWorkRow, ReviewBoard, ReviewResults and model. `useAcpSession` creates PendingSubjects per cwd, but ProjectWindow is keyed by cwd (App.tsx:90), so no stale instance is kept across projects.
+
+### Module Boundary Violations
+ARCH-1 (minor): the PR-to-Flow resolution is implemented in four places with two meanings.
+
+### Design Pattern Misuse
+None found. `openSubjectSession` and `PendingSubjects` take their I/O through injected deps. `usePendingFlowLinks` keeps the decision in the pure `resolveFlowLink`.
+
+### Dependency Inversion
+None found.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS and MobX. React: lane and filter rules live in review/model.ts (`reviewLane`, `drawnLanes`, `filterReviews`), not in the components.
+
+### Routing audit
+- graph_used: no. Not needed: `keryx ctx rg` found the PR-to-Flow resolver sites, and the import checks were direct reads.
+- wiki_used: not-relevant. The slice's layering is local to apps/desktop, and the PR body and the commit settled the intent.
+- ctx_used: yes (`keryx ctx read`, `ctx rg`, `ctx run -- git show`)
+- raw_rg_used: no
+
+Not verified: no tests were run (exec_budget 0). The ARCH-1 trigger comes from reading the code, not from a run.

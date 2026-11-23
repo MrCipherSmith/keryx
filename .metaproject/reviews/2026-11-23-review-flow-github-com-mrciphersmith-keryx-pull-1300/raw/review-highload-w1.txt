@@ -1,0 +1,98 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review
+
+Scope: branch feat/desktop-review-v2-stage1, base b147408a8748cdbd8506b371adb5957947e4477a, head 6a2a3031f740833e60b82856a9a266b5ffab5e10, diff mode, slice-02 read in full (App.tsx, acp/types.ts, issues/*, review/PrWorkRow.tsx, ReviewBoard.tsx, ReviewFilters.tsx, ReviewResults.tsx, model.ts, prWork.ts, reviewFilterStorage.ts, usePendingFlowLinks.ts, session/SessionSubjectLinks.tsx, subjectBinding.ts, useAcpSession.ts, shell/AppShell.tsx). Load profile: not provided. Concrete triggers used: several "Create Flow" / "Open in session" requests in flight in one window, other sessions or the CLI creating flow packages in the same checkout, a repeated click while `session/new` is pending. Counterpart read: `src/acp/server.ts` handleSessionFlags (same repo, head).
+
+Summary: The Subject-binding writes are safe under concurrency (keryx's `_keryx/session_flags` handler is synchronous, so concurrent flow and subject writes for one session cannot interleave inside one keryx process; PendingSubjects guards a replaced binding). The "Create Flow" linker attributes a flow package by "the first new directory", independently per pending request and with no expiry, so two pending requests, or one pending request and any other session creating a flow, persist a wrong `flow` link in the session's flags.json. "Open in session" is an unguarded check-then-act that creates a second, never-stored bound session on a repeat click. Stats: blocker 1 | major 1 | minor 0 | info 0.
+
+### CLI / Multi-Session
+[F-001] (blocker) A pending "Create Flow" links whichever new flow package appears first, so concurrent requests or another session's flow persist a wrong session→flow link. See REVIEW_RESULT.
+
+### Concurrency & Races
+[F-002] (major) "Open in session" / "Create Flow" check-then-act: a repeat click before `session/new` returns creates a second bound session; the unsaved one then wins "latest" for the rest of the app run. See REVIEW_RESULT.
+
+### Resources
+None detected. Pending subject bindings and pending flow links are grown only by user clicks (named in F-002 for the phantom entry); no timers, listeners or subscriptions added without cleanup (the focus effect, Menu portal and storage helpers were checked).
+
+### Caching
+None detected. `withPendingSubjects` copies rather than mutating stored session objects; grouping/filter storage is keyed per cwd, repositoryId and viewer.
+
+### Lock Contention
+None detected. Counterpart check: `handleSessionFlags` in `src/acp/server.ts` calls `setSessionFlags` synchronously, so the flow write (applyPendingFlow / linkFlow) and the subject write (PendingSubjects.apply) for one session do not interleave as a read-modify-write inside one keryx process. Cross-process writers to the same flags.json were not in this slice and were not checked.
+
+### Async / Queues
+None detected beyond F-001.
+
+### Retry / Timeout / Circuit Breaker
+None detected. PendingSubjects and applyPendingFlow retry once per finished turn of that session only, so retries are bounded by user turns.
+
+### Idempotency & Distributed Invariants
+Covered by F-001 (one package attributed to several requests) and F-002 (duplicate creation).
+
+Clean Areas: Part 0 (apart from F-001), Part B, Part C, Part D, Part F reviewed with no findings. Parts E and G apply only through F-001/F-002.
+
+Not verified: nothing was run (exec budget 0). The two findings are read from code; no test reproduces either (usePendingFlowLinks.dom.test.tsx covers one pending session only).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Subject-binding writes are concurrency-safe (keryx session_flags handler is synchronous). The Create Flow linker attributes the first new flow package to every pending request and never expires, persisting a wrong session-to-flow link when two requests are pending or another session creates a flow; Open in session has an unguarded check-then-act that creates a second, never-stored bound session that then wins 'latest'.",
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "blocker",
+      "reviewer": "review-highload",
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "line": null,
+      "quote": "      const step = resolveFlowLink(entry, dirs, session && sessionFlags(session).flow);\n      if (step.action === \"link\") linkRef.current(entry.sessionId, step.dir);",
+      "problem": "Each pending \"Create Flow\" entry is resolved on its own against the shared flow directory list: the first directory not in that entry's `knownDirs` is linked to its session. A directory one entry links is never removed from the other entries' candidates, and an entry has no expiry, so it waits for the app's lifetime. `resolveFlowLink` handles \"several new packages for one request\" but not \"one new package, several requests\" or \"one new package from someone else\".",
+      "impact": "Trigger 1: \"Create Flow\" on PR A, then on PR B, before A's package exists. `expect` keeps both entries (it only replaces the same sessionId). When A's package appears, both entries see exactly one fresh directory, so both sessions get `flow = A` through `linkFlow` → `_keryx/session_flags`, which writes it to each session's flags.json. Session B's own package appears later, after B's entry was already dropped, so it is never linked. Trigger 2: one pending request while another session in the same checkout, an Issue \"prepare-flow\", or the CLI creates a flow package. The foreign package is linked. Outcome, persisted: PR B's card shows Flow #A, because `prFlows` adds the flows of bound sessions. Session B's header links to Flow A, and the Flows board lists session B under Flow A. This is silently wrong persisted data (shape 2).",
+      "suggested_fix": "Claim each directory once across all entries. Resolve the entries in one pass over the fresh directories. When the number of pending entries is not exactly one, or a directory is already claimed, link nothing. Better, attribute positively instead of by arrival: link a package only when its `prUrl` (or a field the flow prompt asks the orchestrator to record, e.g. the session id) matches the request. Give an entry a deadline, for example cleared at the end of the session's first turn after the prompt, so that a package appearing hours later is not linked. Add a usePendingFlowLinks test with two pending sessions and one new package that asserts no link, or only the matching one.",
+      "evidence": "usePendingFlowLinks.ts: `expect` does `[...old.filter(entry => entry.sessionId !== sessionId), { sessionId, knownDirs }]`, so entries for different sessions coexist. The effect calls `resolveFlowLink(entry, dirs, ...)` per entry with the same `dirs`. prWork.ts `resolveFlowLink` returns `{ action: \"link\", dir: fresh[0] }` when `fresh.length === 1`, computed only against that entry's `knownDirs`. App.tsx wires `link` to `(id, dir) => void s.linkFlow(id, dir)`. useAcpSession `linkFlow` → `applyPendingFlow` → `client.request(SESSION_FLAGS, { sessionId, cwd, flow })`, and the server's `handleSessionFlags` → `setSessionFlags`, so the link is stored. prWork.ts `prFlows` includes `dirs.has(flow.dir)` from bound sessions. Read the deliberate choice (law 4): the PR body says \"The single new flow package that appears while that request is pending gets linked\", and the resolveFlowLink doc says several packages link none because \"which one is the session's cannot be told\". The same reason applies, and is ignored, when one package is visible to several requests or comes from another session. usePendingFlowLinks.dom.test.tsx tests only one pending session.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "location_class": "in-diff",
+      "dedupe_key": "pending-flow-link-attribution-by-arrival",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/usePendingFlowLinks.ts (effect resolving each pending entry independently; expect without expiry)",
+          "apps/desktop/src/review/prWork.ts resolveFlowLink (fresh computed per entry, no cross-entry claim)",
+          "apps/desktop/src/App.tsx createPrFlow (the only caller of flowLinks.expect)"
+        ],
+        "enumeration_method": "keryx ctx rg for resolveFlowLink|usePendingFlowLinks over apps/desktop/src/review (definitions, the dom test, the App.tsx caller); in slice-02 the only arrival-based attributor is usePendingFlowLinks, and its only producer is App.tsx createPrFlow; workOnFlow/linkFlow take an explicit dir and do not attribute."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "reviewer": "review-highload",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "line": null,
+      "quote": "  const id = await deps.newSession();\n  if (!id) return null;\n  deps.bind(id, subject);",
+      "problem": "`openSubjectSession` checks for a bound session, then awaits `newSession()` (a `session/new` round-trip), and only afterwards records the pending binding. Nothing serialises the requests for the same Subject: the work-row buttons stay enabled, and `newSession` in useAcpSession has no in-flight guard.",
+      "impact": "Trigger: a second click on \"Open in session\" or \"Create Flow\" for the same PR while the first `session/new` is pending. Both calls see no bound session, both create a session, and both bind it. The first session shown is never prompted, so keryx never stores it. Its PendingSubjects entry then never clears: `write` throws until the session is stored, and the retry runs only after a turn of that session. The phantom lasts for the app run. The card reads \"2 sessions\" and lists \"New session (not saved yet)\". `boundSessions` sorts a session without `updatedAt` as the newest, so every later click on \"Session\" or \"Open in session\" (target \"latest\") opens the empty phantom instead of the session that holds the work. With \"Create Flow\" the double click also registers two pending flow links, which feeds F-001.",
+      "suggested_fix": "Serialise per Subject. Keep an in-flight map keyed by `kind/repo/number` in App.tsx's openPrSession (or inside openSubjectSession through deps) that returns the pending promise to a repeat caller. Alternatively, disable the slot buttons while an open for that card is pending. Separately, rank an unsaved binding as newest only while it is the session currently shown, or drop a pending Subject whose session was replaced without a prompt, so that a phantom cannot capture \"latest\".",
+      "evidence": "prWork.ts openSubjectSession: `const bound = boundSessions(deps.sessions(), subject)` → `existing` undefined → `await deps.newSession()` → `deps.bind(...)`. App.tsx: `bind: (id, value) => void s.bindSubject(id, value)` updates `pendingSubjects` only after `newSession` resolves. useAcpSession `newSession` awaits `openNew(client, l.gen)` with no guard. PrWorkRow.tsx: the session button `disabled={!openSession}` and the Flow button `disabled={!flow && !createFlow}` do not change while a request is pending. subjectBinding.ts `apply` catches the throw on an unstored session and returns, keeping the entry. acp/types.ts `unsaved` returns `Number.POSITIVE_INFINITY` for a session without `updatedAt`, so it sorts first in `boundSessions`.",
+      "confidence": "medium",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "dedupe_key": "subject-session-open-check-then-act",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/prWork.ts openSubjectSession",
+          "apps/desktop/src/App.tsx openPrSession (callers: onOpenSubjectSession, createPrFlow, and the PR panel via openPanelSession)"
+        ],
+        "enumeration_method": "Read every caller of openSubjectSession in slice-02 (App.tsx openPrSession is the only one; it is reached from ReviewBoard onOpenSubjectSession, PrWorkRow slot and menu items, ReviewBoard openPanelSession, and createPrFlow). Issue sessions bind through the backend withIssueBinding (outside this slice) and were not enumerated."
+      }
+    }
+  ],
+  "stats": { "blocker": 1, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice and its counterparts were named, and only two targeted lookups were needed). wiki_used: no (not-relevant: a concurrency read of supplied diff text). ctx_used: yes (keryx ctx rg for the session_flags handler, applyPendingFlow, newSession, the flow-link tests, and the journal). raw_rg_used: no.

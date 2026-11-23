@@ -1,0 +1,13 @@
+# keryx review verify-run
+finding: logic-F-001
+command: git grep -n CardReviewProgress 6a2a3031f740833e60b82856a9a266b5ffab5e10 -- apps/desktop/src/review/ReviewResults.tsx
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-23T21:10:11.674Z
+exit: 0
+
+--- stdout ---
+6a2a3031f740833e60b82856a9a266b5ffab5e10:apps/desktop/src/review/ReviewResults.tsx:2:import { CardReviewProgress } from "./ReviewProgress";
+6a2a3031f740833e60b82856a9a266b5ffab5e10:apps/desktop/src/review/ReviewResults.tsx:64:      <CardReviewProgress badge={card.localReview} />
+6a2a3031f740833e60b82856a9a266b5ffab5e10:apps/desktop/src/review/ReviewResults.tsx:118:          <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+--- stderr ---
+

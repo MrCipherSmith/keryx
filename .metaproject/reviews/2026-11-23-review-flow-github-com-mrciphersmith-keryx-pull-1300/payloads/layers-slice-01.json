@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/description.md",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T5.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T6.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T7.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T8.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T9.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/plan.md",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T10.test.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T5.implement.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T6.implement.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T7.implement.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T8.implement.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T9.implement.json",
+    ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/tasks.md"
+  ],
+  "prHead": "6a2a3031f740833e60b82856a9a266b5ffab5e10",
+  "graphCommit": "6a2a3031f740833e60b82856a9a266b5ffab5e10",
+  "maxBytes": 8192,
+  "affected": {
+    "depth": 2,
+    "files": []
+  },
+  "symbols": [],
+  "relatedTests": [],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+}

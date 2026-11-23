@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 23,
+  "droppedKey": "6bac40d10ef1082b",
+  "fileBytes": {
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/raw/review-frontend-w2.txt": 6190,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json": 81716,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff": 54946,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-04.diff": 129859,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json": 133236,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff": 83789,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-03.diff": 7085,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-04.diff": 124040,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/scope.json": 286851,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-01.diff": 106923,
+    "apps/desktop/src/main.tsx": 649,
+    "apps/desktop/src/review/ReviewDetail.tsx": 21580,
+    "apps/desktop/src/review/ReviewRunDialog.tsx": 6539,
+    "apps/desktop/src/review/SessionReviewActivity.tsx": 14663,
+    "apps/desktop/src/session/ActivityPanel.tsx": 17982,
+    "apps/desktop/src/session/ContextMeter.tsx": 2381,
+    "apps/desktop/src/session/commandRunner.ts": 12892,
+    "apps/desktop/src/session/delegateTerminals.ts": 6115,
+    "apps/desktop/src/test/issue-question-resume.fixture.tsx": 3789,
+    "scripts/verify-native-coverage.ts": 77145,
+    "src/acp/shell-profile.test-helpers.ts": 5901,
+    "src/cli.ts": 10721,
+    "src/commands/help.ts": 2179
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/raw/review-frontend-w2.txt",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff"
+      ],
+      "bytes": 142852
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-04.diff"
+      ],
+      "bytes": 129859
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json"
+      ],
+      "bytes": 133236
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-03.diff"
+      ],
+      "bytes": 90874
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-04.diff"
+      ],
+      "bytes": 124040
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/scope.json"
+      ],
+      "bytes": 286851
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-01.diff",
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/test/issue-question-resume.fixture.tsx",
+        "src/acp/shell-profile.test-helpers.ts",
+        "src/cli.ts",
+        "apps/desktop/src/session/commandRunner.ts"
+      ],
+      "bytes": 140875
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/session/ActivityPanel.tsx",
+        "apps/desktop/src/session/ContextMeter.tsx",
+        "apps/desktop/src/session/delegateTerminals.ts",
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "scripts/verify-native-coverage.ts",
+        "src/commands/help.ts",
+        "apps/desktop/src/review/SessionReviewActivity.tsx"
+      ],
+      "bytes": 148584
+    }
+  ]
+}

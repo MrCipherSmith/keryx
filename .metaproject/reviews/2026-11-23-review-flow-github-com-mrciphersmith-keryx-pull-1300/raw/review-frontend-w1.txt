@@ -1,0 +1,73 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a`, head `6a2a3031f740833e60b82856a9a266b5ffab5e10`
+- Scope mode: diff (slice-02, read in full: 2539 lines)
+- Changed files reviewed: 21 (App.tsx, acp/types.ts, issues/{IssueFilters,IssueWorkRow,IssuesBoard,IssuesView,model,useIssueCollection,IssuesBoard.css}, review/{PrWorkRow,ReviewBoard,ReviewFilters,ReviewResults,model,prWork,reviewFilterStorage,usePendingFlowLinks}, session/{SessionSubjectLinks,subjectBinding,useAcpSession}, shell/AppShell.tsx)
+- Stack note: Desktop uses plain React hooks, no MobX. The MobX parts of this lens (Iron Laws 1, 4, 5) have nothing to check. The React and TypeScript parts were applied.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 0
+
+### Findings
+
+### [F-001] The PR focus request from the session header is never cleared and carries no repository, so it can open the wrong PR panel or reopen one later
+- **Severity**: minor
+- **File**: apps/desktop/src/App.tsx (the producer), apps/desktop/src/review/ReviewBoard.tsx (the consumer)
+- **Rule**: canonical rubric (trigger and outcome): a UI-only wrong panel, no data loss
+- **Problem**: `onOpenSubject` sets `reviewFocus` to `{number, nonce}`. Nothing resets it to null: `setReviewFocus` is called only at App.tsx:626. The consumer stores the nonce it last handled in a per-mount ref (`focused = useRef<number | null>(null)`). `RepositoryBoard` is keyed by `[cwd, repo]`, so choosing another base repository remounts it. The ref is then null again, and the old focus opens `#N` once more whenever that snapshot holds a card with the number. The request also has no `repo`. A subject from repository A therefore opens PR `#N` of repository B when the board shows B, on a project with more than one base repository. A focus that waits for a PR the current state filter hides (for example a merged PR with the default open filter) stays armed. It opens the panel later, unasked, when the user widens the filter.
+- **Why it matters**: The detail panel can show a different pull request than the one the header link names, or appear unprompted after a repository switch or a filter change.
+- **Fix**: Add `repo` to the focus request and compare it with `snapshot.repo` (case-insensitive) before opening. Have the board report that it handled the request, for example with an `onFocusHandled` callback that sets `reviewFocus` to null, so a remount cannot replay it. Or keep the handled nonce in App rather than in the board's per-mount ref.
+
+### Clean Areas
+- Hooks rules: every hook in PrWorkRow, IssueWorkRow, usePendingFlowLinks and ReviewResults is called unconditionally. `workActions` in IssuesBoard is a render helper, not a component, and calls no hook.
+- Effects and side effects: the `usePendingFlowLinks` effect links only the entries it removes from `pending` in the same pass, so a re-run does not link twice. `PendingSubjects.apply` never throws. `applyPendingFlow` swallows its error, so the `.then(() => subjects.apply(...))` chain in `sendPrompt` always reaches the subject write. The flags writes are serialised per turn end, as the comment says.
+- Keys: lane, card, table-row and menu-item keys are stable ids (`card.number`, `issueKey`, `"s-" + sessionId`).
+- Accessibility (AC6 lens): every new action control has visible text and an `aria-label` that names its PR or issue. The "More" menu button has `aria-haspopup` and `aria-expanded`. The menu is portaled with a stated reason (content-visibility clipping).
+- TypeScript: no `any`, no new non-null assertions beyond the existing `rows[selectedIndex ± 1]!` sites. `SessionSubject` and `sameSubject` are typed. `exactOptionalPropertyTypes` is honoured by conditional spreads (`...(repositoryId ? { repositoryId } : {})`, `{...(sessions ? {sessions} : {})}`).
+- Stored preferences: `readReviewFilters` rejects a non-boolean quick filter and returns `EMPTY_FILTERS`. `readPreferences` drops the old `stage` key on read. The grouping is stored under its own key and is read defensively.
+- Platform boundary: `boundSessions` lives in `acp/types.ts`, so `issues/model.ts` reaches no platform module.
+
+### Not checked / left to other lenses
+- The `work` memo in ReviewBoard depends on `onOpenSubjectSession` and `onCreateFlow`. App passes both as inline arrows, so the memo, and the `memo` on ReviewResults, change on every App render. That is a re-render-frequency concern, which belongs to review-performance; it is not reported here.
+- The server side of `_keryx/session_flags` (another slice) was not read. Whether concurrent flags writes (a `linkFlow` triggered by a flow-list refresh while a turn-end subject write runs) merge safely is left to review-logic and review-highload.
+- No test was run (exec_budget_s 0). The supplied evidence reports 1016 pass, 0 fail.
+
+Routing audit: graph_used: payload layers block (graph at PR head) used, no extra `gdgraph` query needed · wiki_used: not-relevant (UI wiring review, intent stated in the PR body and comments) · ctx_used: yes (`keryx ctx rg` ×3, `keryx ctx read` for the schema) · raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "slice-02 read in full. React/TS frontend (no MobX in Desktop). One minor: the session-header PR focus request is never cleared and carries no repo, so a RepositoryBoard remount (repo switch) or a later filter change replays it, and on a multi-repository project it can open PR #N of the wrong repository. Hooks, effects, keys, a11y labels, TS optional-property handling and stored-preference parsing are clean.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "setReviewFocus(old => ({ number: subject.number, nonce: (old?.nonce ?? 0) + 1 }));",
+      "problem": "The focus request {number, nonce} is never reset and has no repo. ReviewBoard tracks the handled nonce in a per-mount ref (`const focused = useRef<number | null>(null)`). RepositoryBoard is keyed by [cwd, repo], so a base-repository switch remounts it and the stale request opens #N again. The comparison is by number only, so PR #N of another repository opens. A focus for a PR hidden by the current state filter stays armed and opens later when the filter widens.",
+      "impact": "The detail panel can show a different PR than the header link named, or open unprompted after a repository switch or filter change. UI only; no state is written.",
+      "suggested_fix": "Carry `repo` in the focus request and check it against `snapshot.repo` (case-insensitive) before calling setSelected. Clear the request once handled, either with an onFocusHandled callback that sets reviewFocus to null in App or by keeping the handled nonce in App instead of a per-mount ref.",
+      "evidence": "App.tsx:411 declares reviewFocus; App.tsx:626 is its only setter (keryx ctx rg 'setReviewFocus|reviewFocus'). ReviewBoard.tsx focus effect: `if (!focus || focused.current === focus.nonce || !snapshot?.cards.some(c => c.number === focus.number)) return;`. ReviewBoard.tsx: `<RepositoryBoard key={JSON.stringify([props.cwd, repo])} ...>`. The base-repository <select> calls selectRepo when snapshot.repositories.length > 1. The subject repo comes from prSubject(card, work.repo, ...) at bind time.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "desktop-review-focus-stale-no-repo",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
