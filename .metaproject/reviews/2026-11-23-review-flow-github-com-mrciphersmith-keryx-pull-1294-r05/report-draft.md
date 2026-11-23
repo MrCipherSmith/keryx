@@ -71,7 +71,8 @@ Not verified: 1
   "dedupe_key": "seeded-marker-not-invalidated-on-identity-change",
   "blocking_merge": false,
   "degradation_class": "behaviour-delta",
-  "evidence_kind": "consumer-trace"
+  "evidence_kind": "consumer-trace",
+  "location_class": "in-diff"
  },
  {
   "id": "F-035",
@@ -87,7 +88,8 @@ Not verified: 1
   "confidence": "medium",
   "dedupe_key": "hidden-attention-hint-on-stale-open-snapshot",
   "blocking_merge": false,
-  "evidence_kind": "consumer-trace"
+  "evidence_kind": "consumer-trace",
+  "location_class": "in-diff"
  },
  {
   "id": "F-036",
@@ -104,7 +106,7 @@ Not verified: 1
   "dedupe_key": "count-label-aria-on-span",
   "blocking_merge": false,
   "degradation_class": "behaviour-delta",
-  "evidence_kind": "static"
+  "location_class": "in-diff"
  },
  {
   "id": "F-037",
@@ -120,7 +122,7 @@ Not verified: 1
   "confidence": "high",
   "dedupe_key": "hint-label-effect-and-focus",
   "blocking_merge": false,
-  "evidence_kind": "static"
+  "location_class": "in-diff"
  },
  {
   "id": "F-038",
@@ -137,7 +139,7 @@ Not verified: 1
   "dedupe_key": "seed-restarted-per-historical-load",
   "blocking_merge": false,
   "degradation_class": "behaviour-delta",
-  "evidence_kind": "static"
+  "location_class": "in-diff"
  },
  {
   "id": "F-039",
@@ -154,7 +156,8 @@ Not verified: 1
   "dedupe_key": "seed-races-unpinned",
   "blocking_merge": false,
   "degradation_class": "blind-test",
-  "evidence_kind": "red-test"
+  "evidence_kind": "red-test",
+  "location_class": "in-diff"
  },
  {
   "id": "F-040",
@@ -169,7 +172,8 @@ Not verified: 1
   "evidence": "layout-measurements-t23.md; review.css. Reported by review-layout and review-ui-ux.",
   "confidence": "medium",
   "dedupe_key": "toolbar-hint-cosmetics",
-  "blocking_merge": false
+  "blocking_merge": false,
+  "location_class": "in-diff"
  }
 ]
 ```

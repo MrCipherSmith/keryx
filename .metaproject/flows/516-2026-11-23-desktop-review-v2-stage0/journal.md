@@ -162,3 +162,4 @@
 - T23 (worker, standard tier): the three answers, docs deviation (c) and new item (d). The orchestrator measured the toolbar with the real stylesheets and rebuilt markup: the bare count made the 560px toolbar wrap (573px needed); the orchestrator added a narrow-toolbar search-field rule (80px), after which the toolbar is one row from 560 to 1380px without the hint, and wraps without clipping at about 560, 820 and 1180px while the hint is shown. Measurements: `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/research-evidence/layout-measurements-t23.md`. `bun test src` 766 pass, `bunx tsc --noEmit` exit 0.
 - Not done: no review round on T22 and T23; no scenario reproduced in the app with real data; nothing pushed.
 
+- 2026-11-23T12:10:55.684Z - decision d-mwt85gki-34a400 [review override-reviewers, ordinary]: chose override; no recommendation

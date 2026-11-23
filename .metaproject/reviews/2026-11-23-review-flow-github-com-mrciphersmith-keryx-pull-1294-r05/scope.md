@@ -2,9 +2,9 @@
 
 target: pr
 ref: https://github.com/MrCipherSmith/keryx/pull/1294
-mode: review-flow
+mode: ingest
 flow: none
-created_at: 2026-11-23T12:08:18.425Z
+created_at: 2026-11-23T12:20:56.610Z
 context_mode: light
 
 ## Stage counts
@@ -15,8 +15,16 @@ construction, refused as a baseline).
 
 ### Dropped by the pre-filter
 
-not recorded — no pre-filter scope was supplied to this package.
-This is NOT `dropped 0`: nothing ran, so nothing is known.
+files_seen: 16
+files_retained: 16
+files_dropped: 0
+blocks_seen: 44
+blocks_retained: 44
+blocks_dropped: 0
+changed_lines_retained: 763
+changed_lines_dropped: 0
+
+_the pre-filter ran and dropped nothing_
 
 ### Refuted by the verifier
 
@@ -28,13 +36,13 @@ verdicts_capped_to_unverifiable: 0
 confirmed: 0
 refuted: 0
 unverifiable: 0
-unverified: 0
+unverified: 7
 
 ### Retained
 
-findings_in: 0
+findings_in: 7
 findings_removed_by_verifier: 0
-findings_retained: 0
+findings_retained: 7
 
 ### Verification claims discarded
 
@@ -50,10 +58,10 @@ cap that dropped nothing are different facts.
 ### Findings cap
 
 limit_per_reviewer: 10
-findings_seen: 0
-findings_retained: 0
+findings_seen: 6
+findings_retained: 6
 findings_truncated: 0
-blockers_exempt: 0
+blockers_exempt: 5
 reviewers_truncated: 0
 
 _the findings cap ran and truncated nothing_
@@ -68,9 +76,19 @@ not recorded — no dispatch plan was supplied for this package.
 
 ## Scope B rejections
 
-not recorded — no blast-radius record reached this ingest, so the scope-B screen
-did not run. No finding in this package was raised under scope B; had one been,
-the ingest would have been refused rather than recorded unscreened.
+severity_floor: major
+accepted: 0
+rejected: 1
+exempted: 0
+
+| finding | reviewer | rule | why |
+|---|---|---|---|
+| F-038 | review-regression | non-regression-severity | severity `minor` is below the scope-B floor `major`. Under the canonical rubric `minor` states that the code behaves correctly and `info` names neither a trigger nor an outcome; neither can be a claim that the change broke an existing behaviour. |
+
+Rejected findings are recorded, not deleted: raise them under scope A or as a separate review.
+scope_b_findings: 1
+scope_b_exempted: 0
+blast_radius_record: supplied by the caller (--blast-radius)
 
 ## Degradation evidence screen
 
@@ -86,20 +104,44 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 0
-dropped_prefilter: null — no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`.
+total: 7
+dropped_prefilter: 0
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
-dropped_scope_b: null — no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart.
+dropped_scope_b: 1
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
 merged_duplicates: 0
-retained: 0
+retained: 6
 
 ### by_reason
 
-_no drop was attributed to a reason; every stage that ran removed nothing_
+scope_b:non-regression-severity: 1
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before any reviewer read them. Every other count is findings, and only those are
 summed against `retained`.
+
+## Premise check
+
+premise_judge: review-premise
+premise_claims_received: 6
+premise_claims_applied: 5
+premise_claims_rejected: 1
+premise_upheld: 5
+premise_downgraded: 0
+premise_challenged: 0
+premise_owner_decision: 0
+premise_held: 0
+
+### Held for the operator (premise)
+
+_none_
+
+### Premise claims discarded
+
+| finding | reason | why |
+|---|---|---|
+| F-038 | unknown-finding | this round reported no such finding. A premise judge cannot introduce one. |
+
+Every discarded claim leaves its finding as it was: a claim can cost a verdict, never a finding.

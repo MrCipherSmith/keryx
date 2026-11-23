@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reviewId": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05",
-  "mode": "review-flow",
+  "mode": "ingest",
   "status": "draft",
   "target": {
     "kind": "pr",
@@ -21,56 +21,109 @@
   },
   "coverage": [
     {
-      "reviewer": "review-orchestrator",
+      "reviewer": "review-architecture",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-backend",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-clean-code",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-degradation",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-frontend",
       "status": "run",
-      "reason": "selected for managed review package"
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-highload",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-layout",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-performance",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-pr-contract",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-style",
+      "status": "failed",
+      "reason": "not run: no reviewer result recorded"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-ui-ux",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
     }
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 0,
-    "dropped_prefilter": null,
+    "total": 7,
+    "dropped_prefilter": 0,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
-    "dropped_scope_b": null,
+    "dropped_scope_b": 1,
     "dropped_findings_cap": 0,
     "merged_duplicates": 0,
-    "retained": 0,
+    "retained": 6,
     "dismissed_by_round": null,
-    "by_reason": {},
+    "by_reason": {
+      "scope_b:non-regression-severity": 1
+    },
     "not_measured": [
       {
         "stage": "low_confidence",
         "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
       },
       {
-        "stage": "prefilter",
-        "reason": "no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`."
-      },
-      {
         "stage": "round_dismissed",
         "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
-      },
-      {
-        "stage": "scope_b",
-        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
       }
     ]
   },
   "report_fields": [
     "evidence-level"
   ],
-  "cleanContext": {
-    "startedAt": "2026-11-23T12:08:18.425Z",
-    "memoryQuery": "desktop pull requests board attention indicator seed toolbar hint"
-  },
-  "createdAt": "2026-11-23T12:08:18.425Z",
-  "updatedAt": "2026-11-23T12:08:18.425Z",
-  "operatorGate": 1,
-  "roundRecord": {
-    "roundSha256": "22c12fee4ec9fb1c96978a6846b54d193b55a1e50f2a4514e037e47e90612e63",
-    "priorFindingsSha256": "ea402c498291c13d07617c78180a706fd7c3b80cd23118b96b8f0be996fbd81b",
-    "targetKey": "pr:mrciphersmith/keryx#1294",
-    "targetBase": "origin/main"
-  }
+  "createdAt": "2026-11-23T12:20:56.610Z",
+  "updatedAt": "2026-11-23T12:20:56.610Z"
 }

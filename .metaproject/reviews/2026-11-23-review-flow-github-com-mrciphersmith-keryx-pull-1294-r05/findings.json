@@ -1,1 +1,164 @@
-[]
+[
+  {
+    "id": "F-034",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Incomplete fix of F-030 (T22). On a non-replacing load an identity change empties the carried attention set, but the `seeded` ref keeps the identity seeded earlier, and a seed is requested only when `seeded.current !== nextIdentity`. When the board returns to an identity seeded before a switch, the set is emptied and no seed follows; a late seed of the other identity is dropped by the guard.",
+    "impact": "Accounts A and B both have saved filter State = Merged. A is seeded at mount. The account switches to B; a merged load empties the set and requests B's seed, which fails or is still in flight. The account switches back to A; the next merged load empties the set again and requests nothing, because `seeded` still says A. A's open pull request that requests A's review does not light the tab until A opens the Open or All view — the F-030 false negative, for the account the viewer returns to.",
+    "suggested_fix": "Clear the seed marker wherever the set is emptied for a new identity: `if (identity.current !== nextIdentity) { setCarriedAttention(new Set()); seeded.current = \"\"; }` before the seed check. DOM test: A seeded, switch to B on Merged with B's seed failing, switch back to A on Merged, assert an open request was issued and the indicator is 'attention'.",
+    "evidence": "ReviewBoard.tsx at 8e6ecf1aa: :118 `seeded`; :193 and :241 are its only resets; :245-246; :248-252 setFilters(readReviewFilters(...)) restores the saved historical filter after clearPrivateView(true); :280 seed guard. Traced by review-logic and re-read by the orchestrator; not run.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 245,
+    "quote": "if (identity.current !== nextIdentity) setCarriedAttention(new Set());",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 245
+    },
+    "dedupe_key": "seeded-marker-not-invalidated-on-identity-change",
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-034",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The trace holds at 8e6ecf1aa: `seeded` is written only by a replacing load (ReviewBoard.tsx:241), an applied seed (:281) and accessLost (:193), while a non-replacing load on an identity change empties the carried set (:245) and asks for a seed only when `seeded.current !== nextIdentity` (:246). On A (seeded) -> B on a saved Merged filter with B's seed failed or in flight (a late B seed is dropped by `identity.current !== key` at :280) -> back to A on Merged, the set is emptied and no seed is requested, so A's open requests do not light the tab. The marker and the guard are new in this branch (91c37c81b) and carry no prior intent; the comment at :238-239 says a new identity seen on such a view 'starts from nothing and gets one open load', which this path breaks, so the finding is a defect in T22's own stated contract, not a choice."
+    }
+  },
+  {
+    "id": "F-035",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The F-012 hint counts carried numbers absent from the shown snapshot. That is right for historical and period views (the reset moves to the open scope, where they load) but wrong when the shown snapshot is the open scope itself as a stale cached fallback after an `unavailable:` error: the hint reports requests 'hidden by filters' that no filter hides, and its reset keeps the same scope, reloads nothing and shows nothing new.",
+    "impact": "After an `unavailable:` error on the Open view the toolbar can show '1 waiting on you hidden by filters'; clicking it changes nothing visible, the button stays, and the viewer's saved filters are wiped for no effect.",
+    "suggested_fix": "While the snapshot is a fallback (`read.stale` or `error` set) count only cards present in the snapshot that the filters hide, or hide the hint. DOM test for the scenario.",
+    "evidence": "ReviewBoard.tsx :262-266 stale fallback; :375-384 attentionPrs; :425-427 reset and hint; model.ts EMPTY_FILTERS maps to scope 'open'. Traced by review-logic; also noted as info by review-ui-ux and review-frontend.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 427,
+    "quote": "const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n)).length : 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 427
+    },
+    "dedupe_key": "hidden-attention-hint-on-stale-open-snapshot",
+    "blocking_merge": false,
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-035",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The hint counts every number in attentionPrs absent from `visible` (ReviewBoard.tsx:426-427) with no regard to `read.stale`; the carried set can hold numbers a later replacing load saw (an All load caches under 'all/', not 'open/', at :132) while the `unavailable:` fallback on Open shows the older cached 'open/' snapshot (:262-266). With the filters already at EMPTY_FILTERS (scope 'open') the button claims a filter hides them and its reset (:425) changes neither scope nor result. The operator decided the hint counts requests hidden by filters (implementation-plan.md (d)); counting ones hidden by a stale cache is a miscount in carrying that decision out, not the decision. The path is narrow (it needs a replacing non-Open load after the cached Open one) but reachable, and nothing in the code marks the stale case as intended for the hint."
+    }
+  },
+  {
+    "id": "F-036",
+    "reviewer": "review-frontend",
+    "severity": "minor",
+    "problem": "The count is named with aria-label on a plain span, which has no role that accepts a name (ARIA 1.2), and under the 760px container query the visible word is removed with display:none, which also removes it from the accessibility tree.",
+    "impact": "On the narrow toolbar — the default window with the PR panel open — a screen reader announces a bare number next to the heading, with no unit. The title tooltip helps pointer users only.",
+    "suggested_fix": "Hide `.count-word` visually (the existing `.sr-only` pattern) instead of display:none under the container query, and drop aria-label and title from the span.",
+    "evidence": "ReviewBoard.tsx count span; review.css `@container (max-width: 760px)` rule hiding `.count-word`. Reported by review-frontend, review-ui-ux and review-layout; review-testing-practices notes the test asserts only the attribute. Not checked with a screen reader.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 441,
+    "quote": "<div className=\"flows-heading\"><h1>Pull requests</h1>{snapshot && <span className=\"count-label\" aria-label={countText} title={countText}>",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 441
+    },
+    "dedupe_key": "count-label-aria-on-span",
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-036",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "ReviewBoard.tsx:441 names a role-less span with aria-label and review.css:94 hides `.count-word` with display:none under the 760px container query, so the visible unit leaves the accessibility tree and the name rests on aria-label on a generic element, which ARIA 1.2 prohibits naming (support varies by screen reader). Several other spans in the app carry aria-label without a role (AppShell.tsx:229, SessionSidebar.tsx:46, ReviewLaunchDialog.tsx:284-285), but that is a repeated pattern, not a reasoned exemption, and accepted practice (WAI-ARIA 1.2 / ARIA in HTML: aria-label prohibited on generic) runs against it. The operator's decision (deviation (c)) is a bare visible number, which the suggested fix keeps; hiding the word with the existing `.sr-only` (components.css:6) is consistent with the project's own utility."
+    }
+  },
+  {
+    "id": "F-037",
+    "reviewer": "review-ui-ux",
+    "severity": "minor",
+    "problem": "The hint button names the cause ('N waiting on you hidden by filters') but not what a click does: it overwrites the viewer's saved filters with the defaults and clears the search, with no undo. Under 1100px it shrinks to an alert icon and a number right after the bare pull request count, with its meaning only in a tooltip. After the click the focused button unmounts and keyboard focus falls to the page body.",
+    "impact": "A viewer with tuned saved filters clicks a warning chip to see two requests and loses the filter set; on the default window the chip reads as a second unlabelled number; keyboard and screen reader users lose their place.",
+    "suggested_fix": "Label the action: 'Show N waiting on you' with the accessible name 'Show N waiting on you — clears filters and search'; keep one short word at the narrow width (e.g. icon + 'N hidden'); move focus to the search field after the reset.",
+    "evidence": "ReviewBoard.tsx hint markup and reset; review.css `.toolbar-label` hidden under 1100px. Reported by review-ui-ux (label, narrow form) and review-frontend (focus loss). Not rendered, not run with assistive technology.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 425,
+    "quote": "const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(\"\"); };",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 425
+    },
+    "dedupe_key": "hint-label-effect-and-focus",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-037",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The operator decided what the control does — a hint with the hidden count and a button that resets the filters and the search (implementation-plan.md (d); journal 'show a hint for attention hidden by filters') — and named no label text; the finding leaves that behaviour intact and asks the label to state it and the focus to survive it, which is execution. The focus part is a plain defect: after reset the button (ReviewBoard.tsx:444) unmounts once the count reaches zero or the snapshot is null during the scope load, and nothing moves focus (contrast the explicit search refocus at :291-294 used for other resets), against WCAG 2.4.3 Focus Order. The narrow-width part is the weakest: labels collapsing to icon plus accessible name under 1100px is the documented toolbar pattern (review.css:91, deviation (c)), so the fixer should weigh that sibling pattern rather than add a word only here; that does not undo the label and focus premise."
+    }
+  },
+  {
+    "id": "F-039",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The new tests pin the named scenarios but never build the races the seed code guards: every load double resolves at once, so the seed always lands after its main load and never overlaps a scope switch, a second historical load or an open load. The hint tests cover one trigger (a saved author filter) and not the search, the saved-filter wipe or the stale-fallback case.",
+    "impact": "Executed by the orchestrator, each alone, file restored after each: removing `setSeedFor(null)` on an open load, removing it after an applied seed, dropping any one of the three seed-guard clauses (`identity.current !== key`, `seeded.current === key`, `key !== seedFor.identity`), removing the catch cleanup, dropping `setQuery(\"\")` from the reset, and marking every `unavailable:` fallback stale — all 8 leave `ReviewBoard.dom.test.tsx` green. These are the lines added for F-030, on code that regressed in earlier rounds.",
+    "suggested_fix": "Add tests with held (manually resolved) load promises: a seed in flight when the viewer switches to Open; a seed in flight across an account change; a seed landing after an open load already replaced the set. Add hint tests for the search trigger, the saved-filter result and the stale fallback.",
+    "evidence": "Orchestrator mutation run at 8e6ecf1aa: 8 of 8 candidates survive (0 fail each). Reported by review-testing-practices by reading.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "line": 1140,
+    "quote": "test(\"an open seed answered for another account does not enter the tab signal\", async () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 1140
+    },
+    "dedupe_key": "seed-races-unpinned",
+    "blocking_merge": false,
+    "degradation_class": "blind-test",
+    "evidence_kind": "red-test",
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-039",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Taken as given: the orchestrator's executed run left ReviewBoard.dom.test.tsx green under 8 of 8 mutations of the T22/T23 lines (seed reset on open load and after apply, each seed-guard clause, catch cleanup, `setQuery(\"\")` in reset, stale marking). These are new lines in a code path that regressed in earlier rounds; no intent signal or practice source argues that the races and the hint triggers need no test, and the fix (held promises) is the standard way to pin async ordering. A surviving mutant stays as reported."
+    }
+  },
+  {
+    "id": "F-040",
+    "reviewer": "review-layout",
+    "severity": "info",
+    "problem": "Toolbar notes: the hint lives inside the non-shrinking heading and wraps the toolbar to two rows at about 560, 820 and 1180px while shown (measured, no clipping); its hover removes the fill instead of strengthening it like sibling buttons; at 80px the search field shows only the first letters of its placeholder.",
+    "impact": "Cosmetic; the review.css comment says the 80px rule keeps one row at 560px, which holds only without the hint.",
+    "suggested_fix": "Use an existing hover token; state in the comment and in deviation (d) that the hint may wrap the toolbar.",
+    "evidence": "layout-measurements-t23.md; review.css. Reported by review-layout and review-ui-ux.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/styles/review.css",
+    "line": 99,
+    "quote": ".review-board .flows-toolbar .review-hidden-attention:hover { background: transparent; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 99
+    },
+    "dedupe_key": "toolbar-hint-cosmetics",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05#F-040"
+  }
+]

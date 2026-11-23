@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewResults.tsx",
+    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+    "apps/desktop/src/review/ReviewRuns.tsx",
+    "apps/desktop/src/styles/review.css",
+    "docs/requirements/keryx-desktop-review-v2/implementation-plan.md"
+  ],
+  "files": [
+    {
+      "file": "apps/desktop/src/shell/AppShell.tsx",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "path": [
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ReviewRuns.tsx",
+      "path": [
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "path": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRunDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ReviewRuns.tsx",
+      "path": [
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/styles/review.css",
+      "path": [
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/SessionReviewActivity.tsx",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ReviewRuns.tsx",
+      "path": [
+        "apps/desktop/src/review/SessionReviewActivity.tsx",
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "path": [
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewRuns.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/review/ReviewDetail.tsx (hop 2, from apps/desktop/src/review/ReviewRuns.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 7,
+    "changedFilesResolved": 6,
+    "changedFilesUnresolved": 1,
+    "candidates": 11,
+    "retained": 7,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 0,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 4,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 5,
+      "2": 2
+    }
+  },
+  "graph": {
+    "nodes": 4660,
+    "edges": 17739
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewResults.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewRuns.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/styles/review.css",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "not a JS/TS module: every importer is reached by the file edge"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewRuns.tsx"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    }
+  ],
+  "testCommand": "bun test"
+}

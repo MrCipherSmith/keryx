@@ -7,13 +7,19 @@
       "id": "review-frontend-w1:F-501",
       "source": "raw/review-frontend-w1.txt",
       "question": "Is review-frontend finding F-501 (The pull request count is named with aria-label on a plain span (generic role, no role attribute). A) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-frontend-w1:F-502",
       "source": "raw/review-frontend-w1.txt",
       "question": "Is review-frontend finding F-502 (The hint button calls reset and is rendered only while hiddenAttention > 0. After reset the hidden c) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-037",
+      "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation).",
+      "finding": "F-037"
     },
     {
       "id": "review-frontend-w1:F-503",
@@ -25,19 +31,28 @@
       "id": "review-frontend-w1:F-504",
       "source": "raw/review-frontend-w1.txt",
       "question": "Is review-frontend finding F-504 (hiddenAttention counts every number of attentionPrs missing from visible, including carried numbers ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-035",
+      "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation).",
+      "finding": "F-035"
     },
     {
       "id": "review-frontend-w2:F-501",
       "source": "raw/review-frontend-w2.txt",
       "question": "Is review-frontend finding F-501 (The pull request count is named with aria-label on a plain span (generic role, no role attribute). A) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-frontend-w2:F-502",
       "source": "raw/review-frontend-w2.txt",
       "question": "Is review-frontend finding F-502 (The hint button calls reset and is rendered only while hiddenAttention > 0. After reset the hidden c) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-037",
+      "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation).",
+      "finding": "F-037"
     },
     {
       "id": "review-frontend-w2:F-503",
@@ -49,79 +64,118 @@
       "id": "review-frontend-w2:F-504",
       "source": "raw/review-frontend-w2.txt",
       "question": "Is review-frontend finding F-504 (hiddenAttention counts every number of attentionPrs missing from visible, including carried numbers ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-035",
+      "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation).",
+      "finding": "F-035"
     },
     {
       "id": "review-layout-w1:LY-001",
       "source": "raw/review-layout-w1.txt",
       "question": "Is review-layout finding LY-001 (The hint button sits inside .flows-heading, which is a direct toolbar child and so is flex:none (con) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-layout-w1:LY-002",
       "source": "raw/review-layout-w1.txt",
       "question": "Is review-layout finding LY-002 (UNVERIFIED. At 80px border-box the search field (1px borders, 8px and 6px padding, a 14px icon, 6px ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-layout-w1:LY-003",
       "source": "raw/review-layout-w1.txt",
       "question": "Is review-layout finding LY-003 (UNVERIFIED and outside this lens (for review-ui-ux). aria-label on a plain span has no role that nam) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-layout-w1:LY-004",
       "source": "raw/review-layout-w1.txt",
       "question": "Is review-layout finding LY-004 (UNVERIFIED (reading only). The resting state fills with --warn-soft; hover removes the fill. Other c) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-layout-w2:LY-001",
       "source": "raw/review-layout-w2.txt",
       "question": "Is review-layout finding LY-001 (The hint button sits inside .flows-heading, which is a direct toolbar child and so is flex:none (con) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-layout-w2:LY-002",
       "source": "raw/review-layout-w2.txt",
       "question": "Is review-layout finding LY-002 (UNVERIFIED. At 80px border-box the search field (1px borders, 8px and 6px padding, a 14px icon, 6px ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-layout-w2:LY-003",
       "source": "raw/review-layout-w2.txt",
       "question": "Is review-layout finding LY-003 (UNVERIFIED and outside this lens (for review-ui-ux). aria-label on a plain span has no role that nam) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-layout-w2:LY-004",
       "source": "raw/review-layout-w2.txt",
       "question": "Is review-layout finding LY-004 (UNVERIFIED (reading only). The resting state fills with --warn-soft; hover removes the fill. Other c) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-logic-w1:F-034",
       "source": "raw/review-logic-w1.txt",
       "question": "Is review-logic finding F-034 (On a non-replacing load (closed, merged, or any period scope), an identity change empties the carrie) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-034",
+      "reason": "Same defect as canonical F-034 (merged by the orchestrator at consolidation).",
+      "finding": "F-034"
     },
     {
       "id": "review-logic-w1:F-035",
       "source": "raw/review-logic-w1.txt",
       "question": "Is review-logic finding F-035 (hiddenAttention counts every number in attentionPrs that is not among `visible`. attentionPrs is the) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-035",
+      "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation).",
+      "finding": "F-035"
     },
     {
       "id": "review-logic-w5:F-034",
       "source": "raw/review-logic-w5.txt",
       "question": "Is review-logic finding F-034 (On a non-replacing load (closed, merged, or any period scope), an identity change empties the carrie) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-034",
+      "reason": "Same defect as canonical F-034 (merged by the orchestrator at consolidation).",
+      "finding": "F-034"
     },
     {
       "id": "review-logic-w5:F-035",
       "source": "raw/review-logic-w5.txt",
       "question": "Is review-logic finding F-035 (hiddenAttention counts every number in attentionPrs that is not among `visible`. attentionPrs is the) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-035",
+      "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation).",
+      "finding": "F-035"
     },
     {
       "id": "review-regression-w1:RG-1",
@@ -139,103 +193,154 @@
       "id": "review-testing-practices-w1:F-T01",
       "source": "raw/review-testing-practices-w1.txt",
       "question": "Is review-testing-practices finding F-T01 (Every test double for the seed path is an immediately resolving async function, so the order between) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-039",
+      "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation).",
+      "finding": "F-039"
     },
     {
       "id": "review-testing-practices-w1:F-T02",
       "source": "raw/review-testing-practices-w1.txt",
       "question": "Is review-testing-practices finding F-T02 (The test 'an open seed answered for another account does not enter the tab signal' ends on a falsy a) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-039",
+      "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation).",
+      "finding": "F-039"
     },
     {
       "id": "review-testing-practices-w1:F-T03",
       "source": "raw/review-testing-practices-w1.txt",
       "question": "Is review-testing-practices finding F-T03 (The hidden-attention tests pin one trigger: a saved author filter. Not pinned: (1) a request hidden ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-039",
+      "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation).",
+      "finding": "F-039"
     },
     {
       "id": "review-testing-practices-w1:F-T04",
       "source": "raw/review-testing-practices-w1.txt",
       "question": "Is review-testing-practices finding F-T04 (The test is named 'accessible name' but asserts an attribute on a plain `span` with no role; aria-la) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-testing-practices-w1:F-T05",
       "source": "raw/review-testing-practices-w1.txt",
       "question": "Is review-testing-practices finding F-T05 (Determinism, read only: no timers, sleeps or real network in the seven new tests; waits are `act(asy) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-039",
+      "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation).",
+      "finding": "F-039"
     },
     {
       "id": "review-ui-ux-w1:UX-001",
       "source": "raw/review-ui-ux-w1.txt",
       "question": "Is review-ui-ux finding UX-001 (The hint's label ('N waiting on you hidden by filters') names the cause but not the effect of the cl) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-037",
+      "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation).",
+      "finding": "F-037"
     },
     {
       "id": "review-ui-ux-w1:UX-002",
       "source": "raw/review-ui-ux-w1.txt",
       "question": "Is review-ui-ux finding UX-002 (At a container width of 760px or less .count-word is display:none, which removes the word from the a) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-ui-ux-w1:UX-003",
       "source": "raw/review-ui-ux-w1.txt",
       "question": "Is review-ui-ux finding UX-003 (Under 1100px (.toolbar-label hidden) the hint is an alert icon and a number directly after the bare ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-037",
+      "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation).",
+      "finding": "F-037"
     },
     {
       "id": "review-ui-ux-w1:UX-004",
       "source": "raw/review-ui-ux-w1.txt",
       "question": "Is review-ui-ux finding UX-004 (Hover removes the warn-soft fill, so the chip looks lighter, more like a label, while the pointer is) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-ui-ux-w1:UX-005",
       "source": "raw/review-ui-ux-w1.txt",
       "question": "Is review-ui-ux finding UX-005 (At 80px the search field shows the icon and a few characters of the placeholder 'Search by title or ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-ui-ux-w1:UX-006",
       "source": "raw/review-ui-ux-w1.txt",
       "question": "Is review-ui-ux finding UX-006 (Historical view: the count includes carried numbers that are not in the shown closed/period snapshot) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-035",
+      "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation).",
+      "finding": "F-035"
     },
     {
       "id": "review-ui-ux-w2:UX-001",
       "source": "raw/review-ui-ux-w2.txt",
       "question": "Is review-ui-ux finding UX-001 (The hint's label ('N waiting on you hidden by filters') names the cause but not the effect of the cl) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-037",
+      "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation).",
+      "finding": "F-037"
     },
     {
       "id": "review-ui-ux-w2:UX-002",
       "source": "raw/review-ui-ux-w2.txt",
       "question": "Is review-ui-ux finding UX-002 (At a container width of 760px or less .count-word is display:none, which removes the word from the a) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-036",
+      "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation).",
+      "finding": "F-036"
     },
     {
       "id": "review-ui-ux-w2:UX-003",
       "source": "raw/review-ui-ux-w2.txt",
       "question": "Is review-ui-ux finding UX-003 (Under 1100px (.toolbar-label hidden) the hint is an alert icon and a number directly after the bare ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-037",
+      "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation).",
+      "finding": "F-037"
     },
     {
       "id": "review-ui-ux-w2:UX-004",
       "source": "raw/review-ui-ux-w2.txt",
       "question": "Is review-ui-ux finding UX-004 (Hover removes the warn-soft fill, so the chip looks lighter, more like a label, while the pointer is) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-ui-ux-w2:UX-005",
       "source": "raw/review-ui-ux-w2.txt",
       "question": "Is review-ui-ux finding UX-005 (At 80px the search field shows the icon and a few characters of the placeholder 'Search by title or ) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-040",
+      "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation).",
+      "finding": "F-040"
     },
     {
       "id": "review-ui-ux-w2:UX-006",
       "source": "raw/review-ui-ux-w2.txt",
       "question": "Is review-ui-ux finding UX-006 (Historical view: the count includes carried numbers that are not in the shown closed/period snapshot) real, and where is it reported?",
-      "status": "unresolved"
+      "status": "finding",
+      "evidence": "canonical-findings.json F-035",
+      "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation).",
+      "finding": "F-035"
     }
   ],
   "dispatch": {
