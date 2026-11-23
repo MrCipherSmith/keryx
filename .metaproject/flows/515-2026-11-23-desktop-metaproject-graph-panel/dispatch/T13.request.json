@@ -1,0 +1,47 @@
+{
+  "task": {
+    "task_id": "task-13",
+    "task_name": "Panel and relationship list polish from the isolated live preview",
+    "task_type": "ui_component",
+    "complexity": "medium",
+    "dependencies": [],
+    "description": "Fix six defects the orchestrator found when it rendered the new panel on real projections of this repository in a browser (380 px wide panel, dark and light). AC7-AC9 must keep passing; add or adjust tests for each item that is testable without a browser.\n\nP1. The Module fact shows the raw node id ('module:src/bus'). Show the module's path (the id without its 'module:' prefix) as a control that calls `onSelect(node.module)`.\nP2. Kind headings and kind badges show raw ids ('imports', 'changes-spec', 'wiki'). Use RELATIONSHIP_KIND_LABELS for relationship kinds and NODE_KIND_LABELS for node kinds from the shared labels file, in the list headings, the row badges and the header badge.\nP3. A relationship row wraps over several lines when the title or path is long (seen: 'native-services-…' with its path broken beside it). Keep a row to one line: title, kind badge, then the path truncated with an ellipsis, with the full path in the title attribute.\nP4. Evidence takes two to five lines under every row and often repeats the row's own path (a `describes` edge carries ['related-code', '<path>']). Collapse it: a row with evidence gets a disclosure that is closed by default and opens the example lines; for module imports its label is the count ('7 imports'). Evidence that only repeats the neighbour's path is not shown as lines; its origin word ('related-code', 'key-files', 'frontmatter') becomes a small muted tag on the row.\nP5. The second-step group can hold 250 rows (seen: 253). Render it as a disclosure with its count, closed by default.\nP6. The counts fact is labelled 'Relations' while the tab says 'Relationships'. Label it 'Relationships' and widen the key column so it fits.\n\nShared labels: apps/desktop/src/metaproject/labels.ts must exist with EXACTLY this content (the other polish lane needs the same file at the same time; if it already exists with this content, leave it; if it does not exist, create it):\n```ts\nimport type { MetaprojectEdgeKind, MetaprojectNodeKind } from \"../../../../src/integrations/metaproject-explorer-contract\";\n\n/** Human-readable names shown wherever a kind appears: filters, graph captions and legend, panel, lists. */\nexport const RELATIONSHIP_KIND_LABELS: Record<MetaprojectEdgeKind, string> = {\n  imports: \"Imports\",\n  asset: \"Assets\",\n  describes: \"Describes\",\n  links: \"Wiki links\",\n  contains: \"Contains\",\n  defines: \"Defines\",\n  calls: \"Calls\",\n  \"changes-spec\": \"Changes spec\",\n  \"spec-context\": \"Spec context\",\n};\n\nexport const NODE_KIND_LABELS: Record<MetaprojectNodeKind, string> = {\n  module: \"Module\",\n  file: \"File\",\n  symbol: \"Symbol\",\n  wiki: \"Wiki page\",\n  spec: \"Spec\",\n  change: \"Change\",\n  archive: \"Archived change\",\n};\n```\n",
+    "target_files": [
+      "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "apps/desktop/src/metaproject/nodePanel.css",
+      "apps/desktop/src/metaproject/labels.ts"
+    ],
+    "acceptance_criteria": [
+      "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+      "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+      "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

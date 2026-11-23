@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "for": "implement",
+  "files": [
+    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "apps/desktop/src/metaproject/graph.css",
+    "apps/desktop/src/metaproject/graphLayout.ts",
+    "apps/desktop/src/metaproject/labels.ts"
+  ],
+  "entries": [
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/activity/implement.mdc",
+      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
+      "bytes": 2654,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
+      "bytes": 4676,
+      "reason": "glob:**/*.ts",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
+      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
+      "bytes": 4910,
+      "reason": "glob:**/*.ts",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
+      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
+      "bytes": 3389,
+      "reason": "glob:**/*.ts",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
+      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
+      "bytes": 2938,
+      "reason": "glob:**/*.ts",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
+      "bytes": 3734,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
+      "bytes": 5462,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
+      "bytes": 7159,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/frontend-assistant.mdc",
+      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
+      "bytes": 1074,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/security-baseline.mdc",
+      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
+      "bytes": 2523,
+      "reason": "when-relevant",
+      "tier": "on_demand",
+      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
+      "bytes": 2701,
+      "reason": "when-relevant",
+      "tier": "on_demand",
+      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
+      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
+      "bytes": 3223,
+      "reason": "when-relevant",
+      "tier": "on_demand",
+      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/cli-interface-design.mdc",
+      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
+      "bytes": 5195,
+      "reason": "when-relevant",
+      "tier": "on_demand",
+      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
+    }
+  ],
+  "budget": {
+    "limitBytes": 131072,
+    "usedBytes": 0,
+    "exceeded": false,
+    "limitSource": "default"
+  },
+  "warnings": []
+}

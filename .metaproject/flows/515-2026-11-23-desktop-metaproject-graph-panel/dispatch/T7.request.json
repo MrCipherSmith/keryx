@@ -1,0 +1,48 @@
+{
+  "task": {
+    "task_id": "task-7",
+    "task_name": "Explorer navigation and state fixes D1-D7",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Fix seven navigation and state defects of the Desktop Metaproject explorer: D1-D7 in context.md, 'Defects this flow fixes'. Each fix comes with a test that fails before it. What the user must see in each situation is decided in plan.md, 'State x event matrix'.\n\nD1 (App.tsx:586) - the explorer must not lose its state when the user leaves the work view: mount it on first visit and keep it mounted and hidden afterwards, the way the session view is kept; it stays keyed by project folder. AC10 is checked live by the orchestrator; add the best automated test that is practical for the mount logic.\nD2 - selections are history entries: a node selected in Graph (from the list, the canvas or a panel row), a page selected in Wiki and an entry opened in OpenSpec can be returned to with Back, restoring panel state and scroll the way `visit` already does. Typing in the search field, changing filters and resizing or closing the panel are not history entries. Re-selecting the current selection adds nothing.\nD3 - in Wiki, the 'first wiki page' default applies only while the query is empty. With a non-empty query and no selection, the article area shows an empty state that names the query and offers to clear the search, never an unrelated article. 'Find an OpenSpec document' keeps the query when the collection is switched.\nD4 - in Wiki mode the neighbours read uses depth 1, direction 'both' and every relationship kind except `defines` and `calls`, whatever the Graph filters are; Graph mode keeps using the filters.\nD5 - `rebuild()` always clears `rebuilding` when the rebuild settles and re-reads the catalog on success, even if the catalog was reloaded in between; only an unmount or a project change suppresses the state write.\nD6 - a failed negotiation shows its error with a Retry control and without the 'Loading project knowledge...' banner; Retry negotiates again and on success loads the catalog; 'Checking OpenSpec support...' is not shown next to the error.\nD7 - a wiki link whose target path is not among the loaded nodes triggers one lookup read (a `search` for the resolved path, then an exact `node.path` match) and opens the target; if nothing matches, a visible inline status names the unresolved path; the href path is percent-decoded and a leading '/' resolves from the repository root.\n\nStay inside your files. In MetaprojectView.tsx do not change the `Graph` function, the `RelationshipList` function or the `<GraphNodePanel ...>` element and its props: task T8 replaces all three right after you. Two other implementers are adding new files in apps/desktop/src/metaproject/ at the same time.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+      "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without \"Loading project knowledge…\"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

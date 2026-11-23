@@ -1,0 +1,50 @@
+{
+  "task": {
+    "task_id": "task-8",
+    "task_name": "Integrate graph and panel into the explorer; filters, counts, cleanup",
+    "task_type": "mixed",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Put the new graph and the new details panel into the Desktop Metaproject explorer and finish the Graph screen. The parts exist and are committed: `RelationshipGraph` (RelationshipGraph.tsx, graph.css, graphLayout.ts), `NodeDetailsPanel` and `RelationshipList` (NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css) and the shared `labels.ts`. Their export contracts are in plan.md, 'Interfaces between tasks'. Layout and behaviour per situation are decided in plan.md ('Design direction', 'State x event matrix').\n\nIn MetaprojectView.tsx:\n1. Swap. Use `RelationshipGraph` in place of the inline `Graph` function, `NodeDetailsPanel` in place of `GraphNodePanel`, and `RelationshipList` from ./RelationshipList in place of the inline one. Delete the two inline functions and GraphNodePanel.tsx; anything that imported `isOpenSpecNode` from it imports it from ./NodeDetailsPanel.\n2. Graph mode layout: the filter bar, then the graph filling the remaining height of the content column. The relationship list is no longer rendered under the canvas; it is the panel's Relationships tab. Wiki mode keeps its Relationships disclosure with `RelationshipList`.\n3. Panel wiring: `relationships` is the current filtered projection of the selection (null while it loads or after a failure) with `relationshipsPending` and `relationshipsProblem`; the document props carry what `projection`, `pending` and `problem` carried; `onSelect` selects a neighbour; the graph's `onShowHidden` opens the panel and bumps the number passed as `revealRelationships`.\n4. While the relationships of a new selection load, the previous graph stays rendered with `busy` instead of being unmounted; it is dropped when the read fails or the view changes.\n5. Filters: labels from RELATIONSHIP_KIND_LABELS; one compact row (selects for direction and depth, `.chip-btn` toggles for kinds); `defines` and `calls` disabled with a stated reason when `catalog.hasSymbolLayer` is false; a Reset control when the filters differ from their defaults.\n6. List header: 'Catalog · <shown> of <total>' with the total from `catalog.counts` (files + wiki + modules), replacing the 'Catalog is limited. Search for more results.' banner; 'Results · <n>' while searching.\n7. The selected list row is scrolled into view when the selection changes (for example from the graph).\n8. Explorer banners (protocol error, read error, snapshot mismatch) render above the OpenSpec view, not below it. The freshness banner reads as one sentence ('Graph is stale: <reason>'), not 'Graph stale. an untracked ...'.\n9. Carried over from the review of the navigation task: the Wiki empty state must not say 'No Wiki page matches' while a search is still running; `useExplorerNavigation.ts` restores the scroll of `.metaproject-node-body`, the old panel body class, and must point at the new panel body; keep a map of nodes already seen so that Back to a node shows its panel at once instead of waiting for its projection.\n\nIn metaproject.css: remove the rules the swap makes dead (`.metaproject-node-*`, `.metaproject-relations`, the old `.metaproject-graph*` rules), remove the `@media (max-width: 700px)` block (the window cannot be narrower than 720 px, so it never applies) and, where a narrow layout is needed, use a container query on the explorer as `.composer` does elsewhere in the app. The three columns are list, content, panel. At the minimum window (720x480, a 660 px wide host) with the panel closed and no warning banner at least 140 px of graph height must be visible without scrolling (AC20); the orchestrator measures this in a browser.\n\nTests (MetaprojectView.dom.test.tsx): update what the swap changes (the Wiki tab must be activated before 'Open in Wiki'; the old relationship row texts are gone) and add tests for AC17. cytoscape cannot create a canvas under happy-dom; `RelationshipGraph` has a test-only `createCytoscape` prop (see RelationshipGraph.dom.test.tsx for the headless factory) — give the explorer a way to pass it in tests so the graph can mount there.\n\nYou may edit the graph and panel files only to fix a defect the integration exposes, and you say which.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/metaproject.css",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "apps/desktop/src/metaproject/OpenSpecView.tsx",
+      "apps/desktop/src/metaproject/GraphNodePanel.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+      "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
+      "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
+      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T07:22:41.733Z",
+  "updatedAt": "2026-11-23T07:47:51.679Z",
   "source": {
     "type": "description",
     "ref": null
@@ -99,43 +99,81 @@
       "id": "T5",
       "title": "Graph layout module and RelationshipGraph component (new files)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:25:40.538Z",
+            "outcome": "started",
+            "detail": "515-T5"
+          }
+        ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "NodeDetailsPanel and RelationshipList components (new files)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:25:41.096Z",
+            "outcome": "started",
+            "detail": "515-T6"
+          }
+        ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC7",
+        "AC8",
+        "AC9"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Explorer navigation and state fixes D1-D7",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:25:41.654Z",
+            "outcome": "started",
+            "detail": "515-T7"
+          }
+        ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC10",
+        "AC11",
+        "AC12",
+        "AC13",
+        "AC14",
+        "AC15",
+        "AC16"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -145,7 +183,9 @@
       "dependsOn": [
         "T5",
         "T6",
-        "T7"
+        "T7",
+        "T12",
+        "T13"
       ],
       "attempts": {
         "count": 0,
@@ -198,6 +238,50 @@
       "attempts": {
         "count": 0,
         "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Graph polish from the isolated live preview",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:46:12.081Z",
+            "outcome": "started",
+            "detail": "515-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Panel and relationship list polish from the isolated live preview",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:46:12.731Z",
+            "outcome": "started",
+            "detail": "515-T13"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -277,6 +361,61 @@
     {
       "at": "2026-11-23T07:22:41.733Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-23T07:25:40.538Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 515-T5"
+    },
+    {
+      "at": "2026-11-23T07:25:41.096Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 515-T6"
+    },
+    {
+      "at": "2026-11-23T07:25:41.654Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 515-T7"
+    },
+    {
+      "at": "2026-11-23T07:38:59.635Z",
+      "event": "task-done",
+      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
+    },
+    {
+      "at": "2026-11-23T07:46:10.344Z",
+      "event": "task-done",
+      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
+    },
+    {
+      "at": "2026-11-23T07:46:10.580Z",
+      "event": "task-added",
+      "detail": "T12: Graph polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:46:10.824Z",
+      "event": "task-added",
+      "detail": "T13: Panel and relationship list polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:46:11.022Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T5, T6, T7, T12, T13 (was T5, T6, T7) — Integration builds on the polished graph and panel"
+    },
+    {
+      "at": "2026-11-23T07:46:12.081Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 515-T12"
+    },
+    {
+      "at": "2026-11-23T07:46:12.731Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 515-T13"
+    },
+    {
+      "at": "2026-11-23T07:47:51.679Z",
+      "event": "task-done",
+      "detail": "T7: Explorer navigation and state fixes D1-D7"
     }
   ],
   "origin": {

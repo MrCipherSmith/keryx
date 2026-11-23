@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T13",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Panel and relationship list polish from the isolated live preview",
+    "description": "Fix six defects the orchestrator found when it rendered the new panel on real projections of this repository in a browser (380 px wide panel, dark and light). AC7-AC9 must keep passing; add or adjust tests for each item that is testable without a browser.\n\nP1. The Module fact shows the raw node id ('module:src/bus'). Show the module's path (the id without its 'module:' prefix) as a control that calls `onSelect(node.module)`.\nP2. Kind headings and kind badges show raw ids ('imports', 'changes-spec', 'wiki'). Use RELATIONSHIP_KIND_LABELS for relationship kinds and NODE_KIND_LABELS for node kinds from the shared labels file, in the list headings, the row badges and the header badge.\nP3. A relationship row wraps over several lines when the title or path is long (seen: 'native-services-…' with its path broken beside it). Keep a row to one line: title, kind badge, then the path truncated with an ellipsis, with the full path in the title attribute.\nP4. Evidence takes two to five lines under every row and often repeats the row's own path (a `describes` edge carries ['related-code', '<path>']). Collapse it: a row with evidence gets a disclosure that is closed by default and opens the example lines; for module imports its label is the count ('7 imports'). Evidence that only repeats the neighbour's path is not shown as lines; its origin word ('related-code', 'key-files', 'frontmatter') becomes a small muted tag on the row.\nP5. The second-step group can hold 250 rows (seen: 253). Render it as a disclosure with its count, closed by default.\nP6. The counts fact is labelled 'Relations' while the tab says 'Relationships'. Label it 'Relationships' and widen the key column so it fits.\n\nShared labels: apps/desktop/src/metaproject/labels.ts must exist with EXACTLY this content (the other polish lane needs the same file at the same time; if it already exists with this content, leave it; if it does not exist, create it):\n```ts\nimport type { MetaprojectEdgeKind, MetaprojectNodeKind } from \"../../../../src/integrations/metaproject-explorer-contract\";\n\n/** Human-readable names shown wherever a kind appears: filters, graph captions and legend, panel, lists. */\nexport const RELATIONSHIP_KIND_LABELS: Record<MetaprojectEdgeKind, string> = {\n  imports: \"Imports\",\n  asset: \"Assets\",\n  describes: \"Describes\",\n  links: \"Wiki links\",\n  contains: \"Contains\",\n  defines: \"Defines\",\n  calls: \"Calls\",\n  \"changes-spec\": \"Changes spec\",\n  \"spec-context\": \"Spec context\",\n};\n\nexport const NODE_KIND_LABELS: Record<MetaprojectNodeKind, string> = {\n  module: \"Module\",\n  file: \"File\",\n  symbol: \"Symbol\",\n  wiki: \"Wiki page\",\n  spec: \"Spec\",\n  change: \"Change\",\n  archive: \"Archived change\",\n};\n```\n",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+    "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/nodePanel.css"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/NodeDetailsPanel.tsx, apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx, apps/desktop/src/metaproject/RelationshipList.tsx, apps/desktop/src/metaproject/RelationshipList.dom.test.tsx, apps/desktop/src/metaproject/nodePanel.css, apps/desktop/src/metaproject/labels.ts. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
+    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T07:46:11Z",
+    "created_by": "flow-orchestrator"
+  }
+}
