@@ -9,17 +9,102 @@
   "id": "515",
   "slug": "desktop-metaproject-graph-panel",
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T12:45:05.928Z",
+  "updatedAt": "2026-11-23T13:15:05.261Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-23T13:07:42.136Z",
+      "note": "`cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`: 51 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC2": {
+      "at": "2026-11-23T13:07:42.336Z",
+      "note": "`bun test src/metaproject/graphLayout.test.ts`: 51 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC3": {
+      "at": "2026-11-23T13:07:42.533Z",
+      "note": "`bun test src/metaproject/graphLayout.test.ts`: 51 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC4": {
+      "at": "2026-11-23T13:07:42.735Z",
+      "note": "`bun test src/metaproject/RelationshipGraph.dom.test.tsx`: 27 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC5": {
+      "at": "2026-11-23T13:07:42.933Z",
+      "note": "Judged live in the browser dev build at T11 (journal line 66): 1180x780 with the panel open, 31-node depth-1 module labels 9.7 px and 0 overlaps; 200-node depth-2 projection labels 9.6 px and 0 overlaps; second pass after T14 (line 79) labels 13.3 px, 0 overlaps. Measured on the live cytoscape instance. Not re-measured after the fix rounds, which did not change the graph's layout or styles."
+    },
+    "AC6": {
+      "at": "2026-11-23T13:07:43.137Z",
+      "note": "Judged live at T11 (journal line 66): after setting data-theme=light and data-palette=light-sky without a selection change, the label colour went from rgb(225,236,229) to rgb(27,43,63), the new --fg #1b2b3f; re-seen at the second pass (line 79)."
+    },
+    "AC7": {
+      "at": "2026-11-23T13:07:43.336Z",
+      "note": "`bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`: 24 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC8": {
+      "at": "2026-11-23T13:07:43.533Z",
+      "note": "`bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`: 24 and 14 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC9": {
+      "at": "2026-11-23T13:07:43.734Z",
+      "note": "`bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`: 24 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC10": {
+      "at": "2026-11-23T13:07:43.928Z",
+      "note": "Judged live at T11 (journal line 66): with a query, a selected module, depth 2 and the panel open, Flows then Metaproject showed the same view, query, selection, depth, open panel and Back. After the fix rounds (quiet re-read on return, retained explorer) seen live again (journal line 159): one catalog request on return, the open page and its Relationships kept; the full Graph-mode sequence was not repeated live after the fix rounds and rests also on the DOM tests in MetaprojectView.dom.test.tsx (91 pass)."
+    },
+    "AC11": {
+      "at": "2026-11-23T13:07:44.127Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295; also seen live at T11 (journal line 66)."
+    },
+    "AC12": {
+      "at": "2026-11-23T13:07:44.332Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295; also seen live at T11 (journal line 66)."
+    },
+    "AC13": {
+      "at": "2026-11-23T13:07:44.535Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC14": {
+      "at": "2026-11-23T13:07:44.725Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC15": {
+      "at": "2026-11-23T13:07:44.947Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. Real negotiation against the Tauri core is not tested (no Rust toolchain); only the injected negotiate seam is."
+    },
+    "AC16": {
+      "at": "2026-11-23T13:07:45.138Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC17": {
+      "at": "2026-11-23T13:07:45.331Z",
+      "note": "`bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC18": {
+      "at": "2026-11-23T13:07:45.534Z",
+      "note": "`test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`: exit 0, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295."
+    },
+    "AC19": {
+      "at": "2026-11-23T13:07:45.744Z",
+      "note": "`cd apps/desktop && bunx tsc --noEmit && bun test src`: exit 0; 935 pass, 0 fail across 89 files, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. CI of PR 1295 green on the required checks."
+    },
+    "AC20": {
+      "at": "2026-11-23T13:07:45.960Z",
+      "note": "Judged live at T11 (journal lines 66, 67, 79): at 720x480 with the panel closed and no banner the graph box is 434x330 (at least 140 px holds after T14; it was 114 px before); at 1180x780 and 1440x900 columns, captions, legend, panel header, facts and tabs with counts seen with no clipped text, in the dark and the light-sky theme; the compact panel leaves 272 px of content visible. WebKit older than macOS 26 and the native Tauri window not checked."
+    },
+    "AC21": {
+      "at": "2026-11-23T13:07:46.298Z",
+      "note": "Judged by the orchestrator reading docs/docs/guides/desktop-metaproject.md against the final screen (journal lines 94 and 134): column layout, legend, +N more, Relationships/Wiki/OpenSpec tabs and Back through selections described; the 'same search and selection as Graph' sentence gone; the relationship-type table lists every type; `bun run docs:check` exit 0 after T21."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1295"
   },
   "baseBranch": "main",
   "outcomeAuthor": "agent",
@@ -1181,6 +1266,135 @@
       "at": "2026-11-23T12:45:05.928Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-23T13:06:41.687Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1295 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-23T13:07:42.136Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`: 51 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:42.336Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: `bun test src/metaproject/graphLayout.test.ts`: 51 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:42.533Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: `bun test src/metaproject/graphLayout.test.ts`: 51 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:42.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: `bun test src/metaproject/RelationshipGraph.dom.test.tsx`: 27 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:42.933Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Judged live in the browser dev build at T11 (journal line 66): 1180x780 with the panel open, 31-node depth-1 module labels 9.7 px and 0 overlaps; 200-node depth-2 projection labels 9.6 px and 0 overlaps; second pass after T14 (line 79) labels 13.3 px, 0 overlaps. Measured on the live cytoscape instance. Not re-measured after the fix rounds, which did not change the graph's layout or styles. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:43.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Judged live at T11 (journal line 66): after setting data-theme=light and data-palette=light-sky without a selection change, the label colour went from rgb(225,236,229) to rgb(27,43,63), the new --fg #1b2b3f; re-seen at the second pass (line 79). (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:43.336Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`: 24 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:43.533Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`: 24 and 14 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:43.734Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`: 24 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:43.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Judged live at T11 (journal line 66): with a query, a selected module, depth 2 and the panel open, Flows then Metaproject showed the same view, query, selection, depth, open panel and Back. After the fix rounds (quiet re-read on return, retained explorer) seen live again (journal line 159): one catalog request on return, the open page and its Relationships kept; the full Graph-mode sequence was not repeated live after the fix rounds and rests also on the DOM tests in MetaprojectView.dom.test.tsx (91 pass). (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:44.127Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295; also seen live at T11 (journal line 66). (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:44.332Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295; also seen live at T11 (journal line 66). (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:44.536Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:44.725Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:44.947Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. Real negotiation against the Tauri core is not tested (no Rust toolchain); only the injected negotiate seam is. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:45.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:45.331Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: `bun test src/metaproject/MetaprojectView.dom.test.tsx`: 91 pass, 0 fail, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:45.534Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`: exit 0, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:45.744Z",
+      "event": "ac-confirmed",
+      "detail": "AC19: `cd apps/desktop && bunx tsc --noEmit && bun test src`: exit 0; 935 pass, 0 fail across 89 files, on fdd8ed95c, whose tree equals main's merge commit e45e38152 of PR 1295. CI of PR 1295 green on the required checks. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:45.960Z",
+      "event": "ac-confirmed",
+      "detail": "AC20: Judged live at T11 (journal lines 66, 67, 79): at 720x480 with the panel closed and no banner the graph box is 434x330 (at least 140 px holds after T14; it was 114 px before); at 1180x780 and 1440x900 columns, captions, legend, panel header, facts and tabs with counts seen with no clipped text, in the dark and the light-sky theme; the compact panel leaves 272 px of content visible. WebKit older than macOS 26 and the native Tauri window not checked. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:07:46.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC21: Judged by the orchestrator reading docs/docs/guides/desktop-metaproject.md against the final screen (journal lines 94 and 134): column layout, legend, +N more, Relationships/Wiki/OpenSpec tabs and Back through selections described; the 'same search and selection as Graph' sentence gone; the relationship-type table lists every type; `bun run docs:check` exit 0 after T21. (signed: flow-orchestrator agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T13:10:05.424Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (named by the operator in the session of 2026-11-23 when asked who is accountable for flow 515)"
+    },
+    {
+      "at": "2026-11-23T13:13:37.729Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-11-23T13:15:05.258Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-11-23T13:15:05.261Z",
+      "event": "done",
+      "detail": "completed with exceptions: review:ingested-round: 2 of 5 round(s) ingested; 3 cannot be read: 2026-11-23-review-flow-branch (13 in-scope file(s) are uncovered: .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl, … (+8). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-23-review-flow-branch`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-23-review-flow-branch-r02 (research scope census is incomplete; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-layout: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-style: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-ui-ux: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand), 2026-11-23-review-flow-branch-r04 (research scope census is incomplete; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that cannot be read is not a round that found nothing — repair or remove the package, but do not complete over it.; reason: Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.; operator: yes | review:terminal-dispositions: 43 blocking finding(s) are not terminal (at or above `minor`, or held by the premise judge at any severity): 2026-11-23-review-flow-branch#F-001 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-002 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-003 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-004 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-005 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-006 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-007 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-008 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-009 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-010 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-011 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-012 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-013 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-014 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-015 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-016 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-017 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-018 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-019 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-020 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-021 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-022 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-001 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-002 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-003 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-004 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-006 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-007 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-008 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-009 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-001 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-002 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-003 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-004 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-005 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-006 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-007 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-008 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-001 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-002 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-003 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-005 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r05#F-001 (minor, round 2026-11-23-review-flow-branch-r05): no disposition recorded; reason: Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.; operator: yes | review:head-commit: the latest round ran against 857036d02174a396b2acecf09cdcaf2560484a93, but the PR head is fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0. A clean round against a stale SHA proves nothing about what will merge — re-run the round.; reason: Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.; operator: yes"
     }
   ],
   "origin": {
@@ -1268,5 +1482,400 @@
     "AC21": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-23T13:07:42.136Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:42.336Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:42.533Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:42.735Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:42.933Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:43.137Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:43.336Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:43.533Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:43.734Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:43.928Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:44.127Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:44.332Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:44.535Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:44.725Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:44.947Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:45.138Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:45.331Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC17",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:45.534Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC18",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:45.744Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC19",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:45.960Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC20",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:07:46.298Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow-orchestrator agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC21",
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33"
+    },
+    {
+      "at": "2026-11-23T13:15:05.261Z",
+      "kind": "complete",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "2 of 5 round(s) ingested; 3 cannot be read: 2026-11-23-review-flow-branch (13 in-scope file(s) are uncovered: .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl, … (+8). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-23-review-flow-branch`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-23-review-flow-branch-r02 (research scope census is incomplete; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-layout: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-style: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-ui-ux: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand), 2026-11-23-review-flow-branch-r04 (research scope census is incomplete; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that cannot be read is not a round that found nothing — repair or remove the package, but do not complete over it.",
+          "reason": "Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-23T13:15:05.258Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "43 blocking finding(s) are not terminal (at or above `minor`, or held by the premise judge at any severity): 2026-11-23-review-flow-branch#F-001 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-002 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-003 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-004 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-005 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-006 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-007 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-008 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-009 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-010 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-011 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-012 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-013 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-014 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-015 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-016 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-017 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-018 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-019 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-020 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-021 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-022 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-001 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-002 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-003 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-004 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-006 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-007 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-008 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-009 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-001 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-002 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-003 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-004 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-005 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-006 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-007 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-008 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-001 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-002 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-003 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-005 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r05#F-001 (minor, round 2026-11-23-review-flow-branch-r05): no disposition recorded",
+          "reason": "Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-23T13:15:05.258Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "the latest round ran against 857036d02174a396b2acecf09cdcaf2560484a93, but the PR head is fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0. A clean round against a stale SHA proves nothing about what will merge — re-run the round.",
+          "reason": "Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-23T13:15:05.258Z"
+        }
+      ],
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
+      "headCommit": "fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "completionAttempts": [
+    {
+      "at": "2026-11-23T13:15:05.258Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "21 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "27 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "515-2026-11-23-desktop-metaproject-graph-panel is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "3 of 5 conditions failed — ingested-round (unobserved): 2 of 5 round(s) ingested; 3 cannot be read: 2026-11-23-review-flow-branch (13 in-scope file(s) are uncovered: .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl, … (+8). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-23-review-flow-branch`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-23-review-flow-branch-r02 (research scope census is incomplete; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-layout: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-style: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-ui-ux: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand), 2026-11-23-review-flow-branch-r04 (research scope census is incomplete; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that cannot be read is not a round that found nothing — repair or remove the package, but do not complete over it. | terminal-dispositions (violated): 43 blocking finding(s) are not terminal (at or above `minor`, or held by the premise judge at any severity): 2026-11-23-review-flow-branch#F-001 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-002 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-003 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-004 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-005 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-006 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-007 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-008 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-009 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-010 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-011 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-012 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-013 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-014 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-015 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-016 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-017 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-018 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-019 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-020 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-021 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-022 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-001 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-002 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-003 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-004 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-006 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-007 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-008 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-009 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-001 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-002 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-003 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-004 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-005 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-006 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-007 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-008 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-001 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-002 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-003 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-005 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r05#F-001 (minor, round 2026-11-23-review-flow-branch-r05): no disposition recorded | head-commit (violated): the latest round ran against 857036d02174a396b2acecf09cdcaf2560484a93, but the PR head is fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (5) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes.",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "2 of 5 round(s) ingested; 3 cannot be read: 2026-11-23-review-flow-branch (13 in-scope file(s) are uncovered: .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl, … (+8). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-23-review-flow-branch`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-23-review-flow-branch-r02 (research scope census is incomplete; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-layout: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-style: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-ui-ux: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand), 2026-11-23-review-flow-branch-r04 (research scope census is incomplete; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that cannot be read is not a round that found nothing — repair or remove the package, but do not complete over it."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "violated",
+              "detail": "43 blocking finding(s) are not terminal (at or above `minor`, or held by the premise judge at any severity): 2026-11-23-review-flow-branch#F-001 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-002 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-003 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-004 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-005 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-006 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-007 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-008 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-009 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-010 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-011 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-012 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-013 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-014 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-015 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-016 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-017 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-018 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-019 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-020 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-021 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-022 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-001 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-002 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-003 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-004 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-006 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-007 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-008 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-009 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-001 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-002 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-003 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-004 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-005 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-006 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-007 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-008 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-001 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-002 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-003 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-005 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r05#F-001 (minor, round 2026-11-23-review-flow-branch-r05): no disposition recorded"
+            },
+            {
+              "id": "head-commit",
+              "status": "violated",
+              "detail": "the latest round ran against 857036d02174a396b2acecf09cdcaf2560484a93, but the PR head is fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1295: 0 comment(s) collected over 1 round(s) up to the PR head fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0 (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "pass",
+              "detail": "round `2026-11-23-review-flow-branch-r05`: verification_mode `annotate`, 3 claim(s) received, 0 refuted, 3 retained"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "2 of 5 round(s) ingested; 3 cannot be read: 2026-11-23-review-flow-branch (13 in-scope file(s) are uncovered: .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl, .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl, … (+8). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-23-review-flow-branch`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-23-review-flow-branch-r02 (research scope census is incomplete; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-layout: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-style: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-ui-ux: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand), 2026-11-23-review-flow-branch-r04 (research scope census is incomplete; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that cannot be read is not a round that found nothing — repair or remove the package, but do not complete over it.",
+          "reason": "Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-23T13:15:05.258Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "43 blocking finding(s) are not terminal (at or above `minor`, or held by the premise judge at any severity): 2026-11-23-review-flow-branch#F-001 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-002 (major, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-003 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-004 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-005 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-006 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-007 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-008 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-009 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-010 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-011 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-012 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-013 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-014 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-015 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-016 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-017 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-018 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-019 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-020 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-021 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch#F-022 (minor, round 2026-11-23-review-flow-branch): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-001 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-002 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-003 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-004 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-006 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-007 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-008 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r02#F-009 (minor, round 2026-11-23-review-flow-branch-r02): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-001 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-002 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-003 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-004 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-005 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-006 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-007 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r03#F-008 (minor, round 2026-11-23-review-flow-branch-r03): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-001 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-002 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-003 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r04#F-005 (minor, round 2026-11-23-review-flow-branch-r04): no disposition recorded | 2026-11-23-review-flow-branch-r05#F-001 (minor, round 2026-11-23-review-flow-branch-r05): no disposition recorded",
+          "reason": "Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-23T13:15:05.258Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "the latest round ran against 857036d02174a396b2acecf09cdcaf2560484a93, but the PR head is fdd8ed95c6eab09a6b2cb3477dde6781c43dbce0. A clean round against a stale SHA proves nothing about what will merge — re-run the round.",
+          "reason": "Code merged in PR 1295 after five review rounds, the cap. Rounds 1, 2 and 4 ran on part of their plan by the operator's choice, so their packages are not complete. Every finding at or above minor was fixed in a later commit and closed by the next round's reviewers, or dismissed by the operator, but no verifier re-check against each fixing commit was run. The last round reviewed 857036d02; the merged head fdd8ed95c adds only a test rename, the review packages and the journal.",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-23T13:15:05.258Z"
+        }
+      ]
+    }
+  ]
 }
