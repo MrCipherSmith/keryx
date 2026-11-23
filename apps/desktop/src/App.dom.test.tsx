@@ -3,6 +3,8 @@ import type { Root } from "react-dom/client";
 import { registerDom, unregisterDom } from "./test/dom";
 import type { View } from "./shell/AppShell";
 
+type ExplorerProps = { cwd: string; visible?: boolean; onRebuild: () => Promise<boolean>; onDraft?: (task: string) => Promise<void> };
+
 let React: typeof import("react");
 let RetainedView: typeof import("./App").RetainedView;
 let MetaprojectWork: typeof import("./App").MetaprojectWork;
@@ -84,4 +86,32 @@ test("the Metaproject explorer is told it is hidden while another view or Settin
   // Settings opened over the explorer hides it too.
   await render("settings", "metaproject");
   expect(given.at(-1)).toBe(false);
+  // The view itself is hidden under Settings, not only told so.
+  expect(host.querySelector("p")?.closest("[hidden]")).not.toBeNull();
+});
+
+test("the Metaproject explorer is given the app's rebuild and draft callbacks", async () => {
+  const calls: string[] = [];
+  let props: ExplorerProps | undefined;
+  const Explorer = (given: ExplorerProps) => { props = given; return React.createElement("p", null, "Explorer"); };
+  await React.act(async () => {
+    root.render(React.createElement(MetaprojectWork, {
+      cwd: "/project", view: "metaproject", workView: "metaproject", explorer: Explorer,
+      onRebuild: async () => { calls.push("rebuild"); return true; },
+      onDraft: async (task: string) => { calls.push(`draft ${task}`); },
+    }));
+  });
+  expect(props?.cwd).toBe("/project");
+  expect(await props?.onRebuild()).toBe(true);
+  await props?.onDraft?.("Document the client");
+  expect(calls).toEqual(["rebuild", "draft Document the client"]);
+});
+
+test("without a stand-in, the app's explorer is loaded lazily behind a visible loading status", async () => {
+  // Rendered and removed synchronously: the real explorer, which would read the CLI, never mounts here.
+  await React.act(() => {
+    root.render(React.createElement(MetaprojectWork, { cwd: "/project", view: "metaproject", workView: "metaproject", onRebuild: async () => false, onDraft: async () => {} }));
+  });
+  expect(host.querySelector('[role="status"]')?.textContent).toBe("Loading Metaproject…");
+  await React.act(() => { root.render(null); });
 });

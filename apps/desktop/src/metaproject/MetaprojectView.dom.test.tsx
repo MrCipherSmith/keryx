@@ -1637,3 +1637,175 @@ test("a node known only from a search hit keeps its panel once the search is cle
     expect(panelTitle()).toBe("Far module");
   } finally { debounce.restore(); }
 });
+
+// ---- Fix round 3 (T24): a quiet re-read and the catalog error, and test strength of fix round 2. ----
+
+test("a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not", async () => {
+  const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
+  let snapshotId = "one";
+  let failure = "";
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      if (failure) return Promise.reject(new Error(failure));
+      return Promise.resolve(snapshotId === "one" ? catalog : { ...catalog, snapshotId, nodes: [page, file, server], counts: { files: 2, wiki: 1, modules: 0 } });
+    }
+    return request(cwd, input).then(result => ({ ...result, snapshotId }));
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
+  await showView(props, true);
+  // The reload after a rebuild fails: its banner and Retry show above the catalog still loaded.
+  failure = "The index is being written.";
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
+  // A failed quiet re-read on return neither removes that banner nor replaces its message.
+  failure = "The CLI is busy.";
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(3);
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
+  expect(host.textContent).not.toContain("The CLI is busy.");
+  // The catalog can be read again, with the same snapshot: the banner goes.
+  failure = "";
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(4);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+  expect(freshnessBanner()?.textContent).toContain("Graph is missing.");
+  // A failed Retry shows the banner again; the next quiet read finds a changed snapshot, shows it, and the banner goes.
+  failure = "The CLI is not ready.";
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
+  await act(async () => { button("Retry").click(); });
+  expect(catalogReads).toBe(6);
+  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
+  failure = "";
+  snapshotId = "two";
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(7);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+  expect(listRow("Server").textContent).toContain("src/server.ts");
+});
+
+test("a failed rebuild's message outlives a catalog read that was already in flight and then succeeds", async () => {
+  let release: () => void = () => {};
+  let catalogReads = 0;
+  const reader = (hold: boolean) => (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      if (hold) return new Promise(resolve => { release = () => resolve(catalog); });
+    }
+    return request(cwd, input);
+  };
+  const onRebuild = async (): Promise<boolean> => { throw new Error("Rebuild failed: index locked."); };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(false), onRebuild })); });
+  // A new reader identity reloads the catalog, loudly; that read is held while a rebuild fails.
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(true), onRebuild })); });
+  expect(catalogReads).toBe(2);
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
+  await act(async () => { release(); });
+  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
+});
+
+test("a rebuild's catalog reload retires a wiki-link lookup in flight: it neither opens its target nor names a path", async () => {
+  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
+  const pending = new Map<string, () => void>();
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") catalogReads++;
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Missing](missing.md) [Far](../src/far.ts)" });
+    if (input.action === "search") {
+      const query = input.query;
+      return new Promise(resolve => { pending.set(query, () => resolve({ ...snapshot, hits: query === far.path ? [{ node: far }] : [] })); });
+    }
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => true })); });
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => { wikiLink("Missing").click(); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(2);
+  await act(async () => { pending.get("wiki/missing.md")?.(); });
+  expect(wikiArticle()?.textContent).toContain("Intro.");
+  expect(wikiArticle()?.textContent).not.toContain("No indexed project file");
+  await act(async () => { wikiLink("Far").click(); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(3);
+  await act(async () => { pending.get(far.path)?.(); });
+  expect(panelTitle()).toBeUndefined();
+  expect(button("Wiki").getAttribute("aria-pressed")).toBe("true");
+  expect(wikiArticle()?.querySelector("h2")?.textContent).toBe("Guide");
+});
+
+test("a rebuild's catalog reload retires a page of results in flight: it is not appended", async () => {
+  const debounce = holdDebounce();
+  let releasePage: () => void = () => {};
+  let catalogReads = 0;
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    if (input.action === "catalog") { catalogReads++; return { ...catalog, schemaVersion: 2 }; }
+    if (input.action === "search") {
+      if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
+      return new Promise(resolve => { releasePage = () => resolve({ schemaVersion: 2, snapshotId: "one", hits: [{ node: { ...page, id: "second-page", title: "Second Wiki page" }, scope: "wiki" }], partial: false }); });
+    }
+    if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
+    return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
+  };
+  const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: async () => true, createCytoscape: await headlessCytoscape() };
+  try {
+    await showView(props, true);
+    await act(async () => { button("Wiki").click(); });
+    await typeQuery("query");
+    await debounce.run();
+    await act(async () => { button("Load more results").click(); });
+    await act(async () => { button("Rebuild graph").click(); });
+    expect(catalogReads).toBe(2);
+    await act(async () => { releasePage(); });
+    expect(host.querySelector(".metaproject-list")?.textContent).toContain("Guide");
+    expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Second Wiki page");
+  } finally { debounce.restore(); }
+});
+
+test("a Wiki page's Relationships disclosure counts a second-step row with the adjacent ones", async () => {
+  // A limited catalog of a built graph makes the explorer read the neighbourhood from the CLI, which this test answers.
+  const limited = { ...catalog, truncated: true, graph: "ready" as const };
+  const edges: MetaprojectEdge[] = [{ from: page.id, to: file.id, kind: "describes" }, { from: file.id, to: third.id, kind: "imports" }];
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve(limited);
+    if (input.action === "neighbors") return Promise.resolve({ ...snapshot, root: input.id, nodes: [page, file, third], edges, truncated: false });
+    return request(cwd, input);
+  };
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild, createCytoscape })); });
+  await act(async () => { button("Wiki").click(); });
+  const section = host.querySelector(".metaproject-relationship-section");
+  expect(section?.querySelector("summary .count-label")?.textContent).toBe("2");
+  expect(section?.querySelectorAll('[data-direction="outgoing"] .metaproject-rel-row')).toHaveLength(1);
+  expect(section?.querySelector('[data-direction="second-step"] summary')?.textContent?.replace(/\s+/g, " ").trim()).toBe("Second step 1");
+  expect(section?.querySelectorAll('[data-direction="second-step"] .metaproject-rel-second')).toHaveLength(1);
+});
+
+test("a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone", async () => {
+  let catalogReads = 0;
+  let finish: (value: boolean) => void = () => {};
+  let rebuilds = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      if (catalogReads === 2) return Promise.reject(new Error("The index is being written."));
+    }
+    return request(cwd, input);
+  };
+  const onRebuild = () => { rebuilds++; return rebuilds === 1 ? Promise.resolve(true) : new Promise<boolean>(resolve => { finish = resolve; }); };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild })); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(button("Rebuilding…").disabled).toBe(true);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+  await act(async () => { finish(false); });
+  expect(catalogReads).toBe(2);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+});

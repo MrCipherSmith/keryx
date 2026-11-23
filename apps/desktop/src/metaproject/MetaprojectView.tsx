@@ -313,7 +313,9 @@ function Explorer({
   const [projection, setProjection] = useState<MetaprojectNeighbors | null>(
     null,
   );
-  const [error, setError] = useState("");
+  // The explorer's error banner, with what failed: a catalog read or a rebuild. A quiet re-read that succeeds
+  // removes only a catalog read's failure; a rebuild's stands until the next read or rebuild the user starts.
+  const [error, setError] = useState<{ source: "catalog" | "rebuild"; message: string } | null>(null);
   const [detailError, setDetailError] = useState("");
   const [relationshipError, setRelationshipError] = useState("");
   const [searchError, setSearchError] = useState<{ query: string; message: string } | null>(null);
@@ -332,8 +334,8 @@ function Explorer({
   const loaded = useRef(false);
   const loadedSnapshot = useRef<string>();
   // Shown again after being hidden, the explorer re-reads the catalog once, quietly: an unchanged
-  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads, and a
-  // failure leaves the explorer as it was, any standing error included.
+  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads; success
+  // removes a failed catalog read's banner, and a failure leaves the explorer as it was, any standing error included.
   const quietRead = useRef(false);
   const [freshness, setFreshness] = useState<Pick<MetaprojectCatalog, "snapshotId" | "graph" | "graphReason"> | null>(null);
   const wasVisible = useRef(visible);
@@ -375,7 +377,7 @@ function Explorer({
     quietRead.current = false;
     if (!quiet) {
       project.current++;
-      setError("");
+      setError(null);
     }
     if (!loaded.current) setLoading(true);
     catalogPending.current = true;
@@ -386,6 +388,8 @@ function Explorer({
         })) as MetaprojectCatalog;
         if (generation !== catalogRead.current) return;
         loaded.current = true;
+        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.
+        if (quiet) setError(current => current?.source === "catalog" ? null : current);
         if (quiet && result.snapshotId === loadedSnapshot.current) {
           setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });
           return;
@@ -400,7 +404,7 @@ function Explorer({
         loadedSnapshot.current = result.snapshotId;
       } catch (cause) {
         // A failed quiet read keeps the loaded catalog; the next read the user starts reports a lasting failure.
-        if (generation === catalogRead.current && !quiet) setError(errMessage(cause));
+        if (generation === catalogRead.current && !quiet) setError({ source: "catalog", message: errMessage(cause) });
       } finally {
         if (generation === catalogRead.current) {
           catalogPending.current = false;
@@ -670,11 +674,11 @@ function Explorer({
   }, []);
   const rebuild = async () => {
     setRebuilding(true);
-    setError("");
+    setError(null);
     try {
       if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);
     } catch (cause) {
-      if (mounted.current) setError(errMessage(cause));
+      if (mounted.current) setError({ source: "rebuild", message: errMessage(cause) });
     } finally {
       if (mounted.current) setRebuilding(false);
     }
@@ -841,7 +845,7 @@ function Explorer({
       )}
       {error && (
         <div className="inline-banner tone-warn" role="alert">
-          <span>{error}</span>
+          <span>{error.message}</span>
           <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
         </div>
       )}

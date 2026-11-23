@@ -189,3 +189,16 @@ test("a count beside evidence lines labels the disclosure and is not repeated on
   expect(item.querySelector(".metaproject-rel-toggle")?.textContent?.trim()).toBe("7 imports");
   expect(item.textContent?.split("7 imports")).toHaveLength(2);
 });
+
+test("a projection with rows in some groups only lists them and does not say it is empty", async () => {
+  const incomingOnly = projection({ edges: [{ from: guide.id, to: client.id, kind: "describes" }] });
+  await act(async () => { root.render(createElement(List, { projection: incomingOnly, select: () => {} })); });
+  expect(host.textContent).not.toContain("No relationships for these filters.");
+  expect(groupHeadings("h3")).toEqual(["Incoming 1"]);
+  // An edge between two neighbours of the root, and none at the root, is a second-step row.
+  const secondStepOnly = projection({ edges: [{ from: server.id, to: api.id, kind: "calls" }] });
+  expect(summarize(secondStepOnly)).toMatchObject({ incoming: 0, outgoing: 0, secondStep: 1 });
+  await act(async () => { root.render(createElement(List, { projection: secondStepOnly, select: () => {} })); });
+  expect(host.textContent).not.toContain("No relationships for these filters.");
+  expect(groupHeadings("h3")).toEqual(["Second step 1"]);
+});
