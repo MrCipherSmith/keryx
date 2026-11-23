@@ -1,0 +1,23 @@
+{
+  "reviewer": "review-testing-practices",
+  "wave": 2,
+  "waves": 2,
+  "slices": [
+    "slice-03"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-03",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-03.diff",
+      "bytes": 21134
+    }
+  ],
+  "result": "raw/review-testing-practices-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+  "model": {
+    "inherit": false,
+    "tier": "standard",
+    "model": "sonnet",
+    "chosen_by": "orchestrator: keryx review tier had no session baseline"
+  }
+}

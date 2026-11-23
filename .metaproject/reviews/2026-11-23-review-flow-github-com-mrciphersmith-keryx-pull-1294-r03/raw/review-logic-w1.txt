@@ -1,0 +1,60 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Delta 33fd9647a..086335a01, slices 01-03 read in full, ReviewBoard.tsx read at head (lines 66-400) and the old badge statement read at 33fd9647a. F-018: the refactored SQL returns the same rows; checked term by term with NULLs, see prior_dispositions. F-015: the reported scenario is closed. The memo plus write-back effect converges after one extra render, with no loop. But because the load callback no longer judges the loaded cards, a snapshot that is loaded and never shown now adds nothing to the carried set. That happens on every board mount with a saved merged-only, closed-only or period filter, so open pull requests that need the viewer no longer light the tab indicator. Reported as one minor behaviour-delta. F-016 and F-017 are closed.",
+  "slices": ["slice-01", "slice-02", "slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (replaceAttention) setCarriedAttention(new Set());",
+      "problem": "Introduced by the F-015 fix (cc42698a3). Before the fix, the load callback judged each loaded card into carriedAttention. Now it only clears the set on a replacing load, and cards are judged only by the attentionPrs memo, which runs for the snapshot that is shown (`snapshot = read.scope === scope ? read.snapshot : null`). The first load of every RepositoryBoard mount uses EMPTY_FILTERS (state open/draft, so a replacing load). In the same callback it calls `setFilters(readReviewFilters(nextFilterKey))`, because filterKey.current starts undefined. If the saved filters select merged only, closed only, or any period, the scope changes in the same batched update. The open snapshot that was just loaded is never shown, and carriedAttention is left empty. The next load is merged, closed or period, which does not replace the set (`replaceAttention` false), so its memo starts from the empty set. Open pull requests that need the viewer are never added.",
+      "impact": "Saved filter is State = Merged (or a 7/30/90-day period). Open PR #A requests review from the viewer. The viewer opens the project, or picks another repository: RepositoryBoard is keyed by [cwd, repo], so the component remounts. The first load (open) contains #A, but the saved filter switches the scope before that snapshot is shown, and the merged load does not contain #A. attentionPrs stays empty and the tab indicator shows nothing (or 'watching') instead of 'attention'. It stays that way until the viewer switches to an Open or All view. At 33fd9647a and at 53c96b8af the load callback added #A, and the indicator showed 'attention'. This is the reverse of F-015: a missed request instead of a stale one.",
+      "suggested_fix": "Seed the set on a replacing load instead of clearing it, and keep the memo and the write-back effect as they are: `if (replaceAttention) setCarriedAttention(new Set(loaded.cards.filter(c => needsViewerAttention(c, loaded.viewer, unreadCount(loaded, c))).map(c => c.number)));`. Removals still survive through the effect, because the memo removes cards from the shown snapshot. Add a DOM test: save `{ ...EMPTY_FILTERS, state: ['merged'] }` for the key, render with a load that returns an open card requesting the viewer for 'open' and [] for 'merged', and assert that the last indicator is 'attention'.",
+      "evidence": "ReviewBoard.tsx at head: :97 `useState(EMPTY_FILTERS)`; model.ts:19 EMPTY_FILTERS.state is ['open','draft'], so stateQuery returns 'open'; :230 replaceAttention is true on the first load (identity.current is ''); :231 is the only write in the callback; :233-236 setFilters(readReviewFilters(...)) runs on the first load of each mount; :241 setRead stores the old scope; :276 the snapshot is null when read.scope !== scope; :339-348 the memo judges only the shown snapshot; :350-352 the effect writes only when the snapshot is non-null. The slice-01 diff shows the removed judgement loop (`needsViewerAttention(card, loaded.viewer, ...) ... next.add`). :80-85 the board remounts per cwd, viewer and repo. Traced only: not run in the app, and no test was written (read-only round).",
+      "confidence": "medium",
+      "dedupe_key": "carried-attention-unseeded-when-first-load-hidden",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "F-015",
+      "disposition": "closed",
+      "evidence": "ReviewBoard.tsx:349-352: the new effect writes attentionPrs back into carriedAttention whenever a snapshot is shown and the sets differ. A reply read under the open scope removes #A from the memo, the effect persists the removal, and the null snapshot during the merged load and the non-replacing merged load both start from the pruned set. No render loop: after the write, the memo rebuilds a set with equal contents, so the effect's size/membership check is false. Access loss (:188) and identity change (:230-231) still clear it. The unavailable path (:247) shows the scope's own or cached snapshot, which is judged like any shown snapshot. The fix introduced a separate behaviour delta, reported as F-001 of this result."
+    },
+    {
+      "id": "F-016",
+      "disposition": "closed",
+      "evidence": "ReviewResults.tsx list row: `const reason = laneReason(c); const note = secondaryNote(c, reason);` is computed once per row and used in the title, the reason span and the note span. Output is unchanged."
+    },
+    {
+      "id": "F-017",
+      "disposition": "closed",
+      "evidence": "model.ts laneReason: `const note = reviewNote(c); if (note) return note;`."
+    },
+    {
+      "id": "F-018",
+      "disposition": "closed",
+      "evidence": "desk-run-store.ts: `scoped` computes `active` and `done` once from r.state, `flagged` reads `FROM scoped` with no alias, and each state list now appears once in the file (a search for both literals returns one line, :408). Term by term against 33fd9647a, with runs.state TEXT NOT NULL (:93), so active and done are never NULL. Old kept = coalesce(A OR Q OR Y,0); new kept = coalesce(A OR Q,0) OR coalesce(Y,0). Both are 1 exactly when A, Q or Y is true, else 0, with Q and Y possibly NULL. Old supersedes = coalesce(A OR Q OR (D AND Y),0); new = coalesce(A OR Q,0) OR (D AND coalesce(Y,0)). Both are 1 exactly when A or Q is true, or D and Y are both true, else 0, never NULL. `finished` is the same expression (D AND base IS NOT NULL AND head IS NOT NULL), and `wanted`, the partitions and the ordering are unchanged. Returned rows are the same."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+Not verified:
+- Nothing was run (read-only round, exec budget 0). F-001 is a code trace and was not reproduced in the app or with a DOM test. The claim that React batches setFilters and setRead in the promise callback into one render rests on React 18 automatic batching. I did not check the React version.
+- The SQL equivalence was checked by reading, not by running both statements against a store. Query plans and timing after the refactor were not checked.
+- I did not re-run the new DOM test or confirm that it fails on the component at 33fd9647a.
+- Slice-02 (flow.json, journal) is context. Its statements about the fixes match the code I read.
+
+Routing audit: graph_used: no (not relevant: the delta's files were given as slices and read directly). wiki_used: no (not relevant). ctx_used: yes (keryx ctx rg and keryx ctx read). raw_rg_used: no. One raw `git show 33fd9647a:src/review/desk-run-store.ts`, marked keryx:raw, for the exact old SQL text.

@@ -1,0 +1,15 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test src/commands/agent-question-axis.test.ts src/commands/review-accounts.test.ts src/commands/review-desk-run.test.ts src/commands/review-watch.test.ts src/docs/intake-docs.test.ts src/gdskills/skill-frontmatter.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts src/intake/intake-readonly.test.ts src/review/board-addressed-replies.test.ts src/review/board.test.ts src/review/desk-publication.test.ts src/review/desk-run-legacy.test.ts src/review/pr-context.test.ts src/review/review-rules.test.ts src/review/watcher-project.test.ts src/review/watcher.test.ts src/scheduler/digest-run.test.ts src/scheduler/digest-tools-readonly.test.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit
+time: 2026-11-23T09:42:14.619Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+ 349 pass
+ 0 fail
+ 2022 expect() calls
+Ran 349 tests across 18 files. [137.59s]

@@ -1,0 +1,21 @@
+STATUS: DONE
+
+Security second look at slice-04 (Desktop board UI, flow files) and slice-06 (board badges, desk-run-store SQL). No security findings. Both slices read in full.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable defect in either slice. attachBadges binds card numbers/SHAs, repo and viewer as ?1/?2/?3 through json_each; the only interpolated SQL (`pending`) is built from table names that sqlite_schema returns after an IN-allowlist of two fixed names, and `visible()` takes a fixed alias. Run details are read via json_extract, so no report text crosses the boundary. UI side: the two dialogs are portaled to document.body, no dangerouslySetInnerHTML, eval or storage writes were added; outdated headSha and reviewer strings render as React text. Viewer/repository identity change still clears snapshots and private view. Flow files carry no secret or personal data beyond the operator name already in flow.json owner.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts:406 `scoped AS MATERIALIZED` parses each run of a requested PR once (json_extract of createdAt, shas, reviewed shas); `picked` uses window functions, and the final select re-reads only the wanted rows. No second full-details scan remains." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts:416 `finished` requires `base IS NOT NULL AND head IS NOT NULL`, so an outdated candidate needs both reviewed SHAs; board-badges.ts:46 additionally requires run.result?.reviewed." }
+  ],
+  "slices": ["slice-04", "slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Not verified: no tests, SQL or UI run (read-only budget). Rust review_board passthrough (src-tauri) is outside the slices. ProjectReviewRules portal has no `active` gate unlike ReviewWatcher (a dialog open while the tab is hidden by a programmatic tab switch would stay visible); behavioural, no attacker, not reported as a finding. Other prior-finding sites (F-001..F-005, F-007, F-008 code) are not changed in these slices' visible hunks, so I give no disposition for them. Routing audit: graph_used no (not-relevant), wiki_used no (not-relevant), ctx_used yes, raw_rg_used no.

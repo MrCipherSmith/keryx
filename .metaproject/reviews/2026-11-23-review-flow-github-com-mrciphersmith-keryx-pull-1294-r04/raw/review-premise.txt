@@ -1,0 +1,44 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-030",
+      "verdict": "upheld",
+      "reasoning": "See research-evidence/premises.json (identical text): precondition holds without a remount, pre-existing with an identical outcome at 1b994df18, no recorded intent accepting the limit."
+    }
+  ]
+}
+```
+
+Summary: 1 judged, upheld 1, downgraded 0, challenged 0, owner-decision 0. F-031..F-033 (info) not judged (below minor). The full claim, with the reasoning, is in research-evidence/premises.json.
+
+1. Precondition (remount check)
+- App.tsx:600 renders `<ReviewBoard key={reviewViewer ?? "active-gh"} ...>`; reviewViewer = githubAccount?.login (App.tsx:171-172). The account is refreshed on mount, on window focus and when project settings open (App.tsx:200-225, 295-298), not on a board access error.
+- ReviewBoard keys ProjectBoard by [cwd, expectedViewer] (ReviewBoard.tsx:80); ProjectBoard keys RepositoryBoard by [cwd, repo] (:85).
+- accessLost (:182-193) changes none of those keys. The board is remounted only if the shell later reads a different login, or a disconnect/reconnect that sends the login through undefined. An access/configuration error with the same login (repo access revoked, SSO, token scope) keeps the board mounted.
+- After accessLost, clearPrivateView() without reset keeps `state` and drops `updatedWithin` (:133; model.ts:18-20). With a period set, the scope changes, so the load runs at once on the kept Merged/Closed state. Without one, it runs on Refresh (attempt, :106-107, :253). identity.current is "", so replaceAttention is true (:230). The seed comes from all-non-open cards, which needsViewerAttention rejects (model.ts:38), so the set is empty. filterKey was cleared, so the saved filters are read back (:232-236) and stay historical.
+- Path (2) holds too. clearPrivateView(true) at :209 is followed in the same callback by setFilters(readReviewFilters(nextFilterKey)) at :235, so the new identity's saved historical filters win and no open load follows.
+
+2. Pre-existing
+- At 1b994df18 the load callback (base :198-207) built the set from [] when replaceAttention was true and added only cards with state === "open" (and reviewers or CHANGES_REQUESTED). On a merged/closed snapshot it added nothing.
+- accessLost cleared the set (base :170) and called clearPrivateView() the same way. The App key (base App.tsx:600) and the clear-then-setFilters order (base :191, :211) are the same.
+- Same outcome on both paths: an empty set, and the indicator stays off until Open or All. The predicate differed (any reviewer then, the viewer now), which does not matter for non-open cards. So "judged every loaded card" made no difference here.
+
+3. Intent
+- The comment above replaceAttention ("Closed/merged-only views can retire known requests, but cannot replace the open snapshot") predates the branch (b040c853f/dc6491839). It argues for the finding: historical views should not define the set.
+- The accessLost comment is about not restoring a private snapshot. It does not accept a dark indicator after recovery.
+- These name no accepted limit: acceptance-criteria.md AC4, plan.md "Tab indicator rule", description.md, the journal T16/T18 entries, the 20b535531 message, and docs/requirements/keryx-desktop-review-v2/.
+- No intent signal or practice source was found, so the verdict is upheld.
+
+Note for the fixer: seeding from the historical snapshot gives the same result as a plain reset. The real gap is that no open load seeds the set after an identity reset on a historical scope, and the finding's problem and fix already describe that.
+
+Not verified
+- Not reproduced in the running app; no tests run (read-only role).
+- I did not trace whether the error UI always offers Refresh, or whether a re-authentication flow in the shell changes githubAccount.login and so remounts the board in practice.
+- I did not check whether the badge-poll, rules or watcher errors reach accessLost with the same login in real GitHub failure modes. I took this from the code paths (:307 and the reviewer's trace).
+
+Routing audit: graph_used: no (narrow, file-targeted premise check); wiki_used: no (not-relevant: intent searched in the flow package and requirements directly); ctx_used: yes (keryx ctx rg / keryx ctx run for git log and show); raw_rg_used: no. One raw `git show` redirect to the scratchpad (marked keryx:raw) to read the merge-base files with the Read tool. metaproject index.md: not read (bounded subagent task with routing inlined by the caller).

@@ -1,0 +1,26 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "summary": "The F-018 refactor of attachBadges is row-for-row equivalent to the statement at 33fd9647a. runs.state is NOT NULL (desk-run-store.ts:93), so active and done are never NULL, and kept, finished and supersedes reduce to the old values term by term, including NULL reviewed SHAs and NULL card SHAs through coalesce. details is still parsed once per run, in the MATERIALIZED scoped CTE. The new names active, done, live, reviewed are not SQLite keywords. No new backend defects.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-018", "disposition": "closed", "evidence": "scoped carries active/done as columns; flagged derives live=coalesce(active OR requested,0), reviewed=coalesce(base=wb AND head=wh,0), finished=done AND base IS NOT NULL AND head IS NOT NULL; picked derives kept=live OR reviewed and supersedes=live OR (done AND reviewed). Old kept=coalesce(A OR Q OR R,0) is 1 iff any term is true, else 0; new live OR reviewed gives the same 0/1. Old supersedes=coalesce(A OR Q OR (D AND R),0); the new form gives the same because D is never NULL (state NOT NULL) and reviewed is coalesced, so D AND reviewed is never NULL and supersedes stays 0/1 (so NOT max(supersedes) cannot become NULL). finished is unchanged. NULL reviewed base/head: base=wb is NULL, reviewed 0, kept/supersedes fall back to A OR Q as before. NULL card wb/wh: requested and reviewed are NULL/0 as before. The window logic in ranked is textually the old picked." }
+  ],
+  "slices": ["slice-01", "slice-03"]
+}
+```
+
+Checks made
+- Equivalence: compared the slice-01 SQL hunk (removed lines are the 33fd9647a statement) with the new CTE chain term by term under three-valued logic. A difference would exist only if runs.state could be NULL (supersedes would become NULL where the old gave 0); the column is declared NOT NULL, so none occurs.
+- Parse once: json_extract over details happens once per run in scoped (MATERIALIZED); flagged, picked and ranked read only scoped columns. The final SELECT re-reads details only for wanted rows, as before.
+- Identifiers: active, done, live, reviewed, kept, supersedes are not SQLite reserved words and clash with no column in their CTE scope.
+- slice-03: only removed pre-change code (old query shape, old attentionPrs setter, old list row); nothing new introduced.
+
+Not verified
+- No SQL was executed (exec budget 0): no differential old-versus-new run on data, no EXPLAIN, no timing.
+- F-015, F-016, F-017 (frontend and model code in slice-01) are outside this reviewer's scope and were not judged; no dispositions given for them.

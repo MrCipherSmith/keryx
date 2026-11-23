@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer review-ui-ux, round 2 (fix round), slices slice-01, slice-02, slice-03, code mode only. No render or screenshot with board data was supplied. Surface: desktop app screen (pull request board and list); primary task: see which pull requests need me and start or open a review. The concerns below are minor/info only; no blocker or major.
+
+Summary: F-003 closed, F-005 closed with one residual (UX-001, info), F-013 open and unchanged (info). The fixes introduced no new usability defect that I can show from code. Everything visual rests on the brief's measurements (no data, stand-in buttons) and on tokens; nothing was seen rendered with real cards.
+
+F-003 closed. `laneReason` now ranks `attentionReason` first and the outdated text after it (`const outdated = reviewNote(c)` after `if (attention) return attention`), so "New reply to you" / "Review requested" / "Checks failed" lead. `reviewNote` is a separate function and `secondaryNote` renders it as `.review-note` under `.review-reason` in the board tile and in the list Reason cell, skipped when it equals the reason (no duplicate when it is the only reason). Operator decision "on every card" holds: `reviewNote` has no state gate, so merged and closed cards in Done show "Merged" plus the outdated line. Judged against the operator's choice, not a defect. The `.review-note` colour is `--warn` (light `#80510d`, dark `#eec27a`, the tokens already used for warn text on `.badge.review-publication-pending`), 12px (`--fs-xs`), weight 500; contrast not computed against the card surface (see unverified).
+
+F-005 closed, residual in UX-001. Review rules now uses `shieldCheck` (exists in Icon.tsx) while Filters keeps `checklist`, so the two icon-only buttons differ. The filter count is a separate `<span className="filter-count">` outside `.toolbar-label`, so "(N)" stays visible when labels hide below 1100px; the aria-label and title still carry the count. The pull request count now collapses only below 760px (was 1100px).
+
+F-013 open (info). The card action label still reads "Review changes" when an outdated review exists and the detail panel uses the same label. Not touched by this delta; nothing new in the diff. Still only wording ambiguity.
+
+Other prior findings in the slices I read, code evidence only:
+- F-001 closed by code: the `flex-wrap: nowrap` rule is removed from review.css, search is `flex: 1 1 96px; max-width: 260px`, the count label and `.watcher-indicator` hide in a `max-width: 760px` container query. Fit relies on the brief's measurements; I did not measure (layout lens).
+- F-002 closed: `inBoardOverlay` also matches a `[role="dialog"]` containing `.project-review-rules` or `.review-watcher`; the new DOM test focuses inside both portaled dialogs and expects focus on the search field.
+- F-004 closed: README, plan, PRD R12, specification and roadmap now say stage 0 is implemented and record the login-only team deviation.
+- F-006 closed by code read (one materialized `scoped` CTE, window functions); timings are the worker's, not re-run.
+- F-007 closed: the lane assertions use `quiet(pr)` (no decision, no reviewers), lane "open".
+- F-008 closed: `attentionPrs` is `useMemo` over `carriedAttention`, snapshot and receipt version; only the carried set stays state.
+- F-010 closed: the `finished` flag requires both reviewed base and head non-null.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 2 delta, code mode. F-003 and F-005 closed, F-013 open (unchanged wording). One info finding: below 760px container width the pull request count and the watcher status text are hidden, which is the board width of the default window with the detail panel open. No blocker or major. No render with board data was supplied; contrast, real target sizes and the open-panel layout are unverified.",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "info",
+      "criterion": "Nielsen #1 (visibility of system status)",
+      "file": "apps/desktop/src/styles/review.css",
+      "quote": ".review-board .flows-toolbar .count-label, .review-board .flows-toolbar .watcher-indicator { display: none; }",
+      "problem": "Under a 760px toolbar container the pull request count and the PR watcher status text are removed together. The 560px board (1180px window, 60px rail, 560px detail panel) is the case the F-001 fix targets, so with the panel open the user sees neither how many pull requests are listed nor the watcher state text. The watcher button keeps its accessible name, but the visible state is gone.",
+      "impact": "With the detail panel open at the default window size, the count and the watcher on/off text are not visible; the user has to hover or close the panel. Count and state are secondary; the Filters count and all actions stay reachable.",
+      "suggested_fix": "Keep the count (it is short, e.g. '12') visible at all widths and hide only the watcher text, or move the count into the lane headers, which already show per-lane counts.",
+      "evidence": "Unverified: no render with board data; the brief's measurement used stand-ins for the count label and Review rules button. Class `.watcher-indicator` and the query read from the diff.",
+      "confidence": "medium",
+      "blocking_merge": false,
+      "dedupe_key": "toolbar-count-hidden-under-760"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: nowrap override removed; search `flex: 1 1 96px; max-width: 260px`; labels hide under 1100px, count and watcher text under 760px. Fit at 560-1380px is the brief's measurement, not mine; real board data and the open panel were not measured." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx inBoardOverlay also matches a dialog containing `.project-review-rules` or `.review-watcher`; the new DOM test focuses inside each portaled dialog and expects focus on the search field." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason returns attentionReason before reviewNote; ReviewResults.tsx shows `.review-note` as a secondary line in the board tile and list Reason cell, skipped when equal to the reason. Shown on merged and closed cards too, per the operator's answer 'на всех карточках'. Tests: model.test.ts reviewNote case, DOM test expecting 'Review requested' plus the note in board and list." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan ('Состояние этапа 0', deviations a and b), PRD R12, specification indicator section and roadmap 0.29.38 now state stage 0 is implemented and the login-only team match." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx uses Icon name 'shieldCheck' (present in Icon.tsx) while Filters keeps 'checklist'; ReviewBoard.tsx renders `<span className=\"filter-count\">({active.length})</span>` outside `.toolbar-label`, so it survives the 1100px collapse; the pull request count survives until 760px. Residual hiding below 760px is UX-001 (info)." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: one MATERIALIZED `scoped` CTE parses each run once, `flagged`/`picked` use window functions. Read only; the brief's timings (about 395 ms against base 405 ms) are the worker's and I did not re-run them." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts asserts reviewLane on `quiet(pr)` is 'open' with and without the outdated badge." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx: attentionPrs is a useMemo over carriedAttention, snapshot and receiptVersion; the second effect writer is gone; only carriedAttention is state." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts `finished` is `state IN ('completed','partial','budget') AND base IS NOT NULL AND head IS NOT NULL`. The journal notes localBadge's live-history path may still accept a head-only run; not a UI matter." },
+    { "id": "F-013", "disposition": "open", "evidence": "'Review changes' label for a card with an outdated review is unchanged; the delta does not touch the label chain in ReviewAction or ReviewRuns.tsx. Still info." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: nothing rendered. No contrast computed for `.review-note` (`--warn` on the card surface, token values read only), no measured target sizes, no check that the lane card and list Reason cell wrap the extra line cleanly, no check of the toolbar with real data, the Review rules button or the open detail panel, no dark-theme view, no keyboard walk-through. Tests were not run (read-only, no exec). Slop score not computed: app screen, tells of the marketing set do not apply; the delta adds no new visual language.

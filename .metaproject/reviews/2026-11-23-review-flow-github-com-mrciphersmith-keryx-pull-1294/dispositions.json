@@ -1,0 +1,390 @@
+[
+ {
+  "id": "review-architecture-w1:F-001",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-architecture-w1:F-002",
+  "status": "finding",
+  "finding": "F-008",
+  "evidence": "canonical-findings.json F-008",
+  "reason": "Same defect as canonical F-008 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-architecture-w1:F-003",
+  "status": "finding",
+  "finding": "F-011",
+  "evidence": "canonical-findings.json F-011",
+  "reason": "Same defect as canonical F-011 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-architecture-w1:F-004",
+  "status": "finding",
+  "finding": "F-014",
+  "evidence": "canonical-findings.json F-014",
+  "reason": "Same defect as canonical F-014 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-degradation-w1:F-001",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "canonical-findings.json F-003",
+  "reason": "Same defect as canonical F-003 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-degradation-w1:F-002",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-degradation-w1:F-003",
+  "status": "finding",
+  "finding": "F-012",
+  "evidence": "canonical-findings.json F-012",
+  "reason": "Same defect as canonical F-012 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-001",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-002",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "canonical-findings.json F-003",
+  "reason": "Same defect as canonical F-003 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-003",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "canonical-findings.json F-001",
+  "reason": "Same defect as canonical F-001 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w2:F-001",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-highload-w1:F-001",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-highload-w1:F-002",
+  "status": "finding",
+  "finding": "F-006",
+  "evidence": "canonical-findings.json F-006",
+  "reason": "Same defect as canonical F-006 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "canonical-findings.json F-001",
+  "reason": "Same defect as canonical F-001 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-003",
+  "status": "finding",
+  "finding": "F-011",
+  "evidence": "canonical-findings.json F-011",
+  "reason": "Same defect as canonical F-011 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-004",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:fu1",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "canonical-findings.json F-001",
+  "reason": "Same defect as canonical F-001 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:fu2",
+  "status": "finding",
+  "finding": "F-011",
+  "evidence": "canonical-findings.json F-011",
+  "reason": "Same defect as canonical F-011 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w1:F-001",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w1:F-002",
+  "status": "finding",
+  "finding": "F-011",
+  "evidence": "canonical-findings.json F-011",
+  "reason": "Same defect as canonical F-011 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w2:F-001",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "status": "finding",
+  "finding": "F-010",
+  "evidence": "canonical-findings.json F-010",
+  "reason": "Same defect as canonical F-010 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-performance-w1:F-001",
+  "status": "finding",
+  "finding": "F-006",
+  "evidence": "canonical-findings.json F-006",
+  "reason": "Same defect as canonical F-006 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-performance-w1:F-002",
+  "status": "finding",
+  "finding": "F-006",
+  "evidence": "canonical-findings.json F-006",
+  "reason": "Same defect as canonical F-006 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "finding": "F-007",
+  "evidence": "canonical-findings.json F-007",
+  "reason": "Same defect as canonical F-007 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-002",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "canonical-findings.json F-009",
+  "reason": "Same defect as canonical F-009 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "canonical-findings.json F-009",
+  "reason": "Same defect as canonical F-009 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-004",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "canonical-findings.json F-009",
+  "reason": "Same defect as canonical F-009 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-005",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "canonical-findings.json F-009",
+  "reason": "Same defect as canonical F-009 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-006",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w2:F-001",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "canonical-findings.json F-009",
+  "reason": "Same defect as canonical F-009 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w2:F-002",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "canonical-findings.json F-009",
+  "reason": "Same defect as canonical F-009 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-001",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "canonical-findings.json F-003",
+  "reason": "Same defect as canonical F-003 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-002",
+  "status": "finding",
+  "finding": "F-005",
+  "evidence": "canonical-findings.json F-005",
+  "reason": "Same defect as canonical F-005 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-003",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "canonical-findings.json F-002",
+  "reason": "Same defect as canonical F-002 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-004",
+  "status": "finding",
+  "finding": "F-013",
+  "evidence": "canonical-findings.json F-013",
+  "reason": "Same defect as canonical F-013 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-001",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-002",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-003",
+  "status": "finding",
+  "finding": "F-005",
+  "evidence": "canonical-findings.json F-005",
+  "reason": "Same defect as canonical F-005 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-004",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "canonical-findings.json F-003",
+  "reason": "Same defect as canonical F-003 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-001",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-002",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-003",
+  "status": "finding",
+  "finding": "F-005",
+  "evidence": "canonical-findings.json F-005",
+  "reason": "Same defect as canonical F-005 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-004",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "canonical-findings.json F-003",
+  "reason": "Same defect as canonical F-003 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-001",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-002",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "canonical-findings.json F-004",
+  "reason": "Same defect as canonical F-004 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-003",
+  "status": "finding",
+  "finding": "F-005",
+  "evidence": "canonical-findings.json F-005",
+  "reason": "Same defect as canonical F-005 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-004",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "canonical-findings.json F-003",
+  "reason": "Same defect as canonical F-003 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-002",
+  "status": "narrowed",
+  "evidence": "research-evidence/layout-measurements.md: at toolbar width 1150px without board data the spacer is 113px and the search field 313px (minimum 96px), about 330px of slack; no overflow at 1080 or 1380px.",
+  "reason": "The claimed overflow just above the 1100px breakpoint did not appear in the measurement without board data.",
+  "remains": "Not measured with board data (count label, Review rules label, longest watcher status) in the 1101-1300px band."
+ },
+ {
+  "id": "review-logic-w1:F-003",
+  "status": "narrowed",
+  "evidence": "research-evidence/layout-measurements.md: at toolbar width 1150px without board data the spacer is 113px and the search field 313px (minimum 96px), about 330px of slack; no overflow at 1080 or 1380px.",
+  "reason": "The claimed overflow just above the 1100px breakpoint did not appear in the measurement without board data.",
+  "remains": "Not measured with board data (count label, Review rules label, longest watcher status) in the 1101-1300px band."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-005",
+  "status": "narrowed",
+  "evidence": "research-evidence/layout-measurements.md: at toolbar width 1150px without board data the spacer is 113px and the search field 313px (minimum 96px), about 330px of slack; no overflow at 1080 or 1380px.",
+  "reason": "The claimed overflow just above the 1100px breakpoint did not appear in the measurement without board data.",
+  "remains": "Not measured with board data (count label, Review rules label, longest watcher status) in the 1101-1300px band."
+ },
+ {
+  "id": "review-logic-w3:F-001",
+  "status": "narrowed",
+  "evidence": "research-evidence/verify-sqlite-version-1.txt: bun:sqlite reports SQLite 3.51.0 on this host (darwin, Bun 1.4.4).",
+  "reason": "AS MATERIALIZED needs SQLite 3.35+; the runtime on the review host is 3.51.0.",
+  "remains": "The SQLite version on the oldest supported macOS and in the packaged Desktop CLI was not checked."
+ },
+ {
+  "id": "review-testing-practices-w1:F-007",
+  "status": "out-of-scope",
+  "evidence": "acceptance-criteria.md AC7 is marked [verify: judged]; research-evidence/layout-measurements.md holds the measurements.",
+  "reason": "The toolbar layout is CSS-only and cannot be asserted in the happy-dom test environment; the flow verifies it by measurement, and the measured defect is canonical F-001."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-005",
+  "status": "out-of-scope",
+  "evidence": "git ls-files .metaproject/flows: flow.json files in this repository record owner.value; review-security-code-w1 counted 542 matches in 166 files.",
+  "reason": "The owner name in flow.json is the flow schema field every flow in the repository carries and equals the git author; not a change of this pull request."
+ },
+ {
+  "id": "review-pr-contract-w2:PC-005",
+  "status": "out-of-scope",
+  "evidence": "git ls-files .metaproject/flows: flow.json files in this repository record owner.value; review-security-code-w1 counted 542 matches in 166 files.",
+  "reason": "The owner name in flow.json is the flow schema field every flow in the repository carries and equals the git author; not a change of this pull request."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-005",
+  "status": "out-of-scope",
+  "evidence": "git ls-files .metaproject/flows: flow.json files in this repository record owner.value; review-security-code-w1 counted 542 matches in 166 files.",
+  "reason": "The owner name in flow.json is the flow schema field every flow in the repository carries and equals the git author; not a change of this pull request."
+ }
+]

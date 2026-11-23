@@ -1,0 +1,40 @@
+[
+  {
+    "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/model.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "laneReason"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/review/desk-run-store.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  }
+]

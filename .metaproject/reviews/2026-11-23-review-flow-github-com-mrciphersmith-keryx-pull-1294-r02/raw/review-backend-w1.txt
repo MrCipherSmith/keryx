@@ -1,0 +1,28 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "summary": "The rewritten attachBadges statement keeps the same badge outcome as localBadge: its 'supersedes' flag equals localBadge's (active run, run requested for the card range, finished run that reviewed the card range), the outdated candidate is the newest finished run with both reviewed SHAs, and ordering and tie-breaks match the old subquery. No new backend defect found. F-006 and F-010 are closed on the SQL side; F-014 stays open (visible() is still a second copy of the source filter).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css hunks: the `flex-wrap: nowrap` override line is deleted; the search field is `flex: 1 1 96px; min-width: 96px; max-width: 260px`. Layout not measured by me (not my lens)." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx clearPrivateView now calls inBoardOverlay(), which also matches a role=dialog that contains `.project-review-rules, .review-watcher`; both classes exist in ProjectReviewRules.tsx and ReviewWatcher.tsx (keryx ctx rg). Not run." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason now returns attentionReason before the outdated text (via reviewNote); reviewNote is exported and ReviewResults shows it as a secondary line. Operator chose uphold." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README.md line 4 now says stage 0 is implemented; version bumped to 0.1.2. Other docs files named by the finding were not in my slices." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules uses Icon name=shieldCheck; the filter count is a separate `.filter-count` span outside `.toolbar-label`. The count-label hiding CSS was not read in full." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: `scoped AS MATERIALIZED` parses each run's details once; the final SELECT re-reads only rows with p.wanted. The per-card outdated subquery is gone. Timing figures are the implementing worker's; not re-run by me." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts now uses quiet(pr) as a neutral card and asserts reviewLane is 'open' with and without an outdated badge." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx: attentionPrs is a useMemo over carriedAttention, snapshot and receiptVersion; the effect writer is gone; only the load callback and accessLost write carriedAttention." },
+    { "id": "F-009", "disposition": "partial", "evidence": "desk-run-store.test.ts changed in e08743ab4 (+20 lines) but is not in my slices; I could not judge whether the o.repo and state predicates are now separated by a fixture." },
+    { "id": "F-010", "disposition": "closed", "evidence": "`finished` in the flagged CTE requires `base IS NOT NULL AND head IS NOT NULL`, matching the TS projection `row.base && row.head`. The live-history path of localBadge still accepts a reviewed head without base (noted by the worker; unchanged, not a defect of this delta)." },
+    { "id": "F-014", "disposition": "open", "evidence": "visible() still hard-codes `IN ('manual','scheduled')` while localBadge filters `source !== 'existing'`." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+What I did not verify: no SQL was executed, no tests run, no query plan read (read-only budget). I checked equivalence to localBadge by reading board-badges.ts and the new SQL (supersedes = active OR requested range OR finished with reviewed range; NULL handling via coalesce; ordering created DESC, rowid DESC; operator precedence of NOT/AND/OR in `picked`). The worker's timing numbers are unverified. slice-02 was read mainly for the backend-relevant parts; its flow, journal and frontend content was read as context only. Test changes of e08743ab4 were not in my slices.

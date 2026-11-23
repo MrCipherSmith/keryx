@@ -1,0 +1,19 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-04/05/06 at head 086335a01. The refactored attachBadges SQL (F-018) is term-by-term equivalent to the SQL at 33fd9647a, including NULL handling, and still agrees with localBadge in board-badges.ts. No new defects. Slice-04 (flow/journal docs) was skimmed as context; no claim in it was checked against code beyond the SQL claim.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-018", "disposition": "closed", "evidence": "desk-run-store.ts:406-426. Old kept = coalesce(active OR requested OR (base=wb AND head=wh),0); new kept = live OR reviewed with live=coalesce(active OR requested,0), reviewed=coalesce(base=wb AND head=wh,0). Both give 1 whenever a term is true, else 0 or NULL treated as false. Old supersedes = coalesce(active OR requested OR (done AND base=wb AND head=wh),0); new = live OR (done AND reviewed): same truth table. finished (done AND base/head NOT NULL) unchanged. wanted/row_number/PARTITION unchanged; final select joins ranked instead of picked, same columns and ORDER BY. The state column was dropped from scoped but the final SELECT reads r.state from runs, as before. Agreement with localBadge: live matches `current ?? runs.find(sameRange)`, done AND reviewed matches `ready`, finished with base and head matches `runFinished && result.reviewed`, visible() matches the archive/delete/existing filter, ordering matches newest-first." }
+  ],
+  "slices": ["slice-04", "slice-05", "slice-06"]
+}
+```
+
+Not verified: no tests or SQL were executed (read-only, no budget); the SQL equivalence is by reading, and no runtime comparison against 33fd9647a was done. Slice-04 and the non-test parts of slice-05 are flow/journal/docs and were only skimmed. Slice-05's ReviewBoard.dom.test.tsx F-015 test body and ReviewBoard.tsx F-015 logic were not reviewed here (slice-01/02 own them). Residual, pre-existing and not a defect of this round: visible() excludes rows whose source is NULL, while localBadge only excludes source "existing".
+Routing audit: graph_used no (not-relevant), wiki_used no (not-relevant), ctx_used yes, raw_rg_used no (one raw git show with stated reason, to compare the prior SQL).

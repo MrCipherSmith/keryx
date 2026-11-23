@@ -1,0 +1,76 @@
+STATUS: DONE_WITH_CONCERNS
+
+Round 2 (fix round), reviewer review-degradation, slices slice-01 (FIX), slice-02, slice-03 (new code). No `--degradation` block was produced; I used `<package>/blast-radius.json` as the consumer set and compared against the merge base 1b994df18 and the previous head 53c96b8af by reading the three slice diffs and the head files. Consumers traced: `localBadge` (board-badges.ts) for the SQL change; `laneReason`/`reviewLane`/`reviewNote` users (ReviewResults.tsx and model.ts only, from `keryx ctx rg`); `attentionPrs` users (indicator string only, App.tsx via `onIndicatorChange`); `.project-review-rules` / `.review-watcher` content classes (also used by the non-portaled PrSubscriptionDialog, which the old selector already matched).
+
+Verified clean:
+- SQL `attachBadges`: the kept set (active, requested range, reviewed range) and the suppression set (`supersedes`: active, requested, finished-and-reviewed-the-range) equal the conditions under which `localBadge` returns no `outdated` (`latest || ready`, board-badges.ts:35-41). `PARTITION BY card` (json_each key) keeps the suppression per card. The outdated pick (newest finished with both SHAs, `created DESC, seq DESC`) matches `runs.find(finished && result.reviewed)` on newest-first rows. The row projection and the ORDER BY are unchanged. Badge output equals round 1 for the traced shapes; the measurement is the worker's and was not re-run.
+- `attentionPrs` as `useMemo(carriedAttention, snapshot, receiptVersion)`: same add/delete predicate as the old effect, cross-scope retention stays in `carriedAttention`; the consumer only reads `.size`, so the lost referential-equality guard has no effect.
+- `inBoardOverlay`: matches focus inside the portaled Review rules and PR watcher dialogs by their content classes; the new DOM test fails if the selector is reverted (focus falls to body).
+- `laneReason` order: live states, closed state, partial run, attention reason, outdated note, decision. `reviewLane` is untouched, so no card changes lane. The secondary line is hidden when equal to the lane reason.
+- Toolbar CSS: wrap restored by removing the override; search field bounded; container queries apply to descendants of the toolbar container.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "summary": "All fix slices read in full. F-001, F-002, F-003, F-004, F-006, F-007, F-008, F-010 closed; F-005 and F-009 partial; F-012, F-013, F-014 unchanged. No defect introduced by the fixes found. Two info findings: the toolbar docs overstate the no-wrap behaviour, and the new batch test cannot observe the efficiency half of the SQL change. No blast-radius degradation block; used blast-radius.json. Not run: no test, no SQL, no render.",
+  "findings": [
+    {
+      "id": "D-001",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "quote": "Не переносится на вторую строку при открытой панели PR: второстепенные элементы уходят в меню.",
+      "problem": "The specification (Pull requests, Панель инструментов) and plan stage 0 say the toolbar does not wrap while the PR panel is open and that secondary items move into a menu. After the F-001 fix the toolbar wraps again below the width where it no longer fits (measured: wrapped at 340px) and the labels are hidden by container queries instead of moved into a menu. The new 'Состояние этапа 0' section lists two deviations and neither is this one.",
+      "impact": "A reader of the requirements package sees the toolbar requirement as met as written; it is met at the measured widths (560 to 1380px), not at narrow ones, and by hiding labels, not a menu.",
+      "suggested_fix": "Add a third stage 0 deviation: labels collapse to icons under 1100px, the count label and watcher status hide under 760px, and the toolbar may wrap below roughly 400px.",
+      "evidence": "base-diff: slice-02 specification.md hunk keeps the toolbar line unchanged while review.css removes the nowrap override; layout-measurements.md shows wrap at 340px.",
+      "confidence": "medium",
+      "line": 150,
+      "location_class": "in-diff",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "base-diff",
+      "blocking_merge": false,
+      "dedupe_key": "docs-toolbar-no-wrap-overstated"
+    },
+    {
+      "id": "D-002",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "file": "src/review/desk-run-store.test.ts",
+      "quote": "in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card",
+      "problem": "The test asserts the badge output, which is identical whether or not the SQL drops the outdated row for a superseded card, because `localBadge` ignores it. A mutant that never suppresses (supersedes always 0) keeps the test green. The per-card isolation (PARTITION BY card) and the 'never outdated when superseded' direction are pinned; the saving that F-006 asked for is not. The worker's own note calls it a characterization test.",
+      "impact": "Nothing fails if the lookup returns to parsing and returning rows for superseded cards. No wrong badge results.",
+      "suggested_fix": "Accept, or count the rows the statement returns for the superseded cards through a seam, or keep the measurement script as the guard.",
+      "evidence": "base-diff: the test compares card.localReview only; board-badges.ts:41 drops `stale` when `latest || ready`. Read, not mutated.",
+      "confidence": "medium",
+      "line": 516,
+      "location_class": "in-diff",
+      "degradation_class": "blind-test",
+      "evidence_kind": "base-diff",
+      "blocking_merge": false,
+      "dedupe_key": "batch-test-blind-to-suppression"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css:85-96 has no nowrap override, so the shared wrap rule applies; search field flex 1 1 96px, max-width 260px; labels hidden under 1100px, count label and watcher status under 760px. Measurements in the previous package show one row at 560-1380px and wrapped without clipping at 340px. Not measured with real board data or an open detail panel (stated in the brief)." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx inBoardOverlay() adds closest('[role=\"dialog\"]')?.querySelector('.project-review-rules, .review-watcher'); ProjectReviewRules.tsx:63 and ReviewWatcher.tsx:103 render those classes inside the portaled dialogs. New DOM test focuses a button in each dialog, switches the account and expects focus on the search field." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts laneReason now returns attentionReason before the outdated text; reviewNote(c) is rendered as a .review-note secondary line in ReviewTile and in the list Reason cell, skipped when equal to the lane reason. Operator decision (merged and closed cards also show it) matches the code. Model and DOM tests cover the Changes-requested case." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan, specification, PRD R12 and the roadmap 0.29.38 entry now say stage 0 is implemented; the plan's 'Состояние этапа 0' records team requests not matched and the local-review indicator, both true to needsViewerAttention (model.ts:37-43). New residual is D-001 (info), not a reopening." },
+    { "id": "F-005", "disposition": "partial", "evidence": "Closed parts: Review rules uses shieldCheck (distinct from Filters checklist), the filter count is a separate .filter-count element outside .toolbar-label, and the count label shows between 760 and 1100px. Remaining: the pull request count label is still hidden under 760px, which includes the 560px default board with the detail panel open. The fix chose this on purpose; the finding asked for the count outside the collapsing set." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts:405-444: one MATERIALIZED scoped CTE reads each run of a requested PR once; picked keeps active/requested/reviewed-range rows plus one outdated row only when no row supersedes it. The per-card outdated subquery is gone. Worker measurement (base ~405 ms, previous head ~770 ms, now ~395 ms) was not re-run by me; it shows the cost is back at the base level." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts uses quiet(pr) (no decision, no reviewers, CI passed) and asserts reviewLane is 'open' with and without the outdated badge; a change sending outdated cards to attention would fail it." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx:346-355 derives attentionPrs with useMemo from carriedAttention, the snapshot and the receipt version; the effect with a second writer is gone. The load callback still writes carriedAttention for cross-scope retention. Same predicate and add/delete behaviour as the removed effect." },
+    { "id": "F-009", "disposition": "partial", "evidence": "The decoys for another PR, another repository, deleted, imported and no-result runs are in desk-run-store.test.ts:498-508 at this head, and a new batch test was added. Still unpinned in the slices I read: a newer finished-state filter case (a failed run with a recorded result) and the model/DOM items of the finding. The quoted site no longer exists after the SQL rewrite." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts:416 `finished` requires both base IS NOT NULL AND head IS NOT NULL; the SQL path and the row projection (line 456) now agree. The journal's open question (whether localBadge should also require both) has no known trigger." },
+    { "id": "F-012", "disposition": "open", "evidence": "ReviewBoard.tsx:346-352 still derives the indicator from all snapshot cards while `visible` applies filters; accepted per the operator decision to remove the bypass. Info only." },
+    { "id": "F-013", "disposition": "open", "evidence": "The 'Review changes' / 'Run review' label chain in ReviewResults.tsx is unchanged by the delta. Info only." },
+    { "id": "F-014", "disposition": "open", "evidence": "visible() in desk-run-store.ts:399 still hard-codes source IN ('manual','scheduled') while localBadge filters source !== 'existing'; unchanged, agrees for the three current values." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: no test, SQL or render was run (read-only round); the SQL equivalence with `localBadge` is traced by reading, not by diffing outputs on a large store; the 200x30 measurement is the worker's; real board data with the detail panel open, contrast of the `.review-note` warn colour in light and dark themes, and the Rust side were not checked; F-011 (ReviewWatcher.tsx) is outside my slices and gets no disposition; slice-04..06 were not mine. The multi-file test failures in `desk-run-executor.test.ts` noted in the brief were not investigated by me.

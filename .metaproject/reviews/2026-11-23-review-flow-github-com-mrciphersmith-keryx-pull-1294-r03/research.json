@@ -1,0 +1,340 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-frontend-w1:R3-FE-1",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding R3-FE-1 (The new test passes with the F-015 write-back effect deleted. After the fix the load callback only r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-028",
+      "reason": "Same defect as canonical F-028 (merged by the orchestrator at consolidation).",
+      "finding": "F-028"
+    },
+    {
+      "id": "review-frontend-w2:R3-FE-1",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding R3-FE-1 (The new test passes with the F-015 write-back effect deleted. After the fix the load callback only r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-028",
+      "reason": "Same defect as canonical F-028 (merged by the orchestrator at consolidation).",
+      "finding": "F-028"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (Introduced by the F-015 fix (cc42698a3). Before the fix, the load callback judged each loaded card i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-027",
+      "reason": "Same defect as canonical F-027 (merged by the orchestrator at consolidation).",
+      "finding": "F-027"
+    },
+    {
+      "id": "review-logic-w5:F-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-001 (Introduced by the F-015 fix (cc42698a3). Before the fix, the load callback judged each loaded card i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-027",
+      "reason": "Same defect as canonical F-027 (merged by the orchestrator at consolidation).",
+      "finding": "F-027"
+    },
+    {
+      "id": "review-testing-practices-w1:T-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-001 (The test waits a fixed 5 ms for the receipt notification, which subscribeReviewReads delivers throug) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-028",
+      "reason": "Same defect as canonical F-028 (merged by the orchestrator at consolidation).",
+      "finding": "F-028"
+    },
+    {
+      "id": "review-testing-practices-w1:T-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-002 (No test pins the reset on replace. The new test starts from an empty carried set and its only post-s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-028",
+      "reason": "Same defect as canonical F-028 (merged by the orchestrator at consolidation).",
+      "finding": "F-028"
+    },
+    {
+      "id": "review-testing-practices-w1:T-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T-003 (The store tests I read never build a run whose details lack baseSha/headSha (NULL `requested`) nor a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-029",
+      "reason": "Same defect as canonical F-029 (merged by the orchestrator at consolidation).",
+      "finding": "F-029"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "priorDispositions": {
+      "F-015": "closed",
+      "F-016": "closed",
+      "F-017": "closed",
+      "F-018": "closed",
+      "F-019": "open",
+      "F-020": "open",
+      "F-021": "open",
+      "F-022": "open",
+      "F-023": "open",
+      "F-024": "open",
+      "F-025": "withdrawn",
+      "F-026": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "unresolvedRules": [
+      "review-pr-contract"
+    ],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:ebf3ecf97467",
+        "rawEvidence": "raw/review-backend-w2.txt#sha256:ebf3ecf97467",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:576b5908c894",
+        "rawEvidence": "raw/review-frontend-w2.txt#sha256:576b5908c894",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:b3c17053cfbd",
+        "rawEvidence": "raw/review-logic-w5.txt#sha256:b3c17053cfbd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "opus",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:23ad4406339e",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:23ad4406339e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:8fc5221de7d5",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:8fc5221de7d5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:4b5b381bc8a2",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:4b5b381bc8a2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 16,
+    "known": 0,
+    "unknown": 16,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise.txt"
+  ]
+}

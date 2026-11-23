@@ -1,0 +1,29 @@
+{
+  "reviewer": "review-regression",
+  "wave": 1,
+  "waves": 1,
+  "slices": [
+    "slice-01",
+    "slice-03"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-01.diff",
+      "bytes": 106923
+    },
+    {
+      "id": "slice-03",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.worktrees/pr-review-audit/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-03.diff",
+      "bytes": 21134
+    }
+  ],
+  "result": "raw/review-regression-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+  "model": {
+    "inherit": false,
+    "tier": "standard",
+    "model": "sonnet",
+    "chosen_by": "orchestrator: keryx review tier had no session baseline"
+  }
+}

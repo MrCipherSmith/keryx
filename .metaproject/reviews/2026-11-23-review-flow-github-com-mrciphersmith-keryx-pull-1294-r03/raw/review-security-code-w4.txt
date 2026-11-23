@@ -1,0 +1,28 @@
+STATUS: DONE
+
+## Security Review (round 3, delta)
+
+No security findings. Details:
+
+- `attachBadges` (src/review/desk-run-store.ts at 086335a01): the statement is built from template parts that are all constant. `visible(r)` is a literal fragment that takes a table alias from literal call sites; `pending` is built from names read from `sqlite_schema` and filtered by `IN ('review_questions','reviewer_questions')`, so it is one of two literals or "0" (unchanged from before). Values reach SQL only as bound parameters `?1` (card list JSON), `?2` (repositoryId), `?3` (viewer); three arguments are passed. Scope is intact: `scoped` filters `r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND visible`; the final select joins `runs r ON r.rowid=p.seq`, and `seq` only comes from `scoped`, so rows of another repository, viewer or PR cannot enter through `ranked`. Archived/deleted runs and `existing` imports are excluded in `scoped`. The `json_each(?1)` input is built with JSON.stringify from card number, baseSha and headSha.
+- NULL handling term by term: `live`, `reviewed`, `finished`, `supersedes` and `wanted` are all non-NULL (coalesce, or AND/OR with a definite 0/1 operand). A card without SHAs gives wb/wh NULL, so `requested` and `reviewed` become 0, as in the old WHERE. Rows kept: active OR requested OR reviewed, the same as the old three-way predicate; the outdated row is added only when nothing supersedes it. Nothing more is exposed than the old statement plus the single newest finished result per card (already the behaviour before the refactor). Returned columns are unchanged.
+- ReviewBoard.tsx attention set: on an identity change (`identity.current !== nextIdentity`) or access loss (`accessLost`) the carried set is replaced by an empty set in the same tick as the `setRead` of the new snapshot, and `snapshots.current` is cleared, so a number from another repository or account does not survive. The unavailable-error path keeps only a snapshot of the same scope shown under the same identity (or one from `snapshots.current`, cleared on identity change). The new effect writes back only the memo's result; the memo is idempotent over the written set, so there is no render loop. Only numbers are held, and the set feeds only the tab indicator.
+- slice-04, slice-05, slice-06: scanned for secrets, tokens, personal data, home paths and e-mail addresses; hits were only words such as "token limit" and "security baseline" in tests and descriptions. slice-06 (board-badges, tests, types, SQL parts) read in full; nothing wrong about the code found from the security side.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No security defects in the delta: the refactored badge query uses only bound parameters and literal fragments with repository, viewer and PR scope intact; the attention-set change cannot carry numbers across identity change or access loss. Flow, journal and doc slices hold no secrets or personal data.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-015", "disposition": "closed", "evidence": "Security lens only: ReviewBoard.tsx resets carriedAttention on identity change and in accessLost; the sync effect is idempotent (no loop). The scope-switch logic is judged by the logic reviewers." },
+    { "id": "F-018", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: scoped/flagged/picked/ranked columns are non-NULL; kept and outdated predicates match the old three-way WHERE; scope predicates r.repo=?2, r.viewer=?3, r.pr=w.n are retained." }
+  ],
+  "slices": ["slice-03", "slice-04", "slice-05", "slice-06"]
+}
+```
+
+Not verified: no code was run (SQL timing, the DOM test, the F-015 scenario in a running app). slice-04 and slice-05 were scanned by pattern for secrets and personal data, not read line by line. Equivalence of the SQL to the statement at 33fd9647a was checked by reading the new text and the old predicate in the diff, not by executing both against data. Whether `runs` has real columns named baseSha/headSha/source (the old unqualified names) was not checked; the new text uses json_extract only.

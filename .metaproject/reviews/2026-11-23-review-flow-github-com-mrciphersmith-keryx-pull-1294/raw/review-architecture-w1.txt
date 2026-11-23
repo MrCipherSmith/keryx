@@ -1,0 +1,83 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Architecture Review
+
+Stack: fullstack (React Desktop + shared TS review core + SQLite store). Slices read in full: slice-01, slice-03.
+
+Summary: The change keeps the layering intact. `localBadge` stays the single shared projection for the live history and the SQLite rows, the protocol field is additive and optional, and `board-transport` forwards `localReview` unchanged. No dependency-direction or circular-import issue is introduced. Two minor structural concerns: portaled dialogs break a closest()-based focus restore that was scoped to `.review-workspace`, and the tab-attention set is now derived state written from two places.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Layering is preserved: shared localBadge projection, additive optional protocol field, SQL and TS predicates agree on visible sources. Minor concerns: focus-restore selector no longer matches the two portaled dialogs; attentionPrs is derived state mirrored by two writers; portal strategy is applied per caller instead of in Dialog.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+      "problem": "clearPrivateView decides whether to restore focus to the search field by testing whether the focused element is inside `.review-workspace [role=\"dialog\"]`. The diff portals ProjectReviewRules and ReviewWatcher dialogs to document.body, so they are no longer descendants of `.review-workspace` and the selector no longer matches them. The selector was not updated with the structural move.",
+      "impact": "When the viewer or repository identity changes while the Review rules or PR watcher dialog has focus (both are keyed by watcherTarget and unmount), focus falls to body and is not returned to the search input; before the change it was restored. Keyboard users lose their place.",
+      "suggested_fix": "Match the dialog by a marker that does not depend on the ancestor, for example `.overlay [role=\"dialog\"]` or a data attribute on Dialog, or keep the ancestor check and add the portaled dialogs to the selector.",
+      "evidence": "ReviewBoard.tsx clearPrivateView (unchanged line) versus ProjectReviewRules.tsx `createPortal(<RulesDialog/>, document.body)` and ReviewWatcher.tsx `createPortal(<Dialog/>, document.body)`; `.review-workspace` exists only at ReviewBoard.tsx:391 and ReviewDetail.css. Not run in a browser.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "focus-restore-selector-portal"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);",
+      "problem": "attentionPrs is a value derivable from the shown snapshot plus read receipts, but it is kept as state and written from two places with the same predicate: the load callback (with replaceAttention semantics) and a new useEffect on [snapshot, receiptVersion]. The effect then re-applies the same add/delete per card. A render-time ref write (`latest.current = read`) was added to feed the load callback.",
+      "impact": "Two writers of one derived set must be kept in step by hand; a future change to the predicate or to the replace rules in one place only reintroduces the flicker this round fixed. Maintainability cost only; the current behaviour is consistent.",
+      "suggested_fix": "Derive the indicator in one place (useMemo over snapshot and receiptVersion), keeping only the cross-scope retention (closed-only views must not drop open attention) as the remaining state, so the predicate is applied once.",
+      "evidence": "Two call sites of needsViewerAttention in ReviewBoard.tsx (load callback and the new effect); code-style-patterns Rule 2 and 5 (derived state, effects orchestrating state).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "attention-derived-state"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "line": null,
+      "quote": "{open && createPortal(<RulesDialog {...props} onClose={() => setOpen(false)} />, document.body)}",
+      "problem": "The containing-block problem is solved per caller (two createPortal calls) rather than in the shared Dialog. ReviewFilters, PrSubscriptionDialog and ReviewDetail dialogs still render inside `.review-workspace`, which already has `container-type: inline-size` (ReviewDetail.css line 1); container-type inline-size applies layout containment, which makes it the containing block for position:fixed descendants.",
+      "impact": "Two dialogs of the same toolbar now behave differently from their siblings; whether the siblings are actually clipped by the workspace container was not measured, and that pre-existing condition is outside this diff.",
+      "suggested_fix": "If the sibling dialogs are affected, portal inside Dialog once; otherwise note why only these two need it.",
+      "evidence": "ReviewDetail.css:1 `.review-workspace { ... container-type: inline-size; }`; ReviewBoard.tsx renders ReviewFilters and PrSubscriptionDialog as children of `.review-workspace`.",
+      "confidence": "low",
+      "reviewer": "review-architecture",
+      "dedupe_key": "portal-per-caller",
+      "location_class": "pre-existing",
+      "publication": "question"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "json_extract(${r}.details,'$.source') IN ('manual','scheduled')",
+      "problem": "The set of runs that count for a badge is expressed twice: SQL `source IN ('manual','scheduled')` and the TS filter `run.source !== \"existing\"` in localBadge. They agree today because DeskRun.source is exactly manual, scheduled or existing (desk-run-types.ts:122).",
+      "impact": "A fourth source value would be admitted by localBadge and excluded by SQL (or the reverse), making the two hosts disagree. The new tests compare the two paths for the current values only.",
+      "suggested_fix": "Share one predicate or constant, or add a guard test that enumerates DeskRun['source'] values.",
+      "evidence": "board-badges.ts localBadge filter; desk-run-store.ts `visible()`; desk-run-types.ts:122.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "visible-source-duplication",
+      "location_class": "pre-existing",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 },
+  "slices": ["slice-01", "slice-03"],
+  "follow_ups": []
+}
+```
+
+Not verified: no browser or test run (read-only, exec budget 0); the Rust `review_board` pass-through was not read (flow journal says it returns untyped JSON); F-001 and F-003 rest on reading the selectors and CSS, not on a rendered dialog; the SQLite query plan on a large store was not examined; graph and wiki layers were not consulted (package layers not used).

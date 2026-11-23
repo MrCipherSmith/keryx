@@ -1,0 +1,44 @@
+STATUS: DONE
+
+## Frontend Review, round 4 (delta, fix round)
+
+Read in full: slice-01, slice-02, slice-03; `git show 20b535531 f72f23f73`; `ReviewBoard.tsx` (lines 85-390) and `Dialog` in `components/ui.tsx`.
+
+Answers to the three questions:
+1. Seeded set. `setCarriedAttention(new Set(loaded.cards.filter(needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card)))...))` and the `attentionPrs` memo call the same predicate with the same inputs for the same snapshot, so for the snapshot just loaded the memo result equals the seed (receipts can only differ through `receiptVersion`, which the memo tracks). The write-back effect compares by size and membership and stops after one set: the next render's memo over the new carried set is idempotent, so no render loop. `loaded` and `unreadCount` are a local const and a module function, no stale closure. The load callback's two setStates (`setCarriedAttention`, `setRead`) run in one microtask and batch in React 18. Cost: one extra O(cards) pass per replacing load, negligible. Residual (not a defect): a carried entry whose card is not in the shown snapshot can only be retired by a later replacing load or by a snapshot that contains the card; a receipt change while only a historical scope is shown does not clear it. Designed behaviour, noted only.
+2. Dialog marker. `Dialog` renders `role="dialog"` with `.dialog-body` wrapping `children`; both `data-review-board-dialog` divs are the first child inside that body, so `el.closest('[role="dialog"]').querySelector('[data-review-board-dialog]')` finds them for any focus target in the dialog, footer buttons included. Workspace dialogs are matched by the first `closest` branch and carry no marker. The marker is only on the two portaled dialogs (ProjectReviewRules.tsx createPortal to body; ReviewWatcher.tsx createPortal). A boolean JSX attribute renders as `data-review-board-dialog=""`, matched by the attribute selector. No defect.
+3. Tests. The handled-request test asserts the indicator (observable output), uses a second pending request so the write-back is the only thing that can retire the first, and ends with a merged refresh that must clear the signal, which proves 481 was removed from the carried set. The saved-filter test asserts the indicator on first load. Both are behaviour tests. The 5 ms wait at ReviewBoard.dom.test.tsx:1045 is the only wait for the read receipt in them (the other `setTimeout` at line 630, 10 ms, is older and unrelated). The two outdated-note tests use class selectors (`.review-note`, `.review-reason`, `td[title] > span:first-child`), which tie them to markup but assert the user-visible text and its single occurrence. The focus test at line 218 loops both openers, so both dialogs' markers are covered; the orchestrator's mutation covered only the watcher marker.
+
+No new defect found.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Delta of 20b535531 and f72f23f73 read as React and DOM code. The seeded carried set, the memo and the write-back effect are consistent for the same snapshot, terminate after one write and have no stale closure. The data-review-board-dialog marker sits inside the role=dialog node in both portaled dialogs and is absent from workspace dialogs. New and changed DOM tests assert observable behaviour and keep the 5 ms receipt wait as their only wait. No findings.",
+  "slices": ["slice-01", "slice-02", "slice-03"],
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx: write-back effect (snapshot, attentionPrs, carriedAttention) persists memo removals; the handled-request DOM test now ends with a merged refresh that clears the signal only if 481 was removed." },
+    { "id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx list rows compute reason and note once per row as locals." },
+    { "id": "F-017", "disposition": "closed", "evidence": "model.ts laneReason local is named note, not outdated." },
+    { "id": "F-018", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: scoped CTE carries active and done flags; flagged/picked/ranked stages read them. Read only; not re-executed." },
+    { "id": "F-019", "disposition": "closed", "evidence": "implementation-plan.md names deviation (c) for the toolbar and specification.md links to it. The measurements it quotes were not re-checked against CSS." },
+    { "id": "F-021", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges reads publication only when card?.baseSha === row.base && card.headSha === row.head via cardByPr. Backend lens not re-executed." },
+    { "id": "F-022", "disposition": "closed", "evidence": "Two DOM tests added in ReviewBoard.dom.test.tsx for the merged-card note and for the outdated text as the reason; one store test with a fixture per lookup term." },
+    { "id": "F-023", "disposition": "closed", "evidence": "PORTALED_DIALOG_CONTENT is '[data-review-board-dialog]'; marker on .project-review-rules and .review-watcher divs inside Dialog's role=dialog body; focus test at line 218 loops both dialogs." },
+    { "id": "F-026", "disposition": "closed", "evidence": "git grep for the removed 'awaiting merge' wording under docs returns nothing." },
+    { "id": "F-027", "disposition": "closed", "evidence": "Load callback seeds carriedAttention from loaded.cards when replaceAttention; saved-historical-filter DOM test asserts 'attention' on first load." }
+  ],
+  "not_verified": [
+    "No test or app run (read-only, exec budget 0); mutation results taken from the brief.",
+    "React version batching assumed to be 18 (not read from package.json).",
+    "Toolbar measurements quoted in docs not re-checked.",
+    "Cross-window receipt changes while only a historical scope is shown were reasoned about, not run."
+  ]
+}
+```
+
+Not verified: nothing was executed (read-only). Mutation results are the orchestrator's, from the brief. The React batching behaviour (React 18) and the toolbar measurements quoted in the docs were not checked. The cross-window receipt case is reasoning only.

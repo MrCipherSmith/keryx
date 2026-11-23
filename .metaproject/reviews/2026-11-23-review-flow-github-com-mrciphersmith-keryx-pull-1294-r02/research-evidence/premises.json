@@ -1,0 +1,31 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-015",
+      "verdict": "upheld",
+      "reasoning": "The trace holds at this head: carriedAttention is written only by the load callback (ReviewBoard.tsx:231-238) and cleared by accessLost (:188); the memo at :346-355 starts from it and is the only place receipt-driven removals exist; while a new scope loads the snapshot is null (:283) so the memo returns carriedAttention unchanged, and a merged-only, closed-only or period load keeps the previous set (:230). At 53c96b8af the effect wrote the judged set back with setAttentionPrs, so the removal survived the scope switch. The only intent signal, the base comment at :229 that closed/merged-only views cannot replace the open snapshot, is about keeping open items across scopes, not about resurrecting handled ones; the F-008 fix aimed at removing redundant state, not at changing this behaviour. React guidance favouring derived state does not cover state that must outlive the shown snapshot, which is exactly what carriedAttention is, so pruning it on receipt changes is consistent with F-008's own split."
+    },
+    {
+      "finding_id": "F-016",
+      "verdict": "upheld",
+      "reasoning": "ReviewResults.tsx:113-114 calls laneReason(c) in the title, the reason cell and twice inside the secondaryNote guard, while ReviewTile in the same file (:63-64) computes reason and note once into locals. The repetition is introduced by the F-003 fix in this branch, so it carries no prior intent, and the suggested fix makes the list row match its sibling."
+    },
+    {
+      "finding_id": "F-017",
+      "verdict": "upheld",
+      "reasoning": "At 53c96b8af the local in laneReason was `const outdated = c.localReview?.outdated` (the badge object); the F-003 fix kept the name while the value became the note string from reviewNote (model.ts:103-104), and reviewNote itself (:85) still uses `outdated` for the badge object. The rename is a by-product of the fix, not a choice; no signal or practice argues for a name that now denotes two different types in neighbouring functions."
+    },
+    {
+      "finding_id": "F-018",
+      "verdict": "upheld",
+      "reasoning": "In the new flagged CTE (desk-run-store.ts:415-418) the active-state list and the finished-state list each appear twice and `active OR requested` is repeated between kept and supersedes; activeReviewNumbers (:471) repeats the active set again. The file already factors SQL into named fragments (`visible` at :399, `pending` at :398), so the suggested fix follows the file's own pattern; the CTE and its alias `r` are new in this branch (e08743ab4), so they carry no prior intent."
+    },
+    {
+      "finding_id": "F-025",
+      "verdict": "upheld",
+      "reasoning": "The PR body in pr-context.md still says 'Toolbar on one row', '752 pass' and that no second round ran, while at head 33fd9647a the toolbar wraps and hides labels by container width (review.css), the outdated text is a secondary line when an attention reason ranks first (model.ts:94-104), the orchestrator counted 755 passes, and a full pull request round with three fix commits ran (reviewer-brief.md: 'The PR description was not updated after the fixes'). The flow package records no decision to defer or skip the description update, so there is no intent signal; a description that matches the merged code is the accepted pull request practice. The finding's `file` names implementation-plan.md while its quote is from the PR body; that is an anchoring detail, not the premise."
+    }
+  ]
+}

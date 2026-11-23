@@ -1,0 +1,16 @@
+{
+  "requested": "auto",
+  "depth": "full",
+  "reason": "auto: 7 files exceeds 5",
+  "head": "086335a01cc6ccd4c97672215d4db86d5c308dce",
+  "files": [
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewResults.tsx",
+    "apps/desktop/src/review/model.ts",
+    "src/review/desk-run-store.ts"
+  ],
+  "changedLines": 160
+}

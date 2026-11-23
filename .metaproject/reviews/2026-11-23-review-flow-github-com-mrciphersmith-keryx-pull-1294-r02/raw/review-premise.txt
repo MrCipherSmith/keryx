@@ -1,0 +1,13 @@
+STATUS: DONE
+
+Premise claims saved to research-evidence/premises.json (judge review-premise, model claude-opus-5-5). Info findings F-019 to F-024 left alone (below minor).
+
+Verdicts: 5 upheld, 0 downgraded, 0 challenged, 0 owner-decision. (F-025 added after the first pass, on the coordinator's request.)
+
+- F-015 upheld. The regression trace holds: carriedAttention is written only by the load callback (ReviewBoard.tsx:231-238) and accessLost (:188), the memo (:346-355) is the only holder of receipt-driven removals, the snapshot is null during a scope switch (:283), and merged-only/closed-only/period loads keep the old set (:230). At 53c96b8af the removed effect persisted removals via setAttentionPrs. The base comment at :229 is about keeping open items across scopes, not reviving handled ones.
+- F-016 upheld. ReviewResults.tsx:113-114 calls laneReason four times and secondaryNote twice per row; ReviewTile (:63-64) computes them once. Introduced by the F-003 fix; the fix aligns the row with its sibling.
+- F-017 upheld. The F-003 fix kept the local name `outdated` (formerly the badge object at 53c96b8af) for the note string (model.ts:103); reviewNote (:85) still uses `outdated` for the badge object.
+- F-018 upheld. The flagged CTE (desk-run-store.ts:415-418) spells both state lists twice and repeats `active OR requested`; activeReviewNumbers (:471) again. The file already uses named SQL fragments (`visible` :399, `pending` :398). All new in e08743ab4, so no prior intent.
+- F-025 upheld. The PR body (pr-context.md) still claims a one-row toolbar, 752 passes and no second round; at head 33fd9647a the toolbar wraps and collapses by width, the outdated text is a secondary line when an attention reason ranks first (model.ts:94-104), the count is 755, and a full PR round with three fix commits ran. The flow package records no decision to defer the description update (searched flow 516 for "PR description", "PR body", "gh pr edit": no match). The finding's `file` (implementation-plan.md) does not hold its quote, which is from the PR body; an anchoring detail, not the premise.
+
+Not verified: F-015 was not reproduced in the app or by a test (read-only; trace from code and git show only). Whether the F-015 indicator is user-visible beyond the tab indicator (other consumers of attentionPrs) was not enumerated. F-016's line 113 was read truncated in search output; the count of four calls is the reviewer's, consistent with the visible three plus the title. No practice source was needed or looked up. For F-025, raw/review-pr-contract-w1.txt was not read (the canonical finding, pr-context.md and the brief sufficed), and the live PR body on GitHub was not re-fetched; pr-context.md was collected at 10:32Z at this head.

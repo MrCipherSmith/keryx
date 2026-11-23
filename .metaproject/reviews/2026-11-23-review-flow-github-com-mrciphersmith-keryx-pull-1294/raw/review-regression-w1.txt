@@ -1,0 +1,15 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression of major or higher found in slice-01 (Desktop UI) and slice-03 (backend badge code). Checked: localBadge refactor against the old filter/active/latest/ready logic (equivalent for every input except the new outdated fallback); the attachBadges SQL against the live-history path (same newest-first order, same 'any run on this range or any active run suppresses outdated' rule, bound parameters ?1..?3 match the three positional values); consumers of ReviewCard.localReview (CardReviewProgress, ReviewAction label and icon, openReview intent, the badge poll, updateRunSummary, readBoardBadges, review-board.ts activeReviewCards, board-transport cardPart.localReview, platform/review.ts reassembly), none of which assume outdated-only cards carry a runState; the portaled Rules and PR watcher dialogs (Dialog styles are unscoped, overlayOpen is a global escape stack, both dialogs stay gated by tabActive, so closing behaviour on tab switch is unchanged); Done-lane gating (a card reaches the done lane only when its state is closed or merged, which passes the state filter only when stateFilterShowsDone is true, so no counted card is left undrawn). Observations below major, not filed because scope B refuses them: (1) laneReason ranks the outdated text above GitHub-derived attention reasons, so a card sitting in the Needs attention lane because of a review request, failed checks or changes requested shows 'Outdated review' as its lane reason (operator-decided ordering per journal T7; tags still show the GitHub state); (2) clearPrivateView's restoreFocus selector '.review-workspace [role=dialog]' no longer matches the portaled Rules and PR watcher dialogs, so on an account switch with one of them open focus is no longer returned to the search field (those dialogs unmount anyway). Radius coverage: the computed set was capped (51 files dropped by cap, 501 text-hub, 26 test-consumer and 13 unrelated-symbol candidates dropped; 74 of 87 changed files, all flow, review-package and docs markdown/json, are not graph nodes and have an empty radius, recorded as unresolved, not clean). I read the dependents by following the code (ReviewBoard.tsx, ReviewProgress.tsx, ui.tsx, platform/review.ts, board-badge-read.ts, review-board.ts, styles) rather than enumerating the capped list file by file. Rust (review.rs) not read; per the journal it passes untyped JSON.",
+  "findings": [],
+  "slices": ["slice-01", "slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Not verified: no tests, server or browser were run (read-only round, exec_budget_s 0); the SQL was reasoned about, not executed (no query-plan or SQLite-version check on a large store; MATERIALIZED needs SQLite 3.35 or newer, which I did not confirm for the shipped runtime); the outdated card and open detail panel with real board data were not seen; Rust side (src-tauri review.rs) not read; blast-radius set was capped, see summary.

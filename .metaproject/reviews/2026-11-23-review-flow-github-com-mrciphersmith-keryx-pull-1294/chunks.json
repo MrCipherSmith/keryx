@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 51,
+  "droppedKey": "d4dcd9a92f38a195",
+  "fileBytes": {
+    ".metaproject/data/wiki/freshness-queue.jsonl": 29141,
+    ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/flow.json": 22868,
+    ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/blast-radius.json": 120443,
+    ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/manifest.json": 2398,
+    ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-main-r02/manifest.json": 2848,
+    ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-main/manifest.json": 2820,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/scope-src.json": 573055,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round2-1804c39d/scope.json": 1161486,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/research-evidence/verify/shell-base.ts": 474443,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/research-evidence/verify/shell-r2.ts": 474443,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/scope.json": 436762,
+    "apps/desktop/src/issues/IssuesBoard.css": 2682,
+    "apps/desktop/src/main.tsx": 649,
+    "apps/desktop/src/metaproject/metaproject.css": 7168,
+    "apps/desktop/src/review/PrSubscriptionDialog.tsx": 7401,
+    "apps/desktop/src/review/PullRequestAutomation.tsx": 3152,
+    "apps/desktop/src/review/ReviewFilters.tsx": 4365,
+    "apps/desktop/src/review/ReviewOutcome.tsx": 1611,
+    "apps/desktop/src/review/ReviewRunDialog.tsx": 6539,
+    "apps/desktop/src/review/ReviewSessions.tsx": 10936,
+    "apps/desktop/src/review/SessionReviewActivity.tsx": 14663,
+    "apps/desktop/src/review/sessionReview.ts": 3463,
+    "apps/desktop/src/shell/RoutingDialog.tsx": 6749,
+    "apps/desktop/src/styles/components.css": 13740,
+    "apps/desktop/src/styles/flows.css": 14256,
+    "apps/desktop/src/test/app-navigation.fixture.tsx": 14361,
+    "apps/hub-web/src/features/managed-work/work-lists.tsx": 4661,
+    "apps/hub-web/src/styles.css": 19275,
+    "docs/analysis/desktop-review-board.md": 30942,
+    "docs/docs/cli-reference.md": 655403,
+    "docs/docs/guides/scheduled-digest.md": 9931,
+    "docs/docs/guides/work-intake.md": 15680,
+    "docs/requirements/keryx-desktop-review/README.md": 2551,
+    "src/commands/review-board.ts": 7504,
+    "src/commands/review-desk-publish.ts": 7676,
+    "src/commands/review-desk-run.ts": 5918,
+    "src/commands/review-pr-context.ts": 1339,
+    "src/commands/review-rules.ts": 4869,
+    "src/commands/review-watch.ts": 7001,
+    "src/commands/review.ts": 314646,
+    "src/review/board-badge-read.ts": 2806,
+    "src/review/board-transport.ts": 2303,
+    "src/review/desk-reviewer-question.ts": 6920,
+    "src/review/desk-run-executor.ts": 40722,
+    "src/review/desk-run-lifecycle.ts": 7499,
+    "src/review/review-automation-guard.ts": 2430,
+    "src/review/review-rule-dispatch.ts": 4546,
+    "src/review/review-rule-queue.ts": 7275,
+    "src/review/watcher-repair.ts": 10219,
+    "src/scheduler/digest-collect.ts": 8776,
+    "src/tui/ask-user-bridge.ts": 7803
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "apps/desktop/src/styles/components.css",
+        "src/commands/review-board.ts",
+        "src/review/board-transport.ts",
+        "src/review/desk-run-lifecycle.ts",
+        "src/review/watcher-repair.ts",
+        "src/scheduler/digest-collect.ts",
+        "apps/desktop/src/issues/IssuesBoard.css",
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/review/PullRequestAutomation.tsx",
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/styles/flows.css",
+        "apps/hub-web/src/features/managed-work/work-lists.tsx",
+        "apps/hub-web/src/styles.css",
+        ".metaproject/data/wiki/freshness-queue.jsonl"
+      ],
+      "bytes": 134741
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/flow.json",
+        ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/blast-radius.json",
+        ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/manifest.json",
+        ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-main-r02/manifest.json"
+      ],
+      "bytes": 148557
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-main/manifest.json"
+      ],
+      "bytes": 2820
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/scope-src.json"
+      ],
+      "bytes": 573055
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round2-1804c39d/scope.json"
+      ],
+      "bytes": 1161486
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/research-evidence/verify/shell-base.ts"
+      ],
+      "bytes": 474443
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/research-evidence/verify/shell-r2.ts"
+      ],
+      "bytes": 474443
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/scope.json"
+      ],
+      "bytes": 436762
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        "apps/desktop/src/main.tsx",
+        "docs/analysis/desktop-review-board.md"
+      ],
+      "bytes": 31591
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        "docs/docs/cli-reference.md"
+      ],
+      "bytes": 655403
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        "docs/docs/guides/scheduled-digest.md",
+        "docs/docs/guides/work-intake.md",
+        "docs/requirements/keryx-desktop-review/README.md"
+      ],
+      "bytes": 28162
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        "src/commands/review.ts"
+      ],
+      "bytes": 314646
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        "src/tui/ask-user-bridge.ts",
+        "src/review/desk-reviewer-question.ts",
+        "apps/desktop/src/review/ReviewOutcome.tsx",
+        "apps/desktop/src/review/sessionReview.ts",
+        "src/commands/review-desk-publish.ts",
+        "src/review/board-badge-read.ts",
+        "src/review/desk-run-executor.ts",
+        "src/review/review-rule-queue.ts",
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "apps/desktop/src/review/ReviewSessions.tsx",
+        "src/commands/review-rules.ts",
+        "src/commands/review-watch.ts",
+        "src/review/review-automation-guard.ts",
+        "src/review/review-rule-dispatch.ts",
+        "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+        "apps/desktop/src/review/SessionReviewActivity.tsx",
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "src/commands/review-desk-run.ts"
+      ],
+      "bytes": 149328
+    },
+    {
+      "id": "chunk-014",
+      "files": [
+        "src/commands/review-pr-context.ts",
+        "apps/desktop/src/test/app-navigation.fixture.tsx"
+      ],
+      "bytes": 15700
+    }
+  ]
+}

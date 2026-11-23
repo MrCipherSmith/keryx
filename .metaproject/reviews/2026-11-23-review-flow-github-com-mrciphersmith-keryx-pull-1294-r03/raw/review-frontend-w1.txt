@@ -1,0 +1,41 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-frontend",
+  "summary": "F-015 fix is sound React: the write-back effect converges in one extra render, no loop, safe under StrictMode, and a scope switch renders with the persisted set. One new minor finding: the new DOM test does not pin the write-back, it passes with the effect removed. F-016 and F-017 closed; F-018 SQL NULL handling is equivalent term by term.",
+  "findings": [
+    {
+      "id": "R3-FE-1",
+      "reviewer": "review-frontend",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": 1008,
+      "quote": "test(\"a request handled after the load stays out of the tab signal when the scope switches to a historical view\"",
+      "problem": "The new test passes with the F-015 write-back effect deleted. After the fix the load callback only resets carriedAttention to an empty set; the effect is the only code that seeds it from the memo. Without the effect carriedAttention stays empty for the whole test, so after the switch to merged-only (empty snapshot) the memo returns an empty set and the last indicator is null, exactly what the test asserts. The test therefore does not guard the write-back, and no test I found asserts the opposite direction (a request still needing attention stays in the signal after a switch to merged-only).",
+      "impact": "Deleting or breaking the effect (or its dependency list) keeps the suite green while the tab indicator drops every open-scope attention item on a switch to a historical view, and F-015 can return unnoticed. The worker's 'fails against 33fd9647a' check ran against the old load-callback design, not against this component minus the effect.",
+      "suggested_fix": "Add a positive assertion in the same test: before reading the reply keep a second PR that still needs attention (unread reply or requested reviewer), and assert the indicator stays 'attention' after the switch to merged-only and drops to null only after that PR is handled. This fails without the effect.",
+      "evidence": "ReviewBoard.tsx:231 (replaceAttention branch sets an empty Set, no adds), :339-352 memo and effect are the only place the set is filled; test body in slice-01. Read only, test not run with the effect removed.",
+      "confidence": "high",
+      "locator": {"state": "derived", "method": "substring", "reported_line": null},
+      "dedupe_key": "f015-test-does-not-pin-writeback",
+      "blocking_merge": false,
+      "degradation_class": "blind-test"
+    }
+  ],
+  "stats": {"findings": 1, "blocker": 0, "major": 0, "minor": 1, "info": 0},
+  "prior_dispositions": [
+    {"id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx:349-352: the effect writes the memo result into carriedAttention when sets differ. The memo (:339-348) is idempotent on its own output, so the next pass compares equal and stops: one extra render, no loop. attentionPrs is a new Set each run but the effect guards on content, not identity. StrictMode double effects only repeat an idempotent setState with the same reference. After a receipt change the removal is written in the same commit, before the user can switch scope; on a switch snapshot is null (:276), the effect guard skips, and the memo returns the persisted set. replaceAttention loads reset in the same batch as setRead, so the first render of the new snapshot already judges against an empty set. Identity change, accessLost (:188) and the unavailable path (old snapshot kept, set unchanged) behave as before. Behaviour closed; only the test is weak (see R3-FE-1)."},
+    {"id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx list row computes `reason` and `note` once per row and uses them in title, span and note."},
+    {"id": "F-017", "disposition": "closed", "evidence": "model.ts laneReason local renamed to `note`; reviewNote keeps `outdated` for the badge object."},
+    {"id": "F-018", "disposition": "closed", "evidence": "Term by term against the old statement: active and done are non-NULL (state is NOT NULL); requested may be NULL. New live = coalesce(active OR requested,0) and reviewed = coalesce(base=wb AND head=wh,0) are non-NULL; old kept = coalesce(active OR requested OR (base=wb AND head=wh),0) equals live OR reviewed under three-valued logic (any true gives 1, otherwise NULL or 0 gives 0). Old supersedes coalesce(active OR requested OR (done AND base=wb AND head=wh),0) equals live OR (done AND reviewed). finished = done AND base IS NOT NULL AND head IS NOT NULL is unchanged. ranked uses the same window expression, final join renamed to ranked. Returned rows unchanged by reading; not executed."}
+  ],
+  "slices": ["slice-01", "slice-03"]
+}
+```
+
+Slice-03 note: it shows the removal of the old setAttentionPrs block, the old list row, the active-card filter bypass and the old attachBadges WHERE; those are the base-side forms that slice-01 replaces, nothing new to report there.
+
+Not verified: nothing was run (read-only); the F-015 scenario in a running app; the test with the effect removed (conclusion is from reading); the SQL by execution or timing. A narrow race I could not rule out and did not report: a pending passive effect flushed after a load's reset could enqueue a stale write-back after `setCarriedAttention(new Set())`, restoring the old set for one pass. I judged it too unlikely to report.

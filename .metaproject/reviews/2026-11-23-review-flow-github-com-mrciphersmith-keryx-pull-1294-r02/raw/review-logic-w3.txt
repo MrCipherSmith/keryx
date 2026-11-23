@@ -1,0 +1,76 @@
+STATUS: DONE
+
+## Logic Review (round 2, slice-05, second look)
+
+Read in full: `slices/slice-05.diff` (ReviewBoard.dom.test.tsx, model.test.ts, the requirements package docs, roadmap, board-badges.test.ts, desk-run-store.test.ts). Where a disposition needed code outside the slice I read it at head 33fd9647a (`model.ts` laneReason/reviewNote, `desk-run-store.ts` attachBadges, README/plan/roadmap).
+
+Summary: the tests and docs in this slice are logically sound. The `host` to `document.body` rewrite is consistent with the portaled dialogs, and the new store, badge and model tests pin the delta's behaviour. One info finding: the requirements package still says the toolbar never wraps, while the F-001 fix lets it wrap below about 340px. F-009's test gaps are only partly closed.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at tests and requirements docs found no logic defects in the tests. F-003, F-004, F-007 and F-010 are closed at this head; F-009 is partial (repo predicate and state filter of the outdated lookup still have no decoy fixture). One info: spec and plan still say the toolbar does not wrap, which the F-001 fix no longer guarantees.",
+  "findings": [
+    {
+      "id": "F-101",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "problem": "The requirements package states that the board toolbar does not wrap and that secondary items move into a menu. After the F-001 fix the toolbar wraps again (no nowrap override) and collapses labels instead of using a menu. The stage 0 deviations section lists only (a) team requests and (b) local review in the indicator, so this divergence is not recorded.",
+      "impact": "A reader of the package believes stage 0 delivered a never-wrapping toolbar with an overflow menu; at narrow board widths (about 340px, reachable with the 560px detail panel at the 720px minimum window) the toolbar wraps to two rows.",
+      "suggested_fix": "Add a deviation (c) to the plan's 'Состояние этапа 0': below about 340px the toolbar wraps; labels collapse under 1100px; no overflow menu in stage 0. Or reword the specification line.",
+      "evidence": "specification.md line 151 ('Не переносится на вторую строку при открытой панели PR: второстепенные элементы уходят в меню'); implementation-plan.md line 10 ('Убрать перенос панели инструментов') and the deviation list at lines 20-23; the round brief for F-001 ('the toolbar wraps again'; measurement: wrapped to two rows at 340px).",
+      "confidence": "medium",
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "line": 151,
+      "quote": "**Панель инструментов.** Не переносится на вторую строку при открытой панели PR",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": [
+    {
+      "id": "F-003",
+      "disposition": "closed",
+      "evidence": "model.ts laneReason now returns attentionReason before reviewNote, and reviewNote(card) returns the outdated text independently of lane order. model.test.ts lines 85-92 pin it: a CHANGES_REQUESTED card stays in attention, laneReason is 'Changes requested' and reviewNote is 'Outdated review · abcdef0'. The ReviewResults note line was not in my slice and is not re-verified."
+    },
+    {
+      "id": "F-004",
+      "disposition": "closed",
+      "evidence": "README.md line 4 now says stage 0 is implemented (Flow 516, PR #1294). The plan has a 'Состояние этапа 0' section with deviations (a) team requests and (b) local review in the indicator. The roadmap 0.29.38 entry says stage 0 is implemented. specification.md line 150 says stage 0 matches the login only. Residual doc drift on the toolbar is reported as F-101."
+    },
+    {
+      "id": "F-007",
+      "disposition": "closed",
+      "evidence": "model.test.ts lines 78-82 use a neutral card (`quiet(pr)`: decision null, no reviewers, CI passed), assert reviewLane is 'open' with and without the outdated badge, and assert laneReason. A change sending outdated cards to attention now fails the test."
+    },
+    {
+      "id": "F-009",
+      "disposition": "partial",
+      "evidence": "desk-run-store.test.ts now has decoys for another PR, another viewer, deleted and archived runs, imported runs and a run without a result (test at the 'outdated lookup ignores' title), plus a badgesEqual test and a tab-signal matrix with mixed-case login. Still unpinned: the `r.repo=?2` predicate (the test store holds one repository; `other` differs only in viewer), and the `state IN ('completed','partial','budget')` filter (no newer failed or cancelled run that has a recorded result). The 'merged PR hidden under the default filter' case was not found in this slice. The mutation pass was not run."
+    },
+    {
+      "id": "F-010",
+      "disposition": "closed",
+      "evidence": "desk-run-store.ts attachBadges (head): `finished` requires `base IS NOT NULL AND head IS NOT NULL` (flagged CTE, line 416), matching the row mapping `result: row.base && row.head ? ...`. Read only; the SQL was not executed."
+    }
+  ],
+  "slices": ["slice-05"]
+}
+```
+
+## Notes on the second look (no finding)
+
+- ReviewBoard.dom.test.tsx: switching every query from `host` to `document.body` is needed because the Review rules and PR watcher dialogs are portaled. The new test 'toolbar dialogs render under document.body' checks both the portal and that no dialog sits under `.review-board`. The assertions no longer rely on `host` containing the dialogs, so none became vacuous. The `trapped()` helper is correct: it is false only when the dialog is outside `.review-board` and its overlay's parent is body.
+- The merged-PR actionable test now saves a `state: ["merged"]` filter first, which matches the removed bypass: the card is visible only because the filter selects merged.
+- 'a card-only refresh does not drop the tab signal ... carried unread reply' covers the cross-scope retention that remains as state after F-008.
+- board-badges.test.ts and the store tests agree on the precedence rules in `localBadge`. The newest-finished and 'skipped newer run does not hide older' cases line up with the SQL `row_number() ... PARTITION BY card, finished`.
+- Docs: the specification rows O6 and O8-O19 describe base code, which is stated as read, not run. I found no contradiction with the code that was read.
+
+## Not verified
+
+- No tests, builds or SQL were run (exec budget 0). Every disposition rests on reading the code and tests at head 33fd9647a.
+- F-006 (query cost), F-001 (CSS), F-002, F-005, F-008 and the ReviewResults note line are outside my slice; I give no disposition for them.
+- Prior-finding text for F-009 was taken from `prior_findings.json`; the round-1 mutant list was not re-read.

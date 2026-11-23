@@ -1,0 +1,74 @@
+STATUS: DONE
+
+## Frontend Review
+
+Slice-01 read in full (flow files, ProjectReviewRules, ReviewBoard, ReviewResults, ReviewWatcher, model.ts, review.css). Checked against the diff only plus targeted reads of ui.tsx (overlayOpen, Dialog), review.css, ReviewDetail.css, board-badges.ts, board-types.ts.
+
+Clean areas: observer/MobX not used in this slice (hooks-based React); no API call added to a component; badgesEqual now compares `outdated`; the latest-ref carry-over of addressed replies keeps the previous semantics (same repository/viewer/updatedAt/range guard); Done-lane gate (`stateFilterShowsDone`) agrees with `stateQuery` for an empty state filter; toolbar container query targets descendants of the container, which is valid; icon-only collapsed buttons keep `aria-label` and `title`; flow files hold no secret. The flow `owner` field carries the operator's name as project metadata (not reported).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "No blocker or major. Two minor findings and one info: portaling the rules and watcher dialogs out of .review-workspace breaks the focus-restore selector for them; the outdated lane reason masks the GitHub reason that put a card in Needs attention; toolbar one-row claim is unmeasured with the real watcher label and board data.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+      "problem": "clearPrivateView detects an open dialog with the selector `.review-workspace [role=\"dialog\"]`. This change portals the Review rules and PR watcher dialogs to document.body, so they are no longer descendants of .review-workspace and the selector no longer matches them. Only the detail panel and the non-portaled Filters and subscription dialogs still match.",
+      "impact": "Scenario: the PR watcher or Review rules dialog is open with focus inside it; a board load returns a different repository or viewer identity, so clearPrivateView runs. ReviewWatcher and ProjectReviewRules are keyed on the watcher target and remount, closing the dialog. restoreFocus stays false, so the search field is not refocused and focus falls to document.body. Before the change focus returned to the search field. Keyboard and screen-reader users lose their place; no data effect.",
+      "suggested_fix": "Match portaled dialogs too, for example closest('.review-workspace [role=\"dialog\"], .review-detail-panel, body > .overlay [role=\"dialog\"]'), or test overlayOpen() at that point instead of a DOM ancestor selector.",
+      "evidence": "ReviewBoard.tsx clearPrivateView (hunk @@ 91,132 @@); ProjectReviewRules.tsx and ReviewWatcher.tsx diffs wrap the dialog in createPortal(..., document.body); ui.tsx Dialog renders `.overlay` as the root. The selector was not updated in the diff.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "restore-focus-selector-portaled-dialogs",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": null,
+      "quote": "const outdated = c.localReview?.outdated;",
+      "problem": "laneReason returns the outdated-review text before attentionReason, but reviewLane still places the card by attentionReason. A card with an outdated review and, for example, a requested reviewer, CHANGES_REQUESTED or failed checks sits in the Needs attention lane while its reason line reads 'Outdated review · sha'. The T7 journal records the ordering as a decision but gives no reason for hiding the GitHub reason.",
+      "impact": "Scenario: a PR with changes requested and a finished Keryx review of an earlier head. The card is in Needs attention (lane from CHANGES_REQUESTED), and the card and list Reason column show only 'Outdated review · abc1234'. The user cannot see why the card needs attention without opening the detail. The old order showed the GitHub reason for exactly these cards.",
+      "suggested_fix": "Show the outdated text only when attentionReason(c) is null, or append it as a secondary note next to the attention reason; alternatively rank it after attentionReason and before the decision/draft fallbacks.",
+      "evidence": "model.ts laneReason (outdated block placed before `const attention = attentionReason(c)`) versus reviewLane (`return attentionReason(c) ? \"attention\" : \"open\"`); journal line 'T7 decision: the outdated reason ranks ... before every GitHub-derived reason'.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "lane-reason-outdated-masks-attention",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-board .flows-toolbar > * { flex: none; }",
+      "problem": "With labels collapsed under 1100px the PR watcher button still shows `.watcher-indicator` text (Checking, Off, Paused, Needs repair, Poll failed, Status unavailable, Watching), and every child is flex:none with nowrap. The one-row claim at 820px was measured with no board data, where the watcher is not configured and the count label and Review rules button are absent.",
+      "impact": "Not a confirmed defect. With board data at about 820px the fixed-width items (heading, Filters, Review rules, watcher plus its longest status text, view toggle, Refresh) plus the 96px search minimum could exceed the toolbar width and overflow instead of wrapping (wrapping is disabled). It would be settled by measuring scrollWidth against clientWidth with a loaded board and the longest watcher status.",
+      "suggested_fix": "Measure with board data and the longest watcher label; if it overflows, hide .watcher-indicator in the collapsed container query or let it shrink with text-overflow.",
+      "evidence": "review.css hunk @@ 63,92 @@ and ReviewWatcher.tsx button markup; brief states board data, count label and Review rules button were not measured.",
+      "confidence": "low",
+      "reviewer": "review-frontend",
+      "dedupe_key": "toolbar-overflow-unmeasured-with-data",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-01"]
+}
+```
+
+## Not verified
+
+- No code was run (read-only, exec budget 0); no live rendering of the toolbar with board data, the open detail panel, an outdated card, or the portaled dialogs' focus behaviour.
+- The test files (ReviewBoard.dom.test.tsx, model.test.ts) and the SQL and badge files are in other slices; only `board-badges.ts` and `board-types.ts` outline lines were read for the `outdated` shape.
+- `keryx gdgraph affected`, `keryx test related`, wiki and memory layers were not consulted; no layers block was in the payload.
+
+Routing audit: graph_used no (not-relevant: findings rest on the diff and targeted reads), wiki_used no (not-relevant), ctx_used yes (`keryx ctx rg`), raw_rg_used no.

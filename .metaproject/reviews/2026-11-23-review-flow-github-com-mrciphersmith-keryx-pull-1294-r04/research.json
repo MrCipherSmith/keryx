@@ -1,0 +1,459 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (Sibling of F-027 that the fix leaves. Seeding at :231 is correct only if a replacing load contains e) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-030",
+      "reason": "Same defect as canonical F-030 (merged by the orchestrator at consolidation).",
+      "finding": "F-030"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (On an `unavailable:` error after a scope switch, the board shows the cached snapshot of that scope f) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-031",
+      "reason": "Same defect as canonical F-031 (merged by the orchestrator at consolidation).",
+      "finding": "F-031"
+    },
+    {
+      "id": "review-logic-w1:fu1",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? F-020, F-024, F-025 not dispositioned: their sites (review.css, ReviewResults.tsx secondaryNote, the GitHub PR body) were not read in this round.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w2:R4-LOGIC-1",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding R4-LOGIC-1 (The `reviewed` fixture (PR +2: requested on b, reviewed c, newer finished run of d) separates `revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-logic-w2:R4-LOGIC-2",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding R4-LOGIC-2 (The thresholds are container queries on `.flows-toolbar` (`container-type: inline-size`, `@container) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-032",
+      "reason": "Same defect as canonical F-032 (merged by the orchestrator at consolidation).",
+      "finding": "F-032"
+    },
+    {
+      "id": "review-logic-w3:R4-LOGIC-1",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding R4-LOGIC-1 (The `reviewed` fixture (PR +2: requested on b, reviewed c, newer finished run of d) separates `revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-logic-w3:R4-LOGIC-2",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding R4-LOGIC-2 (The thresholds are container queries on `.flows-toolbar` (`container-type: inline-size`, `@container) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-032",
+      "reason": "Same defect as canonical F-032 (merged by the orchestrator at consolidation).",
+      "finding": "F-032"
+    },
+    {
+      "id": "review-logic-w4:R4-LOGIC-1",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding R4-LOGIC-1 (The `reviewed` fixture (PR +2: requested on b, reviewed c, newer finished run of d) separates `revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-logic-w4:R4-LOGIC-2",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding R4-LOGIC-2 (The thresholds are container queries on `.flows-toolbar` (`container-type: inline-size`, `@container) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-032",
+      "reason": "Same defect as canonical F-032 (merged by the orchestrator at consolidation).",
+      "finding": "F-032"
+    },
+    {
+      "id": "review-logic-w5:F-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-001 (Sibling of F-027 that the fix leaves. Seeding at :231 is correct only if a replacing load contains e) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-030",
+      "reason": "Same defect as canonical F-030 (merged by the orchestrator at consolidation).",
+      "finding": "F-030"
+    },
+    {
+      "id": "review-logic-w5:F-002",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-002 (On an `unavailable:` error after a scope switch, the board shows the cached snapshot of that scope f) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-031",
+      "reason": "Same defect as canonical F-031 (merged by the orchestrator at consolidation).",
+      "finding": "F-031"
+    },
+    {
+      "id": "review-logic-w5:fu1",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? F-020, F-024, F-025 not dispositioned: their sites (review.css, ReviewResults.tsx secondaryNote, the GitHub PR body) were not read in this round.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-T01",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-T01 (The F-021 gate that reads a publication only for a row whose reviewed range equals the card's range ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w1:F-T02",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-T02 (Prior F-022 (b) stays open. The `supersedes` term only decides whether the outdated candidate row is) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w1:F-T03",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-T03 (The terms of replaceAttention that the T18 fix relies on are pinned only for the first load of an op) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w1:F-T04",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-T04 (The handled-request test still waits for the read receipt with a 5 ms sleep (F-028, second half). Th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w2:F-T01",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-T01 (The F-021 gate that reads a publication only for a row whose reviewed range equals the card's range ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w2:F-T02",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-T02 (Prior F-022 (b) stays open. The `supersedes` term only decides whether the outdated candidate row is) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w2:F-T03",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-T03 (The terms of replaceAttention that the T18 fix relies on are pinned only for the first load of an op) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w2:F-T04",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-T04 (The handled-request test still waits for the read receipt with a 5 ms sleep (F-028, second half). Th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-033",
+      "reason": "Same defect as canonical F-033 (merged by the orchestrator at consolidation).",
+      "finding": "F-033"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "priorDispositions": {
+      "F-009": "partial",
+      "F-015": "closed",
+      "F-016": "closed",
+      "F-017": "closed",
+      "F-018": "closed",
+      "F-019": "closed",
+      "F-020": "closed",
+      "F-021": "closed",
+      "F-022": "partial",
+      "F-023": "closed",
+      "F-024": "open",
+      "F-025": "withdrawn",
+      "F-026": "closed",
+      "F-027": "closed",
+      "F-028": "partial",
+      "F-029": "partial"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:669abc5ab157",
+        "rawEvidence": "raw/review-backend-w2.txt#sha256:669abc5ab157",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:710be0b74fba",
+        "rawEvidence": "raw/review-frontend-w2.txt#sha256:710be0b74fba",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:852526d6b3c5",
+        "rawEvidence": "raw/review-logic-w5.txt#sha256:852526d6b3c5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:4d64ceae4170",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:4d64ceae4170",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:b8117ea20fdf",
+        "rawEvidence": "raw/review-security-code-w5.txt#sha256:b8117ea20fdf",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:f26a1c7f8004",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:f26a1c7f8004",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 18,
+    "known": 0,
+    "unknown": 18,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise.txt"
+  ]
+}

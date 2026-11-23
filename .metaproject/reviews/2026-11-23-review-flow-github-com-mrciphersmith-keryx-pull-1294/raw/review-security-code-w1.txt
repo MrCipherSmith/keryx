@@ -1,0 +1,45 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage0`, base `1b994df180fb89c82b6164e516ad3ff27b2453fa`, head `53c96b8af161a9aa7550f6d8f7c2ed739baaf110`, scope_mode diff.
+- Slices read in full: slice-01 (flow package 516, apps/desktop review UI: ProjectReviewRules.tsx, ReviewBoard.tsx, ReviewResults.tsx, ReviewWatcher.tsx, model.ts, review.css) and slice-03 (src/review/board-badges.ts, board-types.ts, desk-run-store.ts attachBadges SQL, and their tests).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas (checked)
+- SQL injection (desk-run-store.ts `attachBadges`): every value is bound (`?1` cards JSON, `?2` repositoryId, `?3` viewer); the switch from anonymous `?` to numbered parameters keeps the bind order of the unchanged `query.all(JSON.stringify(cards…), snapshot.repositoryId, snapshot.viewer)` call. The interpolated `${visible("o")}` / `${visible("r")}` only splices the compile-time aliases "o" and "r"; `${pending}` interpolates table names read from `sqlite_schema` constrained by a literal `IN ('review_questions','reviewer_questions')` (pre-existing).
+- Authorization / data scoping: the new outdated subquery is scoped by `o.repo=?2 AND o.viewer=?3 AND o.pr=w.n`, the same (repo, viewer, pr) scope as the outer query; archived/deleted and imported (`source` not manual/scheduled) runs are excluded. The test "Another account's history stays out" and the separating fixtures (other PR, other viewer) cover it. The badge exposes only `headSha` and `state` of the outdated run; no report text crosses the boundary (comment and plan risk confirmed by the SELECT list).
+- Unbounded result / DoS: the subquery is `LIMIT 1` per card and cards are chunked by 200 (pre-existing), so the extra rows are bounded to one per card.
+- XSS / React: the new text ("Outdated review · <sha>", toolbar labels, `title`/`aria-label` attributes) is rendered through JSX escaping; no `dangerouslySetInnerHTML`, `eval` or `new Function` added. `createPortal(..., document.body)` for the Review rules and PR watcher dialogs moves existing dialog markup only; no new message handlers.
+- Secrets / storage: no credentials, tokens or `localStorage` writes added; filter storage and read receipts are pre-existing.
+- Personal data in flow files: `flow.json` carries the `owner.value` name written by `keryx flow init --owner`; the same field exists in many existing flows (`keryx ctx rg '"basis": "stated"' .metaproject/flows` returns 542 matches in 166 files), so it is an established project convention, not a new leak. No secrets in the journal, plan or resolved-context files.
+- Command injection, path traversal, open redirect, crypto, CSRF: no such code in the diff.
+
+### Not verified
+- No tests run (read-only budget); I relied on the slices and the package's test evidence files as described in the brief, which I did not open.
+- I did not read the Rust `review_board` pass-through in apps/desktop/src-tauri (outside the diff); the journal states it forwards untyped JSON.
+- `Dialog` component internals (focus trap, escape handling) under the new portal were not read; they are not a security surface in this change.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No code-level security defects in slice-01 or slice-03. The changed attachBadges SQL binds every value (?1 cards JSON, ?2 repo, ?3 viewer), interpolates only literal aliases, keeps the (repo, viewer, pr) scope in the new outdated subquery, returns at most one extra row per card and exposes only headSha and state. UI changes render text through JSX escaping and portal existing dialogs to document.body; no secrets, unsafe HTML or new storage.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01", "slice-03"],
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: two-slice diff review with supplied text); wiki_used: no (not-relevant: intent stated in brief and flow files); ctx_used: yes (keryx ctx rg for owner-field convention and attachBadges callers); raw_rg_used: no.

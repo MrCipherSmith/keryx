@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "reviewer-override",
+      "quote": "yes",
+      "reason": "Round 3 delta is two fix commits touching five code files; operator chose six reviewers",
+      "confirmedVia": "host-question",
+      "at": "2026-11-23T11:18:26.012Z",
+      "subject": {
+        "head": "086335a01cc6ccd4c97672215d4db86d5c308dce",
+        "items": [
+          "review-architecture",
+          "review-degradation",
+          "review-highload",
+          "review-layout",
+          "review-performance",
+          "review-ui-ux"
+        ]
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "ask-r03-roster",
+        "questionText": "Раунд 3 — дельта из двух коммитов (5 файлов кода). Запустить его сокращённым составом: review-logic, review-regression, review-frontend, review-backend, review-security-code, review-testing-practices — и НЕ запускать review-architecture, review-clean-code, review-degradation, review-highload, review-layout, review-performance, review-style, review-ui-ux?",
+        "answerText": "yes",
+        "time": "2026-11-23T11:18:26.012Z"
+      }
+    }
+  ]
+}

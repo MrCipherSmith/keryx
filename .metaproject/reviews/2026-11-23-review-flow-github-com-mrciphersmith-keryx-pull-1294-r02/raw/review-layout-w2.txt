@@ -1,0 +1,31 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "No new layout defect. F-001 (the nowrap toolbar overflow) is closed against the supplied browser measurements: one row with no clipping at 560, 700, 820, 1101 and 1380px, two rows with no clipping at 340px. The measurements used stand-ins and an empty board, and the detail panel was not open. The new .review-note rule and the remaining toolbar states were read, not measured, so nothing is filed about them.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css at this head has no `flex-wrap: nowrap` override, so the shared `.flows-toolbar { flex-wrap: wrap }` from flows.css applies again. Search field is `flex: 1 1 96px; max-width: 260px`; `.toolbar-label` is hidden under a 1100px container, `.count-label` and `.watcher-indicator` under 760px. Measured evidence (previous package, research-evidence/layout-measurements.md, 'After the fix', Chromium, Vite dev build): clientWidth 340/560/700/820/1101/1380, scrollWidth equal to clientWidth every time, 0 clipped children, height 55 (one row) from 560 up and 91 (two rows) at 340. The original failing width (560) now fits. Even where the content does not fit, wrapping is the fallback, so the 7px push-out cannot recur as clipping. Caveat: stand-ins for the Review rules button and the count label, no real board data, detail panel not actually open, real watcher status text not measured (only 'Status unavailable')." },
+    { "id": "F-002", "disposition": "closed", "evidence": "`inBoardOverlay` in ReviewBoard.tsx keeps the old ancestor test and adds `el.closest('[role=\"dialog\"]')?.querySelector('.project-review-rules, .review-watcher')`. `.project-review-rules` exists in review.css/ProjectReviewRules.tsx and `.review-watcher` in ReviewWatcher.tsx, and the new DOM test returns focus to search from both portaled dialogs. Judged by reading the diff and the test, not by running it, and outside this lens." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts `laneReason` now returns `attentionReason` before the outdated text (`reviewNote`), so a card in Needs attention keeps its GitHub reason; ReviewResults.tsx adds `.review-note` as a secondary line in board and list via `secondaryNote`, which skips it when it equals the lead reason. Operator decision (every card with an outdated badge) matches the code. Tests in model.test.ts and ReviewBoard.dom.test.tsx cover it. Visual result of the note not measured." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan (new 'Состояние этапа 0' with deviations a and b), prd R12, specification (status line and indicator bullet) and roadmap 0.29.38 now state stage 0 is implemented and that only the login is matched. Docs read only." },
+    { "id": "F-005", "disposition": "partial", "evidence": "Review rules uses `shieldCheck` while Filters keeps `checklist`, so the collapsed icons differ; the active-filter count is its own `.filter-count` element outside `.toolbar-label`, so it stays visible under 1100px. Remaining: `.count-label` (the pull request count) is still hidden under a 760px container, which is where the default 560px detail-panel case lands. The fix moved it from 1100px to 760px but did not keep it outside the collapsing set. Minor and deliberate; the toolbar measurements show it hidden at 560 and 700 and shown from 820." },
+    { "id": "F-006", "disposition": "closed", "evidence": "Structure read only: `scoped AS MATERIALIZED` parses each run of a requested card once; `flagged`/`picked` use window functions to keep the newest finished run per card only when no run of that card supersedes it; the final select joins `picked` by rowid. This matches the stated design. The worker's timing (about 395 ms vs 770 ms at the previous head) was not re-run and the correctness of the window logic is outside the layout lens." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts adds `quiet(pr)` (no decision, no reviewers) and asserts `reviewLane(neutral)` is \"open\" with and without the outdated badge, so a change that sends outdated cards to attention now fails." },
+    { "id": "F-008", "disposition": "closed", "evidence": "ReviewBoard.tsx derives `attentionPrs` with `useMemo` over `carriedAttention`, `snapshot` and `receiptVersion`; the load callback and `accessLost` write only `setCarriedAttention`. The effect writer is gone." },
+    { "id": "F-010", "disposition": "closed", "evidence": "In `flagged`, a finished run needs `base IS NOT NULL AND head IS NOT NULL`, so a run with a reviewed head and no base is no longer picked. The journal records that `localBadge` itself still accepts such a run; that parity gap is outside this finding's SQL site." },
+    { "id": "F-012", "disposition": "open", "evidence": "The derived `attentionPrs` still iterates all `snapshot.cards` while `visible` filters afterwards, so the indicator can point at a hidden card. Unchanged and not addressed; info." },
+    { "id": "F-014", "disposition": "open", "evidence": "`visible()` still spells the source set as `IN ('manual','scheduled')` in SQL, separate from the TypeScript predicate. Unchanged; info." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+What I did not verify:
+- No browser or test run (read-only, exec_budget_s 0). Layout claims rest on the supplied measurements, which name the command class (Chromium, Vite dev build) and the viewports.
+- Not measured: real board data, the real Review rules and watcher label widths, the open detail panel, widths between the measured ones, RTL and longest-translation labels (the toolbar text is English only), the `.review-note` line (size, warn colour contrast, wrapping on a 230px lane card), and the `Filters(2)` spacing inside `.btn` (depends on its flex gap in components.css).
+- SQL correctness and timing, F-002 behaviour and the docs were judged by reading only.

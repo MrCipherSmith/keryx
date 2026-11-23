@@ -1,0 +1,110 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage0` | Merge-base: `1b994df180fb` | Delta `53c96b8af161..33fd9647afea`
+- Slices read in full: slice-01 (fix slice), slice-02 and slice-03 (new code). For the changed hunks I also read the current text of `src/review/desk-run-store.ts` (attachBadges) and `ReviewResults.tsx`.
+
+### Summary
+The fixes close the clean-code-relevant prior findings (F-001, F-002, F-003, F-004, F-005, F-006, F-007, F-010); F-008 is only partly closed because the attention predicate still has two call sites. The delta adds four small maintainability issues: the list row calls `laneReason` four times and `secondaryNote` twice per row, the new SQL repeats the run-state lists, a string comparison decides whether the secondary note shows, and the portaled-dialog detection depends on two class names defined in other files. Nothing is above minor.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 2
+
+### Findings
+#### Functions / DRY
+- F-101 (minor): list row recomputes the same reason four times.
+- F-102 (minor): run-state literal lists repeated in the new SQL.
+#### Comments / coupling
+- F-103 (info): secondary-note de-duplication by string equality.
+- F-104 (info): portaled-dialog detection by foreign class names.
+#### Error handling, SOLID
+No issues found.
+
+### Clean Areas
+`reviewNote` (small pure helper, doc comment matches the code), the `attentionPrs` useMemo (no I/O, deps correct; the consumer reads only `.size`, so dropping the old identity-preserving return is harmless), the `inBoardOverlay` function body, the CSS, the docs hunks, the test hunks. `attachBadges` is long (about 78 lines, SQL plus row transform) but it was over the threshold before this change; not reported as debt the change did not create.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Fix slice closes F-001..F-007 and F-010 on clean-code grounds, F-008 partially. Four new findings, none above minor: repeated laneReason/secondaryNote calls in the list row, repeated run-state SQL literals, string-equality de-duplication of the note, class-name coupling in inBoardOverlay.",
+  "findings": [
+    {
+      "id": "F-101",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "{secondaryNote(c, laneReason(c)) && <span className=\"review-note\">{secondaryNote(c, laneReason(c))}</span>}",
+      "problem": "In the list view each row calls laneReason(c) four times (title attribute, the visible span, and twice as the argument of secondaryNote) and secondaryNote twice. ReviewTile computes `reason` and `note` once; the list branch does not. Four copies of one expression is over the duplicate-block threshold (3 or more) and was introduced by the F-003 fix (before it, the row called laneReason twice).",
+      "impact": "Cost: every re-render of the list recomputes the reason chain (attentionReason plus reviewNote) four times for each of up to 150 rows, and a future change to how the note is derived must be made in two places per row. No wrong behaviour today.",
+      "suggested_fix": "Extract a small `ReasonCell({ card })` component, or make the row callback a block body that computes `const reason = laneReason(c); const note = secondaryNote(c, reason);` once, as ReviewTile does, and render from those two values.",
+      "evidence": "ReviewResults.tsx list branch, the `<td title={laneReason(c)}>` cell; ReviewTile at the top of the same file uses the single-computation form.",
+      "confidence": "high",
+      "degradation_class": "behaviour-delta"
+    },
+    {
+      "id": "F-102",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "coalesce(r.state IN ('running','cancelling','queued') OR requested OR (base=wb AND head=wh),0) AS kept,",
+      "problem": "The new `flagged` CTE spells the active-state list `('running','cancelling','queued')` twice and the finished-state list `('completed','partial','budget')` twice, and `kept` and `supersedes` repeat the sub-expression `state IN active OR requested`. The file already names one such fragment (`scheduledReservation`, line 24) and uses the active list again in activeReviewNumbers and elsewhere in a different order, so the same business set is now spelled five times in the file.",
+      "impact": "Cost: adding a run state (a new active or finished state) requires finding every copy; missing one of the two inside this query makes `kept` and `supersedes` disagree and silently changes which outdated badge a card gets. Not wrong today.",
+      "suggested_fix": "Name the two sets once next to scheduledReservation (for example ACTIVE_STATES_SQL and FINISHED_STATES_SQL) and interpolate them; compute `active OR requested` once in `scoped` as a column and reuse it in `kept` and `supersedes`.",
+      "evidence": "keryx ctx rg over src/review/desk-run-store.ts for the three state lists: lines 24, 415, 416, 417, 418, 471, 736.",
+      "confidence": "medium",
+      "degradation_class": "behaviour-delta"
+    },
+    {
+      "id": "F-103",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "return note && note !== reason ? note : null;",
+      "problem": "Whether the secondary line shows is decided by comparing the note text with the reason text. It works because laneReason returns reviewNote's string when nothing else leads, but it ties two functions in two files together through exact string equality.",
+      "impact": "If laneReason ever decorates the outdated text (a prefix, a count), the same sentence would show twice on the card. No current defect.",
+      "suggested_fix": "Have the model say which reason won (for example laneReason returning a `{ text, source }` pair, or a `noteIsLead(c)` predicate in model.ts next to the ranking) and let the view use that instead of comparing strings.",
+      "evidence": "ReviewResults.tsx secondaryNote and model.ts laneReason fall-through to reviewNote.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-104",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "const PORTALED_DIALOG_CONTENT = \".project-review-rules, .review-watcher\";",
+      "problem": "The focus-restore check for the two body-portaled dialogs depends on two class names owned by ProjectReviewRules.tsx and ReviewWatcher.tsx (content root classes, also styled in review.css). Nothing at those sites says the board's focus logic reads them.",
+      "impact": "Renaming either class for styling reasons silently brings back the F-002 behaviour; the new DOM test covers both dialogs today, so the regression would be caught there, not at the rename.",
+      "suggested_fix": "Add a shared marker (a data attribute exported as a constant, or a one-line comment at both class sites) so the coupling is visible where the class is defined.",
+      "evidence": "ReviewBoard.tsx PORTALED_DIALOG_CONTENT; keryx ctx rg shows `.review-watcher` at ReviewWatcher.tsx:103 and `.project-review-rules` in review.css and the rules dialog.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `.review-board .flows-toolbar { flex-wrap: nowrap; }` line is deleted; search field is `flex: 1 1 96px; max-width: 260px`; labels hide under a 1100px container, count label and watcher indicator under 760px. Read only; the measurements in the brief were not re-run." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx: clearPrivateView now calls inBoardOverlay(document.activeElement), which also accepts a focus inside a `[role=\"dialog\"]` that contains `.project-review-rules` or `.review-watcher`; a DOM test covers both portaled dialogs. Class-name coupling is noted as F-104 (info)." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts: laneReason ranks reviewNote after attentionReason; ReviewResults.tsx shows reviewNote as a `review-note` line on tile and list row when it differs from the lead reason; model.test.ts and a DOM test pin it. Operator decision (every card) is what the code does. New cost noted in F-101 and F-103." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan, specification, prd R12 and roadmap 0.29.38 now say stage 0 is implemented and the plan has a 'Состояние этапа 0' section recording the team-request and local-review deviations. Docs only, read against the flow description." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx uses the existing `shieldCheck` icon (present in Icon.tsx); ReviewBoard.tsx renders the filter count as its own `<span className=\"filter-count\">` outside `.toolbar-label`, so it stays visible; the PR count label now hides only under 760px, so below 760px it is still hidden by design." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges: `scoped` is one MATERIALIZED CTE that parses each run's details once; `flagged`/`picked` use window functions to keep the newest finished run only when `max(supersedes)` over the card is 0; the final select joins picked rows by rowid. Judged from the SQL; the 405/770/395 ms measurement is the worker's and was not re-run." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts uses `quiet(pr)` (no decision, no reviewers) and asserts reviewLane is \"open\" with and without the outdated badge." },
+    { "id": "F-008", "disposition": "partial", "evidence": "attentionPrs is now a useMemo over carriedAttention, snapshot and receiptVersion, and the effect writer is gone. The predicate `needsViewerAttention(c, viewer, unreadCount(...))` with the same add/delete loop still exists twice: in the load callback (writes carriedAttention) and in the useMemo. The cross-scope retention justifies a carried set, but the loop body is duplicated; a shared helper would finish the fix. Maintainability only." },
+    { "id": "F-010", "disposition": "closed", "evidence": "`finished` in the `flagged` CTE requires `base IS NOT NULL AND head IS NOT NULL`, so a run with a head and no base is no longer selected and then dropped. The journal notes the live-history localBadge path still accepts such a run; no producer writes one." },
+    { "id": "F-012", "disposition": "open", "evidence": "Unchanged by design: the tab indicator is still derived from all snapshot cards (the new useMemo loops over snapshot.cards) while `visible` applies the filters. Info." },
+    { "id": "F-014", "disposition": "open", "evidence": "`visible()` in attachBadges still hard-codes `IN ('manual','scheduled')`; unchanged. Info." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+### Not verified
+No test, build or browser run (read-only budget). The SQL timing and the toolbar measurements are the workers' and the orchestrator's, not re-run. I did not judge F-009, F-011 and F-013: their sites are outside the lines my lens reads or belong to the testing and UI reviewers. Slice-03 (ProjectReviewRules, ReviewBoard removals, ReviewResults import, model, desk-run-store removed lines) is mostly the removed side of the new code in slice-02; I read it fully. Slices 04 to 06 were not assigned to me. Behaviour of the SQL on a real store (equivalence with round-1 head) was judged from the text, not executed.
+
+Routing audit: graph_used: no (not-relevant, bounded diff slices); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no.

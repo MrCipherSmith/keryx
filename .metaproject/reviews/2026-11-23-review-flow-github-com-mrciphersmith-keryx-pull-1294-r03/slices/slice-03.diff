@@ -1,0 +1,65 @@
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 230,230 @@
+       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
+-      setAttentionPrs(previous => {
+-        const next = new Set(replaceAttention ? [] : previous);
+-        for (const card of snapshot.cards) {
+-          if (card.state === "open" && (card.reviewers.length > 0 || card.decision === "CHANGES_REQUESTED")) next.add(card.number);
+-          else next.delete(card.number);
+-        }
+-        return next;
+-      });
+-      const nextFilterKey = reviewFilterKey(cwd, snapshot.repositoryId, snapshot.viewer);
+
+--- apps/desktop/src/review/ReviewResults.tsx
+@@ 109,110 @@
+     <table className="flow-list review-table"><thead><tr>
+       <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
+-    </tr></thead><tbody>{cards.slice(0, limit).map((c) => <tr key={c.number}>
+-      <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
+-      <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={laneReason(c)}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{laneReason(c)}</span>
+-        <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+-      <td><ReviewAction card={c} {...actions} /></td>
+-    </tr>)}</tbody></table>
+
+--- apps/desktop/src/review/model.ts
+@@ 51,69 @@
+ }
+ 
+ export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
+   const q = query.trim().toLowerCase();
+   return cards.filter(c => {
+     if (q && !c.title.toLowerCase().includes(q) && !String(c.number).includes(q.replace(/^#(?=\d)/, ""))) return false;
+-    if (c.localReview?.active) return true;
+     return (!f.author.length || f.author.includes(c.author)) &&
+       matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
+       matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
+       (!f.decision.length || f.decision.includes(c.decision ?? ":none")) &&
+       (!f.ci.length || f.ci.includes(c.ci)) &&
+       (!f.state.length || f.state.includes(prState(c)));
+   });
+ }
+ 
+ function attentionReason(c: ReviewCard): string | null {
+   if (c.localReview?.publicationPending) return "Choose whether to publish on GitHub";
+   if (c.localReview?.ready) return "Keryx review result available";
+   if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
+
+--- src/review/desk-run-store.ts
+@@ 436,443 @@
+         coalesce(json_extract(r.details,'$.reviewerProgress.completed'),
+           CASE WHEN json_array_length(r.details,'$.reviewerProgress.sessions')>0 THEN (
+             SELECT count(*) FROM (
+               SELECT json_extract(s.value,'$.state') AS outcome,
+                 row_number() OVER (PARTITION BY json_extract(s.value,'$.reviewer'),json_extract(s.value,'$.wave') ORDER BY s.key DESC) AS retry
+               FROM json_each(r.details,'$.reviewerProgress.sessions') s
+             ) WHERE retry=1 AND outcome='completed'
+           ) END) AS completed
+-      FROM json_each(?) wanted CROSS JOIN runs r
+-      WHERE r.repo=? AND r.viewer=? AND r.pr=json_extract(wanted.value,'$.number')
+-        AND source IN ('manual','scheduled')
+-        AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete') AND
+-        (r.state IN ('running','cancelling','queued') OR
+-          (baseSha=json_extract(wanted.value,'$.baseSha') AND headSha=json_extract(wanted.value,'$.headSha')) OR
+-          (base=json_extract(wanted.value,'$.baseSha') AND head=json_extract(wanted.value,'$.headSha')))
+-      ORDER BY json_extract(r.details,'$.createdAt') DESC,r.rowid DESC`);

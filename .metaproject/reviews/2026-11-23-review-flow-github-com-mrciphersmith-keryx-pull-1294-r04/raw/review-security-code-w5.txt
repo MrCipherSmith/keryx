@@ -1,0 +1,31 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No security finding in the round 4 delta. attachBadges binds repo and viewer in SQL and compares the card's own range, so one card's publication receipt cannot attach to another card or viewer; the receipt path is built from a run id validated as a UUID. A replacing load seeds the carried attention set from the new snapshot only; account switches remount the board. data-review-board-dialog is used only by inBoardOverlay for focus restore. No secrets or personal data in the slices.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0, "total": 0 },
+  "prior_dispositions": [
+    { "id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx: the effect after attentionPrs writes the judged set back to carriedAttention; no cross-identity data involved." },
+    { "id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx list row computes reason and note once as locals; no security surface." },
+    { "id": "F-017", "disposition": "closed", "evidence": "model.ts laneReason local renamed note; behaviour unchanged." },
+    { "id": "F-018", "disposition": "closed", "evidence": "desk-run-store.ts attachBadges SQL: repo=?2 AND viewer=?3 AND pr=w.n are bound parameters, visible() excludes archived, deleted and imported runs; the card list goes in as one bound JSON parameter, no injection and no cross-viewer rows." },
+    { "id": "F-019", "disposition": "closed", "evidence": "specification.md and implementation-plan.md record deviation (c); documentation only, no secret." },
+    { "id": "F-021", "disposition": "closed", "evidence": "be26765ae: publication is read only when card?.baseSha === row.base && card.headSha === row.head; cardByPr is keyed by number inside one repository and viewer batch, and the rows come from a query bound to the same repository and viewer." },
+    { "id": "F-022", "disposition": "closed", "evidence": "desk-run-store.test.ts: one fixture per outdated lookup term including repository and another viewer, each compared with localBadge." },
+    { "id": "F-023", "disposition": "closed", "evidence": "ProjectReviewRules.tsx and ReviewWatcher.tsx carry data-review-board-dialog; PORTALED_DIALOG_CONTENT is read only in inBoardOverlay, which feeds restoreFocus and overlayOpen focus logic, not any authorization or data gate." },
+    { "id": "F-025", "disposition": "closed", "evidence": "implementation-plan.md no longer claims awaiting merge; documentation only." },
+    { "id": "F-026", "disposition": "closed", "evidence": "The awaiting-merge wording is removed in README.md and implementation-plan.md." },
+    { "id": "F-027", "disposition": "closed", "evidence": "20b535531: on a replacing load ReviewBoard.tsx sets carriedAttention to a new Set built from loaded.cards, replacing and not merging the previous numbers. A failed load never reaches that line; non-'unavailable' failures go to accessLost, which clears the set, and an 'unavailable:' failure keeps the old snapshot together with its own set (identity.current not advanced). Account switches remount ProjectBoard through its key." },
+    { "id": "F-029", "disposition": "closed", "evidence": "The store test pins each term of the outdated lookup against localBadge." }
+  ],
+  "slices": ["slice-01", "slice-03", "slice-04", "slice-05", "slice-06"]
+}
+```
+
+Not verified: no code ran (read-only, no tests, no running app). slice-04 and slice-05 were scanned for secrets, tokens, personal paths and statements about the code with pattern searches and spot reads, not line by line; the hits were a security-baseline description and the test string "Previous account secret rule" (no secret). That the board remounts on a repository change was inferred from the scope definition (state/period) and component names, not traced end to end. SQL timing and the mutation runs were not repeated. F-020, F-024 and F-028 sites were not in the files I read, so no disposition is given for them.
+
+Routing audit: graph_used no (not-relevant, diff review); wiki_used no (not-relevant); ctx_used yes; raw_rg_used no.

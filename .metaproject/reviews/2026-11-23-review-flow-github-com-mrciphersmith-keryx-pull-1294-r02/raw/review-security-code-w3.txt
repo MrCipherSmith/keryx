@@ -1,0 +1,26 @@
+STATUS: DONE
+
+## Security Review (round 2, slice-05, second look: tests and requirements docs)
+
+No exploitable or reachable security weakness found in slice-05. Checked: secrets/PII in fixtures and docs (only synthetic values such as "ann", "org/repo", "Private repo name", "Previous account secret rule"), injection (the tests only drive existing code; no SQL, command or HTML is built from input inside the slice), XSS (no dangerouslySetInnerHTML added; the test notes DOMPurify loads after registerDom), localStorage use (filters only; tests cover malformed data and unavailable storage), and cross-account leakage (tests assert eviction of previous-account data; the slice only exercises it). The docs carry no credentials, tokens, personal data or internal URLs beyond the public PR reference.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at tests and requirements docs (slice-05): no security findings. Fixtures are synthetic; docs carry no secrets or personal data. F-004 and F-007 closed; F-009 and F-010 partial; F-006 closed on the test side only.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-004", "disposition": "closed", "evidence": "docs/requirements/keryx-desktop-review-v2/README.md line 4 now states stage 0 is implemented on feat/desktop-review-v2-stage0 (Flow 516, PR #1294) and stages 1-4 are draft; the old 'nothing implemented' sentence is gone. Roadmap bumped to 0.29.38. The deviation record in the implementation plan is not visible in this slice's hunks and was not re-verified." },
+    { "id": "F-007", "disposition": "closed", "evidence": "apps/desktop/src/review/model.test.ts lines 78-82 use a neutral card (quiet(pr)), assert reviewLane is 'open' with and without an outdated localReview, so the assertion can fail if outdated moved a card." },
+    { "id": "F-009", "disposition": "partial", "evidence": "desk-run-store.test.ts now has decoys for another PR, another viewer, deleted/archived, imported and result-less runs; board-badges.test.ts pins source and state cases. Not visible in this slice: a newer finished run in another repository (o.repo predicate) and a newer failed run with a recorded result (state filter). Mutation pass not run." },
+    { "id": "F-006", "disposition": "closed", "evidence": "Only the test side is in this slice: store tests assert badge parity with localBadge for the new query shape. The SQL and its measurement are outside slice-05; the performance defect itself is not judged here." },
+    { "id": "F-010", "disposition": "partial", "evidence": "Store tests cover a run without a recorded result but none with a reviewed head and no base; the SQL predicate is outside this slice, so that parity edge is not pinned by these tests." }
+  ],
+  "slices": ["slice-05"]
+}
+```
+
+Not verified: no tests were run (read-only, exec budget 0). SQL in src/review/desk-run-store.ts and the UI code are outside this slice and were not read; the F-006 and F-010 dispositions rest on the test side only; the implementation-plan deviation record (second half of F-004) is only partly visible in the diff hunks.

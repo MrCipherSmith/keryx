@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 20221,
+      "contentHash": "d2944ea3a6567a3ccb3163da2a6727ba3eeaafd02323b74a7096995fe97d4ded",
+      "files": [
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/model.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "domain": "apps [test], apps, src/review",
+      "split": "domain",
+      "roles": [
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ReviewBoard.tsx, apps/desktop/src/review/ReviewResults.tsx, apps/desktop/src/review/model.ts (+1)",
+          "fix slice: answers 4 prior finding(s) F-015, F-016, F-017, F-018"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "F-015",
+        "F-016",
+        "F-017",
+        "F-018"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 12983,
+      "contentHash": "3d5f2e7b70e076779252567ab0a3b8746bb0daca76ccb8d9bd0619a739f82c7b",
+      "files": [
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md"
+      ],
+      "domain": ".metaproject, .metaproject [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 3858,
+      "contentHash": "6791a6f55fdda81df5cd86bc09d86c0760bc6a263f0d13f69985490661b172e8",
+      "files": [
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/model.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "domain": "apps, src/review",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ReviewBoard.tsx, apps/desktop/src/review/ReviewResults.tsx, apps/desktop/src/review/model.ts (+1)"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 131733,
+      "contentHash": "b9c76ed83e07222158ef8643e3c2686fcffd264e792e08ddbc8234304ee32552",
+      "files": [
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T12.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T13.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T14.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json",
+        ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json",
+        "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/ReviewWatcher.tsx",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ProjectReviewRules.tsx, apps/desktop/src/review/ReviewBoard.tsx, apps/desktop/src/review/ReviewResults.tsx (+2)",
+          "second look: unchanged since round 2, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 146633,
+      "contentHash": "549ef4b072cf078c17d1f7734bd468f730b6231e7281acfc286373b30083fbda",
+      "files": [
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "docs/requirements/keryx-desktop-review-v2/README.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "docs/requirements/keryx-desktop-review-v2/prd.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "docs/requirements/roadmap.md"
+      ],
+      "domain": "apps [test], docs [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 2, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 21569,
+      "contentHash": "6635a6f7053bb84daba1a78bcd6029a715aadb7010431935cdb94f8c14f3920f",
+      "files": [
+        "src/review/board-badges.test.ts",
+        "src/review/desk-run-store.test.ts",
+        "src/review/board-badges.ts",
+        "src/review/board-types.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "domain": "src/review [test], src/review",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/board-badges.ts, src/review/board-types.ts, src/review/desk-run-store.ts",
+          "second look: unchanged since round 2, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 6,
+    "bytes": 336997,
+    "files": 31,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

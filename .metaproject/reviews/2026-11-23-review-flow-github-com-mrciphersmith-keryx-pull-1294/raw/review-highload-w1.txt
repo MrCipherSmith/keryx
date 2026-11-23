@@ -1,0 +1,48 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "No race, unbounded-growth, lock or retry defect found in slices 01 and 03 under the stated load (SQLite per user, 200-card batches, 6 s badge poll). The poll sends only active cards, so the new outdated-run SQL runs per 6 s only for those; the full-board load pays one extra scalar subquery per card. One minor focus-restore regression from the portaled dialogs (outside this lens) and one performance-adjacent info.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel')",
+      "problem": "Review rules and PR watcher dialogs are now portaled to document.body, so they are no longer descendants of .review-workspace. clearPrivateView still detects 'a dialog had focus' with a selector scoped to .review-workspace.",
+      "impact": "When the viewer identity changes (account switch / access lost) while the Review rules or PR watcher dialog holds focus, restoreFocus stays false and focus is not returned to the search field; focus falls to body. Keyboard users lose their place. No data effect.",
+      "suggested_fix": "Match portaled dialogs too, e.g. closest('[role=\"dialog\"], .review-detail-panel') guarded by a board-owned marker, or have the dialogs report open state to the board.",
+      "evidence": "slice-01 diff of ProjectReviewRules.tsx and ReviewWatcher.tsx (createPortal(..., document.body)); ReviewBoard.tsx:122 selector read via keryx ctx rg. Not exercised at runtime.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "portaled-dialog-focus-restore-selector",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "ORDER BY json_extract(o.details,'$.createdAt') DESC,o.rowid DESC LIMIT 1",
+      "problem": "The outdated lookup is a correlated scalar subquery per requested card: it uses the (repo,viewer,pr) index but then evaluates several json_extract calls on every run of that PR and sorts by createdAt, before LIMIT 1.",
+      "impact": "Full board load: up to 200 such subqueries per batch, cost proportional to total runs of the requested PRs (the previous query already parsed each such run, so roughly a constant-factor increase). The 6 s poll passes only cards with an active review, so it is not multiplied by board size. No measurement was possible; information, not a defect.",
+      "suggested_fix": "If a store with many runs per PR shows slow board loads, store created_at / reviewed head as columns or select only the outdated run id with a covering index. Otherwise leave as is.",
+      "evidence": "slice-03 desk-run-store.ts attachBadges diff; ReviewBoard.tsx poll builds `active` from cards with localReview.active (read in the tree). Query plan not run (exec_budget_s 0).",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "dedupe_key": "outdated-subquery-per-card-cost",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-01", "slice-03"]
+}
+```
+
+Checked and clean: Part 0 (no state files, locks, children), A (the `latest` ref read inside the load callback sees the same snapshot the old functional updater did; the later setRead replaces the whole snapshot either way, so no new lost update), E/F (poll keeps one timer, cleared on cleanup, fixed 6 s, `cancelled` guards late results), G (read-only SQL, single statement gives a consistent snapshot, viewer-scoped). The new attention-sync effect only rewrites state when the set changes, so it cannot loop with the poll.
+
+Not verified: query plan or timing of the SQL on a large store (no execution allowed); SQLite version support for `MATERIALIZED` and numbered parameters in the Bun runtime used by the packaged app; runtime behaviour of the portaled dialogs; the Rust bridge. Memory was not used.

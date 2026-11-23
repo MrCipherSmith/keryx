@@ -1,0 +1,23 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "No unintended behaviour change found in the three points. (1) 20b535531: a replacing load seeds carriedAttention with the same judgement (needsViewerAttention over loaded cards, unreadCount(loaded, card)) that 33fd9647a/53c96b8af ran in the load callback; non-replacing loads no longer judge in the callback, but the shown snapshot is judged by the useMemo (add and delete per card) and persisted by the write-back effect, which gives the same set. A card that stops needing attention is deleted by the memo and written back. (2) f72f23f73: both portaled dialogs (RulesDialog, ReviewWatcher) carry the marker on the same inner div the class selectors matched; PrSubscriptionDialog (.review-watcher, not portaled; Dialog in components/ui.tsx does not portal, it renders under .review-workspace) was and is matched by the '.review-workspace [role=dialog]' selector, so nothing flips. (3) be26765ae: localBadge reads publication only at board-badges.ts line 49, behind same && latest.publication === 'pending' && sameRange(latest.result.reviewed, revision); the new guard (row.base/head equal the card's range) is implied by the second term, publication() is a pure read, so no badge field changes for any run combination. Slices were not read in full (see unverified).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx:350-352 write-back effect persists removals into carriedAttention when a snapshot is shown, so the scope switch to Merged no longer resurrects a handled PR." },
+    { "id": "F-016", "disposition": "closed", "evidence": "ReviewResults.tsx:112-113 computes reason and note once per list row." },
+    { "id": "F-017", "disposition": "closed", "evidence": "model.ts:103 local renamed to note." },
+    { "id": "F-021", "disposition": "closed", "evidence": "desk-run-store.ts:455-458 reads publication only when the row's reviewed range equals the card's range." },
+    { "id": "F-023", "disposition": "closed", "evidence": "ReviewBoard.tsx:64 PORTALED_DIALOG_CONTENT = '[data-review-board-dialog]'; marker on ProjectReviewRules.tsx:63 and ReviewWatcher.tsx:103." },
+    { "id": "F-027", "disposition": "closed", "evidence": "ReviewBoard.tsx:231 seeds carriedAttention from the replacing load's cards; with saved Merged/Closed/period filters on a first load of a new identity the set is seeded from that load." }
+  ],
+  "slices": ["slice-01", "slice-03"]
+}
+```
+
+Not verified: I did not read the two slice diffs in full; I read the four new commits with git show and the current ReviewBoard.tsx, board-badges.ts and desk-run-store.ts regions they touch, plus the 53c96b8af load callback. No tests or app runs. F-018/F-019/F-022/F-026/F-028/F-029 dispositions not assessed. Residual edge not traced: a replacing load seeds with receipts as of load time; later receipt changes are covered by the memo only while that snapshot is shown, the same as at 53c96b8af. Duplicate card numbers in one chunk (cardByPr) assumed impossible.

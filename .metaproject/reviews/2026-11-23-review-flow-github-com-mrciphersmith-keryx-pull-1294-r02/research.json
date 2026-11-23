@@ -1,0 +1,792 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:A-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding A-001 (The board identifies the two portaled dialogs by the internal content class names of ProjectReviewRu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-023",
+      "reason": "Same defect as canonical F-023 (merged by the orchestrator at consolidation).",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-architecture-w2:A-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding A-001 (The board identifies the two portaled dialogs by the internal content class names of ProjectReviewRu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-023",
+      "reason": "Same defect as canonical F-023 (merged by the orchestrator at consolidation).",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-clean-code-w1:F-101",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-101 (In the list view each row calls laneReason(c) four times (title attribute, the visible span, and twi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-016",
+      "reason": "Same defect as canonical F-016 (merged by the orchestrator at consolidation).",
+      "finding": "F-016"
+    },
+    {
+      "id": "review-clean-code-w1:F-102",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-102 (The new `flagged` CTE spells the active-state list `('running','cancelling','queued')` twice and the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-018",
+      "reason": "Same defect as canonical F-018 (merged by the orchestrator at consolidation).",
+      "finding": "F-018"
+    },
+    {
+      "id": "review-clean-code-w1:F-103",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-103 (Whether the secondary line shows is decided by comparing the note text with the reason text. It work) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-024",
+      "reason": "Same defect as canonical F-024 (merged by the orchestrator at consolidation).",
+      "finding": "F-024"
+    },
+    {
+      "id": "review-clean-code-w1:F-104",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-104 (The focus-restore check for the two body-portaled dialogs depends on two class names owned by Projec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-023",
+      "reason": "Same defect as canonical F-023 (merged by the orchestrator at consolidation).",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-clean-code-w2:F-101",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-101 (In the list view each row calls laneReason(c) four times (title attribute, the visible span, and twi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-016",
+      "reason": "Same defect as canonical F-016 (merged by the orchestrator at consolidation).",
+      "finding": "F-016"
+    },
+    {
+      "id": "review-clean-code-w2:F-102",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-102 (The new `flagged` CTE spells the active-state list `('running','cancelling','queued')` twice and the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-018",
+      "reason": "Same defect as canonical F-018 (merged by the orchestrator at consolidation).",
+      "finding": "F-018"
+    },
+    {
+      "id": "review-clean-code-w2:F-103",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-103 (Whether the secondary line shows is decided by comparing the note text with the reason text. It work) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-024",
+      "reason": "Same defect as canonical F-024 (merged by the orchestrator at consolidation).",
+      "finding": "F-024"
+    },
+    {
+      "id": "review-clean-code-w2:F-104",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-104 (The focus-restore check for the two body-portaled dialogs depends on two class names owned by Projec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-023",
+      "reason": "Same defect as canonical F-023 (merged by the orchestrator at consolidation).",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-degradation-w1:D-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding D-001 (The specification (Pull requests, Панель инструментов) and plan stage 0 say the toolbar does not wra) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-019",
+      "reason": "Same defect as canonical F-019 (merged by the orchestrator at consolidation).",
+      "finding": "F-019"
+    },
+    {
+      "id": "review-degradation-w1:D-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding D-002 (The test asserts the badge output, which is identical whether or not the SQL drops the outdated row ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-022",
+      "reason": "Same defect as canonical F-022 (merged by the orchestrator at consolidation).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-degradation-w2:D-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding D-001 (The specification (Pull requests, Панель инструментов) and plan stage 0 say the toolbar does not wra) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-019",
+      "reason": "Same defect as canonical F-019 (merged by the orchestrator at consolidation).",
+      "finding": "F-019"
+    },
+    {
+      "id": "review-degradation-w2:D-002",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding D-002 (The test asserts the badge output, which is identical whether or not the SQL drops the outdated row ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-022",
+      "reason": "Same defect as canonical F-022 (merged by the orchestrator at consolidation).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-frontend-w1:F-R2-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-R2-001 (The F-008 fix derives attentionPrs in a useMemo from carriedAttention plus the shown snapshot. carri) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-015",
+      "reason": "Same defect as canonical F-015 (merged by the orchestrator at consolidation).",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-frontend-w2:F-R2-001",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-R2-001 (The F-008 fix derives attentionPrs in a useMemo from carriedAttention plus the shown snapshot. carri) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-015",
+      "reason": "Same defect as canonical F-015 (merged by the orchestrator at consolidation).",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (Since the F-008 fix, attentionPrs is a useMemo over carriedAttention and the shown snapshot. carried) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-015",
+      "reason": "Same defect as canonical F-015 (merged by the orchestrator at consolidation).",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (attachBadges computes the publication outcome for every returned row, including the single outdated ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-021",
+      "reason": "Same defect as canonical F-021 (merged by the orchestrator at consolidation).",
+      "finding": "F-021"
+    },
+    {
+      "id": "review-logic-w3:F-101",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-101 (The requirements package states that the board toolbar does not wrap and that secondary items move i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-019",
+      "reason": "Same defect as canonical F-019 (merged by the orchestrator at consolidation).",
+      "finding": "F-019"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (attachBadges computes the publication outcome for every returned row, including the single outdated ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-021",
+      "reason": "Same defect as canonical F-021 (merged by the orchestrator at consolidation).",
+      "finding": "F-021"
+    },
+    {
+      "id": "review-logic-w5:F-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-001 (Since the F-008 fix, attentionPrs is a useMemo over carriedAttention and the shown snapshot. carried) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-015",
+      "reason": "Same defect as canonical F-015 (merged by the orchestrator at consolidation).",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (Claims in the What section no longer match the head. (1) The toolbar is not forced onto one row: the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-025",
+      "reason": "Same defect as canonical F-025 (merged by the orchestrator at consolidation).",
+      "finding": "F-025"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (Verification and Not verified describe the branch before the fix round. (1) The count is now 755 pas) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-025",
+      "reason": "Same defect as canonical F-025 (merged by the orchestrator at consolidation).",
+      "finding": "F-025"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (Commit 626bf776d writes 'awaiting merge' and the PR number as present-tense status into implementati) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-026",
+      "reason": "Same defect as canonical F-026 (merged by the orchestrator at consolidation).",
+      "finding": "F-026"
+    },
+    {
+      "id": "review-regression-w1:RG-1",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding RG-1 (Introduced by the F-008 fix. At 53c96b8af an effect wrote the judged set back into state (next.delet) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-015",
+      "reason": "Same defect as canonical F-015 (merged by the orchestrator at consolidation).",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-regression-w2:RG-1",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding RG-1 (Introduced by the F-008 fix. At 53c96b8af an effect wrote the judged set back into state (next.delet) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-015",
+      "reason": "Same defect as canonical F-015 (merged by the orchestrator at consolidation).",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-style-w1:S-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding S-001 (In laneReason the local `outdated` used to hold the object `c.localReview?.outdated`; after the F-00) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-017",
+      "reason": "Same defect as canonical F-017 (merged by the orchestrator at consolidation).",
+      "finding": "F-017"
+    },
+    {
+      "id": "review-style-w1:S-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding S-002 (The list-row Reason cell computes laneReason(c) four times (title attribute, visible span, and once ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-016",
+      "reason": "Same defect as canonical F-016 (merged by the orchestrator at consolidation).",
+      "finding": "F-016"
+    },
+    {
+      "id": "review-style-w1:S-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding S-003 (In the `flagged` CTE the alias `r` names rows of `scoped` (`FROM scoped r`), while in the final SELE) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-018",
+      "reason": "Same defect as canonical F-018 (merged by the orchestrator at consolidation).",
+      "finding": "F-018"
+    },
+    {
+      "id": "review-style-w2:S-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-001 (In laneReason the local `outdated` used to hold the object `c.localReview?.outdated`; after the F-00) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-017",
+      "reason": "Same defect as canonical F-017 (merged by the orchestrator at consolidation).",
+      "finding": "F-017"
+    },
+    {
+      "id": "review-style-w2:S-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-002 (The list-row Reason cell computes laneReason(c) four times (title attribute, visible span, and once ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-016",
+      "reason": "Same defect as canonical F-016 (merged by the orchestrator at consolidation).",
+      "finding": "F-016"
+    },
+    {
+      "id": "review-style-w2:S-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-003 (In the `flagged` CTE the alias `r` names rows of `scoped` (`FROM scoped r`), while in the final SELE) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-018",
+      "reason": "Same defect as canonical F-018 (merged by the orchestrator at consolidation).",
+      "finding": "F-018"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The `requested` term of `supersedes` (a run requested for the card's range that is neither active no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-022",
+      "reason": "Same defect as canonical F-022 (merged by the orchestrator at consolidation).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (No test builds the input that separates the `note !== reason` de-duplication: every DOM fixture with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-022",
+      "reason": "Same defect as canonical F-022 (merged by the orchestrator at consolidation).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (The `requested` term of `supersedes` (a run requested for the card's range that is neither active no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-022",
+      "reason": "Same defect as canonical F-022 (merged by the orchestrator at consolidation).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (No test builds the input that separates the `note !== reason` de-duplication: every DOM fixture with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-022",
+      "reason": "Same defect as canonical F-022 (merged by the orchestrator at consolidation).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (Under a 760px toolbar container the pull request count and the PR watcher status text are removed to) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-020",
+      "reason": "Same defect as canonical F-020 (merged by the orchestrator at consolidation).",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-001",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-001 (Under a 760px toolbar container the pull request count and the PR watcher status text are removed to) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "canonical-findings.json F-020",
+      "reason": "Same defect as canonical F-020 (merged by the orchestrator at consolidation).",
+      "finding": "F-020"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "F-001": "closed",
+      "F-002": "closed",
+      "F-003": "closed",
+      "F-004": "closed",
+      "F-005": "partial",
+      "F-006": "closed",
+      "F-007": "closed",
+      "F-008": "closed",
+      "F-009": "partial",
+      "F-010": "closed",
+      "F-011": "open",
+      "F-012": "open",
+      "F-013": "open",
+      "F-014": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:73f5ea96f61a",
+        "rawEvidence": "raw/review-architecture-w2.txt#sha256:73f5ea96f61a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:85961628b412",
+        "rawEvidence": "raw/review-backend-w2.txt#sha256:85961628b412",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:c4cc4c4e07de",
+        "rawEvidence": "raw/review-clean-code-w2.txt#sha256:c4cc4c4e07de",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:2a1d5766d540",
+        "rawEvidence": "raw/review-degradation-w2.txt#sha256:2a1d5766d540",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:bf924af7371f",
+        "rawEvidence": "raw/review-frontend-w2.txt#sha256:bf924af7371f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:a1fbc7322ddd",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:a1fbc7322ddd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:0ac42a4ab940",
+        "rawEvidence": "raw/review-layout-w2.txt#sha256:0ac42a4ab940",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:0b83623a8268",
+        "rawEvidence": "raw/review-logic-w5.txt#sha256:0b83623a8268",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "opus",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:af9732ea95da",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:af9732ea95da",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:f2b60abf8feb",
+        "rawEvidence": "raw/review-pr-contract-w1.txt#sha256:f2b60abf8feb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:8bef4f57cc1e",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:8bef4f57cc1e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:5dd78127dfe9",
+        "rawEvidence": "raw/review-security-code-w5.txt#sha256:5dd78127dfe9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "opus",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:6ead0cbc9002",
+        "rawEvidence": "raw/review-style-w2.txt#sha256:6ead0cbc9002",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:0805e911f7bb",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:0805e911f7bb",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:e246fb5793e3",
+        "rawEvidence": "raw/review-ui-ux-w2.txt#sha256:e246fb5793e3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 35,
+    "known": 0,
+    "unknown": 35,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise.txt"
+  ]
+}

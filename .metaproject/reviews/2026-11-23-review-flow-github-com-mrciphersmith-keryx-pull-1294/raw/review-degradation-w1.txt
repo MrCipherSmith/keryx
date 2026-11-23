@@ -1,0 +1,67 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "summary": "Two minor behaviour deltas against base, one info. No blocker or major. Verified clean: (1) localBadge refactor (board-badges.ts): filtering source==='existing' up front gives the same active/latest/ready results as base; the ready expression is identical; outdated is a fallback only when no same-range run and no active run exists, so ready/publicationPending/runState are unchanged for every card that had a localReview on base. (2) SQL (desk-run-store.ts attachBadges): numbered params ?1/?2/?3 match the (json, repo, viewer) bind order; visible() reproduces the old source/decision predicates; the outdated pick (newest finished, reviewed range != card range, MATERIALIZED CTE, LIMIT 1 per card) agrees with the localBadge stale rule, including the case of a finished run reviewed on the card range (ready=true, outdated unset); extra cost is one row per card plus one publication() receipt-file read per outdated row, bounded by card count. (3) Consumers of localReview outside the diff, walked with keryx ctx rg (search-derived): board-transport.ts (strips and re-attaches localReview as an opaque object), platform/review.ts:54 (copies it), commands/review-board.ts:78,85 (filters on .active only), ReviewProgress.tsx CardReviewProgress (reads runState/progress; an outdated-only badge has neither), ReviewBoard.tsx badge poll (polls active cards only; badgesEqual now compares outdated). A card that had localReview undefined on base may now carry {active:false, ready:false, outdated}; no consumer found that treats bare truthiness of localReview as 'has a run'. (4) Filter-bypass removal, sort removal, Done-lane gate (stateFilterShowsDone): a done-lane card cannot pass the default Open+Draft filter, so the gate hides no card; the behaviour changes the brief lists as operator decisions are not filed. (5) Attention-set effect and the addressedReplyIds carry-over moved out of setRead: same inputs as base (latest.current is the last rendered read); the new effect re-derives the set from the shown snapshot with add/delete only; no flicker path found. (6) Portals: ProjectReviewRules and ReviewWatcher dialogs are mounted only under tabActive, so moving them to document.body does not leave a dialog visible on a hidden tab; ReviewFilters and PrSubscriptionDialog sit outside the toolbar and are unchanged. Graph degradation block not supplied; blast-radius.json was not opened, consumers were found by search and marked search-derived; whether a cap dropped consumers is unknown. Slice-01 lines 1-1233 are flow metadata and resolved-context JSON (read; nothing about the code).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": null,
+      "quote": "if (outdated.headSha === c.headSha) return `${partial ? \"Partial review\" : \"Review\"} predates base update · ${sha}`;",
+      "problem": "laneReason now returns the outdated-review text before attentionReason(c). reviewLane() is unchanged, so an open PR with an outdated review AND a GitHub reason (changes requested, review requested, failed checks, unread reply to the viewer) still sits in the 'Needs attention' lane, but its reason line reads 'Outdated review · <sha>' instead of the reason that put it there. On base such a card showed the real reason, because the finished earlier-head run never reached the badge. Base already lets 'Partial review' outrank GitHub reasons, but that needs a same-range run; outdated is the common case after every push.",
+      "impact": "Card is in 'Needs attention' with a reason that does not explain why. 'New reply to you' is surfaced only through this reason text, so for such a card the reply cue is lost on the card and in the list Reason column (the tab indicator still lights).",
+      "suggested_fix": "Rank the outdated text after attentionReason(c), or append it as a secondary suffix, so GitHub-derived reasons keep their text; keep it before the 'No review requested' fallback.",
+      "evidence": "consumer-trace: model.ts reviewLane (attentionReason non-null -> 'attention') versus laneReason (outdated branch returns first); attentionReason lists decision, reviewers, ci, addressedReplyIds. base-diff: base laneReason had no outdated branch. refute: read ReviewResults.tsx; ReviewTags still shows the decision and Review requested badges and the list has a CI column, so decision and CI stay visible; an unread reply has no other card-level cue. The T7 journal records the ordering as a worker decision, not an operator one.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role=\"dialog\"], .review-detail-panel');",
+      "problem": "This selector decides whether focus returns to the search field after clearPrivateView (identity change or access lost). The Review rules and PR watcher dialogs are now portaled to document.body, so they no longer match `.review-workspace [role=\"dialog\"]`. On base both were inside .review-workspace and matched; ReviewFilters and the detail panel still match.",
+      "impact": "If access is lost or the viewer changes while focus is inside the Rules or PR watcher dialog, those components remount (keyed on watcherTarget), the dialog unmounts, and focus is not restored to the search field; it drops to document.body.",
+      "suggested_fix": "Extend the selector to cover the portaled dialogs (for example a shared class or data attribute on them), or set restoreFocus from the dialog open state.",
+      "evidence": "base-diff: base ProjectReviewRules and ReviewWatcher rendered the Dialog inside the .review-workspace subtree; head renders it with createPortal(..., document.body) while the ReviewBoard.tsx selector is unchanged. refute: useFocusTrap restores focus on unmount, but to the toolbar button that the same key change unmounts; the restoreFocus effect in ReviewBoard.tsx is the only path to the search field. Rare trigger (identity change with that dialog open).",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);",
+      "problem": "The tab indicator is computed over snapshot.cards (all cards) while the visible list is filtered. With the filter bypass for active reviews gone (operator decision), an open PR whose review awaits the viewer's answer but which a persisted author, reviewer or CI filter excludes lights 'attention' on the tab with no card on the board to act on. On base that card stayed visible through the filters.",
+      "impact": "The indicator can point at a card the active filters hide; the user has to clear filters to find it. Follows from AC1; noted so the operator can confirm it is accepted.",
+      "suggested_fix": "Accept and document, or show a 'N hidden by filters need you' hint next to the filter summary.",
+      "evidence": "consumer-trace: attentionPrs is fed from unfiltered snapshot.cards in both the load handler and the new effect; visible applies filterReviews afterwards. Not a defect against the stated requirement.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-01", "slice-03"]
+}
+```
+
+Not verified: no code was run (read-only, exec budget 0). The SQL was read, not executed; SQLite support for `AS MATERIALIZED` was not checked beyond the passing store tests cited in the brief; the query plan on a large store was not measured; the Rust `review_board` passthrough was not read. The graph consumer list was not supplied, so consumer coverage is search-derived (keryx ctx rg localReview), not graph-complete. The store test for a finished run whose reviewed head equals the card head but whose base differs (the SQL `NOT (base IS wb AND head IS wh)` boundary) is not visible in the slice hunks, so whether a mutation of that predicate is caught was not confirmed. model.test.ts and ReviewBoard.dom.test.tsx were not in my slices.
+
+Routing audit: graph_used: no (degradation block not supplied; search-derived instead); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

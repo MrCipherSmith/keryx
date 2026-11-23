@@ -1,0 +1,34 @@
+STATUS: DONE
+
+Logic review, slice-02 (Desktop tests and requirements docs). The tests encode the six stage-0 behaviours correctly: no filter bypass for active reviews, snapshot order kept, Done lane only when the state filter can yield closed/merged, tab signal narrowed to the viewer (team requests excluded, case-insensitive match, merged/closed excluded, unread replies cleared by markRepliesRead), outdated review reason and base-moved wording, badgesEqual including `outdated`. The host-to-document.body query migration is consistent with the portaled dialogs. The base-commit citations I spot-checked (model.ts bypass, ReviewBoard sort and indicator, ReviewResults lane loop, board-badges same-range logic) match `1b994df18`. Only defect found: docs say "nothing implemented" while this PR implements stage 0.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Tests encode the stage-0 logic correctly and match the operator decisions; docs cite base-commit code accurately. One minor docs misstatement: README and roadmap say nothing is implemented although stage 0 ships in this PR.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "line": 4,
+      "quote": "Ничего из этого пакета не реализовано.",
+      "problem": "README (and roadmap changelog 0.29.38 'nothing implemented', implementation-plan 'Статус: draft') state that nothing in the package is implemented, but this PR implements stage 0 (filter bypass removal, no active-first sort, Done lane hiding, narrowed tab indicator, outdated badge, toolbar on one row), which is the stage-0 row of the plan.",
+      "impact": "A reader of the roadmap or README at the PR head is told stage 0 does not exist. Stage 0 is not marked done or in progress anywhere. The spec indicator section also still says the tab lights for requests to 'the user or their team', while stage 0 deliberately excludes team requests.",
+      "suggested_fix": "Change the status line to say stage 0 is implemented on this branch (stages 1-4 draft), align the roadmap 0.29.38 entry, and note in the spec indicator section that stage 0 excludes team requests until stage 1.",
+      "evidence": "slice-02 docs/requirements/keryx-desktop-review-v2/README.md line 4 and docs/requirements/roadmap.md changelog 0.29.38 versus the stage-0 tests in ReviewBoard.dom.test.tsx and model.test.ts in the same slice.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-02"]
+}
+```
+
+Not verified: the tests were not run (evidence files taken from the brief); the selector `.review-lanes section.lane` and the portal behaviour were not checked against component source (outside slice-02); the docs' remaining code citations (desk-run-*, prior-round, SKILL.md lines) were not checked; no live rendering.

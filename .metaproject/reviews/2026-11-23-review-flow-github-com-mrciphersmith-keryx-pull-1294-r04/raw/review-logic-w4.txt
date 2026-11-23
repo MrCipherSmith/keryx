@@ -1,0 +1,62 @@
+STATUS: DONE
+
+REVIEW_RESULT
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-04", "slice-05", "slice-06"],
+  "summary": "The new store test and the publication gate of be26765ae are correct: each of the four fixtures follows from localBadge and the SQL, and the fixtures for `requested`, the finished-state filter, the `reviewed` term of `kept` and the repository predicate each fail when their term is dropped. Two residual gaps: the `done AND reviewed` term of `supersedes` and the NULL-SHA case stay unpinned, so 'each term' is slightly overstated; and the new deviation (c) states its width thresholds against the panel while the CSS applies them to the toolbar's content box. No blocker or major found; the attention-set code at head was read for the next case and no new one was found.",
+  "findings": [
+    {
+      "id": "R4-LOGIC-1",
+      "severity": "info",
+      "file": "src/review/desk-run-store.test.ts",
+      "line": 516,
+      "quote": "test(\"each term of the outdated lookup is pinned by its own fixture\"",
+      "problem": "The `reviewed` fixture (PR +2: requested on b, reviewed c, newer finished run of d) separates `reviewed` in `kept` but not `reviewed` in `supersedes` (`live OR (done AND reviewed)`). With that term removed from `supersedes` only, the d run stays a finished candidate and is returned as an extra row, but localBadge sets `ready = true` from the kept run and `stale` is then undefined, so the badge is identical and the test stays green. Mutations that drop `reviewed` from both terms, or `requested`, the finished-state filter or `r.repo`, do fail it. A run with NULL requested SHAs (the second half of the F-029 suggestion) still has no fixture; the SQL relies on `coalesce(active OR requested, 0)` for it.",
+      "impact": "A change that stops a reviewed-range run from suppressing the outdated candidate loads an extra row per such card and keeps the suite green; the test title says every term is pinned. No wrong badge today.",
+      "suggested_fix": "Either count the rows through a seam (assert the candidate row is not returned for the `reviewed` card) or soften the title; add a fixture whose details lack baseSha/headSha.",
+      "evidence": "attachBadges at src/review/desk-run-store.ts lines 415-426 against localBadge `ready`/`stale` at src/review/board-badges.ts; traced by hand, not run as a mutant.",
+      "confidence": "medium",
+      "degradation_class": "blind-test"
+    },
+    {
+      "id": "R4-LOGIC-2",
+      "severity": "info",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "line": 24,
+      "quote": "подписи кнопок скрываются, когда панель уже 1100px; счётчик pull request'ов и текст состояния вотчера скрываются, когда панель уже 760px",
+      "problem": "The thresholds are container queries on `.flows-toolbar` (`container-type: inline-size`, `@container (max-width: 1100px)` and `(max-width: 760px)` in apps/desktop/src/styles/review.css), and a container query measures the content box. layout-measurements.md records it itself: at toolbar clientWidth 1101 the content box is 1061 and labels are hidden. So labels hide for a panel up to roughly 1140px and the count and watcher status for a panel up to roughly 800px, not 1100 and 760. The measured widths listed in the same sentence (560, 700, 820, 1101, 1380) are consistent with the CSS, only the stated thresholds are not. The rest of (c) is true: 340px wraps to two rows with nothing clipped (table row 400x800: height 91, clipped 0), one row at 560-1380, no menu, the filter counter is not hidden by either rule, and the measurement was made with injected stand-ins for the count label and the Review rules button (the sentence says 'без данных', and the last sentence says real data was not measured).",
+      "impact": "A reader sizing a window from the document expects labels at a 1120px panel and gets none. No runtime effect.",
+      "suggested_fix": "Say 'контейнер (панель без отступов) уже 1100px / 760px', or give the thresholds as panel widths about 1140 and 800.",
+      "evidence": "review.css lines 85-95; layout-measurements.md 'After the fix' table, row 1161x800.",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "prior_dispositions": [
+    { "id": "F-018", "disposition": "closed", "evidence": "attachBadges at head: the active and finished state lists are spelled once each in `scoped` (`active`, `done`), `live`, `reviewed` and `finished` are named flags used by `picked` and `ranked`; the duplicated list and the repeated `active OR requested` are gone." },
+    { "id": "F-021", "disposition": "closed", "evidence": "be26765ae: `cardByPr` lookup; publication is read only when `card?.baseSha === row.base && card.headSha === row.head`. localBadge's `publicationPending` requires `sameRange(latest.result.reviewed, revision)`, so the gate loses no output; the 'in one batch' test still expects `publicationPending: true` for the card that reviewed its range." },
+    { "id": "F-022", "disposition": "partial", "evidence": "(a) `requested` closed: fixture 1 (failed, then cancelled run requested on `next`, older completed run on b) fails if `requested` is dropped. (b) the saving of dropping the outdated row for a superseded card is still not asserted, only badge output (see R4-LOGIC-1). (c) is in f72f23f73's DOM tests, outside the slices read here." },
+    { "id": "F-029", "disposition": "partial", "evidence": "The requested-on-one-range, reviewed-another fixture now exists and pins `reviewed` in `kept`; `reviewed` in `supersedes` stays redundant for the badge, and the NULL requested SHA fixture was not added." },
+    { "id": "F-019", "disposition": "closed", "evidence": "implementation-plan.md deviation (c) and the sentence appended to specification.md line 151 ('см. отклонение (c) в разделе «Состояние этапа 0»') point at the right item; content matches review.css and the measurements except the threshold wording in R4-LOGIC-2." },
+    { "id": "F-020", "disposition": "closed", "evidence": "Accepted and recorded: deviation (c) states that the count and watcher status hide at the 760px container threshold (info, no code change)." },
+    { "id": "F-026", "disposition": "closed", "evidence": "251d494ac removes 'ожидает слияния' from README.md, implementation-plan.md (two places); a search of docs/requirements/keryx-desktop-review-v2, docs/requirements/keryx-desktop-review and apps/desktop/src finds no 'ожидает слияния' or 'awaiting merge'." },
+    { "id": "F-025", "disposition": "withdrawn", "evidence": "The finding is about the pull request description, which is not in the code or documents read; the toolbar statement it names is now in deviation (c). Not verified against the live PR text." },
+    { "id": "F-015", "disposition": "closed", "evidence": "ReviewBoard.tsx lines 339-352: attentionPrs memo re-judges the shown snapshot (add or delete per card) and the effect writes the result back to carriedAttention." },
+    { "id": "F-027", "disposition": "closed", "evidence": "ReviewBoard.tsx line 231: on a replacing load (`replaceAttention`) the carried set is seeded from the loaded cards with needsViewerAttention and unreadCount; non-replacing loads (closed/merged or period views) keep the previous set; accessLost clears it. Next-case look: replacement and seeding use the same predicate as the memo, so a seeded card is neither dropped nor added differently once shown; no case found where a replacing load discards a request that the shown snapshot would keep." },
+    { "id": "F-023", "disposition": "closed", "evidence": "`data-review-board-dialog` is on the root element of both portaled dialogs (ReviewWatcher.tsx line 103, ProjectReviewRules.tsx line 63) and matched by PORTALED_DIALOG_CONTENT in ReviewBoard.tsx line 64 used by inBoardOverlay." }
+  ],
+  "not_verified": [
+    "slice-04 and slice-05 (flow, journal, requirements and the round-3 code) were not read line by line; only the parts named in the dispatch and the code files they point at were read at head.",
+    "No test, mutation or running app was executed; the fixture analysis is by hand against the SQL in attachBadges and localBadge. Ordering ties between runs created in the same millisecond rely on `seq DESC` in both the SQL and history(); not exercised.",
+    "F-022(c) DOM tests, F-016, F-017, F-024 and F-028 sites were not read.",
+    "CSS thresholds were read from the stylesheet and compared with the recorded measurements; no layout was measured."
+  ]
+}
+```
+
+Not verified: slice-04 and slice-05 were not read in full (see `not_verified` above); nothing was executed; the PR description (F-025) was not read.

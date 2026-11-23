@@ -1,0 +1,79 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Style lens over the fix slice (slice-01) and the new code (slice-02, slice-03). Naming and structure of the fixes are readable. Two minor findings: a local named `outdated` now holds a string note, and the list-view Reason cell calls laneReason three times and secondaryNote twice for one value. One info on the new SQL CTE chain (alias `r` reused for a different table). All round-1 findings whose site is in these slices have a disposition.",
+  "findings": [
+    {
+      "id": "S-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/model.ts",
+      "line": 117,
+      "quote": "const outdated = reviewNote(c);\n  if (outdated) return outdated;",
+      "problem": "In laneReason the local `outdated` used to hold the object `c.localReview?.outdated`; after the F-003 fix it holds the string returned by reviewNote. The name now says the opposite of the type, and reviewNote in the same file uses the same identifier for the object.",
+      "impact": "A reader takes `outdated` for the badge object and looks for `.headSha`. Readability only.",
+      "suggested_fix": "Rename to `note`: `const note = reviewNote(c); if (note) return note;`.",
+      "evidence": "slice-02 model.ts laneReason hunk (new local) against slice-01 model.ts reviewNote (`const outdated = c.localReview?.outdated`). Name row, minor.",
+      "confidence": "high",
+      "dedupe_key": "style-laneReason-outdated-string-name",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta"
+    },
+    {
+      "id": "S-002",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": 920,
+      "quote": "{secondaryNote(c, laneReason(c)) && <span className=\"review-note\">{secondaryNote(c, laneReason(c))}</span>}",
+      "problem": "The list-row Reason cell computes laneReason(c) four times (title attribute, visible span, and once inside each of the two secondaryNote calls) and secondaryNote twice. ReviewTile in the same file binds `reason` and `note` once. The two views are written in different shapes.",
+      "impact": "Hard to read and easy to desynchronise on the next edit.",
+      "suggested_fix": "Use a block-bodied map callback or a small row component: `const reason = laneReason(c); const note = secondaryNote(c, reason);` and reuse both.",
+      "evidence": "slice-02 ReviewResults.tsx list branch vs ReviewTile (`const reason = laneReason(card); const note = secondaryNote(card, reason);`).",
+      "confidence": "high",
+      "dedupe_key": "style-list-cell-repeated-calls",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta"
+    },
+    {
+      "id": "S-003",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": 411,
+      "quote": "SELECT seq, created, card, coalesce(r.state IN ('running','cancelling','queued') OR requested OR (base=wb AND head=wh),0) AS kept,",
+      "problem": "In the `flagged` CTE the alias `r` names rows of `scoped` (`FROM scoped r`), while in the final SELECT `r` names `runs`. The `picked` expression `kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND row_number() OVER (...)=1) AS wanted` packs four conditions into one line, and `wanted` names a column where it named a CTE in the previous version.",
+      "impact": "Readability of a dense statement; the boolean is over the clause threshold. No functional effect seen.",
+      "suggested_fix": "Alias `scoped` as `s` in `flagged`, and give the row_number test its own column (`newest_finished`) so `picked.wanted` reads `kept OR (finished AND NOT superseded AND newest_finished)`.",
+      "evidence": "slice-01 and slice-02 desk-run-store.ts attachBadges hunks.",
+      "confidence": "medium",
+      "dedupe_key": "style-sql-cte-alias-and-dense-boolean",
+      "blocking_merge": false
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed", "evidence": "review.css: the `.review-board .flows-toolbar { flex-wrap: nowrap; }` line is deleted, search field is `flex: 1 1 96px; max-width: 260px`, `.toolbar-label` hides under 1100px, `.count-label` and `.watcher-indicator` under 760px (the class exists: review.css:46, ReviewWatcher.tsx:100). Layout itself is not judged by this lens; the orchestrator's measurements cover it." },
+    { "id": "F-002", "disposition": "closed", "evidence": "ReviewBoard.tsx: clearPrivateView now calls inBoardOverlay(document.activeElement), which also matches a `[role=dialog]` containing `.project-review-rules` or `.review-watcher`; both classes exist (ProjectReviewRules.tsx:63, ReviewWatcher.tsx:103). A new DOM test covers both dialogs." },
+    { "id": "F-003", "disposition": "closed", "evidence": "model.ts: laneReason ranks reviewNote after attentionReason; ReviewResults renders it as `.review-note` in tile and list; operator chose uphold and all cards. Style remarks are S-001 and S-002." },
+    { "id": "F-004", "disposition": "closed", "evidence": "README, implementation-plan (section 'Состояние этапа 0' with deviations a and b), prd R12, specification and roadmap 0.29.38 now state stage 0 is implemented and that only the login is matched." },
+    { "id": "F-005", "disposition": "closed", "evidence": "ProjectReviewRules.tsx uses Icon name=\"shieldCheck\" (also used in FlowsBoard.tsx, so the icon exists); the filter count is its own `<span className=\"filter-count\">` outside `.toolbar-label`; `.count-label` hides only under 760px." },
+    { "id": "F-006", "disposition": "closed", "evidence": "desk-run-store.ts: `scoped AS MATERIALIZED` parses each run once, `flagged`/`picked` apply window functions; the per-card correlated subquery is gone. Timings are the implementing worker's, not re-run by me." },
+    { "id": "F-007", "disposition": "closed", "evidence": "model.test.ts: `quiet(pr)` gives a neutral card; `expect(reviewLane(neutral)).toBe(\"open\")`, also with an outdated localReview, so the assertion can fail." },
+    { "id": "F-008", "disposition": "partial", "evidence": "attentionPrs is now a useMemo over carriedAttention, snapshot and receiptVersion and the effect is gone. The `needsViewerAttention ... next.add/next.delete` loop still exists in the load callback (setCarriedAttention) and in the memo, so the predicate is written in two places; the carried set needs it for cross-scope retention. Remaining duplication, not a defect." },
+    { "id": "F-009", "disposition": "partial", "evidence": "desk-run-store.test.ts now adds decoys for another PR, another repository, deleted, imported and a newer failed run, plus a batch test for active/range suppression. The model and DOM cases listed in F-009 (lowercase viewer, merged PR under the default filter) are not in my slices; the testing lens owns the call." },
+    { "id": "F-010", "disposition": "closed", "evidence": "desk-run-store.ts flagged CTE: `finished` requires `base IS NOT NULL AND head IS NOT NULL`." },
+    { "id": "F-011", "disposition": "open", "evidence": "ProjectReviewRules.tsx still uses createPortal(..., document.body); ReviewBoard.tsx still renders Filters inside .review-workspace; nothing records why." },
+    { "id": "F-012", "disposition": "open", "evidence": "The attentionPrs memo still iterates snapshot.cards, while `visible` applies filterReviews afterwards." },
+    { "id": "F-013", "disposition": "open", "evidence": "The ReviewAction label chain is not in the changed hunks; wording unchanged." },
+    { "id": "F-014", "disposition": "open", "evidence": "The `visible()` helper still holds the literal `IN ('manual','scheduled')`; no shared predicate or guard test." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Not verified: nothing was run (read-only round). CSS layout, SQL timings and test results come from the brief, not re-measured. ReviewWatcher.tsx, the ReviewAction label code and board-badges.ts were outside my slices; I only confirmed class and icon names with keryx ctx rg. Slice-02 also holds flow.json, journal and resolved/*.json: context only, nothing reported there.
