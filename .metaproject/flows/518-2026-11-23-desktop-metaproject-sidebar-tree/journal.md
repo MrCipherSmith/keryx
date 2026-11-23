@@ -25,3 +25,7 @@
 - 2026-11-23T20:52:53.486Z - task-done: T7: Desktop: MetaprojectTree component and explorer integration, with tests
 - 2026-11-23T20:53:06.658Z - task-attempt: T8: started (attempt 1) — 518-T8
 - 2026-11-24 - orchestrator: T8 done. Guide gained 'Browse the tree' and 'Search' subsections and three recovery rows; worker ran docs:check: exit 0 (2392 links, 0 broken; 67 tests pass). Worker notes not confirmed from code: Back revealing the tree (left out of the guide), row-click toggling a module folder (guide names the chevron only), the older-CLI recovery wording.
+- 2026-11-23T20:54:47.803Z - task-done: T8: Docs: describe the tree in the Desktop Metaproject guide
+- 2026-11-24 - orchestrator: T9 verification on 69f2c16b8 (+ docs-only b5d655738): bun run lint exit 0; bun run typecheck exit 0; bun test src/integrations 443 pass, 0 fail; Desktop bunx tsc --noEmit exit 0 and bun test src 998 pass, 0 fail (after the T7 fix round); bun run docs:check exit 0; keryx health run PASS (no gate conditions; optional sonarqube/coverage sources absent).
+- 2026-11-23T20:56:48.820Z - task-done: T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check
+- 2026-11-24 - operator (question card): first-green gate -> "Открыть PR и ревью" (standard review, no extra hardening); completion choice -> "A: PR, ревью, мерж, закрыть" (merge into main after a clean review and green CI, then implemented and complete).

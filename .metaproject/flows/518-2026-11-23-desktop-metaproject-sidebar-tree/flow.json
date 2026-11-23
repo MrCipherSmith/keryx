@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: tree navigation in the sidebar",
   "status": "in-progress",
   "createdAt": "2026-11-23T20:02:01.811Z",
-  "updatedAt": "2026-11-23T20:53:06.658Z",
+  "updatedAt": "2026-11-23T20:56:48.820Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,7 +174,7 @@
       "id": "T8",
       "title": "Docs: describe the tree in the Desktop Metaproject guide",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -190,13 +190,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7",
         "T8"
@@ -207,7 +208,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "lint, typecheck, core integration tests, Desktop tsc and full suite, docs check and health all pass; numbers in journal.md"
     },
     {
       "id": "T10",
@@ -345,6 +348,16 @@
       "at": "2026-11-23T20:53:06.658Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 1) — 518-T8"
+    },
+    {
+      "at": "2026-11-23T20:54:47.803Z",
+      "event": "task-done",
+      "detail": "T8: Docs: describe the tree in the Desktop Metaproject guide"
+    },
+    {
+      "at": "2026-11-23T20:56:48.820Z",
+      "event": "task-done",
+      "detail": "T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check"
     }
   ],
   "acKinds": {
