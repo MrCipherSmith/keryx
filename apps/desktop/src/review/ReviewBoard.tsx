@@ -61,7 +61,7 @@ export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
 
-const PORTALED_DIALOG_CONTENT = ".project-review-rules, .review-watcher";
+const PORTALED_DIALOG_CONTENT = "[data-review-board-dialog]";
 /** Focus inside the workspace dialogs, the detail panel, or the Review rules and PR watcher dialogs portaled to the body. */
 function inBoardOverlay(el: Element | null) {
   if (!el) return false;

@@ -60,7 +60,7 @@ function RulesDialog({ onClose, ...props }: RulesProps & { onClose: () => void }
   const [confirmDelete, setConfirmDelete] = useState<ReviewRule | null>(null);
   return <Dialog title="Review rules" icon="checklist" width={580} onClose={onClose} focusRoot
     footer={<button className="btn" onClick={onClose}>Close</button>}>
-    <div className="project-review-rules">
+    <div className="project-review-rules" data-review-board-dialog>
       <p><strong>{props.target.repo}</strong> · {props.target.viewer}</p>
       <p className="review-detail-muted">Enabled rules use the PR watcher’s schedule. Turn on the watcher to run reviews in the background.</p>
       {error && <p className="inline-banner tone-warn" role="alert">{error} <button className="btn btn-sm" disabled={saving} onClick={refresh}>Refresh rules</button></p>}

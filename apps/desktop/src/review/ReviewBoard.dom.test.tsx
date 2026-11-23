@@ -777,6 +777,34 @@ test("an outdated review shows as a secondary line under the attention reason in
   }
 });
 
+test("a merged card with an outdated review shows its state as the reason and the outdated text as the note, in board and list", async () => {
+  const merged: ReviewCard = { ...pr, number: 301, state: "merged", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" } } };
+  await render(async (_cwd, state) => snapshot(state === "open" ? [] : [merged]));
+  await click(button("Filters"));
+  await click(option("PR state", "Open"));
+  await click(option("PR state", "Draft"));
+  await click(option("PR state", "Merged"));
+  await click(button("Apply filters"));
+  for (const mode of ["Board", "List"]) {
+    await click(button(mode));
+    expect(document.body.querySelector(".review-reason, .review-table td[title] > span:first-child")?.textContent).toBe("Merged");
+    const notes = document.body.querySelectorAll(".review-note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.textContent).toBe("Outdated review · abcdef0");
+  }
+});
+
+test("an open card with no attention reason shows the outdated text once, as the reason, with no note, in board and list", async () => {
+  const quiet = { ...pr, reviewers: [], decision: null, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+  await render(async () => snapshot([quiet]));
+  for (const mode of ["Board", "List"]) {
+    await click(button(mode));
+    expect(document.body.querySelector(".review-note")).toBeNull();
+    expect(document.body.textContent!.split("Outdated review · abcdef0")).toHaveLength(2);
+    expect(document.body.querySelector(mode === "Board" ? ".review-reason" : ".review-table td[title] > span:first-child")?.textContent).toBe("Outdated review · abcdef0");
+  }
+});
+
 test("a badge whose only change is the outdated review counts as changed", () => {
   const base = { active: false, ready: false };
   const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };

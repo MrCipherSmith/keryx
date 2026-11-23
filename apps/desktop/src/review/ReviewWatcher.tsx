@@ -100,7 +100,7 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, active = t
     }}><Icon name="clock" size={14} /> <span className="toolbar-label">PR watcher</span> <span className="watcher-indicator">{label}</span></button>
     {active && open && createPortal(<Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
       footer={<button className="btn" onClick={() => setOpen(false)}>Close</button>}>
-      <div className="review-watcher">
+      <div className="review-watcher" data-review-board-dialog>
         <p>{target ? <><strong>{target.repo}</strong> · {target.viewer}</> : "Local schedule for this project"}</p>
         {(!snapshot && !readError) && <span role="status"><Spinner /> Checking schedule…</span>}
         {readError && <div className="watcher-notice" role="alert">{readError} <button className="link-btn"
