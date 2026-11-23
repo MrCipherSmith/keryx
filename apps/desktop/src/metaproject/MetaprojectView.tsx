@@ -24,13 +24,17 @@ import { renderRepositoryMarkdown } from "../components/Markdown";
 import { EmptyState, useEscape } from "../components/ui";
 import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
-import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
+import {
+  negotiateMetaprojectExplorer, requestMetaproject, requestMetaprojectTree, requestMetaprojectV2, type MetaprojectNegotiation,
+} from "../platform/metaproject";
+import { MetaprojectTree } from "./MetaprojectTree";
 import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
 import { NodeDetailsPanel } from "./NodeDetailsPanel";
 import { RelationshipGraph, type CytoscapeFactory } from "./RelationshipGraph";
 import { RelationshipList, summarizeRelationships } from "./RelationshipList";
 import { RELATIONSHIP_KIND_LABELS } from "./labels";
 import { useExplorerNavigation } from "./useExplorerNavigation";
+import { useMetaprojectTree, type RequestTree } from "./useMetaprojectTree";
 import "./metaproject.css";
 
 type Request = (
@@ -136,7 +140,8 @@ function RepositoryMarkdown({
   );
 }
 
-type Negotiate = (cwd: string) => Promise<1 | 2>;
+/** Protocol negotiation; a bare protocol number means the CLI offers no optional action (no `tree`). */
+type Negotiate = (cwd: string) => Promise<1 | 2 | MetaprojectNegotiation>;
 
 export function MetaprojectView(props: {
   cwd: string;
@@ -146,6 +151,11 @@ export function MetaprojectView(props: {
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
   /** Protocol negotiation; given, it runs even when `request`/`requestV2` are injected. */
   negotiate?: Negotiate;
+  /**
+   * Reads one page of the sidebar tree. Used when the negotiation reports `tree`; injected without
+   * a negotiation, it alone turns the tree on.
+   */
+  requestTree?: RequestTree;
   /** Test seam for the graph canvas (happy-dom has none); the app passes nothing. */
   createCytoscape?: CytoscapeFactory;
   /**
@@ -238,6 +248,7 @@ function Explorer({
   request = requestMetaproject,
   requestV2,
   negotiate,
+  requestTree,
   createCytoscape,
   visible = true,
 }: {
@@ -247,6 +258,7 @@ function Explorer({
   request?: Request;
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
   negotiate?: Negotiate;
+  requestTree?: RequestTree;
   createCytoscape?: CytoscapeFactory;
   visible?: boolean;
 }) {
@@ -257,16 +269,19 @@ function Explorer({
   const [panelWidth, setPanelWidth] = useState(380);
   const negotiates = Boolean(negotiate) || (!requestV2 && request === requestMetaproject);
   const [protocol, setProtocol] = useState<1 | 2 | null>(negotiates ? null : requestV2 ? 2 : 1);
+  const [supportsTree, setSupportsTree] = useState(!negotiates && Boolean(requestTree));
   const archiveSelection = useRef(false);
   const [protocolError, setProtocolError] = useState("");
   const [negotiation, setNegotiation] = useState(0);
   useEffect(() => {
     if (!negotiates) return;
     let active = true;
-    void (negotiate ?? negotiateMetaproject)(cwd).then(value => {
+    void (negotiate ?? negotiateMetaprojectExplorer)(cwd).then(value => {
       if (!active) return;
+      const settled = typeof value === "number" ? { protocol: value, supportsTree: false } : value;
       setProtocolError("");
-      setProtocol(value);
+      setProtocol(settled.protocol);
+      setSupportsTree(settled.supportsTree);
     }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
     return () => { active = false; };
   }, [cwd, negotiate, negotiates, negotiation]);
@@ -733,7 +748,14 @@ function Explorer({
     list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
   }, [selection, mode]);
   const shownTotal = catalog ? mode === "wiki" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;
-  const listHeading = searchQuery ? `Results · ${results.length}` : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
+  // Without a query, a CLI that offers `tree` browses Graph by folder and Wiki by page type; otherwise the flat list.
+  const treeScope = protocol === 2 && supportsTree && !searchQuery && (mode === "graph" || mode === "wiki") ? mode : null;
+  const markStale = useCallback(() => setSnapshotMismatch(true), []);
+  const tree = useMetaprojectTree({ cwd, snapshot: catalog?.snapshotId ?? "", request: requestTree ?? requestMetaprojectTree, onStale: markStale });
+  const listHeading = searchQuery ? `Results · ${results.length}`
+    : treeScope === "graph" ? `Files · ${catalog?.counts.files ?? 0}`
+    : treeScope === "wiki" ? `Wiki · ${catalog?.counts.wiki ?? 0}`
+    : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
   const showHidden = useCallback(() => {
     setRoute(current => current.mode === "graph" && !current.panelOpen ? { ...current, panelOpen: true } : current);
     setRevealRelationships(value => value + 1);
@@ -901,6 +923,12 @@ function Explorer({
                   <button className="btn btn-sm" onClick={() => setSearchAttempt(value => value + 1)}>Retry search</button>
                 </div>
               )}
+              {treeScope ? (
+                <MetaprojectTree key={treeScope} scope={treeScope} label={treeScope === "graph" ? "Project files" : "Wiki pages"}
+                  // Only a selection the user made is revealed; the fallback shown without one expands nothing.
+                  model={tree} selection={selection} selected={route.selection ? activeNode : undefined}
+                  onSelect={node => { remember(node); openHit({ node }); }} />
+              ) : <>
               <ul>
                 {results.map(hit => (
                   <li key={`${hit.node.id}-${hit.section ?? ""}`}>
@@ -920,6 +948,7 @@ function Explorer({
                   ? <p role="status">Searching project knowledge…</p>
                   : !searchFailure && !snapshotMismatch && <p>{searchQuery ? "No results." : "No indexed project knowledge."}</p>
               )}
+              </>}
             </nav>
             <section className="metaproject-content" ref={content} aria-label={mode === "wiki" ? "Wiki article" : "Relationship graph"}>
               {(detailError || (mode === "wiki" && relationshipError)) && (

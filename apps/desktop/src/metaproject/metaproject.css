@@ -57,6 +57,17 @@ button.metaproject-row[aria-current="true"] {
   background: var(--bg-selected);
   border-color: var(--accent);
 }
+/* Sidebar tree: flat treeitem rows indented by level (inline style), the list's row look. */
+.metaproject-list .metaproject-tree { gap: 0; }
+.metaproject-tree .metaproject-tree-row { display: flex; align-items: center; gap: var(--sp-1); padding-block: var(--sp-1); }
+.metaproject-tree [role="treeitem"]:not([aria-disabled="true"]):hover { background: var(--bg-hover); }
+.metaproject-tree [role="treeitem"]:focus-visible { outline-offset: -3px; }
+.metaproject-tree [role="treeitem"][aria-selected="true"] { background: var(--bg-selected); border-color: var(--accent); }
+.metaproject-tree-chevron { flex: none; display: inline-flex; inline-size: 12px; color: var(--fg-muted); }
+.metaproject-tree-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metaproject-tree-row > .metaproject-meta, .metaproject-tree-row > .count-label { flex: none; }
+.metaproject-tree-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-block-size: 28px; padding-block: var(--sp-1); color: var(--fg-muted); font-size: var(--fs-sm); }
+.metaproject-tree-more { min-block-size: 28px; padding-block: var(--sp-1); color: var(--accent-text); font-size: var(--fs-sm); }
 .metaproject-meta, .metaproject-snippet {
   margin: 0;
   color: var(--fg-muted);

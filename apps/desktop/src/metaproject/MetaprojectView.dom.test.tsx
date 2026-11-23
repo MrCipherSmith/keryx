@@ -1891,3 +1891,218 @@ test("a rebuild reload that a later one superseded shows no banner when it fails
   expect(catalogErrorBanner()?.textContent).toBeUndefined();
   expect(listRow("Client").textContent).toContain("src/client.ts");
 });
+
+/* ---- Sidebar tree (flow 518) ---- */
+
+type TreeInput = import("../platform/metaproject").MetaprojectTreeRequest;
+type TreeV2 = import("../../../../src/integrations/metaproject-explorer-contract").MetaprojectTreeV2;
+type TreeAnswer = { entries: unknown[]; nextCursor?: string; partial?: boolean };
+
+/**
+ * A protocol-2 explorer whose CLI offers `tree`. Catalog and tree answers follow `state.snapshot`;
+ * tree answers are keyed `snapshot|scope|parent|cursor`, and a key in `hold` answers when released.
+ */
+function treeExplorer(trees: Record<string, TreeAnswer>, nodes: MetaprojectCatalog["nodes"] = catalog.nodes) {
+  const state = { snapshot: "s1" };
+  const treeCalls: TreeInput[] = [];
+  const hold = new Set<string>();
+  const held = new Map<string, () => void>();
+  const requestV2 = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    const base = { schemaVersion: 2, snapshotId: state.snapshot };
+    if (input.action === "catalog") return { ...catalog, ...base, nodes, graph: "stale", counts: { files: 3, wiki: 1, modules: 0 } };
+    if (input.action === "search") return { ...base, hits: [{ node: file, scope: "graph" }], partial: false };
+    if (input.action === "detail") return { ...base, node: input.id === page.id ? page : file, markdown: input.id === page.id ? "# Readable guide" : undefined };
+    return { ...base, root: input.id, nodes: [page, file], edges: [], truncated: false };
+  };
+  const requestTree = (_cwd: string, input: TreeInput): Promise<TreeV2> => {
+    treeCalls.push(input);
+    const key = `${input.expectedSnapshotId}|${input.scope}|${input.parent ?? ""}|${input.cursor ?? ""}`;
+    const answer = () => {
+      const found = trees[key];
+      return found
+        ? Promise.resolve({ schemaVersion: 2, snapshotId: input.expectedSnapshotId ?? "", scope: input.scope, parent: input.parent ?? null, partial: false, ...found } as TreeV2)
+        : Promise.reject(new Error(`No tree answer for ${key}`));
+    };
+    if (!hold.has(key)) return answer();
+    return new Promise<TreeV2>((resolve, reject) => { held.set(key, () => { void answer().then(resolve, reject); }); });
+  };
+  return {
+    state, treeCalls, hold, release: (key: string) => held.get(key)?.(),
+    props: {
+      requestV2: requestV2 as unknown as NonNullable<ViewProps["requestV2"]>,
+      requestTree,
+      negotiate: async () => ({ protocol: 2 as const, supportsTree: true }),
+    },
+  };
+}
+const GRAPH_ROOT: TreeAnswer = { entries: [{ type: "folder", path: "src", name: "src", files: 1 }] };
+const SRC_CHILDREN: TreeAnswer = { entries: [{ type: "node", node: file }] };
+const WIKI_ROOT: TreeAnswer = { entries: [{ type: "group", key: "other", name: "Other", pages: 1 }] };
+const WIKI_OTHER: TreeAnswer = { entries: [{ type: "node", node: page }] };
+const STANDARD_TREES = { "s1|graph||": GRAPH_ROOT, "s1|graph|src|": SRC_CHILDREN, "s1|wiki||": WIKI_ROOT, "s1|wiki|other|": WIKI_OTHER };
+
+const treeRows = () => [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+const treeRow = (name: string) => {
+  const found = treeRows().find(row => row.querySelector(".metaproject-tree-name")?.textContent === name);
+  if (!found) throw new Error(`Missing tree row ${name}`);
+  return found;
+};
+const treeHeading = () => host.querySelector(".metaproject-list h2")?.textContent;
+const expandFolder = (name: string) => act(async () => { treeRow(name).querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+async function typeTreeQuery(value: string) {
+  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value); search.dispatchEvent(new Event("input", { bubbles: true })); });
+  return search;
+}
+/** The search's debounce runs when the test says so. */
+function manualTimer() {
+  const original = window.setTimeout;
+  let run: () => void = () => {};
+  window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") run = () => callback(); return 1; }) as typeof window.setTimeout;
+  return { run: () => run(), restore: () => { window.setTimeout = original; } };
+}
+
+test("a CLI without tree negotiates and keeps the flat list, with no error", async () => {
+  const { negotiateMetaprojectExplorer, METAPROJECT_REQUIRED_ACTIONS } = await import("../platform/metaproject");
+  const explorer = treeExplorer(STANDARD_TREES);
+  const negotiate = (cwd: string) => negotiateMetaprojectExplorer(cwd, async () => ({ schemaVersion: 2, actions: [...METAPROJECT_REQUIRED_ACTIONS] }));
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, negotiate, createCytoscape, onRebuild: async () => false })); });
+  expect(host.querySelector('[role="tree"]')).toBeNull();
+  expect(treeHeading()?.startsWith("Catalog ·")).toBe(true);
+  expect(listRow("Client").textContent).toContain("src/client.ts");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => { button("Wiki").click(); });
+  expect(host.querySelector('[role="tree"]')).toBeNull();
+  expect(explorer.treeCalls).toHaveLength(0);
+});
+
+test("the tree shows without a query and flat results with one; clearing it brings back the same folders", async () => {
+  const timer = manualTimer();
+  try {
+    const explorer = treeExplorer(STANDARD_TREES);
+    const createCytoscape = await headlessCytoscape();
+    await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
+    expect(host.querySelector('[role="tree"]')?.getAttribute("aria-label")).toBe("Project files");
+    expect(treeHeading()).toBe("Files · 3");
+    await expandFolder("src");
+    expect(treeRow("Client")).not.toBeNull();
+    await typeTreeQuery("client");
+    await act(async () => { timer.run(); });
+    expect(host.querySelector('[role="tree"]')).toBeNull();
+    expect(treeHeading()).toBe("Results · 1");
+    expect(listRow("Client")).not.toBeNull();
+    await typeTreeQuery("");
+    expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
+    expect(treeRow("Client")).not.toBeNull();
+    expect(explorer.treeCalls.filter(call => call.parent === "src")).toHaveLength(1);
+    await act(async () => { button("Wiki").click(); });
+    expect(host.querySelector('[role="tree"]')?.getAttribute("aria-label")).toBe("Wiki pages");
+    expect(treeHeading()).toBe("Wiki · 1");
+  } finally { timer.restore(); }
+});
+
+test("expanded folders and the selection survive switching Graph and Wiki and leaving the view", async () => {
+  const explorer = treeExplorer(STANDARD_TREES);
+  const createCytoscape = await headlessCytoscape();
+  const show = (visible: boolean) => act(async () => {
+    root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false, visible }));
+  });
+  await show(true);
+  await expandFolder("src");
+  await act(async () => { treeRow("Client").click(); });
+  expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
+  expect(host.querySelector('[aria-label="Graph node details"]')?.textContent).toContain("src/client.ts");
+  await act(async () => { button("Wiki").click(); });
+  // The Wiki's fallback page expands nothing; the user opens its group and picks it.
+  expect(treeRow("Other").getAttribute("aria-expanded")).toBe("false");
+  await expandFolder("Other");
+  await act(async () => { treeRow("Guide").click(); });
+  expect(treeRow("Guide").getAttribute("aria-selected")).toBe("true");
+  await act(async () => { button("Graph").click(); });
+  expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
+  expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
+  await show(false);
+  await show(true);
+  expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
+  expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
+  await act(async () => { button("Wiki").click(); });
+  expect(treeRow("Other").getAttribute("aria-expanded")).toBe("true");
+  // Every parent was read once in all of this.
+  const reads = explorer.treeCalls.map(call => `${call.scope}|${call.parent ?? ""}`);
+  expect(reads.sort()).toEqual(["graph|", "graph|src", "wiki|", "wiki|other"]);
+});
+
+test("a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus", async () => {
+  const timer = manualTimer();
+  const scrolled: HTMLElement[] = [];
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  try {
+    const explorer = treeExplorer(STANDARD_TREES);
+    const createCytoscape = await headlessCytoscape();
+    await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
+    expect(treeRow("src").getAttribute("aria-expanded")).toBe("false");
+    await typeTreeQuery("client");
+    await act(async () => { timer.run(); });
+    await act(async () => { listRow("Client").click(); });
+    const search = await typeTreeQuery("");
+    search.focus();
+    await act(async () => {});
+    expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
+    expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
+    expect(scrolled).toContain(treeRow("Client"));
+    expect(document.activeElement).toBe(search);
+  } finally {
+    timer.restore();
+    HTMLElement.prototype.scrollIntoView = original;
+  }
+});
+
+test("a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old cursor", async () => {
+  const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
+  const explorer = treeExplorer({
+    "s1|graph||": { entries: [{ type: "folder", path: "gone", name: "gone", files: 1 }, { type: "folder", path: "src", name: "src", files: 1 }], nextCursor: "s1-page-2" },
+    "s1|graph|gone|": { entries: [{ type: "node", node: { ...file, id: "gone-file", title: "Gone", path: "gone/file.ts" } }] },
+    "s1|graph|src|": SRC_CHILDREN,
+    "s1|graph||s1-page-2": { entries: [{ type: "node", node: { ...file, id: "late", title: "Late", path: "late.ts" } }] },
+    "s2|graph||": { entries: [{ type: "folder", path: "src", name: "src", files: 1 }] },
+    "s2|graph|src|": { entries: [{ type: "node", node: server }] },
+  });
+  const onRebuild = async () => { explorer.state.snapshot = "s2"; return true; };
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild })); });
+  await expandFolder("gone");
+  expect(treeRow("Gone")).not.toBeNull();
+  explorer.hold.add("s1|graph|src|");
+  explorer.hold.add("s1|graph||s1-page-2");
+  await expandFolder("src");
+  await act(async () => { treeRows().find(row => row.textContent === "Show more")?.click(); });
+  const before = explorer.treeCalls.length;
+  await act(async () => { button("Rebuild graph").click(); });
+  // The answers the old snapshot still owed arrive late and are dropped.
+  await act(async () => { explorer.release("s1|graph|src|"); explorer.release("s1|graph||s1-page-2"); });
+  const after = explorer.treeCalls.slice(before);
+  expect(after.length).toBeGreaterThan(0);
+  expect(after.every(call => call.expectedSnapshotId === "s2" && call.cursor === undefined)).toBe(true);
+  expect(after.map(call => call.parent ?? "")).toEqual(["", "src"]);
+  expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
+  expect(treeRow("Server")).not.toBeNull();
+  expect(() => treeRow("Client")).toThrow();
+  expect(() => treeRow("Late")).toThrow();
+  expect(() => treeRow("gone")).toThrow();
+  expect(treeRows().some(row => row.textContent === "Show more")).toBe(false);
+});
+
+test("the selection shown by default reveals nothing: only a selection the user made expands folders", async () => {
+  // The Graph falls back to the catalog's first node (a file in src), the Wiki to its first page.
+  const explorer = treeExplorer(STANDARD_TREES, [file, page]);
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
+  await act(async () => {});
+  expect(treeRow("src").getAttribute("aria-expanded")).toBe("false");
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => {});
+  expect(treeRow("Other").getAttribute("aria-expanded")).toBe("false");
+  expect(explorer.treeCalls.map(call => `${call.scope}|${call.parent ?? ""}`).sort()).toEqual(["graph|", "wiki|"]);
+});

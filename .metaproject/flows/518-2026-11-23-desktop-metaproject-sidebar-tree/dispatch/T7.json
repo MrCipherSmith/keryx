@@ -1,0 +1,77 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "518",
+  "dispatch_id": "518-T7",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Desktop: MetaprojectTree component and explorer integration, with tests",
+    "intent": "implement",
+    "description": "Build the sidebar tree exactly as plan.md sections 'Desktop UI' and 'State × event matrix' specify. Create apps/desktop/src/metaproject/MetaprojectTree.tsx and apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx; mount the tree in the `nav.metaproject-list` of MetaprojectView.tsx when there is no search query, the mode is Graph (scope graph) or Wiki (scope wiki), and the CLI offers `tree`; otherwise render the list exactly as today. Transport is ready (T6): apps/desktop/src/platform/metaproject.ts exports negotiateMetaprojectExplorer(cwd, call?) -> { protocol, supportsTree } and requestMetaprojectTree(cwd, request, call?). MetaprojectView currently uses negotiateMetaproject via an injectable `negotiate` prop that returns 1|2; widen it (or add an injectable alternative) so the view learns supportsTree, keeping existing test doubles working, and make the tree request injectable for tests like the other requests. Behaviour to implement and test: WAI-ARIA tree (role tree with a name, treeitem rows with aria-level/setsize/posinset, aria-expanded on folders/groups, aria-selected on the selected node, one roving tabIndex=0); keys Up/Down/Left/Right/Home/End/Enter/Space as in the plan; folder/group rows with chevron, name and count; node rows with title and kind label; a module folder selects its module node on the name and toggles on the chevron; selecting a node row goes through the same path a search hit uses today (openHit/select/openDocument) so Graph, panel, Wiki and Back behave unchanged; a folder read shows one Loading row, is issued once even on repeated toggles, a failed read shows an inline error row whose Retry re-reads only that folder; nextCursor shows a Show more row that appends the next page in order with no duplicates; graph not built (partial with no entries) shows an empty-state line. State: expanded folders and loaded children per scope (graph, wiki) live in explorer state that survives leaving the view and switching Graph/Wiki (see useExplorerNavigation.ts and how flow 515 kept state); a new catalog snapshot drops loaded children and late answers, keeps the expanded set, re-reads expanded folders, forgets folders that no longer exist, and never sends an old-snapshot cursor. Reveal: when the selection changes from outside the tree (graph click, search result, Back, details panel) expand its ancestor folders (reading as needed, stop at a failed folder, page until found or pages end), scroll the row into view with block nearest, never move focus. Heading: 'Files' in Graph, 'Wiki' in Wiki (with counts); search keeps 'Results · N'. Use existing tokens and classes in the Metaproject stylesheet (find it with keryx ctx rg 'metaproject-list' apps/desktop/src); no new colours, no new dependencies. Extend MetaprojectView.dom.test.tsx for AC4 (CLI without tree -> flat list, no error) and AC6, and put component-level behaviour in MetaprojectTree.dom.test.tsx for AC5."
+  },
+  "acceptance_criteria": [
+    "AC4: Desktop learns from the capability probe whether the CLI offers `tree`; against a CLI that does not, the explorer negotiates successfully and the sidebar shows today's flat list with no error. [verify: exec `cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` · sensitive: failure-scenario]",
+    "AC5: The tree component renders folders, groups and node rows with WAI-ARIA tree semantics and roving focus; Up/Down/Left/Right/Home/End/Enter/Space behave as the plan states; expanding reads a folder once and shows a loading row; a failed folder read shows an inline error whose Retry re-reads only that folder; \"Show more\" appends the next page in order; selecting a node row calls the selection callback with that node; a graph that is not built shows an empty-state line. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx` · sensitive: failure-scenario]",
+    "AC6: In the explorer, the tree shows without a query and flat results with one; expanded folders and the selection survive leaving and returning to the view and switching between Graph and Wiki; a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus; a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old-snapshot cursor. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC7: The Desktop package type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/platform/metaproject.ts",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "Scope: apps/desktop/src/metaproject/** (new MetaprojectTree component and test, MetaprojectView and its test, the Metaproject stylesheet) and, only if needed for injection, apps/desktop/src/platform/metaproject.ts. Do not touch src/integrations/** or src-tauri/**; report a transport bug instead of fixing it there.",
+    "Code search goes through `keryx ctx rg`, never bare rg/grep. Run long commands through `keryx ctx run -- <cmd>`."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T20:50:00Z",
+    "created_by": "flow-orchestrator"
+  }
+}
