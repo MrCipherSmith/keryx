@@ -11,13 +11,14 @@ import {
   type MetaprojectHitV2, type MetaprojectNode, type MetaprojectOpenSpecState, type MetaprojectProjection,
   type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectScope, type MetaprojectV2Response,
 } from "./metaproject-explorer-contract";
-import type { loadExplorerGraph } from "./metaproject-explorer";
+import type { ExplorerGraphFreshness, loadExplorerGraph } from "./metaproject-explorer";
 import { indexMetaprojectGraph, projectMetaprojectGraph } from "./metaproject-projection";
 
 type DataRequest = Exclude<MetaprojectRequestV2, { action: "capabilities" }>;
 type SearchRequest = Extract<DataRequest, { action: "search" }>;
 type GraphModel = Awaited<ReturnType<typeof loadExplorerGraph>>;
-type LoadGraph = (root: string, request: MetaprojectRequest) => Promise<{ graph: GraphModel; confirm: () => Promise<void>; track: (relative: string) => Promise<void> }>;
+type ReadFreshness = () => Promise<ExplorerGraphFreshness>;
+type LoadGraph = (root: string, request: MetaprojectRequest) => Promise<{ graph: GraphModel; freshness: ReadFreshness; confirm: () => Promise<void>; track: (relative: string) => Promise<void> }>;
 
 const DEFAULT_SCOPES: readonly MetaprojectScope[] = ["graph", "wiki", "spec", "change"];
 const MAX_DIAGNOSTICS = 64;
@@ -240,15 +241,17 @@ class V2Read {
     private readonly openEdges: MetaprojectEdge[],
     diagnostics: OpenSpecDiagnostic[],
   ) {
-    this.base = { schemaVersion: METAPROJECT_SCHEMA_V2, snapshotId: hash([model.base.snapshotId, source.catalog.snapshotId, model.graph, model.graphReason, openEdges, diagnostics]) };
+    // Data only: graph freshness follows `git status`, so it would retire the ID for an unrelated untracked file.
+    this.base = { schemaVersion: METAPROJECT_SCHEMA_V2, snapshotId: hash([model.base.snapshotId, source.catalog.snapshotId, openEdges, diagnostics]) };
     this.state = sourceState(source, diagnostics);
     this.openNodes = source.catalog.entries.map(entryNode);
   }
 
-  read(request: DataRequest): MetaprojectV2Response {
+  /** `freshness` runs `git status`; only an action whose response reports it may call it. */
+  async read(request: DataRequest, freshness: ReadFreshness): Promise<MetaprojectV2Response> {
     checkSnapshot(this.base.snapshotId, request.expectedSnapshotId);
     switch (request.action) {
-      case "catalog": return this.catalog();
+      case "catalog": return this.catalog(await freshness());
       case "detail": return this.detail(request);
       case "neighbors": return this.neighbors(request);
       case "search": return this.search(request);
@@ -257,8 +260,8 @@ class V2Read {
     }
   }
 
-  private catalog() {
-    const { graph, graphReason, hasWikiLayer, hasSymbolLayer, counts } = this.model;
+  private catalog({ graph, graphReason }: ExplorerGraphFreshness) {
+    const { hasWikiLayer, hasSymbolLayer, counts } = this.model;
     const groups = [
       this.model.nodes.filter((node) => node.kind === "wiki"),
       this.model.nodes.filter((node) => node.kind !== "wiki"),
@@ -369,14 +372,14 @@ export async function metaprojectExplorerV2(
   if (request.action === "capabilities") return { schemaVersion: METAPROJECT_SCHEMA_V2, actions: METAPROJECT_CAPABILITIES };
   try {
     const root = await realpath(projectRoot);
-    const [{ graph: loaded, confirm, track }, source] = await Promise.all([
+    const [{ graph: loaded, freshness, confirm, track }, source] = await Promise.all([
       load(root, graphRequest(request)),
       readOpenSpec(root),
     ]);
     const graph = { ...loaded, nodes: loaded.nodes.filter(safeGraphNode) };
     const { edges, diagnostics } = await buildRelationships(source, graph, root, track);
     await confirm();
-    const response = new V2Read(graph, source, edges, diagnostics).read(request);
+    const response = await new V2Read(graph, source, edges, diagnostics).read(request, freshness);
     if (bytes(response) + 1 > METAPROJECT_RESPONSE_BYTES_V2) {
       throw new MetaprojectRequestError("response-limit", "Metaproject response exceeds the byte limit.");
     }

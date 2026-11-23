@@ -218,8 +218,9 @@ covers how agents use the same wiki and graph data.
 Desktop sends read requests for catalog, search, detail, and neighbors through
 the local Keryx CLI. It reads from the project folder associated with the
 view. A Git worktree has its own graph freshness and may show a different
-catalog from the main checkout. Read requests leave your files alone.
-**Rebuild graph** writes the generated graph artifacts.
+catalog from the main checkout. Desktop checks graph freshness when it loads
+the catalog; search, detail and neighbor reads skip that check. Read requests
+leave your files alone. **Rebuild graph** writes the generated graph artifacts.
 
 The result list shows up to 200 items. A neighborhood is limited to 200 nodes,
 400 edges, and two steps. Use a narrower search or filter when the view
@@ -240,6 +241,13 @@ Copy the `node.id` from a search or catalog result when requesting detail or
 neighbors. IDs identify a node in the current checkout. Each response carries
 a `schemaVersion` and `snapshotId`. Desktop compares them before mixing
 results from separate reads and asks to refresh if the underlying data changes.
+The snapshot covers the graph, wiki and OpenSpec data. Graph freshness is not
+part of it: creating or editing another file in the checkout can mark the
+graph stale, and the results already loaded stay valid.
+
+Before its first read, Desktop asks the selected CLI which read actions it
+serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer
+than Desktop keeps working when it adds actions.
 
 Desktop can calculate a file or wiki neighborhood from a complete catalog.
 It asks the CLI for a neighborhood when the catalog is limited or the
@@ -255,9 +263,10 @@ and can carry example file pairs. See the
 | **Graph missing** | Open existing wiki pages in **Wiki**, or select **Rebuild graph** to add code relationships. |
 | **Graph stale** after switching branches or changing code | Rebuild from the open checkout. The stale graph can still show results from its last build. |
 | **Graph unknown** or a layer fails to load | Rebuild and check the terminal output. For `defines` or `calls`, also check `keryx gdgraph symbols status`. |
-| **Project knowledge changed while loading** | Select **Refresh catalog** to load a consistent snapshot. |
+| **Project knowledge changed while loading** | The graph was rebuilt, or a wiki page or OpenSpec file changed, between two reads. Select **Refresh catalog** to load a consistent snapshot. |
 | **Search failed** | Select **Retry search** to repeat the current query. |
 | The CLI does not support Metaproject Explorer | Choose the bundled CLI in **Settings → Desktop**, or update the CLI and Desktop together. |
+| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop uses. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
 | A page has no **Relationships** section | Confirm the page links to other wiki pages or declares the code it covers, then rebuild the graph and check the filters in **Graph**. |
 
 For maintenance of wiki references and freshness, see
