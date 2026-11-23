@@ -1066,6 +1066,124 @@ test("saved historical filters on the first load still seed the tab signal from 
   expect(indicators.at(-1)).toBe("attention");
 });
 
+test("recovery from access loss on a historical view seeds the tab signal from the open pull requests", async () => {
+  saveReviewFilters(reviewFilterKey("/lost-test", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+  const mine: ReviewCard = { ...pr, reviewers: ["ann"], decision: null };
+  let failure = "";
+  const scopes: string[] = [];
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => {
+    scopes.push(scope);
+    if (failure) throw new Error(failure);
+    return snapshot(scope === "merged" ? [] : [mine]);
+  };
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/lost-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  failure = "access: Grant revoked";
+  await click(button("Refresh pull requests"));
+  expect(indicators.at(-1)).toBeNull();
+  failure = "";
+  scopes.length = 0;
+  await click(button("Refresh pull requests"));
+  expect(indicators.at(-1)).toBe("attention");
+  expect(scopes).toEqual(["merged", "open"]);
+  // Once seeded, a later historical load issues no extra open request.
+  scopes.length = 0;
+  await click(button("Refresh pull requests"));
+  expect(scopes).toEqual(["merged"]);
+  expect(indicators.at(-1)).toBe("attention");
+});
+
+test("an open seed answered for another account does not enter the tab signal", async () => {
+  saveReviewFilters(reviewFilterKey("/seed-identity-test", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+  let openViewer = "ann";
+  let failure = "";
+  const bobRequest: ReviewCard = { ...pr, number: 202, reviewers: ["bob"], decision: null };
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => {
+    if (failure) throw new Error(failure);
+    if (scope === "merged") return snapshot([]);
+    return { ...snapshot(openViewer === "bob" ? [bobRequest] : []), viewer: openViewer };
+  };
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/seed-identity-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBeNull();
+  failure = "access: Grant revoked";
+  await click(button("Refresh pull requests"));
+  failure = "";
+  // The historical load answers for ann, the open seed that follows answers for bob.
+  openViewer = "bob";
+  await click(button("Refresh pull requests"));
+  expect(document.body.textContent).toContain("Signed in as ann");
+  expect(indicators.at(-1)).toBeNull();
+});
+
+test("an account change seen on a historical view seeds the tab signal from the new account's open pull requests only", async () => {
+  let viewer = "ann";
+  for (const login of ["ann", "bob"]) saveReviewFilters(reviewFilterKey("/switch-test", "repo1", login), { ...EMPTY_FILTERS, state: ["merged"] });
+  const annRequest: ReviewCard = { ...pr, number: 101, reviewers: ["ann", "bob"], decision: null };
+  const bobRequest: ReviewCard = { ...pr, number: 202, reviewers: ["bob"], decision: null };
+  let merged: ReviewCard[] = [];
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  let openOffline = false;
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => {
+    if (scope === "open" && openOffline) throw new Error("unavailable: offline");
+    return { ...snapshot(scope === "merged" ? merged : viewer === "ann" ? [annRequest] : [bobRequest]), viewer };
+  };
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/switch-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  viewer = "bob";
+  openOffline = true;
+  await click(button("Refresh pull requests"));
+  expect(document.body.textContent).toContain("Signed in as bob");
+  // The open seed failed: ann's set must not stand in for bob's.
+  expect(indicators.at(-1)).toBeNull();
+  openOffline = false;
+  await click(button("Refresh pull requests"));
+  expect(indicators.at(-1)).toBe("attention");
+  // Observing bob's request as merged leaves nothing: ann's #101, which also requests bob, was not carried over.
+  merged = [{ ...bobRequest, state: "merged" }];
+  await click(button("Refresh pull requests"));
+  expect(indicators.at(-1)).toBeNull();
+});
+
+test("a cached snapshot shown after an unavailable error does not bring back a request seen as merged", async () => {
+  const mine: ReviewCard = { ...pr, reviewers: ["ann"], decision: null };
+  let offline = false;
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const filtersButton = () => Array.from(document.body.querySelectorAll("button")).find(b => b.getAttribute("aria-label")?.startsWith("Filters"))!;
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => {
+    if (scope === "open" && offline) throw new Error("unavailable: offline");
+    return snapshot(scope === "merged" ? [{ ...mine, state: "merged" }] : scope === "closed" ? [] : [mine]);
+  };
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/stale-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  await click(filtersButton());
+  await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+  await click(button("Apply filters"));
+  expect(indicators.at(-1)).toBeNull();
+  offline = true;
+  await click(filtersButton());
+  await click(option("PR state", "Merged")); await click(option("PR state", "Open"));
+  await click(button("Apply filters"));
+  expect(document.body.textContent).toContain("Last available snapshot");
+  await click(filtersButton());
+  await click(option("PR state", "Open")); await click(option("PR state", "Closed"));
+  await click(button("Apply filters"));
+  expect(indicators.at(-1)).toBeNull();
+});
+
 test("visible cards keep snapshot order when a later card has an active review", async () => {
   const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
   await render(async () => snapshot(cards));

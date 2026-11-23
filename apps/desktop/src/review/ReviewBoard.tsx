@@ -52,6 +52,8 @@ interface ReadState {
   snapshot: ReviewBoardSnapshot | null;
   error: string;
   loading: boolean;
+  /** The snapshot is a cached fallback from an earlier visit to this scope, not the result of the latest request. */
+  stale?: boolean;
 }
 
 export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
@@ -75,6 +77,8 @@ function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
   return card.addressedReplyIds.filter(id => !readIds.has(id));
 }
 const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
+const attentionNumbers = (board: ReviewBoardSnapshot) =>
+  new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
 
 export function ReviewBoard(props: Props) {
   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
@@ -110,6 +114,9 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const identity = useRef("");
   const filterKey = useRef<string>();
   const sequence = useRef(0);
+  // The identity whose carried set was last replaced from a load that holds every open PR (open or all, no period).
+  const seeded = useRef("");
+  const [seedFor, setSeedFor] = useState<{ identity: string } | null>(null);
   // A delayed GitHub refresh can carry older local run badges than a just-finished launch.
   const pendingBadges = useRef<Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">> | null>(null);
   const restoreFocus = useRef(false);
@@ -183,9 +190,11 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     // A list request started before a denied detail request cannot restore its private snapshot.
     sequence.current++;
     identity.current = "";
+    seeded.current = "";
     filterKey.current = undefined;
     snapshots.current.clear();
     setCarriedAttention(new Set());
+    setSeedFor(null);
     setWatchingTarget(null);
     pendingBadges.current = null;
     clearPrivateView();
@@ -226,9 +235,16 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         }
       }
       const loaded = snapshot;
-      // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
-      const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
-      if (replaceAttention) setCarriedAttention(new Set(loaded.cards.filter(card => needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))).map(card => card.number)));
+      // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
+      // a new identity seen there starts from nothing and gets one open load that only seeds the set.
+      if (!period && (state === "open" || state === "all")) {
+        seeded.current = nextIdentity;
+        setCarriedAttention(attentionNumbers(loaded));
+        setSeedFor(null);
+      } else {
+        if (identity.current !== nextIdentity) setCarriedAttention(new Set());
+        if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });
+      }
       const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
       if (filterKey.current !== nextFilterKey) {
         filterKey.current = nextFilterKey;
@@ -244,13 +260,33 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       pendingBadges.current = null;
       const message = errMessage(cause);
       if (/^unavailable:/i.test(message)) {
-        setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? snapshots.current.get(scope) ?? null, error: message, loading: false }));
+        setRead((old) => {
+          const kept = old.scope === scope ? old.snapshot : null;
+          return { scope, snapshot: kept ?? snapshots.current.get(scope) ?? null, stale: kept ? old.stale : true, error: message, loading: false };
+        });
       } else {
         accessLost(message);
       }
     });
     return () => { sequence.current++; controller.abort(); };
   }, [cwd, expectedViewer, state, period, scope, repo, attempt, load, clearPrivateView, accessLost]);
+
+  useEffect(() => {
+    if (!seedFor) return;
+    let current = true;
+    const controller = new AbortController();
+    void load(cwd, "open", repo, controller.signal, expectedViewer).then((seed) => {
+      const key = JSON.stringify([seed.repositoryId, seed.viewer]);
+      if (!current || key !== seedFor.identity || identity.current !== key || seeded.current === key) return;
+      seeded.current = key;
+      setCarriedAttention(attentionNumbers(seed));
+      setSeedFor(null);
+    }).catch(() => {
+      // The next successful load of an unseeded identity asks again; no retry from here.
+      if (current) setSeedFor(old => old === seedFor ? null : old);
+    });
+    return () => { current = false; controller.abort(); };
+  }, [seedFor, cwd, repo, expectedViewer, load]);
 
   useEffect(() => {
     if (restoreFocus.current && !overlayOpen()) search.current?.focus();
@@ -347,9 +383,11 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     return next;
   }, [carriedAttention, snapshot, receiptVersion]);
   // Removals seen in the shown snapshot must survive a scope switch to a view that does not replace the set.
+  // A cached fallback may predate what later loads observed, so it never writes back.
+  const stale = !!read.stale;
   useEffect(() => {
-    if (snapshot && (attentionPrs.size !== carriedAttention.size || [...attentionPrs].some(n => !carriedAttention.has(n)))) setCarriedAttention(attentionPrs);
-  }, [snapshot, attentionPrs, carriedAttention]);
+    if (snapshot && !stale && (attentionPrs.size !== carriedAttention.size || [...attentionPrs].some(n => !carriedAttention.has(n)))) setCarriedAttention(attentionPrs);
+  }, [snapshot, stale, attentionPrs, carriedAttention]);
   const active = filterSummary(filters);
   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
   const error = read.scope === scope ? read.error : "";
