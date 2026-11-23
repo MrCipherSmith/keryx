@@ -513,6 +513,26 @@ test("the outdated lookup ignores newer finished runs of another PR, another vie
   expect(store.byId(wanted.run.id)?.run.state).toBe("completed");
 });
 
+test("in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card", async () => {
+  const { localBadge } = await import("./board-badges");
+  const ranOn = (k: typeof key, range: typeof revision) => {
+    store.request("/project", k, range);
+    store.end(store.queued(k)!, { ...finish, result: { ...finish.result!, reviewed: range } });
+  };
+  const busy = { ...key, number: key.number + 1 }, done = { ...key, number: key.number + 2 };
+  for (const k of [key, busy, done]) ranOn(k, revision);
+  store.request("/project", busy, next);
+  ranOn(done, next);
+  const cards: import("./board-badges").BadgeCard[] = [key, busy, done].map(({ number }) => ({ number, ...next }));
+  store.attachBadges({ ...key, cards });
+  expect(cards.map(card => card.localReview)).toEqual([
+    { active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } },
+    { active: true, ready: false, runState: "queued" },
+    { active: false, ready: true, runState: "completed", publicationPending: true },
+  ]);
+  for (const [i, k] of [key, busy, done].entries()) expect(cards[i]?.localReview).toEqual(localBadge(store.history(k).runs, next));
+});
+
 test("a new queued revision shows its own starting state while an earlier revision is still running", () => {
   started();
   store.request("/fixture", key, next);
