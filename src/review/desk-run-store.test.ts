@@ -486,6 +486,33 @@ test("a finished review of an earlier head reaches the board as outdated until a
   expect(badge()).toEqual({ active: false, ready: false, runState: "failed" });
 });
 
+test("the outdated lookup ignores newer finished runs of another PR, another viewer, hidden runs and runs without a result", async () => {
+  const { localBadge } = await import("./board-badges");
+  const finishFor = (k: typeof key, head: string, state: DeskFinish["state"] = "completed", recorded = true) => {
+    const range = { ...revision, headSha: head.repeat(40) };
+    store.request("/project", k, range);
+    const a = store.queued(k)!;
+    store.end(a, { ...finish, state, result: recorded ? { ...finish.result!, reviewed: range } : null });
+    return a;
+  };
+  const wanted = finishFor(key, "b");
+  // Each of these is newer than the wanted run and would win the lookup if its own predicate were dropped.
+  finishFor({ ...key, number: key.number + 1 }, "d");
+  finishFor(other, "e");
+  const deleted = finishFor(key, "f");
+  deleted.run.decision = { action: "delete", reason: "", at: "" };
+  store.save(deleted);
+  const imported = finishFor(key, "1");
+  imported.run.source = "existing";
+  store.save(imported);
+  finishFor(key, "2", "completed", false);
+  const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+  store.attachBadges({ ...key, cards });
+  expect(cards[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: "b".repeat(40), state: "completed" } });
+  expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, next));
+  expect(store.byId(wanted.run.id)?.run.state).toBe("completed");
+});
+
 test("a new queued revision shows its own starting state while an earlier revision is still running", () => {
   started();
   store.request("/fixture", key, next);

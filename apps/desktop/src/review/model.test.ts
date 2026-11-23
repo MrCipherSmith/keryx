@@ -76,3 +76,12 @@ test("an outdated review names the reviewed commit and ranks above GitHub reason
   expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
   expect(reviewLane(outdated("completed"))).toBe(reviewLane(pr));
 });
+
+test("a review of the current head under an older base says the base moved, not that the head is outdated", () => {
+  const baseMoved = (state: "completed" | "partial" | "budget") =>
+    ({ ...pr, headSha: "abcdef0123456", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+  expect(laneReason(baseMoved("completed"))).toBe("Review predates base update · abcdef0");
+  expect(laneReason(baseMoved("partial"))).toBe("Partial review predates base update · abcdef0");
+  expect(laneReason(baseMoved("budget"))).toBe("Partial review predates base update · abcdef0");
+  expect(laneReason({ ...baseMoved("completed"), headSha: "fedcba9876543" })).toBe("Outdated review · abcdef0");
+});

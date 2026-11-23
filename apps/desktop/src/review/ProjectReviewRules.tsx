@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReviewRule } from "../../../../src/review/review-rule-types";
 import { Icon } from "../components/Icon";
 import { Dialog, Spinner } from "../components/ui";
@@ -92,5 +93,5 @@ function RulesDialog({ onClose, ...props }: RulesProps & { onClose: () => void }
 export function ProjectReviewRules(props: RulesProps) {
   const [open, setOpen] = useState(false);
   return <><button className="btn btn-sm" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Review rules" title="Review rules"><Icon name="checklist" size={14} /> <span className="toolbar-label">Review rules</span></button>
-    {open && <RulesDialog {...props} onClose={() => setOpen(false)} />}</>;
+    {open && createPortal(<RulesDialog {...props} onClose={() => setOpen(false)} />, document.body)}</>;
 }

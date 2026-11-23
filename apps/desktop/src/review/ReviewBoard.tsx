@@ -108,6 +108,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const period = filters.updatedWithin;
   const scope = `${state}/${period ?? ""}`;
   const [read, setRead] = useState<ReadState>({ scope, snapshot: null, error: "", loading: true });
+  const latest = useRef(read);
+  latest.current = read;
   const q = useDeferredValue(query);
 
   useEffect(() => {
@@ -202,41 +204,39 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
           return update && sameRange(card, update) ? { ...card, localReview: update.localReview } : card;
         }) };
       }
+      // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+      const previous = latest.current.snapshot;
+      if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+        const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+        if (replies.size) {
+          snapshot = { ...snapshot, cards: snapshot.cards.map(c => {
+            const prior = replies.get(c.number);
+            return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
+              ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
+          }) };
+        }
+      }
+      const loaded = snapshot;
       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
-      setAttentionPrs(previous => {
-        const next = new Set(replaceAttention ? [] : previous);
-        for (const card of snapshot.cards) {
-          if (needsViewerAttention(card, snapshot.viewer, unreadCount(snapshot, card))) next.add(card.number);
+      setAttentionPrs(previousSet => {
+        const next = new Set(replaceAttention ? [] : previousSet);
+        for (const card of loaded.cards) {
+          if (needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))) next.add(card.number);
           else next.delete(card.number);
         }
         return next;
       });
-      const nextFilterKey = reviewFilterKey(cwd, snapshot.repositoryId, snapshot.viewer);
+      const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
       if (filterKey.current !== nextFilterKey) {
         filterKey.current = nextFilterKey;
         setFilters(readReviewFilters(nextFilterKey));
       }
       pendingBadges.current = null;
-      setSelected(current => current && snapshot.cards.some(c => c.number === current.number) ? current : null);
-      if (!snapshot.warnings.length) setDismissedWarning("");
+      setSelected(current => current && loaded.cards.some(c => c.number === current.number) ? current : null);
+      if (!loaded.warnings.length) setDismissedWarning("");
       identity.current = nextIdentity;
-      setRead(old => {
-        const previous = old.snapshot;
-        if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
-          // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
-          const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
-          if (replies.size) {
-            const cards = snapshot.cards.map(c => {
-              const prior = replies.get(c.number);
-              return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
-                ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
-            });
-            return { scope, snapshot: { ...snapshot, cards }, error: "", loading: false };
-          }
-        }
-        return { scope, snapshot, error: "", loading: false };
-      });
+      setRead({ scope, snapshot: loaded, error: "", loading: false });
     }).catch((cause: unknown) => {
       if (request !== sequence.current) return;
       pendingBadges.current = null;

@@ -88,8 +88,11 @@ export function laneReason(c: ReviewCard) {
   if (c.state !== "open") return STATE_LABEL[c.state];
   const outdated = c.localReview?.outdated;
   if (outdated) {
-    const kind = outdated.state === "partial" || outdated.state === "budget" ? "Outdated partial review" : "Outdated review";
-    return `${kind} · ${outdated.headSha.slice(0, 7)}`;
+    const partial = outdated.state === "partial" || outdated.state === "budget";
+    const sha = outdated.headSha.slice(0, 7);
+    // Same head, different range: only the base moved, so the reviewed head is not "outdated".
+    if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
+    return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
   }
   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);

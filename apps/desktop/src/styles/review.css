@@ -81,12 +81,12 @@
 .pr-subscription-topics label { display: flex; align-items: center; gap: var(--sp-2); }
 .pr-subscription-topics input { accent-color: var(--accent); }
 
-.review-board { container-type: inline-size; }
+.review-board .flows-toolbar { container-type: inline-size; }
 .review-board .flows-toolbar { flex-wrap: nowrap; }
 .review-board .flows-toolbar > * { flex: none; }
 .review-board .flows-toolbar > .grow { flex: 1 1 0; min-width: 0; }
 .review-board .flows-toolbar > .search-field { flex: 1 1 200px; min-width: 96px; width: auto; }
 .review-board .flows-toolbar .btn, .review-board .flows-toolbar .segmented button { white-space: nowrap; }
-@container (max-width: 980px) {
+@container (max-width: 1100px) {
   .review-board .flows-toolbar .toolbar-label, .review-board .flows-toolbar .count-label { display: none; }
 }

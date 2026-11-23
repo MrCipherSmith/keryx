@@ -94,8 +94,7 @@ export const ReviewResults = memo(function ReviewResults({ cards, view, showDone
   if (view === "board") {
     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
     for (const card of cards) lanes[reviewLane(card)].push(card);
-    // A card that lands in Done is never hidden, whatever the state filter says.
-    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone || lanes.done.length > 0);
+    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone);
     return <div className="board review-lanes">{drawn.map((lane) =>
       <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
   }

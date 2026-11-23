@@ -9,7 +9,6 @@ import { registerDom, unregisterDom } from "../test/dom";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
 import { markRepliesRead } from "./reviewReadState";
 import { EMPTY_FILTERS } from "./model";
-import { badgesEqual } from "./ReviewBoard";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
 let root: Root;
@@ -17,6 +16,7 @@ let host: HTMLElement;
 let act: (fn: () => void | Promise<void>) => Promise<void>;
 let createElement: typeof import("react").createElement;
 let ReviewBoard: typeof import("./ReviewBoard").ReviewBoard;
+let badgesEqual: typeof import("./ReviewBoard").badgesEqual;
 let renderKey = 0;
 
 beforeAll(async () => {
@@ -24,7 +24,8 @@ beforeAll(async () => {
   const React = await import("react");
   act = React.act as unknown as typeof act;
   createElement = React.createElement;
-  ReviewBoard = (await import("./ReviewBoard")).ReviewBoard;
+  // Imported after registerDom: DOMPurify reads the DOM globals at load time.
+  ({ ReviewBoard, badgesEqual } = await import("./ReviewBoard"));
   host = document.createElement("div");
   document.body.append(host);
   root = (await import("react-dom/client")).createRoot(host);
@@ -57,12 +58,12 @@ function render(load: typeof fetchReviewBoard, cwd = "/project", key = ++renderK
 
 const click = (el: HTMLElement) => act(async () => { el.click(); });
 function button(label: string) {
-  const el = Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
+  const el = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
   if (!el) throw new Error("Missing button " + label);
   return el;
 }
 function option(group: string, name: string) {
-  const fieldset = Array.from(host.querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent === group);
+  const fieldset = Array.from(document.body.querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent === group);
   const label = Array.from(fieldset?.querySelectorAll("label") ?? []).find((l) => l.textContent === name);
   if (!label) throw new Error("Missing filter " + group + "/" + name);
   return label.querySelector("input")!;
@@ -78,18 +79,18 @@ test("shows unassigned colleagues and drafts; board and list share author, team,
     { ...pr, number: 106, title: "Draft from author", draft: true, author: "bob", reviewers: [], decision: null, ci: "none" },
   ];
   await render(async () => snapshot(cards));
-  expect(host.querySelectorAll(".review-card")).toHaveLength(cards.length);
+  expect(document.body.querySelectorAll(".review-card")).toHaveLength(cards.length);
   await click(button("Filters"));
   await click(option("Author", "lee"));
   await click(option("Review requested from", "org/team"));
   await click(option("GitHub review decision", "Review required"));
   await click(option("Checks on head commit", "CI passed"));
   await click(button("Apply filters"));
-  expect(Array.from(host.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#101"]);
+  expect(Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#101"]);
   await click(button("List"));
-  expect(Array.from(host.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101"]);
+  expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101"]);
   await click(button("Clear filters"));
-  expect(host.querySelectorAll("tbody tr")).toHaveLength(cards.length);
+  expect(document.body.querySelectorAll("tbody tr")).toHaveLength(cards.length);
 });
 
 test("refresh failure preserves last available snapshot, access loss hides its cards and identity", async () => {
@@ -98,17 +99,17 @@ test("refresh failure preserves last available snapshot, access loss hides its c
     if (reason) throw new Error(reason);
     return snapshot([pr], ["Some checks unavailable"]);
   });
-  expect(host.textContent).toContain("Partial sync");
+  expect(document.body.textContent).toContain("Partial sync");
   reason = "unavailable: GitHub timed out";
   await click(button("Refresh pull requests"));
-  expect(host.textContent).toContain("Last available snapshot");
-  expect(host.textContent).toContain(pr.title);
+  expect(document.body.textContent).toContain("Last available snapshot");
+  expect(document.body.textContent).toContain(pr.title);
   reason = "access: Sign in with gh";
   await click(button("Try again"));
-  expect(host.textContent).not.toContain(pr.title);
-  expect(host.textContent).not.toContain("Signed in as ann");
-  expect(host.textContent).toContain("Sign in with gh");
-  expect(host.textContent).not.toContain("No open pull requests");
+  expect(document.body.textContent).not.toContain(pr.title);
+  expect(document.body.textContent).not.toContain("Signed in as ann");
+  expect(document.body.textContent).toContain("Sign in with gh");
+  expect(document.body.textContent).not.toContain("No open pull requests");
 });
 
 test("partial sync can be dismissed, reopened, and shown again for a new issue", async () => {
@@ -118,20 +119,20 @@ test("partial sync can be dismissed, reopened, and shown again for a new issue",
   expect(document.activeElement).toBe(button("Sync details"));
   expect(button("Sync details").getAttribute("aria-expanded")).toBe("false");
   await click(button("Refresh pull requests"));
-  expect(host.textContent).not.toContain(warnings[0]!);
+  expect(document.body.textContent).not.toContain(warnings[0]!);
   await click(button("Sync details"));
-  expect(host.textContent).toContain(warnings[0]!);
+  expect(document.body.textContent).toContain(warnings[0]!);
   await click(button("Hide sync details"));
   warnings = ["Some checks unavailable"];
   await click(button("Refresh pull requests"));
-  expect(host.textContent).toContain(warnings[0]!);
+  expect(document.body.textContent).toContain(warnings[0]!);
   await click(button("Hide sync details"));
   warnings = [];
   await click(button("Refresh pull requests"));
-  expect(host.textContent).toContain("Synced");
+  expect(document.body.textContent).toContain("Synced");
   warnings = ["Some checks unavailable"];
   await click(button("Refresh pull requests"));
-  expect(host.textContent).toContain(warnings[0]!);
+  expect(document.body.textContent).toContain(warnings[0]!);
 });
 
 test("a pending retry keeps the previously failed snapshot labeled stale until success", async () => {
@@ -144,11 +145,11 @@ test("a pending retry keeps the previously failed snapshot labeled stale until s
   });
   await click(button("Refresh pull requests"));
   await click(button("Try again"));
-  expect(host.textContent).toContain("Last available snapshot");
-  expect(host.textContent).toContain(pr.title);
+  expect(document.body.textContent).toContain("Last available snapshot");
+  expect(document.body.textContent).toContain(pr.title);
   await act(async () => complete(snapshot([pr])));
-  expect(host.textContent).toContain("Synced");
-  expect(host.textContent).not.toContain("Last available snapshot");
+  expect(document.body.textContent).toContain("Synced");
+  expect(document.body.textContent).not.toContain("Last available snapshot");
 });
 
 test("a late response for the previous project cannot replace the current one", async () => {
@@ -159,8 +160,8 @@ test("a late response for the previous project cannot replace the current one", 
   await render(load, "/old", key);
   await render(load, "/new", key);
   await act(async () => { finish(snapshot([pr])); });
-  expect(host.textContent).toContain("Current project PR");
-  expect(host.textContent).not.toContain(pr.title);
+  expect(document.body.textContent).toContain("Current project PR");
+  expect(document.body.textContent).not.toContain(pr.title);
 });
 
 test("can select the connected upstream when the default repository is inaccessible", async () => {
@@ -169,13 +170,13 @@ test("can select the connected upstream when the default repository is inaccessi
     return { ...snapshot([pr]), repo, repositories: ["mine/fork", "org/repo"] };
   };
   await render(load, "/fork", ++renderKey, async () => ["mine/fork", "org/repo"]);
-  const selector = host.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
+  const selector = document.body.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
   await act(async () => {
     selector.value = "org/repo";
     selector.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  expect(host.textContent).toContain(pr.title);
-  expect(host.textContent).not.toContain("No access to default origin");
+  expect(document.body.textContent).toContain(pr.title);
+  expect(document.body.textContent).not.toContain("No access to default origin");
 });
 
 test("a denied detail read evicts the private board and invalidates an in-flight list refresh", async () => {
@@ -187,14 +188,14 @@ test("a denied detail read evicts the private board and invalidates an in-flight
   };
   await render(load, "/private", ++renderKey, async () => [], async () => { throw new Error("access: Permission revoked"); });
   await click(button("Refresh pull requests"));
-  await click(host.querySelector<HTMLButtonElement>(".review-card")!);
-  expect(host.querySelectorAll('[role="dialog"]')).toHaveLength(0);
-  expect(host.textContent).toContain("Permission revoked");
-  expect(host.textContent).not.toContain("Signed in as ann");
-  expect(host.textContent).not.toContain(pr.title);
+  await click(document.body.querySelector<HTMLButtonElement>(".review-card")!);
+  expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+  expect(document.body.textContent).toContain("Permission revoked");
+  expect(document.body.textContent).not.toContain("Signed in as ann");
+  expect(document.body.textContent).not.toContain(pr.title);
   await act(async () => { finish(snapshot([pr])); });
-  expect(host.textContent).not.toContain(pr.title);
-  expect(host.textContent).toContain("Permission revoked");
+  expect(document.body.textContent).not.toContain(pr.title);
+  expect(document.body.textContent).toContain("Permission revoked");
 });
 
 test("a changed GitHub account closes a filter dialog and removes the previous account's PR data", async () => {
@@ -206,11 +207,11 @@ test("a changed GitHub account closes a filter dialog and removes the previous a
   });
   await click(button("Refresh pull requests"));
   await click(button("Filters"));
-  expect(host.textContent).toContain("Filter pull requests");
+  expect(document.body.textContent).toContain("Filter pull requests");
   await act(async () => { finish({ ...snapshot([]), viewer: "new-account" }); });
-  expect(host.textContent).not.toContain("Filter pull requests");
-  expect(host.textContent).not.toContain(pr.title);
-  expect(host.textContent).toContain("Signed in as new-account");
+  expect(document.body.textContent).not.toContain("Filter pull requests");
+  expect(document.body.textContent).not.toContain(pr.title);
+  expect(document.body.textContent).toContain("Signed in as new-account");
   expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
 });
 
@@ -227,9 +228,9 @@ test("historical states are requested lazily and a merged pull request appears i
   await click(option("PR state", "Merged"));
   await click(button("Apply filters"));
   expect(scopes).toEqual(["open", "merged"]);
-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
-  expect(host.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
-  expect(host.textContent).not.toContain(pr.title);
+  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+  expect(document.body.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
+  expect(document.body.textContent).not.toContain(pr.title);
 });
 
 test("the period filters the GitHub request and is saved for the repository", async () => {
@@ -239,7 +240,7 @@ test("the period filters the GitHub request and is saved for the repository", as
     return snapshot([pr]);
   });
   await click(button("Filters"));
-  const period = host.querySelector<HTMLSelectElement>('[aria-label="PR updated within"]')!;
+  const period = document.body.querySelector<HTMLSelectElement>('[aria-label="PR updated within"]')!;
   await act(async () => {
     period.value = "7";
     period.dispatchEvent(new Event("change", { bubbles: true }));
@@ -249,7 +250,7 @@ test("the period filters the GitHub request and is saved for the repository", as
   expect(cutoffs[0]).toBeUndefined();
   expect(Math.abs(Date.parse(cutoffs.at(-1)!) - expected) < 5_000).toBe(true);
   expect(readReviewFilters(reviewFilterKey("/project", "repo1", "ann")).updatedWithin).toBe(7);
-  expect(host.textContent).toContain("Updated · Last 7 days");
+  expect(document.body.textContent).toContain("Updated · Last 7 days");
 });
 
 test("a board refresh started before a local launch preserves the live lane after the drawer closes", async () => {
@@ -267,17 +268,17 @@ test("a board refresh started before a local launch preserves the live lane afte
   }] }; };
   await render(load, "/project", ++renderKey, undefined, loadDetail, runCommand);
   await click(button("Refresh pull requests"));
-  await click(host.querySelector<HTMLButtonElement>(".review-card")!);
+  await click(document.body.querySelector<HTMLButtonElement>(".review-card")!);
   await click(button("Start review"));
   await click(button("Close details"));
   await act(async () => finishLaunch());
   await act(async () => finish(snapshot([pr])));
-  const tile = host.querySelector('section[aria-label="In review"] .review-card')!;
+  const tile = document.body.querySelector('section[aria-label="In review"] .review-card')!;
   expect(tile.textContent).toContain(pr.title);
   expect(tile.textContent).toContain("Wave 3");
   expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
   await click(button("List"));
-  expect(host.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
+  expect(document.body.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
 });
 
 test("Review controls the schedule for the base repository and displays persisted PR activity", async () => {
@@ -302,11 +303,11 @@ test("Review controls the schedule for the base repository and displays persiste
   expect(refresh.textContent).toContain("Refresh");
   await click(refresh);
   expect(reads).toBe(2);
-  expect(host.textContent).toContain("Snapshot 2");
+  expect(document.body.textContent).toContain("Snapshot 2");
   expect(actions.every(action => action.kind === "status")).toBe(true);
   await click(button("PR watcher · Off"));
   const changeMinutes = (n: string) => act(async () => {
-    const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
+    const input = document.body.querySelector<HTMLInputElement>('input[type="number"]')!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, n);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -315,23 +316,23 @@ test("Review controls the schedule for the base repository and displays persiste
   await changeMinutes("7");
   await click(button("Enable watcher"));
   expect(actions.at(-1)).toEqual({ kind: "enable", intervalMinutes: 7 });
-  expect(host.textContent).toContain("Every 7 minutes");
-  expect(host.textContent).toContain("first complete poll");
+  expect(document.body.textContent).toContain("Every 7 minutes");
+  expect(document.body.textContent).toContain("first complete poll");
   const at = "2026-11-19T02:15:00Z";
   state = { ...state, lastSuccessAt: at, lastAttemptAt: at, lastError: "Connection timed out",
     events: [{ kind: "push", at, number: 101, description: "New commits", headSha: "e" }] };
   await act(async () => { window.dispatchEvent(new Event("focus")); });
-  expect(host.querySelector('[role="dialog"]')?.textContent).toContain("#101 New commits");
-  expect(host.querySelectorAll('time[datetime="' + at + '"]')).toHaveLength(3);
-  expect(host.textContent).toContain("Connection timed out");
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("#101 New commits");
+  expect(document.body.querySelectorAll('time[datetime="' + at + '"]')).toHaveLength(3);
+  expect(document.body.textContent).toContain("Connection timed out");
   state = { ...state, lastError: null, recoveryWarning: "One earlier review could not be recovered." };
   await act(async () => { window.dispatchEvent(new Event("focus")); });
   expect(button("PR watcher · Watching").disabled).toBe(false);
-  expect(host.textContent).toContain("One earlier review could not be recovered.");
+  expect(document.body.textContent).toContain("One earlier review could not be recovered.");
   await click(button("Pause watcher"));
-  expect(host.textContent).toContain("fresh baseline");
-  expect(host.textContent).toContain("Reconnect to GitHub to view PR activity.");
-  expect(host.textContent).not.toContain("No changes recorded yet.");
+  expect(document.body.textContent).toContain("fresh baseline");
+  expect(document.body.textContent).toContain("Reconnect to GitHub to view PR activity.");
+  expect(document.body.textContent).not.toContain("No changes recorded yet.");
   await click(button("Resume watcher"));
   expect(actions.at(-1)).toEqual({ kind: "resume" });
   await click(button("Close"));
@@ -344,11 +345,11 @@ test("an access refusal while enabling the watcher evicts the private board", as
     return watcherOff;
   };
   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcher);
-  expect(host.textContent).toContain(pr.title);
+  expect(document.body.textContent).toContain(pr.title);
   await click(button("PR watcher · Off"));
   await click(button("Enable watcher"));
-  expect(host.textContent).toContain("GitHub access was revoked");
-  expect(host.textContent).not.toContain(pr.title);
+  expect(document.body.textContent).toContain("GitHub access was revoked");
+  expect(document.body.textContent).not.toContain(pr.title);
 });
 
 test("an offline board exposes the unique local pause control without revealing cached events or enabling schedules", async () => {
@@ -360,12 +361,12 @@ test("an offline board exposes the unique local pause control without revealing 
       return { ...watcherOff, state: action.kind === "pause" ? "paused" : "enabled", installed: action.kind !== "pause",
         lastError: "Private repo name", events: [{ kind: "push", at: pr.updatedAt, number: 123, description: "Private commit", headSha: "f" }] };
     });
-  await click(host.querySelector<HTMLButtonElement>('button[aria-label^="PR watcher"]')!);
-  expect(host.textContent).not.toContain("Private");
-  expect(host.textContent).not.toContain("Enable watcher");
+  await click(document.body.querySelector<HTMLButtonElement>('button[aria-label^="PR watcher"]')!);
+  expect(document.body.textContent).not.toContain("Private");
+  expect(document.body.textContent).not.toContain("Enable watcher");
   await click(button("Pause watcher"));
   expect(calls.at(-1)).toBe("pause");
-  expect(host.textContent).not.toContain("Resume watcher");
+  expect(document.body.textContent).not.toContain("Resume watcher");
 });
 
 test("a stale watcher read cannot undo a pause and changing account clears private watcher history", async () => {
@@ -387,12 +388,12 @@ test("a stale watcher read cannot undo a pause and changing account clears priva
   await click(button("Pause watcher"));
   await act(async () => finish(enabled));
   expect(button("Resume watcher").disabled).toBe(false);
-  expect(host.textContent).toContain("Ann's private event");
+  expect(document.body.textContent).toContain("Ann's private event");
   account = "new-viewer";
   await click(button("Close"));
   await click(button("Refresh pull requests"));
   await click(button("PR watcher · Off"));
-  expect(host.textContent).not.toContain("Ann's private event");
+  expect(document.body.textContent).not.toContain("Ann's private event");
 });
 
 const automationRule: ReviewRule = { id: "rule-1", name: "Team changes", enabled: true, event: "review_requested", author: "",
@@ -412,16 +413,31 @@ function rulesBackend(rules: ReviewRule[]) {
   return { actions, command };
 }
 
+test("toolbar dialogs render under document.body so the board's containment cannot trap their scrim", async () => {
+  const backend = rulesBackend([]);
+  await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
+  const trapped = (dialog: Element | null) => !dialog || dialog.closest(".review-board") !== null || dialog.closest(".overlay")?.parentElement !== document.body;
+  await click(button("Review rules"));
+  expect(trapped(document.body.querySelector('[role="dialog"]'))).toBe(false);
+  expect(document.body.querySelector('.review-board [role="dialog"]')).toBeNull();
+  await click(button("Close"));
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  await click(button("PR watcher · Off"));
+  expect(trapped(document.body.querySelector('[role="dialog"]'))).toBe(false);
+  expect(document.body.querySelector('.review-board [role="dialog"]')).toBeNull();
+  expect(button("PR watcher · Off").getAttribute("title")).toBe("PR watcher · Off");
+});
+
 test("project rule previews its scope and budgets, can be disabled, edited and deleted", async () => {
   const backend = rulesBackend([]);
   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
   await click(button("Review rules"));
-  const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
+  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
   expect(document.activeElement).toBe(dialog);
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
   expect(document.activeElement).toBe(button("Close"));
   await click(button("New rule"));
-  const field = (text: string) => Array.from(host.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
+  const field = (text: string) => Array.from(document.body.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
   const fill = (text: string, value: string) => act(async () => {
     const input = field(text);
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
@@ -446,7 +462,7 @@ test("project rule previews its scope and budgets, can be disabled, edited and d
   await fill("Token limit (optional)", "300000");
   expect(field("Token limit (optional)").checkValidity()).toBe(true);
   await fill("Token limit (optional)", "50000");
-  expect(host.querySelector('[aria-label="Rule preview"]')?.textContent).toContain("org/team once CI passes for that commit");
+  expect(document.body.querySelector('[aria-label="Rule preview"]')?.textContent).toContain("org/team once CI passes for that commit");
   await click(button("Save rule"));
   const creation = backend.actions.at(-1);
   expect(creation?.kind).toBe("save");
@@ -461,10 +477,10 @@ test("project rule previews its scope and budgets, can be disabled, edited and d
   await fill("PR author", "jo");
   await click(button("Save rule"));
   expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { author: "jo", enabled: false, budgetTokens: null } });
-  expect(host.textContent).toContain("No token limit");
+  expect(document.body.textContent).toContain("No token limit");
   await click(button("Delete")); await click(button("Confirm delete"));
   expect(backend.actions.at(-1)?.kind).toBe("delete");
-  expect(host.textContent).toContain("No automatic review rules");
+  expect(document.body.textContent).toContain("No automatic review rules");
 });
 
 test("PR mode pins an enabled rule, preserves manual launch and scopes its history to the open card", async () => {
@@ -477,12 +493,12 @@ test("PR mode pins an enabled rule, preserves manual launch and scopes its histo
   const detail: typeof fetchReviewDetail = async () => ({ version: 1, number: pr.number, repo: "org/repo", viewer: "ann",
     repositoryId: "repo1", headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], threads: [], reviews: [], checks: [], warnings: [] });
   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, detail, async () => ({ version: 1, runs: [] }), watcherDisabled, command);
-  await click(host.querySelector<HTMLElement>(".review-card")!); await click(button("Automation"));
-  const select = host.querySelector<HTMLSelectElement>(".pr-automation select")!;
+  await click(document.body.querySelector<HTMLElement>(".review-card")!); await click(button("Automation"));
+  const select = document.body.querySelector<HTMLSelectElement>(".pr-automation select")!;
   expect(select.value).toBe("project");
-  expect(host.textContent).toContain("Team changes is waiting for green CI");
-  expect(host.textContent).not.toContain("Unrelated PR reason");
-  const linked = Array.from(host.querySelectorAll(".automation-history li")).find(row => row.textContent?.includes("earlier manual attempt"));
+  expect(document.body.textContent).toContain("Team changes is waiting for green CI");
+  expect(document.body.textContent).not.toContain("Unrelated PR reason");
+  const linked = Array.from(document.body.querySelectorAll(".automation-history li")).find(row => row.textContent?.includes("earlier manual attempt"));
   expect(linked?.querySelector("strong")?.textContent).toBe("Linked");
   expect(linked?.textContent).toContain("Run manual-r");
   for (const value of ["auto/rule-1", "manual", "project"]) {
@@ -500,12 +516,12 @@ test("a rules dialog pending for a previous account cannot expose that account's
   const load: typeof fetchReviewBoard = async () => ({ ...board });
   await render(load, "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, old);
   await click(button("Review rules"));
-  expect(host.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
+  expect(document.body.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
   board.viewer = "other";
   await click(button("Refresh pull requests"));
   await act(async () => resolveRules({ version: 1, rules: [{ ...automationRule, name: "Previous account secret rule" }], choice: { mode: "project" }, activity: [] }));
-  expect(host.querySelector('[role="dialog"]')).toBeNull();
-  expect(host.textContent).not.toContain("Previous account secret rule");
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.textContent).not.toContain("Previous account secret rule");
 });
 
 test("project tabs reuse prefetched cards until refresh and evict them on denied access", async () => {
@@ -524,25 +540,25 @@ test("project tabs reuse prefetched cards until refresh and evict them on denied
   expect(reads).toBe(1);
   await show(true);
   expect(reads).toBe(1);
-  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
+  const select = document.body.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
   await act(async () => { select.value = "org/upstream"; select.dispatchEvent(new Event("change", {bubbles: true})); });
-  expect(host.textContent).toContain("Upstream card");
+  expect(document.body.textContent).toContain("Upstream card");
   await show(false);
-  expect(host.textContent).not.toContain("Upstream card");
+  expect(document.body.textContent).not.toContain("Upstream card");
   problem = "unavailable: The dev bridge connection closed.";
   await show(true);
-  expect(host.textContent).toContain("Upstream card");
+  expect(document.body.textContent).toContain("Upstream card");
   expect(reads).toBe(2);
   await click(button("Refresh pull requests"));
   expect(reads).toBe(3);
-  expect(host.textContent).toContain("Last available snapshot");
-  expect(host.textContent).not.toContain("Fork card");
+  expect(document.body.textContent).toContain("Last available snapshot");
+  expect(document.body.textContent).not.toContain("Fork card");
   problem = "access: Grant revoked";
   await click(button("Refresh pull requests"));
   await show(false);
   problem = "unavailable: offline";
   await show(true);
-  expect(host.textContent).not.toContain("Upstream card");
+  expect(document.body.textContent).not.toContain("Upstream card");
 });
 
 test("successful watcher ticks refresh cached cards in the background once per tick", async () => {
@@ -562,12 +578,12 @@ test("successful watcher ticks refresh cached cards in the background once per t
   await readStatus();
   expect(reads).toBe(2);
   await show(true);
-  expect(host.textContent).toContain("Card revision 2");
+  expect(document.body.textContent).toContain("Card revision 2");
   state = { ...state, state: "paused", lastSuccessAt: "2026-11-20T12:05:00Z" };
   await readStatus();
   expect(reads).toBe(2);
   await click(button("Refresh pull requests"));
-  expect(host.textContent).toContain("Card revision 3");
+  expect(document.body.textContent).toContain("Card revision 3");
 });
 
 test("a missing author has a named filter and consistent reason in board and list", async () => {
@@ -575,11 +591,11 @@ test("a missing author has a named filter and consistent reason in board and lis
   await click(button("Filters"));
   await click(option("Author","Unknown author"));
   await click(button("Apply filters"));
-  expect(host.textContent).toContain("Author · Unknown author");
-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
-  expect(host.querySelector(".review-card")!.textContent).toContain("Unknown author");
+  expect(document.body.textContent).toContain("Author · Unknown author");
+  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+  expect(document.body.querySelector(".review-card")!.textContent).toContain("Unknown author");
   await click(button("List"));
-  expect(host.querySelector("tbody")!.textContent).toContain("Unknown author");
+  expect(document.body.querySelector("tbody")!.textContent).toContain("Unknown author");
 });
 
 test("marking a new addressed reply locally clears its board and list reason", async () => {
@@ -587,14 +603,14 @@ test("marking a new addressed reply locally clears its board and list reason", a
   const data = { version: 1 as const, viewer:"ann", repositoryId:"repo1", number:card.number,
     fetchedAt:pr.updatedAt, headSha:pr.headSha, comments:[{id:"reply-addr-test",author:"bob",own:false,body:"@ann ready",url:"",createdAt:pr.updatedAt}], reviews:[],threads:[],checks:[],warnings:[] };
   await render(async () => snapshot([card]), "/project", ++renderKey, undefined, async () => data, async () => ({version:1,runs:[]}));
-  expect(host.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
-  await click(host.querySelector<HTMLElement>(".review-card")!);
+  expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
+  await click(document.body.querySelector<HTMLElement>(".review-card")!);
   await click(button("Mark 1 as read"));
   await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
   await click(button("Close details"));
-  expect(host.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
+  expect(document.body.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
   await click(button("List"));
-  expect(host.querySelector("tbody")!.textContent).not.toContain("New reply to you");
+  expect(document.body.querySelector("tbody")!.textContent).not.toContain("New reply to you");
 });
 
 test("an offline return from merged history restores only the earlier open query for this viewer", async () => {
@@ -606,12 +622,12 @@ test("an offline return from merged history restores only the earlier open query
   await click(button("Filters"));
   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state","Merged"));
   await click(button("Apply filters"));
-  expect(host.textContent).toContain("Old merged history");
+  expect(document.body.textContent).toContain("Old merged history");
   offline = true;
   await click(button("Clear filters"));
-  expect(host.textContent).toContain("Last available snapshot");
-  expect(host.textContent).toContain(pr.title);
-  expect(host.textContent).not.toContain("Old merged history");
+  expect(document.body.textContent).toContain("Last available snapshot");
+  expect(document.body.textContent).toContain(pr.title);
+  expect(document.body.textContent).not.toContain("Old merged history");
 });
 
 test("details can be resized and stay closed if a removed PR later returns", async () => {
@@ -620,23 +636,23 @@ test("details can be resized and stay closed if a removed PR later returns", asy
     version: 1, viewer:"ann", repositoryId:"repo1", number: pr.number, headSha:pr.headSha, fetchedAt:pr.updatedAt,
     comments:[],reviews:[],threads:[],checks:[],warnings:[],
   }), async () => ({ version:1, runs:[] }));
-  await click(host.querySelector<HTMLElement>(".review-card")!);
-  const panel = host.querySelector<HTMLElement>(".review-detail-panel")!;
+  await click(document.body.querySelector<HTMLElement>(".review-card")!);
+  const panel = document.body.querySelector<HTMLElement>(".review-detail-panel")!;
   expect(panel.tagName).toBe("ASIDE");
-  const divider = host.querySelector<HTMLElement>('[aria-label="Resize pull request details"]')!;
+  const divider = document.body.querySelector<HTMLElement>('[aria-label="Resize pull request details"]')!;
   await act(async () => { divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
   expect(panel.style.width).toBe("528px");
   cards = [];
   await click(button("Refresh pull requests"));
-  expect(host.querySelector(".review-detail-panel")).toBeNull();
+  expect(document.body.querySelector(".review-detail-panel")).toBeNull();
   cards = [pr];
   await click(button("Refresh pull requests"));
-  expect(host.querySelector(".review-detail-panel")).toBeNull();
+  expect(document.body.querySelector(".review-detail-panel")).toBeNull();
 });
 
 test("clearing filters preserves the independently entered search", async () => {
   await render(async () => snapshot([pr, { ...pr, number:102, title:"Another change" }]));
-  const input = host.querySelector<HTMLInputElement>('[aria-label="Search pull requests"]')!;
+  const input = document.body.querySelector<HTMLInputElement>('[aria-label="Search pull requests"]')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "colleague");
     input.dispatchEvent(new Event("input", { bubbles:true }));
@@ -646,7 +662,7 @@ test("clearing filters preserves the independently entered search", async () => 
   await click(button("Apply filters"));
   await click(button("Clear filters"));
   expect(input.value).toBe("colleague");
-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
+  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
 });
 
 test("one board tick updates every active PR from scoped badges and access denial clears the board", async () => {
@@ -678,12 +694,12 @@ test("one board tick updates every active PR from scoped badges and access denia
     expect(typeof tick).toBe("function");
     await act(async () => { await tick!(); });
     expect(polls).toBe(1);
-    expect(host.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
-    expect(host.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
-    expect(host.textContent).toContain("3 of 5");
+    expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
+    expect(document.body.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
+    expect(document.body.textContent).toContain("3 of 5");
     await act(async () => { await tick!(); });
-    expect(host.textContent).toContain("Repository access revoked");
-    expect(host.textContent).not.toContain(pr.title);
+    expect(document.body.textContent).toContain("Repository access revoked");
+    expect(document.body.textContent).not.toContain(pr.title);
   } finally { clock.setTimeout = schedule; }
 });
 
@@ -705,7 +721,7 @@ test("board and list expose GitHub state and pending requests separately and run
   }), run);
   for (const mode of ["Board", "List"]) {
     await click(button(mode));
-    const tags = [...host.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
+    const tags = [...document.body.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
     expect(Array.from(tags!.children, child => child.textContent)).toEqual(["Open", "Changes requested", "Review requested"]);
     await click(button("Run review for #105"));
     expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
@@ -724,7 +740,7 @@ test("an outdated review shows its short SHA and a Review changes action that st
         headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
     await click(button(mode));
-    expect(host.textContent).toContain("Outdated review · abcdef0");
+    expect(document.body.textContent).toContain("Outdated review · abcdef0");
     await click(button("Review changes for #101"));
     expect(calls).toContain("start");
   }
@@ -771,30 +787,30 @@ test("applied filters survive cold board mounts within the verified project, rep
   viewer = "ANN";
   await render(load);
   expect(scopes).toEqual(["open", "merged"]);
-  expect([...host.querySelectorAll(".review-card .flow-id")].map(el => el.textContent)).toEqual(["#303"]);
+  expect([...document.body.querySelectorAll(".review-card .flow-id")].map(el => el.textContent)).toEqual(["#303"]);
   await click(button("Filters (2)"));
   await click(option("Author", "bob"));
   await click(button("Cancel"));
 
   viewer = "colleague";
   await render(load);
-  expect(host.querySelector(".review-active-filters")).toBeNull();
-  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
+  expect(document.body.querySelector(".review-active-filters")).toBeNull();
+  expect(document.body.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
   viewer = "ann";
   repositoryId = "repo2";
   await render(load);
-  expect(host.querySelector(".review-active-filters")).toBeNull();
+  expect(document.body.querySelector(".review-active-filters")).toBeNull();
   repositoryId = "repo1";
   await render(load, "/second-project");
-  expect(host.querySelector(".review-active-filters")).toBeNull();
+  expect(document.body.querySelector(".review-active-filters")).toBeNull();
 
   await render(load);
-  expect(host.querySelector(".review-active-filters")?.textContent).toContain("Author · lee");
-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
+  expect(document.body.querySelector(".review-active-filters")?.textContent).toContain("Author · lee");
+  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
   await click(button("Clear filters"));
   await render(load);
-  expect(host.querySelector(".review-active-filters")).toBeNull();
-  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
+  expect(document.body.querySelector(".review-active-filters")).toBeNull();
+  expect(document.body.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
 });
 
 test("saved filters reject malformed data and unsupported versions and tolerate unavailable browser storage", () => {
@@ -822,11 +838,11 @@ test("filter editing waits for the first verified snapshot before restoring save
   const filters = button("Filters");
   expect(filters.disabled).toBe(true);
   await click(filters);
-  expect(host.querySelector('[role="dialog"]')).toBeNull();
-  expect(host.textContent).not.toContain("Author · lee");
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.textContent).not.toContain("Author · lee");
 
   await act(async () => resolve(snapshot([pr])));
-  expect(host.textContent).toContain("Author · lee");
+  expect(document.body.textContent).toContain("Author · lee");
   const restored = button("Filters (1)");
   expect(restored.disabled).toBe(false);
   await click(restored);
@@ -854,8 +870,8 @@ test("a merged PR awaiting a Keryx answer stays actionable when the merged state
   for (const mode of ["Board", "List"]) {
     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
     await click(button(mode));
-    if (mode === "Board") expect(host.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
-    else expect(host.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
+    if (mode === "Board") expect(document.body.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
+    else expect(document.body.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
     await click(button("Answer question for #" + pr.number));
     expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
   }
@@ -894,7 +910,7 @@ test("Review tab signal follows unfiltered open requests to the viewer and backg
   await click(button("Filters"));
   await click(option("Author", "bob"));
   await click(button("Apply filters"));
-  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
+  expect(document.body.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
   expect(seen.at(-1)).toBe("attention");
   cards = [{ ...neutral, author: "ann", decision: "CHANGES_REQUESTED" }];
   await click(button("Refresh pull requests"));
@@ -940,15 +956,31 @@ test("the tab signal is attention only for requests, owned changes, unread repli
   expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBeNull();
 });
 
+test("a card-only refresh does not drop the tab signal of a PR whose only reason is a carried unread reply", async () => {
+  const base: ReviewCard = { ...pr, reviewers: [], decision: null };
+  let cards: ReviewCard[] = [{ ...base, addressedReplyIds: ["carried-1"] }];
+  const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/carry", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
+    watcherCommand: watcherDisabled, onIndicatorChange: value => seen.push(value),
+  })));
+  expect(seen.at(-1)).toBe("attention");
+  const before = seen.length;
+  cards = [base];
+  await click(button("Refresh pull requests"));
+  expect(seen.slice(before).filter(value => value !== "attention")).toEqual([]);
+  expect(seen.at(-1)).toBe("attention");
+});
+
 test("visible cards keep snapshot order when a later card has an active review", async () => {
   const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
   await render(async () => snapshot(cards));
   await click(button("List"));
-  expect(Array.from(host.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
+  expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
 });
 
 test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
-  const lanes = () => Array.from(host.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
+  const lanes = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
   const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
   const key = reviewFilterKey("/project", "repo1", "ann");
   await render(async () => snapshot(cards));

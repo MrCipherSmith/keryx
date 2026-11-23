@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Dialog, Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { absoluteTime, errMessage } from "../lib/format";
@@ -94,10 +95,10 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, active = t
     onWatchingChange?.(watching ? target : null);
   }, [onWatchingChange, watching, target]);
   return <>
-    <button className="btn btn-sm" aria-haspopup="dialog" aria-label={'PR watcher · ' + label} onClick={() => {
+    <button className="btn btn-sm" aria-haspopup="dialog" aria-label={'PR watcher · ' + label} title={'PR watcher · ' + label} onClick={() => {
       setOpen(true); void request({ kind: "status" });
     }}><Icon name="clock" size={14} /> <span className="toolbar-label">PR watcher</span> <span className="watcher-indicator">{label}</span></button>
-    {active && open && <Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
+    {active && open && createPortal(<Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
       footer={<button className="btn" onClick={() => setOpen(false)}>Close</button>}>
       <div className="review-watcher">
         <p>{target ? <><strong>{target.repo}</strong> · {target.viewer}</> : "Local schedule for this project"}</p>
@@ -144,6 +145,6 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, active = t
           </section>}
         </>}
       </div>
-    </Dialog>}
+    </Dialog>, document.body)}
   </>;
 }
