@@ -67,3 +67,9 @@
 - No second review round was run on the fix commit; the fixes were checked by the orchestrator only.
 - 2026-11-23T08:52:03.382Z - task-done: T12: Review round 1 fixes: dialogs under container CSS, attention flicker, base-moved label, dead Done-lane clause, SQL test fixtures
 - 2026-11-23T08:52:03.567Z - task-done: T10: review-orchestrator on the branch
+
+## 2026-11-23 — completion choice
+
+- Operator chose A (create a PR, review, merge on a separate ask) through AskUserQuestion.
+- `git push -u origin feat/desktop-review-v2-stage0` was refused with HTTP 403: the active gh account has no write access to the repository; a second signed-in account exists. The orchestrator did not switch the active account (it is shared with other sessions). No PR exists yet; the flow stays in-progress.
+- Review round 1 package committed to the branch as an incomplete managed round.
