@@ -1,16 +1,18 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
 import { registerDom, unregisterDom } from "./test/dom";
+import type { View } from "./shell/AppShell";
 
 let React: typeof import("react");
 let RetainedView: typeof import("./App").RetainedView;
+let MetaprojectWork: typeof import("./App").MetaprojectWork;
 let root: Root;
 let host: HTMLElement;
 
 beforeAll(async () => {
   registerDom();
   React = await import("react");
-  RetainedView = (await import("./App")).RetainedView;
+  ({ RetainedView, MetaprojectWork } = await import("./App"));
   host = document.createElement("div");
   document.body.append(host);
   root = (await import("react-dom/client")).createRoot(host);
@@ -61,4 +63,25 @@ test("a retained view is hidden while it is the work view under Settings, keepin
   await render(false, true);
   expect(input.closest("[hidden]")).toBeNull();
   expect(input.value).toBe("under settings");
+});
+
+test("the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return", async () => {
+  // A stand-in explorer records the `visible` it is given; the real one closes its Filters popover and re-reads its catalog on it.
+  const given: Array<boolean | undefined> = [];
+  const Explorer = ({ visible }: { visible?: boolean }) => { given.push(visible); return React.createElement("p", null, "Explorer"); };
+  const render = (view: View, workView: Exclude<View, "settings">) => React.act(async () => {
+    root.render(React.createElement(MetaprojectWork, { cwd: "/project", view, workView, onRebuild: async () => false, onDraft: async () => {}, explorer: Explorer }));
+  });
+  await render("metaproject", "metaproject");
+  expect(host.textContent).toContain("Explorer");
+  expect(given.at(-1)).toBe(true);
+  await render("flows", "flows");
+  // Still mounted, hidden: the explorer keeps its state and hears that it left the screen.
+  expect(host.querySelector("p")?.closest("[hidden]")).not.toBeNull();
+  expect(given.at(-1)).toBe(false);
+  await render("metaproject", "metaproject");
+  expect(given.at(-1)).toBe(true);
+  // Settings opened over the explorer hides it too.
+  await render("settings", "metaproject");
+  expect(given.at(-1)).toBe(false);
 });

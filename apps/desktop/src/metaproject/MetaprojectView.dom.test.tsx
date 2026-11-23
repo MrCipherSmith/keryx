@@ -1452,3 +1452,188 @@ test("a return while a catalog reload is in flight starts no quiet read, and the
   await act(async () => { failReload(); });
   expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
 });
+
+test("the Filters popover stays under its button when its content fits on neither side and there is less room above", async () => {
+  const restoreHeight = stubWindowHeight(480);
+  const restoreContent = stubPopoverContentHeight(500);
+  try {
+    await renderFilters();
+    // 294 px below the button, 138 px above it: neither holds 500 px, so the larger room, below, wins.
+    stubBox(filtersButton(), { left: 544, top: 150, right: 615, bottom: 174 });
+    await openFilters();
+    const style = filtersDialog()!.style;
+    expect(style.bottom).toBe("");
+    expect(px(style.top)).toBe(174 + 4);
+    expect(px(style.maxHeight)).toBe(480 - 8 - 178);
+  } finally { restoreContent(); restoreHeight(); }
+});
+
+test("in a tall window the Filters popover keeps the menu's 420 px height cap, under its button and above it", async () => {
+  const restoreHeight = stubWindowHeight(900);
+  const restoreContent = stubPopoverContentHeight(229);
+  try {
+    await renderFilters();
+    // 764 px of room below the button.
+    stubBox(filtersButton(), { left: 544, top: 100, right: 615, bottom: 124 });
+    await openFilters();
+    expect(px(filtersDialog()!.style.top)).toBe(128);
+    expect(px(filtersDialog()!.style.maxHeight)).toBe(420);
+    await act(async () => { filtersButton().click(); });
+    // 264 px below cannot hold the content; 788 px above can.
+    stubBox(filtersButton(), { left: 544, top: 800, right: 615, bottom: 824 });
+    await openFilters();
+    expect(filtersDialog()!.style.top).toBe("");
+    expect(px(filtersDialog()!.style.bottom)).toBe(900 - 800 + 4);
+    expect(px(filtersDialog()!.style.maxHeight)).toBe(420);
+  } finally { restoreContent(); restoreHeight(); }
+});
+
+test("a Filters button at the window's bottom edge keeps the popover above it 8 px inside the window", async () => {
+  const restoreHeight = stubWindowHeight(480);
+  const restoreContent = stubPopoverContentHeight(229);
+  try {
+    await renderFilters();
+    stubBox(filtersButton(), { left: 544, top: 478, right: 615, bottom: 502 });
+    await openFilters();
+    expect(filtersDialog()!.style.top).toBe("");
+    expect(px(filtersDialog()!.style.bottom)).toBe(8);
+  } finally { restoreContent(); restoreHeight(); }
+});
+
+test("in a window too short for any room beside its button, the Filters popover gets no negative height", async () => {
+  const restoreHeight = stubWindowHeight(30);
+  try {
+    await renderFilters();
+    // 6 px short below the button and 12 px short above it.
+    stubBox(filtersButton(), { left: 544, top: 0, right: 615, bottom: 24 });
+    await openFilters();
+    expect(px(filtersDialog()!.style.top)).toBe(28);
+    expect(px(filtersDialog()!.style.maxHeight)).toBe(0);
+  } finally { restoreHeight(); }
+});
+
+test("a closed Filters popover no longer measures its button when the window is resized", async () => {
+  await renderFilters();
+  const toggle = filtersButton();
+  stubBox(toggle, { left: 544, top: 100, right: 615, bottom: 124 });
+  const box = toggle.getBoundingClientRect;
+  let measured = 0;
+  toggle.getBoundingClientRect = () => { measured++; return box(); };
+  await openFilters();
+  const opened = measured;
+  await act(async () => { window.dispatchEvent(new Event("resize")); });
+  expect(measured).toBe(opened + 1);
+  await act(async () => { toggle.click(); });
+  expect(filtersDialog()).toBeNull();
+  const closed = measured;
+  await act(async () => { window.dispatchEvent(new Event("resize")); });
+  expect(measured).toBe(closed);
+});
+
+test("shown again after the project's knowledge changed, the explorer shows the new catalog", async () => {
+  const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
+  let snapshotId = "one";
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      return Promise.resolve(snapshotId === "one" ? catalog : { ...catalog, snapshotId, nodes: [page, file, server], counts: { files: 2, wiki: 1, modules: 0 } });
+    }
+    return request(cwd, input).then(result => ({ ...result, snapshotId }));
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
+  await showView(props, true);
+  expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Server");
+  await showView(props, false);
+  snapshotId = "two";
+  await showView(props, true);
+  expect(catalogReads).toBe(2);
+  expect(listRow("Server").textContent).toContain("src/server.ts");
+  expect(host.textContent).not.toContain("Project knowledge changed while loading");
+});
+
+test("a graph gone stale while hidden shows its reason under Details, and a rebuild's ready reload clears it", async () => {
+  let graph: "ready" | "stale" = "ready";
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve(graph === "ready" ? { ...catalog, graph } : { ...catalog, graph, graphReason: "an untracked file changed" })
+    : request(cwd, input);
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true, createCytoscape: await headlessCytoscape() };
+  await showView(props, true);
+  expect(freshnessBanner()).toBeUndefined();
+  await showView(props, false);
+  graph = "stale";
+  await showView(props, true);
+  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
+  await act(async () => { detailsButton()?.click(); });
+  expect(detailsButton()?.getAttribute("aria-expanded")).toBe("true");
+  expect(freshnessBanner()?.textContent).toContain("an untracked file changed");
+  graph = "ready";
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(freshnessBanner()).toBeUndefined();
+});
+
+test("after a quiet re-read on return, a rebuild's failed catalog reload is still shown", async () => {
+  let catalogReads = 0;
+  let failing = false;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      if (failing) return Promise.reject(new Error("The index is being written."));
+    }
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
+  await showView(props, true);
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(2);
+  failing = true;
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(3);
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
+});
+
+test("a return after a failed first catalog read starts no read, and its failure and Retry stay", async () => {
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      return catalogReads === 1 ? Promise.reject(new Error("The CLI is not ready.")) : Promise.resolve(catalog);
+    }
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
+  await showView(props, true);
+  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(1);
+  expect(catalogErrorBanner()?.textContent).toContain("The CLI is not ready.");
+  await act(async () => { button("Retry").click(); });
+  expect(catalogReads).toBe(2);
+  expect(catalogErrorBanner()).toBeUndefined();
+  expect(listRow("Client").textContent).toContain("src/client.ts");
+});
+
+test("a node known only from a search hit keeps its panel once the search is cleared, and Back returns to it at once", async () => {
+  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "search"
+    ? Promise.resolve({ ...snapshot, hits: input.query === "far" ? [{ node: far, snippet: "far away" }] : [] })
+    : request(cwd, input);
+  const debounce = holdDebounce();
+  try {
+    await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+    await typeQuery("far");
+    await debounce.run();
+    await act(async () => { listRow("Far module").click(); });
+    expect(panelTitle()).toBe("Far module");
+    // The hit is gone from the list; the node is in neither the catalog nor any read the explorer holds now.
+    await typeQuery("");
+    expect(host.querySelector(".metaproject-list")?.textContent).not.toContain("Far module");
+    expect(panelTitle()).toBe("Far module");
+    await act(async () => { listRow("Client").click(); });
+    expect(panelTitle()).toBe("Client");
+    await act(async () => { button("Back").click(); });
+    expect(panelTitle()).toBe("Far module");
+  } finally { debounce.restore(); }
+});
