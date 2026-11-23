@@ -1809,3 +1809,85 @@ test("a rebuild the user starts removes a failed catalog read's banner, and one 
   expect(catalogReads).toBe(2);
   expect(catalogErrorBanner()?.textContent).toBeUndefined();
 });
+
+// ---- Fix round 4 (T26): a failed rebuild's banner against the reads and rebuilds the user starts, and superseded reads. ----
+
+test("a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds", async () => {
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") catalogReads++;
+    return request(cwd, input);
+  };
+  const onRebuild = async (): Promise<boolean> => { throw new Error("Rebuild failed: index locked."); };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild })); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
+  await act(async () => { button("Retry").click(); });
+  expect(catalogReads).toBe(2);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+  expect(listRow("Client").textContent).toContain("src/client.ts");
+});
+
+test("a second rebuild removes the first one's failure banner while it runs", async () => {
+  let rebuilds = 0;
+  let finish: (value: boolean) => void = () => {};
+  const onRebuild = (): Promise<boolean> => {
+    rebuilds++;
+    return rebuilds === 1 ? Promise.reject(new Error("Rebuild failed: index locked.")) : new Promise<boolean>(resolve => { finish = resolve; });
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild })); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(button("Rebuilding…").disabled).toBe(true);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+  await act(async () => { finish(false); });
+  expect(button("Rebuild graph").disabled).toBe(false);
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+});
+
+test("a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands", async () => {
+  let catalogReads = 0;
+  let releaseQuiet: () => void = () => {};
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      // The quiet re-read on return is held; the reload after the rebuild, started meanwhile, fails.
+      if (catalogReads === 2) return new Promise(resolve => { releaseQuiet = () => resolve(catalog); });
+      if (catalogReads === 3) return Promise.reject(new Error("The index is being written."));
+    }
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
+  await showView(props, true);
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(2);
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(3);
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
+  // The quiet read lands after the reload that superseded it: it succeeds, and the reload's failure still stands.
+  await act(async () => { releaseQuiet(); });
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
+});
+
+test("a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded", async () => {
+  let catalogReads = 0;
+  let failFirstReload: () => void = () => {};
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      // The first rebuild's reload is held; the second rebuild's reload succeeds at once.
+      if (catalogReads === 2) return new Promise((_resolve, reject) => { failFirstReload = () => reject(new Error("The index is being written.")); });
+    }
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => true })); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(2);
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(3);
+  await act(async () => { failFirstReload(); });
+  expect(catalogErrorBanner()?.textContent).toBeUndefined();
+  expect(listRow("Client").textContent).toContain("src/client.ts");
+});
