@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T08:09:28.999Z",
+  "updatedAt": "2026-11-23T08:22:57.858Z",
   "source": {
     "type": "description",
     "ref": null
@@ -104,78 +104,113 @@
       "id": "T5",
       "title": "Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:09:29.940Z",
+            "outcome": "started",
+            "detail": "516-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Outdated review result in the card badge (SQL + localBadge + types)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:09:30.122Z",
+            "outcome": "started",
+            "detail": "516-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Show the outdated review on the card and in the list",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:15:55.067Z",
+            "outcome": "started",
+            "detail": "516-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Keep the board toolbar on one row with the detail panel open",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:18:19.086Z",
+            "outcome": "started",
+            "detail": "516-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Test suites, typecheck, lint and live check in the browser dev build",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:20:59.898Z",
+            "outcome": "started",
+            "detail": "516-T9 orchestrator verification"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -197,7 +232,7 @@
       "id": "T11",
       "title": "Requirements package keryx-desktop-review-v2 and roadmap entry",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -205,7 +240,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -276,6 +312,61 @@
     {
       "at": "2026-11-23T08:09:28.999Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-23T08:09:29.339Z",
+      "event": "task-done",
+      "detail": "T11: Requirements package keryx-desktop-review-v2 and roadmap entry"
+    },
+    {
+      "at": "2026-11-23T08:09:29.940Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 516-T5"
+    },
+    {
+      "at": "2026-11-23T08:09:30.122Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 516-T6"
+    },
+    {
+      "at": "2026-11-23T08:13:16.301Z",
+      "event": "task-done",
+      "detail": "T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator"
+    },
+    {
+      "at": "2026-11-23T08:15:54.694Z",
+      "event": "task-done",
+      "detail": "T6: Outdated review result in the card badge (SQL + localBadge + types)"
+    },
+    {
+      "at": "2026-11-23T08:15:55.067Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 516-T7"
+    },
+    {
+      "at": "2026-11-23T08:18:18.896Z",
+      "event": "task-done",
+      "detail": "T7: Show the outdated review on the card and in the list"
+    },
+    {
+      "at": "2026-11-23T08:18:19.086Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 516-T8"
+    },
+    {
+      "at": "2026-11-23T08:20:59.676Z",
+      "event": "task-done",
+      "detail": "T8: Keep the board toolbar on one row with the detail panel open"
+    },
+    {
+      "at": "2026-11-23T08:20:59.898Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 516-T9 orchestrator verification"
+    },
+    {
+      "at": "2026-11-23T08:22:57.858Z",
+      "event": "task-done",
+      "detail": "T9: Test suites, typecheck, lint and live check in the browser dev build"
     }
   ],
   "acKinds": {
