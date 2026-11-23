@@ -86,6 +86,11 @@ export function laneReason(c: ReviewCard) {
   if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
   if (c.localReview?.active) return "Keryx review in progress";
   if (c.state !== "open") return STATE_LABEL[c.state];
+  const outdated = c.localReview?.outdated;
+  if (outdated) {
+    const kind = outdated.state === "partial" || outdated.state === "budget" ? "Outdated partial review" : "Outdated review";
+    return `${kind} · ${outdated.headSha.slice(0, 7)}`;
+  }
   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);
   if (attention) return attention;

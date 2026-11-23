@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewCard } from "./types";
-import { EMPTY_FILTERS, filterReviews, reviewLane, stateQuery } from "./model";
+import { EMPTY_FILTERS, filterReviews, laneReason, reviewLane, stateQuery } from "./model";
 
 const pr: ReviewCard = {
   number: 42, title: "Use project settings", url: "https://github.com/example/project/pull/42", state: "open", draft: false,
@@ -62,4 +62,17 @@ test("an active local review does not bypass any selected filter", () => {
   expect(filterReviews([active], { ...EMPTY_FILTERS, state: ["merged"] }, "")).toEqual([]);
   expect(filterReviews([active], { ...EMPTY_FILTERS, ci: ["failed"] }, "")).toEqual([]);
   expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["ann"] }, "")).toEqual([active]);
+});
+
+test("an outdated review names the reviewed commit and ranks above GitHub reasons, below live Keryx states and closed PRs", () => {
+  const outdated = (state: "completed" | "partial" | "budget") =>
+    ({ ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+  expect(laneReason(outdated("completed"))).toBe("Outdated review · abcdef0");
+  expect(laneReason(outdated("partial"))).toBe("Outdated partial review · abcdef0");
+  expect(laneReason(outdated("budget"))).toBe("Outdated partial review · abcdef0");
+  expect(laneReason({ ...outdated("completed"), state: "merged" })).toBe("Merged");
+  const awaiting = { ...outdated("completed"), localReview: { ...outdated("completed").localReview, awaitingAnswer: true as const } };
+  expect(laneReason(awaiting)).toBe("Awaiting your answer");
+  expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
+  expect(reviewLane(outdated("completed"))).toBe(reviewLane(pr));
 });

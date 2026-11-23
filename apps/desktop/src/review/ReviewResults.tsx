@@ -33,7 +33,7 @@ function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscription
   const showReview = card.state === "open" || card.localReview?.runState;
   const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
     card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
-    card.localReview?.runState ? "View review result" : "Run review";
+    card.localReview?.runState ? "View review result" : card.localReview?.outdated ? "Review changes" : "Run review";
   const browserLabel = `Open PR #${card.number} in browser`;
   const sessionLabel = `Open PR #${card.number} in Sessions`;
   const following = subscriptions?.has(card.number) ?? false;

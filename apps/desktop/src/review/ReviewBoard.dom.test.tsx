@@ -9,6 +9,7 @@ import { registerDom, unregisterDom } from "../test/dom";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
 import { markRepliesRead } from "./reviewReadState";
 import { EMPTY_FILTERS } from "./model";
+import { badgesEqual } from "./ReviewBoard";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
 let root: Root;
@@ -712,6 +713,31 @@ test("board and list expose GitHub state and pending requests separately and run
     await click(button("Close details"));
   }
   expect(starts).toEqual([105, 105]);
+});
+
+test("an outdated review shows its short SHA and a Review changes action that starts a review in board and list", async () => {
+  const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+  for (const mode of ["Board", "List"]) {
+    const calls: string[] = [];
+    await render(async () => snapshot([outdated]), "/project", ++renderKey,
+      undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+        headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+      async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+    await click(button(mode));
+    expect(host.textContent).toContain("Outdated review · abcdef0");
+    await click(button("Review changes for #101"));
+    expect(calls).toContain("start");
+  }
+});
+
+test("a badge whose only change is the outdated review counts as changed", () => {
+  const base = { active: false, ready: false };
+  const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };
+  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
+  expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
+  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
+  expect(badgesEqual(a, base)).toBe(false);
+  expect(badgesEqual(base, a)).toBe(false);
 });
 
 test("opening a running review from its badge action only reads the run", async () => {
