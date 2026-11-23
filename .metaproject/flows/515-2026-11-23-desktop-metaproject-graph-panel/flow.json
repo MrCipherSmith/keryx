@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T08:21:15.922Z",
+  "updatedAt": "2026-11-23T08:40:21.193Z",
   "source": {
     "type": "description",
     "ref": null
@@ -87,7 +87,8 @@
         "T10",
         "T11",
         "T14",
-        "T15"
+        "T15",
+        "T16"
       ],
       "attempts": {
         "count": 0,
@@ -256,7 +257,7 @@
       "id": "T11",
       "title": "Live browser verification at three window sizes, dark and light",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T14"
@@ -267,7 +268,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Live browser check passed after T14: AC5, AC6, AC10 and AC20 hold; measured values are in journal.md (T11 first and second live pass)"
     },
     {
       "id": "T12",
@@ -355,17 +358,52 @@
       "id": "T15",
       "title": "Align the guide with the final screen and refresh its screenshots",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:36:10.435Z",
+            "outcome": "started",
+            "detail": "515-T15"
+          }
+        ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC21"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "One-line freshness banner with details on demand",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:36:10.782Z",
+            "outcome": "started",
+            "detail": "515-T16"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC19",
+        "AC20"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -566,6 +604,46 @@
       "at": "2026-11-23T08:21:15.922Z",
       "event": "task-done",
       "detail": "T14: Compact filter bar and one-row header on narrow hosts"
+    },
+    {
+      "at": "2026-11-23T08:23:02.341Z",
+      "event": "task-done",
+      "detail": "T11: Live browser verification at three window sizes, dark and light"
+    },
+    {
+      "at": "2026-11-23T08:36:09.362Z",
+      "event": "task-added",
+      "detail": "T16: One-line freshness banner with details on demand"
+    },
+    {
+      "at": "2026-11-23T08:36:09.594Z",
+      "event": "task-depends-set",
+      "detail": "T15: dependsOn T14 (was T14) — The guide task runs beside the banner task; it describes the banner from the T16 dispatch"
+    },
+    {
+      "at": "2026-11-23T08:36:09.842Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16 (was T8, T9, T10, T11, T14, T15) — The review round runs on the final verified change"
+    },
+    {
+      "at": "2026-11-23T08:36:10.436Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 515-T15"
+    },
+    {
+      "at": "2026-11-23T08:36:10.782Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 515-T16"
+    },
+    {
+      "at": "2026-11-23T08:37:57.245Z",
+      "event": "task-done",
+      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
+    },
+    {
+      "at": "2026-11-23T08:40:21.193Z",
+      "event": "task-done",
+      "detail": "T16: One-line freshness banner with details on demand"
     }
   ],
   "origin": {

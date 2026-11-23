@@ -1,0 +1,37 @@
+{
+  "task": {
+    "task_id": "task-15",
+    "task_name": "Align the guide with the final screen and refresh its screenshots",
+    "task_type": "mixed",
+    "complexity": "low",
+    "dependencies": [],
+    "description": "The guide docs/docs/guides/desktop-metaproject.md was updated before the Graph screen was finished. Bring it in line with what ships now. The orchestrator checked the screen in a browser; these are the places where the guide and the screen differ.\n\n1. Filters. There is no filter bar any more. A 'Filters' button in the graph's header row, next to the zoom controls, opens a popover with Direction, Depth, the relationship types and 'Reset filters'; a change applies at once with the graph visible behind it; Escape or a click outside closes it. While the filters differ from their defaults the button reads 'Filters · n' and is highlighted. Defines and Calls are disabled in the popover, with the reason shown, until the symbol layer is enabled. Rewrite step 2 of 'Trace relationships in Graph' and every other mention of a filter bar or of filters shown on the page (including the sentence under 'Enable symbol and call relationships').\n2. The zoom controls and the Filters button are in the header row of the graph, beside its caption.\n3. Wiki: the Relationships block shows the direct relationships of every type except Defines and Calls, not 'every type'.\n4. The control at the end of a relationship row reads the count for module imports ('7 imports') and 'N examples' otherwise; say both.\n5. Freshness. The banner now reads 'Graph is stale.' / 'Graph is missing.' on one line with 'Details' for the reason and 'Rebuild graph'. Update the wording in 'Set up the project', step 3. Do not touch the table under 'Recover from common problems'.\n6. Second-step relationships sit in a 'Second step' disclosure that is closed until opened.\n7. Screenshots. The orchestrator replaced both image files with captures of the new screen: docs/docs/images/desktop-metaproject/graph.jpg shows the file src/bus/leases.ts selected in Graph — its 12 importing files, the wiki page that describes it and its module on the left, the four files it imports on the right, the legend under the graph, and the details panel open on Relationships; docs/docs/images/desktop-metaproject/wiki.jpg shows the Agent Bus article in Wiki with the catalog list on the left. Rewrite the two alt texts to describe exactly that, and make the example in the surrounding text agree with the picture where it names what is selected.\n\nConstraints stay as in the first guide task: do not touch the paragraph that starts 'Desktop sends read requests', the section 'Inspect the module from the CLI', or the table under 'Recover from common problems'; keep the image paths and the stated limits; keep the guide's voice and second person.",
+    "target_files": [
+      "docs/docs/guides/desktop-metaproject.md"
+    ],
+    "acceptance_criteria": [
+      "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T15.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}
