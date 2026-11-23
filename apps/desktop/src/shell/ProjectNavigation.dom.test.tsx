@@ -80,7 +80,7 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
 });
 
 
-test("App preserves tab state and starts a background review from the originating session", () => {
+test("App preserves tab state and starts a background review from the originating session; AC16 a PR without Flow and review opens one bound session whose /review run shows on the card", () => {
   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });
