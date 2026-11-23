@@ -2,14 +2,15 @@
 
 Task definitions live here; task **statuses** live in flow.json and are managed
 only via `keryx flow task done <id> <taskId>`. The table follows `flow.json`: T12–T16 were added
-while the screen was tuned on a live preview, T17–T21 after review round 1; the journal records why.
+while the screen was tuned on a live preview, T17–T21 after review round 1, T22–T23 after review
+round 2, T24–T25 after review round 3; the journal records why.
 
 | ID | Kind | Title | Depends on | Criteria |
 |----|------|-------|------------|----------|
 | T1 | context | Collect remaining context | — | — |
 | T2 | implement | Implement per plan (scaffold; superseded by T5–T8) | — | — |
 | T3 | test | Add/adjust tests and make them pass (scaffold; tests live in T5–T8, suite in T10) | — | — |
-| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 | — |
+| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 | — |
 | T5 | implement | Graph layout module and RelationshipGraph component (new files) | — | AC1, AC2, AC3, AC4 |
 | T6 | implement | NodeDetailsPanel and RelationshipList components (new files) | — | AC7, AC8, AC9 |
 | T7 | implement | Explorer navigation and state fixes D1–D7 | — | AC11, AC12, AC13, AC14, AC15, AC16 (and the code for AC10) |
@@ -29,6 +30,8 @@ while the screen was tuned on a live preview, T17–T21 after review round 1; th
 | T21 | docs | Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes) | T17, T18 | AC21 |
 | T22 | implement | Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004) | — | AC7, AC10, AC14, AC16, AC19 |
 | T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
+| T24 | implement | Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005) | — | AC10, AC14, AC16, AC19 |
+| T25 | docs | Fix round 3: flow record (F-006, F-007, F-008) | — | — |
 
 ## Context
 
@@ -90,6 +93,8 @@ while the screen was tuned on a live preview, T17–T21 after review round 1; th
   Round 2 (delta over the fixes of round 1): package
   `.metaproject/reviews/2026-11-23-review-flow-branch-r02` (13 findings: 9 minor, 4 info; one minor
   dismissed by the operator).
+  Round 3 (the commits of fix round 2): package
+  `.metaproject/reviews/2026-11-23-review-flow-branch-r03` (15 findings: 8 minor, 7 info).
 
 ## Fix round 1 (findings of review round 1)
 
@@ -124,3 +129,18 @@ names) was dismissed by the operator; the info findings F-010 to F-013 are not f
 - **T23 — test strength of the first fixes.** F-006 to F-009: 14 surviving mutants of the Filters
   popover placement, the quiet catalog re-read, the node memory and the `visible` wiring in `App.tsx`;
   after T22, which edits the same files.
+
+## Fix round 3 (findings of review round 3)
+
+The finding ids below are round 3's. The finish line of T24 is in its dispatch file; the findings are in
+`.metaproject/reviews/2026-11-23-review-flow-branch-r03/findings.json`. The info findings F-009 to F-015
+are not fixed.
+
+- **T24 — catalog error and test strength.** F-001 (the banner of a failed catalog read stays after a
+  later quiet re-read has succeeded), F-002 to F-005 (14 surviving mutants of the list's empty note, the
+  Wiki disclosure's count, the counter that retires pending lookups and pages, and the `MetaprojectWork`
+  wiring).
+- **T25 — flow record.** Done by the orchestrator, with no dispatch file: F-006 (this file gave T4 the
+  dependencies it had before T22 and T23), F-007 (the journal's entries on T22 and T23 named no script
+  for the runs they report; `verification/fix-round-2.md` now holds the commands and the mutants),
+  F-008 (T22's result file named "F-005" without its round).
