@@ -211,21 +211,23 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
     } finally { activeMove.current = false; if (alive.current) setMoving(null); }
   }
 
-  function workActions(row: Row, full = false) {
+  /** The issue's actions, each with visible text on the card, the list row and the panel alike. */
+  function workActions(row: Row) {
     const issue = row.issue;
     const stage = issue.work?.stage ?? "none";
     const pending = working !== null;
     const flowLabel = stage === "none" ? "Create Flow" : "Open Flow";
+    const sessionLabel = stage === "needs_answer" ? "Open question" : "Open in session";
     return <div className="card-actions issue-actions">
-      <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={"Open issue session for " + issueName(issue)}
-        title={stage === "needs_answer" ? "Open question in Sessions" : "Open session"} disabled={pending} onClick={() => void act("open-session", issue.ref)}>
-        <Icon name="chat" size={15} />{full && (stage === "needs_answer" ? "Open question" : "Open session")}</button>
-      <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={flowLabel + " for " + issueName(issue)} title={flowLabel}
+      <button className="btn btn-sm" aria-label={sessionLabel + " for " + issueName(issue)}
+        title={stage === "needs_answer" ? "Open question in Sessions" : "Open in session"} disabled={pending} onClick={() => void act("open-session", issue.ref)}>
+        <Icon name="chat" size={13} />{sessionLabel}</button>
+      <button className="btn btn-sm" aria-label={flowLabel + " for " + issueName(issue)} title={flowLabel}
         disabled={pending} onClick={() => void act(stage === "none" ? "prepare-flow" : "open-flow", issue.ref)}>
-        <Icon name="branch" size={15} />{full && flowLabel}</button>
-      {issue.work?.canResumePreparation && <button className={full ? "btn btn-sm" : "icon-btn"}
+        <Icon name="branch" size={13} />{flowLabel}</button>
+      {issue.work?.canResumePreparation && <button className="btn btn-sm"
         aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
-        onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={15} />{full && "Resume preparation"}</button>}
+        onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={13} />Resume preparation</button>}
       {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
     </div>;
   }
@@ -290,7 +292,7 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
       {snapshot?.nextCursor && <button className="btn issue-more" disabled={busy} onClick={() => void load(true)}>Load more issues</button>}
     </section>
     {selected && snapshot && <IssueDetail key={JSON.stringify([issueKey(selected.issue.ref), detailRead])} cwd={cwd} login={login} viewer={snapshot.viewer} row={selected.issue}
-      request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected, true)}
+      request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected)}
       onPrevious={selectedIndex > 0 ? () => setSelection(rows[selectedIndex - 1]!) : undefined}
       onNext={selectedIndex < rows.length - 1 ? () => setSelection(rows[selectedIndex + 1]!) : undefined} />}
     {filterDialog && <IssueFilters filters={filters} project={project} apply={f => { setFilters(f); setFilterDialog(false); }} close={() => setFilterDialog(false)} />}

@@ -31,7 +31,11 @@ import { IssuesView } from "./issues/IssuesView";
 import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
-import { sessionFlags } from "./acp/types";
+import { sessionFlags, type SessionSubject } from "./acp/types";
+import { flowPrompt, openSubjectSession, reviewLaunchTarget, withPendingSubjects, type SubjectSessionTarget } from "./review/prWork";
+import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
+import type { ReviewCard } from "./review/types";
+import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
 import type { FlowCard } from "./platform/commands";
 import { laneOf, workPrompt } from "./flows/model";
 import { useFlows } from "./flows/useFlows";
@@ -375,6 +379,37 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     return id;
   }, [s, fillComposer]);
 
+  /** The sessions the cards see: the stored list plus Subject bindings keryx has not stored yet. */
+  const subjectSessions = useMemo(() => withPendingSubjects(state.sessions, s.pendingSubjects), [state.sessions, s.pendingSubjects]);
+  const subjectSessionsRef = useRef(subjectSessions);
+  subjectSessionsRef.current = subjectSessions;
+  const flowForPr = useCallback((url: string) => flows.cards.find(flow =>
+    flow.prUrl?.replace(/\/$/, "").toLowerCase() === url.replace(/\/$/, "").toLowerCase()), [flows.cards]);
+
+  /** Open the PR's bound session (newest, named or new); a new one is bound to the PR and gets `prompt`, never sent. */
+  const openPrSession = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject, prompt: string, prefillExisting = false) => {
+    setView("session");
+    const flow = flowForPr(card.url);
+    return openSubjectSession({
+      sessions: () => subjectSessionsRef.current,
+      loadSession: s.loadSession,
+      // A Flow that already names this PR is linked to the new session, as before.
+      newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
+      bind: (id, value) => void s.bindSubject(id, value),
+      fill: fillComposer,
+    }, subject, target, prompt, prefillExisting);
+  }, [s, fillComposer, flowForPr]);
+
+  /** "Create Flow": the PR's session with a flow prompt; the one package that then appears is linked to it. */
+  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void s.linkFlow(id, dir));
+  const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
+    const known = flowLinks.known();
+    const id = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
+    if (id) flowLinks.expect(id, known);
+  }, [flowLinks, openPrSession]);
+
+  const [reviewFocus, setReviewFocus] = useState<{ number: number; nonce: number } | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
@@ -542,6 +577,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (routingSession !== null && (routingSession !== state.sessionId || view !== "session")) setRoutingSession(null);
   }, [routingSession, state.sessionId, view]);
   const sessionFlow = state.sessions.find(session => session.sessionId === state.sessionId);
+  const shownSubject = (sessionFlow && sessionFlags(sessionFlow).subject) ?? (state.sessionId ? s.pendingSubjects.get(state.sessionId) : undefined);
+  const shownFlowDir = sessionFlow && sessionFlags(sessionFlow).flow;
+  const shownFlow = shownFlowDir ? flows.cards.find(card => card.dir === shownFlowDir) : undefined;
   const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
   const viewer = reviewViewer ?? currentNotice?.viewer;
   const sessionReviews = useMemo(() => reviewLinks.filter(link => link.sessionId === state.sessionId &&
@@ -578,6 +616,16 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onView={go}
       onProjectSettings={openProjectSettings}
       title={title}
+      titleLinks={<SessionSubjectLinks subject={shownSubject} flow={shownFlow}
+        onOpenSubject={subject => {
+          if (subject.kind === "issue") {
+            if (state.sessionId) openIssueOrigin({ sessionId: state.sessionId });
+            return;
+          }
+          go("review");
+          setReviewFocus(old => ({ number: subject.number, nonce: (old?.nonce ?? 0) + 1 }));
+        }}
+        onOpenFlow={dir => { setLinkedFlow(dir); setView("flows"); }} />}
       onOpenSourceIssue={sessionFlow && sessionFlags(sessionFlow).hasIssue
         ? () => openIssueOrigin({sessionId: sessionFlow.sessionId}) : undefined}
       hasSession={state.sessionId !== null}
@@ -625,8 +673,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
-              flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace}
+            sessions={subjectSessions} focus={reviewFocus}
+            onOpenSubjectSession={(card, target, subject) => void openPrSession(card, target, subject, card.url)}
+            onCreateFlow={(card, subject) => void createPrFlow(card, subject)} onOpenFlow={(dir) => {
             setLinkedFlow(dir);
             setView("flows");
           }} />
@@ -645,7 +695,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
       {view === "session" && !(routingSession && routingSession === state.sessionId) && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
-          initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
+          initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)} models={reviewModels} loadTargets={loadReviewTargets}
           onApply={async (key, revision, options) => {
             const result = await reviewRun(cwd, key, { kind: "start", ...revision, options });
             const id = result.startedRunId;

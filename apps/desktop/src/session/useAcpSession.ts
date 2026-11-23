@@ -39,6 +39,7 @@ import {
   type PermissionOutcome,
   type SessionFlags,
   type SessionInfo,
+  type SessionSubject,
   type SessionUpdate,
 } from "../acp/types";
 import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
@@ -50,6 +51,7 @@ import { answerAgentRequest } from "./agentRequests";
 import { retentionDays } from "../lib/retention";
 import { idleSessions, pickStartSession } from "./startup";
 import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN } from "./telegramSession";
+import { PendingSubjects } from "./subjectBinding";
 
 export type { PendingAsk, PendingPermission } from "./dialogQueue";
 
@@ -267,6 +269,22 @@ export function useAcpSession(cwd: string) {
     }
   }, [cwd, dispatch]);
 
+  /** PR and issue bindings waiting for keryx to store a new session, applied like the pending flow link. */
+  const [pendingSubjects, setPendingSubjects] = useState<ReadonlyMap<string, SessionSubject>>(() => new Map());
+  const subjects = useMemo(() => new PendingSubjects({
+    write: (sessionId, subject) => {
+      const client = live.current.client;
+      return client ? client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, subject }) : Promise.reject(new Error("keryx is not running"));
+    },
+    onFlags: (sessionId, flags) => {
+      dispatch({ t: "flags", sessionId, flags });
+      // The pending binding is dropped only once the stored list (which then holds it) is read.
+      return refreshSessions();
+    },
+    onNotice: (sessionId, text) => dispatch({ t: "notice", sessionId, level: "warn", text }),
+    onChange: setPendingSubjects,
+  }), [cwd, dispatch, refreshSessions]);
+
   /**
    * Archive the sessions nobody touched for the retention window (Settings → Sessions). The shown
    * session and any with a running turn are kept; pinned ones are never archived. Best effort.
@@ -392,13 +410,14 @@ export function useAcpSession(cwd: string) {
             // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
             if (!busyRefusal) dialogs.dropSession(sessionId);
             dispatch({ t: "busy", sessionId, busy: false });
-            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
+            // One flags write at a time: the flow link first, then the subject binding.
+            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());
           }
         }
       })();
       return true;
     },
-    [dialogs, dispatch, refreshSessions, applyPendingFlow],
+    [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
   );
 
   const resumeIssueQuestions = useCallback((sessionId: string) =>
@@ -762,6 +781,15 @@ export function useAcpSession(cwd: string) {
     [loadSession, newSession, applyPendingFlow],
   );
 
+  /** Link a session to a flow package; kept pending and retried after its turn while keryx has not stored the session. */
+  const linkFlow = useCallback((sessionId: string, flowDir: string) => {
+    pendingFlow.current.set(sessionId, flowDir);
+    return applyPendingFlow(sessionId);
+  }, [applyPendingFlow]);
+
+  /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
+  const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);
+
   const setMode = useCallback(
     async (modeId: string) => {
       const l = live.current;
@@ -1036,6 +1064,10 @@ export function useAcpSession(cwd: string) {
     setFlags,
     trashSession,
     workOnFlow,
+    linkFlow,
+    bindSubject,
+    /** Bindings keryx has not stored yet, by session id. */
+    pendingSubjects,
     setMode,
     setModel,
     restart,

@@ -47,6 +47,8 @@ interface ShellProps {
   onView: (v: View) => void;
   onProjectSettings?: () => void;
   title: ReactNode;
+  /** Links shown beside the session title (its Subject and Flow). */
+  titleLinks?: ReactNode;
   hasSession?: boolean;
   onOpenSourceIssue?: () => void;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
@@ -270,6 +272,7 @@ function TitleBar(p: ShellProps) {
         </button>
         {menu ? <Menu anchor={btn.current} items={items} onClose={() => setMenu(false)} label="Project" width={320} /> : null}
         <div className="titlebar-title" data-tauri-drag-region>{title}</div>
+        {p.view === "session" && p.titleLinks}
         {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
       </div>
       <div className="titlebar-right" data-tauri-drag-region>

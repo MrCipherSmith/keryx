@@ -754,7 +754,7 @@ test("board and list expose GitHub state and pending requests separately and run
   expect(starts).toEqual([105, 105]);
 });
 
-test("an outdated review keeps its Review again action that starts a review in board and list", async () => {
+test("an outdated review's work-row link starts a new review in board and list", async () => {
   const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
   for (const mode of ["Board", "List"]) {
     const calls: string[] = [];
@@ -763,7 +763,7 @@ test("an outdated review keeps its Review again action that starts a review in b
         headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
     await click(button(mode));
-    await click(button("Review again for #101"));
+    await click(button("Review · outdated for #101"));
     expect(calls).toContain("start");
   }
 });
@@ -811,7 +811,7 @@ test("opening a running review from its badge action only reads the run", async 
     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
-  await click(button("View review for #101"));
+  await click(button("Review · running for #101"));
   expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
   expect(calls).toEqual(["status"]);
 });
@@ -921,7 +921,7 @@ test("a merged PR awaiting a Keryx answer stays actionable when the merged state
     await click(button(mode));
     if (mode === "Board") expect(document.body.querySelector('[aria-label="Merged"]')?.textContent).toContain("#" + pr.number);
     else expect(document.body.querySelector("tbody")?.textContent).toContain("#" + pr.number);
-    await click(button("Answer question for #" + pr.number));
+    await click(button("Review · needs your answer for #" + pr.number));
     expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
   }
   expect(actions).not.toContain("start");

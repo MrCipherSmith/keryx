@@ -21,6 +21,17 @@
 .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
 .badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
 .review-board .card-actions .is-following { color: var(--accent-text); background: var(--bg-selected); }
+.review-board .card-actions { flex-wrap: wrap; }
+.review-board .card-actions .btn { gap: 4px; white-space: nowrap; }
+/* The Keryx work row: three slots (review, Flow, session) of one fixed height, filled or empty; text truncates. */
+.pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }
+.pr-work-slot { display: flex; min-width: 0; height: 24px; }
+.pr-work-link, .pr-work-more { height: 24px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--accent-text); font: inherit; cursor: pointer; white-space: nowrap; }
+.pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+.pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
+.pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
+.pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
 .review-note { display: block; color: var(--warn); font-size: var(--fs-xs); font-weight: 500; overflow-wrap: anywhere; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
 .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
@@ -29,9 +40,10 @@
 .review-ci.ci-passed { color: var(--ok); }
 .review-ci.ci-failed { color: var(--danger); }
 .review-ci.ci-pending { color: var(--warn); }
-.review-table { min-width: 780px; }
+.review-table { min-width: 1000px; }
 .review-table th:first-child { width: 30%; }
-.review-table th:last-child { width: calc(4 * 28px + 3 * var(--sp-1) + 2 * var(--sp-3)); }
+.review-table th:last-child { width: 11rem; }
+.review-table th:nth-child(6) { width: 16rem; }
 .review-table th:nth-child(4) { width: 18%; }
 .review-table .review-progress-caption { min-width: 0; white-space: normal; }
 .review-table tbody tr:hover { background: transparent; }
@@ -107,3 +119,4 @@
 .review-board .flows-toolbar .review-hidden-attention { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn); font: inherit; font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
 .review-board .flows-toolbar .review-hidden-attention:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
 .review-board .flows-toolbar .filter-count { font-variant-numeric: tabular-nums; }
+.session-subject-links { display: inline-flex; align-items: center; flex: none; gap: var(--sp-2); font-size: var(--fs-sm); white-space: nowrap; }

@@ -4,6 +4,7 @@ import { registerDom, unregisterDom } from "../test/dom";
 import type { FlowCard } from "../platform/commands";
 import type { ReviewBoardSnapshot } from "./types";
 import type { ReviewLaunchDialogProps } from "./ReviewLaunchDialog";
+import { reviewLaunchTarget } from "./prWork";
 
 let root: Root;
 let render: (props: ReviewLaunchDialogProps) => Promise<void>;
@@ -178,4 +179,17 @@ test("denied lookup exposes no previous PR, and a failed launch can be retried",
   expect(document.body.textContent).not.toContain("Improve cache");
   expect(btn("Apply").disabled).toBe(true);
   expect(attempts).toBe(1);
+});
+
+test("/review without a target in a PR-bound session opens with that PR preselected", async () => {
+  const hints: Array<string | undefined> = [];
+  const url = board.cards[0]!.url;
+  const initialTarget = reviewLaunchTarget(undefined, { kind: "pr", repo: "example/repo", number: 14, url });
+  await render({ ...defaults, initialTarget, loadTargets: async hint => {
+    hints.push(hint);
+    return { snapshot: { ...board, cards: [...board.cards, { ...board.cards[0]!, number: 15, url: url.replace("14", "15") }] }, ...(hint === url ? { selectedNumber: 14 } : {}) };
+  } });
+  expect(hints).toEqual([url]);
+  expect(document.querySelector<HTMLInputElement>("input.text-input")?.value).toBe(url);
+  expect(select("Pull request").value).toBe("14");
 });

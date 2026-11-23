@@ -306,3 +306,24 @@ test("AC4 Escape from a narrow Board and List detail returns focus to the exact 
     else Reflect.deleteProperty(proto, "clientWidth");
   }
 });
+
+test("every action on an Issue card and list row has visible text", async () => {
+  await render(async (_login, action) => {
+    if (action === "list") return page([issue, {...issue, ref: {...issue.ref, nodeId: "I_b", number: 4, url: "https://github.com/org/sample/issues/4"},
+      work: {stage: "none", canResumePreparation: true}}]);
+    throw new Error("Unexpected " + action);
+  });
+  for (const mode of ["Board", "List"]) {
+    await click(button(mode));
+    const containers = [...host.querySelectorAll(mode === "Board" ? ".issue-lanes .flow-card" : ".issue-table tbody tr")];
+    expect(containers.length).toBe(2);
+    for (const container of containers) {
+      const controls = [...container.querySelectorAll(".card-actions button, .card-actions a")];
+      expect(controls.length).toBeGreaterThan(1);
+      for (const control of controls) expect(control.textContent?.trim()).not.toBe("");
+    }
+  }
+  expect(button("Open in session for org/sample#3").textContent).toBe("Open in session");
+  expect(button("Create Flow for org/sample#4").textContent).toBe("Create Flow");
+  expect(button("Resume preparation for org/sample#4").textContent).toBe("Resume preparation");
+});

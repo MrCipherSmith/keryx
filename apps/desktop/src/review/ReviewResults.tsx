@@ -7,14 +7,15 @@ import { reviewUrl } from "./ReviewBrowserLink";
 import { Icon } from "../components/Icon";
 import { absoluteTime, relativeTime } from "../lib/format";
 import { CI_LABEL, DECISION_LABEL, LANES, STATE_LABEL, drawnLanes, laneReason, newestFirst, prState, reviewLane, type Filters, type Grouping, type Lane } from "./model";
+import { PrWorkRow, type PrWork } from "./PrWorkRow";
 import type { ReviewCard } from "./types";
 
 interface ReviewActions {
   onOpen: (number: number) => void;
   onReview: (card: ReviewCard) => void;
-  onOpenSession?: (card: ReviewCard) => void;
   onSubscribe?: (card: ReviewCard) => void;
   subscriptions?: ReadonlySet<number>;
+  work: PrWork;
 }
 
 function ReviewTags({ card }: { card: ReviewCard }) {
@@ -26,34 +27,27 @@ function ReviewTags({ card }: { card: ReviewCard }) {
   </span>;
 }
 
-function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscriptions }: Omit<ReviewActions, "onOpen"> & { card: ReviewCard }) {
+/** The card's own actions, each with visible text; the Keryx work (review, Flow, session) is the work row. */
+function ReviewAction({ card, onSubscribe, subscriptions }: Pick<ReviewActions, "onSubscribe" | "subscriptions"> & { card: ReviewCard }) {
   const toast = useToast();
   const href = reviewUrl(card.url);
-  const showReview = card.state === "open" || card.localReview?.runState;
-  const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
-    card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
-    card.localReview?.runState ? "View review result" : card.localReview?.outdated ? "Review again" : "Run review";
-  const browserLabel = `Open PR #${card.number} in browser`;
-  const sessionLabel = `Open PR #${card.number} in Sessions`;
   const following = subscriptions?.has(card.number) ?? false;
-  const watchLabel = `${following ? "Edit subscription for" : "Subscribe to"} PR #${card.number}`;
+  const watchText = following ? "Following" : "Subscribe";
+  const watchTitle = `${following ? "Edit subscription for" : "Subscribe to"} PR #${card.number}`;
   return <div className="card-actions">
-    {showReview && <button type="button" className="icon-btn" title={label} aria-label={`${label} for #${card.number}`}
-      onClick={() => onReview(card)}><Icon name={card.localReview?.runState ? "checklist" : "play"} size={15} /></button>}
-    {onOpenSession && <button type="button" className="icon-btn" aria-label={sessionLabel} title={sessionLabel} onClick={() => onOpenSession(card)}>
-      <Icon name="chat" size={15} />
-    </button>}
-    {href && <a className="icon-btn" href={href} rel="noreferrer" title={browserLabel} aria-label={browserLabel}
+    {href && <a className="btn btn-sm" href={href} rel="noreferrer" title={`Open PR #${card.number} on GitHub`}
+      aria-label={`Open on GitHub: PR #${card.number}`}
       onClick={event => {
         event.preventDefault();
         void openPullRequest(href).catch(error => toast({ level: "error", title: "Could not open pull request", body: errMessage(error) }));
-      }}><Icon name="external" size={15} /></a>}
-    {onSubscribe && <button type="button" className={`icon-btn${following ? " is-following" : ""}`} aria-haspopup="dialog"
-      aria-label={watchLabel} title={watchLabel} onClick={() => onSubscribe(card)}><Icon name="bell" size={15} /></button>}
+      }}><Icon name="external" size={13} />Open on GitHub</a>}
+    {onSubscribe && <button type="button" className={`btn btn-sm${following ? " is-following" : ""}`} aria-haspopup="dialog"
+      aria-label={`${watchText}: PR #${card.number}`} title={watchTitle} onClick={() => onSubscribe(card)}>
+      <Icon name="bell" size={13} />{watchText}</button>}
   </div>;
 }
 
-function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: ReviewCard }) {
+function ReviewTile({ card, onOpen, onReview, work, ...actions }: ReviewActions & { card: ReviewCard }) {
   return <article className="flow-card">
     <button className="review-card" onClick={() => onOpen(card.number)}>
       <span className="flow-card-top">
@@ -71,6 +65,7 @@ function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: Review
       {card.assignees.length > 0 && <span className="review-request">Assigned to {card.assignees.join(", ")}</span>}
       {card.reviewers.length > 0 && <span className="review-request">Requested from {card.reviewers.join(", ")}</span>}
     </button>
+    <PrWorkRow card={card} work={work} onReview={onReview} />
     <ReviewAction card={card} {...actions} />
   </article>;
 }
@@ -95,7 +90,7 @@ interface ResultsProps extends ReviewActions {
   viewer: string;
 }
 
-export const ReviewResults = memo(function ReviewResults({ cards, view, grouping, filters, viewer, onOpen, ...actions }: ResultsProps) {
+export const ReviewResults = memo(function ReviewResults({ cards, view, grouping, filters, viewer, onOpen, onReview, work, ...actions }: ResultsProps) {
   const [limit, setLimit] = useState(150);
   const ordered = useMemo(() => newestFirst(cards), [cards]);
   if (view === "board") {
@@ -110,17 +105,18 @@ export const ReviewResults = memo(function ReviewResults({ cards, view, grouping
     const possible = new Set(drawnLanes(grouping, filters, viewer));
     const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => possible.has(lane) || lanes.has(lane));
     return <div className="board review-lanes">{drawn.map((lane) =>
-      <ReviewLane key={lane} lane={lane} cards={lanes.get(lane) ?? []} onOpen={onOpen} {...actions} />)}</div>;
+      <ReviewLane key={lane} lane={lane} cards={lanes.get(lane) ?? []} onOpen={onOpen} onReview={onReview} work={work} {...actions} />)}</div>;
   }
   return <div className="flow-list-wrap">
     <table className="flow-list review-table"><thead><tr>
-      <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
+      <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Keryx work</th><th>Actions</th>
     </tr></thead><tbody>{ordered.slice(0, limit).map((c) => {
       const reason = laneReason(c);
       return <tr key={c.number}>
         <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
         <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span>{reason}</span>
           <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+        <td><PrWorkRow card={c} work={work} onReview={onReview} /></td>
         <td><ReviewAction card={c} {...actions} /></td>
       </tr>;
     })}</tbody></table>
