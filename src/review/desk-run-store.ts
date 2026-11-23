@@ -404,7 +404,8 @@ export class DeskRunStore {
     // requested for the card's range, or a finished run that reviewed it.
     const query = this.db.query<Row, [string, string, string]>(`
       WITH scoped AS MATERIALIZED (
-        SELECT w.key AS card, r.rowid AS seq, r.state, json_extract(r.details,'$.createdAt') AS created,
+        SELECT w.key AS card, r.rowid AS seq, json_extract(r.details,'$.createdAt') AS created,
+          r.state IN ('running','cancelling','queued') AS active, r.state IN ('completed','partial','budget') AS done,
           json_extract(r.details,'$.baseSha')=w.wb AND json_extract(r.details,'$.headSha')=w.wh AS requested,
           json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
           w.wb, w.wh
@@ -412,15 +413,16 @@ export class DeskRunStore {
           FROM json_each(?1)) w CROSS JOIN runs r
         WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible("r")}
       ), flagged AS (
-        SELECT seq, created, card, coalesce(r.state IN ('running','cancelling','queued') OR requested OR (base=wb AND head=wh),0) AS kept,
-          r.state IN ('completed','partial','budget') AND base IS NOT NULL AND head IS NOT NULL AS finished,
-          coalesce(r.state IN ('running','cancelling','queued') OR requested OR
-            (r.state IN ('completed','partial','budget') AND base=wb AND head=wh),0) AS supersedes
-        FROM scoped r
+        SELECT seq, created, card, coalesce(active OR requested,0) AS live, done, coalesce(base=wb AND head=wh,0) AS reviewed,
+          done AND base IS NOT NULL AND head IS NOT NULL AS finished
+        FROM scoped
       ), picked AS (
+        SELECT seq, created, live OR reviewed AS kept, finished, live OR (done AND reviewed) AS supersedes, card
+        FROM flagged
+      ), ranked AS (
         SELECT seq, created, kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND
           row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
-        FROM flagged
+        FROM picked
       )
       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
@@ -439,7 +441,7 @@ export class DeskRunStore {
               FROM json_each(r.details,'$.reviewerProgress.sessions') s
             ) WHERE retry=1 AND outcome='completed'
           ) END) AS completed
-      FROM picked p JOIN runs r ON r.rowid=p.seq
+      FROM ranked p JOIN runs r ON r.rowid=p.seq
       WHERE p.wanted
       ORDER BY p.created DESC,p.seq DESC`);
     for (let i = 0; i < snapshot.cards.length; i += 200) {
