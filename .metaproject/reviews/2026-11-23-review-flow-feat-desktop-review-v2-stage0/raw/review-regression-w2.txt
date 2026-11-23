@@ -1,0 +1,12 @@
+STATUS: DONE
+
+Summary: slice-02 read in full (diff lines 1-823). No regression found in the blast radius. Blast-radius set was not supplied as a computed record in my payload; I enumerated callers myself with `keryx ctx rg` (graph/cap status unknown, nothing dropped that I could see). No tests were run (read-only); recorded evidence for this head exits 0.
+
+Checked:
+- `localBadge` refactor: the `source !== "existing"` filter was moved to the top of the function. It was already applied to `active`, `latest` and `ready` before, so for pre-existing inputs the result is unchanged. `ready` is the same expression as before (`runFinished` = completed/partial/budget).
+- Callers of `localBadge`: only `src/review/desk-run-store.ts` (SQLite projection, `attachBadges`) and Desktop live history (`apps/desktop/src/review/ReviewBoard.tsx:128`). The watcher path and `board-badge-read.ts` reach it only through `attachBadges`; the CLI board (`src/commands/review-board.ts:85`) reads only `localReview?.active`. `board-transport.ts:29` sends `localReview` on part 0 when present; it now exists for outdated-only cards, which is the deliberate change.
+- SQL: the old unqualified `source` was the SELECT alias of `json_extract(details,'$.source')` (table `runs` has no such column), so the new `visible()` predicate is equivalent. `?1/?2/?3` numbered binding matches the `.all(json, repositoryId, viewer)` order. The outdated candidate is selected under the same filters and ordering (createdAt DESC, rowid DESC) that `localBadge` uses on the live path, so the live and projected results agree; the new store test asserts this equality.
+- Consumers keyed on `runState` / presence of `localReview` in `ReviewResults.tsx` and `model.ts` are slice-01 and were not judged here.
+
+REVIEW_RESULT
+{"findings": [], "slices": ["slice-02"]}

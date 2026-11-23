@@ -1,0 +1,42 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: feat/desktop-review-v2-stage0, base 1b994df180fb, head 13462d2e3ad5
+- Slices read in full: slice-01, slice-02 (supplied diff text, not rebuilt)
+- Run: read-only; no tests executed (exec_budget_s 0). Test evidence at this head recorded by the orchestrator (both exit 0) was not re-run.
+
+### Summary
+- Blockers: 0, Major: 0, Minor: 0, Info: 0
+
+### Findings
+None.
+
+### Checks and why they came out clean
+- SQL injection (src/review/desk-run-store.ts attachBadges): the only interpolations into the SQL text are `${pending}` (built from table names read out of sqlite_schema filtered by a fixed IN list, unchanged) and `${visible("o")}` / `${visible("r")}`. `visible` is called only with the literal aliases "o" and "r" and its body is a constant string. No request-, card- or viewer-derived value reaches the SQL text. Card numbers and SHAs go through `json_each(?1)`; repository id and viewer through `?2`, `?3`.
+- Account and repository boundary: the new outdated lookup (CTE `wanted`) is constrained by `o.repo=?2 AND o.viewer=?3 AND o.pr=w.n`, the same bindings as the outer query. The outer query selects the outdated run only via `r.id=wanted.outdated` while also requiring `r.repo=?2 AND r.viewer=?3 AND r.pr=wanted.n AND visible("r")`, so a run id from the CTE cannot pull in another viewer's or repository's row. The new store test attaches badges as another account (`other`) and expects no `localReview`. Numbered placeholders bind positionally with the 3-element parameter array; the test passing at this head supports that.
+- Data crossing the SQLite boundary: the outer SELECT column list is unchanged (id, pr, state, source, coverage, reviewed/requested base and head, reviewer progress counts). No `report`, `result` body or session text is selected. The extra rows are bounded to one outdated run per card (`LIMIT 1`). The updated comment matches the code. Note: `this.publication(...)` is still called for the outdated row (reads a receipt from the run directory); `localBadge` discards it for outdated, so nothing extra is exposed.
+- Archived/deleted/existing runs: excluded by `visible()` in both the CTE and the outer query, and by the `source !== "existing"` filter in `localBadge`.
+- Client: `outdated.headSha` is rendered through React text nodes (`slice(0, 7)`), not as HTML; no dangerouslySetInnerHTML, eval, storage of sensitive data, URLs or redirects added. The tab-indicator logic compares logins case-insensitively and reads only card data already in the snapshot.
+- Flow package (`resolved/*.json`, journal, flow.json, context, plan): no tokens, keys, credentials or absolute home paths. Content is rule paths, sha256 hashes of rule files, task ids and test summaries. The operator name appears as `owner.value` in flow.json (a flow-schema field, same name as the git author already in history); not treated as a leak.
+- Docs under docs/requirements/keryx-desktop-review-v2/: no secrets or personal data.
+
+### Not verified
+- `apps/desktop/src-tauri/src/review.rs` (Rust boundary) was not read; the journal reports `review_board` passes untyped JSON. Out of this slice.
+- Query plan and behaviour on a large store were not measured (performance, not a security concern).
+
+### Clean Areas
+Injection (SQL, XSS, command, SSTI, eval), authz/IDOR on the viewer and repo scoping, input validation, secrets/logging, crypto (none touched), CSRF, path traversal, open redirect, React-specific patterns.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable or reachable security defect found. attachBadges interpolates only constant alias strings via visible(); the outdated-run subquery is scoped by repo (?2), viewer (?3) and pr in both the CTE and the outer query; no report or session text crosses the SQLite boundary; client renders the SHA as escaped text; flow package holds no secrets.",
+  "findings": [],
+  "slices": ["slice-01", "slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

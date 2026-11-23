@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 3,
+  "droppedKey": "2fdba8baffbfc0d1",
+  "fileBytes": {
+    "apps/desktop/src/test/app-navigation.fixture.tsx": 14361,
+    "src/commands/review-desk-run.ts": 5918,
+    "src/commands/review-pr-context.ts": 1339
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/commands/review-desk-run.ts",
+        "src/commands/review-pr-context.ts",
+        "apps/desktop/src/test/app-navigation.fixture.tsx"
+      ],
+      "bytes": 21618
+    }
+  ]
+}

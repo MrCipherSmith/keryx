@@ -1,0 +1,1979 @@
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md
+@@ 1,23 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: `filterReviews` returns no card that fails a selected filter, including a card whose local review is active; a test with an active review and a non-matching author filter expects an empty result. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/model.test.ts'`]
++- AC2: The order of visible cards does not depend on `localReview`; a board test with an active review on the second card keeps the snapshot order. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'`]
++- AC3: The Done lane is rendered only when the state filter includes closed or merged; under the default filter the board has three lanes. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'`]
++- AC4: The tab indicator is "attention" only when an open pull request has the viewer among requested reviewers, or is authored by the viewer with changes requested, or has unread replies addressed to the viewer, or has a local review awaiting an answer or a publication decision; a review request to another login alone leaves it off. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'`]
++- AC5: For a card whose only finished run with a recorded result covers an earlier head, the badge carries `outdated` with that run's reviewed head and state, while `ready` and `publicationPending` stay false; a run on the current range or an active run takes precedence. [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]
++- AC6: A card with an outdated badge shows the text "Outdated review" with the short reviewed SHA in board and list views, and the badge comparison on the client treats a changed `outdated` value as a change. [verify: exec `sh -c 'cd apps/desktop && bun test src/review'`]
++- AC7: With the detail panel open at a 1440 px wide window the board toolbar occupies one row. [verify: judged]
++- AC8: The Desktop review test suite, the backend review store tests, typecheck and lint pass on the branch. [verify: invariant `sh -c 'cd apps/desktop && bun test src/review && cd ../.. && bun test src/review/desk-run-store.test.ts && bun run typecheck'`]
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md
+@@ 1,33 @@
++# Context
++
++## Sources
++
++- Audit of the review module and the Pull requests tab, this session (2026-11-23).
++- Requirements package `docs/requirements/keryx-desktop-review-v2/` — specification.md table "Основания" (O1–O19), implementation-plan.md stage 0.
++
++## Code map
++
++| Concern | Files |
++|---|---|
++| Lane, filter, lane reason | `apps/desktop/src/review/model.ts`, `model.test.ts` |
++| Board state, sort, tab indicator, toolbar markup | `apps/desktop/src/review/ReviewBoard.tsx`, `ReviewBoard.dom.test.tsx` |
++| Lanes and cards rendering | `apps/desktop/src/review/ReviewResults.tsx` |
++| Toolbar and board styles | `apps/desktop/src/styles/flows.css`, `apps/desktop/src/styles/review.css` |
++| Card badge from local runs | `src/review/board-badges.ts`, `src/review/board-types.ts` |
++| SQL that selects runs for badges | `src/review/desk-run-store.ts:388-445`, `desk-run-store.test.ts` |
++| Badge equality on the client | `apps/desktop/src/review/ReviewBoard.tsx:57-62` (`badgesEqual`) |
++| Detail panel launch label | `apps/desktop/src/review/ReviewRuns.tsx:26-38` (`launchAction`) |
++
++## Facts
++
++- `localBadge` is shared by Desktop live history and the SQLite projection; both must agree (`board-badges.ts:27`).
++- `ReviewCard.localReview.runState` already has `"other-revision"` for an active run on another range.
++- The SQL admits a finished run only when its requested or reviewed range equals the card's range; a finished run on an earlier head never reaches `localBadge`.
++- Board JSON crosses the Tauri boundary through `review_board`; whether `review.rs` types the card or passes JSON through was not read. A worker that adds a card field must check it and report.
++- Tests: `cd apps/desktop && bun test src/review` (Desktop, DOM tests included); `bun test src/review/desk-run-store.test.ts` (backend). Baseline on this branch: both green.
++- No local Rust toolchain on this machine; Rust is verifiable only in CI.
++
++## Constraints
++
++- `.metaproject/rules/process/git-concurrency.mdc`: no `git stash`, no `git add -A`.
++- Code search through `keryx ctx rg`; bare `rg`, `grep` and `cat` are blocked by a hook.
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md
+@@ 1,33 @@
++# Desktop Review v2 stage 0: PR board fixes without model change
++
++Status: formalized
++Source: user description (origin: human-request)
++Requirements: docs/requirements/keryx-desktop-review-v2/ (PRD R1, R2, R12 in part; implementation-plan stage 0)
++
++## Problem
++
++The Desktop Pull requests board mixes GitHub pull request state with local Keryx review state. Five defects are fixable without changing the data model:
++
++1. A pull request with an active review passes every filter except search (`apps/desktop/src/review/model.ts:40`).
++2. Active reviews are sorted to the top, so cards reorder on review events (`apps/desktop/src/review/ReviewBoard.tsx:323`).
++3. The "Done" lane is always drawn and is empty under the default filter (`apps/desktop/src/review/ReviewResults.tsx:95-98`).
++4. The tab indicator lights for any open pull request with a review request to anybody or with changes requested, regardless of whose pull request it is (`apps/desktop/src/review/ReviewBoard.tsx:203`).
++5. After the author pushes a commit, the finished review of the previous head vanishes from the board card (`src/review/desk-run-store.ts:416-423`); it stays only in the history inside the detail panel.
++6. The board toolbar wraps to a second row when the detail panel is open (seen live at 1440x900).
++
++## Expected Outcome
++
++Filters hide what they should, cards keep their order when a review starts or ends, the empty lane is gone, the tab indicator means "something is addressed to me", a finished review of an earlier head stays visible on the card as outdated, and the toolbar stays on one row.
++
++## Outcome criteria
++
++- Запрос (дословно): «Создавай фло оформляй все и начинай имлементацию» (source: claude-code session 2026-11-23, operator message)
++- Эффект (формализация агента): на доске Pull requests фильтры не имеют исключений, порядок карточек не зависит от событий ревью, результат ревью прошлого коммита остаётся виден на карточке как устаревший.
++- Как наблюдать (предложение агента): на PR с активным ревью включить фильтр по другому автору — карточка скрыта; после нового коммита в PR с завершённым ревью карточка показывает «Outdated review».
++
++## Out of Scope
++
++- Lanes computed from GitHub only, the Keryx links row, "Open in session" binding (stage 1).
++- The Review entity and Reviews tab (stage 2), head-move reconciliation (stage 3), the shared registry (stage 4).
++- Team membership for the tab indicator: a review request to a team is not matched to the viewer in this stage.
++- Rust code in `apps/desktop/src-tauri`.
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md
+@@ 1,48 @@
++# Flow Journal
++
++- 2026-11-23T08:07:29.420Z - flow created
++- 2026-11-23T08:09:15.318Z - task-done: T1: Collect remaining context
++- 2026-11-23T08:09:15.519Z - task-done: T2: Implement per plan
++- 2026-11-23T08:09:15.715Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-11-23T08:09:15.892Z - task-done: T4: Self-review and prepare draft PR
++- 2026-11-23T08:09:16.069Z - task-added: T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator
++- 2026-11-23T08:09:16.260Z - task-added: T6: Outdated review result in the card badge (SQL + localBadge + types)
++- 2026-11-23T08:09:16.456Z - task-added: T7: Show the outdated review on the card and in the list
++- 2026-11-23T08:09:16.647Z - task-added: T8: Keep the board toolbar on one row with the detail panel open
++- 2026-11-23T08:09:16.831Z - task-added: T9: Test suites, typecheck, lint and live check in the browser dev build
++- 2026-11-23T08:09:17.025Z - task-added: T10: review-orchestrator on the branch
++- 2026-11-23T08:09:17.216Z - task-added: T11: Requirements package keryx-desktop-review-v2 and roadmap entry
++- 2026-11-23T08:09:28.819Z - frozen: 8 criteria; checksum recorded
++- 2026-11-23T08:09:28.999Z - started
++- 2026-11-23T08:09:29.339Z - task-done: T11: Requirements package keryx-desktop-review-v2 and roadmap entry
++- 2026-11-23T08:09:29.940Z - task-attempt: T5: started (attempt 1) — 516-T5
++- 2026-11-23T08:09:30.122Z - task-attempt: T6: started (attempt 1) — 516-T6
++
++## 2026-11-23 — orchestrator notes
++
++- Execution metrics: not collected (question not asked; recorded as a deviation from flow-orchestrator Phase 1).
++- Dispatch form: workers receive a text brief carrying every Worker-brief item (A–G) instead of a schema-validated `subagent-dispatch` JSON; `keryx skills contracts validate` was not run on dispatches or replies. Deviation, by orchestrator choice.
++- Models by task, by operator instruction: T5 sonnet, T6 opus, T7 sonnet, T8 haiku.
++- T5 (516-T5) STATUS: DONE. Orchestrator re-ran `cd apps/desktop && bun test src/review` (89 pass) and `bunx tsc --noEmit` (exit 0), read the source diff. Commit 21e2110b1.
++- T5 behavior_changes, needs_operator: a merged or closed pull request with a running Keryx review is hidden under the default Open+Draft filter. Operator answer (AskUserQuestion, 2026-11-23): "Скрывать" — the implemented choice stands.
++- T5 note: worker did not open each must_read rule file separately and did not read the flow context files; accepted because the diff and tests satisfy AC1–AC4.
++- 2026-11-23T08:13:16.301Z - task-done: T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator
++- T6 (516-T6) STATUS: DONE_WITH_CONCERNS. Orchestrator re-ran `bun test src/review/board*.test.ts src/review/desk-run*.test.ts` and `bun run typecheck`, read the source diff (SQL bounded to one extra row per card by a LIMIT 1 scalar subquery).
++- T6 decision: a card with only an outdated run has no `runState`; badge is `{active:false, ready:false, outdated}`.
++- T6 finding: `review_board` in `apps/desktop/src-tauri/src/review.rs` returns untyped `serde_json::Value`; the new field is not dropped. Rust not compiled locally.
++- T6 concerns, carried into T7: `badgesEqual` in `ReviewBoard.tsx` does not compare `outdated`; UI keyed on `runState` shows an outdated-only card as "Run review". Not verified by T6: query plan on a large store.
++- T6 note: worker read only the head of each must_read rule file.
++- 2026-11-23T08:15:54.694Z - task-done: T6: Outdated review result in the card badge (SQL + localBadge + types)
++- 2026-11-23T08:15:55.067Z - task-attempt: T7: started (attempt 1) — 516-T7
++- T7 (516-T7) STATUS: DONE_WITH_CONCERNS. Orchestrator re-ran `cd apps/desktop && bun test src/review` (92 pass) and `bunx tsc --noEmit` (exit 0), read the source diff.
++- T7 concerns: implementation written before tests (no red run); rule files of the resolved context not read individually; the `badgesEqual` change is covered by a direct unit test, not through the badge poll (the poll only covers active cards, where `outdated` cannot be present).
++- T7 decision: the outdated reason ranks after live run states and the closed/merged label, before every GitHub-derived reason.
++- 2026-11-23T08:18:18.896Z - task-done: T7: Show the outdated review on the card and in the list
++- 2026-11-23T08:18:19.086Z - task-attempt: T8: started (attempt 1) — 516-T8
++- T8 (516-T8, haiku) STATUS: DONE. Orchestrator live check in the browser dev build (Vite from this worktree on port 1430): at board width 820 px (the width left by a 560 px detail panel in a 1440 px window) the toolbar is one row, height 55 px, every child on the same top, labels collapsed to icons, 62 px of slack.
++- T8 limits of the check: the dev bridge on 1421 belongs to another session's worktree and refused this origin, so the board had no data: the "Review rules" button and the count label were absent, and the detail panel itself could not be opened. Width was emulated instead.
++- 2026-11-23T08:20:59.676Z - task-done: T8: Keep the board toolbar on one row with the detail panel open
++- 2026-11-23T08:20:59.898Z - task-attempt: T9: started (attempt 1) — 516-T9 orchestrator verification
++- T9 verification by the orchestrator at 0fcedf62f: `cd apps/desktop && bun test src` 749 pass / 0 fail; `bunx tsc --noEmit` in apps/desktop exit 0; `bun test src/review/board*.test.ts src/review/desk-run*.test.ts` 114 pass / 0 fail; root `bun run typecheck` exit 0; eslint on the changed `src/review` files exit 0 (apps/desktop is outside the root eslint config: "File ignored"); `keryx health run` score 91, no gate conditions triggered.
++- T9 not verified: the outdated card and the open detail panel with real board data in a running app (dev bridge port held by another session); Rust not compiled (no local toolchain); the whole root test suite was not run, only the review board and store tests.
++- 2026-11-23T08:22:57.858Z - task-done: T9: Test suites, typecheck, lint and live check in the browser dev build
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md
+@@ 1,38 @@
++# Implementation Plan
++
++Status: ready
++
++## Approach
++
++Fix the five board defects in place and add one optional field to the card badge. No table, protocol version or lane model changes: lanes stay as they are until stage 1.
++
++Alternative rejected: jumping straight to GitHub-only lanes. It removes defects 1–3 by construction but needs the Keryx links row first, or the review state disappears from the board.
++
++## Steps
++
++1. Board behaviour in the Desktop UI (T5): remove the active-review filter bypass; remove the active-first sort; draw the Done lane only when the state filter can produce closed or merged pull requests; narrow the tab indicator.
++2. Outdated result in the badge (T6, parallel with T5): the SQL also returns the newest finished run with a recorded result on another range; `localBadge` reports it as an optional `outdated` field. Active-run behaviour and `ready`/`publicationPending` for the current range do not change.
++3. Outdated result on the card (T7, after T5 and T6): card and list show the outdated review with the reviewed short SHA; `badgesEqual` compares the new field.
++4. Toolbar on one row (T8, after T7).
++5. Verification (T9): Desktop and backend test suites, typecheck, lint, live check in the browser dev build.
++6. Review (T10): review-orchestrator on the branch.
++
++## Tab indicator rule
++
++Lit when at least one open pull request satisfies one of: the viewer's login is in `reviewers`; the viewer is the author and the decision is `CHANGES_REQUESTED`; the card has unread replies addressed to the viewer; the local review awaits an answer or a publication decision. The last clause stays until the Reviews tab exists (stage 2).
++
++## State × event matrix
++
++| state \ event | review starts | review finishes | author pushes a commit | filter applied |
++|---|---|---|---|---|
++| card visible, no review | order unchanged; lane per existing rule | — | order unchanged | hidden if it does not match |
++| card with active review | — | order unchanged | badge shows the active run as other-revision (unchanged) | hidden if it does not match (AC1) |
++| card with finished review on current head | order unchanged | — | card shows "Outdated review · <sha>" (AC5, AC6) | hidden if it does not match |
++| card with outdated review | new run takes precedence over the outdated label | outdated label replaced by the new result | still outdated, newest finished run wins | hidden if it does not match |
++| Done lane, default filter | no change | no change | no change | drawn only when closed or merged can match (AC3) |
++
++## Risks
++
++- DOM tests encode the current bypass and sort; they must be rewritten to the new behaviour, not deleted.
++- The SQL change must not return report text or more than one extra row per card.
++- A typed card struct in Rust would drop the new field in the packaged app; T6 checks and reports.
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md
+@@ 1,18 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++| ID | Kind | Model | Title |
++|----|------|-------|-------|
++| T1 | context | — | Collect remaining context (done by the audit in this session) |
++| T2–T4 | — | — | Scaffold rows superseded by T5–T11 |
++| T5 | implement | sonnet | Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator |
++| T6 | implement | opus | Outdated review result in the card badge (SQL + localBadge + types) |
++| T7 | implement | sonnet | Show the outdated review on the card and in the list |
++| T8 | implement | haiku | Keep the board toolbar on one row with the detail panel open |
++| T9 | verify | orchestrator | Test suites, typecheck, lint and a live check in the browser dev build |
++| T10 | review | orchestrator | review-orchestrator on the branch |
++| T11 | docs | orchestrator | Requirements package keryx-desktop-review-v2 and roadmap entry |
++
++Model choice: opus for the task that changes a shared SQL projection and a cross-host contract; sonnet for multi-file UI behaviour with DOM tests; haiku for a bounded CSS change.
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json
+@@ 1,405 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "516",
++  "slug": "desktop-review-v2-stage0",
++  "title": "Desktop Review v2 stage 0: PR board fixes without model change",
++  "status": "in-progress",
++  "createdAt": "2026-11-23T08:07:29.420Z",
++  "updatedAt": "2026-11-23T08:22:57.858Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "Aleksandr Tsaitler",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "origin": {
++    "kind": "human-request",
++    "quote": "Создавай фло оформляй все и начинай имлементацию",
++    "source": "claude-code session 2026-11-23, operator message"
++  },
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Superseded by plan tasks T5-T11"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Superseded by plan tasks T5-T11"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Superseded by plan tasks T5-T11"
++    },
++    {
++      "id": "T5",
++      "title": "Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:09:29.940Z",
++            "outcome": "started",
++            "detail": "516-T5"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "Outdated review result in the card badge (SQL + localBadge + types)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:09:30.122Z",
++            "outcome": "started",
++            "detail": "516-T6"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Show the outdated review on the card and in the list",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5",
++        "T6"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:15:55.067Z",
++            "outcome": "started",
++            "detail": "516-T7"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Keep the board toolbar on one row with the detail panel open",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T7"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:18:19.086Z",
++            "outcome": "started",
++            "detail": "516-T8"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "Test suites, typecheck, lint and live check in the browser dev build",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:20:59.898Z",
++            "outcome": "started",
++            "detail": "516-T9 orchestrator verification"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T10",
++      "title": "review-orchestrator on the branch",
++      "kind": "review",
++      "status": "todo",
++      "dependsOn": [
++        "T9"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T11",
++      "title": "Requirements package keryx-desktop-review-v2 and roadmap entry",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-23T08:07:29.420Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-23T08:09:15.318Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-23T08:09:15.519Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-23T08:09:15.715Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-23T08:09:15.892Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-11-23T08:09:16.069Z",
++      "event": "task-added",
++      "detail": "T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator"
++    },
++    {
++      "at": "2026-11-23T08:09:16.260Z",
++      "event": "task-added",
++      "detail": "T6: Outdated review result in the card badge (SQL + localBadge + types)"
++    },
++    {
++      "at": "2026-11-23T08:09:16.456Z",
++      "event": "task-added",
++      "detail": "T7: Show the outdated review on the card and in the list"
++    },
++    {
++      "at": "2026-11-23T08:09:16.647Z",
++      "event": "task-added",
++      "detail": "T8: Keep the board toolbar on one row with the detail panel open"
++    },
++    {
++      "at": "2026-11-23T08:09:16.831Z",
++      "event": "task-added",
++      "detail": "T9: Test suites, typecheck, lint and live check in the browser dev build"
++    },
++    {
++      "at": "2026-11-23T08:09:17.025Z",
++      "event": "task-added",
++      "detail": "T10: review-orchestrator on the branch"
++    },
++    {
++      "at": "2026-11-23T08:09:17.216Z",
++      "event": "task-added",
++      "detail": "T11: Requirements package keryx-desktop-review-v2 and roadmap entry"
++    },
++    {
++      "at": "2026-11-23T08:09:28.819Z",
++      "event": "frozen",
++      "detail": "8 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-23T08:09:28.999Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-23T08:09:29.339Z",
++      "event": "task-done",
++      "detail": "T11: Requirements package keryx-desktop-review-v2 and roadmap entry"
++    },
++    {
++      "at": "2026-11-23T08:09:29.940Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 516-T5"
++    },
++    {
++      "at": "2026-11-23T08:09:30.122Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 516-T6"
++    },
++    {
++      "at": "2026-11-23T08:13:16.301Z",
++      "event": "task-done",
++      "detail": "T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator"
++    },
++    {
++      "at": "2026-11-23T08:15:54.694Z",
++      "event": "task-done",
++      "detail": "T6: Outdated review result in the card badge (SQL + localBadge + types)"
++    },
++    {
++      "at": "2026-11-23T08:15:55.067Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 516-T7"
++    },
++    {
++      "at": "2026-11-23T08:18:18.896Z",
++      "event": "task-done",
++      "detail": "T7: Show the outdated review on the card and in the list"
++    },
++    {
++      "at": "2026-11-23T08:18:19.086Z",
++      "event": "task-attempt",
++      "detail": "T8: started (attempt 1) — 516-T8"
++    },
++    {
++      "at": "2026-11-23T08:20:59.676Z",
++      "event": "task-done",
++      "detail": "T8: Keep the board toolbar on one row with the detail panel open"
++    },
++    {
++      "at": "2026-11-23T08:20:59.898Z",
++      "event": "task-attempt",
++      "detail": "T9: started (attempt 1) — 516-T9 orchestrator verification"
++    },
++    {
++      "at": "2026-11-23T08:22:57.858Z",
++      "event": "task-done",
++      "detail": "T9: Test suites, typecheck, lint and live check in the browser dev build"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review/model.test.ts'"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review'"
++    },
++    "AC7": {
++      "kind": "judged"
++    },
++    "AC8": {
++      "kind": "invariant",
++      "check": "sh -c 'cd apps/desktop && bun test src/review && cd ../.. && bun test src/review/desk-run-store.test.ts && bun run typecheck'"
++    }
++  }
++}
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewBoard.tsx",
++    "apps/desktop/src/review/ReviewResults.tsx",
++    "apps/desktop/src/review/model.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewBoard.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/board-badges.ts",
++    "src/review/board-types.ts",
++    "src/review/desk-run-store.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/review/desk-run-store.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewBoard.tsx",
++    "apps/desktop/src/review/ReviewResults.tsx",
++    "apps/desktop/src/review/model.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewBoard.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- apps/desktop/src/review/ProjectReviewRules.tsx
+@@ 74,96 @@
+           <small>{runLimits(rule.budgetMinutes, rule.budgetTokens)}</small>
+           {confirmDelete?.id === rule.id ? <div className="rule-actions">
+             <span>Delete this rule?</span>
+             <button className="btn btn-sm" disabled={saving} onClick={async () => {
+               if (await request({ kind: "delete", id: rule.id, expected: confirmDelete })) setConfirmDelete(null);
+             }}>Confirm delete</button><button className="btn btn-sm" disabled={saving} onClick={() => setConfirmDelete(null)}>Keep rule</button>
+           </div> : <div className="rule-actions">
+             <button className="btn btn-sm" disabled={saving} onClick={() => setEditor({ draft: rule, expected: rule })}>Edit</button>
+             <button className="btn btn-sm" disabled={saving} onClick={() => void request({ kind: "save", rule: { ...rule, enabled: !rule.enabled }, expected: rule })}>{rule.enabled ? "Disable" : "Enable"}</button>
+             <button className="link-btn" disabled={saving} onClick={() => setConfirmDelete(rule)}>Delete</button>
+           </div>}
+         </article>)}
+         <RuleActivity events={snapshot.activity} showNumber />
+       </>)}
+     </div>
+   </Dialog>;
+ }
+ 
+ export function ProjectReviewRules(props: RulesProps) {
+   const [open, setOpen] = useState(false);
+-  return <><button className="btn btn-sm" onClick={() => setOpen(true)} aria-haspopup="dialog"><Icon name="checklist" size={14} /> Review rules</button>
++  return <><button className="btn btn-sm" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Review rules" title="Review rules"><Icon name="checklist" size={14} /> <span className="toolbar-label">Review rules</span></button>
+     {open && <RulesDialog {...props} onClose={() => setOpen(false)} />}</>;
+ }
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 4,90 @@
+ import { absoluteTime, errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
+ import { withRunBackoff } from "./runPolling";
+ import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
+ import { sameRange, type RunObserver } from "./useReviewRuns";
+ import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
+ import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
+ import { ProjectReviewRules } from "./ProjectReviewRules";
+ import { reviewRules } from "../platform/reviewRules";
+ import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
+ import { ReviewWatcher } from "./ReviewWatcher";
+ import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
+ import { readReplies, subscribeReviewReads } from "./reviewReadState";
+ import type { ReviewDetailSnapshot } from "./ReviewDetailTypes";
+ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
+ import { ReviewFilters, filterSummary } from "./ReviewFilters";
+ import { ReviewResults } from "./ReviewResults";
+ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
+ import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+-import { EMPTY_FILTERS, filterReviews, stateQuery, type Filters } from "./model";
++import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
+ import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ export type ReviewTabIndicator = "attention" | "watching" | null;
+ 
+ interface Props {
+   cwd: string;
+   expectedViewer?: string;
+   active?: boolean;
+   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
+   flows: FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   currentRepairModel?: ReviewLaunchModel | undefined;
+   onOpenFlow: (dir: string) => void;
+   onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   onOpenSession?: ((card: ReviewCard) => void) | undefined;
+   load?: typeof fetchReviewBoard;
+   loadBadges?: typeof fetchReviewBadges;
+   listRepositories?: typeof fetchReviewRepositories;
+   loadDetail?: typeof fetchReviewDetail;
+   runCommand?: typeof reviewRun;
+   watcherCommand?: typeof reviewWatcher;
+   rulesCommand?: typeof reviewRules;
+ }
+ 
+ interface ReadState {
+   scope: string;
+   snapshot: ReviewBoardSnapshot | null;
+   error: string;
+   loading: boolean;
+ }
+ 
+-function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
++export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+     && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending && a?.lastActivityAt === b?.lastActivityAt
+-    && a?.runState === b?.runState && a?.progress?.completed === b?.progress?.completed
++    && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.progress?.completed === b?.progress?.completed
+     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
+ }
+ 
++function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
++  if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
++  const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
++  return card.addressedReplyIds.filter(id => !readIds.has(id));
++}
++const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
++
+ export function ReviewBoard(props: Props) {
+   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
+ }
+ 
+ function ProjectBoard(props: Props) {
+   const [repo, setRepo] = useState<string>();
+   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+ }
+ 
+ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+   repo?: string;
+   selectRepo: (repo?: string) => void;
+ }) {
+   const [attentionPrs, setAttentionPrs] = useState<ReadonlySet<number>>(() => new Set());
+   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
+   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
+   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
+   const [filters, setFilters] = useState(EMPTY_FILTERS);
+   const snapshots = useRef(new Map<string, ReviewBoardSnapshot>());
+   const [query, setQuery] = useState("");
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 190,230 @@
+       : { scope, snapshot: null, error: "", loading: true });
+     const controller = new AbortController();
+     const updatedSince = period && new Date(Date.now() - period * 86_400_000).toISOString();
+     void load(cwd, state, repo, controller.signal, expectedViewer, updatedSince).then((snapshot) => {
+       if (request !== sequence.current) return;
+       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
+       if (identity.current && identity.current !== nextIdentity) {
+         snapshots.current.clear();
+         clearPrivateView(true);
+       } else if (badges.size) {
+         snapshot = { ...snapshot, cards: snapshot.cards.map(card => {
+           const update = badges.get(card.number);
+           return update && sameRange(card, update) ? { ...card, localReview: update.localReview } : card;
+         }) };
+       }
+       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
+       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
+       setAttentionPrs(previous => {
+         const next = new Set(replaceAttention ? [] : previous);
+         for (const card of snapshot.cards) {
+-          if (card.state === "open" && (card.reviewers.length > 0 || card.decision === "CHANGES_REQUESTED")) next.add(card.number);
++          if (needsViewerAttention(card, snapshot.viewer, unreadCount(snapshot, card))) next.add(card.number);
+           else next.delete(card.number);
+         }
+         return next;
+       });
+       const nextFilterKey = reviewFilterKey(cwd, snapshot.repositoryId, snapshot.viewer);
+       if (filterKey.current !== nextFilterKey) {
+         filterKey.current = nextFilterKey;
+         setFilters(readReviewFilters(nextFilterKey));
+       }
+       pendingBadges.current = null;
+       setSelected(current => current && snapshot.cards.some(c => c.number === current.number) ? current : null);
+       if (!snapshot.warnings.length) setDismissedWarning("");
+       identity.current = nextIdentity;
+       setRead(old => {
+         const previous = old.snapshot;
+         if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+           // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+           const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+           if (replies.size) {
+             const cards = snapshot.cards.map(c => {
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 310,367 @@
+     let timer = window.setTimeout(poll, 6000);
+     return () => { cancelled = true; window.clearTimeout(timer); };
+   }, [accessLost, cwd, loadBadges, runCommand, selected, snapshot, tabActive]);
+   const needRepositories = read.scope === scope && !!read.error && !snapshot;
+   useEffect(() => {
+     if (!needRepositories) return;
+     let active = true;
+     void listRepositories(cwd).then((names) => {
+       if (active) setAlternatives(names);
+     }).catch(() => { if (active) setAlternatives([]); });
+     return () => { active = false; };
+   }, [cwd, needRepositories, listRepositories]);
+   const [receiptVersion, setReceiptVersion] = useState(0);
+   const viewer = snapshot?.viewer;
+   const repositoryId = snapshot?.repositoryId;
+   useEffect(() => {
+     if (viewer && repositoryId) return subscribeReviewReads(viewer, repositoryId, undefined, () => setReceiptVersion(n => n + 1));
+   }, [viewer, repositoryId]);
+   const visible = useMemo(() => {
+     if (!snapshot) return [];
+-    return filterReviews(snapshot.cards, filters, q).sort((a, b) => Number(!!b.localReview?.active) - Number(!!a.localReview?.active)).map(card => {
++    return filterReviews(snapshot.cards, filters, q).map(card => {
+       if (!card.addressedReplyIds?.length) return card;
+-      const readIds = readReplies(snapshot.viewer, snapshot.repositoryId, card.number, card.addressedReplyIds);
+-      const ids = card.addressedReplyIds.filter(id => !readIds.has(id));
++      const ids = unreadIds(snapshot, card);
+       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
+     });
+   }, [snapshot, filters, q, receiptVersion]);
++  // Receipts and discussion notes change after the load that seeded the set; keep it in step with the shown snapshot.
++  useEffect(() => {
++    if (!snapshot) return;
++    setAttentionPrs(previous => {
++      const next = new Set(previous);
++      for (const c of snapshot.cards) {
++        if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
++        else next.delete(c.number);
++      }
++      return next.size === previous.size && [...next].every(n => previous.has(n)) ? previous : next;
++    });
++  }, [snapshot, receiptVersion]);
+   const active = filterSummary(filters);
+   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
+   const error = read.scope === scope ? read.error : "";
+   const loading = read.scope !== scope || read.loading;
+   const warningKey = snapshot?.warnings.length
+     ? JSON.stringify([snapshot.repositoryId, snapshot.viewer, [...snapshot.warnings].sort()]) : "";
+   const showWarning = !!warningKey && warningKey !== dismissedWarning;
+   const watcherRepo = snapshot?.repo;
+   const watcherRepoId = snapshot?.repositoryId;
+   const watcherViewer = snapshot?.viewer;
+   const watcherTarget = useMemo(() => watcherRepo && watcherRepoId && watcherViewer
+     ? { repo: watcherRepo, repositoryId: watcherRepoId, viewer: watcherViewer } : null, [watcherRepo, watcherRepoId, watcherViewer]);
+   useEffect(() => {
+     if (!tabActive || !watcherTarget) {
+       setSubscriptionNumber(null);
+       return;
+     }
+     let current = true;
+     void rulesCommand(cwd, watcherTarget, { kind: "status" }).then(result => {
+       if (current) setSubscriptions(new Set(result.subscriptions?.map(item => item.number)));
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 381,434 @@
+   }
+   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); };
+ 
+   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+   const [detailWidth, setDetailWidth] = useState(560);
+   const openReview = useCallback((card: ReviewCard) => {
+     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
+   }, []);
+ 
+   return <div className="review-workspace" hidden={!tabActive}>
+     <section className="flows review-board" aria-label="Pull requests">
+     <div className="flows-toolbar">
+       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
+         {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
+       </span>}</div>
+       <label className="search-field"><Icon name="search" size={14} />
+         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+       </label>
+-      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog">
+-        <Icon name="checklist" size={14} /> Filters{active.length ? ' (' + active.length + ')' : ''}
++      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
++        aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
++        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters{active.length ? ' (' + active.length + ')' : ''}</span>
+       </button>
+       <div className="grow" />
+       {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
+       <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
+       <div className="segmented" role="group" aria-label="Review view">
+         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
+-          onClick={() => setView(mode)}><Icon name={mode} size={14} /> {mode === "board" ? "Board" : "List"}</button>)}
++          aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
++          onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
+       </div>
+       <button className="btn btn-sm" disabled={loading} onClick={refresh} aria-label="Refresh pull requests" title="Refresh pull requests">
+-        {loading ? <Spinner /> : <Icon name="refresh" size={15} />} Refresh
++        {loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
+       </button>
+     </div>
+     {(snapshot || repo || (needRepositories && alternatives.length > 0) || active.length > 0) && <div className="review-context">
+       {snapshot && <>
+         <Icon name="branch" size={14} />
+         {snapshot.repositories.length > 1 ? <select className="select-compact" aria-label="Base repository" value={snapshot.repo}
+           onChange={(e) => selectRepo(e.target.value)}>{snapshot.repositories.map((name) => <option key={name}>{name}</option>)}</select>
+           : <strong>{snapshot.repo}</strong>}
+         <span>Signed in as {snapshot.viewer}</span>
+         <span className="grow" />
+         <span>{error ? "Last available snapshot" : warningKey ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+         {warningKey && <button ref={warningToggle} className="icon-btn" aria-label="Sync details" title="Sync details"
+           aria-expanded={showWarning} aria-controls={warningId} onClick={() => setDismissedWarning(showWarning ? warningKey : "")}>
+           <Icon name="info" size={15} />
+         </button>}
+       </>}
+       {needRepositories && alternatives.length > 0 && <select className="select-compact" aria-label="Base repository"
+         value={repo ?? ""} onChange={(e) => selectRepo(e.target.value)}>
+         <option disabled value="">Choose a repository</option>
+         {alternatives.map((name) => <option key={name}>{name}</option>)}
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 436,476 @@
+       {!snapshot && repo && <><strong>{repo}</strong><button className="link-btn" onClick={() => selectRepo()}>Use default repository</button></>}
+       {active.length > 0 && <div className="review-active-filters">
+         <button className="icon-btn" aria-label="Clear filters" title="Clear filters" onClick={() => applyFilters(EMPTY_FILTERS)}>
+           <Icon name="clearFilters" size={16} />
+         </button>
+         {active.map((label) => <span key={label}>{label}</span>)}
+       </div>}
+     </div>}
+     {error && <div className="inline-banner tone-warn" role="alert">
+       <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
+       <button className="btn btn-sm" onClick={refresh}>Try again</button>
+     </div>}
+     {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
+       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
+       <button className="icon-btn review-dismiss-warning" aria-label="Hide sync details" title="Hide sync details"
+         onClick={() => { setDismissedWarning(warningKey); warningToggle.current?.focus(); }}>
+         <Icon name="x" size={15} />
+       </button>
+     </div>}
+     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
+-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
++    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
+         {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
+       <EmptyState icon={q || active.length ? "search" : "pr"}
+         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
+         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
+         {q || active.length ? "Try another title, number, or filter." : undefined}
+       </EmptyState>)}
+     </section>
+     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
+       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
+       owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
+         item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
+       models={reviewModels} currentModel={currentRepairModel}
+       watching={watchingTarget !== null} onAccessLost={accessLost}
+       onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
+     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
+       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
+     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
+       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
+       width={detailWidth} onResize={setDetailWidth}
+       reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={onOpenSession && (() => onOpenSession(card))}
+
+--- apps/desktop/src/review/ReviewResults.tsx
+@@ 16,56 @@
+   onSubscribe?: (card: ReviewCard) => void;
+   subscriptions?: ReadonlySet<number>;
+ }
+ 
+ function ReviewTags({ card }: { card: ReviewCard }) {
+   return <span className="review-tags">
+     <span className={`badge pr-${card.state}`}>{STATE_LABEL[card.state]}</span>
+     {prState(card) === "draft" && <span className="badge">Draft</span>}
+     {card.decision && <span className={`badge pr-${card.decision.toLowerCase()}`}>{DECISION_LABEL[card.decision]}</span>}
+     {card.reviewers.length > 0 && <span className="badge pr-review_requested" title={card.reviewers.join(", ")}>Review requested</span>}
+     {card.state === "open" && card.localReview?.publicationPending && <span className="badge review-publication-pending">Action required</span>}
+   </span>;
+ }
+ 
+ function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscriptions }: Omit<ReviewActions, "onOpen"> & { card: ReviewCard }) {
+   const toast = useToast();
+   const href = reviewUrl(card.url);
+   const showReview = card.state === "open" || card.localReview?.runState;
+   const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
+     card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
+-    card.localReview?.runState ? "View review result" : "Run review";
++    card.localReview?.runState ? "View review result" : card.localReview?.outdated ? "Review changes" : "Run review";
+   const browserLabel = `Open PR #${card.number} in browser`;
+   const sessionLabel = `Open PR #${card.number} in Sessions`;
+   const following = subscriptions?.has(card.number) ?? false;
+   const watchLabel = `${following ? "Edit subscription for" : "Subscribe to"} PR #${card.number}`;
+   return <div className="card-actions">
+     {showReview && <button type="button" className="icon-btn" title={label} aria-label={`${label} for #${card.number}`}
+       onClick={() => onReview(card)}><Icon name={card.localReview?.runState ? "checklist" : "play"} size={15} /></button>}
+     {onOpenSession && <button type="button" className="icon-btn" aria-label={sessionLabel} title={sessionLabel} onClick={() => onOpenSession(card)}>
+       <Icon name="chat" size={15} />
+     </button>}
+     {href && <a className="icon-btn" href={href} rel="noreferrer" title={browserLabel} aria-label={browserLabel}
+       onClick={event => {
+         event.preventDefault();
+         void openPullRequest(href).catch(error => toast({ level: "error", title: "Could not open pull request", body: errMessage(error) }));
+       }}><Icon name="external" size={15} /></a>}
+     {onSubscribe && <button type="button" className={`icon-btn${following ? " is-following" : ""}`} aria-haspopup="dialog"
+       aria-label={watchLabel} title={watchLabel} onClick={() => onSubscribe(card)}><Icon name="bell" size={15} /></button>}
+   </div>;
+ }
+ 
+
+--- apps/desktop/src/review/ReviewResults.tsx
+@@ 72,113 @@
+       <CardReviewProgress badge={card.localReview} />
+       {card.assignees.length > 0 && <span className="review-request">Assigned to {card.assignees.join(", ")}</span>}
+       {card.reviewers.length > 0 && <span className="review-request">Requested from {card.reviewers.join(", ")}</span>}
+     </button>
+     <ReviewAction card={card} {...actions} />
+   </article>;
+ }
+ 
+ function ReviewLane({ lane, cards, ...actions }: ReviewActions & { lane: Lane; cards: ReviewCard[] }) {
+   const [limit, setLimit] = useState(30);
+   return <section className="lane" aria-label={LANES[lane]}>
+     <header className="lane-head"><span className={'lane-dot review-lane-' + lane} /><h2>{LANES[lane]}</h2><span className="lane-count">{cards.length}</span></header>
+     <div className="lane-body">
+       {!cards.length && <div className="lane-empty">No pull requests</div>}
+       {cards.slice(0, limit).map((card) => <ReviewTile key={card.number} card={card} {...actions} />)}
+       {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 30)}>Show more ({cards.length - limit})</button>}
+     </div>
+   </section>;
+ }
+ 
+-export const ReviewResults = memo(function ReviewResults({ cards, view, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list" }) {
++export const ReviewResults = memo(function ReviewResults({ cards, view, showDone, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list"; showDone: boolean }) {
+   const [limit, setLimit] = useState(150);
+   if (view === "board") {
+     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
+     for (const card of cards) lanes[reviewLane(card)].push(card);
+-    return <div className="board review-lanes">{(Object.keys(LANES) as Lane[]).map((lane) =>
++    // A card that lands in Done is never hidden, whatever the state filter says.
++    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone || lanes.done.length > 0);
++    return <div className="board review-lanes">{drawn.map((lane) =>
+       <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
+   }
+   return <div className="flow-list-wrap">
+     <table className="flow-list review-table"><thead><tr>
+       <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
+     </tr></thead><tbody>{cards.slice(0, limit).map((c) => <tr key={c.number}>
+       <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
+       <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={laneReason(c)}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{laneReason(c)}</span>
+         <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+       <td><ReviewAction card={c} {...actions} /></td>
+     </tr>)}</tbody></table>
+     {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({cards.length - limit})</button>}
+   </div>;
+ });
+
+--- apps/desktop/src/review/ReviewWatcher.tsx
+@@ 79,119 @@
+       document.removeEventListener("visibilitychange", refresh);
+       window.removeEventListener("focus", refresh);
+     };
+   }, [open, request]);
+ 
+   const label = watcherState(snapshot, readError);
+   const configured = snapshot && snapshot.state !== "disabled";
+   const minutes = draftMinutes ?? String(snapshot?.intervalMinutes ?? 5);
+   const value = Number(minutes);
+   const valid = Number.isInteger(value) && value >= 1 && value <= 1440;
+   const canConfigure = !!target && !!snapshot;
+   const applyInterval = () => void request({ kind: "enable", intervalMinutes: value });
+   const running = snapshot?.state === "enabled";
+   const watching = running && snapshot.installed;
+   useEffect(() => {
+     onWatchingChange?.(watching ? target : null);
+   }, [onWatchingChange, watching, target]);
+   return <>
+     <button className="btn btn-sm" aria-haspopup="dialog" aria-label={'PR watcher · ' + label} onClick={() => {
+       setOpen(true); void request({ kind: "status" });
+-    }}><Icon name="clock" size={14} /> PR watcher <span className="watcher-indicator">{label}</span></button>
++    }}><Icon name="clock" size={14} /> <span className="toolbar-label">PR watcher</span> <span className="watcher-indicator">{label}</span></button>
+     {active && open && <Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
+       footer={<button className="btn" onClick={() => setOpen(false)}>Close</button>}>
+       <div className="review-watcher">
+         <p>{target ? <><strong>{target.repo}</strong> · {target.viewer}</> : "Local schedule for this project"}</p>
+         {(!snapshot && !readError) && <span role="status"><Spinner /> Checking schedule…</span>}
+         {readError && <div className="watcher-notice" role="alert">{readError} <button className="link-btn"
+           onClick={() => void request({ kind: "status" })}>Retry status</button></div>}
+         {snapshot && <>
+           <dl className="watcher-facts">
+             <dt>Status</dt><dd>{label}</dd>
+             {configured && <>
+               <dt>Schedule</dt><dd>Every {snapshot.intervalMinutes} {snapshot.intervalMinutes === 1 ? "minute" : "minutes"}</dd>
+               <dt>System timer</dt><dd>{snapshot.installed ? "Loaded" : "Unloaded"}</dd>
+               <dt>Last attempt</dt><dd><Timestamp value={snapshot.lastAttemptAt} /></dd>
+               <dt>Last successful poll</dt><dd><Timestamp value={snapshot.lastSuccessAt} /></dd>
+             </>}
+           </dl>
+           {target && snapshot.lastError && <p className="watcher-notice" role="status">Last poll error · {snapshot.lastError}</p>}
+           {target && snapshot.recoveryWarning && <p className="watcher-notice" role="status">{snapshot.recoveryWarning}</p>}
+           {!target && <p>Reconnect to GitHub to manage the interval and view PR activity.</p>}
+
+--- apps/desktop/src/review/model.ts
+@@ 8,100 @@
+ };
+ export const STATE_LABEL = { open: "Open", draft: "Draft", closed: "Closed", merged: "Merged" };
+ export const LANES = {
+   attention: "Needs attention", review: "In review", open: "Open", done: "Done",
+ } as const;
+ export type Lane = keyof typeof LANES;
+ export type Dimension = "author" | "assignee" | "reviewer" | "decision" | "state" | "ci";
+ export const REVIEW_PERIODS = [7, 30, 90] as const;
+ export type ReviewPeriod = typeof REVIEW_PERIODS[number];
+ export type Filters = Record<Dimension, string[]> & { updatedWithin?: ReviewPeriod };
+ export const EMPTY_FILTERS: Filters = {
+   author: [], assignee: [], reviewer: [], decision: [], state: ["open", "draft"], ci: [],
+ };
+ 
+ export function stateQuery(states: string[]): ReviewBoardState {
+   if (states.length && states.every((s) => s === "draft" || s === "open")) return "open";
+   if (states.length === 1 && (states[0] === "closed" || states[0] === "merged")) return states[0];
+   return "all";
+ }
+ 
++/** The Done lane can only hold closed or merged pull requests; an empty state filter means every state. */
++export function stateFilterShowsDone(states: readonly string[]) {
++  return !states.length || states.some((s) => s === "closed" || s === "merged");
++}
++
++/**
++ * Whether an open pull request needs the viewer: requested from their login (teams are not matched),
++ * their own change with requested changes, unread replies to them, or a Keryx review that waits on them.
++ */
++export function needsViewerAttention(c: ReviewCard, viewer: string, unreadReplies: number) {
++  if (c.state !== "open") return false;
++  const login = viewer.toLowerCase();
++  return c.reviewers.some((r) => r.toLowerCase() === login) ||
++    (c.author.toLowerCase() === login && c.decision === "CHANGES_REQUESTED") ||
++    unreadReplies > 0 || !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending;
++}
++
+ export function prState(c: ReviewCard) {
+   return c.state === "open" && c.draft ? "draft" : c.state;
+ }
+ 
+ function matchesRole(selected: string[], values: string[], complete = true) {
+   return !selected.length || selected.some((v) => values.includes(v) || (v === ":none" && complete && !values.length));
+ }
+ 
+ export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
+   const q = query.trim().toLowerCase();
+   return cards.filter(c => {
+     if (q && !c.title.toLowerCase().includes(q) && !String(c.number).includes(q.replace(/^#(?=\d)/, ""))) return false;
+-    if (c.localReview?.active) return true;
+     return (!f.author.length || f.author.includes(c.author)) &&
+       matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
+       matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
+       (!f.decision.length || f.decision.includes(c.decision ?? ":none")) &&
+       (!f.ci.length || f.ci.includes(c.ci)) &&
+       (!f.state.length || f.state.includes(prState(c)));
+   });
+ }
+ 
+ function attentionReason(c: ReviewCard): string | null {
+   if (c.localReview?.publicationPending) return "Choose whether to publish on GitHub";
+   if (c.localReview?.ready) return "Keryx review result available";
+   if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
+   if (c.reviewers.length) return "Review requested";
+   if (c.ci === "failed") return "Checks failed";
+   if (c.addressedReplyIds?.length) return "New reply to you";
+   return null;
+ }
+ 
+ export function reviewLane(c: ReviewCard): Lane {
+   if (c.localReview?.awaitingAnswer) return "attention";
+   if (c.localReview?.active) return "review";
+   if (c.state !== "open") return "done";
+   return attentionReason(c) ? "attention" : "open";
+ }
+ 
+ export function laneReason(c: ReviewCard) {
+   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
+   if (c.localReview?.runState === "queued") return "Keryx review queued";
+   if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
+   if (c.localReview?.active) return "Keryx review in progress";
+   if (c.state !== "open") return STATE_LABEL[c.state];
++  const outdated = c.localReview?.outdated;
++  if (outdated) {
++    const kind = outdated.state === "partial" || outdated.state === "budget" ? "Outdated partial review" : "Outdated review";
++    return `${kind} · ${outdated.headSha.slice(0, 7)}`;
++  }
+   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
+   const attention = attentionReason(c);
+   if (attention) return attention;
+   if (c.decision) return DECISION_LABEL[c.decision];
+   if (c.draft) return "Draft pull request";
+   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";
+ }
+
+--- apps/desktop/src/styles/review.css
+@@ 63,92 @@
+ .project-review-rules p, .pr-automation p, .rule-heading h3, .automation-history h3 { margin: 0; }
+ .rule-heading, .rule-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+ .rule-heading { justify-content: space-between; }
+ .review-rule-editor fieldset { border: 0; min-width: 0; padding: 0; margin: 0; }
+ .review-rule-editor label, .pr-automation label { display: grid; gap: var(--sp-1); font-size: var(--fs-sm); }
+ .review-rule-editor label.rule-check { display: flex; gap: var(--sp-2); align-items: center; }
+ .review-rule-editor input[type=checkbox] { accent-color: var(--accent); }
+ .rule-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: var(--sp-3); }
+ .review-rule-editor input, .review-rule-editor select, .pr-automation select { min-width: 0; max-width: 100%; }
+ .rule-entry, .rule-preview { border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--sp-3); overflow-wrap: anywhere; }
+ .rule-entry { display: grid; gap: var(--sp-2); }
+ .rule-entry small, .automation-history time, .automation-history small { color: var(--fg-muted); }
+ .rule-preview { background: var(--bg-sunken); }
+ .automation-history { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+ .automation-history ol { list-style: none; padding: 0; margin: 0; }
+ .automation-history li { padding-block: var(--sp-2); overflow-wrap: anywhere; }
+ .automation-history h3 { margin-bottom: var(--sp-2); }
+ 
+ .pr-subscription-topics label { display: flex; align-items: center; gap: var(--sp-2); }
+ .pr-subscription-topics input { accent-color: var(--accent); }
++
++.review-board { container-type: inline-size; }
++.review-board .flows-toolbar { flex-wrap: nowrap; }
++.review-board .flows-toolbar > * { flex: none; }
++.review-board .flows-toolbar > .grow { flex: 1 1 0; min-width: 0; }
++.review-board .flows-toolbar > .search-field { flex: 1 1 200px; min-width: 96px; width: auto; }
++.review-board .flows-toolbar .btn, .review-board .flows-toolbar .segmented button { white-space: nowrap; }
++@container (max-width: 980px) {
++  .review-board .flows-toolbar .toolbar-label, .review-board .flows-toolbar .count-label { display: none; }
++}
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 1,32 @@
+ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+ import type { ReviewRule, ReviewRuleAction, ReviewRuleSnapshot } from "../../../../src/review/review-rule-types";
+ import type { reviewRules } from "../platform/reviewRules";
+ import type { reviewWatcher, ReviewWatcherAction, ReviewWatcherSnapshot } from "../platform/reviewWatcher";
+ import type { reviewRun } from "../platform/reviewRuns";
+ import type { Root } from "react-dom/client";
+ import type { fetchReviewBoard, fetchReviewDetail, fetchReviewRepositories } from "../platform/review";
+ import { registerDom, unregisterDom } from "../test/dom";
+ import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
++import { markRepliesRead } from "./reviewReadState";
+ import { EMPTY_FILTERS } from "./model";
++import { badgesEqual } from "./ReviewBoard";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ let root: Root;
+ let host: HTMLElement;
+ let act: (fn: () => void | Promise<void>) => Promise<void>;
+ let createElement: typeof import("react").createElement;
+ let ReviewBoard: typeof import("./ReviewBoard").ReviewBoard;
+ let renderKey = 0;
+ 
+ beforeAll(async () => {
+   registerDom();
+   const React = await import("react");
+   act = React.act as unknown as typeof act;
+   createElement = React.createElement;
+   ReviewBoard = (await import("./ReviewBoard")).ReviewBoard;
+   host = document.createElement("div");
+   document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ 
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 698,762 @@
+       starts.push(target.number);
+     }
+     return { version: 1, runs: [] };
+   };
+   await render(async () => snapshot([pr, other]), "/project", ++renderKey, undefined, async (_cwd, _repo, number) => ({
+     version: 1, viewer: "ann", repositoryId: "repo1", number, headSha: other.headSha,
+     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+   }), run);
+   for (const mode of ["Board", "List"]) {
+     await click(button(mode));
+     const tags = [...host.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
+     expect(Array.from(tags!.children, child => child.textContent)).toEqual(["Open", "Changes requested", "Review requested"]);
+     await click(button("Run review for #105"));
+     expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+     expect(starts).toHaveLength(mode === "Board" ? 1 : 2);
+     await click(button("Close details"));
+   }
+   expect(starts).toEqual([105, 105]);
+ });
+ 
++test("an outdated review shows its short SHA and a Review changes action that starts a review in board and list", async () => {
++  const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
++  for (const mode of ["Board", "List"]) {
++    const calls: string[] = [];
++    await render(async () => snapshot([outdated]), "/project", ++renderKey,
++      undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
++        headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
++      async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
++    await click(button(mode));
++    expect(host.textContent).toContain("Outdated review · abcdef0");
++    await click(button("Review changes for #101"));
++    expect(calls).toContain("start");
++  }
++});
++
++test("a badge whose only change is the outdated review counts as changed", () => {
++  const base = { active: false, ready: false };
++  const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };
++  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
++  expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
++  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
++  expect(badgesEqual(a, base)).toBe(false);
++  expect(badgesEqual(base, a)).toBe(false);
++});
++
+ test("opening a running review from its badge action only reads the run", async () => {
+   const calls: string[] = [];
+   await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey,
+     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+   await click(button("View review for #101"));
+   expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+   expect(calls).toEqual(["status"]);
+ });
+ 
+ test("applied filters survive cold board mounts within the verified project, repository and account", async () => {
+   let viewer = "ann", repositoryId = "repo1";
+   const scopes: string[] = [];
+   const load: typeof fetchReviewBoard = async (_cwd, state) => {
+     scopes.push(state);
+     return { ...snapshot([pr, { ...pr, state: "merged", number: 303 }, { ...pr, number: 304, state: "merged", author: "bob" }]), viewer, repositoryId };
+   };
+   await render(load);
+   await click(button("Filters"));
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 817,986 @@
+ test("filter editing waits for the first verified snapshot before restoring saved settings", async () => {
+   const key = reviewFilterKey("/waiting", "repo1", "ann");
+   saveReviewFilters(key, { ...EMPTY_FILTERS, author: ["lee"] });
+   let resolve!: (value: ReviewBoardSnapshot) => void;
+   await render(() => new Promise(r => { resolve = r; }), "/waiting");
+   const filters = button("Filters");
+   expect(filters.disabled).toBe(true);
+   await click(filters);
+   expect(host.querySelector('[role="dialog"]')).toBeNull();
+   expect(host.textContent).not.toContain("Author · lee");
+ 
+   await act(async () => resolve(snapshot([pr])));
+   expect(host.textContent).toContain("Author · lee");
+   const restored = button("Filters (1)");
+   expect(restored.disabled).toBe(false);
+   await click(restored);
+   expect(option("Author", "lee").checked).toBe(true);
+   await click(button("Cancel"));
+ });
+ 
+-test("a merged PR awaiting a Keryx answer stays actionable in the Open filter from either view", async () => {
++test("a merged PR awaiting a Keryx answer stays actionable when the merged state is selected, from either view", async () => {
+   const pending = { ...pr, state: "merged" as const,
+     localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
+   const actions: string[] = [];
+   const command: typeof reviewRun = async (_cwd, _key, action) => {
+     actions.push(action.kind);
+     return { version: 1, runs: [{
+       id: "test-run", headSha: pr.headSha, baseSha: pr.baseSha, source: "manual", state: "running", phase: "Review",
+       createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, reason: "", result: null,
+       pendingQuestion: { id: "scope", question: "Which scope?", options: [], allowFreeform: true },
+     }] };
+   };
+   const detail: typeof fetchReviewDetail = async () => ({
+     version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number, headSha: pr.headSha,
+     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+   });
++  saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+   for (const mode of ["Board", "List"]) {
+     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
+     await click(button(mode));
+     if (mode === "Board") expect(host.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
+     else expect(host.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
+     await click(button("Answer question for #" + pr.number));
+     expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+   }
+   expect(actions).not.toContain("start");
+ });
+ 
+-test("Review tab signal follows unfiltered open requests and background watcher refreshes without extra reads", async () => {
++test("Review tab signal follows unfiltered open requests to the viewer and background watcher refreshes without extra reads", async () => {
+   const key = ++renderKey;
+   const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   const notify = (value: import("./ReviewBoard").ReviewTabIndicator) => seen.push(value);
+   const neutral: ReviewCard = { ...pr, reviewers: [], decision: "REVIEW_REQUIRED" };
++  const mine: ReviewCard = { ...pr, reviewers: ["Ann"] };
+   let cards = [neutral];
+   let reads = 0;
+   let failure = "";
+   const load: typeof fetchReviewBoard = async () => {
+     reads++;
+     if (failure) throw Error(failure);
+     return snapshot(cards);
+   };
+   let status: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
+   const watch = async () => status;
+   const show = (active: boolean, cwd = "/project", expectedViewer = "ann") => act(async () => root.render(createElement(ReviewBoard, {
+     key, active, cwd, expectedViewer, flows: [], onOpenFlow() {}, load, watcherCommand: watch, onIndicatorChange: notify,
+     listRepositories: async () => [],
+   })));
+   await show(false);
+   expect(seen.at(-1)).toBe("watching");
+   expect(reads).toBe(1);
+-  cards = [pr, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
++  cards = [mine, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
+   status = { ...status, lastSuccessAt: "2026-11-20T12:03:00Z" };
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+   expect(seen.at(-1)).toBe("attention");
+   expect(reads).toBe(2);
+   await show(true);
+   await click(button("Filters"));
+   await click(option("Author", "bob"));
+   await click(button("Apply filters"));
+   expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
+   expect(seen.at(-1)).toBe("attention");
+-  cards = [{ ...neutral, decision: "CHANGES_REQUESTED" }];
++  cards = [{ ...neutral, author: "ann", decision: "CHANGES_REQUESTED" }];
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBe("attention");
+-  cards = [{ ...pr, state: "merged" }, { ...neutral, state: "closed", decision: "CHANGES_REQUESTED" }];
++  cards = [{ ...mine, state: "merged" }, { ...neutral, state: "closed", author: "ann", decision: "CHANGES_REQUESTED" }];
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBe("watching");
+   status = { ...status, state: "paused" };
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+   expect(seen.at(-1)).toBeNull();
+-  cards = [pr];
++  cards = [mine];
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBe("attention");
+   failure = "access: Account is unavailable";
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBeNull();
+   await show(false, "/other-project", "colleague");
+   expect(seen.at(-1)).toBeNull();
+ });
+ 
++test("the tab signal is attention only for requests, owned changes, unread replies or Keryx decisions concerning the viewer", async () => {
++  const base: ReviewCard = { ...pr, reviewers: [], decision: null };
++  async function signal(cards: ReviewCard[]) {
++    const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
++    await act(async () => root.render(createElement(ReviewBoard, {
++      key: ++renderKey, cwd: "/signal", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
++      watcherCommand: watcherDisabled, onIndicatorChange: value => seen.push(value),
++    })));
++    return seen.at(-1);
++  }
++  expect(await signal([{ ...base, reviewers: ["bob"] }])).toBeNull();
++  expect(await signal([{ ...base, reviewers: ["org/team"] }])).toBeNull();
++  expect(await signal([{ ...base, decision: "CHANGES_REQUESTED" }])).toBeNull();
++  expect(await signal([{ ...base, localReview: { active: true, ready: false } }])).toBeNull();
++  expect(await signal([{ ...base, reviewers: ["bob", "ANN"] }])).toBe("attention");
++  expect(await signal([{ ...base, author: "Ann", decision: "CHANGES_REQUESTED" }])).toBe("attention");
++  expect(await signal([{ ...base, author: "ann", decision: "REVIEW_REQUIRED" }])).toBeNull();
++  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBe("attention");
++  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBe("attention");
++  expect(await signal([{ ...base, state: "merged", reviewers: ["ann"] }])).toBeNull();
++  expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBe("attention");
++  markRepliesRead("ann", "repo1", base.number, ["unread-1"]);
++  expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBeNull();
++});
++
++test("visible cards keep snapshot order when a later card has an active review", async () => {
++  const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
++  await render(async () => snapshot(cards));
++  await click(button("List"));
++  expect(Array.from(host.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
++});
++
++test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
++  const lanes = () => Array.from(host.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
++  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
++  const key = reviewFilterKey("/project", "repo1", "ann");
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Needs attention", "In review", "Open"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["closed"] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, state: [] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["merged", "draft"] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toContain("Done");
++});
++
+ test("a historical filter retains known open requests and removes them when their PR is observed as merged", async () => {
+   let merged = 102;
++  const mine: ReviewCard = { ...pr, reviewers: ["ann"] };
+   const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged"
+-    ? [{ ...pr, number: merged, state: "merged" }]
+-    : [pr]);
++    ? [{ ...mine, number: merged, state: "merged" }]
++    : [mine]);
+   await act(async () => root.render(createElement(ReviewBoard, {
+     key: ++renderKey, cwd: "/history-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+     onIndicatorChange: indicator => indicators.push(indicator),
+   })));
+   expect(indicators.at(-1)).toBe("attention");
+   await click(button("Filters"));
+   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(indicators.at(-1)).toBe("attention");
+-  merged = pr.number;
++  merged = mine.number;
+   await click(button("Refresh pull requests"));
+   expect(indicators.at(-1)).toBeNull();
+ });
+
+--- apps/desktop/src/review/model.test.ts
+@@ 1,23 @@
+ import { expect, test } from "bun:test";
+ import type { ReviewCard } from "./types";
+-import { EMPTY_FILTERS, filterReviews, reviewLane, stateQuery } from "./model";
++import { EMPTY_FILTERS, filterReviews, laneReason, reviewLane, stateQuery } from "./model";
+ 
+ const pr: ReviewCard = {
+   number: 42, title: "Use project settings", url: "https://github.com/example/project/pull/42", state: "open", draft: false,
+   author: "ann", assignees: ["lee"], reviewers: ["example/team"], decision: "CHANGES_REQUESTED", ci: "passed",
+   updatedAt: "2026-10-01T00:00:00Z", headSha: "head", baseSha: "base",
+ };
+ 
+ test("combines independent roles with AND, selected values with OR and searches titles and numbers", () => {
+   const filters = { ...EMPTY_FILTERS, author: ["me", "ann"], assignee: ["lee"], reviewer: ["example/team"], decision: ["CHANGES_REQUESTED"], ci: ["passed"] };
+   expect(filterReviews([pr], filters, "#42")).toEqual([pr]);
+   expect(filterReviews([pr], filters, "PROJECT")).toEqual([pr]);
+   expect(filterReviews([pr], { ...filters, assignee: ["ann"] }, "")).toEqual([]);
+   expect(filterReviews([pr], { ...filters, reviewer: ["lee"] }, "")).toEqual([]);
+ });
+ 
+ test("empty role filters match genuinely empty assignments/requests, unknown CI is separate from no checks", () => {
+   const missing: ReviewCard = { ...pr, assignees: [], reviewers: [], decision: null, ci: "unknown" };
+   const empty = { ...EMPTY_FILTERS, assignee: [":none"], reviewer: [":none"] };
+   expect(filterReviews([pr, missing], empty, "")).toEqual([missing]);
+   expect(filterReviews([missing], { ...empty, ci: ["none"] }, "")).toEqual([]);
+
+--- apps/desktop/src/review/model.test.ts
+@@ 35,78 @@
+ });
+ 
+ test("closed wins over requests, and a failing check requests attention independently of GitHub review decision", () => {
+   expect(reviewLane({ ...pr, state: "merged" })).toBe("done");
+   expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "failed" })).toBe("attention");
+   expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "none" })).toBe("open");
+ });
+ 
+ test("a branch rule requiring approval does not imply a request to a reviewer", () => {
+   const required = { ...pr, decision: "REVIEW_REQUIRED" as const, reviewers: [] };
+   expect(reviewLane(required)).toBe("open");
+   expect(reviewLane({ ...required, reviewers: ["org/team"] })).toBe("attention");
+ });
+ 
+ test("active Keryx runs precede GitHub attention and available results bring an open PR back to attention", () => {
+   const card = { ...pr, decision: null, reviewers: [], ci: "passed" as const };
+   expect(reviewLane({ ...card, localReview: { active: true, ready: true } })).toBe("review");
+   expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
+   const merged = { ...card, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
+   expect(reviewLane(merged)).toBe("attention");
+-  expect(filterReviews([merged], { ...EMPTY_FILTERS, author: ["someone else"], updatedWithin: 7 }, "")).toEqual([merged]);
++  expect(filterReviews([merged], { ...EMPTY_FILTERS, state: [] }, "")).toEqual([merged]);
+   expect(filterReviews([merged], EMPTY_FILTERS, "#999")).toEqual([]);
+ });
++
++test("an active local review does not bypass any selected filter", () => {
++  const active = { ...pr, localReview: { active: true, ready: false } };
++  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["someone else"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, state: ["merged"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, ci: ["failed"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["ann"] }, "")).toEqual([active]);
++});
++
++test("an outdated review names the reviewed commit and ranks above GitHub reasons, below live Keryx states and closed PRs", () => {
++  const outdated = (state: "completed" | "partial" | "budget") =>
++    ({ ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
++  expect(laneReason(outdated("completed"))).toBe("Outdated review · abcdef0");
++  expect(laneReason(outdated("partial"))).toBe("Outdated partial review · abcdef0");
++  expect(laneReason(outdated("budget"))).toBe("Outdated partial review · abcdef0");
++  expect(laneReason({ ...outdated("completed"), state: "merged" })).toBe("Merged");
++  const awaiting = { ...outdated("completed"), localReview: { ...outdated("completed").localReview, awaitingAnswer: true as const } };
++  expect(laneReason(awaiting)).toBe("Awaiting your answer");
++  expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
++  expect(reviewLane(outdated("completed"))).toBe(reviewLane(pr));
++});

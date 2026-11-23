@@ -1,0 +1,2302 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json",
+    ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md",
+    "apps/desktop/src/review/ProjectReviewRules.tsx",
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewResults.tsx",
+    "apps/desktop/src/review/ReviewWatcher.tsx",
+    "apps/desktop/src/review/model.test.ts",
+    "apps/desktop/src/review/model.ts",
+    "apps/desktop/src/styles/review.css",
+    "docs/requirements/keryx-desktop-review-v2/README.md",
+    "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+    "docs/requirements/keryx-desktop-review-v2/prd.md",
+    "docs/requirements/keryx-desktop-review-v2/specification.md",
+    "docs/requirements/roadmap.md",
+    "src/review/board-badges.test.ts",
+    "src/review/board-badges.ts",
+    "src/review/board-types.ts",
+    "src/review/desk-run-store.test.ts",
+    "src/review/desk-run-store.ts"
+  ],
+  "files": [
+    {
+      "file": "src/review/pr-context.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/pr-context.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/watcher-rebase.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/watcher-rebase.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/watcher.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/watcher.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewProgress.tsx",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/desk-run-service.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/desk-run-service.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/platform/review.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/platform/review.ts",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/shell/AppShell.tsx",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "path": [
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/board.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/board.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/desk-questions.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/desk-questions.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/board-addressed-replies.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/board-addressed-replies.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/desk-publication.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/watcher-events.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/watcher-events.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "path": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/model.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewRuns.tsx",
+        "apps/desktop/src/review/model.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-board.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/commands/review-board.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/board-transport.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/board-transport.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/desk-run-lifecycle.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/desk-run-lifecycle.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/watcher-repair.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/watcher-repair.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewFilters.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/model.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/review/model.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/styles/review.css",
+      "path": [
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review.ts",
+      "hop": 2,
+      "fanIn": 58,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/commands/review-board.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/ask-user-bridge.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/tui/ask-user-bridge.ts",
+        "src/review/desk-questions.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/desk-reviewer-question.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/desk-reviewer-question.ts",
+        "src/review/desk-questions.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewOutcome.tsx",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewOutcome.tsx",
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/sessionReview.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/sessionReview.ts",
+        "apps/desktop/src/platform/review.ts",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-desk-publish.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/commands/review-desk-publish.ts",
+        "src/review/desk-publication.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/board-badge-read.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/board-badge-read.ts",
+        "src/review/board-badges.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/desk-run-executor.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/desk-run-executor.ts",
+        "src/review/desk-questions.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-rule-queue.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/review-rule-queue.ts",
+        "src/review/watcher-events.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRunDialog.tsx",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewSessions.tsx",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewSessions.tsx",
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-rules.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/commands/review-rules.ts",
+        "src/review/watcher-rebase.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-watch.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/commands/review-watch.ts",
+        "src/review/watcher.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-automation-guard.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "src/review/review-automation-guard.ts",
+        "src/review/watcher-events.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-rule-dispatch.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/desk-run-store.ts",
+      "path": [
+        "src/review/review-rule-dispatch.ts",
+        "src/review/desk-run-service.ts",
+        "src/review/desk-run-store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/SessionReviewActivity.tsx",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/review/SessionReviewActivity.tsx",
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/shell/RoutingDialog.tsx",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "path": [
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+        "apps/desktop/src/review/types.ts",
+        "src/review/board-types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "apps/desktop/src/platform/reviewPages.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot, ReviewCard} of apps/desktop/src/review/types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewCard} of apps/desktop/src/review/types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot} of apps/desktop/src/review/types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewCard} of apps/desktop/src/review/types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DeskRunStore} of src/review/desk-run-store.ts (hop 1, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-accounts.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot, ReviewCard} of src/review/board-types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-desk-run.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DeskRunStore} of src/review/desk-run-store.ts (hop 1, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-watch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot, ReviewCard} of src/review/board-types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DeskRunStore} of src/review/desk-run-store.ts (hop 1, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/board-addressed-replies.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot, ReviewCard} of src/review/board-types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/desk-publication.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DeskRunStore} of src/review/desk-run-store.ts (hop 1, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/desk-run-legacy.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DeskRunStore} of src/review/desk-run-store.ts (hop 1, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/pr-context.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {DeskRunStore} of src/review/desk-run-store.ts (hop 1, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-rules.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot, ReviewCard} of src/review/board-types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/watcher.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ReviewBoardSnapshot, ReviewCard} of src/review/board-types.ts (hop 1, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "src/review/board.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runReviewBoard} of src/commands/review-board.ts (hop 2, from src/review/desk-run-store.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/watcher-project.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {pollWatcher} of src/review/watcher.ts (hop 2, from src/review/board-types.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-desk-run.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 43 at hop 2, fan-in 1, reached via src/review/desk-run-store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-pr-context.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 43 at hop 2, fan-in 1, reached via src/review/desk-run-store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 43 at hop 2, fan-in 0, reached via apps/desktop/src/review/ReviewBoard.tsx. It was NOT reviewed."
+    },
+    {
+      "file": "apps/desktop/src/components/Toasts.tsx",
+      "hop": 1,
+      "fanIn": 14,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/components/Markdown.tsx",
+      "hop": 1,
+      "fanIn": 13,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/useReviewRuns.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/board-badges.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runActive} from src/review/board-badges.ts; changed: {localBadge, runFinished}"
+    },
+    {
+      "file": "apps/desktop/src/session/Composer.tsx",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBrowserLink.tsx",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueOriginDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueWork.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/project/GitHubSettings.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLifecycle.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewQuestion.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/ActivityPanel.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/AttachmentImage.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/CommandCard.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/components/imagePreview.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowsBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/BrowserPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/ChangesPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/ConsentDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/CookieImportDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/FilesPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/TerminalPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/project/TelegramBotSettings.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/project/TelegramServeSettings.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/project/WikiEnrichDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.css",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/reviewFilterStorage.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/model.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CI_LABEL, DECISION_LABEL, Dimension, EMPTY_FILTERS, Filters, REVIEW_PERIODS, STATE_LABEL} from apps/desktop/src/review/model.ts; changed: {filterReviews, laneReason, needsViewerAttention, stateFilterShowsDone}"
+    },
+    {
+      "file": "apps/desktop/src/session/Approvals.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/DelegateResultCard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/ProvidersDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionView.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/SubagentArchive.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/UserMessage.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/styles/components.css",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueFilters.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesView.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/SidePanel.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/project/ProjectMenu.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/PullRequestAutomation.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/RunsTab.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/SchedulesTab.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/shell/Welcome.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 40 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/repomap.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/pr978.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/059-2026-07-20-opentui-shell-spike/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/059-2026-07-20-opentui-shell-spike/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/059-2026-07-20-opentui-shell-spike/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/070-2026-07-20-opentui-ux-fixes/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/070-2026-07-20-opentui-ux-fixes/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/070-2026-07-20-opentui-ux-fixes/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/071-2026-07-20-opentui-menu-focus/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/071-2026-07-20-opentui-menu-focus/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/071-2026-07-20-opentui-menu-focus/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/072-2026-07-20-opentui-menu-autofocus/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/072-2026-07-20-opentui-menu-autofocus/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/076-2026-07-20-opentui-copy-select/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/076-2026-07-20-opentui-copy-select/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/076-2026-07-20-opentui-copy-select/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/076-2026-07-20-opentui-copy-select/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/076-2026-07-20-opentui-copy-select/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/079-2026-07-20-opentui-toasts/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/079-2026-07-20-opentui-toasts/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/079-2026-07-20-opentui-toasts/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/079-2026-07-20-opentui-toasts/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/tasks.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/116-2026-07-22-test-suite-isolation-concurrent-runs-mus/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/116-2026-07-22-test-suite-isolation-concurrent-runs-mus/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/137-2026-08-10-keryx-memory-reliability-p2-generated-da/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/137-2026-08-10-keryx-memory-reliability-p2-generated-da/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/138-2026-08-10-keryx-memory-reliability-p3-accepted-onl/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/141-2026-08-10-keryx-memory-reliability-p6-documentatio/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/142-2026-08-10-keryx-version-update-checks-for-shell-an/documentation-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/150-2026-08-12-shared-agent-context-phase-4-collaborati/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/150-2026-08-12-shared-agent-context-phase-4-collaborati/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/150-2026-08-12-shared-agent-context-phase-4-collaborati/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/150-2026-08-12-shared-agent-context-phase-4-collaborati/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/150-2026-08-12-shared-agent-context-phase-4-collaborati/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewResults.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"board\" (changed in apps/desktop/src/review/ReviewResults.tsx) is mentioned by 962 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/keryx-dashboard.html",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src-tauri/icons/icon.icns",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/components/Markdown.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/elementPicks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/pick.dom.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/review/ProjectReviewRules.tsx) is mentioned by 98 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/review/managed.ts",
+      "hop": 2,
+      "fanIn": 38,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseProjectPr} from src/review/pr-context.ts; changed: {collectPrContext}"
+    },
+    {
+      "file": "src/review/desk-related-prs.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseProjectPr} from src/review/pr-context.ts; changed: {collectPrContext}"
+    },
+    {
+      "file": "src/review/pr-repair-git.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OwnedPullRequest} from src/review/watcher-rebase.ts; changed: {rebaseWatchedPullRequests}"
+    },
+    {
+      "file": "src/commands/review-accounts.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {beginWatcherOperation, changeProjectGithubBinding, readWatcher} from src/review/watcher.ts; changed: {pollWatcher}"
+    },
+    {
+      "file": "src/commands/review-plan-desktop.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PR_CONTEXT_FILE, parseProjectPr} from src/review/pr-context.ts; changed: {collectPrContext}"
+    },
+    {
+      "file": "src/commands/pr-repair-agent.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RunPrRepair} from src/review/watcher-repair.ts; changed: {repairWatchedPullRequests}"
+    },
+    {
+      "file": "src/review/pr-repair-ci.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OwnedPullRequest} from src/review/watcher-rebase.ts; changed: {rebaseWatchedPullRequests}"
+    },
+    {
+      "file": "src/review/pr-repair-draft.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OwnedPullRequest} from src/review/watcher-rebase.ts; changed: {rebaseWatchedPullRequests}"
+    },
+    {
+      "file": "src/review/pr-repair-feedback.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/review/board-types.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OwnedPullRequest} from src/review/watcher-rebase.ts; changed: {rebaseWatchedPullRequests}"
+    },
+    {
+      "file": "src/commands/review-plan-desktop.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PR_CONTEXT_FILE} from src/review/pr-context.ts; changed: {collectPrContext}"
+    },
+    {
+      "file": "src/review/desk-run-executor.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/desk-run-store.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {finishExecution} from src/review/desk-run-service.ts; changed: {dispatchNext, reconcileLinkedScheduledRuns, requestDeskRun, runDeskWorker, scheduleDeskReview}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T5.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T6.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/resolved/T7.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/prd.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/roadmap.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 28,
+    "changedFilesResolved": 13,
+    "changedFilesUnresolved": 15,
+    "candidates": 63,
+    "retained": 40,
+    "droppedByCap": 3,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 13,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 115,
+    "droppedTestConsumer": 20,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 22,
+      "2": 18
+    }
+  },
+  "graph": {
+    "nodes": 4660,
+    "edges": 17739
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewResults.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/review/model.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/review/model.ts",
+        "names": [
+          "filterReviews",
+          "laneReason",
+          "needsViewerAttention",
+          "stateFilterShowsDone"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: filterReviews, laneReason, needsViewerAttention, stateFilterShowsDone"
+      },
+      {
+        "file": "apps/desktop/src/styles/review.css",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "not a JS/TS module: every importer is reached by the file edge"
+      },
+      {
+        "file": "src/review/board-badges.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/board-badges.ts",
+        "names": [
+          "localBadge",
+          "runFinished"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: localBadge, runFinished"
+      },
+      {
+        "file": "src/review/board-types.ts",
+        "names": [
+          "ReviewBoardSnapshot",
+          "ReviewCard"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ReviewBoardSnapshot, ReviewCard"
+      },
+      {
+        "file": "src/review/desk-run-store.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/review/desk-run-store.ts",
+        "names": [
+          "DeskRunStore",
+          "attachDeskRunBadges",
+          "readLocalActiveReviewNumbers",
+          "readLocalBadges"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: DeskRunStore, attachDeskRunBadges, readLocalActiveReviewNumbers, readLocalBadges"
+      }
+    ],
+    "barrels": [
+      "apps/desktop/src/review/types.ts"
+    ],
+    "textKeys": 6,
+    "textHubs": [
+      {
+        "key": "btn",
+        "kind": "css-class",
+        "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "hits": 98
+      },
+      {
+        "key": "btn-sm",
+        "kind": "css-class",
+        "via": "apps/desktop/src/review/ProjectReviewRules.tsx",
+        "hits": 40
+      },
+      {
+        "key": "board",
+        "kind": "css-class",
+        "via": "apps/desktop/src/review/ReviewResults.tsx",
+        "hits": 962
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "apps/desktop/src/platform/reviewPages.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot",
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DeskRunStore"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/commands/review-accounts.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot",
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "src/commands/review-desk-run.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DeskRunStore"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/commands/review-watch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot",
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DeskRunStore"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/review/board-addressed-replies.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot",
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "src/review/board.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runReviewBoard"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/review/desk-publication.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DeskRunStore"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/review/desk-run-legacy.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DeskRunStore"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/review/pr-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "DeskRunStore"
+      ],
+      "via": "src/review/desk-run-store.ts"
+    },
+    {
+      "file": "src/review/review-rules.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot",
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "src/review/watcher-project.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "pollWatcher"
+      ],
+      "via": "src/review/board-types.ts"
+    },
+    {
+      "file": "src/review/watcher.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ReviewBoardSnapshot",
+        "ReviewCard"
+      ],
+      "via": "src/review/board-types.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

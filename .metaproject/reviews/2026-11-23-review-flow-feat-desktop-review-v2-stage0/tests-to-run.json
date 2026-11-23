@@ -1,0 +1,148 @@
+[
+  {
+    "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/platform/reviewPages.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/commands/review-accounts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/commands/review-desk-run.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/commands/review-watch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/board-addressed-replies.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/review/board.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runReviewBoard"
+    ]
+  },
+  {
+    "file": "src/review/desk-publication.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/desk-run-legacy.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/pr-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/review-rules.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/review/watcher-project.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "pollWatcher"
+    ]
+  },
+  {
+    "file": "src/review/watcher.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  }
+]
