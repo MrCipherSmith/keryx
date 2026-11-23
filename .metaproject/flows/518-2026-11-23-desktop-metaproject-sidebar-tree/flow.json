@@ -1,0 +1,329 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "518",
+  "slug": "desktop-metaproject-sidebar-tree",
+  "title": "Desktop Metaproject: tree navigation in the sidebar",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T20:02:01.811Z",
+  "updatedAt": "2026-11-23T20:05:10.432Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6967eb6b3ab4713dfc3c8f19fcf5fa9f32c2e8a1a949da12507ceb10e2a87c41",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "теперь смотри что по плану дальше, заводи фло в новой ворктри и реализуй следующий этап",
+    "source": "Claude Code session of 2026-11-24, after flows 512 and 514 were recorded; the tree is the owner's third complaint deferred by flow 515"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected by the orchestrator: gdctx searches and reads of the contract, v2 service, Rust command, platform transport and MetaprojectView; findings in context.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Generic init task replaced by the specific tasks T5-T11 of this plan"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Generic init task replaced by the specific tasks T5-T11 of this plan"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Generic init task replaced by the specific tasks T5-T11 of this plan"
+    },
+    {
+      "id": "T5",
+      "title": "Core: tree action in contract, service and capabilities, with tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Desktop: MetaprojectTree component and explorer integration, with tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Docs: describe the tree in the Desktop Metaproject guide",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verify: Rust tests and all required checks green in GitHub CI on the PR",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review: managed review rounds on the PR until clean",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T20:02:01.811Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T20:04:59.726Z",
+      "event": "task-added",
+      "detail": "T5: Core: tree action in contract, service and capabilities, with tests"
+    },
+    {
+      "at": "2026-11-23T20:05:00.015Z",
+      "event": "task-added",
+      "detail": "T6: Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests"
+    },
+    {
+      "at": "2026-11-23T20:05:00.313Z",
+      "event": "task-added",
+      "detail": "T7: Desktop: MetaprojectTree component and explorer integration, with tests"
+    },
+    {
+      "at": "2026-11-23T20:05:00.616Z",
+      "event": "task-added",
+      "detail": "T8: Docs: describe the tree in the Desktop Metaproject guide"
+    },
+    {
+      "at": "2026-11-23T20:05:00.958Z",
+      "event": "task-added",
+      "detail": "T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check"
+    },
+    {
+      "at": "2026-11-23T20:05:01.344Z",
+      "event": "task-added",
+      "detail": "T10: Verify: Rust tests and all required checks green in GitHub CI on the PR"
+    },
+    {
+      "at": "2026-11-23T20:05:01.659Z",
+      "event": "task-added",
+      "detail": "T11: Review: managed review rounds on the PR until clean"
+    },
+    {
+      "at": "2026-11-23T20:05:02.023Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T20:05:02.367Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T20:05:02.729Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T20:05:03.029Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-23T20:05:10.115Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T20:05:10.432Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/integrations/metaproject-explorer-tree.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts",
+      "sensitivity": "failure-scenario"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop/src-tauri && cargo test --locked metaproject"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx",
+      "sensitivity": "failure-scenario"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx",
+      "sensitivity": "failure-scenario"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun run lint && bun run typecheck"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun run docs:check"
+    }
+  }
+}
