@@ -23,6 +23,19 @@ export interface SessionFlags {
   pinnedAt?: string;
   /** The flow package (its directory name) this session works on; absent when none. */
   flow?: string;
+  /** The GitHub pull request or issue this session works on; absent when none. */
+  subject?: SessionSubject;
+}
+
+/** A GitHub pull request or issue a session is bound to. `url` is its github.com page and agrees with `kind`, `repo` and `number`. */
+export interface SessionSubject {
+  kind: "pr" | "issue";
+  /** `owner/name`, as GitHub spells it. */
+  repo: string;
+  number: number;
+  url: string;
+  /** GitHub's node id of the repository, when the binder knows it. */
+  repositoryId?: string;
 }
 
 export interface SessionFlagsChange {
@@ -30,10 +43,18 @@ export interface SessionFlagsChange {
   pinned?: boolean;
   /** A flow package directory name to link, or null to unlink. */
   flow?: string | null;
+  /** A subject to bind, or null to unbind. Refused unless it passes `parseSessionSubject`. */
+  subject?: SessionSubject | null;
 }
 
 /** A flow package directory name as keryx writes them (`<id>-<date>-<slug>`): no path, no shell metacharacters. */
 export const FLOW_REF = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$/;
+
+/** GitHub's owner (login) and repository-name charsets; `.` and `..` are not names. */
+const REPO_REF = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/(?!\.\.?$)([A-Za-z0-9._-]{1,100})$/;
+const SUBJECT_URL = /^https:\/\/github\.com\/([^/?#]+\/[^/?#]+)\/(pull|issues)\/([1-9][0-9]{0,9})$/;
+const NODE_ID = /^[A-Za-z0-9_=-]{1,200}$/;
+const URL_KIND = { pull: "pr", issues: "issue" } as const;
 
 const FLAGS_FILE = "flags.json";
 
@@ -41,18 +62,42 @@ function isIso(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
-/** The flags of the session stored in `dir`; an absent or unreadable file reads as none. */
+/**
+ * A subject from untrusted JSON, or undefined when it is not one: kind `pr` or
+ * `issue`, `owner/name` repo, positive integer number, and a
+ * `https://github.com/<repo>/pull|issues/<number>` url that agrees with all
+ * three (the repo compared without case, as GitHub does).
+ */
+export function parseSessionSubject(value: unknown): SessionSubject | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const { kind, repo, number, url, repositoryId } = raw;
+  if (kind !== "pr" && kind !== "issue") return undefined;
+  if (typeof repo !== "string" || !REPO_REF.test(repo)) return undefined;
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) return undefined;
+  if (typeof url !== "string") return undefined;
+  const match = SUBJECT_URL.exec(url);
+  if (match === null) return undefined;
+  const [, urlRepo = "", urlKind = "", urlNumber = ""] = match;
+  if (URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || urlRepo.toLowerCase() !== repo.toLowerCase() || Number(urlNumber) !== number) return undefined;
+  if (repositoryId !== undefined && (typeof repositoryId !== "string" || !NODE_ID.test(repositoryId))) return undefined;
+  return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };
+}
+
+/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
 export function readSessionFlags(dir: string): SessionFlags {
   const origin: SessionFlags = existsSync(path.join(dir, "issue-link.json")) ? { hasIssue: true } : {};
   const read = readConfigFile(path.join(dir, FLAGS_FILE));
   if (!read.ok) return origin;
   try {
     const raw = JSON.parse(read.text) as Record<string, unknown>;
+    const subject = parseSessionSubject(raw["subject"]);
     return {
       ...origin,
       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
+      ...(subject !== undefined ? { subject } : {}),
     };
   } catch {
     return origin;
@@ -60,28 +105,16 @@ export function readSessionFlags(dir: string): SessionFlags {
 }
 
 function writeFlags(dir: string, flags: SessionFlags): void {
-  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify({ archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow }, null, 2)}\n`);
-}
-
-/** The project root and directory of a stored session, by its exact id. */
-function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
-  const summary = findSession(cwd, sessionId, dataDir);
-  if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
-  return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject };
+  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
 }
 
 /**
- * Archives or unarchives, pins or unpins a session. A flag already in the
- * asked state keeps its original time. Returns the flags as stored.
+ * Applies a change to the flags stored in `dir` and returns them as stored.
+ * For a caller that already holds the session directory, such as a binder
+ * that has just created the session and cannot look it up yet.
  */
-export function setSessionFlags(
-  cwd: string,
-  sessionId: string,
-  change: SessionFlagsChange,
-  dataDir?: string,
-  now: () => Date = () => new Date(),
-): SessionFlags {
-  const { dir } = locate(cwd, sessionId, dataDir);
+export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
   const current = readSessionFlags(dir);
   const stamp = now().toISOString();
   const next: SessionFlags = { ...current };
@@ -94,8 +127,37 @@ export function setSessionFlags(
     next.flow = change.flow;
   }
   if (change.flow === null) delete next.flow;
+  if (change.subject !== undefined && change.subject !== null) {
+    const subject = parseSessionSubject(change.subject);
+    if (subject === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(change.subject).slice(0, 300)}`);
+    next.subject = subject;
+  }
+  if (change.subject === null) delete next.subject;
   writeFlags(dir, next);
   return next;
+}
+
+/** The project root and directory of a stored session, by its exact id. */
+function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
+  const summary = findSession(cwd, sessionId, dataDir);
+  if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
+  return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+}
+
+/**
+ * Archives or unarchives, pins or unpins a session, links or unlinks its flow
+ * and subject. A flag already in the asked state keeps its original time.
+ * Returns the flags as stored.
+ */
+export function setSessionFlags(
+  cwd: string,
+  sessionId: string,
+  change: SessionFlagsChange,
+  dataDir?: string,
+  now: () => Date = () => new Date(),
+): SessionFlags {
+  const { dir } = locate(cwd, sessionId, dataDir);
+  return updateSessionFlagsAt(dir, change, now);
 }
 
 export interface TrashOptions {

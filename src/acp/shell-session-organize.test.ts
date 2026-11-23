@@ -74,6 +74,42 @@ describe("shell profile: organise sessions", () => {
   );
 
   test(
+    "a subject is linked, listed after a fresh read, unlinked by null; an invalid one is refused",
+    async () => {
+      const h = shellHarness();
+      try {
+        await h.initialize();
+        const id = storedSession(h);
+        const subject = { kind: "pr", repo: "org/repo", number: 12, url: "https://github.com/org/repo/pull/12" };
+        const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject });
+        expect(linked.error).toBeUndefined();
+        expect(linked.result?.["subject"]).toEqual(subject);
+        // session/list reads flags.json again, as after a restart.
+        const listed = await call(h, "session/list", { cwd: h.projectDir });
+        const info = (listed.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+        expect(info?.["_meta"]?.keryx?.subject).toEqual(subject);
+
+        // Refused at the wire (wrong type) and at the store (URL that does not match).
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: "org/repo#12" })).error?.code).toBe(-32602);
+        const mismatch = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: { ...subject, url: "https://github.com/org/repo/issues/12" } });
+        expect(mismatch.error).toBeDefined();
+        expect(mismatch.result).toBeUndefined();
+        // Omitted: a flag change leaves the subject as it is.
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, pinned: true })).result?.["subject"]).toEqual(subject);
+
+        const unlinked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: null });
+        expect(unlinked.result?.["subject"]).toBeUndefined();
+        const again = await call(h, "session/list", { cwd: h.projectDir });
+        const cleared = (again.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+        expect(cleared?.["_meta"]?.keryx?.subject).toBeUndefined();
+      } finally {
+        await h.end();
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "trash releases an idle held session and moves its folder; a busy one is refused",
     async () => {
       const seam = trashSeam();

@@ -49,6 +49,60 @@ describe("session flags", () => {
     }
   });
 
+  test("a PR subject is stored, survives a restart re-read and later saves, and null unlinks it", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const subject = { kind: "pr" as const, repo: "Org/Repo.name", number: 42, url: "https://github.com/Org/Repo.name/pull/42", repositoryId: "R_kgDOabc" };
+    expect(setSessionFlags(cwd, id, { subject, pinned: true }, dataDir).subject).toEqual(subject);
+    // A fresh read of flags.json, as a restarted keryx does.
+    expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(subject);
+    // Another flag change and a later save of the session keep it.
+    expect(setSessionFlags(cwd, id, { pinned: false }, dataDir).subject).toEqual(subject);
+    const handle = createSession({ cwd, dataDir, id, provider: "test", model: "m" });
+    persistHistory(handle, [{ role: "user", content: "again" }], { provider: "test", model: "m" });
+    expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(subject);
+
+    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
+    expect(setSessionFlags(cwd, id, { subject: issue }, dataDir).subject).toEqual(issue);
+    expect(setSessionFlags(cwd, id, { subject: null }, dataDir).subject).toBeUndefined();
+    expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({});
+  });
+
+  test("an invalid subject is refused on write and the stored one is kept", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const good = { kind: "pr", repo: "org/repo", number: 1, url: "https://github.com/org/repo/pull/1" };
+    setSessionFlags(cwd, id, { subject: good as never }, dataDir);
+    const bad: unknown[] = [
+      "org/repo#1",
+      { ...good, kind: "commit" },
+      { ...good, url: "https://github.com/org/repo/issues/1" },
+      { ...good, url: "http://github.com/org/repo/pull/1" },
+      { ...good, url: "https://evil.example/org/repo/pull/1" },
+      { ...good, url: "https://github.com/org/other/pull/1" },
+      { ...good, url: "https://github.com/org/repo/pull/2" },
+      { ...good, number: 0, url: "https://github.com/org/repo/pull/0" },
+      { ...good, number: 1.5 },
+      { ...good, repo: "org" },
+      { ...good, repo: "../x/y", url: "https://github.com/../x/y/pull/1" },
+      { ...good, repo: "org/re po" },
+      { ...good, repositoryId: 5 },
+      { ...good, repositoryId: "" },
+    ];
+    for (const subject of bad) {
+      expect(() => setSessionFlags(cwd, id, { subject: subject as never }, dataDir)).toThrow(/not a GitHub subject/);
+    }
+    expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(good as never);
+  });
+
+  test("an invalid subject in flags.json reads as absent and leaves the other flags", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const file = path.join(sessionDir(cwd, id, dataDir), "flags.json");
+    writeFileSync(file, JSON.stringify({ pinnedAt: "2026-11-17T10:00:00.000Z", subject: { kind: "pr", repo: "org/repo", number: 3, url: "https://github.com/org/repo/issues/3" } }));
+    expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({ pinnedAt: "2026-11-17T10:00:00.000Z" });
+  });
+
   test("an unreadable flags file reads as none; an unknown session is refused", () => {
     const { cwd, dataDir } = project();
     const id = stored(cwd, dataDir);

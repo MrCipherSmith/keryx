@@ -2936,7 +2936,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuse(invalidRequest({ reason: `${method}: ${error instanceof Error ? error.message : String(error)}`, method, sessionId }));
   }
 
-  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow. */
+  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow and a GitHub subject. */
   function handleSessionFlags(params: unknown): SessionFlags {
     const method = KERYX_ACP_EXTENSION_METHODS.sessionFlags;
     const { obj, sessionId, cwd } = organiseTarget(params, method);
@@ -2951,6 +2951,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     if (flow !== undefined) {
       if (flow !== null && typeof flow !== "string") refuse(invalidParams(`${method}: flow must be a string, null or omitted`, { received: flow }));
       change.flow = flow;
+    }
+    const subject = obj["subject"];
+    if (subject !== undefined) {
+      if (subject !== null && (typeof subject !== "object" || Array.isArray(subject))) {
+        refuse(invalidParams(`${method}: subject must be an object, null or omitted`, { received: subject }));
+      }
+      // Its fields are checked by the store, which refuses a subject that is not a GitHub PR or issue.
+      change.subject = subject as SessionFlagsChange["subject"];
     }
     try {
       return setSessionFlags(cwd, sessionId, change, options.dataDir);

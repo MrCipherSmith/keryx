@@ -156,6 +156,25 @@ export interface SessionFlags {
   pinnedAt?: string;
   /** The flow package directory this session works on. */
   flow?: string;
+  /** The GitHub pull request or issue this session works on; keryx before subject support never reports it. */
+  subject?: SessionSubject;
+}
+
+/** A GitHub pull request or issue a session is bound to (`flags.json` `subject`); keryx validates it on write and read. */
+export interface SessionSubject {
+  kind: "pr" | "issue";
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  /** Its github.com page. */
+  url: string;
+  repositoryId?: string;
+}
+
+/** Whether two subjects name the same PR or issue: same kind and number, repo compared without case as GitHub does. */
+export function sameSubject(a: SessionSubject | null | undefined, b: SessionSubject | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.kind === b.kind && a.number === b.number && a.repo.toLowerCase() === b.repo.toLowerCase();
 }
 
 export interface SessionInfo {
