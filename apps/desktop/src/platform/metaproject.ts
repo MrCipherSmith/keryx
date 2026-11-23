@@ -1,8 +1,8 @@
 import {
-  METAPROJECT_CAPABILITIES, METAPROJECT_ERROR_CODES, METAPROJECT_PAGE_SIZE_V2, METAPROJECT_RESPONSE_BYTES_V2,
-  MetaprojectRequestError, isMetaprojectEdgeKind, isMetaprojectRelativePath, isMetaprojectScope, isMetaprojectV2EdgeKind,
-  isOpenSpecKind, isSha256, type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectResponse,
-  type MetaprojectV2Response,
+  METAPROJECT_ERROR_CODES, METAPROJECT_PAGE_SIZE_V2, METAPROJECT_RESPONSE_BYTES_V2,
+  MetaprojectRequestError, isMetaprojectEdgeKind, isMetaprojectRelativePath, isMetaprojectScope, isMetaprojectTreeScope,
+  isMetaprojectV2EdgeKind, isOpenSpecKind, isSha256, type MetaprojectRequest, type MetaprojectRequestV2,
+  type MetaprojectResponse, type MetaprojectTreeScope, type MetaprojectTreeV2, type MetaprojectV2Response,
 } from "../../../../src/integrations/metaproject-explorer-contract";
 import { errMessage } from "../lib/format";
 import { invoke, isTauri } from "./backend";
@@ -164,12 +164,47 @@ function validV2Hit(value: unknown): boolean {
       : validSource(value.source));
 }
 
-/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop sends. */
+/**
+ * The actions Desktop sends to every protocol-2 CLI; a CLI must offer all of them. Optional actions
+ * (`tree`) are used only when the answering CLI lists them, so an older CLI still negotiates.
+ */
+export const METAPROJECT_REQUIRED_ACTIONS = [
+  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history",
+] as const;
+
+/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop always sends. */
 function validCapabilities(value: RecordValue): boolean {
   const { actions } = value;
   return Object.keys(value).length === 2 && value.schemaVersion === 2
     && Array.isArray(actions) && actions.every((action: unknown) => typeof action === "string")
-    && METAPROJECT_CAPABILITIES.every((action) => actions.includes(action));
+    && METAPROJECT_REQUIRED_ACTIONS.every((action) => actions.includes(action));
+}
+
+/** Graph pages hold folders and file nodes; wiki roots hold page-type groups, a group holds wiki nodes. */
+function validTreeEntry(value: unknown, scope: MetaprojectTreeScope, parent: string | null): boolean {
+  if (!object(value)) return false;
+  switch (value.type) {
+    case "folder":
+      return scope === "graph" && isMetaprojectRelativePath(value.path) && typeof value.name === "string"
+        && value.name.length > 0 && positiveInteger(value.files)
+        && (value.module === undefined || (validV2Node(value.module) && object(value.module)
+          && value.module.kind === "module" && value.module.path === value.path));
+    case "group":
+      return scope === "wiki" && parent === null && typeof value.key === "string" && value.key.length > 0
+        && typeof value.name === "string" && positiveInteger(value.pages);
+    case "node":
+      return validV2Node(value.node) && object(value.node) && value.node.kind === (scope === "graph" ? "file" : "wiki");
+    default:
+      return false;
+  }
+}
+
+function validTree(value: RecordValue): boolean {
+  const { scope, parent } = value;
+  const parentKey = typeof parent === "string" && parent.length > 0 ? parent : parent === null ? null : undefined;
+  return isMetaprojectTreeScope(scope) && parentKey !== undefined
+    && typeof value.partial === "boolean" && optionalString(value.nextCursor)
+    && list(value.entries, METAPROJECT_PAGE_SIZE_V2, (entry) => validTreeEntry(entry, scope, parentKey));
 }
 
 export function isMetaprojectV2Response(value: unknown, action: MetaprojectRequestV2["action"]): value is MetaprojectV2Response {
@@ -203,14 +238,23 @@ export function isMetaprojectV2Response(value: unknown, action: MetaprojectReque
         && list(value.entries, METAPROJECT_PAGE_SIZE_V2, (row) => object(row) && object(row.entry)
           && row.entry.kind === "archive" && validEntry(row.entry) && validSource(row.source)
           && list(row.requirements, 10_000, validRequirement));
+    case "tree":
+      return validTree(value);
   }
 }
 
 type InvokeExplorer = (request: MetaprojectRequest | MetaprojectRequestV2) => Promise<unknown>;
 const invokeFor = (cwd: string): InvokeExplorer => (request) => invoke("metaproject_request", { cwd, request });
 
+/** What the capability probe settled: the protocol, and the optional actions the answering CLI offers. */
+export interface MetaprojectNegotiation {
+  protocol: 1 | 2;
+  /** The CLI lists `tree`; without it the explorer shows the flat list. */
+  supportsTree: boolean;
+}
+
 /** A legacy handshake can occur only after this fixed probe. */
-export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {
+export async function negotiateMetaprojectExplorer(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<MetaprojectNegotiation> {
   let response: unknown;
   try {
     response = await call({ version: 2, action: "capabilities" });
@@ -219,13 +263,28 @@ export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = i
     if (reason !== "Invalid request" && !/^unsupported-version: .+$/.test(reason)) throw error;
     const legacy = await call({ action: "catalog" });
     if (!isMetaprojectResponse(legacy, "catalog")) throw new Error("The selected CLI returned an incompatible legacy Metaproject catalog.");
-    return 1;
+    return { protocol: 1, supportsTree: false };
   }
-  if (isMetaprojectV2Response(response, "capabilities")) return 2;
+  if (isMetaprojectV2Response(response, "capabilities") && "actions" in response) {
+    return { protocol: 2, supportsTree: response.actions.includes("tree") };
+  }
   // Tauri validates and caches the handshake against the authorized checkout and actual executable.
   if (isTauri() && object(response) && Object.keys(response).length === 2 && response.schemaVersion === 1
-    && response.legacyHandshake === true) return 1;
+    && response.legacyHandshake === true) return { protocol: 1, supportsTree: false };
   throw new Error("The selected CLI returned invalid Metaproject capabilities.");
+}
+
+export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {
+  return (await negotiateMetaprojectExplorer(cwd, call)).protocol;
+}
+
+export type MetaprojectTreeRequest = Omit<Extract<MetaprojectRequestV2, { action: "tree" }>, "version" | "action">;
+
+/** One page of one tree parent; call only when the negotiation reported `supportsTree`. */
+export function requestMetaprojectTree(
+  cwd: string, request: MetaprojectTreeRequest, call: InvokeExplorer = invokeFor(cwd),
+): Promise<MetaprojectTreeV2> {
+  return requestMetaprojectV2<MetaprojectTreeV2>(cwd, { ...request, version: 2, action: "tree" }, call);
 }
 
 export async function requestMetaprojectV2<T extends MetaprojectV2Response = MetaprojectV2Response>(
@@ -256,6 +315,8 @@ function matchesRequest(response: MetaprojectV2Response, request: MetaprojectReq
     case "neighbors": return "root" in response && response.root === request.id;
     case "openspec-list": return "collection" in response && response.collection === request.collection;
     case "openspec-history": return "id" in response && response.id === request.id;
+    case "tree": return "scope" in response && "entries" in response
+      && response.scope === request.scope && response.parent === (request.parent ?? null);
     case "search": return "hits" in response && response.hits.every((hit) => !request.scopes || request.scopes.includes(hit.scope));
     default: return true;
   }

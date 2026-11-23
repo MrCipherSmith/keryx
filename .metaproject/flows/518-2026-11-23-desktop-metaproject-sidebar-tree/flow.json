@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: tree navigation in the sidebar",
   "status": "in-progress",
   "createdAt": "2026-11-23T20:02:01.811Z",
-  "updatedAt": "2026-11-23T20:05:10.432Z",
+  "updatedAt": "2026-11-23T20:26:56.305Z",
   "source": {
     "type": "description",
     "ref": null
@@ -105,17 +105,24 @@
       "id": "T5",
       "title": "Core: tree action in contract, service and capabilities, with tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:05:38.865Z",
+            "outcome": "started",
+            "detail": "518-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -126,8 +133,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:26:56.305Z",
+            "outcome": "started",
+            "detail": "518-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -283,6 +296,21 @@
     {
       "at": "2026-11-23T20:05:10.432Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-23T20:05:38.865Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 518-T5"
+    },
+    {
+      "at": "2026-11-23T20:26:36.792Z",
+      "event": "task-done",
+      "detail": "T5: Core: tree action in contract, service and capabilities, with tests"
+    },
+    {
+      "at": "2026-11-23T20:26:56.305Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 518-T6"
     }
   ],
   "acKinds": {
