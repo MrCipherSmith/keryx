@@ -1,0 +1,76 @@
+{
+  "task_id": "task-5",
+  "task_name": "Graph layout module and RelationshipGraph component (new files)",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "New pure layout module graphLayout.ts (layoutNeighborhood in five direction columns with relationship-kind groups and captions, column cap 12 with a '+N more' overflow entry, incoming/outgoing counts, computeViewport with automatic zoom clamped to 0.8..1.15 and root-centred panning, shortenMiddle, nodeKindStyle/edgeKindStyle/legendFor style mapping, toOpaqueColor), the RelationshipGraph component (core cytoscape with preset positions, one instance per mount, batched element replacement, callbacks through refs, token colours re-resolved on data-theme/data-palette/style changes and prefers-color-scheme, label size following --text-scale, zero-size guard, HTML caption, HTML legend, zoom in/out/fit buttons, hover highlight, '+N more' calls onShowHidden), graph.css, and tests for both. Nothing existing was edited and nothing is wired into the screen.",
+  "files_modified": [],
+  "files_created": [
+    "apps/desktop/src/metaproject/graphLayout.ts",
+    "apps/desktop/src/metaproject/graphLayout.test.ts",
+    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+    "apps/desktop/src/metaproject/graph.css"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass (keryx health run --changed --source eslint,typescript: PASS, 0 findings; ESLint does not cover apps/desktop)",
+  "type_check_result": "pass for owned files: `cd apps/desktop && bunx tsc --noEmit` reports no error in the five T5 files; 3 errors remain in other lanes' in-progress files (src/App.dom.test.tsx lines 6 and 13: RetainedView not exported by App; src/metaproject/MetaprojectView.dom.test.tsx line 484: unknown prop 'negotiate')",
+  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts src/metaproject/RelationshipGraph.dom.test.tsx` 46 passed, 0 failed (graphLayout 32, RelationshipGraph 14)",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
+    { "path": ".metaproject/rules/core/security-baseline.mdc", "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "apps/desktop/src/test/bun-test.d.ts declares only a slice of bun:test matchers (no toBeLessThan, toBeDefined, toBeCloseTo, toBeGreaterThanOrEqual), so tests that use them pass under bun but fail `tsc --noEmit`; T5 tests were rewritten to the declared matchers instead of extending the shim.", "where": "apps/desktop/src/test/bun-test.d.ts" }
+  ],
+  "assumptions": [
+    "A second-step node touching several first-step neighbours is attached to the first drawn (not overflowed) neighbour in projection edge order; a node reachable only through another second-step node (possible in a truncated projection) is attached through that node and placed on its side.",
+    "A group caption counts every node of that kind in the column, including those collapsed into '+N more'.",
+    "The legend lists node kinds of every node in the projection, including hidden ones, as AC4 says 'present in the projection'."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Change nodes get a double 3 px border in addition to the --warn tint, so spec and change (both tag-shaped) differ by more than colour; the plan named only the tint.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Plain tag with only the --warn tint, as the plan worded it (spec and change then differ by colour alone)", "round-tag shape for change"]
+    },
+    {
+      "description": "The caption counts are root-adjacent relationships per direction (edge.to === root / edge.from === root), matching how NodeDetailsPanel counts in AC7, not distinct neighbour nodes; a neighbour with edges both ways counts on both sides while it is drawn only on the outgoing side.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Count distinct neighbour nodes per drawn column"]
+    },
+    {
+      "description": "Caption and legend are HTML rows above and below the canvas inside the component's bordered box, not floated over the canvas, so they never cover node labels; this costs roughly two text lines of graph height.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Absolutely positioned overlays on top of the canvas"]
+    },
+    {
+      "description": "Geometry tuned from the plan's starting numbers so a depth-1 layout fits 440 px at zoom 0.8: node width at most 128 px (plan about 132), root at most 168 px (plan up to 180), column gap 40 px (plan about 44); long labels are therefore shortened a little earlier.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": ["Plan numbers 132/180/44, which do not fit 440 px at zoom 0.8 with 16 px padding"]
+    },
+    {
+      "description": "Nodes with no edge to the root, a first-step node or an attached second-step node (only possible in a truncated projection) are not drawn; edges to nodes hidden in a '+N more' entry are not drawn either.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": ["Draw unattached nodes in the outgoing outer column", "Draw edges to the '+N more' entry"]
+    }
+  ],
+  "notes": "Cytoscape cannot mount under happy-dom ('Could not create canvas of type 2d', probed). RelationshipGraph therefore takes an optional `createCytoscape` factory prop that only the DOM test passes (a headless cytoscape); the app always uses core cytoscape. The exported contract otherwise matches plan.md exactly (projection, busy?, onSelect, onShowHidden?), plus exported RelationshipGraphProps and CytoscapeFactory types. A one-off probe with styleEnabled headless cytoscape (deleted afterwards, then kept as a real test) confirmed the stylesheet parses without warnings; it caught `font-weight: 650`, which cytoscape rejects, now 600. Token resolution reads the host's computed custom properties with a fallback to the root element (happy-dom does not inherit custom properties). TDD order: the layout tests were run red (module missing) before graphLayout.ts was written; the component was written before its DOM test, so that test was not observed red. Not verified without a browser: real canvas render, label sizes at the live zoom (AC5), theme re-colouring on a real palette switch (AC6, covered only by the headless test), hover fading, wheel zoom, the zoom buttons' effect, legend swatch shapes and the 440 px fit on screen. No project-skill routes to apps/desktop/src/metaproject (keryx skills route not run; no skill was relied on)."
+}
