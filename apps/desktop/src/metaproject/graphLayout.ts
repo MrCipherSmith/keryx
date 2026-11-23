@@ -11,8 +11,11 @@ import {
   type MetaprojectNode,
   type MetaprojectNodeKind,
 } from "../../../../src/integrations/metaproject-explorer-contract";
+import { NODE_KIND_LABELS, RELATIONSHIP_KIND_LABELS } from "./labels";
 
 export const COLUMN_CAP = 12;
+/** Each relationship-kind group of an over-full column keeps at least this many slots while slots remain. */
+export const GROUP_MIN_SLOTS = 2;
 
 /** Model-space sizes in px at zoom 1 and `--text-scale` 1. */
 export const GRAPH_GEOMETRY = {
@@ -124,7 +127,17 @@ interface Entry {
   node: MetaprojectNode;
   side: GraphSide;
   group: MetaprojectEdgeKind;
+  /** The largest edge `count` linking the node into its column; 0 when the edges carry none. */
+  weight: number;
   via?: string;
+}
+
+interface ColumnSelection {
+  /** Drawn entries, in group order and, inside a group, by weight then title. */
+  shown: Entry[];
+  totals: Map<MetaprojectEdgeKind, number>;
+  total: number;
+  side: GraphSide | null;
 }
 
 interface StackedColumn {
@@ -132,6 +145,11 @@ interface StackedColumn {
   captions: LaidOutCaption[];
   overflow: LaidOutOverflow | null;
   width: number;
+}
+
+interface ColumnSpan {
+  left: number;
+  right: number;
 }
 
 const KIND_ORDER = new Map<MetaprojectEdgeKind, number>(METAPROJECT_EDGE_KINDS_V2.map((kind, index) => [kind, index]));
@@ -146,7 +164,18 @@ function firstKind(kinds: Iterable<MetaprojectEdgeKind>): MetaprojectEdgeKind | 
   return best;
 }
 
-/** Shortens `text` to `maxChars` characters with an ellipsis in the middle, keeping a file extension. */
+/** The dotted tails of the last path segment, longest first: "a.dom.test.ts" → [".dom.test.ts", ".test.ts", ".ts"]. */
+function dottedTails(text: string): string[] {
+  const base = text.slice(text.lastIndexOf("/") + 1);
+  const tails: string[] = [];
+  for (let index = base.indexOf(".", 1); index > 0; index = base.indexOf(".", index + 1)) tails.push(base.slice(index));
+  return tails;
+}
+
+/**
+ * Shortens `text` to `maxChars` characters with an ellipsis in the middle. When the name has dots,
+ * the cut keeps the longest dotted tail that fits in half the budget, so ".test.ts" survives.
+ */
 export function shortenMiddle(text: string, maxChars: number): string {
   if (!Number.isInteger(maxChars) || maxChars < 1) {
     throw new RangeError(`maxChars must be a positive integer, got ${maxChars}`);
@@ -155,8 +184,11 @@ export function shortenMiddle(text: string, maxChars: number): string {
   if (chars.length <= maxChars) return text;
   if (maxChars === 1) return "…";
   const available = maxChars - 1;
-  const extension = /\.[A-Za-z0-9]{1,6}$/.exec(text)?.[0].length ?? 0;
-  const tail = Math.min(available - 1, Math.max(Math.floor(available * 0.4), extension));
+  const dotted = dottedTails(text).find((tail) => {
+    const length = Array.from(tail).length;
+    return length <= Math.floor(maxChars / 2) && length <= available - 1;
+  });
+  const tail = dotted !== undefined ? Array.from(dotted).length : Math.max(0, Math.min(available - 1, Math.floor(available * 0.4)));
   const head = available - tail;
   return `${chars.slice(0, head).join("")}…${chars.slice(chars.length - tail).join("")}`;
 }
@@ -176,21 +208,23 @@ function textWidth(text: string, textScale: number): number {
 }
 
 /** Splits root-adjacent neighbours into sides; a neighbour with edges both ways goes with outgoing. */
-function firstStep(rootId: string, edges: readonly MetaprojectEdge[]): Map<string, { side: GraphSide; group: MetaprojectEdgeKind }> {
-  const incoming = new Map<string, Set<MetaprojectEdgeKind>>();
-  const outgoing = new Map<string, Set<MetaprojectEdgeKind>>();
+function firstStep(rootId: string, edges: readonly MetaprojectEdge[]): Map<string, Omit<Entry, "node">> {
+  type Seen = { kinds: Set<MetaprojectEdgeKind>; weight: number };
+  const incoming = new Map<string, Seen>();
+  const outgoing = new Map<string, Seen>();
   for (const edge of edges) {
     if (edge.from === edge.to) continue;
     const [bucket, other] = edge.from === rootId ? [outgoing, edge.to] : edge.to === rootId ? [incoming, edge.from] : [null, ""];
     if (!bucket) continue;
-    const kinds = bucket.get(other) ?? new Set<MetaprojectEdgeKind>();
-    kinds.add(edge.kind);
-    bucket.set(other, kinds);
+    const seen = bucket.get(other) ?? { kinds: new Set<MetaprojectEdgeKind>(), weight: 0 };
+    seen.kinds.add(edge.kind);
+    seen.weight = Math.max(seen.weight, edge.count ?? 0);
+    bucket.set(other, seen);
   }
-  const result = new Map<string, { side: GraphSide; group: MetaprojectEdgeKind }>();
-  for (const [id, kinds] of outgoing) result.set(id, { side: "outgoing", group: firstKind(kinds) ?? "imports" });
-  for (const [id, kinds] of incoming) {
-    if (!result.has(id)) result.set(id, { side: "incoming", group: firstKind(kinds) ?? "imports" });
+  const result = new Map<string, Omit<Entry, "node">>();
+  for (const [id, seen] of outgoing) result.set(id, { side: "outgoing", group: firstKind(seen.kinds) ?? "imports", weight: seen.weight });
+  for (const [id, seen] of incoming) {
+    if (!result.has(id)) result.set(id, { side: "incoming", group: firstKind(seen.kinds) ?? "imports", weight: seen.weight });
   }
   return result;
 }
@@ -215,7 +249,7 @@ function secondStep(
         const anchor = anchors.get(other);
         const node = nodes.get(self);
         if (!anchor || !node || (preferDrawn && !drawnFirst.has(other))) continue;
-        attached.set(self, { node, side: anchor.side, group: edge.kind, via: other });
+        attached.set(self, { node, side: anchor.side, group: edge.kind, weight: edge.count ?? 0, via: other });
         progress = true;
       }
     }
@@ -231,27 +265,91 @@ function sortEntries(entries: Entry[]): Entry[] {
   return [...entries].sort(
     (a, b) =>
       kindRank(a.group) - kindRank(b.group) ||
+      b.weight - a.weight ||
       a.node.title.localeCompare(b.node.title) ||
       a.node.id.localeCompare(b.node.id),
   );
 }
 
+/**
+ * Chooses the drawn entries of one column. Every group gets up to GROUP_MIN_SLOTS slots in kind
+ * order while slots remain; the slots left over are filled in kind order.
+ */
+function selectColumn(entries: Entry[], cap: number): ColumnSelection {
+  const groups = new Map<MetaprojectEdgeKind, Entry[]>();
+  for (const entry of sortEntries(entries)) {
+    const group = groups.get(entry.group) ?? [];
+    group.push(entry);
+    groups.set(entry.group, group);
+  }
+  const slots = new Map<MetaprojectEdgeKind, number>();
+  let left = cap;
+  for (const [kind, group] of groups) {
+    const take = Math.min(GROUP_MIN_SLOTS, group.length, left);
+    slots.set(kind, take);
+    left -= take;
+  }
+  for (const [kind, group] of groups) {
+    const taken = slots.get(kind) ?? 0;
+    const extra = Math.min(group.length - taken, left);
+    slots.set(kind, taken + extra);
+    left -= extra;
+  }
+  const totals = new Map([...groups].map(([kind, group]) => [kind, group.length]));
+  return {
+    shown: [...groups].flatMap(([kind, group]) => group.slice(0, slots.get(kind) ?? 0)),
+    totals,
+    total: entries.length,
+    side: entries[0]?.side ?? null,
+  };
+}
+
+/**
+ * Labels drawn nodes by title; nodes that share a title get the shortest path suffix that tells
+ * them apart ("src/commands", "hub/commands"), prefixed by the title when the path does not end in it.
+ */
+function distinctTitles(nodes: readonly MetaprojectNode[]): Map<string, string> {
+  const byTitle = new Map<string, MetaprojectNode[]>();
+  for (const node of nodes) byTitle.set(node.title, [...(byTitle.get(node.title) ?? []), node]);
+  const titles = new Map<string, string>();
+  for (const [title, group] of byTitle) {
+    if (group.length < 2) {
+      for (const node of group) titles.set(node.id, title);
+      continue;
+    }
+    const segments = group.map((node) => node.path.split("/").filter(Boolean));
+    const longest = Math.max(1, ...segments.map((parts) => parts.length));
+    let depth = 1;
+    while (depth < longest && new Set(segments.map((parts) => parts.slice(-depth).join("/"))).size < group.length) depth++;
+    group.forEach((node, index) => {
+      const parts = segments[index] ?? [];
+      const suffix = parts.slice(-depth).join("/") || node.id;
+      const base = parts[parts.length - 1] ?? "";
+      const endsInTitle = base === title || base.startsWith(`${title}.`);
+      titles.set(node.id, endsInTitle ? suffix : `${title} · ${suffix}`);
+    });
+  }
+  return titles;
+}
+
 /** Stacks one column top to bottom (captions, nodes, overflow), centred on y = 0, x still 0. */
-function stackColumn(entries: Entry[], column: GraphColumn, role: "first" | "second", cap: number, textScale: number): StackedColumn {
+function stackColumn(
+  selection: ColumnSelection,
+  column: GraphColumn,
+  role: "first" | "second",
+  textScale: number,
+  titles: ReadonlyMap<string, string>,
+): StackedColumn {
   const g = GRAPH_GEOMETRY;
-  const sorted = sortEntries(entries);
-  const shown = sorted.slice(0, cap);
-  const totals = new Map<MetaprojectEdgeKind, number>();
-  for (const entry of sorted) totals.set(entry.group, (totals.get(entry.group) ?? 0) + 1);
   const nodes: LaidOutNode[] = [];
   const captions: LaidOutCaption[] = [];
   let cursor = 0;
   let group: MetaprojectEdgeKind | undefined;
-  for (const entry of shown) {
+  for (const entry of selection.shown) {
     if (entry.group !== group) {
       if (group !== undefined) cursor += g.groupGap;
       group = entry.group;
-      const text = `${edgeKindLabel(group)} · ${totals.get(group) ?? 0}`;
+      const text = `${edgeKindLabel(group)} · ${selection.totals.get(group) ?? 0}`;
       captions.push({
         id: `caption:${column}:${group}`,
         text,
@@ -267,7 +365,7 @@ function stackColumn(entries: Entry[], column: GraphColumn, role: "first" | "sec
     } else {
       cursor += g.rowGap;
     }
-    const box = nodeBox(entry.node.title, g.nodeMaxWidth, textScale);
+    const box = nodeBox(titles.get(entry.node.id) ?? entry.node.title, g.nodeMaxWidth, textScale);
     nodes.push({
       id: entry.node.id,
       node: entry.node,
@@ -285,18 +383,17 @@ function stackColumn(entries: Entry[], column: GraphColumn, role: "first" | "sec
     cursor += g.nodeHeight;
   }
   let overflow: LaidOutOverflow | null = null;
-  const firstEntry = sorted[0];
-  if (sorted.length > shown.length && firstEntry) {
+  if (selection.total > selection.shown.length && selection.side) {
     cursor += g.rowGap;
-    const hidden = sorted.length - shown.length;
+    const hidden = selection.total - selection.shown.length;
     const text = `+${hidden} more`;
     overflow = {
       id: `overflow:${column}`,
       text,
-      side: firstEntry.side,
+      side: selection.side,
       column,
       hidden,
-      total: sorted.length,
+      total: selection.total,
       x: 0,
       y: cursor + g.overflowHeight / 2,
       width: textWidth(text, textScale) + 2 * g.captionPadding,
@@ -310,20 +407,32 @@ function stackColumn(entries: Entry[], column: GraphColumn, role: "first" | "sec
   return { nodes, captions, overflow, width };
 }
 
-/** Column centres outward from the root; an empty column takes no space. */
-function columnCentres(widths: Record<GraphColumn, number>): Record<GraphColumn, number> {
+/** Horizontal extent of each column outward from the root; an empty column takes no space. */
+function columnSpans(widths: Record<GraphColumn, number>): Record<GraphColumn, ColumnSpan> {
   const gap = GRAPH_GEOMETRY.columnGap;
   const half = widths[0] / 2;
-  const inner = (width: number) => (width > 0 ? half + gap + width / 2 : half);
-  const innerEdge = (width: number) => (width > 0 ? half + gap + width : half);
-  const outer = (innerWidth: number, width: number) => innerEdge(innerWidth) + gap + width / 2;
+  const innerLeft = widths[1] > 0 ? half + gap : half;
+  const innerRight = innerLeft + widths[1];
+  const outerLeft = (widths[1] > 0 ? innerRight : half) + gap;
+  const outerRight = outerLeft + widths[2];
+  const mirrorInnerLeft = widths[-1] > 0 ? half + gap : half;
+  const mirrorInnerRight = mirrorInnerLeft + widths[-1];
+  const mirrorOuterLeft = (widths[-1] > 0 ? mirrorInnerRight : half) + gap;
+  const mirrorOuterRight = mirrorOuterLeft + widths[-2];
   return {
-    [-2]: -outer(widths[-1], widths[-2]),
-    [-1]: -inner(widths[-1]),
-    0: 0,
-    1: inner(widths[1]),
-    2: outer(widths[1], widths[2]),
-  } as Record<GraphColumn, number>;
+    [-2]: { left: -mirrorOuterRight, right: -mirrorOuterLeft },
+    [-1]: { left: -mirrorInnerRight, right: -mirrorInnerLeft },
+    0: { left: -half, right: half },
+    1: { left: innerLeft, right: innerRight },
+    2: { left: outerLeft, right: outerRight },
+  } as Record<GraphColumn, ColumnSpan>;
+}
+
+/** Boxes sit flush against the column edge that faces the root. */
+function alignedX(column: GraphColumn, span: ColumnSpan, width: number): number {
+  if (column < 0) return span.right - width / 2;
+  if (column > 0) return span.left + width / 2;
+  return 0;
 }
 
 function boundsOf(boxes: readonly LayoutBox[]): LayoutBounds {
@@ -358,29 +467,35 @@ export function layoutNeighborhood(projection: MetaprojectNeighbors, options: La
     const node = nodes.get(id);
     if (node) firstEntries.push({ node, ...placement });
   }
-  const columns = new Map<GraphColumn, StackedColumn>();
+  const selections = new Map<GraphColumn, ColumnSelection>();
   for (const [column, side] of [[-1, "incoming"], [1, "outgoing"]] as const) {
-    columns.set(column, stackColumn(firstEntries.filter((entry) => entry.side === side), column, "first", cap, textScale));
+    selections.set(column, selectColumn(firstEntries.filter((entry) => entry.side === side), cap));
   }
-  const drawnFirst = new Set([...(columns.get(-1)?.nodes ?? []), ...(columns.get(1)?.nodes ?? [])].map((item) => item.id));
+  const drawnFirst = new Set([...(selections.get(-1)?.shown ?? []), ...(selections.get(1)?.shown ?? [])].map((entry) => entry.node.id));
   const second = secondStep(rootNode.id, projection.edges, nodes, first, drawnFirst);
   for (const [column, side] of [[-2, "incoming"], [2, "outgoing"]] as const) {
-    columns.set(column, stackColumn(second.filter((entry) => entry.side === side), column, "second", cap, textScale));
+    selections.set(column, selectColumn(second.filter((entry) => entry.side === side), cap));
   }
 
-  const rootBox = nodeBox(rootNode.title, GRAPH_GEOMETRY.rootMaxWidth, textScale);
+  const titles = distinctTitles([rootNode, ...[...selections.values()].flatMap((selection) => selection.shown.map((entry) => entry.node))]);
+  const columns = new Map<GraphColumn, StackedColumn>();
+  for (const [column, selection] of selections) {
+    columns.set(column, stackColumn(selection, column, Math.abs(column) === 1 ? "first" : "second", textScale, titles));
+  }
+
+  const rootBox = nodeBox(titles.get(rootNode.id) ?? rootNode.title, GRAPH_GEOMETRY.rootMaxWidth, textScale);
   const root: LaidOutNode = { id: rootNode.id, node: rootNode, label: rootBox.label, role: "root", side: null, column: 0, x: 0, y: 0, width: rootBox.width, height: GRAPH_GEOMETRY.nodeHeight };
   const widthOf = (column: GraphColumn) => columns.get(column)?.width ?? 0;
-  const centres = columnCentres({ [-2]: widthOf(-2), [-1]: widthOf(-1), 0: root.width, 1: widthOf(1), 2: widthOf(2) } as Record<GraphColumn, number>);
+  const spans = columnSpans({ [-2]: widthOf(-2), [-1]: widthOf(-1), 0: root.width, 1: widthOf(1), 2: widthOf(2) } as Record<GraphColumn, number>);
 
   const laidOut: LaidOutNode[] = [];
   const captions: LaidOutCaption[] = [];
   const overflow: LaidOutOverflow[] = [];
   for (const [column, stacked] of columns) {
-    const x = centres[column];
-    for (const item of stacked.nodes) laidOut.push({ ...item, x });
-    for (const item of stacked.captions) captions.push({ ...item, x });
-    if (stacked.overflow) overflow.push({ ...stacked.overflow, x });
+    const span = spans[column];
+    for (const item of stacked.nodes) laidOut.push({ ...item, x: alignedX(column, span, item.width) });
+    for (const item of stacked.captions) captions.push({ ...item, x: alignedX(column, span, item.width) });
+    if (stacked.overflow) overflow.push({ ...stacked.overflow, x: alignedX(column, span, stacked.overflow.width) });
   }
 
   const drawn = new Set([root.id, ...laidOut.map((item) => item.id)]);
@@ -472,26 +587,26 @@ export interface EdgeKindStyle {
 export const NODE_KINDS_IN_ORDER: readonly MetaprojectNodeKind[] = ["module", "file", "symbol", "wiki", "spec", "change", "archive"];
 export const LINE_STYLES_IN_ORDER: readonly LineStyle[] = ["solid", "dashed", "dotted"];
 
-const NODE_KIND_STYLES: Record<MetaprojectNodeKind, NodeKindStyle> = {
-  module: { shape: "round-rectangle", borderStyle: "solid", borderWidth: 2, borderToken: "--fg-muted", label: "Module" },
-  file: { shape: "round-rectangle", borderStyle: "solid", borderWidth: 1, borderToken: "--border-strong", label: "File" },
-  symbol: { shape: "barrel", borderStyle: "solid", borderWidth: 1, borderToken: "--border-strong", label: "Symbol" },
-  wiki: { shape: "cut-rectangle", borderStyle: "solid", borderWidth: 1, borderToken: "--info", label: "Wiki page" },
-  spec: { shape: "tag", borderStyle: "solid", borderWidth: 1, borderToken: "--ok", label: "Spec" },
-  change: { shape: "tag", borderStyle: "double", borderWidth: 3, borderToken: "--warn", label: "Change" },
-  archive: { shape: "tag", borderStyle: "dashed", borderWidth: 1, borderToken: "--fg-muted", label: "Archived change" },
+const NODE_KIND_TREATMENTS: Record<MetaprojectNodeKind, Omit<NodeKindStyle, "label">> = {
+  module: { shape: "round-rectangle", borderStyle: "solid", borderWidth: 2, borderToken: "--fg-muted" },
+  file: { shape: "round-rectangle", borderStyle: "solid", borderWidth: 1, borderToken: "--border-strong" },
+  symbol: { shape: "barrel", borderStyle: "solid", borderWidth: 1, borderToken: "--border-strong" },
+  wiki: { shape: "cut-rectangle", borderStyle: "solid", borderWidth: 1, borderToken: "--info" },
+  spec: { shape: "tag", borderStyle: "solid", borderWidth: 1, borderToken: "--ok" },
+  change: { shape: "tag", borderStyle: "double", borderWidth: 3, borderToken: "--warn" },
+  archive: { shape: "tag", borderStyle: "dashed", borderWidth: 1, borderToken: "--fg-muted" },
 };
 
-const EDGE_KIND_STYLES: Record<MetaprojectEdgeKind, EdgeKindStyle> = {
-  imports: { lineStyle: "solid", label: "imports" },
-  calls: { lineStyle: "solid", label: "calls" },
-  asset: { lineStyle: "solid", label: "asset" },
-  describes: { lineStyle: "dashed", label: "describes" },
-  links: { lineStyle: "dashed", label: "links" },
-  "changes-spec": { lineStyle: "dashed", label: "changes spec" },
-  "spec-context": { lineStyle: "dashed", label: "spec context" },
-  contains: { lineStyle: "dotted", label: "contains" },
-  defines: { lineStyle: "dotted", label: "defines" },
+const EDGE_LINE_STYLES: Record<MetaprojectEdgeKind, LineStyle> = {
+  imports: "solid",
+  calls: "solid",
+  asset: "solid",
+  describes: "dashed",
+  links: "dashed",
+  "changes-spec": "dashed",
+  "spec-context": "dashed",
+  contains: "dotted",
+  defines: "dotted",
 };
 
 export const LINE_STYLE_LABELS: Record<LineStyle, string> = {
@@ -501,15 +616,15 @@ export const LINE_STYLE_LABELS: Record<LineStyle, string> = {
 };
 
 export function nodeKindStyle(kind: MetaprojectNodeKind): NodeKindStyle {
-  return NODE_KIND_STYLES[kind];
+  return { ...NODE_KIND_TREATMENTS[kind], label: NODE_KIND_LABELS[kind] };
 }
 
 export function edgeKindStyle(kind: MetaprojectEdgeKind): EdgeKindStyle {
-  return EDGE_KIND_STYLES[kind];
+  return { lineStyle: EDGE_LINE_STYLES[kind], label: RELATIONSHIP_KIND_LABELS[kind] };
 }
 
 export function edgeKindLabel(kind: MetaprojectEdgeKind): string {
-  return EDGE_KIND_STYLES[kind].label;
+  return RELATIONSHIP_KIND_LABELS[kind];
 }
 
 export interface GraphLegend {
@@ -522,11 +637,11 @@ export function legendFor(projection: MetaprojectNeighbors): GraphLegend {
   const nodeKinds = new Set(projection.nodes.map((node) => node.kind));
   const edgeKinds = new Set(projection.edges.map((edge) => edge.kind));
   return {
-    nodeKinds: NODE_KINDS_IN_ORDER.filter((kind) => nodeKinds.has(kind)).map((kind) => ({ kind, label: NODE_KIND_STYLES[kind].label })),
+    nodeKinds: NODE_KINDS_IN_ORDER.filter((kind) => nodeKinds.has(kind)).map((kind) => ({ kind, label: NODE_KIND_LABELS[kind] })),
     lines: LINE_STYLES_IN_ORDER.map((style) => ({
       style,
       label: LINE_STYLE_LABELS[style],
-      kinds: METAPROJECT_EDGE_KINDS_V2.filter((kind) => edgeKinds.has(kind) && EDGE_KIND_STYLES[kind].lineStyle === style).map(edgeKindLabel),
+      kinds: METAPROJECT_EDGE_KINDS_V2.filter((kind) => edgeKinds.has(kind) && EDGE_LINE_STYLES[kind] === style).map(edgeKindLabel),
     })).filter((line) => line.kinds.length > 0),
   };
 }

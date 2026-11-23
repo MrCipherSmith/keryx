@@ -311,20 +311,17 @@ export function RelationshipGraph({ projection, busy = false, onSelect, onShowHi
   const root = layout.root?.node;
   return (
     <div className={`metaproject-rgraph${busy ? " is-busy" : ""}`} ref={host} aria-busy={busy || undefined}>
-      <p className="metaproject-rgraph-caption">
-        <strong className="metaproject-rgraph-title" title={root?.path}>{root?.title ?? "No node selected"}</strong>
-        <span> · {layout.incoming} incoming · {layout.outgoing} outgoing</span>
-        {layout.truncated && (
-          <>
-            <span> · </span>
-            <span className="badge badge-warn">limited</span>
-          </>
-        )}
-      </p>
-      <div className="metaproject-rgraph-stage">
-        <div className="metaproject-rgraph-canvas" aria-hidden="true">
-          <div className="metaproject-rgraph-viewport" ref={container} />
-        </div>
+      <div className="metaproject-rgraph-header">
+        <p className="metaproject-rgraph-caption">
+          <strong className="metaproject-rgraph-title" title={root?.path}>{root?.title ?? "No node selected"}</strong>
+          <span> · {layout.incoming} incoming · {layout.outgoing} outgoing</span>
+          {layout.truncated && (
+            <>
+              <span> · </span>
+              <span className="badge badge-warn">limited</span>
+            </>
+          )}
+        </p>
         <div className="metaproject-rgraph-zoom" role="group" aria-label="Graph zoom">
           <button type="button" className="icon-btn" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(USER_ZOOM.step)}>
             <Icon name="plus" size={14} />
@@ -335,6 +332,11 @@ export function RelationshipGraph({ projection, busy = false, onSelect, onShowHi
           <button type="button" className="icon-btn" aria-label="Fit graph" title="Fit graph" onClick={fit}>
             <Icon name="target" size={14} />
           </button>
+        </div>
+      </div>
+      <div className="metaproject-rgraph-stage">
+        <div className="metaproject-rgraph-canvas" aria-hidden="true">
+          <div className="metaproject-rgraph-viewport" ref={container} />
         </div>
       </div>
       {(legend.nodeKinds.length > 0 || legend.lines.length > 0) && (

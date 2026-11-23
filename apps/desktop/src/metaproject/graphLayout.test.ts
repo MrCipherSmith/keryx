@@ -11,6 +11,7 @@ import {
   computeViewport,
   edgeKindStyle,
   layoutNeighborhood,
+  legendFor,
   nodeKindStyle,
   shortenMiddle,
   toOpaqueColor,
@@ -173,8 +174,8 @@ describe("layoutNeighborhood — depth 1 (AC1, AC2)", () => {
 
   test("groups follow the relationship-kind order with a caption per group, sorted by title", () => {
     const right = layout.captions.filter((item) => item.column === 1).map((item) => item.text);
-    expect(right).toEqual(["contains · 18"]);
-    expect(layout.captions.filter((item) => item.column === -1).map((item) => item.text)).toEqual(["imports · 12"]);
+    expect(right).toEqual(["Contains · 18"]);
+    expect(layout.captions.filter((item) => item.column === -1).map((item) => item.text)).toEqual(["Imports · 12"]);
     const titles = layout.nodes.filter((item) => item.column === -1).sort((a, b) => a.y - b.y).map((item) => item.node.title);
     expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
   });
@@ -298,7 +299,109 @@ describe("layoutNeighborhood — small and degenerate inputs", () => {
   });
 });
 
+describe("layoutNeighborhood — live-preview polish (G2, G3, G4, G6)", () => {
+  function column(layout: NeighborhoodLayout, index: number) {
+    return layout.nodes.filter((item) => item.column === index).sort((a, b) => a.y - b.y);
+  }
+
+  test("G2: a kind group is never hidden behind another: the containing module and the describing page stay drawn", () => {
+    const rootNode = node("src/bus/leases.ts", "file", "leases.ts");
+    const importers = Array.from({ length: 14 }, (_, index) => node(`importer-${index}`, "file", `importer-${String(index).padStart(2, "0")}.ts`));
+    const module = node("module:src/bus", "module", "src/bus");
+    const page = node("wiki:agent-bus", "wiki", "Agent Bus");
+    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, ...importers, module, page], [
+      ...importers.map((item) => edge(item.id, rootNode.id, "imports")),
+      edge(module.id, rootNode.id, "contains"),
+      edge(page.id, rootNode.id, "describes"),
+    ]));
+    const left = column(layout, -1);
+    expect(left.length).toBe(12);
+    expect(left.map((item) => item.id)).toContain(module.id);
+    expect(left.map((item) => item.id)).toContain(page.id);
+    expect(left.filter((item) => item.group === "imports").length).toBe(10);
+    expect(layout.overflow).toHaveLength(1);
+    expect(layout.overflow[0]?.hidden).toBe(16 - 12);
+    expect(layout.captions.filter((item) => item.column === -1).map((item) => item.text)).toEqual(["Imports · 14", "Describes · 1", "Contains · 1"]);
+    expect(overlapping(layout)).toEqual([]);
+  });
+
+  test("G2: every group gets two slots first, then the leftover slots go in kind order", () => {
+    const rootNode = node("root", "module");
+    const group = (kind: MetaprojectEdgeKind) => Array.from({ length: 10 }, (_, index) => node(`${kind}-${index}`));
+    const imports = group("imports");
+    const links = group("links");
+    const contains = group("contains");
+    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, ...imports, ...links, ...contains], [
+      ...imports.map((item) => edge(rootNode.id, item.id, "imports")),
+      ...links.map((item) => edge(rootNode.id, item.id, "links")),
+      ...contains.map((item) => edge(rootNode.id, item.id, "contains")),
+    ]));
+    const right = column(layout, 1);
+    const count = (kind: MetaprojectEdgeKind) => right.filter((item) => item.group === kind).length;
+    expect(right.length).toBe(12);
+    expect([count("imports"), count("links"), count("contains")]).toEqual([8, 2, 2]);
+    expect(layout.overflow[0]?.hidden).toBe(30 - 12);
+  });
+
+  test("G3: inside a group, nodes are ordered by edge count descending, then title", () => {
+    const rootNode = node("root", "module", "root");
+    const modules = Array.from({ length: 15 }, (_, index) => node(`m-${index}`, "module", `module-${String.fromCharCode(97 + index)}`));
+    const counts = [1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 88];
+    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, ...modules], modules.map((item, index) => ({ ...edge(rootNode.id, item.id, "imports"), count: counts[index] }))));
+    const titles = column(layout, 1).map((item) => item.node.title);
+    expect(titles.slice(0, 4)).toEqual(["module-o", "module-c", "module-a", "module-b"]);
+    expect(titles).toHaveLength(12);
+    expect(titles).not.toContain("module-n");
+  });
+
+  test("G4: drawn nodes that share a title get the shortest path suffix that tells them apart", () => {
+    const rootNode = node("root", "module", "root");
+    const a = { ...node("module:src/commands", "module", "commands"), path: "src/commands" };
+    const b = { ...node("module:packages/hub/commands", "module", "commands"), path: "packages/hub/commands" };
+    const c = { ...node("module:src/agents", "module", "agents"), path: "src/agents" };
+    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, a, b, c], [edge(rootNode.id, a.id, "imports"), edge(b.id, rootNode.id, "imports"), edge(rootNode.id, c.id, "imports")]));
+    const labels = new Map(layout.nodes.map((item) => [item.id, item.label]));
+    expect(labels.get(a.id)).toBe("src/commands");
+    expect(labels.get(b.id)).toBe("hub/commands");
+    expect(labels.get(c.id)).toBe("agents");
+  });
+
+  test("G4: shared titles whose paths do not end in the title keep the title in front", () => {
+    const rootNode = node("root", "file", "root");
+    const first = { ...node("symbol:a#run", "symbol", "run"), path: "src/a.ts" };
+    const second = { ...node("symbol:b#run", "symbol", "run"), path: "src/b.ts" };
+    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, first, second], [edge(rootNode.id, first.id, "defines"), edge(rootNode.id, second.id, "defines")]));
+    expect(layout.nodes.map((item) => item.label).sort()).toEqual(["run · a.ts", "run · b.ts"]);
+  });
+
+  test("G6: incoming columns are flush right and outgoing columns flush left, captions and overflow included", () => {
+    const layout = layoutNeighborhood(depthOneModule());
+    const right = (box: LayoutBox) => box.x + box.width / 2;
+    const left = (box: LayoutBox) => box.x - box.width / 2;
+    const incoming = [...layout.nodes.filter((item) => item.column === -1), ...layout.captions.filter((item) => item.column === -1)];
+    const outgoing = [...layout.nodes.filter((item) => item.column === 1), ...layout.captions.filter((item) => item.column === 1), ...layout.overflow.filter((item) => item.column === 1)];
+    expect(new Set(incoming.map((box) => left(box).toFixed(3))).size).toBeGreaterThan(1);
+    expect(new Set(incoming.map((box) => right(box).toFixed(3))).size).toBe(1);
+    expect(new Set(outgoing.map((box) => left(box).toFixed(3))).size).toBe(1);
+    const second = layoutNeighborhood(depthTwoProjection());
+    for (const index of [-2, 2]) {
+      const boxes = [...second.nodes, ...second.captions, ...second.overflow].filter((item) => item.column === index);
+      expect(new Set(boxes.map((box) => (index < 0 ? right(box) : left(box)).toFixed(3))).size).toBe(1);
+    }
+  });
+});
+
 describe("shortenMiddle", () => {
+  test("G5: cuts at a dot boundary and keeps the longest dotted tail that fits in half the budget", () => {
+    expect(shortenMiddle("imagePreview.dom.test.ts", 17)).toBe("imagePre….test.ts");
+  });
+
+  test("G5: a dotted tail longer than half the budget falls back to the plain middle cut", () => {
+    const short = shortenMiddle("a.verylongextension", 8);
+    expect(short).toHaveLength(8);
+    expect(short).toContain("…");
+  });
+
   test("keeps a short label unchanged", () => {
     expect(shortenMiddle("index.ts", 20)).toBe("index.ts");
   });
@@ -337,6 +440,15 @@ describe("computeViewport", () => {
   test("a zero-sized box gives no viewport", () => {
     const layout = layoutNeighborhood(depthOneModule());
     expect(computeViewport(layout, 0, 0).usable).toBe(false);
+  });
+});
+
+describe("human-readable labels (G7)", () => {
+  test("captions and legend use the shared labels", () => {
+    const input = projection("root", [node("root", "module"), node("a"), node("b", "wiki")], [edge("root", "a", "asset"), edge("root", "b", "links"), edge("a", "root", "imports")]);
+    const captions = layoutNeighborhood(input).captions.map((item) => item.text).sort();
+    expect(captions).toEqual(["Assets · 1", "Wiki links · 1"]);
+    expect(legendFor(input).lines.map((line) => `${line.label}: ${line.kinds.join(", ")}`)).toEqual(["Solid line: Imports, Assets", "Dashed line: Wiki links"]);
   });
 });
 

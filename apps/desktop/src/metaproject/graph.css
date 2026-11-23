@@ -2,8 +2,8 @@
 .metaproject-rgraph {
   display: flex;
   flex-direction: column;
-  block-size: clamp(220px, 34vh, 300px);
-  min-block-size: 0;
+  flex: 1 1 auto;
+  min-block-size: 200px;
   min-inline-size: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -11,10 +11,17 @@
   background: var(--bg-sunken);
 }
 
-.metaproject-rgraph-caption {
+.metaproject-rgraph-header {
+  display: flex;
   flex: none;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
+}
+.metaproject-rgraph-caption {
+  flex: 1 1 auto;
+  min-inline-size: 0;
   margin: 0;
-  padding: var(--sp-1) var(--sp-2);
   color: var(--fg-muted);
   font-size: var(--fs-sm);
   white-space: nowrap;
@@ -30,11 +37,10 @@
 .metaproject-rgraph-viewport { position: absolute; inset: 0; }
 
 .metaproject-rgraph-zoom {
-  position: absolute;
-  inset-block-end: var(--sp-2);
-  inset-inline-end: var(--sp-2);
   display: flex;
+  flex: none;
   gap: var(--sp-1);
+  margin-inline-start: auto;
 }
 .metaproject-rgraph-zoom .icon-btn {
   inline-size: 24px;

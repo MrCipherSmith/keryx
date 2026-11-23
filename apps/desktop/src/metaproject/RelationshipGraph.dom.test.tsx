@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type cytoscapeModule from "cytoscape";
 import type { Root } from "react-dom/client";
 import type {
@@ -97,7 +98,7 @@ describe("RelationshipGraph overlay (AC4)", () => {
 
   test("the legend names exactly the node kinds and line styles present", async () => {
     await render({ projection: moduleProjection() });
-    expect(legendItems()).toEqual(["Module", "File", "Solid line: imports", "Dotted line: contains"]);
+    expect(legendItems()).toEqual(["Module", "File", "Solid line: Imports", "Dotted line: Contains"]);
   });
 
   test("the legend follows the projection: wiki pages, specs and dashed links", async () => {
@@ -109,7 +110,26 @@ describe("RelationshipGraph overlay (AC4)", () => {
       truncated: false,
     };
     await render({ projection });
-    expect(legendItems()).toEqual(["Wiki page", "Spec", "Change", "Dashed line: links, changes spec"]);
+    expect(legendItems()).toEqual(["Wiki page", "Spec", "Change", "Dashed line: Wiki links, Changes spec"]);
+  });
+
+  test("G1: the zoom controls sit in the caption row, right of the caption, not over the canvas", async () => {
+    await render({ projection: moduleProjection() });
+    const zoom = host.querySelector('[aria-label="Graph zoom"]');
+    const header = host.querySelector(".metaproject-rgraph-header");
+    expect(zoom?.parentElement).toBe(header);
+    expect(header?.firstElementChild?.classList.contains("metaproject-rgraph-caption")).toBeTrue();
+    expect(header?.lastElementChild).toBe(zoom);
+    expect(zoom?.closest(".metaproject-rgraph-stage")).toBeNull();
+  });
+
+  test("G8: the component fills its host instead of clamping its own height", () => {
+    const css = readFileSync(new URL("./graph.css", import.meta.url), "utf8");
+    const block = /\.metaproject-rgraph\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(block).not.toContain("clamp(");
+    expect(block).not.toContain("block-size: clamp");
+    expect(block).toContain("flex: 1 1 auto;");
+    expect(block).toContain("min-block-size: 200px;");
   });
 
   test("the canvas is hidden from assistive technology; caption and legend are text", async () => {

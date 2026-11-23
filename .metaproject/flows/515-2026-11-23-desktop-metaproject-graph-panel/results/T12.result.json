@@ -1,0 +1,58 @@
+{
+  "task_id": "task-12",
+  "task_name": "Graph polish from the isolated live preview",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "Fixed G1-G8 from the live preview. G1: the zoom controls moved out of the canvas into a header row next to the caption, right-aligned; the caption truncates before them. G2: a column's 12 slots are spread over its kind groups (each group gets up to 2 slots in kind order while slots remain, the rest go in kind order); an over-full column still shows exactly 12 nodes and one overflow entry with total minus 12. G3: inside a group nodes are ordered by edge count descending, then title, then id. G4: drawn nodes sharing a title are labelled with the shortest distinguishing path suffix, shortened in the middle if needed. G5: shortenMiddle cuts at a dot boundary, keeping the longest dotted tail of the last path segment that fits in half the budget. G6: boxes, captions and the overflow entry are flush with the column edge facing the root. G7: captions, legend and node-kind labels come from the new shared labels.ts. G8: the height clamp is gone; the component fills its host with flex: 1 1 auto and min-block-size: 200px. RelationshipGraph's export contract is unchanged.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/graphLayout.ts",
+    "apps/desktop/src/metaproject/graphLayout.test.ts",
+    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+    "apps/desktop/src/metaproject/graph.css"
+  ],
+  "files_created": [],
+  "not_touched": [
+    { "path": "apps/desktop/src/metaproject/labels.ts", "reason": "Committed by the T13 lane in 3ce6184c6 with exactly the dispatch content; the copy this task wrote is byte-identical (no diff against HEAD), so there is no change to commit." }
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass (keryx health run --changed --source eslint,typescript: PASS, 0 findings; ESLint does not cover apps/desktop)",
+  "type_check_result": "pass: `cd apps/desktop && bunx tsc --noEmit` exits 0 with no errors in any file",
+  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts src/metaproject/RelationshipGraph.dom.test.tsx` 57 passed, 0 failed (graphLayout 41, RelationshipGraph 16). Red check: the same tests run against the HEAD versions of graphLayout.ts, RelationshipGraph.tsx and graph.css (staged as temporary zz-red-* copies, deleted afterwards) gave 44 pass, 13 fail, with at least one failing test for each of G1-G8.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" }
+  ],
+  "assumptions": [
+    "G2 applies to every column, including the second-step columns.",
+    "G3 weight of a first-step node is the largest count among its root-adjacent edges on its side; for a second-step node it is the count of the attaching edge; an edge without count weighs 0.",
+    "G4 disambiguates across all drawn nodes of the graph (root included), not per column, because the same title can appear on both sides.",
+    "G5 looks for dotted tails only in the last path segment, and requires at least one head character before the ellipsis."
+  ],
+  "behavior_changes": [
+    {
+      "description": "G4 for nodes whose path does not end in their title (symbols, wiki pages titled differently from their file): the label is '<title> · <shortest distinguishing path suffix>', e.g. 'run · a.ts', so the title is not lost; a node whose path ends in its title gets the bare suffix ('src/commands').",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": ["Always use the bare path suffix, as the dispatch worded it (symbols would then show only their file name)"]
+    },
+    {
+      "description": "G1: the three zoom controls stay 24x24 icon buttons with a border, now in the header row instead of floating over the canvas; the header's right padding is var(--sp-1).",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": ["Borderless ghost buttons in the header"]
+    }
+  ],
+  "notes": "labels.ts did not exist when this task started; it was written with exactly the dispatch content, and meanwhile the T13 lane committed the same content in 3ce6184c6, so the file is unchanged against HEAD. The G8 test reads graph.css as text and checks the .metaproject-rgraph block, because happy-dom does not apply stylesheets. A temporary scratch script staged the HEAD copies for the red check through Bun.spawnSync git show; all zz-red-* files were deleted afterwards and nothing outside the six owned files remains changed. TDD order: the implementation was written before the new tests, and red was then shown against the HEAD code rather than observed before writing it. Not verified without a browser: how the header row looks with the controls (wrapping or truncation at 440 px), G6 alignment on screen, the filled height in the real explorer host, and the shortened labels' real widths at runtime. The T5 behavior choices held for the operator (double border on change nodes, relationship counts in the caption, caption and legend as rows) are unchanged."
+}
