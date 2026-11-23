@@ -89,12 +89,14 @@ function ReviewLane({ lane, cards, ...actions }: ReviewActions & { lane: Lane; c
   </section>;
 }
 
-export const ReviewResults = memo(function ReviewResults({ cards, view, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list" }) {
+export const ReviewResults = memo(function ReviewResults({ cards, view, showDone, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list"; showDone: boolean }) {
   const [limit, setLimit] = useState(150);
   if (view === "board") {
     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
     for (const card of cards) lanes[reviewLane(card)].push(card);
-    return <div className="board review-lanes">{(Object.keys(LANES) as Lane[]).map((lane) =>
+    // A card that lands in Done is never hidden, whatever the state filter says.
+    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone || lanes.done.length > 0);
+    return <div className="board review-lanes">{drawn.map((lane) =>
       <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
   }
   return <div className="flow-list-wrap">

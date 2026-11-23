@@ -21,7 +21,7 @@ import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
-import { EMPTY_FILTERS, filterReviews, stateQuery, type Filters } from "./model";
+import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
@@ -60,6 +60,13 @@ function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
     && a?.runState === b?.runState && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
+
+function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
+  if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
+  const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
+  return card.addressedReplyIds.filter(id => !readIds.has(id));
+}
+const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
 
 export function ReviewBoard(props: Props) {
   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
@@ -200,7 +207,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       setAttentionPrs(previous => {
         const next = new Set(replaceAttention ? [] : previous);
         for (const card of snapshot.cards) {
-          if (card.state === "open" && (card.reviewers.length > 0 || card.decision === "CHANGES_REQUESTED")) next.add(card.number);
+          if (needsViewerAttention(card, snapshot.viewer, unreadCount(snapshot, card))) next.add(card.number);
           else next.delete(card.number);
         }
         return next;
@@ -320,13 +327,24 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   }, [viewer, repositoryId]);
   const visible = useMemo(() => {
     if (!snapshot) return [];
-    return filterReviews(snapshot.cards, filters, q).sort((a, b) => Number(!!b.localReview?.active) - Number(!!a.localReview?.active)).map(card => {
+    return filterReviews(snapshot.cards, filters, q).map(card => {
       if (!card.addressedReplyIds?.length) return card;
-      const readIds = readReplies(snapshot.viewer, snapshot.repositoryId, card.number, card.addressedReplyIds);
-      const ids = card.addressedReplyIds.filter(id => !readIds.has(id));
+      const ids = unreadIds(snapshot, card);
       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
     });
   }, [snapshot, filters, q, receiptVersion]);
+  // Receipts and discussion notes change after the load that seeded the set; keep it in step with the shown snapshot.
+  useEffect(() => {
+    if (!snapshot) return;
+    setAttentionPrs(previous => {
+      const next = new Set(previous);
+      for (const c of snapshot.cards) {
+        if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
+        else next.delete(c.number);
+      }
+      return next.size === previous.size && [...next].every(n => previous.has(n)) ? previous : next;
+    });
+  }, [snapshot, receiptVersion]);
   const active = filterSummary(filters);
   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
   const error = read.scope === scope ? read.error : "";
@@ -433,7 +451,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
         {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}

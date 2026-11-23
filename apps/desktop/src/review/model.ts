@@ -25,6 +25,23 @@ export function stateQuery(states: string[]): ReviewBoardState {
   return "all";
 }
 
+/** The Done lane can only hold closed or merged pull requests; an empty state filter means every state. */
+export function stateFilterShowsDone(states: readonly string[]) {
+  return !states.length || states.some((s) => s === "closed" || s === "merged");
+}
+
+/**
+ * Whether an open pull request needs the viewer: requested from their login (teams are not matched),
+ * their own change with requested changes, unread replies to them, or a Keryx review that waits on them.
+ */
+export function needsViewerAttention(c: ReviewCard, viewer: string, unreadReplies: number) {
+  if (c.state !== "open") return false;
+  const login = viewer.toLowerCase();
+  return c.reviewers.some((r) => r.toLowerCase() === login) ||
+    (c.author.toLowerCase() === login && c.decision === "CHANGES_REQUESTED") ||
+    unreadReplies > 0 || !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending;
+}
+
 export function prState(c: ReviewCard) {
   return c.state === "open" && c.draft ? "draft" : c.state;
 }
@@ -37,7 +54,6 @@ export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
   const q = query.trim().toLowerCase();
   return cards.filter(c => {
     if (q && !c.title.toLowerCase().includes(q) && !String(c.number).includes(q.replace(/^#(?=\d)/, ""))) return false;
-    if (c.localReview?.active) return true;
     return (!f.author.length || f.author.includes(c.author)) &&
       matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
       matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&

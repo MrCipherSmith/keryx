@@ -52,6 +52,14 @@ test("active Keryx runs precede GitHub attention and available results bring an 
   expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
   const merged = { ...card, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
   expect(reviewLane(merged)).toBe("attention");
-  expect(filterReviews([merged], { ...EMPTY_FILTERS, author: ["someone else"], updatedWithin: 7 }, "")).toEqual([merged]);
+  expect(filterReviews([merged], { ...EMPTY_FILTERS, state: [] }, "")).toEqual([merged]);
   expect(filterReviews([merged], EMPTY_FILTERS, "#999")).toEqual([]);
+});
+
+test("an active local review does not bypass any selected filter", () => {
+  const active = { ...pr, localReview: { active: true, ready: false } };
+  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["someone else"] }, "")).toEqual([]);
+  expect(filterReviews([active], { ...EMPTY_FILTERS, state: ["merged"] }, "")).toEqual([]);
+  expect(filterReviews([active], { ...EMPTY_FILTERS, ci: ["failed"] }, "")).toEqual([]);
+  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["ann"] }, "")).toEqual([active]);
 });

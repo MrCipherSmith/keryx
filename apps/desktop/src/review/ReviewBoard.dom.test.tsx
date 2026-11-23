@@ -7,6 +7,7 @@ import type { Root } from "react-dom/client";
 import type { fetchReviewBoard, fetchReviewDetail, fetchReviewRepositories } from "../platform/review";
 import { registerDom, unregisterDom } from "../test/dom";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+import { markRepliesRead } from "./reviewReadState";
 import { EMPTY_FILTERS } from "./model";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
@@ -807,7 +808,7 @@ test("filter editing waits for the first verified snapshot before restoring save
   await click(button("Cancel"));
 });
 
-test("a merged PR awaiting a Keryx answer stays actionable in the Open filter from either view", async () => {
+test("a merged PR awaiting a Keryx answer stays actionable when the merged state is selected, from either view", async () => {
   const pending = { ...pr, state: "merged" as const,
     localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
   const actions: string[] = [];
@@ -823,6 +824,7 @@ test("a merged PR awaiting a Keryx answer stays actionable in the Open filter fr
     version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number, headSha: pr.headSha,
     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
   });
+  saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
   for (const mode of ["Board", "List"]) {
     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
     await click(button(mode));
@@ -834,11 +836,12 @@ test("a merged PR awaiting a Keryx answer stays actionable in the Open filter fr
   expect(actions).not.toContain("start");
 });
 
-test("Review tab signal follows unfiltered open requests and background watcher refreshes without extra reads", async () => {
+test("Review tab signal follows unfiltered open requests to the viewer and background watcher refreshes without extra reads", async () => {
   const key = ++renderKey;
   const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
   const notify = (value: import("./ReviewBoard").ReviewTabIndicator) => seen.push(value);
   const neutral: ReviewCard = { ...pr, reviewers: [], decision: "REVIEW_REQUIRED" };
+  const mine: ReviewCard = { ...pr, reviewers: ["Ann"] };
   let cards = [neutral];
   let reads = 0;
   let failure = "";
@@ -856,7 +859,7 @@ test("Review tab signal follows unfiltered open requests and background watcher 
   await show(false);
   expect(seen.at(-1)).toBe("watching");
   expect(reads).toBe(1);
-  cards = [pr, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
+  cards = [mine, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
   status = { ...status, lastSuccessAt: "2026-11-20T12:03:00Z" };
   await act(async () => { window.dispatchEvent(new Event("focus")); });
   expect(seen.at(-1)).toBe("attention");
@@ -867,16 +870,16 @@ test("Review tab signal follows unfiltered open requests and background watcher 
   await click(button("Apply filters"));
   expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
   expect(seen.at(-1)).toBe("attention");
-  cards = [{ ...neutral, decision: "CHANGES_REQUESTED" }];
+  cards = [{ ...neutral, author: "ann", decision: "CHANGES_REQUESTED" }];
   await click(button("Refresh pull requests"));
   expect(seen.at(-1)).toBe("attention");
-  cards = [{ ...pr, state: "merged" }, { ...neutral, state: "closed", decision: "CHANGES_REQUESTED" }];
+  cards = [{ ...mine, state: "merged" }, { ...neutral, state: "closed", author: "ann", decision: "CHANGES_REQUESTED" }];
   await click(button("Refresh pull requests"));
   expect(seen.at(-1)).toBe("watching");
   status = { ...status, state: "paused" };
   await act(async () => { window.dispatchEvent(new Event("focus")); });
   expect(seen.at(-1)).toBeNull();
-  cards = [pr];
+  cards = [mine];
   await click(button("Refresh pull requests"));
   expect(seen.at(-1)).toBe("attention");
   failure = "access: Account is unavailable";
@@ -886,12 +889,62 @@ test("Review tab signal follows unfiltered open requests and background watcher 
   expect(seen.at(-1)).toBeNull();
 });
 
+test("the tab signal is attention only for requests, owned changes, unread replies or Keryx decisions concerning the viewer", async () => {
+  const base: ReviewCard = { ...pr, reviewers: [], decision: null };
+  async function signal(cards: ReviewCard[]) {
+    const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+    await act(async () => root.render(createElement(ReviewBoard, {
+      key: ++renderKey, cwd: "/signal", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
+      watcherCommand: watcherDisabled, onIndicatorChange: value => seen.push(value),
+    })));
+    return seen.at(-1);
+  }
+  expect(await signal([{ ...base, reviewers: ["bob"] }])).toBeNull();
+  expect(await signal([{ ...base, reviewers: ["org/team"] }])).toBeNull();
+  expect(await signal([{ ...base, decision: "CHANGES_REQUESTED" }])).toBeNull();
+  expect(await signal([{ ...base, localReview: { active: true, ready: false } }])).toBeNull();
+  expect(await signal([{ ...base, reviewers: ["bob", "ANN"] }])).toBe("attention");
+  expect(await signal([{ ...base, author: "Ann", decision: "CHANGES_REQUESTED" }])).toBe("attention");
+  expect(await signal([{ ...base, author: "ann", decision: "REVIEW_REQUIRED" }])).toBeNull();
+  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBe("attention");
+  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBe("attention");
+  expect(await signal([{ ...base, state: "merged", reviewers: ["ann"] }])).toBeNull();
+  expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBe("attention");
+  markRepliesRead("ann", "repo1", base.number, ["unread-1"]);
+  expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBeNull();
+});
+
+test("visible cards keep snapshot order when a later card has an active review", async () => {
+  const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
+  await render(async () => snapshot(cards));
+  await click(button("List"));
+  expect(Array.from(host.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
+});
+
+test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
+  const lanes = () => Array.from(host.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
+  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
+  const key = reviewFilterKey("/project", "repo1", "ann");
+  await render(async () => snapshot(cards));
+  expect(lanes()).toEqual(["Needs attention", "In review", "Open"]);
+  saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["closed"] });
+  await render(async () => snapshot(cards));
+  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
+  saveReviewFilters(key, { ...EMPTY_FILTERS, state: [] });
+  await render(async () => snapshot(cards));
+  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
+  saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["merged", "draft"] });
+  await render(async () => snapshot(cards));
+  expect(lanes()).toContain("Done");
+});
+
 test("a historical filter retains known open requests and removes them when their PR is observed as merged", async () => {
   let merged = 102;
+  const mine: ReviewCard = { ...pr, reviewers: ["ann"] };
   const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
   const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged"
-    ? [{ ...pr, number: merged, state: "merged" }]
-    : [pr]);
+    ? [{ ...mine, number: merged, state: "merged" }]
+    : [mine]);
   await act(async () => root.render(createElement(ReviewBoard, {
     key: ++renderKey, cwd: "/history-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
     onIndicatorChange: indicator => indicators.push(indicator),
@@ -901,7 +954,7 @@ test("a historical filter retains known open requests and removes them when thei
   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
   await click(button("Apply filters"));
   expect(indicators.at(-1)).toBe("attention");
-  merged = pr.number;
+  merged = mine.number;
   await click(button("Refresh pull requests"));
   expect(indicators.at(-1)).toBeNull();
 });
