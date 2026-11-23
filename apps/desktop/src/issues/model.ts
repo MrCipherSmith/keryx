@@ -1,6 +1,5 @@
 import { issueKey, type IssueListSource, type IssueLocalStage, type IssueSummary } from "../../../../src/integrations/issues-contract";
-import type { SessionInfo, SessionSubject } from "../acp/types";
-import { boundSessions } from "../review/prWork";
+import { boundSessions, type SessionInfo, type SessionSubject } from "../acp/types";
 
 export const STAGES: Record<IssueLocalStage["stage"], string> = {
   none: "No Flow", preparing: "Preparing", active: "In progress", needs_answer: "Needs an answer", done: "Done",

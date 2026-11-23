@@ -190,6 +190,19 @@ export function sessionFlags(s: SessionInfo): SessionFlags {
   return s._meta?.keryx ?? {};
 }
 
+const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 : Number.POSITIVE_INFINITY);
+
+/**
+ * The non-archived sessions bound to `subject`, newest first. A session keryx has not stored yet (no
+ * `updatedAt`: its binding is still pending) counts as the newest. Lives here, beside `sameSubject`,
+ * so pure models (the issues board, shared with the root tests) reach no platform module.
+ */
+export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
+  return sessions
+    .filter(s => sessionFlags(s).archivedAt === undefined && sameSubject(sessionFlags(s).subject, subject))
+    .sort((a, b) => unsaved(b) - unsaved(a));
+}
+
 /** Messages the stored session holds; null when this keryx does not report it. */
 export function messageCount(s: SessionInfo): number | null {
   const n = s._meta?.keryx?.messageCount;

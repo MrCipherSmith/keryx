@@ -1,4 +1,4 @@
-import { sameSubject, sessionFlags, type SessionInfo, type SessionSubject } from "../acp/types";
+import { boundSessions, sessionFlags, type SessionInfo, type SessionSubject } from "../acp/types";
 import { byUpdatedDesc, STATUS_LABEL } from "../flows/model";
 import type { FlowCard } from "../platform/commands";
 import type { ReviewCard } from "./types";
@@ -11,17 +11,7 @@ export function prSubject(card: Pick<ReviewCard, "number" | "url">, repo: string
   return { kind: "pr", repo, number: card.number, url: card.url, ...(repositoryId ? { repositoryId } : {}) };
 }
 
-const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 : Number.POSITIVE_INFINITY);
-
-/**
- * The non-archived sessions bound to `subject`, newest first. A session keryx has not stored yet (no
- * `updatedAt`: its binding is still pending) counts as the newest.
- */
-export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
-  return sessions
-    .filter(s => sessionFlags(s).archivedAt === undefined && sameSubject(sessionFlags(s).subject, subject))
-    .sort((a, b) => unsaved(b) - unsaved(a));
-}
+export { boundSessions };
 
 /**
  * The sessions Desktop shows: the stored list plus the bindings still waiting for keryx to store a new
