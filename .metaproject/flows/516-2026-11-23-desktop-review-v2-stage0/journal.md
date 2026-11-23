@@ -100,3 +100,19 @@
 - T14 concerns: the new test is a characterization test (passes before and after, behaviour unchanged); no F-010 fixture, because a run with a reviewed head and no base makes the live-history path of `localBadge` report it while the SQL path now ignores it — whether `localBadge` should also require both SHAs is left open.
 - Not done after the fixes: no second review round on the fix commits; review-verifier and the mutation pass did not run; nothing pushed.
 - 2026-11-23T10:19:07.733Z - task-done: T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement
+- 2026-11-23T10:45:45.400Z - task-added: T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name
+- 2026-11-23T10:45:45.653Z - task-added: T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL
+- 2026-11-23T10:46:16.554Z - task-attempt: T16: started (attempt 1) — 516-T16 PR review round 2 fixes
+- 2026-11-23T10:46:16.741Z - task-attempt: T17: started (attempt 1) — 516-T17 PR review round 2 fixes
+- 2026-11-23T10:47:45.247Z - task-done: T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL
+- 2026-11-23T10:48:26.557Z - task-done: T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name
+
+## 2026-11-23 — PR review round 2 (delta) and fixes (orchestrator)
+
+- Round 2 of the managed review of PR #1294 on head `33fd9647a` (delta `53c96b8af..33fd9647a`), full roster by operator choice: 19 reviewer dispatches and a premise judge. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02`. Result: no blocker or major, 5 minor (F-015 to F-018, F-025), 7 info. Prior findings: F-001 to F-004, F-006, F-007, F-010 closed; F-005 and F-009 partial; F-008 regressed (F-015); F-011 to F-014 open, unchanged. Readiness 11 of 12: `pr-files` fails because a delta round covers 18 of the PR's 89 files.
+- Operator: fix the five minor findings.
+- T16 (worker, standard tier): F-015, F-016, F-017 in `apps/desktop/src/review/`. New DOM test seen failing on the old component by the worker. Orchestrator check: diff read, `bun test src` in `apps/desktop` 756 pass, `bunx tsc --noEmit` exit 0.
+- T17 (worker, standard tier): F-018 in `src/review/desk-run-store.ts`. Orchestrator check: SQL read and compared term by term with the previous statement, `desk-run-store.test.ts` 36 pass, `board-badges.test.ts` 5 pass, root typecheck clean. Timing not re-measured.
+- F-025 (PR description): new text drafted by the orchestrator; applying it to GitHub needs the write account.
+- Not done: F-015 not reproduced in a running app; info findings F-019 to F-024 and F-026 not addressed; the failed CI check `client matrix (cancel-resume)` not re-run; nothing pushed.
+

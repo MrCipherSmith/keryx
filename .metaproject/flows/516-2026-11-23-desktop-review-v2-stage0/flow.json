@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T10:19:07.733Z",
+  "updatedAt": "2026-11-23T10:48:26.557Z",
   "source": {
     "type": "description",
     "ref": null
@@ -333,6 +333,48 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:46:16.554Z",
+            "outcome": "started",
+            "detail": "516-T16 PR review round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:46:16.741Z",
+            "outcome": "started",
+            "detail": "516-T17 PR review round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -528,6 +570,36 @@
       "at": "2026-11-23T10:19:07.733Z",
       "event": "task-done",
       "detail": "T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement"
+    },
+    {
+      "at": "2026-11-23T10:45:45.400Z",
+      "event": "task-added",
+      "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
+    },
+    {
+      "at": "2026-11-23T10:45:45.653Z",
+      "event": "task-added",
+      "detail": "T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL"
+    },
+    {
+      "at": "2026-11-23T10:46:16.554Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 516-T16 PR review round 2 fixes"
+    },
+    {
+      "at": "2026-11-23T10:46:16.741Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 516-T17 PR review round 2 fixes"
+    },
+    {
+      "at": "2026-11-23T10:47:45.247Z",
+      "event": "task-done",
+      "detail": "T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL"
+    },
+    {
+      "at": "2026-11-23T10:48:26.557Z",
+      "event": "task-done",
+      "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
     }
   ],
   "acKinds": {
