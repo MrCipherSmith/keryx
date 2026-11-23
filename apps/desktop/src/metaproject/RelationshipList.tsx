@@ -209,12 +209,14 @@ export function RelationshipList({
 }) {
   const groups = groupRelationships(projection);
   const rootPath = projection.nodes.find(node => node.id === projection.root)?.path ?? "";
+  // Empty by the grouping rule, not by the raw edges: a self-loop or an edge with a missing end lists no row.
+  const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;
   return (
     <div className="metaproject-rel">
       {projection.truncated && <p className="metaproject-rel-note" role="status">
         This projection is limited: some relationships are hidden. Narrow the filters to see them.
       </p>}
-      {projection.edges.length === 0 && <p className="metaproject-rel-note">No relationships for these filters.</p>}
+      {empty && <p className="metaproject-rel-note">No relationships for these filters.</p>}
       <DirectionGroup direction="incoming" groups={groups.incoming} rootPath={rootPath} select={select} />
       <DirectionGroup direction="outgoing" groups={groups.outgoing} rootPath={rootPath} select={select} />
       <SecondStepGroup rows={groups.secondStep} select={select} />

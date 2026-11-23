@@ -126,6 +126,20 @@ test("limited and empty projections say so", async () => {
   expect(host.querySelector("h3")).toBeNull();
 });
 
+test("a projection whose every edge is left out says it has no relationships", async () => {
+  // A wiki page that links to a heading of its own file carries a self `links` edge.
+  const leftOut = projection({
+    edges: [
+      { from: client.id, to: client.id, kind: "links" },
+      { from: "gone", to: client.id, kind: "imports" },
+    ],
+  });
+  expect(summarize(leftOut)).toMatchObject({ incoming: 0, outgoing: 0, secondStep: 0 });
+  await act(async () => { root.render(createElement(List, { projection: leftOut, select: () => {} })); });
+  expect(host.textContent).toContain("No relationships for these filters.");
+  expect(host.querySelector("h3")).toBeNull();
+});
+
 test("summary counts incoming and outgoing root-adjacent edges only", () => {
   expect(summarize(projection())).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1, truncated: false });
 });

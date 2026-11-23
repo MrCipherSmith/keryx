@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
-import type { MetaprojectCatalog, MetaprojectRequest, MetaprojectResponse } from "../../../../src/integrations/metaproject-explorer-contract";
+import type { MetaprojectCatalog, MetaprojectEdge, MetaprojectRequest, MetaprojectResponse } from "../../../../src/integrations/metaproject-explorer-contract";
 import { registerDom, unregisterDom } from "../test/dom";
 
 let createElement: typeof import("react").createElement;
@@ -1308,4 +1308,147 @@ test("a Wiki page without relationships shows no Relationships disclosure", asyn
   await act(async () => { button("Wiki").click(); });
   expect(wikiArticle()?.textContent).toContain("Readable guide");
   expect(host.querySelector(".metaproject-relationship-section")).toBeNull();
+});
+
+/** Renders the explorer with `props`, shown or hidden as the app does when the user leaves its view and returns. */
+function showView(props: ViewProps, visible: boolean) {
+  return act(async () => { root.render(createElement(View, { ...props, visible })); });
+}
+/** The explorer's catalog error banner: the alert whose Retry re-reads the catalog. */
+const catalogErrorBanner = () => [...host.querySelectorAll<HTMLElement>('.inline-banner[role="alert"]')]
+  .find(item => !item.closest(".metaproject-list, .metaproject-content"));
+
+test("a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none", async () => {
+  // A limited catalog of a built graph makes the explorer read the neighbourhood from the CLI, which this test answers.
+  const limited = { ...catalog, truncated: true, graph: "ready" as const };
+  const selfLink = { from: page.id, to: page.id, kind: "links" as const };
+  const readWith = (edges: MetaprojectEdge[]) => (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve(limited);
+    if (input.action === "neighbors") return Promise.resolve({ ...snapshot, root: input.id, nodes: [page, file], edges, truncated: false });
+    return request(cwd, input);
+  };
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: readWith([selfLink]), onRebuild: noRebuild, createCytoscape })); });
+  await act(async () => { button("Wiki").click(); });
+  expect(wikiArticle()?.textContent).toContain("Readable guide");
+  // A count, not the element: a failing match would print the whole disclosure.
+  expect(host.querySelectorAll(".metaproject-relationship-section").length).toBe(0);
+  await act(async () => { root.render(null); });
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: readWith([selfLink, { from: page.id, to: file.id, kind: "describes" }]), onRebuild: noRebuild, createCytoscape })); });
+  await act(async () => { button("Wiki").click(); });
+  const section = host.querySelector(".metaproject-relationship-section");
+  expect(section?.querySelector("summary .count-label")?.textContent).toBe("1");
+  expect(section?.querySelectorAll(".metaproject-rel-row")).toHaveLength(1);
+});
+
+test("a wiki-link lookup in flight when the explorer is hidden and shown again still settles", async () => {
+  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
+  const pending = new Map<string, () => void>();
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Missing](missing.md) [Far](../src/far.ts)" });
+    if (input.action === "search") {
+      const query = input.query;
+      return new Promise(resolve => { pending.set(query, () => resolve({ ...snapshot, hits: query === far.path ? [{ node: far }] : [] })); });
+    }
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
+  await showView(props, true);
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => { wikiLink("Missing").click(); });
+  await showView(props, false);
+  await showView(props, true);
+  await act(async () => { pending.get("wiki/missing.md")?.(); });
+  expect(wikiArticle()?.textContent).toContain("No indexed project file at wiki/missing.md.");
+  await act(async () => { wikiLink("Far").click(); });
+  await showView(props, false);
+  await showView(props, true);
+  await act(async () => { pending.get(far.path)?.(); });
+  expect(panelTitle()).toBe("Far module");
+});
+
+test("a page of results in flight when the explorer is hidden and shown again is still appended", async () => {
+  const debounce = holdDebounce();
+  let releasePage: () => void = () => {};
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    if (input.action === "catalog") return { ...catalog, schemaVersion: 2 };
+    if (input.action === "search") {
+      if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
+      return new Promise(resolve => { releasePage = () => resolve({ schemaVersion: 2, snapshotId: "one", hits: [{ node: { ...page, id: "second-page", title: "Second Wiki page" }, scope: "wiki" }], partial: false }); });
+    }
+    if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
+    return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
+  };
+  const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: noRebuild, createCytoscape: await headlessCytoscape() };
+  try {
+    await showView(props, true);
+    await act(async () => { button("Wiki").click(); });
+    await typeQuery("query");
+    await debounce.run();
+    await act(async () => { button("Load more results").click(); });
+    await showView(props, false);
+    await showView(props, true);
+    await act(async () => { releasePage(); });
+    expect(host.querySelector(".metaproject-list")?.textContent).toContain("Second Wiki page");
+  } finally { debounce.restore(); }
+});
+
+test("a failed quiet re-read on return shows no error and leaves the explorer as it was", async () => {
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      return catalogReads === 1 ? Promise.resolve(catalog) : Promise.reject(new Error("The CLI is busy."));
+    }
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
+  await showView(props, true);
+  await act(async () => { listRow("Client").click(); });
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(2);
+  expect(host.textContent).not.toContain("The CLI is busy.");
+  expect(catalogErrorBanner()).toBeUndefined();
+  expect(freshnessBanner()?.textContent).toContain("Graph is missing.");
+  expect(listRow("Client").getAttribute("aria-current")).toBe("true");
+  expect(panelTitle()).toBe("Client");
+});
+
+test("a standing error, such as a failed rebuild's, survives a quiet re-read on return", async () => {
+  let catalogReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") catalogReads++;
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => { throw new Error("Rebuild failed: index locked."); } };
+  await showView(props, true);
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(2);
+  expect(catalogErrorBanner()?.textContent).toContain("Rebuild failed: index locked.");
+});
+
+test("a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown", async () => {
+  let catalogReads = 0;
+  let failReload: () => void = () => {};
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      if (catalogReads === 2) return new Promise((_resolve, reject) => { failReload = () => reject(new Error("The index is being written.")); });
+    }
+    return request(cwd, input);
+  };
+  const props: ViewProps = { cwd: "/project", request: read, onRebuild: async () => true };
+  await showView(props, true);
+  // A successful rebuild reloads the catalog; that reload is held.
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(catalogReads).toBe(2);
+  await showView(props, false);
+  await showView(props, true);
+  expect(catalogReads).toBe(2);
+  await act(async () => { failReload(); });
+  expect(catalogErrorBanner()?.textContent).toContain("The index is being written.");
 });

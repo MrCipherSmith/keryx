@@ -28,7 +28,7 @@ import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "
 import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
 import { NodeDetailsPanel } from "./NodeDetailsPanel";
 import { RelationshipGraph, type CytoscapeFactory } from "./RelationshipGraph";
-import { RelationshipList } from "./RelationshipList";
+import { RelationshipList, summarizeRelationships } from "./RelationshipList";
 import { RELATIONSHIP_KIND_LABELS } from "./labels";
 import { useExplorerNavigation } from "./useExplorerNavigation";
 import "./metaproject.css";
@@ -323,11 +323,17 @@ function Explorer({
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
   const [revision, setRevision] = useState(0);
+  // Retires pending work (wiki-link lookups, pages of results): moved by every catalog read except
+  // the quiet one, which is no new project, protocol, Retry, Refresh or Rebuild.
   const project = useRef(0);
+  // The catalog read whose result may still apply; every read, the quiet one included, supersedes the last.
+  const catalogRead = useRef(0);
+  const catalogPending = useRef(false);
   const loaded = useRef(false);
   const loadedSnapshot = useRef<string>();
   // Shown again after being hidden, the explorer re-reads the catalog once, quietly: an unchanged
-  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads.
+  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads, and a
+  // failure leaves the explorer as it was, any standing error included.
   const quietRead = useRef(false);
   const [freshness, setFreshness] = useState<Pick<MetaprojectCatalog, "snapshotId" | "graph" | "graphReason"> | null>(null);
   const wasVisible = useRef(visible);
@@ -336,8 +342,8 @@ function Explorer({
     wasVisible.current = visible;
     // Leaving the explorer's view closes the Filters popover; focus stays where the user went.
     if (!visible) setFiltersOpen(false);
-    // A catalog still loading is left to finish; its result is applied on arrival.
-    if (!returned || !loaded.current) return;
+    // A catalog still loading, or a reload in flight, is left to finish; its result, or its failure, is shown on arrival.
+    if (!returned || !loaded.current || catalogPending.current) return;
     quietRead.current = true;
     setRevision(value => value + 1);
   }, [visible]);
@@ -364,17 +370,21 @@ function Explorer({
   }
   useEffect(() => {
     if (protocol === null) return;
-    const generation = ++project.current;
+    const generation = ++catalogRead.current;
     const quiet = quietRead.current;
     quietRead.current = false;
-    setError("");
+    if (!quiet) {
+      project.current++;
+      setError("");
+    }
     if (!loaded.current) setLoading(true);
+    catalogPending.current = true;
     void (async () => {
       try {
         const result = (await read(cwd, {
           action: "catalog",
         })) as MetaprojectCatalog;
-        if (generation !== project.current) return;
+        if (generation !== catalogRead.current) return;
         loaded.current = true;
         if (quiet && result.snapshotId === loadedSnapshot.current) {
           setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });
@@ -389,13 +399,19 @@ function Explorer({
         }
         loadedSnapshot.current = result.snapshotId;
       } catch (cause) {
-        if (generation === project.current) setError(errMessage(cause));
+        // A failed quiet read keeps the loaded catalog; the next read the user starts reports a lasting failure.
+        if (generation === catalogRead.current && !quiet) setError(errMessage(cause));
       } finally {
-        if (generation === project.current) setLoading(false);
+        if (generation === catalogRead.current) {
+          catalogPending.current = false;
+          setLoading(false);
+        }
       }
     })();
     return () => {
-      project.current++;
+      catalogRead.current++;
+      // Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work.
+      if (!quietRead.current) project.current++;
     };
   }, [cwd, read, revision, protocol, setRoute]);
   useEffect(() => {
@@ -566,11 +582,11 @@ function Explorer({
   // Every node this explorer has shown or opened, so Back to one shows its panel at once even
   // when it is not among the catalog, hits or current projection (for example a lookup result).
   const seenNodes = useRef(new Map<string, MetaprojectNode>());
-  const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };
+  const remember = useCallback((node: MetaprojectNode) => { seenNodes.current.set(node.id, node); }, []);
   // Filled when the node list changes, not on every render; the current render reads `nodes` itself.
   useEffect(() => {
-    for (const node of nodes) seenNodes.current.set(node.id, node);
-  }, [nodes]);
+    for (const node of nodes) remember(node);
+  }, [nodes, remember]);
   const activeNode = nodes.find(node => node.id === selection) ?? seenNodes.current.get(selection);
   const [suggestedWiki, setSuggestedWiki] = useState<{ root: string; node: MetaprojectNode } | null>(null);
   const modulePath = activeNode?.kind === "module" ? activeNode.path : undefined;
@@ -692,6 +708,12 @@ function Explorer({
     })();
   };
   const currentProjection = projection?.root === selection ? projection : null;
+  // The Wiki disclosure counts the rows its list shows, by the list's own grouping rule, as the panel's Relationships tab does.
+  const wikiRelationships = useMemo(
+    () => mode === "wiki" && currentProjection ? summarizeRelationships(currentProjection) : null,
+    [mode, currentProjection],
+  );
+  const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;
   // While the next selection's relationships load, the last graph stays on screen, marked busy;
   // a failed read or leaving Graph drops it.
   const lastGraph = useRef<MetaprojectNeighbors | null>(null);
@@ -920,9 +942,9 @@ function Explorer({
               {mode === "graph" && currentProjection && !showGraph && (
                 <p className="metaproject-meta">The graph is not built yet. Open the panel's Relationships tab to see this node's links.</p>
               )}
-              {currentProjection && mode === "wiki" && currentProjection.edges.length > 0 && (
+              {currentProjection && mode === "wiki" && wikiRelationshipRows > 0 && (
                 <details className="metaproject-relationship-section" key={selection}>
-                  <summary>Relationships <span className="count-label">{currentProjection.edges.length}</span></summary>
+                  <summary>Relationships <span className="count-label">{wikiRelationshipRows}</span></summary>
                   <RelationshipList projection={currentProjection} select={id => {
                     const node = nodes.find(item => item.id === id) ?? seenNodes.current.get(id); if (node) openDocument(node);
                   }} />
