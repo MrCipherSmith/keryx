@@ -25,7 +25,7 @@ import { redactSensitiveText } from "../security/service";
 import { sendHtml } from "./format-html";
 import { type HubTimers, realTimers } from "./hub";
 import { type PollerStatus, UpdatePoller } from "./poller";
-import type { PairingState } from "./protocol";
+import type { PairingMembershipDiagnostic, PairingState } from "./protocol";
 import { type BotApi, type BotUpdate, isBotApiError } from "./types";
 
 export const PAIRING_CODE_TTL_MS = 10 * 60_000;
@@ -45,6 +45,9 @@ export interface PairingSnapshot {
   state: PairingState;
   /** Present until a user has been paired: a used code is gone. */
   code?: string;
+  /** A separate, short-lived command challenge for a forum where the bot is already installed. */
+  forumCode?: string;
+  membership?: PairingMembershipDiagnostic;
   botUsername?: string;
   expiresAt: number;
   userId?: number;
@@ -88,6 +91,8 @@ const EARLY_GROUP_EVENTS = 20;
 export class Pairing {
   private state: PairingState = "waiting-for-user";
   private code: string | undefined;
+  private forumCode: string | undefined;
+  private membership: PairingMembershipDiagnostic = { received: 0, last: "none" };
   private expiresAt: number;
   private readonly ttlMs: number;
   private readonly earlyGroups = new Map<number, BotUpdate>();
@@ -99,6 +104,7 @@ export class Pairing {
   private problems: string[] = [];
   private reason: string | undefined;
   private candidate: number | undefined;
+  private candidateRequiresOperatorAdmin = false;
   private readonly poller: UpdatePoller;
   private readonly now: () => number;
   private readonly timers: HubTimers;
@@ -178,6 +184,8 @@ export class Pairing {
     return {
       state: this.state,
       ...(this.code === undefined ? {} : { code: this.code }),
+      ...(this.forumCode === undefined ? {} : { forumCode: this.forumCode }),
+      ...(this.options.requireConfirmation === true ? { membership: { ...this.membership } } : {}),
       ...(this.bot.username === undefined ? {} : { botUsername: this.bot.username }),
       expiresAt: this.expiresAt,
       ...(this.userId === undefined ? {} : { userId: this.userId }),
@@ -201,16 +209,18 @@ export class Pairing {
     return this.state === "ready";
   }
 
-  /** Accept the authenticated account claim before accepting any group event. */
+  /** Confirm the account before inspecting any nominated group. */
   async confirmAccount(): Promise<boolean> {
     let confirmed = false;
     await this.enqueue(async () => {
       this.expireIfDue();
       if (this.state !== "waiting-for-confirmation" || this.userId === undefined) return;
       this.state = "waiting-for-group";
+      this.forumCode = newPairingCode();
       this.expiresAt = this.now() + this.ttlMs;
       this.armExpiryTimer();
       confirmed = true;
+      await this.replayGroupEvents();
     });
     return confirmed;
   }
@@ -260,6 +270,7 @@ export class Pairing {
     this.state = state;
     if (FINAL.has(state)) {
       this.code = undefined;
+      this.forumCode = undefined;
       if (this.expiryTimer !== undefined) {
         this.timers.clearTimeout(this.expiryTimer);
         this.expiryTimer = undefined;
@@ -289,11 +300,16 @@ export class Pairing {
           this.expireIfDue();
           return;
         }
+        if (update.my_chat_member !== undefined) this.membership.received += 1;
         if (this.state === "waiting-for-user") {
           if (this.options.requireConfirmation !== true) this.rememberGroupEvent(update);
+          else if (update.my_chat_member !== undefined) this.membership.last = "before-claim";
           await this.takeCode(update);
+        } else if (this.state === "waiting-for-confirmation") {
+          this.deferGroupEvent(update);
         } else if (this.state === "waiting-for-group") {
           await this.takeGroup(update);
+          await this.takeForumCommand(update);
           await this.takeMigration(update);
         }
       }
@@ -330,6 +346,10 @@ export class Pairing {
       chatId: message.chat.id,
       text: "Paired. Now add me to your group (a group with Topics turned on) and make me an administrator.",
     }).catch(() => undefined);
+    await this.replayGroupEvents();
+  }
+
+  private async replayGroupEvents(): Promise<void> {
     const early = [...this.earlyGroups.values()];
     const earlyMoves = this.earlyMigrations;
     this.earlyGroups.clear();
@@ -347,6 +367,15 @@ export class Pairing {
       }
       await this.takeMigration(event);
     }
+  }
+
+  private deferGroupEvent(update: BotUpdate): void {
+    if (update.my_chat_member !== undefined) {
+      const result = this.membershipResult(update.my_chat_member);
+      this.membership.last = result === "inspecting" ? "deferred" : result;
+      if (result !== "inspecting") return;
+    }
+    this.rememberGroupEvent(update);
   }
 
   private rememberGroupEvent(update: BotUpdate): void {
@@ -374,22 +403,36 @@ export class Pairing {
 
   private async takeGroup(update: BotUpdate): Promise<void> {
     const change = update.my_chat_member;
-    if (change === undefined || change.from.id !== this.userId) {
-      return;
-    }
-    const type = change.chat.type;
-    if (type !== "group" && type !== "supergroup") {
-      return;
-    }
-    const status = change.new_chat_member.status;
-    if (status !== "member" && status !== "administrator") {
-      return;
-    }
+    if (change === undefined) return;
+    const result = this.membershipResult(change);
+    this.membership.last = result;
+    if (result !== "inspecting") return;
     this.candidate = change.chat.id;
-    if (change.chat.title !== undefined) {
-      this.chatTitle = change.chat.title;
-    }
+    this.candidateRequiresOperatorAdmin = false;
+    this.chatTitle = change.chat.title;
     await this.inspectGroup(change.chat.id);
+  }
+
+  private membershipResult(change: NonNullable<BotUpdate["my_chat_member"]>): PairingMembershipDiagnostic["last"] {
+    if (change.from.id !== this.userId) return "different-account";
+    if (change.chat.type !== "group" && change.chat.type !== "supergroup") return "unsupported-chat";
+    const role = change.new_chat_member.status;
+    return role === "member" || role === "administrator" ? "inspecting" : "unsupported-role";
+  }
+
+  private async takeForumCommand(update: BotUpdate): Promise<void> {
+    const message = update.message;
+    if (this.state !== "waiting-for-group" || this.forumCode === undefined || message?.chat.type !== "supergroup" ||
+      message.from?.id !== this.userId || message.sender_chat !== undefined || message.forward_origin !== undefined ||
+      message.forward_date !== undefined || typeof message.text !== "string") return;
+    const [command, code, extra] = message.text.trim().split(/\s+/);
+    const addressed = this.bot.username && `/keryx_pair_forum@${this.bot.username.toLowerCase()}`;
+    if ((command?.toLowerCase() !== "/keryx_pair_forum" && command?.toLowerCase() !== addressed) ||
+      code?.toUpperCase() !== this.forumCode || extra !== undefined) return;
+    this.candidate = message.chat.id;
+    this.candidateRequiresOperatorAdmin = true;
+    this.chatTitle = undefined;
+    await this.inspectGroup(message.chat.id);
   }
 
   /**
@@ -435,6 +478,12 @@ export class Pairing {
         problems.push("Make the bot an administrator of the group.");
       } else if (member.status === "administrator" && member.can_manage_topics !== true) {
         problems.push("Give the bot the Manage Topics right in the group's administrator settings.");
+      }
+      if (this.candidateRequiresOperatorAdmin && this.userId !== undefined && problems.length === 0) {
+        const operator = await this.options.api.getChatMember({ chatId, userId: this.userId });
+        if (operator.status !== "administrator" && operator.status !== "creator") {
+          problems.push("The confirmed Telegram account must be an administrator of this forum.");
+        }
       }
     } catch (error) {
       problems.push(`could not inspect the group: ${describe(error)}`);

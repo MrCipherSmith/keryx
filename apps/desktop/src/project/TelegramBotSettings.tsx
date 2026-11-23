@@ -6,6 +6,16 @@ import { telegramChannelAction, telegramChannelStatus, type TelegramChannelOpera
 
 const POLL_MS = 3000;
 
+const membershipStatus: Readonly<Record<string, string>> = {
+  none: "Keryx has not received a bot membership update during this pairing.",
+  "before-claim": "Telegram sent a membership update before the account claimed the pairing code.",
+  deferred: "A membership update is queued for account confirmation.",
+  "different-account": "The latest membership update came from a different Telegram account.",
+  "unsupported-chat": "The latest membership update was for a chat that is not a group.",
+  "unsupported-role": "The latest membership update did not add or promote the bot.",
+  inspecting: "Keryx received a matching membership update and checked the group.",
+};
+
 function pairingLink(username: string | undefined, code: string | undefined): string | null {
   if (!username || !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(username) || !code || !/^[A-Z2-9]{8}$/.test(code)) return null;
   return `https://t.me/${username}?start=${code}`;
@@ -214,7 +224,15 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
         {pairing.code && copyFailed ? <p className="field-error" role="alert">Could not copy the code. Enter it manually.</p> : null}
       </> : null}
       {pairing?.state === "waiting-for-confirmation" && pairing.userId !== undefined && !expired ? <><p>Telegram account ID: {pairing.userId}. Confirm that this is your account before connecting the group.</p><button className="btn" disabled={busy} onClick={() => runOperation("confirm-account")}>This is my account</button></> : null}
-      {pairing?.state === "waiting-for-group" || pairing?.state === "ready" ? <><p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>{pairing.chatTitle ? <p style={{ overflowWrap: "anywhere" }}>Forum: {pairing.chatTitle}</p> : null}{pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}</> : null}
+      {(pairing?.state === "waiting-for-group" || pairing?.state === "ready") && !expired ? <>
+        {pairing.state === "waiting-for-group" ? <>
+          <p className="settings-row-help">Add the bot as an administrator in your forum and grant Manage Topics.</p>
+          {pairing.forumCode ? <p className="settings-row-help">If the bot is already an administrator, send <code>/keryx_pair_forum{pairing.botUsername ? `@${pairing.botUsername}` : ""} {pairing.forumCode}</code> in the forum from the account you confirmed.</p> : null}
+          {pairing.membership ? <p className="settings-row-help">{membershipStatus[pairing.membership.last]} Membership events received: {pairing.membership.received}.</p> : null}
+        </> : null}
+        {pairing.chatTitle ? <p style={{ overflowWrap: "anywhere" }}>Forum: {pairing.chatTitle}</p> : null}
+        {pairing.problems.map((problem) => <p className="field-error" key={problem}>{problem}</p>)}
+      </> : null}
       {pairing?.state === "expired" || expired ? <p className="field-error">The pairing expired. Cancel it and start again.</p> : null}
       {pairing?.state === "failed" ? <p className="field-error">Pairing failed. Cancel it and try again.</p> : null}
       {pairing?.state === "ready" && channel.telegram.state === "connected" ? <p className="settings-row-help">Connecting a different bot will interrupt existing remote sessions. Each chat must be attached to a new topic.</p> : null}
@@ -225,6 +243,7 @@ export function TelegramBotSettings({ refreshKey = 0 }: { refreshKey?: number })
       </div>
     </> : null}
     {actionError ? <p className="field-error" role="alert">{actionError}</p> : null}
+    {channel?.lastActivationFailure && !channel.pendingOperation ? <p className="field-error" role="alert">Last connection attempt failed. {channel.lastActivationFailure.reason}</p> : null}
     {statusError ? <p className="field-error" role="alert">{statusError}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {!available || statusError || needsRefresh ? <button className="btn btn-ghost" disabled={busy} onClick={() => void refresh()}>Retry channel status</button> : null}

@@ -28,7 +28,7 @@ The service is shared across projects in the same Keryx configuration profile. C
 2. With the local service running, paste the token into the **Bot token** password field and select **Connect bot**. Use that field for the token. The QR code and manual pairing code identify the pairing attempt.
 3. Scan the QR code with your phone or choose **Open in Telegram**. Tap **Start** in the private bot chat if Telegram prompts you. For the manual path, select **Copy code** and send the code to the bot in that private chat. The initial code is single-use and expires after ten minutes.
 4. Back in Desktop, verify the displayed Telegram account ID and select **This is my account**.
-5. Add the bot as an administrator in the forum with **Manage Topics** permission. Use the same Telegram account that claimed the code. If the forum has already been configured, check the pairing status and update the bot's membership or permissions if Keryx is still waiting.
+5. Add the bot as an administrator in the forum with **Manage Topics** permission. Use the same Telegram account that claimed the code. If the bot is already an administrator and Keryx is still waiting for the group, send the one-time `/keryx_pair_forum` command displayed in Desktop in that forum from the confirmed account.
 6. Verify the displayed forum and select **Confirm connection**. Once connected, select **Test connection** and look for the test message in **General**.
 
 ![Telegram pairing showing the demonstration QR code, Open in Telegram, and Copy code](assets/desktop-telegram/pair-bot.png)
@@ -82,7 +82,8 @@ Keryx checks that Telegram accepts the new token's polling connection before act
 | --- | --- |
 | **Telegram pairing is unavailable** | Start a compatible listener. In the preview, check that both Desktop's CLI and the service have the preview enabled and use the same profile. An older listener cannot provide the required capability. |
 | **Unavailable** or an occupied port | Read the message under **Local service**. If the process is external, stop or restart it from its owning terminal. A second service using the same bot token can conflict with Telegram polling. |
-| The pairing is waiting for the forum | Use the confirmed Telegram account, enable Topics in the group, and give the bot **Manage Topics**. Check that its membership or permissions update appears, then choose **Check pairing**. |
+| The pairing is waiting for the forum | Use the confirmed Telegram account, enable Topics in the group, and give the bot **Manage Topics**. If the bot is already an administrator, send the displayed command, including the bot username when shown, then choose **Check pairing**. |
+| **Last connection attempt failed** | Read the reason under **Bot connection**. The local service keeps the latest activation failure after closing the pairing. The message clears after a successful activation or a service restart. |
 | A revision conflict or uncertain outcome | Refresh the status first. Another Settings window or `/channels` may have changed the connection while you were looking at it. |
 | **Test connection** works, but the bot ignores a session prompt | **General** is used for the connection test. Send the prompt to the session's own topic from the paired account. Check the session is still attached and Desktop is running. |
 | **Telegram reply delivery could not be confirmed** | The turn has finished and its reply is available in Desktop. Check the topic before resending. An unconfirmed request may still have reached the service. |

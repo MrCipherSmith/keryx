@@ -15,6 +15,8 @@ export interface BotMessage {
   /** Set for a message sent inside a forum topic. */
   message_thread_id?: number;
   from?: BotUser;
+  /** Set for anonymous administrators and messages sent on behalf of a chat. */
+  sender_chat?: { id: number };
   chat: { id: number; type?: string };
   /** Unix seconds. */
   date: number;

@@ -32,8 +32,9 @@ test("the first batch is held until admission, and abandoned batches are never a
     let confirm!: (offset: number | undefined) => void;
     const confirmation = new Promise<number | undefined>((resolve) => { confirm = resolve; });
     let calls = 0;
-    api.getUpdates = async ({ offset, signal }) => {
+    api.getUpdates = async ({ offset, signal, timeoutSec }) => {
       calls += 1;
+      expect(timeoutSec).toBe(calls === 1 ? 0 : 25);
       if (calls === 1) return [{ update_id: 42 }];
       confirm(offset);
       return await new Promise((resolve) => { signal?.addEventListener("abort", () => resolve([]), { once: true }); });

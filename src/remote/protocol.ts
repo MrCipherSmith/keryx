@@ -111,6 +111,7 @@ export interface ChannelsStatusResponse {
   /** Present only on the gated revisioned controller. */
   revision?: number | null;
   pendingOperation?: { operationId: string; revision: number | null };
+  lastActivationFailure?: { reason: string; at: number };
   telegram: {
     state: TelegramChannelState;
     reason?: string;
@@ -123,11 +124,18 @@ export interface ChannelsStatusResponse {
 
 export type PairingState = "waiting-for-user" | "waiting-for-confirmation" | "waiting-for-group" | "ready" | "failed" | "expired" | "cancelled";
 
+export interface PairingMembershipDiagnostic {
+  received: number;
+  last: "none" | "before-claim" | "deferred" | "different-account" | "unsupported-chat" | "unsupported-role" | "inspecting";
+}
+
 export interface PairingResponse {
   schemaVersion: string;
   state: PairingState;
   /** One-time code the operator sends the bot in a private message. Present until the user is paired. */
   code?: string;
+  forumCode?: string;
+  membership?: PairingMembershipDiagnostic;
   botUsername?: string;
   /** Epoch ms after which the code stops working. */
   expiresAt: number;

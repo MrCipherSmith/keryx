@@ -150,10 +150,12 @@ export class ChannelsController {
     const record = this.options.experimentalControl === true ? loadChannelRecord(this.host.dir) : undefined;
     if (record !== undefined && !record.ok) return fail(503, "channel-record-invalid", record.reason);
     const pendingOperation = this.control?.pendingOperation();
+    const lastActivationFailure = this.control?.lastActivationFailure();
     return ok({
       machine: this.host.machine,
       ...(record?.ok === true ? { capabilities: { desktopTelegram: 1 }, revision: record.value?.revision ?? null } : {}),
       ...(record !== undefined && pendingOperation !== undefined ? { pendingOperation } : {}),
+      ...(lastActivationFailure === undefined ? {} : { lastActivationFailure }),
       telegram: {
         state,
         ...(reason === undefined ? {} : { reason }),
