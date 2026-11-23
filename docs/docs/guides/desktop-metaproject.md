@@ -38,9 +38,10 @@ keryx openspec show openspec/specs/review/spec.md --json
    keryx init --yes
    ```
 
-3. Open **Metaproject** and select **Rebuild graph** when the view reports
-   **Graph missing** or **Graph stale**. The terminal panel shows the build
-   progress. You can also build it from the same checkout in a terminal.
+3. Open **Metaproject** and select **Rebuild graph** when the banner reads
+   **Graph is missing.** or **Graph is stale.** The banner is one line. Select
+   **Details** beside it to read the reason. The terminal panel shows the
+   build progress. You can also build it from the same checkout in a terminal.
 
    ```bash
    keryx gdgraph build
@@ -66,9 +67,9 @@ keryx openspec show openspec/specs/review/spec.md --json
 ### Enable symbol and call relationships
 
 Files, modules, wiki pages and import relationships work with the file
-graph. For symbol search and the **Defines** and **Calls** filters, which stay
-disabled until the symbol layer is on, enable the optional symbol layer per
-checkout and rebuild it.
+graph. For symbol search and the **Defines** and **Calls** relationship types,
+which stay disabled in the Graph **Filters** popover until the symbol layer is
+on, enable the optional symbol layer per checkout and rebuild it.
 
 ```bash
 keryx gdgraph symbols enable
@@ -92,8 +93,8 @@ The list header shows how many catalog items are shown out of the total, as
 the number of matches instead.
 
 Select a result to inspect it. In **Graph**, the selected item becomes the
-center of the graph, with the nodes related to it by the current filters
-around it. In **Wiki**, a page opens as a readable
+center of the graph, with the nodes related to it by the current graph
+filters around it. In **Wiki**, a page opens as a readable
 article with its repository path. File and symbol results display their
 identity and path. To inspect or edit their
 source, open that path in your editor.
@@ -103,23 +104,34 @@ If the check of the selected CLI fails, the explorer shows the error with a
 
 ## Trace relationships in Graph
 
-![Graph view with Agent Bus selected in the middle of its neighborhood: incoming items on the left, outgoing items on the right, group captions, a legend under the graph, and the details panel open on its Relationships tab](../images/desktop-metaproject/graph.jpg)
+![Graph view with the file src/bus/leases.ts selected: twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left, the four files it imports on the right, group captions, a legend under the graph, and the details panel open on its Relationships tab](../images/desktop-metaproject/graph.jpg)
 
 The graph shows a local neighborhood of the selected item in columns. What
 points at the selected item is on its left, and what it points at is on its
-right. With **2 steps**, items one step further out sit in additional columns
-beyond those, drawn fainter.
+right. In the picture, `src/bus/leases.ts` is selected: the files that import
+it, the Agent Bus page that describes it and its module are on the left, and
+the four files it imports are on the right. With **2 steps**, items one step
+further out sit in additional columns beyond those, drawn fainter. The
+header row above the graph shows its caption, the zoom controls and the
+**Filters** button.
 
-1. Select a starting item. Use **Direction → Outgoing** to follow its
-   dependencies or links, and **Incoming** to see what points to it.
-   **Both** includes each direction.
-2. Start at **1 step** for direct neighbors. Use **2 steps** to follow those
-   neighbors one level further. Turn off unrelated relationship types in the
-   filter bar to narrow a busy graph. The filters are named **Imports**,
-   **Assets**, **Describes**, **Wiki links**, **Contains**, **Defines**,
-   **Calls**, **Changes spec** and **Spec context**. **Defines** and **Calls**
-   are disabled, with the reason shown, until the symbol layer is enabled.
-   **Reset** restores the default filters when you have changed them.
+1. Select a starting item, such as `src/bus/leases.ts`. The graph shows
+   what points to it and what it points at. Use **Filters** to follow only one
+   direction.
+2. Select **Filters** in the header row of the graph, next to the zoom
+   controls. A popover opens with the graph visible behind it, and every change
+   applies at once. Press **Escape** or click outside to close it.
+   - **Direction**: **Outgoing** follows dependencies or links, **Incoming**
+     shows what points to the item, and **Both** includes each direction.
+   - **Depth**: start at **1 step** for direct neighbors. Use **2 steps** to
+     follow those neighbors one level further.
+   - **Relationship types**: turn off unrelated types to narrow a busy graph.
+     They are named **Imports**, **Assets**, **Describes**, **Wiki links**,
+     **Contains**, **Defines**, **Calls**, **Changes spec** and **Spec
+     context**. **Defines** and **Calls** are disabled, with the reason
+     shown, until the symbol layer is enabled.
+   - **Reset filters** restores the defaults. While the filters differ from
+     their defaults, the button reads **Filters · n** and is highlighted.
 3. Read the groups. Each group of items has a caption with its relationship
    type and a count, for example **Imports · 7**. A column shows at most 12
    items. When a column has more, it keeps a few items from each
@@ -130,8 +142,8 @@ beyond those, drawn fainter.
    spec or change. The line style shows the relationship family: solid,
    dashed or dotted, with the relationship types that use it. The legend lists
    only what the current graph contains. Meaning never depends on color alone.
-5. Use the zoom in, zoom out and fit controls above the graph to move around a
-   large neighborhood. Click an item to select it. The graph re-centers on it,
+5. Use the zoom in, zoom out and fit controls in the graph's header row to
+   move around a large neighborhood. Click an item to select it. The graph re-centers on it,
    and while its relationships load the previous graph stays on screen,
    dimmed. **Back** returns to the item you selected before.
 6. Read the details panel for the selected item. It shows the kind, the title
@@ -144,10 +156,12 @@ beyond those, drawn fainter.
    - **Relationships** is the default tab. It groups the relationships into
      **Incoming** and **Outgoing**, then by type. Click a row to select that
      item, or focus it with **Tab** and press **Enter**. The control at the end
-     of a row, such as **2 examples**, opens the source evidence for that
-     relationship, when there is any. A relationship between two second-step
-     items sits under **Second step** and offers an **Open** button for each
-     endpoint. Check the direction before following a dependency.
+     of a row opens the source evidence for that relationship, when there is
+     any. For module imports it reads the count, such as **7 imports**;
+     otherwise it reads **N examples**. Relationships between two second-step
+     items sit in a **Second step** disclosure, closed until you open it. Each
+     relationship offers an **Open** button for each endpoint. Check the direction before
+     following a dependency.
    - **Wiki** previews the linked Wiki page. **Open in Wiki** opens the full
      page. When no page is linked, **Find a Wiki page** searches for one and
      **Draft Wiki page** starts a session that prepares a draft.
@@ -172,12 +186,13 @@ when you need to see which modules use its direct consumers.
 
 ## Read and follow links in Wiki
 
-![Wiki view showing the Agent Bus article with its repository path, a Wiki search and the Relationships block below the article](../images/desktop-metaproject/wiki.jpg)
+![Wiki view showing the Agent Bus article with its repository path and a View in Graph button, and the catalog list on the left headed Catalog · 100 of 125](../images/desktop-metaproject/wiki.jpg)
 
 Select **Wiki** in the view switcher to read a page. Wiki keeps its own
 search and selection, separate from Graph. Expand **Relationships** below the
 article to follow related pages or files. This block always shows the direct
-relationships of every type and does not follow the Graph filters. The
+relationships of every type except **Defines** and **Calls**, and does not
+follow the Graph filters. The
 article also supports links to headings and indexed items in the project. A
 link to a page or file that is not loaded yet is looked up and opened. If a
 link cannot be resolved, the article says which path it could not find. HTTP
