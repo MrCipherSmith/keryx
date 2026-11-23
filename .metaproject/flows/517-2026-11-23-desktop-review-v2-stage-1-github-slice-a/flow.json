@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "517",
+  "slug": "desktop-review-v2-stage-1-github-slice-a",
+  "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T19:41:25.622Z",
+  "updatedAt": "2026-11-23T19:47:50.376Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:772d821796a2a198ae1024e3ca3debdc7a5c2165c3b32ab79fe9bc9cba97416f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 implementation tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each implementation task and T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Subject storage: flags.json subject, session_flags, issue binding",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Issues source repository (project repo) in keryx issues list",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "PR board GitHub-only lanes, grouping, quick filters, GitHub reason",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "PR work row, signed actions, PR-bound sessions, /review and Create Flow from session",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Issues board GitHub grouping, repository default, work row",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Scenario test: PR without Flow and review -> session -> /review -> link on card",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verify focused suites, typecheck, attachBadges/localBadge agreement",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Mutation check of edited attention-set lines",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Toolbar re-measure if .flows-toolbar changed",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Docs: implementation plan stage 1 state, deviation (a) status",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T19:41:25.622Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T19:47:24.862Z",
+      "event": "task-added",
+      "detail": "T5: Subject storage: flags.json subject, session_flags, issue binding"
+    },
+    {
+      "at": "2026-11-23T19:47:25.379Z",
+      "event": "task-added",
+      "detail": "T6: Issues source repository (project repo) in keryx issues list"
+    },
+    {
+      "at": "2026-11-23T19:47:25.904Z",
+      "event": "task-added",
+      "detail": "T7: PR board GitHub-only lanes, grouping, quick filters, GitHub reason"
+    },
+    {
+      "at": "2026-11-23T19:47:26.395Z",
+      "event": "task-added",
+      "detail": "T8: PR work row, signed actions, PR-bound sessions, /review and Create Flow from session"
+    },
+    {
+      "at": "2026-11-23T19:47:26.875Z",
+      "event": "task-added",
+      "detail": "T9: Issues board GitHub grouping, repository default, work row"
+    },
+    {
+      "at": "2026-11-23T19:47:27.374Z",
+      "event": "task-added",
+      "detail": "T10: Scenario test: PR without Flow and review -> session -> /review -> link on card"
+    },
+    {
+      "at": "2026-11-23T19:47:27.976Z",
+      "event": "task-added",
+      "detail": "T11: Verify focused suites, typecheck, attachBadges/localBadge agreement"
+    },
+    {
+      "at": "2026-11-23T19:47:28.524Z",
+      "event": "task-added",
+      "detail": "T12: Mutation check of edited attention-set lines"
+    },
+    {
+      "at": "2026-11-23T19:47:29.079Z",
+      "event": "task-added",
+      "detail": "T13: Toolbar re-measure if .flows-toolbar changed"
+    },
+    {
+      "at": "2026-11-23T19:47:29.702Z",
+      "event": "task-added",
+      "detail": "T14: Docs: implementation plan stage 1 state, deviation (a) status"
+    },
+    {
+      "at": "2026-11-23T19:47:30.848Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T19:47:31.541Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T19:47:31.973Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T19:47:49.906Z",
+      "event": "frozen",
+      "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T19:47:50.376Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/model.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review src/issues"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/issues"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/issues"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC17": {
+      "kind": "judged"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
+    },
+    "AC19": {
+      "kind": "none",
+      "reason": "documentation statement, checked in review"
+    }
+  }
+}
