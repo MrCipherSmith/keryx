@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.37
+Version: 0.29.38
 
 ## Status
 
@@ -12,6 +12,8 @@ carrying the measurement that found it and the reason it was not done then.
 
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
+>
+> - **0.29.38** — [Keryx Desktop Review v2](keryx-desktop-review-v2/README.md). Draft requirements, nothing implemented. Splits the Pull requests board into a GitHub-only view of pull requests and issues and a separate Reviews entity (one review per pull request and reviewer, with rounds), defines what a review does when the pull request head moves, adds "Open in session" binding for pull requests and issues, and plans one review registry for Desktop and agent sessions.
 >
 > - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
 >

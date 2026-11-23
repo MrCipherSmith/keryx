@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "516",
+  "slug": "desktop-review-v2-stage0",
+  "title": "Desktop Review v2 stage 0: PR board fixes without model change",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T08:07:29.420Z",
+  "updatedAt": "2026-11-23T08:09:28.999Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Создавай фло оформляй все и начинай имлементацию",
+    "source": "claude-code session 2026-11-23, operator message"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by plan tasks T5-T11"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by plan tasks T5-T11"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by plan tasks T5-T11"
+    },
+    {
+      "id": "T5",
+      "title": "Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Outdated review result in the card badge (SQL + localBadge + types)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Show the outdated review on the card and in the list",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Keep the board toolbar on one row with the detail panel open",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Test suites, typecheck, lint and live check in the browser dev build",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "review-orchestrator on the branch",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Requirements package keryx-desktop-review-v2 and roadmap entry",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T08:07:29.420Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T08:09:15.318Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T08:09:15.519Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T08:09:15.715Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T08:09:15.892Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-23T08:09:16.069Z",
+      "event": "task-added",
+      "detail": "T5: Board behaviour: no filter bypass, stable order, Done lane on demand, narrowed tab indicator"
+    },
+    {
+      "at": "2026-11-23T08:09:16.260Z",
+      "event": "task-added",
+      "detail": "T6: Outdated review result in the card badge (SQL + localBadge + types)"
+    },
+    {
+      "at": "2026-11-23T08:09:16.456Z",
+      "event": "task-added",
+      "detail": "T7: Show the outdated review on the card and in the list"
+    },
+    {
+      "at": "2026-11-23T08:09:16.647Z",
+      "event": "task-added",
+      "detail": "T8: Keep the board toolbar on one row with the detail panel open"
+    },
+    {
+      "at": "2026-11-23T08:09:16.831Z",
+      "event": "task-added",
+      "detail": "T9: Test suites, typecheck, lint and live check in the browser dev build"
+    },
+    {
+      "at": "2026-11-23T08:09:17.025Z",
+      "event": "task-added",
+      "detail": "T10: review-orchestrator on the branch"
+    },
+    {
+      "at": "2026-11-23T08:09:17.216Z",
+      "event": "task-added",
+      "detail": "T11: Requirements package keryx-desktop-review-v2 and roadmap entry"
+    },
+    {
+      "at": "2026-11-23T08:09:28.819Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T08:09:28.999Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/model.test.ts'"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review'"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "invariant",
+      "check": "sh -c 'cd apps/desktop && bun test src/review && cd ../.. && bun test src/review/desk-run-store.test.ts && bun run typecheck'"
+    }
+  }
+}
