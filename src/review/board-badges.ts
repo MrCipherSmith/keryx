@@ -12,6 +12,7 @@ export interface BadgeSnapshot {
 
 export const runActive = (run: Pick<DeskRun, "state">) => run.state === "running" || run.state === "queued" || run.state === "cancelling";
 export const sameRange = (a: DeskRevision | null, b: DeskRevision) => a?.baseSha === b.baseSha && a.headSha === b.headSha;
+export const runFinished = (run: Pick<DeskRun, "state">) => run.state === "completed" || run.state === "partial" || run.state === "budget";
 
 type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
   decision?: DeskRun["decision"];
@@ -26,20 +27,24 @@ type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
 
 /** Both Desktop's live history and SQLite's projected rows use the same ordering and revision rules. */
 export function localBadge(runs: readonly BadgeRun[], revision: DeskRevision): LocalBadge {
-  runs = runs.filter(run => run.decision?.action !== "archive" && run.decision?.action !== "delete");
-  const active = runs.filter(run => run.source !== "existing" && runActive(run));
+  runs = runs.filter(run => run.source !== "existing" && run.decision?.action !== "archive" && run.decision?.action !== "delete");
+  const active = runs.filter(runActive);
   const current = active.find(run => sameRange(run, revision)) ?? active[0];
   // History is newest first. A review on an older range belongs in the lane but
   // its percentage must not be attributed to the current PR revision.
-  const latest = current ?? runs.find(run => run.source !== "existing" && sameRange(run, revision));
+  const latest = current ?? runs.find(run => sameRange(run, revision));
   const same = !!latest && sameRange(latest, revision);
   const awaiting = latest?.awaitingAnswer ?? (latest?.pendingQuestions ? latest.pendingQuestions.length > 0 : !!latest?.pendingQuestion);
   const roster = same ? latest.reviewerProgress : undefined;
+  const ready = runs.some(run => runFinished(run) && !!run.result && sameRange(run.result.reviewed, revision));
+  // Outdated is a fallback only: any run on this range, or any active run, says more about the card.
+  const stale = latest || ready ? undefined : runs.find(run => runFinished(run) && !!run.result?.reviewed);
+  const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state } : undefined;
   return {
     active: !!current,
-    ready: runs.some(run => run.source !== "existing" && ["completed", "partial", "budget"].includes(run.state)
-      && !!run.result && sameRange(run.result.reviewed, revision)),
+    ready,
     ...(latest ? { runState: same ? latest.state : "other-revision" } : {}),
+    ...(outdated && { outdated }),
     ...(same && latest.state === "running" && latest.source === "manual" && awaiting && { awaitingAnswer: true }),
     ...(same && latest.publication === "pending" && sameRange(latest.result?.reviewed ?? null, revision) && { publicationPending: true }),
     ...(same && latest.state === "running" && latest.lastActivityAt && { lastActivityAt: latest.lastActivityAt }),

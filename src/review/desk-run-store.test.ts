@@ -452,6 +452,40 @@ test("terminal board progress uses the latest matching attempt and restores lega
   expect(badge()).toMatchObject({ active: false, ready: true, runState: "completed" });
 });
 
+test("a finished review of an earlier head reaches the board as outdated until a run covers the new head", async () => {
+  const { localBadge } = await import("./board-badges");
+  const badge = (range = next) => {
+    const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...range }];
+    store.attachBadges({ ...key, cards });
+    expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, range));
+    return cards[0]?.localReview;
+  };
+  const finishAt = (range: typeof revision, state: DeskFinish["state"]) => {
+    store.request("/project", key, range);
+    const a = store.queued(key)!;
+    store.end(a, { ...finish, state, result: { ...finish.result!, reviewed: range } });
+    return a;
+  };
+  finishAt({ ...revision, headSha: "d".repeat(40) }, "partial");
+  finishAt(revision, "completed");
+  const archived = finishAt({ ...revision, headSha: "e".repeat(40) }, "budget");
+  archived.run.decision = { action: "archive", reason: "", at: "" };
+  store.save(archived);
+  expect(badge()).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
+  expect(badge(revision)).toMatchObject({ active: false, ready: true, runState: "completed" });
+  expect(badge(revision)?.outdated).toBeUndefined();
+  // Another account's history stays out.
+  const colleague: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+  store.attachBadges({ ...other, cards: colleague });
+  expect(colleague[0]?.localReview).toBeUndefined();
+  // An active run on the new head takes precedence; once it fails, the current-range run still wins.
+  store.request("/project", key, next);
+  expect(badge()).toEqual({ active: true, ready: false, runState: "queued" });
+  const current = store.queued(key)!;
+  store.end(current, { ...finish, state: "failed", result: null });
+  expect(badge()).toEqual({ active: false, ready: false, runState: "failed" });
+});
+
 test("a new queued revision shows its own starting state while an earlier revision is still running", () => {
   started();
   store.request("/fixture", key, next);

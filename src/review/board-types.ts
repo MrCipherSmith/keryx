@@ -13,6 +13,9 @@ export interface ReviewCard {
     lastActivityAt?: string;
     runState?: DeskRunState | "other-revision";
     progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;
+    /** Newest finished result for another range. Present only when no run covers this range and none is active;
+     * `runState` is then absent, because a finished `runState` means a result for this revision exists. */
+    outdated?: { headSha: string; state: DeskRunState };
   };
   /** GitHub message node IDs addressed to this snapshot’s viewer. */
   addressedReplyIds?: string[];
