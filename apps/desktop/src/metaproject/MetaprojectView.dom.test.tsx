@@ -27,6 +27,24 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
+function listRow(title: string) {
+  const found = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.querySelector("strong")?.textContent === title);
+  if (!found) throw new Error(`Missing list row ${title}`);
+  return found;
+}
+async function openPanelTab(tab: "relationships" | "wiki" | "openspec") {
+  const found = host.querySelector<HTMLButtonElement>(`[aria-label="Graph node details"] [role="tab"][data-tab="${tab}"]`);
+  if (!found) throw new Error(`Missing panel tab ${tab}`);
+  await act(async () => { found.click(); });
+}
+/** happy-dom has no 2D canvas: the explorer's graph gets a headless cytoscape through its test seam. */
+async function headlessCytoscape() {
+  const cytoscape = (await import("cytoscape")).default;
+  return (options: import("cytoscape").CytoscapeOptions) => {
+    const { container: _container, ...rest } = options;
+    return cytoscape({ ...rest, headless: true });
+  };
+}
 function request(_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> {
   if (input.action === "catalog") return Promise.resolve(catalog);
   if (input.action === "detail") return Promise.resolve({ ...snapshot, node: input.id === page.id ? page : file, markdown: input.id === page.id ? "# Readable guide" : undefined });
@@ -37,7 +55,7 @@ function request(_cwd: string, input: MetaprojectRequest): Promise<MetaprojectRe
 test("wiki stays readable without a graph and rebuild is explicit", async () => {
   let rebuilds = 0;
   await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => { rebuilds++; return false; } })); });
-  expect(host.textContent).toContain("Graph missing");
+  expect(host.textContent).toContain("Graph is missing");
   await act(async () => { button("Wiki").click(); });
   expect(host.textContent).toContain("Readable guide");
   expect(rebuilds).toBe(0);
@@ -76,13 +94,17 @@ test("direction, depth and type controls filter the accessible relationship list
   const third = { id: "third", kind: "file" as const, title: "Server", path: "src/server.ts" };
   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve({ ...catalog, nodes: [page, file, third], edges: [{ from: "page", to: "file", kind: "describes", evidence: ["guide:3"] }, { from: "file", to: "third", kind: "imports" }] }) : request(cwd, input);
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
-  expect(host.textContent).toContain("Guide → describes → Client");
-  const selects = host.querySelectorAll("select");
-  await act(async () => { selects[1]!.value = "2"; selects[1]!.dispatchEvent(new Event("change", { bubbles: true })); });
-  expect(host.textContent).toContain("Client → imports → Server");
-  await act(async () => { selects[0]!.value = "incoming"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
-  expect(host.textContent).not.toContain("Guide → describes → Client");
-  await act(async () => { selects[0]!.value = "outgoing"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
+  // Re-selecting the shown node opens its panel, whose Relationships tab holds the list.
+  await act(async () => { listRow("Guide").click(); });
+  const relations = () => host.querySelector('[aria-label="Graph node details"] .metaproject-rel')?.textContent ?? "";
+  expect(host.querySelector('[aria-label="Graph node details"] [data-direction="outgoing"]')?.textContent).toContain("Client");
+  const direction = host.querySelector<HTMLSelectElement>('select[aria-label="Direction"]')!;
+  const depth = host.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
+  await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(host.querySelector('[aria-label="Graph node details"] [data-direction="second-step"]')?.textContent).toContain("Server");
+  await act(async () => { direction.value = "incoming"; direction.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(relations()).not.toContain("Client");
+  await act(async () => { direction.value = "outgoing"; direction.dispatchEvent(new Event("change", { bubbles: true })); });
   await act(async () => { button("Open Server").click(); });
   expect(host.querySelector('[aria-label="Graph node details"] h2')?.textContent).toBe("Server");
 });
@@ -252,8 +274,8 @@ test("opening an OpenSpec search location requests and focuses the exact scenari
   expect(host.textContent).toContain("openspec/specs/review/spec.md:6–8");
 });
 
-test("relationship list shows OpenSpec edge provenance", async () => {
-  const { RelationshipList } = await import("./MetaprojectView");
+test("relationship list names an OpenSpec edge by its label and keeps its digest out of the row", async () => {
+  const { RelationshipList } = await import("./RelationshipList");
   const digest = "a".repeat(64);
   const projection = {
     ...snapshot,
@@ -263,8 +285,9 @@ test("relationship list shows OpenSpec edge provenance", async () => {
     truncated: false,
   };
   await act(async () => { root.render(createElement(RelationshipList, { projection, select: () => {} })); });
-  expect(host.textContent).toContain(".metaproject/openspec/links.json (link 2)");
-  expect(host.textContent).toContain(digest);
+  expect(host.querySelector(".metaproject-rel-kind")?.textContent).toContain("Spec context");
+  expect(host.textContent).toContain("Client");
+  expect(host.textContent).not.toContain(digest);
 });
 
 test("OpenSpec Markdown follows fragments and only known project links", async () => {
@@ -345,13 +368,11 @@ test("a graph node opens its linked Wiki in place and Back restores the graph se
     ? Promise.resolve({ ...catalog, edges: [{ from: page.id, to: file.id, kind: "describes" }] })
     : request(cwd, input);
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
-  const client = host.querySelector<HTMLButtonElement>('button[title="src/client.ts"]')
-    ?? [...host.querySelectorAll("button")].find(item => item.textContent?.startsWith("Client"));
-  if (!client) throw new Error("Missing Client graph result");
-  await act(async () => { client!.click(); });
+  await act(async () => { listRow("Client").click(); });
   const panel = host.querySelector('aside[aria-label="Graph node details"]');
   expect(panel?.textContent).toContain("Client");
   expect(host.querySelector('.metaproject-content article')).toBeNull();
+  await openPanelTab("wiki");
   await act(async () => { button("Open in Wiki").click(); });
   expect(host.querySelector('[aria-label="Wiki article"]')?.textContent).toContain("Readable guide");
   await act(async () => { button("Back").click(); });
@@ -434,11 +455,14 @@ test("Find a Wiki page with no selected page shows an empty state naming the sea
   const client = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.textContent?.includes("Client"));
   if (!client) throw new Error("Missing Client result");
   await act(async () => { client.click(); });
+  await openPanelTab("wiki");
   await act(async () => { button("Find a Wiki page").click(); });
   const content = host.querySelector('[aria-label="Wiki article"]');
   expect(content?.querySelector("article")).toBeNull();
   expect(content?.querySelector(".empty-state")?.textContent).toContain("src/client.ts");
   expect(content?.textContent).not.toContain("Readable guide");
+  // The search is still in flight (its debounce has not run), so the title must not claim "no match".
+  expect(content?.querySelector(".empty-state h3")?.textContent).not.toContain("No Wiki page matches");
 });
 
 test("the Wiki relationships read uses fixed defaults whatever the Graph filters are", async () => {
@@ -450,11 +474,9 @@ test("the Wiki relationships read uses fixed defaults whatever the Graph filters
     return request(cwd, input);
   };
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
-  const depth = host.querySelectorAll("select")[1]!;
+  const depth = host.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
   await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
-  const imports = [...host.querySelectorAll("fieldset label")].find(label => label.textContent === "imports")?.querySelector("input");
-  if (!imports) throw new Error("Missing imports filter");
-  await act(async () => { imports.click(); });
+  await act(async () => { button("Imports").click(); });
   expect(reads.at(-1)).toMatchObject({ depth: 2 });
   await act(async () => { button("Wiki").click(); });
   expect(reads.at(-1)).toEqual({ action: "neighbors", id: page.id, depth: 1, direction: "both", kinds: ["imports", "asset", "describes", "links", "contains"] });
@@ -519,4 +541,130 @@ test("a wiki link outside the loaded nodes is looked up once and an unknown path
   await act(async () => { link("Root").click(); });
   expect(searches).toHaveLength(2);
   expect(panelTitle()).toBe("Client");
+});
+
+test("Back to a node reached through a lookup shows its panel at once", async () => {
+  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Far](../src/far.ts)" });
+    if (input.action === "search") return Promise.resolve({ ...snapshot, hits: input.query === far.path ? [{ node: far }] : [] });
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await act(async () => { button("Wiki").click(); });
+  const farLink = [...host.querySelectorAll<HTMLElement>("article .md a")].find(item => item.textContent === "Far");
+  await act(async () => { farLink?.click(); });
+  expect(panelTitle()).toBe("Far module");
+  await act(async () => { listRow("Client").click(); });
+  expect(panelTitle()).toBe("Client");
+  await act(async () => { button("Back").click(); });
+  expect(panelTitle()).toBe("Far module");
+});
+
+const third = { id: "third", kind: "file" as const, title: "Server", path: "src/server.ts" };
+const linkedCatalog: MetaprojectCatalog = {
+  ...catalog, graph: "ready", nodes: [page, file, third],
+  edges: [{ from: page.id, to: file.id, kind: "describes" }, { from: file.id, to: third.id, kind: "imports" }],
+};
+
+test("Graph mode shows the relationship list in the panel, not under the canvas, with labelled filters", async () => {
+  const createCytoscape = await headlessCytoscape();
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
+  await act(async () => { listRow("Client").click(); });
+  const content = host.querySelector(".metaproject-content");
+  expect(content?.querySelector(".metaproject-rgraph")).not.toBeNull();
+  expect(content?.querySelector(".metaproject-rel")).toBeNull();
+  const panelList = host.querySelector('[aria-label="Graph node details"] .metaproject-rel');
+  expect(panelList?.textContent).toContain("Guide");
+  expect(panelList?.textContent).toContain("Server");
+  expect(host.querySelector('select[aria-label="Direction"]')).not.toBeNull();
+  expect(host.querySelector('select[aria-label="Depth"]')).not.toBeNull();
+  const kinds = host.querySelector('[aria-label="Relationship types"]');
+  expect([...kinds?.querySelectorAll("button") ?? []].map(item => item.textContent?.trim())).toContain("Wiki links");
+  for (const label of ["Defines", "Calls"]) {
+    const chip = button(label);
+    expect(chip.disabled).toBe(true);
+    const reason = document.getElementById(chip.getAttribute("aria-describedby") ?? "")?.textContent ?? chip.title;
+    expect(reason).toContain("symbol layer");
+  }
+  // A changed filter offers Reset, which brings the defaults back.
+  expect([...host.querySelectorAll("button")].some(item => item.textContent?.trim() === "Reset filters")).toBe(false);
+  await act(async () => { button("Imports").click(); });
+  expect(button("Imports").getAttribute("aria-pressed")).toBe("false");
+  await act(async () => { button("Reset filters").click(); });
+  expect(button("Imports").getAttribute("aria-pressed")).toBe("true");
+});
+
+test("the list header counts shown of total and the limited-catalog banner is gone", async () => {
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, truncated: true, counts: { files: 40, wiki: 9, modules: 3 } }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  expect(host.querySelector(".metaproject-list h2")?.textContent).toBe("Catalog · 2 of 52");
+  expect(host.textContent).not.toContain("Catalog is limited");
+  await typeQuery("client");
+  expect(host.querySelector(".metaproject-list h2")?.textContent).toBe("Results · 1");
+});
+
+test("the selected list row is scrolled into view when the selection changes from the panel", async () => {
+  const scrolled: Element[] = [];
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  try {
+    const createCytoscape = await headlessCytoscape();
+    const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
+    await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
+    await act(async () => { listRow("Client").click(); });
+    scrolled.length = 0;
+    const serverRow = host.querySelector<HTMLButtonElement>('[aria-label="Graph node details"] .metaproject-rel-row[title="src/server.ts"]');
+    if (!serverRow) throw new Error("Missing Server relationship row");
+    await act(async () => { serverRow.click(); });
+    expect(panelTitle()).toBe("Server");
+    expect(scrolled).toContain(listRow("Server"));
+  } finally { HTMLElement.prototype.scrollIntoView = original; }
+});
+
+test("the previous graph stays rendered and busy while the next selection's relationships load", async () => {
+  const createCytoscape = await headlessCytoscape();
+  // The relationships read and the panel's linked-documents read of the new selection both wait.
+  const waiting: (() => void)[] = [];
+  const release = () => { for (const resolve of waiting.splice(0)) resolve(); };
+  const read = (_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...linkedCatalog, truncated: true });
+    if (input.action === "neighbors") {
+      const projection = { ...snapshot, root: input.id, nodes: [page, file], edges: [{ from: page.id, to: file.id, kind: "describes" as const }], truncated: false };
+      return input.id === page.id ? Promise.resolve(projection) : new Promise(resolve => { waiting.push(() => resolve(projection)); });
+    }
+    return request(_cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
+  const graph = () => host.querySelector(".metaproject-content .metaproject-rgraph");
+  expect(graph()?.querySelector(".metaproject-rgraph-title")?.textContent).toBe("Guide");
+  expect(graph()?.getAttribute("aria-busy")).toBeNull();
+  await act(async () => { listRow("Client").click(); });
+  expect(graph()?.querySelector(".metaproject-rgraph-title")?.textContent).toBe("Guide");
+  expect(graph()?.getAttribute("aria-busy")).toBe("true");
+  await act(async () => { release(); });
+  expect(graph()?.querySelector(".metaproject-rgraph-title")?.textContent).toBe("Client");
+  expect(graph()?.getAttribute("aria-busy")).toBeNull();
+});
+
+test("explorer banners sit above the OpenSpec view and the freshness banner reads as one sentence", async () => {
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    if (input.action === "catalog") throw new Error("Catalog read failed");
+    if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+    return { schemaVersion: 2, snapshotId: "s", hits: [] };
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<import("react").ComponentProps<typeof View>["requestV2"]>, onRebuild: async () => false })); });
+  await act(async () => { button("OpenSpec").click(); });
+  const alert = [...host.querySelectorAll('[role="alert"]')].find(item => item.textContent?.includes("Catalog read failed"));
+  const view = host.querySelector(".openspec-view");
+  if (!alert || !view) throw new Error("Missing banner or OpenSpec view");
+  expect(alert.compareDocumentPosition(view) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  await act(async () => { root.render(null); });
+  const createCytoscape = await headlessCytoscape();
+  const stale = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, graph: "stale", graphReason: "an untracked file changed" }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: stale, createCytoscape, onRebuild: async () => false })); });
+  expect(host.textContent).toContain("Graph is stale: an untracked file changed");
 });

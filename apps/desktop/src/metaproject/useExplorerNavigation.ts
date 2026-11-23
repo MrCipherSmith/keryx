@@ -12,7 +12,7 @@ const INITIAL: { [Mode in Route["mode"]]: Extract<Route, { mode: Mode }> } = {
   wiki: { mode: "wiki", query: "", selection: "" },
   openspec: { mode: "openspec", query: "", collection: "spec", location: null },
 };
-const PANES = [".metaproject-panes", ".metaproject-list", ".metaproject-content", ".metaproject-node-body"];
+const PANES = [".metaproject-panes", ".metaproject-list", ".metaproject-content", ".metaproject-details-body"];
 const CONTENT_PANE = PANES.indexOf(".metaproject-content");
 const HISTORY_LIMIT = 40;
 
