@@ -1,0 +1,120 @@
+{
+  "task": {
+    "task_id": "fix-20",
+    "task_name": "Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Six findings of review round 1 about the tests of the Metaproject explorer: 26 mutants of MetaprojectView.tsx, useExplorerNavigation.ts and App.tsx survive, so the behaviour they stand for is pinned by no assertion. Each finding is in `fix_context.review_feedback`; the full text is in findings.json and every mutant (file:line, anchor, replacement) in research-evidence/mutation-1-compact.txt. Task T17 has just changed the same production files (results/T17.result.json says what), so some anchors have moved. The task is done when every line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-011. The RetainedView test passes one value for both props, so `hidden={!visible}` can become `hidden={!active}` unnoticed (A1); App.tsx passes two different values when Settings is open over the work view. F-014. No test restores a scroll position, and the history cap, the same-route guard, the content reset and the switchView guard are unpinned (N1 to N5). F-015. The AC13 test never varies Direction and runs protocol 1 only (V1, V30). F-016. The “+N more” wiring — open the panel and reveal Relationships — is driven by no test (V8, V8b). F-017. Ten gates T8 added survive deletion (V2, V3, V4, V5, V6, V7, V13, V14, V15, V17). F-018. The AC16 guards and the settled AC12 state “No Wiki page matches …” are unpinned (V9, V10, V11, V12, V16, V31); the AC12 test checks the in-flight state only.\n\nFinish line: `scratch_check.py mutants --ids A1 --tests src/App.dom.test.tsx` and `--ids N1,N2,N3,N4,N5,V1,V2,V3,V4,V5,V6,V7,V8,V8b,V9,V10,V11,V12,V13,V14,V15,V16,V17,V30,V31 --tests src/metaproject/MetaprojectView.dom.test.tsx` report each mutant as killed. For a mutant the tool reports as invalid because T17 moved its anchor, your result names the line that now carries that behaviour and the test that pins it. For a mutant no DOM test can kill, it says why (an equivalent mutant, or behaviour only a layout engine shows). A test added here asserts what a user or a caller can observe — rendered text, roles, the requests the explorer sends, a callback's arguments — not the wording of the source. The production files are owned so that a test can be given a seam it needs; a change of behaviour in them is a `behavior_changes` entry, and a real defect a new test exposes is reported, with the test, before it is fixed.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx",
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "apps/desktop/src/App.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+      "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 1. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. The review package is .metaproject/reviews/2026-11-23-review-flow-branch: report.md (the round's report), findings.json (every finding with its file, line, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-1-compact.txt (each mutant of the mutation pass: file:line, the anchor, its replacement, killed or survived). Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies the review's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T20.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-011",
+        "file": "apps/desktop/src/App.dom.test.tsx",
+        "severity": "WARNING",
+        "message": "The RetainedView test passes one value for both props, so `hidden={!visible}` -> `hidden={!active}` leaves it green (mutant A1). App.tsx:594 passes different values (workView vs view), the Settings-over-work-view case.",
+        "suggested_fix": "Render with active true and visible false and assert the wrapper is hidden and the input is kept.",
+        "reviewer": "review-testing-practices",
+        "line": 27,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-014",
+        "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+        "severity": "WARNING",
+        "message": "No test restores a scroll position; reverting the selector T8 changed (.metaproject-details-body -> .metaproject-node-body), the history cap, the same-route guard, the content reset and the switchView guard all stay green.",
+        "suggested_fix": "DOM test that scrolls the details body, selects another node, presses Back and asserts scrollTop; one for the 40-entry cap.",
+        "reviewer": "review-testing-practices",
+        "line": 15,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-015",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "The AC13 test changes depth and kinds but leaves Direction at \"both\", and runs protocol 1 only; the direction part and the V2 kinds branch are unpinned.",
+        "suggested_fix": "Set Direction to incoming before switching to Wiki; add a protocol-2 run asserting the V2 kinds.",
+        "reviewer": "review-testing-practices",
+        "line": 268,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-016",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "showHidden (open panel + reveal Relationships) is driven by no test; the graph test checks a mock callback and the panel test checks the prop.",
+        "suggested_fix": "MetaprojectView test with headless cytoscape: close the panel, tap the overflow node, assert panel open on Relationships.",
+        "reviewer": "review-testing-practices",
+        "line": 649,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-017",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "T8 gates survive deletion: list-header floor and Wiki-mode total, dropping a stale graph on a failed read, protocol-2 showGraph, Draft gate, documents-pending flags, Direction in the Filters count, Filters-button mousedown, popover clamp, Wiki disclosure with 0 edges.",
+        "suggested_fix": "One test per gate with the existing fixtures (Wiki-mode header, failed second read, mousedown on the Filters button).",
+        "reviewer": "review-testing-practices",
+        "line": 645,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-018",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "AC16/AC12 guards unpinned: undecodable href, snapshot mismatch on lookup, late lookup after selection change, message scoped to selection, and the settled Wiki empty-state wording naming the searched text (the test asserts the in-flight state only).",
+        "suggested_fix": "Run the debounce and assert the final title; add a malformed %E0%A4%A link and a late-resolving lookup.",
+        "reviewer": "review-testing-practices",
+        "line": 621,
+        "premise_verdict": "upheld"
+      }
+    ],
+    "original_task_ids": [
+      "task-7",
+      "task-8",
+      "task-14"
+    ],
+    "iteration": 1
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

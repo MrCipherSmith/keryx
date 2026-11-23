@@ -1015,3 +1015,297 @@ test("Back to an OpenSpec document restores the scroll it was left at, and the n
   expect(title()).toBe("Alpha spec");
   expect(pane().scrollTop).toBe(120);
 });
+
+// ---- Test strength after review round 1 (T20): each test pins one gate a surviving mutant removed. ----
+
+/** A headless graph factory that also hands the test the live cytoscape instance. */
+async function capturingCytoscape() {
+  const base = await headlessCytoscape();
+  const seen: { cy: import("cytoscape").Core | null } = { cy: null };
+  const createCytoscape = (options: import("cytoscape").CytoscapeOptions) => (seen.cy = base(options));
+  return { createCytoscape, graph: () => { if (!seen.cy) throw new Error("No graph was drawn"); return seen.cy; } };
+}
+function stubWindowWidth(width: number) {
+  const own = Object.getOwnPropertyDescriptor(window, "innerWidth");
+  Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+  return () => { if (own) Object.defineProperty(window, "innerWidth", own); else Reflect.deleteProperty(window, "innerWidth"); };
+}
+/** Replaces window.setTimeout so a test runs the search debounce when it chooses; returns the runner and the undo. */
+function holdDebounce() {
+  const originalTimeout = window.setTimeout;
+  let runTimer: () => void = () => {};
+  window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") runTimer = () => callback(); return 1; }) as typeof window.setTimeout;
+  return { run: () => act(async () => { runTimer(); }), restore: () => { window.setTimeout = originalTimeout; } };
+}
+const wikiLink = (text: string) => {
+  const found = [...host.querySelectorAll<HTMLElement>("article .md a")].find(item => item.textContent === text);
+  if (!found) throw new Error(`Missing link ${text}`);
+  return found;
+};
+const wikiArticle = () => host.querySelector('[aria-label="Wiki article"] article');
+const panelTab = (tab: string) => host.querySelector<HTMLElement>(`[aria-label="Graph node details"] [role="tab"][data-tab="${tab}"]`);
+
+test("Back stops after the 40 most recent history entries", async () => {
+  const many = Array.from({ length: 42 }, (_, index) => ({ id: `n${index}`, kind: "file" as const, title: `Node ${String(index).padStart(2, "0")}`, path: `src/n${index}.ts` }));
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, nodes: many, counts: { files: many.length, wiki: 0, modules: 0 } }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  // Node 00 is shown already, so its row only opens the panel; each of the next 41 is a history entry.
+  for (const node of many.slice(1)) await act(async () => { listRow(node.title).click(); });
+  expect(panelTitle()).toBe("Node 41");
+  for (let step = 0; step < 40; step++) await act(async () => { button("Back").click(); });
+  expect(panelTitle()).toBe("Node 01");
+  expect([...host.querySelectorAll("button")].some(item => item.textContent?.trim() === "Back")).toBe(false);
+});
+
+test("Back restores the details panel's scroll for the node it returns to", async () => {
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: linkedRead, createCytoscape, onRebuild: noRebuild })); });
+  await act(async () => { listRow("Client").click(); });
+  const body = () => host.querySelector<HTMLElement>('[aria-label="Graph node details"] [role="tabpanel"]')!;
+  body().scrollTop = 140;
+  await act(async () => { listRow("Server").click(); });
+  expect(panelTitle()).toBe("Server");
+  body().scrollTop = 0;
+  await act(async () => { button("Back").click(); });
+  expect(panelTitle()).toBe("Client");
+  expect(body().scrollTop).toBe(140);
+});
+
+test("pressing the view that is already shown keeps its selection, panel and history", async () => {
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: noRebuild })); });
+  await act(async () => { listRow("Client").click(); });
+  await act(async () => { button("Graph").click(); });
+  expect(panelTitle()).toBe("Client");
+  await act(async () => { button("Back").click(); });
+  expect([...host.querySelectorAll("button")].some(item => item.textContent?.trim() === "Back")).toBe(false);
+});
+
+test("with protocol 2 the Wiki relationships read uses depth 1, both directions and every non-symbol kind of protocol 2", async () => {
+  const createCytoscape = await headlessCytoscape();
+  const reads: Record<string, unknown>[] = [];
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    const base = { schemaVersion: 2, snapshotId: "one" };
+    if (input.action === "catalog") return { ...catalog, ...base, graph: "ready" };
+    if (input.action === "neighbors") { reads.push(input); return { ...base, root: input.id, nodes: [page, file], edges: [], truncated: false }; }
+    if (input.action === "detail") return { ...base, node: page, markdown: "# Readable guide" };
+    return { ...base, hits: [] };
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, createCytoscape, onRebuild: noRebuild })); });
+  await openFilters();
+  const select = (label: string, value: string) => act(async () => {
+    const control = host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
+    control.value = value; control.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await select("Direction", "incoming");
+  await select("Depth", "2");
+  await act(async () => { button("Imports").click(); });
+  expect(reads.at(-1)).toMatchObject({ direction: "incoming", depth: 2 });
+  await act(async () => { button("Wiki").click(); });
+  const { METAPROJECT_EDGE_KINDS_V2 } = await import("../../../../src/integrations/metaproject-explorer-contract");
+  expect(reads.at(-1)).toMatchObject({ action: "neighbors", id: page.id, depth: 1, direction: "both" });
+  expect(reads.at(-1)?.kinds).toEqual(METAPROJECT_EDGE_KINDS_V2.filter(kind => kind !== "defines" && kind !== "calls"));
+});
+
+test("the list header never counts fewer than it lists, and in Wiki counts Wiki pages only", async () => {
+  let counts = { files: 0, wiki: 0, modules: 0 };
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve({ ...catalog, counts }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  expect(host.querySelector(".metaproject-list h2")?.textContent).toBe("Catalog · 2 of 2");
+  await act(async () => { root.render(null); });
+  counts = { files: 40, wiki: 9, modules: 3 };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  await act(async () => { button("Wiki").click(); });
+  expect(host.querySelector(".metaproject-list h2")?.textContent).toBe("Catalog · 1 of 9");
+});
+
+test("after a failed relationships read the old graph is not shown again while the next selection loads", async () => {
+  const createCytoscape = await headlessCytoscape();
+  const read = (_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...linkedCatalog, truncated: true });
+    if (input.action === "neighbors") {
+      if (input.id === page.id) return Promise.resolve({ ...snapshot, root: page.id, nodes: [page, file], edges: [{ from: page.id, to: file.id, kind: "describes" as const }], truncated: false });
+      if (input.id === file.id) return Promise.reject(new Error("Relationships read failed"));
+      return new Promise(() => {});
+    }
+    return request(_cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: noRebuild })); });
+  const graph = () => host.querySelector(".metaproject-content .metaproject-rgraph");
+  expect(graph()).not.toBeNull();
+  await act(async () => { listRow("Client").click(); });
+  expect(host.textContent).toContain("Relationships read failed");
+  await act(async () => { listRow("Server").click(); });
+  expect(graph()).toBeNull();
+  expect(host.querySelector(".metaproject-content")?.textContent).toContain("Loading relationships…");
+});
+
+test("with protocol 2 the graph is drawn even when the catalog reports the graph missing", async () => {
+  const createCytoscape = await headlessCytoscape();
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    const base = { schemaVersion: 2, snapshotId: "one" };
+    if (input.action === "catalog") return { ...linkedCatalog, ...base, graph: "missing" };
+    if (input.action === "neighbors") return { ...base, root: input.id, nodes: [page, file], edges: [{ from: page.id, to: file.id, kind: "describes" }], truncated: false };
+    return { ...base, hits: [] };
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, createCytoscape, onRebuild: noRebuild })); });
+  expect(host.textContent).toContain("Graph is missing.");
+  expect(host.querySelector(".metaproject-content .metaproject-rgraph-title")?.textContent).toBe("Guide");
+});
+
+test("Draft is offered only on a ready graph whose linked-document read is complete", async () => {
+  const createCytoscape = await headlessCytoscape();
+  const drafted: string[] = [];
+  const show = async (graph: "ready" | "stale", truncated: boolean) => {
+    await act(async () => { root.render(null); });
+    const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+      if (input.action === "catalog") return Promise.resolve({ ...catalog, graph, truncated: true });
+      if (input.action === "neighbors") return Promise.resolve({ ...snapshot, root: input.id, nodes: [input.id === page.id ? page : file], edges: [], truncated });
+      return request(cwd, input);
+    };
+    await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: noRebuild, onDraft: async task => { drafted.push(task); } })); });
+    await act(async () => { listRow("Client").click(); });
+    await openPanelTab("wiki");
+    return [...host.querySelectorAll("button")].some(item => item.textContent?.includes("Draft Wiki page"));
+  };
+  expect(await show("ready", false)).toBe(true);
+  expect(await show("stale", false)).toBe(false);
+  expect(await show("ready", true)).toBe(false);
+});
+
+test("a failed linked-document read shows its problem instead of a pending lookup", async () => {
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...catalog, truncated: true });
+    if (input.action === "neighbors" && input.kinds.includes("describes") && !input.kinds.includes("imports")) return Promise.reject(new Error("Linked documents unavailable"));
+    if (input.action === "neighbors") return Promise.resolve({ ...snapshot, root: input.id, nodes: [page, file], edges: [], truncated: false });
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  await act(async () => { listRow("Client").click(); });
+  await openPanelTab("wiki");
+  const panel = host.querySelector('[aria-label="Graph node details"]')?.textContent ?? "";
+  expect(panel).toContain("Linked documents unavailable");
+  expect(panel).not.toContain("Looking for linked documents");
+});
+
+test("tapping a graph's “+N more” entry opens the panel on its Relationships tab", async () => {
+  const neighbours = Array.from({ length: 14 }, (_, index) => ({ id: `out${index}`, kind: "file" as const, title: `Out ${index}`, path: `src/out${index}.ts` }));
+  const crowded: MetaprojectCatalog = {
+    ...catalog, graph: "ready", nodes: [file, page, ...neighbours],
+    edges: neighbours.map(node => ({ from: file.id, to: node.id, kind: "imports" as const })),
+  };
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(crowded) : request(cwd, input);
+  const { createCytoscape, graph } = await capturingCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: noRebuild })); });
+  const more = () => { const entry = graph().nodes(".overflow"); if (!entry.length) throw new Error("No “+N more” entry"); return entry[0]!; };
+  expect(host.querySelector('[aria-label="Graph node details"]')).toBeNull();
+  await act(async () => { more().emit("tap"); });
+  expect(panelTitle()).toBe("Client");
+  expect(panelTab("relationships")?.getAttribute("aria-selected")).toBe("true");
+  await openPanelTab("wiki");
+  expect(panelTab("relationships")?.getAttribute("aria-selected")).toBe("false");
+  await act(async () => { more().emit("tap"); });
+  expect(panelTab("relationships")?.getAttribute("aria-selected")).toBe("true");
+});
+
+test("a wiki-link lookup answered from another snapshot opens nothing and offers a refresh", async () => {
+  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Far](../src/far.ts)" });
+    if (input.action === "search") return Promise.resolve({ ...snapshot, snapshotId: "two", hits: [{ node: far }] });
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => { wikiLink("Far").click(); });
+  expect(panelTitle()).toBeUndefined();
+  expect(wikiArticle()?.textContent).toContain("Intro.");
+  expect(host.textContent).toContain("Project knowledge changed while loading");
+});
+
+test("a wiki link that cannot be decoded is named as invalid and never looked up", async () => {
+  const searches: string[] = [];
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Broken](bad%E0%A4%A.md)" });
+    if (input.action === "search") { searches.push(input.query); return Promise.resolve({ ...snapshot, hits: [] }); }
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => { wikiLink("Broken").click(); });
+  expect(wikiArticle()?.querySelector('[role="status"]')?.textContent).toBe("The link bad%E0%A4%A.md is not a valid repository path.");
+  expect(searches).toEqual([]);
+});
+
+test("an unresolved-link message belongs to its page and is gone on the next page", async () => {
+  const second = { id: "second", kind: "wiki" as const, title: "Second guide", path: "wiki/second.md" };
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...catalog, nodes: [page, second, file] });
+    if (input.action === "detail") return Promise.resolve({ ...snapshot, node: input.id === second.id ? second : page, markdown: input.id === second.id ? "Second body." : "Intro.\n\n[Missing](missing.md)" });
+    if (input.action === "search") return Promise.resolve({ ...snapshot, hits: [] });
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => { wikiLink("Missing").click(); });
+  expect(wikiArticle()?.textContent).toContain("No indexed project file at wiki/missing.md.");
+  await act(async () => { listRow("Second guide").click(); });
+  expect(wikiArticle()?.textContent).toContain("Second body.");
+  expect(wikiArticle()?.textContent).not.toContain("wiki/missing.md");
+});
+
+test("a changed Direction counts in the Filters button and its summary", async () => {
+  await renderFilters();
+  await openFilters();
+  await act(async () => {
+    const direction = host.querySelector<HTMLSelectElement>('select[aria-label="Direction"]')!;
+    direction.value = "incoming"; direction.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(filtersButton().textContent?.trim()).toBe("Filters · 1");
+  expect(filtersButton().title).toBe("Incoming · 1 step · 5 of 7 types");
+});
+
+test("pressing the Filters button of an open popover closes it, not closes and reopens it", async () => {
+  await renderFilters();
+  await openFilters();
+  // A real press is a mousedown and then a click on the same button.
+  await act(async () => { filtersButton().dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+  await act(async () => { filtersButton().click(); });
+  expect(filtersDialog()).toBeNull();
+  expect(filtersButton().getAttribute("aria-expanded")).toBe("false");
+});
+
+test("the Filters popover is kept 8 px inside the window's left and right edges", async () => {
+  const restoreWidth = stubWindowWidth(720);
+  try {
+    await renderFilters();
+    stubBox(filtersButton(), { left: 130, top: 100, right: 200, bottom: 124 });
+    await openFilters();
+    expect(px(filtersDialog()!.style.left)).toBe(8);
+    await act(async () => { filtersButton().click(); });
+    stubBox(filtersButton(), { left: 690, top: 100, right: 760, bottom: 124 });
+    await openFilters();
+    expect(px(filtersDialog()!.style.left)).toBe(720 - 320 - 8);
+  } finally { restoreWidth(); }
+});
+
+test("once the search settles, Find a Wiki page names the searched text in its empty state", async () => {
+  const debounce = holdDebounce();
+  try {
+    await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: noRebuild })); });
+    await act(async () => { listRow("Client").click(); });
+    await openPanelTab("wiki");
+    await act(async () => { button("Find a Wiki page").click(); });
+    await debounce.run();
+    const content = host.querySelector('[aria-label="Wiki article"]');
+    expect(content?.querySelector(".empty-state h3")?.textContent).toBe("No Wiki page matches “src/client.ts”");
+    expect(content?.querySelector("article")).toBeNull();
+  } finally { debounce.restore(); }
+});
+
+test("a Wiki page without relationships shows no Relationships disclosure", async () => {
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: noRebuild })); });
+  await act(async () => { button("Wiki").click(); });
+  expect(wikiArticle()?.textContent).toContain("Readable guide");
+  expect(host.querySelector(".metaproject-relationship-section")).toBeNull();
+});

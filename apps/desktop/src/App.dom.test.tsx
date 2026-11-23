@@ -42,3 +42,23 @@ test("a retained view mounts on its first visit and keeps its state while hidden
   expect(host.querySelector<HTMLInputElement>("input")?.value).toBe("kept query");
   expect(input.closest("[hidden]")).toBeNull();
 });
+
+test("a retained view is hidden while it is the work view under Settings, keeping its state, and shown when visible alone", async () => {
+  // App.tsx passes active = the work view and visible = the shown view; Settings opened over the work view sets them apart.
+  const render = (active: boolean, visible: boolean) => React.act(async () => {
+    root.render(React.createElement(RetainedView, { active, visible, children: React.createElement(Draft) }));
+  });
+  await render(true, true);
+  const input = host.querySelector<HTMLInputElement>("input");
+  if (!input) throw new Error("Missing retained input");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "under settings");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await render(true, false);
+  expect(host.querySelector("input")).toBe(input);
+  expect(input.closest("[hidden]")).not.toBeNull();
+  await render(false, true);
+  expect(input.closest("[hidden]")).toBeNull();
+  expect(input.value).toBe("under settings");
+});
