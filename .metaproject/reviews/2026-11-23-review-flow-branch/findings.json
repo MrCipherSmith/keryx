@@ -1,0 +1,1026 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-layout",
+    "severity": "major",
+    "problem": "Filters popover is clipped by 51 px at the 720x480 minimum window when the stale banner is expanded, and cannot scroll. The popover is a fixed-position .menu whose top is computed once as anchor.bottom + 4 (MetaprojectView.tsx FiltersPopover: `setPosition({ left, top: rect.bottom + 4 })`). The only height limit is the shared .menu max-block-size of 400px, a fixed number, not a function of the room below the anchor. The rule above adds no max-block-size or overflow clamp tied to the window, so when the anchor sits low the popover runs past the window edge. Its content (229 px) is below 400 px, so it never becomes scrollable either and the last row is unreachable.",
+    "impact": "At the smallest supported window (720x480), a developer with a stale graph who opens Details and then Filters cannot reach the lower relationship-type chips, the symbol-layer reason or Reset filters. A stale graph is the state the flow journal calls the one a developer is in most of the time. Any state that pushes the header down further (a longer reason, a second banner, a larger text scale) moves the cut up. The position is computed once on open, so a resize while it is open is not tracked (unmeasured).",
+    "suggested_fix": "Bound the popover by the room below its anchor: compute `maxHeight = window.innerHeight - top - 8` next to `top` in FiltersPopover and set `max-block-size: min(400px, that)` with `overflow-y: auto`; or flip it above the anchor when there is more room there. Re-measure at 720x480 with Details expanded: popover bottom at or below 472 and scrollHeight greater than clientHeight.",
+    "evidence": "Orchestrator live probe, browser dev build, 720x480, dark, Graph, 'Agent Bus', depth 1, getBoundingClientRect (research-evidence/live-filters-popover-720x480.txt). One-line banner: button bottom 225, popover top 232 bottom 455, 25 px of room, not cut. Banner with Details expanded (banner 122 px): button bottom 301, popover top 308 bottom 531, window 480, cut by 51 px; scrollHeight equals clientHeight (229), so no scroll; the 'Not available: ...' note and the lower chips are outside the window. Not measured: light theme, 1180x780 and 1440x900 with the popover open, the native Tauri window, window resize while open. Measured by the orchestrator in two engines at 720x480 with the freshness Details expanded: Chromium 156, popover bottom 531 against a 480 px window, cut by 51 px, no scroll (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/live-filters-popover-720x480.txt); system WKWebView (AppleWebKit 605.1.15, macOS 26.7.3), layout box bottom 497, cut by 17 px, no scroll (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/verify-F-001-3.txt). With the one-line banner it fits in both (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/verify-F-001-2.txt). The height cap the reviewer calls max-block-size 400px is `.menu`'s `max-height: min(420px, calc(100vh - 80px))` (styles.css:143), which is 400 px at this window height. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the same defect was raised by review-ui-ux (review-ui-ux-w2, UX-001, minor); the same defect was raised by review-ui-ux (review-ui-ux-w1, UX-002, info).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/metaproject.css",
+    "line": 90,
+    "quote": ".metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/metaproject/metaproject.css:.metaproject-filters-pop",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx:FiltersPopover (the only user of the class)"
+      ],
+      "enumeration_method": "keryx ctx rg for `metaproject-filters-pop` under apps/desktop/src/metaproject: one rendering site, the FiltersPopover component (MetaprojectView.tsx:196); the shared .menu in apps/desktop/src/styles.css:142 supplies the 400px cap and is not changed by this diff."
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-F-001-3.txt (system WKWebView, AppleWebKit 605.1.15, 720x480, Details expanded): popover layoutBox bottom 497, cutBottomBy 17, scrolls false, maxHeight 400px. research-evidence/live-filters-popover-720x480.txt (Chromium 156, same state): bottom 531, cut by 51, no scroll. verify-F-001-2.txt (WKWebView, one-line banner): cutBottomBy -59, fits. Clip and no-scroll reproduce in both engines; the 51 px figure is Chromium-only, WebKit clips 17 px. Window minimum confirmed by rg of apps/desktop/src-tauri/tauri.conf.json (minWidth 720, minHeight 480). Quote confirmed at apps/desktop/src/metaproject/metaproject.css:90. Not measured: light theme, 1180x780 and 1440x900 with the popover open, native window resize.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "No signal of intent. The operator chose a popover (journal.md:73) and a one-line banner with Details on demand (journal.md:82, :93), but nobody chose to let the popover run past the window. AC20 scopes its 720x480 check to 'no warning banner'; that limits what was measured and does not accept clipping in the banner state. Siblings point the other way: the shared Menu component bounds its vertical position by window.innerHeight and can place a menu above its anchor (apps/desktop/src/components/Menu.tsx:49-53), and .menu caps its height by the viewport (apps/desktop/src/styles.css:143). FiltersPopover (MetaprojectView.tsx:177-182) computes only top = anchor.bottom + 4. The suggested fix (bound by the room below the anchor, or flip above) makes the popover more consistent with Menu.tsx, and is the usual practice for anchored popovers. Measured in two engines; the premise stands."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-frontend",
+    "severity": "major",
+    "problem": "The explorer root `<section className=\"flows metaproject\">` becomes a size container. container-type inline-size applies layout containment, and an element with layout containment is the containing block of its `position: fixed` descendants. The Filters popover (`FiltersPopover` in MetaprojectView.tsx, rendered inside that section, class `menu`, which `styles.css` sets to `position: fixed`) is placed with viewport coordinates from `anchor.getBoundingClientRect()` (`left`, `top: rect.bottom + 4`). With the new container, those values are resolved against the section's padding box, not the viewport, so the popover is shifted by the section's own viewport offset (sidebar width, toolbar height) and the Escape/outside-press logic and the horizontal clamp to `window.innerWidth` no longer match where it is drawn.",
+    "impact": "Where the section is not at viewport (0,0) the Filters popover opens displaced from its button, and can fall partly outside the window. The only live measurement (720x480) shows the popover top 3 px below the 4 px the code intends (button bottom 225, popover top 232), which is consistent with a small offset, but no measurement was taken with the sidebar visible (1180x780, 1440x900) or in the native window.",
+    "suggested_fix": "Render the popover through a portal to document.body (the other `.menu` users are not inside a size container), or move the container off the ancestor of the popover (for example put `container-type` on `.metaproject-panes`, and leave the header, banner and popover outside it), or compute the position relative to `root.current.getBoundingClientRect()`. Add a DOM-free check or a live probe at 1180x780 with the popover open that compares popover.left to anchor.right - 320.",
+    "evidence": "Read: metaproject.css line `.metaproject { container: metaproject / inline-size; }` (slice-06, hunk 1); MetaprojectView.tsx:171-201 (FiltersPopover, fixed-position `.menu` placed from getBoundingClientRect, rendered at :684 inside the section opened at :730); styles.css:142-143 (`.menu { position: fixed; ... }`); research-evidence/live-filters-popover-720x480.txt (top 232 vs button bottom 225). CSS Containment: container-type size/inline-size applies layout containment, which makes the element a containing block for fixed descendants. Not run: read-only tools and no browser, so the displacement is derived from the spec and the code, not measured at a width where the sidebar is visible. Measured by the orchestrator after the finding was raised: in Chromium 156 (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/live-filters-popover-containing-block.txt) and in the system WKWebView, AppleWebKit 605.1.15 on macOS 26.7.3 (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/verify-F-002-2.txt), the popover's layout box sits exactly at its inline viewport coordinates (displacement 0, 0) while the section's origin is (60, 77), so neither engine makes the size container the containing block of the fixed popover. Not measured: WebKit of older macOS versions. review-regression (wave 3) noted the same possibility without filing it.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/metaproject.css",
+    "line": 9,
+    "quote": ".metaproject { container: metaproject / inline-size; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "css-container-type-breaks-fixed-filters-popover",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/metaproject/metaproject.css:9 (container on .metaproject)",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx:196 (the only position:fixed descendant of the section)"
+      ],
+      "enumeration_method": "keryx ctx rg \"position: fixed|createPortal|<Menu|components/Menu\" apps/desktop/src/metaproject: no other fixed or portalled descendant of the section; the details panel's `.compact` drawer is position:absolute inside `.metaproject-graph-panes` and is unaffected."
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "research-evidence/verify-F-002-2.txt (system WKWebView, AppleWebKit 605.1.15, 1024x768, section origin (60,77)): popover rect left 591.8 top 241.9, layoutBox left 587 top 239 equals its inline coordinates, displacementFromInline x 0 y 0. research-evidence/live-filters-popover-containing-block.txt (Chromium 156): popover rect 587,239 equals inline, offset 0,0. The container is present (verify-F-002-1.txt: metaproject.css:9 container: metaproject / inline-size), so the sites exist and the displacement the finding claims does not occur in these two engines. Not measured: older WebKit, the native Tauri window, the Escape and outside-press paths.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "challenged",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/styles.css:416",
+          "says": "the composer has been an inline-size container (container-type: inline-size) since before this branch: the pattern is already in use in the app"
+        },
+        {
+          "ref": "d24ca140b",
+          "says": "added container-type: inline-size on .review-workspace (apps/desktop/src/review/ReviewDetail.css:1) before this branch, another earlier inline-size container in the same app"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "CSS Containment Module Level 3 (W3C), section 'Creating Query Containers: the container-type property'",
+          "says": "the size and inline-size values apply style containment plus size or inline-size containment. Layout containment is not among them"
+        },
+        {
+          "name": "CSS Containment Module Level 2 (W3C), section 3.2 'Layout Containment'",
+          "says": "layout containment is what makes an element the containing block for its absolute and fixed descendants. Without it the reviewer's chain (container -> layout containment -> containing block for position: fixed) does not hold"
+        }
+      ],
+      "reasoning": "The finding takes a spec reading as its premise: inline-size containers apply layout containment and so trap position: fixed descendants. The current container-type definition applies no layout containment, and the round measured exactly that. In Chromium 156 and in the system WKWebView (macOS 26.7.3), the popover sits at its viewport coordinates, displacement (0, 0), while the section's origin is (60, 77) (research-evidence/live-filters-popover-containing-block.txt, research-evidence/verify-F-002-2.txt). The app already used inline-size containers before this branch. Fix soundness: a portal or moving the container would answer a containment that does not happen. Residual, not measured: tauri.conf.json:42 sets minimumSystemVersion 12.0, so an older WebKit that implemented an earlier draft could behave differently. That is the only way the finding could still be true.",
+      "question": "The containing-block shift does not happen in current Chromium or current WKWebView, and the CSS spec gives inline-size containers no layout containment. Dismiss it, or keep it open until older macOS WebKit is checked?",
+      "options": [
+        "dismiss — the container does not trap the fixed popover; no change",
+        "uphold — keep it open and check on the oldest supported macOS WebKit (or portal the popover as a precaution)"
+      ]
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-degradation",
+    "severity": "minor",
+    "problem": "FiltersPopover registers on the app-wide Escape stack (components/ui.tsx:44-70: window keydown listener, `e.preventDefault(); top.current?.()` for the top entry) and so makes `overlayOpen()` true (ui.tsx:81). On base the explorer was unmounted when the user left the view, taking any popover with it. On head the explorer is mounted but hidden (RetainedView), and `filtersOpen` is deliberately kept across view switches (comment 'Open or closed is explorer state ... survives a view or tab switch'). The only close paths are Escape, a mousedown outside, or the button. A keyboard user can Tab to the sidebar nav and press Enter (no mousedown, popover has no focus-out close) and arrive in another view with the popover open but hidden.",
+    "impact": "While that hidden popover is registered: the first Escape in the other view is consumed by it (preventDefault, then focuses a hidden anchor), so Escape does not reach the visible view; AppShell's view shortcuts back off (AppShell.tsx:84 and :112 return when overlayOpen()); App.tsx:360 and BrowserPanel.tsx:114 (`show = ... && !overlayOpen()`) also treat an overlay as open, so the native browser view hides. Nothing on screen explains it; a second Escape clears it. If true for you: minor (recoverable, needs the keyboard path described).",
+    "suggested_fix": "Close the popover when its view is hidden: pass the RetainedView `visible` flag into MetaprojectView and call setFiltersOpen(false) on becoming hidden, or mount FiltersPopover only while visible. Add a test that switches view with the popover open and checks overlayOpen() is false.",
+    "evidence": "Also described, without a finding, by review-regression (wave 2), which lists the overlayOpen() consumers it reaches: App.tsx:360, AppShell.tsx:84/112, BrowserPanel.tsx:114/130, ReviewBoard.tsx:247/258. Normalisation notes: the same defect was raised by review-highload (review-highload-w2, F-001, minor); the same defect was raised by review-frontend (review-frontend-w2, its unnumbered finding, info); the same defect was raised by review-logic (review-logic-w5, F-001, minor).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 176,
+    "quote": "useEscape(() => close.current());",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-23-review-flow-branch#F-003",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'survives a view or tab switch|useEscape\\(\\(\\) => close.current\\(\\)\\)' apps/desktop/src/metaproject: MetaprojectView.tsx:176 useEscape(() => close.current()) and :259 comment saying filters state survives a view or tab switch. Sites exist. The overlayOpen() consequence and the Escape path need a run, not run. No test covers it (mutants V-series in mutation-1-compact.txt did not target the Escape stack).",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The comment that keeps filtersOpen across a view switch (MetaprojectView.tsx:259) comes from this branch, so it cannot ratify itself. The choice the operator was shown, 'the popover stays open across setting changes and view switches' (journal.md:76, kept as implemented at :83), is about switching between Graph, Wiki and OpenSpec inside the explorer. The plan's matrix keeps 'switch view' and 'leave the work view and return' as separate columns (plan.md:169). Nobody chose to leave a hidden dialog registered on the app-wide Escape stack, which swallows the first Escape and turns on overlayOpen() in other views. No intent signal or practice source stands against the premise."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-degradation",
+    "severity": "minor",
+    "problem": "Base: `{workView === \"metaproject\" && <div className=\"view\" ...><MetaprojectView/></div>}` unmounted the explorer whenever the user left it (workView = view except while in Settings, App.tsx:481), so every return re-ran the catalog read and refreshed the 'Graph is stale/missing' freshness banner, node list and counts. Head keeps Explorer mounted; the catalog effect in MetaprojectView.tsx (`useEffect(() => { if (protocol === null) return; const generation = ++project.current; ... read(cwd, { action: \"catalog\" })`) depends only on protocol/cwd/read/revision, and RetainedView passes the explorer no visibility or 'returned' signal. After the first visit the catalog is read again only on cwd change, Retry/Refresh/Rebuild or revision bump.",
+    "impact": "User opens Metaproject, goes to a session where the agent (or the user) rebuilds the graph or changes the repo, and returns: the list, counts and freshness banner still show the old snapshot, including a stale 'Graph is stale' banner after a rebuild done elsewhere. The state self-corrects only when a later read returns a different snapshotId (which raises the 'Project knowledge changed' banner with Refresh catalog); a plain look at the list shows old data with no hint. If true for you: minor, a stale view, recoverable with one click once the banner shows.",
+    "suggested_fix": "Give the retained explorer a refresh trigger on becoming visible again (pass `visible` through and bump `revision` on a hidden-to-visible transition when the catalog was loaded earlier than a threshold, or re-read the catalog silently and keep the selection when the snapshot id is unchanged). Alternatively state in the guide that the catalog is not refreshed on return.",
+    "evidence": "not stated by the reviewer",
+    "confidence": "medium",
+    "file": "apps/desktop/src/App.tsx",
+    "line": 151,
+    "quote": "return visited || active ? <div className=\"view\" hidden={!visible}>{children}</div> : null;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "base-diff",
+    "global_id": "2026-11-23-review-flow-branch#F-004",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'return visited || active' apps/desktop/src: App.tsx:151 return visited || active ? <div className=\"view\" hidden={!visible}>... so the retained wrapper exists, with App.tsx:594 passing visible={view === \"metaproject\"}. The catalog effect and the stale-banner outcome after return were not run; base App.tsx was not re-read.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "owner-decision",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md:30-31",
+          "says": "lifting state into a store was rejected for 'keeping the view mounted after its first visit, which is how the session view already behaves'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md:173",
+          "says": "state x event matrix, 'leave the work view and return': mode, query, selection, filters, panel state and history are as they were (AC10)"
+        },
+        {
+          "ref": "1358d962f:apps/desktop/src/App.tsx:568",
+          "says": "at base, the session view (and the review view at :594) stays mounted and hidden instead of remounting on return: retained hidden views are an existing pattern"
+        }
+      ],
+      "reasoning": "The explorer was kept mounted on purpose, so its state stays as it was when the user returns (the plan and AC10). That it shows the catalog snapshot it last read is a consequence of that design, not an oversight in it. On the other side, base re-read the catalog on every return, and neither the plan nor the matrix says whether data freshness should survive a return the way UI state does. Both readings are consistent. Which to choose is a product call between 'as you left it' and 'fresh on return', and the code cannot settle it.",
+      "question": "The retained explorer shows the catalog it last read when you come back. Keep that (and say so in the guide), or re-read the catalog when the view becomes visible again?",
+      "options": [
+        "dismiss — keep the retained snapshot; the snapshot-mismatch banner and Refresh catch up; note it in the guide",
+        "uphold — re-read the catalog silently when the explorer becomes visible, keeping the selection"
+      ],
+      "operator": {
+        "answer": "uphold",
+        "reason": "The operator's first answer to this finding was «Перечитывать (Recommended)»: re-read the catalog silently when the view is shown again, keeping the selection, filters and history.",
+        "quote": "uphold",
+        "at": "2026-11-23T09:38:09.352Z",
+        "actor": "operator",
+        "confirmedVia": "host-question",
+        "hostQuestion": {
+          "source": "claude-code",
+          "ref": "AskUserQuestion",
+          "questionText": "Запись решения по находке F-004 (каталог не перечитывается при возврате на вкладку Metaproject). Вы ответили «Перечитывать». Инструмент принимает только слово uphold или dismiss — какое записать?",
+          "answerText": "uphold",
+          "time": "2026-11-23T09:38:09.352Z"
+        }
+      }
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "Concurrent wiki-link lookups are won by whichever read returns first",
+    "impact": "Trigger: click an unloaded wiki link A, then another unloaded link B on the same page before A's `search` read resolves. Both reads pass `current()` because the selection has not changed; whichever resolves first calls `openDocument` and changes the selection, after which the other is dropped. If A's read is the slower one, B opens (the last click wins); if A is faster, A opens and B is silently discarded. The outcome depends on read latency, not click order. No data is lost and the user can click again.",
+    "suggested_fix": "Keep a lookup counter in a ref, increment it in openPath, and have `current()` also require `token === lookup.current` (the pattern `latestSearch.current.generation` already uses nearby).",
+    "evidence": "`const current = () => generation === project.current && shownSelection.current === from && activeMode.current === \"wiki\";` in openPath, which guards only against a changed project, selection or mode, not against a second lookup started from the same page. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 615,
+    "quote": "const current = () => generation === project.current && shownSelection.current === from && activeMode.current === \"wiki\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-005",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'const current = () => generation' apps/desktop/src: MetaprojectView.tsx:615 holds the quoted guard. The race depends on read latency between two lookups; that needs a timing run, not performed. mutation-1-compact.txt V11 (removal of if (!current()) return) and V31 survived, which says the guard is untested, not that the race exists.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "No signal of intent. The suggested fix follows a sibling guard in the same file (latestSearch.current.generation), so it makes the explorer more consistent. 'Last request wins' is the accepted rule for async lookups that race."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-performance",
+    "severity": "minor",
+    "problem": "Per-render walk over every catalog node to fill seenNodes. One Map.set per node in the Explorer render body, on every render (search keystroke, each pointermove of the panel resize drag), although `nodes` is memoized and changes rarely.",
+    "impact": "not stated by the reviewer",
+    "suggested_fix": "Populate seenNodes in the useMemo that builds `nodes`, or in an effect keyed on `nodes`.",
+    "evidence": "for (const node of nodes) remember(node); Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited; the same defect was raised by review-degradation (review-degradation-w1, F-003, info).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 512,
+    "quote": "for (const node of nodes) remember(node);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-006",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'for (const node of nodes) remember' apps/desktop/src: MetaprojectView.tsx:512 holds the loop. The site exists. Its placement in the render body and any measurable cost were not read or timed; a performance claim needs a measurement.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The comment at MetaprojectView.tsx:508-509 gives the reason for seenNodes (Back to a lookup result) but not for filling it during render. It comes from this branch in any case. React's own guidance (react.dev, useRef: 'Do not write or read ref.current during rendering') supports the premise rather than the code. The fix (fill it where nodes is memoized, or in an effect) is sound. No signal or source shrinks it."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-ui-ux",
+    "severity": "minor",
+    "problem": "Code reading, not a render. The Relationships tab count adds secondStep edges; the Relationships fact row in the same panel header (`${summary.incoming} incoming · ${summary.outgoing} outgoing`) and the graph caption count only root-adjacent edges. A node with 5 incoming, 4 outgoing and 3 second-step edges shows 'Relationships 12' on the tab and '5 incoming · 4 outgoing' two rows above it. Unverified on screen; a live read of such a node would settle it.",
+    "impact": "Two adjacent numbers for the same word disagree, so the user cannot tell whether the tab includes extra rows. The 'Second step' group sits inside a collapsed <details>, so the extra rows are not visible until opened.",
+    "suggested_fix": "Either show the tab count as incoming + outgoing only (matching the fact row and caption) or add the second-step count to the fact row (for example '5 incoming · 4 outgoing · 3 second-step').",
+    "evidence": "Code reading, not a render. The Relationships tab count adds secondStep edges; the Relationships fact row in the same panel header (`${summary.incoming} incoming · ${summary.outgoing} outgoing`) and the graph caption count only root-adjacent edges. A node with 5 incoming, 4 outgoing and 3 second-step edges shows 'Relationships 12' on the tab and '5 incoming · 4 outgoing' two rows above it. Unverified on screen; a live read of such a node would settle it. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "line": 242,
+    "quote": "relationships: summary ? summary.incoming + summary.outgoing + summary.secondStep : undefined,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'secondStep|summary.incoming' apps/desktop/src/metaproject/NodeDetailsPanel.tsx: line 242 relationships: summary.incoming + summary.outgoing + summary.secondStep; line 247 fact row ${summary.incoming} incoming ${summary.outgoing} outgoing. The two numbers are computed differently in code. The on-screen rendering was not measured.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "owner-decision",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx:241-245",
+          "says": "every tab count counts the rows that tab lists (Wiki: listed documents; OpenSpec: documents; Relationships: incoming + outgoing + second-step rows)"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:82",
+          "says": "operator answer (3): the graph caption counts relationships, adjacent ones ('10 incoming · 23 outgoing'). The tab count was not asked"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:33",
+          "says": "the fact label was changed from 'Relations' to 'Relationships' to match the tab, which puts the two numbers under the same word"
+        }
+      ],
+      "reasoning": "Both numbers follow a coherent rule. The tab badge counts what the tab lists, the usual meaning of a tab count, and it matches the panel's other two tabs. The fact row counts root-adjacent edges, as AC7 requires. They differ only when second-step rows exist. Which rule the word 'Relationships' should carry is a presentation choice the operator has not made. Nothing in the code settles it either way.",
+      "question": "The Relationships tab counts every row it lists (second-step included); the fact row counts only incoming and outgoing. Keep the tab count as is, or align the two?",
+      "options": [
+        "dismiss — the tab counts its rows, like the Wiki and OpenSpec tabs",
+        "uphold — count only incoming + outgoing on the tab",
+        "uphold — add the second-step count to the fact row"
+      ],
+      "operator": {
+        "answer": "uphold",
+        "reason": "The operator's first answer to this finding was «Дополнить строку фактов (Recommended)»: the fact row also shows the second-step count; the tab count stays.",
+        "quote": "uphold",
+        "at": "2026-11-23T09:38:09.701Z",
+        "actor": "operator",
+        "confirmedVia": "host-question",
+        "hostQuestion": {
+          "source": "claude-code",
+          "ref": "AskUserQuestion",
+          "questionText": "Запись решения по находке F-007 (счётчик вкладки Relationships включает второй шаг, строка фактов — нет). Вы ответили «Дополнить строку фактов». Какое слово записать — uphold или dismiss?",
+          "answerText": "uphold",
+          "time": "2026-11-23T09:38:09.701Z"
+        }
+      }
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Recorded OpenSpec scroll defect still live: choose() zeroes the content pane before the history entry is recorded. T7's result lists under noticed_not_touched that OpenSpecView choose() sets the content scrollTop to 0 before calling onLocation, so the entry being left records scroll 0. At head the code is unchanged: `if (content.current) content.current.scrollTop = 0;` runs before `onLocation?.(next)`. useExplorerNavigation.enter calls remember(leaving), which reads `pane?.scrollTop` of `.metaproject-content` (PANES index CONTENT_PANE) at that moment. The content ref in OpenSpecView is that same element (`<section ref={content} className=\"metaproject-content\"`). The T8 dispatch listed OpenSpecView.tsx among its target_files, but nothing in slice-03 shows this item was taken or declined.",
+    "impact": "Back to a previous OpenSpec entry returns to the top of its document, not where the reader was. This is a silent wrong restore, not data loss, and AC11 covers only Graph selections.",
+    "suggested_fix": "In choose(), do not reset scrollTop before onLocation; let navigate(..., { resetContent: true }) seed the new entry at 0 (the hook already supports it), or record the offsets before zeroing. Or record the item as accepted in the journal.",
+    "evidence": "First recorded by the T7 worker under noticed_not_touched (results/T7.result.json); review-architecture (wave 2) pointed at the same record. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+    "line": 80,
+    "quote": "if (content.current) content.current.scrollTop = 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-008",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'onLocation|scrollTop = 0' apps/desktop/src/metaproject/OpenSpecView.tsx: line 80 if (content.current) content.current.scrollTop = 0; precedes line 82 onLocation?.(next); so the ordering in the finding is literal. Whether the leaving entry records 0 depends on remember() reading scrollTop at enter time in useExplorerNavigation.ts, and the restore was not run.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "challenged",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:43",
+          "says": "T7 concern (3): the OpenSpecView choose() scroll reset is noticed, not fixed, 'out of scope of this flow unless the operator asks'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:96",
+          "says": "at the first-green gate the operator was offered the hardening option 'fix Back to an earlier OpenSpec document landing at its top' and chose 'Стандартное ревью' instead"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md:112",
+          "says": "T8 may edit OpenSpecView.tsx for imports only"
+        },
+        {
+          "ref": "git log 1358d962f..60cbe1c56 -- apps/desktop/src/metaproject/OpenSpecView.tsx",
+          "says": "empty: this branch does not touch the file. The line at OpenSpecView.tsx:80 predates the change"
+        }
+      ],
+      "reasoning": "The behaviour is real and the finding says it is still there, but whether to fix it in this flow was already decided. The worker recorded it as out of scope, the plan limited OpenSpecView to import changes, and the operator was offered the fix by name before the review and did not take it. The finding itself offers 'record the item as accepted' as a fix. That record exists in journal.md:96.",
+      "question": "You declined fixing OpenSpec Back-to-top at the first-green gate. Keep it out of this flow, or fix it now?",
+      "options": [
+        "dismiss — stays out of scope as decided at the first-green gate",
+        "uphold — fix choose() in this flow"
+      ],
+      "operator": {
+        "answer": "uphold",
+        "reason": "The operator's first answer to this finding was «Починить сейчас (Recommended)»: fix choose() in OpenSpecView in this flow, with a test that restores the scroll position.",
+        "quote": "uphold",
+        "at": "2026-11-23T09:38:10.065Z",
+        "actor": "operator",
+        "confirmedVia": "host-question",
+        "hostQuestion": {
+          "source": "claude-code",
+          "ref": "AskUserQuestion",
+          "questionText": "Запись решения по находке F-008 («Назад» в OpenSpec возвращает документ в начало). Вы ответили «Починить сейчас». Какое слово записать — uphold или dismiss?",
+          "answerText": "uphold",
+          "time": "2026-11-23T09:38:10.065Z"
+        }
+      }
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "tasks.md is out of date against flow.json and the journal. The task table still shows T4 depending on T8, T9, T10, T11, T9 on T8 and T11 on T8, and has no rows for T12-T16, although the journal records task-depends-set and task-added entries that change them.",
+    "impact": "A reader of tasks.md alone gets the wrong order and misses five tasks; no gate input is wrong.",
+    "suggested_fix": "Add the rows T12-T16 and correct the dependencies to match flow.json, or label tasks.md as the initial plan with flow.json as the source of truth.",
+    "evidence": "review-architecture (wave 1) noted the same drift without filing it. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    "line": 11,
+    "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11 | — |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-009",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read of .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md: table row T4 depends on T8, T9, T10, T11 (quote matches), T9 and T10 and T11 depend on T8, and the table ends at T11 with no T12-T16 rows. keryx ctx rg '\"T1[2-6]\"' over flow.json: 15 matches, so flow.json has T12 to T16. The dependency sets in flow.json were not read in full.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "tasks.md says of itself that 'Task definitions live here; task statuses live in flow.json' (tasks.md:3-4), and its T2 and T3 rows were edited to say they were superseded. So it is maintained, and it is not an untouched initial plan. Rows T12-T16 and the changed dependencies are missing from the file that claims to hold the task definitions. No signal or source says it may drift."
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "T9 dispatch names files as existing that are absent at head, and requires a result file the journal says was not requested. T9.dispatch.json has context_refs entry `resolved/T9.implement.json` with \"exists\": true and output_contract.artifact_path `results/T9.result.json`, and a constraint to validate that result against the resolved file. Neither file is in the flow folder at head (resolved/ holds T5-T8, T12-T14, T16; results/ holds T5-T8, T12-T14, T16), and git history has no record of them. The journal entry for T9 says \"No result JSON was requested for this docs task\", which contradicts the dispatch. T15 (also docs, flow.json status done) has no result or resolved file either. flow.json marks both T9 and T15 done with disposition completed.",
+    "impact": "A gate input that says a file exists when it does not, and a done task with no result artifact, mean a later reader or the review-flow gate cannot check T9 and T15 against the contract the dispatch states; the evidence is only the journal prose.",
+    "suggested_fix": "Either record in flow.json dispositionReason for T9 and T15 that the docs workers returned inline and no result artifact exists, or remove the stale context_refs entry and output_contract from T9.dispatch.json. Do not edit flow.json by hand; use the keryx flow CLI.",
+    "evidence": "Checked by the orchestrator at head: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved and .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results hold T5-T8, T12-T14 and T16 only; `git log --diff-filter=D` over both folders is empty, so the T9 and T15 files never existed. The dispatch generator wrote `\"exists\": true` for the resolved-context path of every task without looking. The journal entry for T9 says no result JSON was requested. review-regression (wave 1) noted the same gap. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+    "line": 32,
+    "quote": "\"path\": \".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json\"",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-010",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read of .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json: context_refs lists resolved/T9.implement.json with exists true, and the constraint requires validating against it. Read of .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json: 'File does not exist'. keryx ctx rg '\"T9\"|\"T15\"' over results/ and resolved/: no matches. The T15 part of the finding was not checked.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The journal says no result JSON was requested for T9 (journal.md:58). That explains why the file is missing but not why the dispatch states '\"exists\": true' and an output contract it did not mean. A gate input that asserts a missing file exists is a defect by the project's own contract checks. No signal of intent for the false flag."
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The RetainedView test passes one value for both props, so `hidden={!visible}` -> `hidden={!active}` leaves it green (mutant A1). App.tsx:594 passes different values (workView vs view), the Settings-over-work-view case.",
+    "impact": "The explorer could show over Settings with the suite green.",
+    "suggested_fix": "Render with active true and visible false and assert the wrapper is hidden and the input is kept.",
+    "evidence": "mutant A1 in a scratch copy: bun test src/App.dom.test.tsx -> GREEN (1 pass). The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "line": 27,
+    "quote": "root.render(React.createElement(RetainedView, { active, visible: active, children: React.createElement(Draft) }));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:retainedview-active-visible",
+    "global_id": "2026-11-23-review-flow-branch#F-011",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt, row A1: survived (App.tsx:151 hidden={!visible} -> hidden={!active}; the six test files stayed green). Quote confirmed by keryx ctx rg 'RetainedView' apps/desktop/src: App.dom.test.tsx:27 holds the single-value render.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Test gap confirmed by mutation (A1 survived). App.tsx:594 passes different values for active and visible on purpose (the Settings case), so the test missing that case is a real gap. No intent or practice source shrinks it."
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Asserts only an unchanged zoom; deleting `if (!target.usable) return;` (G5) or the zoom clamp (G9) leaves it green, and no test gives the container a size, so fit and zoom success paths never run.",
+    "impact": "A falsy-state test with no positive artifact: it passes when fit does nothing.",
+    "suggested_fix": "Stub clientWidth/clientHeight on the viewport, assert zoom and pan after Fit and clamped zoom after repeated Zoom in.",
+    "evidence": "mutants G5 and G9 GREEN; G6 RED. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+    "line": 222,
+    "quote": "test(\"a zero-sized container is never fitted\", async () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:graph-fit-falsy-only",
+    "global_id": "2026-11-23-review-flow-branch#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: G5 survived, G9 survived, G6 killed. The finding names G5 and G9 as green, which matches; G6 is killed, so the test's zero-size guard is partly pinned.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The plan's happy-dom risk (plan.md:202-205) explains why cytoscape is stubbed, not why the container is never given a size. Stubbing clientWidth/clientHeight is the usual happy-dom technique, so the fix is sound. G5 and G9 survived."
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC6 names data-theme or data-palette; the theme test sets data-theme only. Removing data-palette, the colour-scheme listener, the hover fade/cursor, the isSide guard, the root border width or the second-step class leaves the suite green.",
+    "impact": "One trigger of a stated acceptance criterion and the hover behaviour are unprotected.",
+    "suggested_fix": "Flip data-palette in the theme test; emit mouseover/mouseout and check classes; check second-step class and root border-width with styleEnabled.",
+    "evidence": "mutants G1,G2,G3,G4,G7,G8,G10,G11 all GREEN. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names. Normalisation notes: the same defect was raised by review-logic (review-logic-w4, F-002, info).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "line": 289,
+    "quote": "themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: [\"data-theme\", \"data-palette\", \"style\"] });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:graph-theme-hover-style",
+    "global_id": "2026-11-23-review-flow-branch#F-013",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: G1, G2, G3, G4, G7, G8, G10, G11 all survived (six test files green with each change).",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "AC6 names data-theme or data-palette. The palette path was confirmed live once (journal.md:66) but has no test, and the hover and second-step mutants survived. No signal makes the gap smaller."
+    }
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "No test restores a scroll position; reverting the selector T8 changed (.metaproject-details-body -> .metaproject-node-body), the history cap, the same-route guard, the content reset and the switchView guard all stay green.",
+    "impact": "The Back scroll restore fixed in T8 can regress unseen.",
+    "suggested_fix": "DOM test that scrolls the details body, selects another node, presses Back and asserts scrollTop; one for the 40-entry cap.",
+    "evidence": "mutants N1..N5 all GREEN in MetaprojectView.dom.test.tsx. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+    "line": 15,
+    "quote": "const PANES = [\".metaproject-panes\", \".metaproject-list\", \".metaproject-content\", \".metaproject-details-body\"];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:explorer-nav-scroll",
+    "global_id": "2026-11-23-review-flow-branch#F-014",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: N1, N2, N3, N4, N5 all survived (N2 is the .metaproject-details-body -> .metaproject-node-body selector swap).",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The T8 selector change to the panel body (journal.md:43, item 5) was a deliberate fix, and reverting it survives every test. That argues for the finding."
+    }
+  },
+  {
+    "id": "F-015",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The AC13 test changes depth and kinds but leaves Direction at \"both\", and runs protocol 1 only; the direction part and the V2 kinds branch are unpinned.",
+    "impact": "AC13 has one of three parts with no separating fixture.",
+    "suggested_fix": "Set Direction to incoming before switching to Wiki; add a protocol-2 run asserting the V2 kinds.",
+    "evidence": "mutants V1 and V30 GREEN. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names. Normalisation notes: the same defect was raised by review-logic (review-logic-w4, F-003, info).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 268,
+    "quote": "const relationDirection = mode === \"wiki\" ? \"both\" : direction;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:ac13-direction",
+    "global_id": "2026-11-23-review-flow-branch#F-015",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V1 survived, V30 survived.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "AC13 names three properties (depth 1, direction both, every non-symbol kind), and the test pins two. V1 and V30 survived. No intent signal against."
+    }
+  },
+  {
+    "id": "F-016",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "showHidden (open panel + reveal Relationships) is driven by no test; the graph test checks a mock callback and the panel test checks the prop.",
+    "impact": "Removing either half leaves all suites green and breaks the way to hidden neighbours.",
+    "suggested_fix": "MetaprojectView test with headless cytoscape: close the panel, tap the overflow node, assert panel open on Relationships.",
+    "evidence": "mutants V8 and V8b GREEN. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 649,
+    "quote": "setRevealRelationships(value => value + 1);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:showhidden-wiring",
+    "global_id": "2026-11-23-review-flow-branch#F-016",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V8 survived, V8b survived.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The plan's interface makes revealRelationships the route to hidden neighbours (plan.md:129, :145; AC8). V8 and V8b survived, so that route is unprotected end to end. No signal against."
+    }
+  },
+  {
+    "id": "F-017",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "T8 gates survive deletion: list-header floor and Wiki-mode total, dropping a stale graph on a failed read, protocol-2 showGraph, Draft gate, documents-pending flags, Direction in the Filters count, Filters-button mousedown, popover clamp, Wiki disclosure with 0 edges.",
+    "impact": "Each gate was added in this change and its next edit is unprotected.",
+    "suggested_fix": "One test per gate with the existing fixtures (Wiki-mode header, failed second read, mousedown on the Filters button).",
+    "evidence": "mutants V2,V3,V4,V5,V6,V7,V13,V14,V15,V17 all GREEN. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 645,
+    "quote": "const shownTotal = catalog ? mode === \"wiki\" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:metaprojectview-gates",
+    "global_id": "2026-11-23-review-flow-branch#F-017",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V2, V3, V4, V5, V6, V7, V13, V14, V15, V17 all survived.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Every named gate was added by this change, and its mutant survived. No intent or practice source shrinks it."
+    }
+  },
+  {
+    "id": "F-018",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC16/AC12 guards unpinned: undecodable href, snapshot mismatch on lookup, late lookup after selection change, message scoped to selection, and the settled Wiki empty-state wording naming the searched text (the test asserts the in-flight state only).",
+    "impact": "The settled half of AC12 and three AC16 sub-claims have no failing test.",
+    "suggested_fix": "Run the debounce and assert the final title; add a malformed %E0%A4%A link and a late-resolving lookup.",
+    "evidence": "mutants V9,V10,V11,V12,V16,V31 GREEN; V19 RED. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names. Normalisation notes: the same defect was raised by review-logic (review-logic-w4, F-001, minor).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 621,
+    "quote": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:lookup-and-empty-state",
+    "global_id": "2026-11-23-review-flow-branch#F-018",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V9, V10, V11, V12, V16, V31 survived; V19 killed (matches the finding's 'V19 RED').",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "AC12 and AC16 name these behaviours. The settled empty-state wording and the lookup guards have surviving mutants. No signal against."
+    }
+  },
+  {
+    "id": "F-019",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Per-node tab reset, tab-list arrow keys, drag and ArrowRight resize, failed-copy message, suggested-page count, stale-preview guard, 360-char cut, list-after-prose rule and fenced-code skipping have no fixture.",
+    "impact": "Next edit to any of these is unprotected.",
+    "suggested_fix": "Fixtures: a leading-list page with a fenced block, a 400-char paragraph, a second node after a tab choice, ArrowRight/Home/End on the tab list.",
+    "evidence": "mutants P1,P3,P4,P5,P6,P7,P8,P9,P11,P13,P14,P17,P18,P20,P21 GREEN; P2 RED. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "line": 146,
+    "quote": "const tab: Tab = tabChoice?.node === node.id ? tabChoice.value : \"relationships\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:details-panel-gates",
+    "global_id": "2026-11-23-review-flow-branch#F-019",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: P1, P3, P4, P5, P6, P7, P8, P9, P11, P13, P14, P17, P18, P20, P21 survived; P2 killed.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Among the gaps, the per-node tab reset is a choice the operator confirmed (journal.md:82, answer 2), which makes protecting it more important, not less. The other mutants survived too. No signal against."
+    }
+  },
+  {
+    "id": "F-020",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "No fixture has a dangling edge, exactly two evidence lines, a second-step self-loop, or a count label beside evidence lines.",
+    "impact": "The dangling-edge gate protects against a render crash on truncated projections and is unprotected.",
+    "suggested_fix": "Add one projection with a dangling edge, one edge with two evidence lines, one second-step self-loop.",
+    "evidence": "mutants L1,L2,L3,L8 GREEN; L5,L6 RED. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "line": 56,
+    "quote": "if (!from || !to) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:relationshiplist-gates",
+    "global_id": "2026-11-23-review-flow-branch#F-020",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: L1, L2, L3, L8 survived; L5, L6 killed.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The dangling-edge guard exists to stop a render crash on truncated projections. L1, L2, L3 and L8 survived. No signal against."
+    }
+  },
+  {
+    "id": "F-021",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC3 test passes without the drawn-anchor preference and without chained second-step attachment; self-loops, edge width, fit-case pan, percentage and 3-digit colours, alpha clamp and columnCap integer check have no fixture.",
+    "impact": "Layout rules that keep truncated projections overlap-free are unprotected.",
+    "suggested_fix": "Fixtures: root self-loop, second-step node reachable only via another second-step node, edge count 16, a fitting layout with a pan assertion.",
+    "evidence": "mutants Y1,Y2,Y3,Y4,Y5,Y6,Y7,Y8,Y9,Y12,Y16,Y18 GREEN; Y19 RED. The orchestrator re-ran every proposed mutant through `keryx review mutate` with all six test files per mutant (.metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1.md: 15 killed, 67 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/graphLayout.ts",
+    "line": 260,
+    "quote": "while (candidates(false, attached));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "testing:graphlayout-gates",
+    "global_id": "2026-11-23-review-flow-branch#F-021",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: Y1, Y2, Y3, Y4, Y5, Y6, Y7, Y8, Y9, Y12, Y16, Y18 survived; Y19 killed.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "AC3 and the layout rules in plan.md:57-69 are stated intent, and the named mutants survive. No signal shrinks the gap."
+    }
+  },
+  {
+    "id": "F-022",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The panel counts and lists a self-loop edge (edge.from === edge.to === root) once, as outgoing (documented in groupRelationships). The graph layout skips self-loops (`if (edge.from === edge.to) return;` in layoutNeighborhood), so its caption count leaves them out. The two numbers are computed from the same projection for the same selection and shown on one screen.",
+    "impact": "For a node with a self-edge (for example a wiki page whose `links` edge points at itself) the graph caption reads '0 incoming · 0 outgoing' while the panel fact reads '0 incoming · 1 outgoing', and the Relationships tab lists the node as its own outgoing neighbour, whose row selects the node already shown (a no-op). AC7 asks for the panel counts to come from the root-adjacent edges, so the panel follows the criterion; the caption is the one that differs.",
+    "suggested_fix": "Pick one rule for both: skip self-loops in groupRelationships (the row does nothing useful), or count them in layoutNeighborhood. Skipping them in groupRelationships keeps the two counts equal.",
+    "evidence": "RelationshipList.tsx groupRelationships: `if (edge.from === projection.root) adjacent.outgoing.push(...)` runs before any self-loop test; graphLayout.ts lines 505-508: `if (edge.from === edge.to) return; if (edge.to === root.id) incoming++; if (edge.from === root.id) outgoing++;`. The self-loop case is only reachable if the producer emits a self-edge; not verified that it does.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "line": 57,
+    "quote": "if (edge.from === projection.root) adjacent.outgoing.push({ edge, node: to });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-022",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'edge.from === projection.root|edge.from === edge.to' apps/desktop/src/metaproject: RelationshipList.tsx:57 pushes root-outgoing edges with no self-loop test; graphLayout.ts:506 if (edge.from === edge.to) return; so the two paths diverge on self-edges. Whether the producer emits self-edges was not checked, so the finding's trigger stays conditional.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Both rules (count the self-loop in groupRelationships, skip it in layoutNeighborhood) come from this branch, and no operator answer or plan line addresses self-loops. AC7 governs the panel and the operator's caption answer (journal.md:82) governs the caption, but neither says the two may disagree. The finding already scopes itself to producers that emit self-edges. No signal against."
+    }
+  },
+  {
+    "id": "F-023",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "The G8 test reads graph.css from disk and matches a regex over its text, including the exact declaration `min-block-size: 200px;`. It verifies the stylesheet's spelling, not that the graph fills its host, and it will fail on any harmless reformat or a change of the minimum (the T8 notes lower the minimum to 160px in a narrow container, done in metaproject.css).",
+    "impact": "A brittle test: it can fail on a benign CSS edit and gives no evidence about layout, which happy-dom cannot measure; the real check is the live measurement (AC5, AC20).",
+    "suggested_fix": "Keep only the `not.toContain(\"clamp(\")` and `flex: 1 1 auto;` assertions, or drop the pinned minimum value; leave layout proof to the live pass.",
+    "evidence": "RelationshipGraph.dom.test.tsx G8 test (slice-04 diff); graph.css lines 2-12 at head contain the matched declarations. Normalisation notes: the same defect was raised by review-testing-practices (review-testing-practices-w1, F-012, info).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+    "line": 143,
+    "quote": "expect(block).toContain(\"min-block-size: 200px;\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-023",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'min-block-size: 200px' apps/desktop/src/metaproject: RelationshipGraph.dom.test.tsx:143 expect(block).toContain(\"min-block-size: 200px;\"); graph.css:6 holds the same declaration. The test pins the literal stylesheet text. The brittleness judgement is opinion and was not tested.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-024",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "Red checks swapped tracked source files in the shared worktree under a live dev server",
+    "impact": "Another lane or live check reading the swapped file or the dev server during the swap sees old code; a crash between swap and restore leaves the tree on the old version. T15 (guide and screenshots) ran beside T16 in flow.json history (both started 08:36:10). No corrupted outcome is shown, so info.",
+    "suggested_fix": "Run red checks in a scratch copy or throwaway worktree instead of swapping tracked files in the shared tree.",
+    "evidence": "\"it served the committed MetaprojectView.tsx for the few seconds of the red check\" (T16 notes); T14 result notes: \"it picked up the file changes, including the few seconds while the HEAD versions were swapped in for the red check\" The two guide screenshots were captured by the orchestrator itself, not during those red checks (journal, entry on T15/T16 dispatch). Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "medium",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json",
+    "line": 38,
+    "quote": "it served the committed MetaprojectView.tsx for the few seconds of the red check",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-024",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'it served the committed MetaprojectView.tsx' .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results: match in results/T16.result.json (notes field). The flow's own record states the swap of tracked files during the red check. Whether another lane read the swapped file was not established.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-025",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "RetainedView is a generic view-retention helper exported from the composition root. `export function RetainedView({ active, visible, children })` lives in App.tsx and is exported only so App.dom.test.tsx can import it (`(await import(\"./App\")).RetainedView`). The component has no dependency on App state; the existing session/flows/issues views still use the inline `hidden={view !== ...}` pattern, so two retention idioms now coexist in one file. This is a placement opinion, not a violation of a named rule.",
+    "impact": "Testing it requires importing the whole App module graph, and the next view that needs retention has to import from App.tsx.",
+    "suggested_fix": "Optional: move it to apps/desktop/src/components/ui (or shell/) and import it in App.tsx; the test then imports it directly.",
+    "evidence": "Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/App.tsx",
+    "line": 148,
+    "quote": "export function RetainedView(",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-025",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'RetainedView' apps/desktop/src: App.tsx:148 export function RetainedView; App.dom.test.tsx:6 and :13 reach it only through await import(\"./App\"). The export exists for the test. The placement opinion and the claim about the other views' hidden= pattern were not checked.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-026",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "isOpenSpecNode is exported but has no importer outside its own file. `export const isOpenSpecNode` is used only inside NodeDetailsPanel.tsx (line 87); the keryx ctx rg search over apps/desktop/src found no other import. The plan's interface section lists it as an export, which explains it, so this is a note on a public surface nobody consumes.",
+    "impact": "A public export with no consumer widens the module's surface for no current caller.",
+    "suggested_fix": "Drop `export` if the plan's listed interface is no longer required, or leave it as the plan states.",
+    "evidence": "Normalisation notes: confidence was not stated by the reviewer and is set at normalisation; the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "line": 16,
+    "quote": "export const isOpenSpecNode",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-026",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'isOpenSpecNode' apps/desktop/src: 2 matches, both in NodeDetailsPanel.tsx (line 16 export const, line 87 use). No import elsewhere under apps/desktop/src.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-027",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "`back` reads `previousRoutes.current`, which is refreshed from `history` only on render, while `enter` updates `current.current` eagerly but not `previousRoutes.current`. Two calls in one event tick, `navigate`/`visit` then `back`, would pop the entry before the one just pushed.",
+    "impact": "No caller in the slice does this; user events render between clicks. Noted only because the ref pair (`current`, `previousRoutes`) is half-eager.",
+    "suggested_fix": "In `enter`, also set `previousRoutes.current = [...previousRoutes.current.slice(1 - HISTORY_LIMIT), leaving]` so both refs move together.",
+    "evidence": "Read useExplorerNavigation.ts `enter` and `back` (slice-06). No call path found that triggers both in one tick. review-highload (wave 3) described the same narrow gap and did not file it.",
+    "confidence": "low",
+    "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+    "line": 29,
+    "quote": "previousRoutes.current = history;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "explorer-nav-previousroutes-ref-lag",
+    "blocking_merge": false,
+    "global_id": "2026-11-23-review-flow-branch#F-027",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'previousRoutes.current = history' apps/desktop/src: useExplorerNavigation.ts:29 holds the render-time refresh. The claim that enter() does not refresh previousRoutes and that two calls in one tick break back() needs a run; not performed.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-028",
+    "reviewer": "review-layout",
+    "severity": "info",
+    "problem": "Narrow-host container rule for the docked panel looks unreachable (unverified). This rule sits inside `@container metaproject (max-width: 760px)` and matches only while the panel is docked (not .compact). NodeDetailsPanel.tsx sets compact when `availableWidth < COMPACT_BELOW` (820, lines 11 and 154). If availableWidth is the width of the panes area, it is not wider than the .metaproject container, so a docked panel implies a container of about 820 px or more, outside the 760 px query, and the narrower 150-180 px list column may never apply.",
+    "impact": "If unreachable it is dead CSS suggesting a narrow docked layout that does not exist; if reachable nothing is wrong. No rendered defect is claimed.",
+    "suggested_fix": "Settle with the probe; if dead, remove the rule.",
+    "evidence": "UNVERIFIED. No measurement covers a host between 760 and 820 px. Probe that would settle it: browser dev build at 780 and 800 px wide, Graph with the panel open; read the computed grid-template-columns of .metaproject-graph-panes, the container's inline size and whether .metaproject-details has the compact class; read NodeDetailsPanel.tsx to see which element availableWidth measures. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation.",
+    "confidence": "low",
+    "file": "apps/desktop/src/metaproject/metaproject.css",
+    "line": 131,
+    "quote": ".metaproject-graph-panes:has(.metaproject-details:not(.compact)) { grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) auto; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-028",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'COMPACT_BELOW|availableWidth' apps/desktop/src/metaproject/NodeDetailsPanel.tsx: COMPACT_BELOW = 820 (line 11), availableWidth state (line 151), compact = availableWidth > 0 && availableWidth < 820 (line 154). Whether a docked panel can sit inside a container narrower than 760 px was not measured at 760-820 px; the reviewer's own probe is still outstanding.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-029",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Graph screenshot alt text says twelve importing files sit on the left, the picture draws ten. The alt text reads \"twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left\". That is 14 left-column items, while the same page says a column shows at most 12. In docs/docs/images/desktop-metaproject/graph.jpg the left column draws 10 import nodes, 1 Describes, 1 Contains and a \"+2 more\" entry; only the caption (\"Imports · 12\") and the panel list carry twelve.",
+    "impact": "A screen-reader user, or a reader comparing text and picture, is told the graph draws more nodes than the 12-per-column rule allows. No behaviour is affected.",
+    "suggested_fix": "Drop the count or state it as drawn: \"the files that import it (Imports · 12, two of them collapsed into +2 more), the Agent Bus page and its module bus on the left\".",
+    "evidence": "The screenshot docs/docs/images/desktop-metaproject/graph.jpg was captured by the orchestrator from the browser dev build; it is binary and was in no slice, so the reviewer compared the alt text with the image file itself. Normalisation notes: the quote was taken at normalisation from the code the reviewer cited.",
+    "confidence": "medium",
+    "file": "docs/docs/guides/desktop-metaproject.md",
+    "line": 107,
+    "quote": "twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch#F-029",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'twelve importing files' docs/docs/guides: desktop-metaproject.md:107 holds the alt text. Read of docs/docs/images/desktop-metaproject/graph.jpg: left column shows 10 import nodes, a '+2 more' entry, the caption 'Imports · 12', one Describes and one Contains node. The 12 imports are 10 drawn plus 2 collapsed, so the picture does not contradict the alt text's count. The finding's premise (picture draws ten, alt says twelve) does not hold as a contradiction.",
+      "verifier": "review-verifier"
+    }
+  }
+]

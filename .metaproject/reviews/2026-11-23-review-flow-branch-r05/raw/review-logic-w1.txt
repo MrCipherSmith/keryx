@@ -1,0 +1,58 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 read in full (the four new DOM tests, T26's dispatch/request/resolved/result files, T24's reworded result cell, fix-round-3.md and fix-round-4.md, tasks.md, flow.json, journal.md). Each new test, traced through MetaprojectView.tsx at head (catalog effect 373-420, rebuild() 675-685), produces the sequence and the banner state its title and assertions state; the four mutants it names are killed per t26-mutants-1.txt. The reworded F-003 cell now names two tests that do exercise it, and the record (anchors, mutant results, 27 task rows, journal entries) agrees with the code and the commits. No findings.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" },
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Logic Review
+
+### Review Scope
+- Branch: feat/desktop-metaproject-redesign; range 744d9ef7542f..857036d02174 (round 5, fix-round-4 commits); slice-01 only.
+- Spec compliance gate: ran against the task's finish lines (T26: F-001 tests for R4-10/R4-11, F-002 tests for R4-7/R4-8; T27: the record). No criterion of the 21 is changed by this round; no production file changed.
+- Tools: read-only. Nothing was run; the mutant and test results below are read from research-evidence/t26-mutants-1.txt and the result files, not re-run.
+
+### Prior dispositions
+
+F-003 (closed). The cell of results/T24.result.json, "failed rebuild x loud read started after it, or a new rebuild: cleared at start", now cites 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds' and 'a second rebuild removes the first one's failure banner while it runs', and says the test it named at acceptance does not fail a rebuild and that the cell was reworded after acceptance. Traced: test 1 has onRebuild throw (setError rebuild at :681, banner shown), Retry bumps revision, the effect body runs setError(null) at :380 for a non-quiet read, read 2 succeeds, banner gone: that is "failed rebuild x loud read started after it". Test 2 has the first onRebuild reject, the second click runs rebuild() (:676-677) with the second onRebuild held: "Rebuilding..." disabled and no banner while it runs: that is "a new rebuild". Both cited tests exercise the cell. One precision: test 1 asserts after the read has succeeded, so it pins that the banner is gone, not the instant of the clear; the start clear is pinned for a held rebuild only by test 2. That does not change the cell's claim in a way a reader loses anything by (a variant that clears at a loud success instead of at its start is killed by the existing in-flight test of T24-10), so it is not a finding.
+
+F-005 (closed). fix-round-3.md now says its 86 + 1 is the orchestrator's run on the committed 87-test file, that T24's result file gives 85 + 1 for its own run, and that this fits a run made before the worker's last test was added, while stating the result file does not record when the run was made. The two figures are now accounted for and the claim is hedged as an inference, not stated as fact. 86 + 1 = 87 agrees with the green count in T24's result.
+
+F-001 and F-002 (not mine to own; checked, closed). See the traces below.
+
+### Trace of the four new tests (production code at head)
+
+1. 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds'. Reads started: catalog read 1 on mount (loads); rebuild() click: setRebuilding(true), setError(null), await rejects, setError({source:"rebuild"}) at :681, setRebuilding(false) in finally; Retry (:849) bumps revision: cleanup does catalogRead++, body gen 2, quiet false, setError(null) at :380, read 2 resolves, setCatalog. catalogReads is 2, banner absent, row "Client" listed. R4-10 (functional clear that keeps a rebuild error at :380) leaves the banner: killed. Title matches body. No quiet read, no superseded read in this test.
+
+2. 'a second rebuild removes the first one's failure banner while it runs'. No catalog read after the first. Click 1: onRebuild rejects, banner shows, control re-enabled. Click 2: rebuild() runs setError(null) at :677; onRebuild held, so the banner must be absent while "Rebuilding..." is shown and disabled. finish(false): no revision bump, setRebuilding(false), control enabled, no banner. R4-11 (the same functional clear at :677) keeps the first message: killed. Title matches body.
+
+3. 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands'. Mount: read 1. Hidden then shown: the visible effect (:342-351) sets quietRead and bumps revision, so the quiet read is catalog read 2 (generation 2), held; catalogPending is true. Click Rebuild graph: onRebuild resolves true, setRevision: cleanup catalogRead++ (generation 2 is now superseded), quietRead is false so project.current++, body generation 3, quiet false, setError(null), read 3 rejects, catch at :407 (generation 3 current, not quiet) writes {catalog, "The index is being written."}. releaseQuiet resolves read 2: :389 `generation !== catalogRead.current` returns before the clear at :392, so the banner stays. R4-8 (clear above the check) runs the quiet clear for generation 2 and removes a catalog-source banner: killed. The test asserts what that sequence produces. The production path is reachable by a user: the Rebuild control is disabled only by `rebuilding`, not by a pending catalog read.
+
+4. 'a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded'. Mount: read 1. Rebuild click 1: onRebuild true, revision bump, read 2 (held, rejects on demand), `rebuilding` false again at once. Rebuild click 2: onRebuild true, revision bump, cleanup catalogRead++ (generation 2 superseded), read 3 succeeds. failFirstReload rejects read 2: catch at :407 sees generation 2 !== 3 and writes nothing; finally at :409 skips (not the latest). Banner absent, "Client" row listed. R4-7 (guard dropped) writes {catalog} for the stale failure: killed. Title matches body.
+
+All four titles state what their bodies drive. Each test's banner lookup is catalogErrorBanner (test file :1318, `.inline-banner[role="alert"]`), which the earlier tests use unchanged.
+
+### The record
+
+- Anchors of verification/fix-round-4.md: each occurs once in MetaprojectView.tsx at head (`if (quiet) setError(current => ...` :392; `generation !== catalogRead.current) return;` :389; `generation === catalogRead.current && !quiet) setError(` :407 and the R4-12 anchor on the same line; `setError(null);` pairs: :379-380 (R4-10, with `project.current++;` above) and :676-677 (R4-11, with `setRebuilding(true);`); `if (mounted.current) setError({ source: "rebuild"` :681; `<span>{error.message}</span>` :848 followed by the Retry button :849). The multi-line R4-2, R4-3 and R4-8 anchors match lines 389-392 including the comment at :391.
+- Results of fix-round-4.md agree with research-evidence/t26-mutants-1.txt: R4-1, R4-6, R4-12 survived; R4-2, R4-3, R4-4, R4-5, R4-9 killed; R4-7, R4-8, R4-10, R4-11 killed by the same four test titles the result file names. Judgements (R4-1 and R4-12 equivalent, R4-6 an older guard) agree with round 4.
+- tasks.md: its 27 rows equal flow.json in kind and dependsOn as read in the diff (T26 implement, T27 docs, both no dependencies; T4 depends on T8-T11, T14-T27); the section "Fix round 4" and the Review list entry agree with the journal (10 findings: 5 minor, 5 info, one dismissed). The five titles that differ from flow.json are round 4's info F-006, still known.
+- journal.md: the new entries agree with flow.json history and the commits (T4 attempts 5 and 6, T26 and T27 added, dependency change, T26 started 12:19:46 and done 12:27:31, T27 done 12:27:32); the T26 entry's test titles match the file; 935 = 931 + 4 and the file's 91 = 87 + 4.
+- Remark, not a finding: flow.json and tasks.md title T27 "(F-003, F-004, F-005)" although F-004 was dismissed and the task changes nothing for it; the tasks.md section and the journal say so.
+
+### Not verified
+No test, mutant or build was run by this reviewer (exec budget 0); the red/green and mutant outcomes are taken from the recorded evidence files. The native Tauri window and a live failed rebuild followed by Retry are not verified by anyone, as the brief says.
+
+### Routing
+graph_used: not-relevant (one test file and flow record; the production code was read directly). wiki_used: not-relevant. ctx_used: yes (keryx ctx rg for anchors and helpers). raw_rg_used: no.

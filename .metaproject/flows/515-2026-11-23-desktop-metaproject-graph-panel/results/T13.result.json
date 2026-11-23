@@ -1,0 +1,62 @@
+{
+  "task_id": "task-13",
+  "task_name": "Panel and relationship list polish from the isolated live preview",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "P1: the Module fact shows the module path (id without 'module:') as a link-style button (min 24 px high) that calls onSelect(node.module). P2: list h4 headings use RELATIONSHIP_KIND_LABELS, node-kind badges (rows and header) use NODE_KIND_LABELS, second-step rows name the kind as the lowercased label; labels.ts created with exactly the dispatched content (it did not exist). P3: an adjacent row is a flex line: title (.truncate, max 60%), kind badge, path (.truncate, flex 1, min 4ch), origin tags; the button keeps title=<full path>; the li wraps only opened evidence to a full-width line. P4: evidence sits behind a toggle button (aria-expanded, aria-controls, closed by default) at the row end, labelled '<count> imports' when the edge has a count, else 'N example(s)'; opening shows at most two lines plus 'and N more'. An evidence item equal to either end's path is dropped, and when one is present the origin words beside it (lowercase-hyphen tokens like 'related-code', 'key-files', 'frontmatter') become .tag chips on the row; a row whose evidence was only that has no toggle. A count with no remaining lines shows as muted text. P5: the second-step group is a <details> closed by default whose summary holds the h3 'Second step <count>'; its rows use the same evidence toggle and origin tags. P6: the counts fact is labelled 'Relationships'; the fact key column is 14ch so it fits and follows the text scale.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/nodePanel.css"
+  ],
+  "files_created": [
+    "apps/desktop/src/metaproject/labels.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop; automation.verify_lint is false",
+  "type_check_result": "pass: `cd apps/desktop && bunx tsc --noEmit` reports 0 errors in the whole desktop project at the time of the run",
+  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx` 21 passed, 0 failed; `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx` 13 passed, 0 failed. Before the implementation the 9 new or changed tests (P1-P6) failed and 12 passed.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "missing: apps/desktop/src/metaproject has no project-skill",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "assumptions": [
+    "An evidence item counts as repeating the path when it equals the path of either end of the edge (the neighbour or the root), because from the file's side a describes edge repeats the root's path, not the wiki page's.",
+    "An origin word is a lowercase word or hyphenated words with no slash, colon or space; such words become tags only when the evidence also repeats a path, otherwise they stay example lines."
+  ],
+  "behavior_changes": [
+    {
+      "description": "The evidence disclosure is a small toggle button at the end of the row (chevron + '7 imports' or 'N examples') that opens the lines on a full-width line below, rather than a <details> under each row, so a closed row stays one line.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["a <details> element under every row (adds a summary line per row)"]
+    },
+    {
+      "description": "Second-step rows also get the evidence toggle and origin tags; the second-step rows are all rendered (inside the closed disclosure) rather than lazily on open.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["drop evidence from second-step rows", "render second-step rows only once the disclosure is opened"]
+    },
+    {
+      "description": "Second-step rows name the relationship with the lowercased label ('Client imports Server', 'wiki links'), and a module import with a count but no evidence lines shows the count ('7 imports') as muted text at the row end.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["show the capitalised label", "hide a count that has no evidence"]
+    }
+  ],
+  "notes": "Export contracts unchanged: NodeDetailsPanel props, isOpenSpecNode and RelationshipList({projection, select}) are as in plan.md. New additive exports from RelationshipList.tsx: rowEvidence and RowEvidence. RelationshipList still works outside the panel (it brings its own CSS import and needs no panel context). labels.ts did not exist when checked and was created with exactly the dispatched content. A file of another lane (graphLayout.ts) shows as modified in git status; not touched. Not verified (needs a browser): that rows really stay on one line at 380 px with long titles and paths, the ellipsis position, the toggle and origin tag fitting beside a truncated path, the summary marker of the second-step disclosure in WebKit, and contrast of the .tag chips in all palettes. Tests check classes and attributes, not layout. nodePanel.css adds geometry values in px and ch (2px gaps, 24/28px heights, 60% title cap, 4ch path minimum, 14ch key column); no raw colour values. No commits (auto_commit false)."
+}

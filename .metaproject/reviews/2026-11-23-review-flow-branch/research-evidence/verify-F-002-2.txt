@@ -1,0 +1,11 @@
+# keryx review verify-run
+finding: F-002
+command: swift /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/webkit-probe/probe.swift 'http://localhost:1420/?cwd=%2FUsers%2Ftsaitler.aleksandr%2Fwork%2Fsandbox%2Fkeryx%2F.claude%2Fworktrees%2Fmetaproject-redesign' 1024 768 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/webkit-probe/filters-popover.js 4
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign
+time: 2026-11-23T09:15:45.302Z
+exit: 0
+
+--- stdout ---
+PROBE_RESULT {"ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)","win":[1024,768],"steps":["opened Metaproject","graph header shown"],"toggles":[{"left":836.1,"top":211,"right":907,"bottom":235,"w":70.9,"h":24,"expanded":"false","disabled":false}],"opened":"click()","section":{"left":60,"top":77,"right":1024,"bottom":768,"w":964,"h":691,"containerType":"inline-size","contain":"none","transform":"none"},"anchor":{"left":836.1,"top":211,"right":907,"bottom":235,"w":70.9,"h":24},"popover":{"inline":{"left":"587px","top":"239px"},"rect":{"left":591.8,"top":241.9,"right":902.2,"bottom":428.1,"w":310.4,"h":186.2},"position":"fixed","transform":"matrix(0.97, 0, 0, 0.97, 0, 0)","maxHeight":"420px","scrollHeight":192,"clientHeight":192,"layoutBox":{"left":587,"top":239,"w":320,"h":192,"bottom":431,"scale":[0.97,0.97]}},"displacementFromInline":{"x":0,"y":0},"sectionOrigin":{"x":60,"y":77},"gapBelowButton":4,"cutBottomBy":-337,"scrolls":false,"hitInsidePopover":true}
+--- stderr ---
+

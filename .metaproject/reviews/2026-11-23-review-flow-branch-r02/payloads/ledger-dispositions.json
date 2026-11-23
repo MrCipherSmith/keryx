@@ -1,0 +1,107 @@
+[
+ {
+  "id": "review-logic-w3:F-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/RelationshipList.tsx)",
+  "reason": "review-logic-w3 F-001 is carried through as canonical finding F-001; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-regression-w3:F-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/RelationshipList.tsx)",
+  "reason": "review-regression-w3 F-001 is merged into canonical finding F-001; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-ui-ux-w3:F-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/RelationshipList.tsx)",
+  "reason": "review-ui-ux-w3 F-001 is merged into canonical finding F-001; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-regression-w3:F-002",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-002 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-regression-w3 F-002 is merged into canonical finding F-002; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-degradation-w4:F-001",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-003 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-degradation-w4 F-001 is carried through as canonical finding F-003; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-style-w2:F-001",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-004 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-style-w2 F-001 is carried through as canonical finding F-004; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-clean-code-w1:F-001",
+  "status": "finding",
+  "finding": "F-005",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-005 (minor, apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx)",
+  "reason": "review-clean-code-w1 F-001 is carried through as canonical finding F-005; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-testing-practices-w3:F-001",
+  "status": "finding",
+  "finding": "F-006",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-006 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-testing-practices-w3 F-001 is carried through as canonical finding F-006; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-testing-practices-w3:F-002",
+  "status": "finding",
+  "finding": "F-007",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-007 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-testing-practices-w3 F-002 is carried through as canonical finding F-007; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-testing-practices-w3:F-003",
+  "status": "finding",
+  "finding": "F-008",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-008 (minor, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx)",
+  "reason": "review-testing-practices-w3 F-003 is carried through as canonical finding F-008; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-testing-practices-w3:F-004",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-009 (minor, apps/desktop/src/App.tsx)",
+  "reason": "review-testing-practices-w3 F-004 is carried through as canonical finding F-009; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-highload-w3:F-001",
+  "status": "finding",
+  "finding": "F-010",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-010 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-highload-w3 F-001 is carried through as canonical finding F-010; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-layout-w3:LY-001",
+  "status": "finding",
+  "finding": "F-011",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-011 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-layout-w3 LY-001 is carried through as canonical finding F-011; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-layout-w3:LY-002",
+  "status": "finding",
+  "finding": "F-012",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-012 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-layout-w3 LY-002 is carried through as canonical finding F-012; one finding per defect across reviewers."
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "status": "finding",
+  "finding": "F-013",
+  "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-013 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+  "reason": "review-logic-w3 F-002 is carried through as canonical finding F-013; one finding per defect across reviewers."
+ }
+]

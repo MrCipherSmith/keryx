@@ -1,0 +1,46 @@
+{
+  "task": {
+    "task_id": "task-5",
+    "task_name": "Graph layout module and RelationshipGraph component (new files)",
+    "task_type": "ui_component",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Build the new relationship graph of the Desktop Metaproject explorer as NEW FILES ONLY. Nothing existing is edited and nothing is wired into the screen yet; task T8 does that afterwards.\n\nCreate in apps/desktop/src/metaproject/:\n1. graphLayout.ts - a pure, DOM-free module exporting `layoutNeighborhood(projection, options?)`. It turns a MetaprojectNeighbors projection into positioned boxes: the root, first-step and second-step nodes in direction columns, one caption per relationship-kind group, one overflow entry per over-full column, the edges to draw, and the incoming and outgoing counts. The middle-ellipsis label shortener and the style mapping (node kind to shape or border treatment; relationship kind to solid, dashed or dotted) are also exported pure functions so they can be unit-tested.\n2. RelationshipGraph.tsx - the React component with exactly the export contract of plan.md, 'Interfaces between tasks'. It draws the layout with core cytoscape (`preset` positions) and renders an HTML caption, an HTML legend and three zoom controls (zoom in, zoom out, fit) over the canvas.\n3. graph.css - its styles, imported by the component.\n4. graphLayout.test.ts and RelationshipGraph.dom.test.tsx.\n\nThe design is fixed in plan.md, 'Graph: a local neighbourhood in columns' and 'Design direction'. The numbers there (column cap 12, automatic zoom never below 0.8 or above 1.15, node and gap sizes) are the starting point; tune them only while AC1-AC4 hold and a depth-1 layout still fits a 440 px wide canvas at zoom 0.8 or more. The implementation being replaced is the `Graph` function in MetaprojectView.tsx, lines 41-140: read it for how colours are resolved from CSS tokens, how the ResizeObserver fit works and how cleanup is done. Do not modify it.\n\nEasy to get wrong:\n- cytoscape does not understand CSS variables. Resolve each token to a computed colour at mount and again whenever `data-theme` or `data-palette` changes on document.documentElement; blend a translucent token (the `-soft` ones) to an opaque colour before handing it to cytoscape. Label size follows `--text-scale`.\n- One cytoscape instance per mount. A new `projection` replaces the elements in a batch; `onSelect` and `onShowHidden` are read through refs, so a new callback identity does not rebuild the graph.\n- The container can be zero-sized, because the view stays mounted while hidden: never fit or zoom a zero-sized container, and fit when it gets a size.\n- The existing tests never mount cytoscape under happy-dom. If it cannot mount there, give the component a seam for the cytoscape factory that only the test uses and say so in your report. The caption and legend test must still run.\n- Group captions and '+N more' entries are part of the layout output so overlap can be tested. '+N more' is tappable and calls `onShowHidden(side)`; captions are not interactive.\n- The canvas wrapper stays aria-hidden; caption and legend are real text. No raw colour values in the component or the CSS.",
+    "target_files": [
+      "apps/desktop/src/metaproject/graphLayout.ts",
+      "apps/desktop/src/metaproject/graphLayout.test.ts",
+      "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+      "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "apps/desktop/src/metaproject/graph.css"
+    ],
+    "acceptance_criteria": [
+      "AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+      "AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+      "AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+      "AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word \"limited\" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

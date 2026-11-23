@@ -1,0 +1,45 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Slice-05 read in full (all hunks). The explorer is now kept mounted after its first visit, so every document-level listener it registers stays live while the view is hidden. One of them, the Filters popover's Escape layer, can leave the app's global shortcuts disabled and swallow the first Escape in other views until the next click or Escape. A second, smaller race: two concurrent wiki-link lookups are settled by arrival order, not click order. No lost-update, unbounded-growth, retry-storm or leak issue found: the cytoscape instance, observers, timers and listeners are all torn down in effect cleanups, and stale async results are guarded by active flags, project/selection checks and snapshot ids.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx:176",
+      "title": "Open Filters popover keeps a global Escape layer live while the retained explorer is hidden",
+      "pattern": "CLI/TUI Part 0 - background work outliving its view (listener on a long-lived global)",
+      "evidence": "`useEscape(() => close.current());` inside FiltersPopover, with `const [filtersOpen, setFiltersOpen] = useState(false);` held in Explorer, which App.tsx now mounts through `<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>`. useEscape pushes onto the module-level escapeStack in components/ui.tsx, and `overlayOpen()` is `escapeStack.length > 0`.",
+      "failure_mode": "Trigger: the view changes with no pointer press in the popover's window, for example a programmatic `go(...)`/`setView(...)` in App.tsx (a notification or review-notice navigation) while Filters is open. Before this change the explorer unmounted and the layer was removed. Now the popover stays mounted under `hidden`, so `overlayOpen()` stays true: App.tsx (line 360) and AppShell.tsx (lines 84, 112) stand the Cmd/Ctrl+1..4 and Cmd+K shortcuts down, and the first Escape in another view is preventDefault-ed by onEscapeKey and spent on closing an invisible popover. A mousedown anywhere (its window capture listener also stays live) or one Escape clears it, so the stall is short and self-healing; a mouse switch of view already closes the popover.",
+      "suggested_fix": "Give FiltersPopover (or Explorer) the visibility of the view, or close the popover when the explorer becomes hidden, so the layer is released while hidden: e.g. pass `visible` from RetainedView through MetaprojectView and set `filtersOpen` false in an effect when it turns false, or only render `filters` while visible."
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx:615",
+      "title": "Concurrent wiki-link lookups are won by whichever read returns first",
+      "pattern": "Concurrency A - out-of-order async results (no latest-wins token for the lookup)",
+      "evidence": "`const current = () => generation === project.current && shownSelection.current === from && activeMode.current === \"wiki\";` in openPath, which guards only against a changed project, selection or mode, not against a second lookup started from the same page.",
+      "failure_mode": "Trigger: click an unloaded wiki link A, then another unloaded link B on the same page before A's `search` read resolves. Both reads pass `current()` because the selection has not changed; whichever resolves first calls `openDocument` and changes the selection, after which the other is dropped. If A's read is the slower one, B opens (the last click wins); if A is faster, A opens and B is silently discarded. The outcome depends on read latency, not click order. No data is lost and the user can click again.",
+      "suggested_fix": "Keep a lookup counter in a ref, increment it in openPath, and have `current()` also require `token === lookup.current` (the pattern `latestSearch.current.generation` already uses nearby)."
+    }
+  ],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-redesign, merge-base 1358d962f4dfc07a9e086a533f51e75aa757dfcd, head 60cbe1c56, diff mode, load profile not provided; triggers used: one long-lived desktop session with a retained, hidden explorer view; rapid selection and link clicks; a rebuild in flight during a catalog reload. Files read in full: App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css and the removed GraphNodePanel.tsx (slice-05). Read-only tools only; nothing was run.
+Summary: two minor findings, no blocker or major. Stats: blocker 0 | major 0 | minor 2 | info 0.
+
+Findings
+- CLI / Multi-Session: F-001 (global Escape layer outlives the visible view).
+- Concurrency & Races: F-002 (lookup ordering in openPath). Checked and clean: the neighbours, detail and documents effects (active flags plus snapshotId and root checks), the rebuild flow (`mounted` ref; control re-enabled in finally), the protocol negotiation retry (negotiation counter, `active` guard), the copy-path and preview effects.
+- Resources: None detected. The cytoscape instance, MutationObserver, ResizeObserver, matchMedia listener and the copy timer are all released in cleanups; `seenNodes` is keyed by node id, so it is bounded by the distinct nodes of one project and is reset when the cwd changes (Explorer is keyed by cwd).
+- Caching: None detected. The retained catalog is checked against `snapshotId` on every read, and a mismatch raises the "Refresh catalog" banner.
+- Lock Contention, Async / Queues, Retry / Timeout, Idempotency: None detected (no locks, queues, retry loops or non-idempotent writes in this slice; Retry buttons are user-triggered).
+
+Clean Areas: Parts B, C, D, E, F, G reviewed, no findings.

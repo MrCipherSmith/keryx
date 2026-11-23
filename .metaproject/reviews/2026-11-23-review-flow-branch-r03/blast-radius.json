@@ -1,0 +1,754 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx"
+  ],
+  "files": [
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowsBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/flows/FlowsBoard.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/issues/IssueDetail.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/issues/IssuesBoard.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "path": [
+        "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/nodePanel.css",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "path": [
+        "apps/desktop/src/metaproject/nodePanel.css",
+        "apps/desktop/src/metaproject/RelationshipList.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/styles/flows.css",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/styles/flows.css",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/App.tsx",
+      "path": [
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/App.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/App.tsx",
+      "path": [
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/App.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/metaproject/NodeDetailsPanel.tsx (hop 2, from apps/desktop/src/metaproject/RelationshipList.tsx): run it, it is not read"
+    },
+    {
+      "file": ".metaproject/flows/032-2026-07-17-keryx-shell-status-bar/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/032-2026-07-17-keryx-shell-status-bar/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/032-2026-07-17-keryx-shell-status-bar/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/032-2026-07-17-keryx-shell-status-bar/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/032-2026-07-17-keryx-shell-status-bar/tasks.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/059-2026-07-20-opentui-shell-spike/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/059-2026-07-20-opentui-shell-spike/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/063-2026-07-20-opentui-approval-scroll/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/063-2026-07-20-opentui-approval-scroll/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/063-2026-07-20-opentui-approval-scroll/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/063-2026-07-20-opentui-approval-scroll/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/063-2026-07-20-opentui-approval-scroll/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/109-2026-07-21-tui-transcript-blocks-toggle-collapsible/tasks.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/112-2026-07-21-o-1-o-2-opentui-renderer-for-chat-mode-g/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/112-2026-07-21-o-1-o-2-opentui-renderer-for-chat-mode-g/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/112-2026-07-21-o-1-o-2-opentui-renderer-for-chat-mode-g/tasks.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/121-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/300-2026-09-23-tui-sidebar-and-modals-for-the-governanc/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/415-2026-10-08-durable-shell-exit-preservation-and-reco/review/local-regressions/p1-followup/tests.log",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/415-2026-10-08-durable-shell-exit-preservation-and-reco/review/local-regressions/pr984-p1/tests-retry.log",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/fixture-findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/fixture.patch",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-fixture.raw.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T14.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T15.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-27-shell-10/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-27-shell-10/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-27-shell-10/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/479-2026-10-27-shell-10/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.dispatch.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.dispatch.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/jobs/audit-2026-09-06/shell.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/keryx-dashboard.html",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/memory/lessons/tui-alignself-height-collapse.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"resize\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 130 files, over the 20-file hub limit; its consumers are not followed one by one"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.dispatch.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.dispatch.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 17,
+    "changedFilesResolved": 6,
+    "changedFilesUnresolved": 11,
+    "candidates": 12,
+    "retained": 11,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 0,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 49,
+    "droppedTestConsumer": 1,
+    "textLinksAdded": 8,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 11
+    }
+  },
+  "graph": {
+    "nodes": 4670,
+    "edges": 17773
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/App.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/App.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 3,
+    "textHubs": [
+      {
+        "key": "resize",
+        "kind": "event",
+        "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "hits": 130
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/metaproject/RelationshipList.tsx"
+    }
+  ],
+  "testCommand": "bun test"
+}

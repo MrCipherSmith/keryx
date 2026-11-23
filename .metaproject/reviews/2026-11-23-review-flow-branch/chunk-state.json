@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "retry": {
+    "schemaVersion": 1,
+    "scopeFingerprint": "c479e8b3cae1b6bf476cb38dd783697acaf7b924b58a33170323f43076e4807a",
+    "reviewers": {
+      "review-regression": {
+        "attempt": 0,
+        "status": "DONE",
+        "notRun": false,
+        "stalls": 0,
+        "covered": [
+          "chunk-001",
+          "chunk-014"
+        ]
+      }
+    }
+  },
+  "derived": [],
+  "outcomes": {
+    "chunk-001": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 1,
+      "findings": []
+    },
+    "chunk-014": {
+      "status": "DONE",
+      "decision": "wave",
+      "attempts": 1,
+      "seq": 2,
+      "findings": []
+    }
+  }
+}

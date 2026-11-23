@@ -1,0 +1,41 @@
+{
+  "task_id": "task-20",
+  "task_name": "Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "Tests only, no production change. App.dom.test.tsx gains one test (active and visible apart: the Settings-over-work-view case). MetaprojectView.dom.test.tsx gains 18 tests, one per surviving gate, each asserting what a user or caller observes (rendered text, roles, aria state, scrollTop, the requests sent, the callback). New helpers for later tests: capturingCytoscape (headless graph plus the live instance, to tap the “+N more” entry), stubWindowWidth, holdDebounce, wikiLink, wikiArticle, panelTab. Mutation result: A1 killed; of the 25 explorer mutants 21 killed by the tool, V5/V6/V15 invalid (T17 rewrote those lines) and killed when re-applied to their new lines in a scratch copy, N3 survived as an equivalent mutant.",
+  "files_modified": [
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: ESLint does not cover apps/desktop",
+  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit, exit 0)",
+  "test_result": "pass: MetaprojectView.dom.test.tsx 65 passed, 0 failed (18 new); App.dom.test.tsx 2 passed, 0 failed (1 new). scratch_check.py mutants: A1 killed; N1 N2 N4 N5 V1 V2 V3 V4 V7 V8 V8b V9 V10 V11 V12 V13 V14 V16 V17 V30 V31 killed; V5 V6 V15 invalid (anchor moved by T17), killed on their new lines (V5@704, V6@959, V15@186) in a scratch copy; N3 survived (equivalent)",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all exec-verified criteria hold for the two scoped test files and the type check (AC11, AC12, AC13, AC16, AC17 tests pass; AC19 type check passes, the whole suite was not run per the parallel-lanes constraint); AC10 is judged in the browser and was not re-checked",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" },
+    { "path": ".metaproject/rules/core/cli-interface-design.mdc", "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "useExplorerNavigation's `if (next === leaving) return;` guard is unreachable from every current caller (each builds a fresh route object, and switchView only enters a route of another mode), so it can only matter to a future caller that passes the current route back", "where": "apps/desktop/src/metaproject/useExplorerNavigation.ts enter()" }
+  ],
+  "not_touched": [
+    { "path": "apps/desktop/src/metaproject/MetaprojectView.tsx", "reason": "Every gate could be driven through the existing request, requestV2, createCytoscape and visible seams; no production change was needed and no new test exposed a defect." },
+    { "path": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "reason": "Pinned through the explorer's DOM (Back, scroll, view buttons); no seam or change was needed. N3 is equivalent (see notes)." },
+    { "path": "apps/desktop/src/App.tsx", "reason": "A1 is pinned by a RetainedView test in App.dom.test.tsx; no change was needed." }
+  ],
+  "notes": "Per mutant, the pinning test: A1 — App.dom.test 'a retained view is hidden while it is the work view under Settings…'. N1 — 'Back stops after the 40 most recent history entries'. N2 — 'Back restores the details panel's scroll for the node it returns to'. N4 — T17's 'Back to an OpenSpec document restores the scroll…'. N5 — 'pressing the view that is already shown keeps its selection, panel and history'. V1, V30 — 'with protocol 2 the Wiki relationships read uses depth 1, both directions and every non-symbol kind of protocol 2'. V2, V3 — 'the list header never counts fewer than it lists, and in Wiki counts Wiki pages only'. V4 — 'after a failed relationships read the old graph is not shown again while the next selection loads'. V5 (invalid; now MetaprojectView.tsx:704 `(graphState.graph !== \"missing\" || protocol === 2)`) — 'with protocol 2 the graph is drawn even when the catalog reports the graph missing'; killed when the mutation is applied to that line in a scratch copy. V6 (invalid; now line 959 `onDraft={graphState.graph === \"ready\" && !documents?.truncated ? onDraft : undefined}`) — 'Draft is offered only on a ready graph whose linked-document read is complete'; killed on that line in a scratch copy. V7 — 'a failed linked-document read shows its problem instead of a pending lookup'. V8, V8b — 'tapping a graph's “+N more” entry opens the panel on its Relationships tab'. V9 — 'a wiki-link lookup answered from another snapshot opens nothing and offers a refresh'. V10 — 'a wiki link that cannot be decoded is named as invalid and never looked up'. V11, V31 — T17's 'of several pending wiki-link lookups only the one started last…'. V12 — 'an unresolved-link message belongs to its page and is gone on the next page'. V13 — 'a changed Direction counts in the Filters button and its summary'. V14 — 'pressing the Filters button of an open popover closes it, not closes and reopens it'. V15 (invalid; the clamp now lives in placeFiltersPopover, line 186) — 'the Filters popover is kept 8 px inside the window's left and right edges'; killed on that line in a scratch copy. V16 — 'once the search settles, Find a Wiki page names the searched text in its empty state'. V17 — 'a Wiki page without relationships shows no Relationships disclosure'. N3 survived and is equivalent: enter() is reached only through visit (callers pass a newly built route), navigate (update functions return a new object or null) and switchView (enters remembered[mode] or INITIAL[mode] only when mode differs from the current route's mode, so never the current object); no input reaches `next === leaving`, so deleting the guard changes no observable behaviour. The moved-mutant check used a scratch script (/private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/t20-tools/moved_mutants.py) that copies apps/desktop to the scratchpad, links node_modules and the repository src, applies one replacement and runs the explorer test file; the worktree was only read. suggested_fix diverged: F-011 — the A1 test also checks that a view shown while not the work view (active false, visible true) is not hidden. F-014 — the scroll test uses the details panel's tabpanel (the role, not its class) and the cap test walks 41 selections then 40 Backs. F-016 — the overflow tap is driven through cytoscape's own tap event on the headless instance; the panel starts closed for V8b and on the Wiki tab for V8. All findings reproduced: every new test's mutant survived before the test was added (baseline run on this head). Not run: the whole desktop suite (AC19 `bun test src`), per the parallel-lanes constraint."
+}

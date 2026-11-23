@@ -1,0 +1,1154 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.dispatch.json
+@@ 1,92 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T22",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
++    "description": "Four minor findings of review round 2, each a defect that a fix of round 1 brought or left. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text, the quoted code and the evidence are in findings.json. The task is done when every finish line below holds, each fix has a test that fails without it (shown with `scratch_check2.py red`), the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 1's F-022). `groupRelationships` now leaves out every self-loop, as it already left out an edge whose end is missing from the projection, but two readers still count the raw `projection.edges.length`: the list's own empty note (RelationshipList.tsx) and the Wiki view's Relationships disclosure, its condition and its count (MetaprojectView.tsx). The producer does emit a self `links` edge for a wiki page that links to a heading of its own file. Finish line: whenever the list has no row to show, it says `No relationships for these filters.`; the Wiki disclosure is shown only when the list under it has at least one row, and its count is the number of rows that list shows. The counts a user sees for one projection (the panel's fact row, the Relationships tab count, the Wiki disclosure, the rows listed) all come from the one grouping rule.\nF-002 (brought by the fix of round 1's F-004). The quiet catalog re-read on return runs through the catalog effect, which bumps `project.current`; `openPath` and `loadMoreSearch` use that counter as their 'same project' guard, so a Wiki-link lookup or a 'load more' page still in flight when the user leaves the view and comes back is dropped without a message. Finish line: such a lookup or page settles exactly as it would have if the user had stayed (the target opens, the unresolved-path message shows, the page is appended); everything that retired pending work before round 1's fix still retires it (another project or protocol, Retry, Refresh, Rebuild); the quiet read still drops its own superseded result, and round 1's F-005 rule (only the lookup started last may settle) holds.\nF-003 (brought by the fix of round 1's F-004). The operator's answer to round 1's F-004 was to re-read the catalog silently on return; only the success path is silent. A quiet read clears `error` when it starts and sets it when it fails, so a failed re-read puts the catalog error banner with Retry over an explorer whose catalog, graph and selection are still valid, and a standing message (for example of a failed rebuild) disappears when the user returns. Finish line: a quiet re-read neither shows nor clears the error banner; when it fails, the explorer is exactly as it was before the return (catalog, selection, freshness, any standing error); every other read reports a failure as it does today.\nF-004 (left by the fix of round 1's F-006). The write to the explorer's node memory has two spellings in one component: the `remember` helper and an inlined copy of its body in the effect. Finish line: one spelling, no behaviour change. `remember` is recreated on every render, so calling it from the effect as it stands would make the effect depend on a value outside its dependency list; choose the form that keeps the effect's dependencies honest.\n\nAnother implementer adds tests to MetaprojectView.dom.test.tsx right after you (task T23: the test strength of round 1's fixes, which includes the quiet re-read you are changing), so leave the file's helpers and fixtures in a state others can build on, and say in `notes` which lines of the quiet path moved. If a fix changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
++    "intent": "fix"
++  },
++  "acceptance_criteria": [
++    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
++    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/report.md",
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T17.result.json",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json",
++    "docs/docs/guides/desktop-metaproject.md"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/metaproject/RelationshipList.tsx, apps/desktop/src/metaproject/RelationshipList.dom.test.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, docs/**, package.json or any lockfile. No new dependencies.",
++    "If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
++    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "The fix context (each finding's id, file, the reviewer's message and suggested fix, and the premise judge's verdict) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json under fix_context.review_feedback.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T10:53:39Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json
+@@ 1,96 @@
++{
++  "task": {
++    "task_id": "fix-22",
++    "task_name": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
++    "task_type": "fix",
++    "complexity": "high",
++    "dependencies": [],
++    "description": "Four minor findings of review round 2, each a defect that a fix of round 1 brought or left. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text, the quoted code and the evidence are in findings.json. The task is done when every finish line below holds, each fix has a test that fails without it (shown with `scratch_check2.py red`), the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 1's F-022). `groupRelationships` now leaves out every self-loop, as it already left out an edge whose end is missing from the projection, but two readers still count the raw `projection.edges.length`: the list's own empty note (RelationshipList.tsx) and the Wiki view's Relationships disclosure, its condition and its count (MetaprojectView.tsx). The producer does emit a self `links` edge for a wiki page that links to a heading of its own file. Finish line: whenever the list has no row to show, it says `No relationships for these filters.`; the Wiki disclosure is shown only when the list under it has at least one row, and its count is the number of rows that list shows. The counts a user sees for one projection (the panel's fact row, the Relationships tab count, the Wiki disclosure, the rows listed) all come from the one grouping rule.\nF-002 (brought by the fix of round 1's F-004). The quiet catalog re-read on return runs through the catalog effect, which bumps `project.current`; `openPath` and `loadMoreSearch` use that counter as their 'same project' guard, so a Wiki-link lookup or a 'load more' page still in flight when the user leaves the view and comes back is dropped without a message. Finish line: such a lookup or page settles exactly as it would have if the user had stayed (the target opens, the unresolved-path message shows, the page is appended); everything that retired pending work before round 1's fix still retires it (another project or protocol, Retry, Refresh, Rebuild); the quiet read still drops its own superseded result, and round 1's F-005 rule (only the lookup started last may settle) holds.\nF-003 (brought by the fix of round 1's F-004). The operator's answer to round 1's F-004 was to re-read the catalog silently on return; only the success path is silent. A quiet read clears `error` when it starts and sets it when it fails, so a failed re-read puts the catalog error banner with Retry over an explorer whose catalog, graph and selection are still valid, and a standing message (for example of a failed rebuild) disappears when the user returns. Finish line: a quiet re-read neither shows nor clears the error banner; when it fails, the explorer is exactly as it was before the return (catalog, selection, freshness, any standing error); every other read reports a failure as it does today.\nF-004 (left by the fix of round 1's F-006). The write to the explorer's node memory has two spellings in one component: the `remember` helper and an inlined copy of its body in the effect. Finish line: one spelling, no behaviour change. `remember` is recreated on every render, so calling it from the effect as it stands would make the effect depend on a value outside its dependency list; choose the form that keeps the effect's dependencies honest.\n\nAnother implementer adds tests to MetaprojectView.dom.test.tsx right after you (task T23: the test strength of round 1's fixes, which includes the quiet re-read you are changing), so leave the file's helpers and fixtures in a state others can build on, and say in `notes` which lines of the quiet path moved. If a fix changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
++    "target_files": [
++      "apps/desktop/src/metaproject/MetaprojectView.tsx",
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/metaproject/RelationshipList.tsx",
++      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
++    ],
++    "acceptance_criteria": [
++      "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
++      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
++    ],
++    "context": "Flow 515 in the Keryx repository, fix round after review round 2. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. Review round 2 read the fixes of round 1 as new code; its package is .metaproject/reviews/2026-11-23-review-flow-branch-r02: report.md (the round's report), findings.json (every finding with its file, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-2.md (the 34 mutants of the fix code: file:line, anchor, replacement, killed or survived) and research-evidence/mutants-r2.json (the same mutants as data). Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies round 2's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
++    "existing_tests": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
++    ],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json"
++  },
++  "fix_context": {
++    "review_feedback": [
++      {
++        "id": "F-001",
++        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
++        "severity": "WARNING",
++        "message": "Answering F-022, groupRelationships() now drops every self-loop (`if (edge.from === edge.to) continue;`), but the empty state still tests `projection.edges.length === 0`, the raw edge count. A projection whose only edges are self-loops (or edges with an end absent from the projection, which groupRelationships already dropped) has edges.length > 0 and groups that are all empty: no note, no group, an empty `<div class=\"metaproject-rel\">`. The same raw count feeds the Wiki disclosure label at MetaprojectView.tsx:925, `<summary>Relationships <span className=\"count-label\">{currentProjection.edges.length}</span></summary>`, so that label counts edges the list now omits. This is the F-022 class (a count that disagrees with the list beside it) at two sites the fix did not reach.",
++        "suggested_fix": "Decide the empty note from the groups, not the raw edges: `const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;` and render the note when `empty`. In MetaprojectView.tsx show the disclosure and its count from `summarizeRelationships(currentProjection)` (incoming + outgoing), or from the same groups, not from `edges.length`.",
++        "reviewer": "review-logic",
++        "line": 217,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-002",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "The quiet re-read added for F-004 goes through the catalog effect. On a hidden-to-visible change the visible effect (`if (!returned || !loaded.current) return; quietRead.current = true; setRevision(value => value + 1);`) bumps `revision`, a dependency of the catalog effect. React runs that effect's cleanup (`project.current++`) and then its body (`const generation = ++project.current;`), so project.current moves by two even when the re-read finds the same snapshotId and changes nothing. openPath captured `const generation = project.current;` and its `current()` requires `generation === project.current`; loadMoreSearch captured `const projectGeneration = project.current;` and checks `projectGeneration !== project.current` after its read (line 638) and in its catch (line 644). Both therefore see the guard fail and return. openPath has already cleared the unresolved message (`setUnresolvedLink(null)`), so no message is shown; loadMoreSearch appends nothing and sets no error. The unchanged-snapshot branch (`setFreshness(...); return;`) does not restore the counter. The other guards do not help: latestSearch.generation moves only when the query or catalog snapshotId changes (not here), and the token in openPath and shownSelection/activeMode all still match, so project.current is the only guard that fails.",
++        "suggested_fix": "Keep project.current for real project changes and give the quiet same-snapshot re-read its own counter: let the effect skip `++project.current` and the cleanup bump while `quiet` is set, guarding that read by a separate ref; or restore project.current in the unchanged-snapshot branch. Add a test that holds a wiki-link lookup, hides and shows the explorer, then releases it and checks the target opens.",
++        "reviewer": "review-logic",
++        "line": 367,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-003",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "A failed quiet re-read on return shows the loud catalog error over a working explorer. The fix round added a quiet catalog re-read when the explorer becomes visible again (`quietRead.current = true; setRevision(...)`, lines 335-343). The load effect it reuses clears and sets `error` unconditionally: `setError(\"\")` at line 370 and `setError(errMessage(cause))` in the catch at line 392. On base nothing was read on return, so nothing could fail there. Trigger: the user leaves the Metaproject tab and comes back while the CLI read fails (CLI busy or exiting, a rebuild writing the index, a transient spawn error). Outcome: the `{error && ...role=\"alert\"}` banner (line 820) appears with the CLI message and a Retry button above an explorer whose catalog, graph and selection are still valid; Retry runs a non-quiet read, which replaces the catalog and may drop the selection if the snapshot moved. The quiet read was meant to be invisible (its comment says 'quietly'); only its success path is. The test at MetaprojectView.dom.test.tsx:889 covers the unchanged-snapshot success path only.",
++        "suggested_fix": "In the catch, when `quiet` is true, keep the loaded catalog and skip `setError` (and do not clear a standing error at line 370 for a quiet read); the next real read or the user's Retry reports a persistent failure.",
++        "reviewer": "review-degradation",
++        "line": 392,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-004",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "The fix for round-1 F-006 moved the node-memory fill into an effect and wrote the map write inline, while the `remember` helper declared three lines above (`const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };`) does the same write and is still used at line 603 (`if (node) remember(node);`). The same operation now has two spellings in one component.",
++        "suggested_fix": "Call the helper in the effect: `for (const node of nodes) remember(node);`.",
++        "reviewer": "review-style",
++        "line": 572,
++        "premise_verdict": "upheld"
++      }
++    ],
++    "original_task_ids": [
++      "task-17",
++      "task-18"
++    ],
++    "iteration": 2
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.dispatch.json
+@@ 1,89 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T23",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
++    "description": "Four minor findings of review round 2 about the tests of round 1's fixes: 14 mutants of the fix code survive, so the behaviour they stand for is pinned by no assertion. Each finding is in `fix_context.review_feedback`; the full text is in findings.json and every mutant (file:line, anchor, replacement) in research-evidence/mutation-2.md. Task T22 has just changed the same production file (results/T22.result.json says what, and which lines of the quiet catalog re-read moved), so some anchors have moved. The task is done when every finish line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-006. The bounds of `placeFiltersPopover` and the removal of its resize listener are unpinned: R2-2 (opens above although there is less room above), R2-4, R2-5, R2-6, R2-7 (the floors and the 420 px cap), R2-9 (the resize listener is never removed). F-007. The quiet catalog re-read is pinned by one same-snapshot fixture: R2-14 (a return while the first read is loading), R2-16 (a return after the snapshot changed), R2-17 and R2-19 (a later full read after a quiet one), R2-18 (the snapshot match in `graphState`), R2-26 (the freshness reason). F-008. The node-memory test asserts only that nothing is written, so deleting the effect that fills the memory (R2-23) stays green; nothing reaches, through Back, a node that exists only in that memory. F-009. Removing `visible={view === \"metaproject\"}` from App.tsx (R2-28) stays green, so the line the fixes of round 1's F-003 and F-004 hang on is pinned by no test.\n\nFinish line: `scratch_check2.py mutants --ids R2-2,R2-4,R2-5,R2-6,R2-7,R2-9,R2-14,R2-16,R2-17,R2-18,R2-19,R2-23,R2-26 --tests src/metaproject/MetaprojectView.dom.test.tsx` and `--ids R2-28 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant the tool reports as invalid because T22 moved its anchor, your result names the line that now carries that behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost, it says why, and for R2-28 specifically the reviewer accepts as an alternative a statement that the wiring rests on the live check only; prefer a test if the composition can be rendered with the explorer stubbed. The F-008 test shows the memory working (Back to a node known only from a lookup shows its panel at once), not only that it is left alone. A test added here asserts what a user or a caller can observe — rendered text, roles, the requests the explorer sends, the style the popover gets, a callback's arguments — not the wording of the source. The production files are owned so that a test can be given a seam it needs; a change of behaviour in them is a `behavior_changes` entry, and a real defect a new test exposes is reported, with the test, before it is fixed. R2-12 and R2-30 also survive and are not in this task: the reviewer judged both redundant code with no input a test can drive.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
++    "intent": "fix"
++  },
++  "acceptance_criteria": [
++    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
++    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/report.md",
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json",
++    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/research-evidence/mutation-2.md",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/App.dom.test.tsx",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/App.dom.test.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/App.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, docs/**, package.json or any lockfile. No new dependencies.",
++    "If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
++    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "The fix context (each finding's id, file, the reviewer's message and suggested fix, and the premise judge's verdict) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json under fix_context.review_feedback.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T10:53:39Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json
+@@ 1,95 @@
++{
++  "task": {
++    "task_id": "fix-23",
++    "task_name": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
++    "task_type": "fix",
++    "complexity": "high",
++    "dependencies": [],
++    "description": "Four minor findings of review round 2 about the tests of round 1's fixes: 14 mutants of the fix code survive, so the behaviour they stand for is pinned by no assertion. Each finding is in `fix_context.review_feedback`; the full text is in findings.json and every mutant (file:line, anchor, replacement) in research-evidence/mutation-2.md. Task T22 has just changed the same production file (results/T22.result.json says what, and which lines of the quiet catalog re-read moved), so some anchors have moved. The task is done when every finish line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-006. The bounds of `placeFiltersPopover` and the removal of its resize listener are unpinned: R2-2 (opens above although there is less room above), R2-4, R2-5, R2-6, R2-7 (the floors and the 420 px cap), R2-9 (the resize listener is never removed). F-007. The quiet catalog re-read is pinned by one same-snapshot fixture: R2-14 (a return while the first read is loading), R2-16 (a return after the snapshot changed), R2-17 and R2-19 (a later full read after a quiet one), R2-18 (the snapshot match in `graphState`), R2-26 (the freshness reason). F-008. The node-memory test asserts only that nothing is written, so deleting the effect that fills the memory (R2-23) stays green; nothing reaches, through Back, a node that exists only in that memory. F-009. Removing `visible={view === \"metaproject\"}` from App.tsx (R2-28) stays green, so the line the fixes of round 1's F-003 and F-004 hang on is pinned by no test.\n\nFinish line: `scratch_check2.py mutants --ids R2-2,R2-4,R2-5,R2-6,R2-7,R2-9,R2-14,R2-16,R2-17,R2-18,R2-19,R2-23,R2-26 --tests src/metaproject/MetaprojectView.dom.test.tsx` and `--ids R2-28 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant the tool reports as invalid because T22 moved its anchor, your result names the line that now carries that behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost, it says why, and for R2-28 specifically the reviewer accepts as an alternative a statement that the wiring rests on the live check only; prefer a test if the composition can be rendered with the explorer stubbed. The F-008 test shows the memory working (Back to a node known only from a lookup shows its panel at once), not only that it is left alone. A test added here asserts what a user or a caller can observe — rendered text, roles, the requests the explorer sends, the style the popover gets, a callback's arguments — not the wording of the source. The production files are owned so that a test can be given a seam it needs; a change of behaviour in them is a `behavior_changes` entry, and a real defect a new test exposes is reported, with the test, before it is fixed. R2-12 and R2-30 also survive and are not in this task: the reviewer judged both redundant code with no input a test can drive.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
++    "target_files": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/App.dom.test.tsx",
++      "apps/desktop/src/metaproject/MetaprojectView.tsx",
++      "apps/desktop/src/App.tsx"
++    ],
++    "acceptance_criteria": [
++      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
++      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
++    ],
++    "context": "Flow 515 in the Keryx repository, fix round after review round 2. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. Review round 2 read the fixes of round 1 as new code; its package is .metaproject/reviews/2026-11-23-review-flow-branch-r02: report.md (the round's report), findings.json (every finding with its file, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-2.md (the 34 mutants of the fix code: file:line, anchor, replacement, killed or survived) and research-evidence/mutants-r2.json (the same mutants as data). Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies round 2's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
++    "existing_tests": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/App.dom.test.tsx"
++    ],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json"
++  },
++  "fix_context": {
++    "review_feedback": [
++      {
++        "id": "F-006",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "Five gates of placeFiltersPopover and its resize cleanup are unpinned. Mutants run in a scratch copy, suite green: R2-2 (`needed > below` only: flips above although there is less room above), R2-4 (`Math.max(POPOVER_MARGIN, ...)` on bottom), R2-5 (`Math.min(MENU_MAX_HEIGHT, above)` -> `above`), R2-6/R2-7 (the `Math.max(0, ...)` floor and the MENU_MAX_HEIGHT cap below), R2-9 (the resize listener is never removed). The two placement tests drive only the two clean cases: content 0 px with room below (305/167), content 229 px with 14 px below and 418 above; no fixture has content too tall for below while above is smaller, a button within 4 px of the window bottom, a window taller than 420 px, or an unmount followed by a resize.",
++        "suggested_fix": "Add: stubPopoverContentHeight(500) with the button at top 250 / bottom 274 in a 480 window (more room below than above) and assert style.top and no style.bottom (R2-2); a window of 900 with the popover below asserts maxHeight 420 (R2-7); a button at top 478 asserts bottom 8 (R2-4); content 229 with a button at top 600 in a 700 window asserts maxHeight 420 (R2-5); spy on window.removeEventListener, unmount the view and assert a \"resize\" removal (R2-9).",
++        "reviewer": "review-testing-practices",
++        "line": 190,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-007",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
++        "severity": "WARNING",
++        "message": "The quiet catalog path added for round-1 F-004 is pinned by one fixture (same snapshot id, graph ready then stale) and one rebuild fixture. Surviving mutants: R2-16 (`if (quiet)`: a return after the project changed would drop the new catalog and only update freshness), R2-17 (no `setFreshness(null)` after a full load: a later full read of the same snapshot keeps showing the earlier quiet freshness), R2-18 (`freshness ?? catalog`: ignores the snapshot match in graphState), R2-19 (`quietRead.current` never reset: a later Retry or Rebuild read is treated as quiet), R2-14 (`!loaded.current` guard: a return while the first read is loading starts a second read), R2-26 (freshness reason read from the catalog, not graphState). No fixture returns to the view with a changed snapshot id, or follows a quiet read with a rebuild or Retry.",
++        "suggested_fix": "Extend the 'shown again' test: a third read returns snapshotId \"two\" with new nodes, assert the list shows them (R2-16, R2-18); after the stale quiet read click Rebuild graph with a read returning graph ready and assert no 'Graph is stale' banner (R2-17, R2-19); count catalog reads for a return while the first read is pending (R2-14); open Details on the quiet-stale banner and assert the reason text (R2-26).",
++        "reviewer": "review-testing-practices",
++        "line": 379,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-008",
++        "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++        "severity": "WARNING",
++        "message": "The test asserts only `expect(writes).toBe(0)` after patching Map.prototype.set, with no positive artifact that the effect still fills the memory. Deleting the effect body (`for (const node of nodes) seenNodes.current.set(node.id, node);`, R2-23) leaves the suite green: writes are 0 either way. Only R2-24 (effect without its dependency) is killed. No other test reaches a node that exists only in seenNodes (a lookup result) through Back.",
++        "suggested_fix": "Open a wiki link whose target comes from a `search` hit that is not in the catalog, open another page, press Back and assert the target's panel title shows; and in the same test assert writes > 0 when the node list changes (for example a search that adds a hit).",
++        "reviewer": "review-testing-practices",
++        "line": 974,
++        "premise_verdict": "upheld"
++      },
++      {
++        "id": "F-009",
++        "file": "apps/desktop/src/App.tsx",
++        "severity": "WARNING",
++        "message": "The one line that makes the fixes for round-1 F-003 and F-004 work in the app is unpinned: removing `visible={view === \"metaproject\"}` (R2-28) leaves every suite green, because the explorer tests pass `visible` themselves and App.dom.test.tsx renders only RetainedView. With the prop missing the default `true` applies and the popover stays open and the catalog is never re-read on return.",
++        "suggested_fix": "Cheapest: export a small wrapper or render App's work-view block in a DOM test with a stub MetaprojectView and assert it receives visible=false while another view is shown; or state in the flow that the wiring is covered by the live check only.",
++        "reviewer": "review-testing-practices",
++        "line": 596,
++        "premise_verdict": "upheld"
++      }
++    ],
++    "original_task_ids": [
++      "task-17",
++      "task-20"
++    ],
++    "iteration": 2
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "515",
+   "slug": "desktop-metaproject-graph-panel",
+   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+   "status": "in-progress",
+   "createdAt": "2026-11-23T07:14:05.302Z",
+-  "updatedAt": "2026-11-23T10:12:10.719Z",
++  "updatedAt": "2026-11-23T11:14:40.285Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "outcomeAuthor": "agent",
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 76,133 @@
+       "dispositionReason": "Tests are written inside each implement task (T5-T8); the full suite is verify task T10"
+     },
+     {
+       "id": "T4",
+       "title": "Self-review and prepare draft PR",
+       "kind": "review",
+       "origin": "scaffold",
+       "status": "todo",
+       "dependsOn": [
+         "T8",
+         "T9",
+         "T10",
+         "T11",
+         "T14",
+         "T15",
+         "T16",
+         "T17",
+         "T18",
+         "T19",
+         "T20",
+-        "T21"
++        "T21",
++        "T22",
++        "T23"
+       ],
+       "attempts": {
+-        "count": 0,
+-        "log": []
++        "count": 2,
++        "log": [
++          {
++            "at": "2026-11-23T10:12:37.125Z",
++            "outcome": "started",
++            "detail": "review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
++          },
++          {
++            "at": "2026-11-23T10:52:22.579Z",
++            "outcome": "failed",
++            "detail": "review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
++          }
++        ]
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {}
+     },
+     {
+       "id": "T5",
+       "title": "Graph layout module and RelationshipGraph component (new files)",
+       "kind": "implement",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-23T07:25:40.538Z",
+             "outcome": "started",
+             "detail": "515-T5"
+           }
+         ]
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 515,609 @@
+       "kind": "docs",
+       "status": "done",
+       "dependsOn": [
+         "T17",
+         "T18"
+       ],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-23T10:03:50.347Z",
+             "outcome": "started",
+             "detail": "515-T21 (fix round 1)"
+           }
+         ]
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed"
++    },
++    {
++      "id": "T22",
++      "title": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T10:53:40.447Z",
++            "outcome": "started",
++            "detail": "515-T22 (fix round 2)"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC7",
++        "AC10",
++        "AC14",
++        "AC16",
++        "AC19"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T23",
++      "title": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
++      "kind": "test",
++      "status": "done",
++      "dependsOn": [
++        "T22"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:04:34.114Z",
++            "outcome": "started",
++            "detail": "515-T23 (fix round 2)"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC10",
++        "AC14",
++        "AC19",
++        "AC20"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-23T07:14:05.302Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-23T07:21:57.079Z",
+       "event": "task-added",
+       "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
+     },
+     {
+       "at": "2026-11-23T07:21:57.264Z",
+       "event": "task-added",
+       "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
+     },
+     {
+       "at": "2026-11-23T07:21:57.446Z",
+       "event": "task-added",
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 890,974 @@
+     },
+     {
+       "at": "2026-11-23T10:03:49.241Z",
+       "event": "task-attempt",
+       "detail": "T20: started (attempt 1) — 515-T20 (fix round 1)"
+     },
+     {
+       "at": "2026-11-23T10:03:50.347Z",
+       "event": "task-attempt",
+       "detail": "T21: started (attempt 1) — 515-T21 (fix round 1)"
+     },
+     {
+       "at": "2026-11-23T10:07:07.012Z",
+       "event": "task-done",
+       "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
+     },
+     {
+       "at": "2026-11-23T10:12:10.719Z",
+       "event": "task-done",
+       "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
++    },
++    {
++      "at": "2026-11-23T10:12:37.125Z",
++      "event": "task-attempt",
++      "detail": "T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
++    },
++    {
++      "at": "2026-11-23T10:52:22.579Z",
++      "event": "task-attempt",
++      "detail": "T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
++    },
++    {
++      "at": "2026-11-23T10:52:22.786Z",
++      "event": "task-added",
++      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
++    },
++    {
++      "at": "2026-11-23T10:52:22.977Z",
++      "event": "task-added",
++      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
++    },
++    {
++      "at": "2026-11-23T10:52:23.173Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round"
++    },
++    {
++      "at": "2026-11-23T10:53:40.447Z",
++      "event": "task-attempt",
++      "detail": "T22: started (attempt 1) — 515-T22 (fix round 2)"
++    },
++    {
++      "at": "2026-11-23T11:04:12.196Z",
++      "event": "task-done",
++      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
++    },
++    {
++      "at": "2026-11-23T11:04:34.114Z",
++      "event": "task-attempt",
++      "detail": "T23: started (attempt 1) — 515-T23 (fix round 2)"
++    },
++    {
++      "at": "2026-11-23T11:14:40.285Z",
++      "event": "task-done",
++      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
+     }
+   ],
+   "origin": {
+     "kind": "human-request",
+     "quote": "в графе тоже не понятно что, в деталях ноды визуально все сливается",
+     "source": "operator session, 2026-11-23"
+   },
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+     },
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json
+@@ 1,104 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json
+@@ 1,104 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.dom.test.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/App.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json
+@@ 1,64 @@
++{
++  "task_id": "fix-22",
++  "task_name": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
++  "task_type": "fix",
++  "status": "success",
++  "description": "F-001: RelationshipList decides its empty note from the groups (incoming, outgoing, second step all empty), not from projection.edges.length; the Wiki view's Relationships disclosure is shown only when summarizeRelationships(currentProjection) gives at least one row, and its count is incoming + outgoing + secondStep, the same sum the panel's Relationships tab uses. F-002: the catalog effect has its own counter, catalogRead, for dropping a superseded catalog result; project.current (the guard of openPath and loadMoreSearch) moves only for a non-quiet read and in the effect's cleanup when the next run is not quiet, so a lookup or page in flight across a hide/show settles. F-003: a quiet read neither clears error at its start nor sets it on failure; a return while a catalog read is in flight starts no quiet read (catalogPending), so that read's own failure is still shown. F-004: remember is a stable useCallback and the effect calls it, with remember in its dependency list.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
++  ],
++  "files_created": [],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not applicable: ESLint does not cover apps/desktop",
++  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit exits 0)",
++  "test_result": "pass: MetaprojectView.dom.test.tsx 71 pass 0 fail; RelationshipList.dom.test.tsx 13 pass 0 fail; NodeDetailsPanel.dom.test.tsx 24 pass 0 fail; App.dom.test.tsx 2 pass 0 fail (each in its own process). OpenSpecView.dom.test.tsx does not exist. Red check (scratch_check2.py red --restore src/metaproject/MetaprojectView.tsx,src/metaproject/RelationshipList.tsx): MetaprojectView.dom.test.tsx exit 1, 65 pass | 6 fail; RelationshipList.dom.test.tsx exit 1, 12 pass | 1 fail.",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "noticed_not_touched": [
++    { "what": "NodeDetailsPanel computes the Relationships tab count as summary.incoming + summary.outgoing + summary.secondStep inline; MetaprojectView now computes the same sum for the Wiki disclosure. Two spellings of one count across two files; a `relationshipRows(summary)` helper exported from RelationshipList would make it one. NodeDetailsPanel is outside this task's ownership.", "where": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx:242 (counts.relationships) and MetaprojectView.tsx:716 (wikiRelationshipRows)" },
++    { "what": "When a protocol change and a return to the view land in the same commit, React runs all effect cleanups and then the bodies: the visible effect sets quietRead before the catalog effect body reads it, so the protocol-change read runs as quiet (no error clear, failure silent). The next commit's revision bump then runs a loud read, so the final state is loud, but one read is spent. Pre-existing ordering, not changed here.", "where": "MetaprojectView.tsx visible effect (340-349) and catalog effect (371-416)" }
++  ],
++  "assumptions": [
++    "The Wiki disclosure's 'number of rows that list shows' includes second-step rows, as the panel's Relationships tab count does; the Wiki read is depth 1, so second-step rows appear only when a projection carries edges between two neighbours."
++  ],
++  "behavior_changes": [
++    {
++      "description": "A quiet re-read that finds a changed snapshot replaces the catalog (as before) but no longer retires a wiki-link lookup or a page of results still in flight. Such a lookup then settles against the snapshot it captured: if the answer comes from the new snapshot, the 'Project knowledge changed while loading' banner with Refresh catalog shows; a page of results is still dropped, because its search generation moves with the catalog snapshot.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": [
++        "Bump project.current when a quiet read applies a changed catalog, so pending lookups and pages are dropped silently as a Refresh would drop them."
++      ]
++    },
++    {
++      "description": "Returning to the view while a catalog read is already in flight (for example the reload after a successful rebuild, or a Retry) starts no quiet re-read; the read in flight is left to finish and shows its own result or failure. Before, the quiet read superseded it and that read's failure was lost.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": [
++        "Let the quiet read supersede the read in flight and inherit its loudness (report a failure).",
++        "Let the quiet read supersede it silently, as round 1's fix did on the success path."
++      ]
++    },
++    {
++      "description": "A Wiki page whose only relationships are left out by the grouping rule (a self `links` edge to a heading of its own file, or an edge with a missing end) shows no Relationships disclosure; otherwise the disclosure's count equals the rows it lists. The guide's sentences 'A relationship from an item to itself is neither listed nor counted.' and the table row 'A page has no **Relationships** section' already describe this; no guide sentence is contradicted.",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": []
++    }
++  ],
++  "not_touched": [],
++  "notes": "Readers of what changed. (1) RelationshipList empty note: rendered by RelationshipList itself, which is used by NodeDetailsPanel.tsx:265 (panel Relationships tab) and MetaprojectView's Wiki disclosure; both now show the note whenever no row is listed. groupRelationships/summarizeRelationships are unchanged; summarizeRelationships is read by NodeDetailsPanel.tsx:199 (fact row and tab count) and now also by MetaprojectView (Wiki disclosure), so the fact row, tab count, disclosure count and listed rows come from groupRelationships. (2) project.current: read by openPath (MetaprojectView.tsx:694-695) and loadMoreSearch (646, 654, 660). They now see it unchanged across a quiet re-read and moved by every other catalog read (new protocol, Retry, Refresh catalog, Rebuild's reload, relationship/detail Retry, which all bump revision with quietRead false) and by the catalog effect's cleanup on unmount (another project remounts the Explorer by key). The F-005 token rule in openPath (lookup.current) is untouched. (3) catalogRead (new) is read only by the catalog effect: the quiet read still drops its own superseded result and a later read drops it. (4) catalogPending (new) is read only by the visible effect. (5) error: also set/cleared by rebuild() (673-681 region) and read by the banner; a quiet read no longer touches it. (6) remember: called by the node-memory effect and by viewInGraph (619); it is now stable (useCallback, empty deps; it writes only the seenNodes ref), so the effect's dependency list [nodes, remember] is honest and the effect still runs only when nodes changes (the existing test 'a render that changes no node list leaves the explorer's node memory alone' passes). Quiet-path lines for T23 (MetaprojectView.tsx after this change): refs project/catalogRead/catalogPending/loaded/loadedSnapshot/quietRead at 326-337; the visible effect at 340-349 with the new catalogPending guard at 346; the catalog effect at 371-416: generation from catalogRead at 373, loud-only project bump and setError(\"\") at 376-379, catalogPending set at 381, superseded check at 387, quiet unchanged-snapshot branch right after, catch with the quiet guard at 403, finally clearing catalogPending at 405-408, cleanup at 411-415. Test file: new helpers showView(props, visible) and catalogErrorBanner() sit after the last pre-existing test (around line 1313) for T23 to reuse; the new tests follow them. suggested_fix diverged: F-002 — the reviewer offered either skipping the project bump while quiet or restoring the counter in the unchanged-snapshot branch; I split the counter instead (catalogRead for superseded catalog results, project.current for retiring pending work) because the restore variant would still drop work when a quiet read applies a changed catalog mid-flight and would leave a window between bump and restore. F-003 — beyond the suggestion, a return while a catalog read is in flight now starts no quiet read, because otherwise the quiet read supersedes a loud read and its failure (which the finish line requires to be reported as today) would vanish. F-001 and F-004 followed the suggestions; for F-004 remember was made stable with useCallback so calling it from the effect keeps the dependency list honest, as the task required. All four findings reproduced (red output above). Red-run output quoted: 'restored to HEAD in the copy: src/metaproject/MetaprojectView.tsx', 'restored to HEAD in the copy: src/metaproject/RelationshipList.tsx', '== src/metaproject/MetaprojectView.dom.test.tsx: exit 1; 65 pass | 6 fail', failing: 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' (F-001), 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' and 'a page of results in flight when the explorer is hidden and shown again is still appended' (F-002), 'a failed quiet re-read on return shows no error and leaves the explorer as it was', 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' and 'a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown' (F-003); '== src/metaproject/RelationshipList.dom.test.tsx: exit 1; 12 pass | 1 fail', failing 'a projection whose every edge is left out says it has no relationships' (F-001). F-004 is a no-behaviour-change refactor and has no red test. Not verified: the whole desktop suite (bun test src) was not run, per the dispatch's scope; round 2's mutants were not run; AC10 (judged, browser dev build) was not checked in a browser. The .metaproject changes in git status predate this task. No commit made."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json
+@@ 1,51 @@
++{
++  "task_id": "fix-23",
++  "task_name": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
++  "task_type": "fix",
++  "status": "success",
++  "description": "Tests only, plus one test seam in App.tsx. MetaprojectView.dom.test.tsx gains ten tests (lines 1456-1636): five for placeFiltersPopover's bounds and its resize cleanup (F-006), four for the quiet catalog re-read (F-007) and one that reaches, through Back, a node known only from a search hit (F-008). App.tsx moves the explorer's work-view block into an exported MetaprojectWork component that takes an optional `explorer` test seam, and App.dom.test.tsx renders it with a stand-in explorer to pin `visible={view === \"metaproject\"}` (F-009). Mutant results, all in a scratch copy: R2-2, R2-4, R2-5, R2-6, R2-7, R2-9, R2-16, R2-17, R2-19, R2-26 killed by scratch_check2.py; R2-28 killed by scratch_check2.py against App.dom.test.tsx; R2-14 and R2-23 invalid (anchors moved by T22) and killed in their new form by own_mutants.py; R2-18 survives as an equivalent mutant; T22's five branches T23-1..T23-5 all killed.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/App.dom.test.tsx",
++    "apps/desktop/src/App.tsx"
++  ],
++  "files_created": [],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not applicable: ESLint does not cover apps/desktop",
++  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit exits 0)",
++  "test_result": "pass: src/metaproject/MetaprojectView.dom.test.tsx 81 pass 0 fail; src/App.dom.test.tsx 3 pass 0 fail (each in its own process). Mutants (scratch copy): scratch_check2.py mutants --ids R2-2,R2-4,R2-5,R2-6,R2-7,R2-9,R2-14,R2-16,R2-17,R2-18,R2-19,R2-23,R2-26 --tests src/metaproject/MetaprojectView.dom.test.tsx -> 10 killed, R2-14 and R2-23 invalid, R2-18 survived; --ids R2-28 --tests src/App.dom.test.tsx -> killed; own_mutants.py (scratchpad) -> R2-14 (new anchor, line 346), R2-23 (new anchor, line 588), T23-1..T23-5 all killed.",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "noticed_not_touched": [
++    { "what": "The snapshot match in graphState (`catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog`) is redundant: setCatalog is called in one place (line 393) and is always followed by setFreshness(null) in the same batch, and setFreshness(value) is only called with result.snapshotId === loadedSnapshot.current, which equals the catalog's snapshot. So freshness is either null or of the loaded snapshot, and R2-18 (`freshness ?? catalog`) is an equivalent mutant no input can tell apart. Either drop the guard or drop the setFreshness(null) and keep the guard as the single rule; keeping both is harmless.", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx:361 (graphState) and :394 (setFreshness(null))" },
++    { "what": "If the explorer is hidden and shown again while protocol negotiation is still pending, the `!loaded.current` guard is what keeps the first catalog read loud; without it the visible effect would set quietRead before any read and the first read would be quiet (no error shown on failure). The test added for R2-14 pins the guard through a failed first read instead; the negotiation path is not pinned separately.", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx:346 (visible effect)" }
++  ],
++  "assumptions": [
++    "A wiki-link lookup's own target is remembered by viewInGraph's direct remember(node) call, not by the node-memory effect, so the existing 'Back to a node reached through a lookup' test cannot kill R2-23. The new F-008 test uses a search hit (a lookup through the search field) whose node leaves `nodes` when the search is cleared; that is the path where only the effect fills the memory."
++  ],
++  "behavior_changes": [
++    {
++      "description": "Test seam, no behaviour change: App.tsx's Metaproject work-view block (RetainedView + Suspense + lazy MetaprojectView with visible, onRebuild, onDraft) is now the exported component MetaprojectWork, rendered by ProjectWindow with the same props; it takes an optional `explorer` component that defaults to the lazy explorer, so a DOM test can render the composition with a stand-in. The lazy const is renamed LazyMetaprojectView and the default parameter is bound to the name MetaprojectView so the JSX line keeps R2-28's anchor.",
++      "user_visible": false,
++      "needs_operator": false,
++      "alternatives": [
++        "bun's mock.module('./metaproject/MetaprojectView') in App.dom.test.tsx: rejected because bun keeps module mocks for the whole `bun test src` run, which would replace the real explorer in MetaprojectView.dom.test.tsx (AC19).",
++        "No test; state that the wiring rests on the live check only."
++      ]
++    }
++  ],
++  "not_touched": [
++    { "path": "apps/desktop/src/metaproject/MetaprojectView.tsx", "reason": "No test needed a seam there and no new test exposed a defect; every mutant is killed through the existing props (request, visible, createCytoscape) and the layout stubs." }
++  ],
++  "notes": "Mutant table (file:line now -> killer). F-006: R2-2 MetaprojectView.tsx:190 -> 'the Filters popover stays under its button when its content fits on neither side and there is less room above'; R2-4 :191 -> 'a Filters button at the window's bottom edge keeps the popover above it 8 px inside the window'; R2-5 :191 and R2-6 :193 -> 'in a tall window the Filters popover keeps the menu's 420 px height cap, under its button and above it'; R2-7 :193 -> 'in a window too short for any room beside its button, the Filters popover gets no negative height'; R2-9 :212 -> 'a closed Filters popover no longer measures its button when the window is resized'. F-007: R2-14 invalid, behaviour now at :346 (`if (!returned || !loaded.current || catalogPending.current) return;`, own mutation drops `!loaded.current ||`) -> 'a return after a failed first catalog read starts no read, and its failure and Retry stay' (catalogPending now covers the original 'return while the first read is loading' case, so the loaded guard is reached only after a failed first read or before negotiation); R2-16 :389 -> 'shown again after the project's knowledge changed, the explorer shows the new catalog'; R2-17 :394 -> 'a graph gone stale while hidden shows its reason under Details, and a rebuild's ready reload clears it'; R2-18 :361 survived, equivalent (see noticed_not_touched); R2-19 :374-375 -> 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown'; R2-26 :812 -> 'a graph gone stale while hidden ...'. F-008: R2-23 invalid, behaviour now at :588 (`for (const node of nodes) remember(node);`, own mutation deletes it) -> 'a node known only from a search hit keeps its panel once the search is cleared, and Back returns to it at once'. F-009: R2-28 App.tsx:172 -> App.dom.test.tsx 'the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return'. T22's branches (own_mutants.py): T23-1 :376 `if (!quiet) {` -> `{` killed by T22's lookup-in-flight, page-in-flight and standing-error tests; T23-2 :403 drop `&& !quiet` killed by 'a failed quiet re-read on return shows no error ...'; T23-3 :346 drop `|| catalogPending.current` killed by 'a return while a catalog reload is in flight starts no quiet read ...'; T23-4 :406 delete `catalogPending.current = false;` killed by 7 tests; T23-5 :414 `if (!quietRead.current) project.current++;` -> `project.current++;` killed by the lookup-in-flight and page-in-flight tests. No T22 branch survived, so no test was added for them. suggested_fix diverged: F-006 — the reviewer's R2-2 fixture (top 250/bottom 274 in a 480 window) has more room above (238) than below (194), so it would not separate the mutant; used top 150/bottom 174 (138 above, 294 below). The reviewer's labels R2-6/R2-7 are swapped against the mutation list: R2-6 removes the 420 cap below, R2-7 removes the 0 floor; R2-7 needs a button with both sides short, hence the 30 px window. R2-9 is pinned by what the stale listener does (it measures the button on resize) instead of spying on removeEventListener. F-007 — Retry/Rebuild fixtures as suggested, but R2-17 and R2-19 needed separate fixtures: under R2-19 a later same-snapshot read is quiet and still clears the stale banner, so it is killed only by a failing reload whose error must show. F-008 — the reviewer's wiki-link fixture is the existing test that R2-23 survives (viewInGraph remembers the target itself); used a search hit instead, and asserted the visible panel rather than Map writes. F-009 — followed the 'export a small wrapper' option with an injected stand-in instead of a module mock (reason in behavior_changes). Who else reads what changed: MetaprojectWork is rendered only by ProjectWindow (App.tsx:618) and App.dom.test.tsx; LazyMetaprojectView is read only by MetaprojectWork's default parameter; RetainedView is unchanged and still read by MetaprojectWork and App.dom.test.tsx; the work view gets the same elements as before (RetainedView > Suspense > lazy explorer, same props). Test helpers reused: showView, catalogErrorBanner, renderFilters, stubWindowHeight, stubBox, stubPopoverContentHeight, holdDebounce, typeQuery, panelTitle, freshnessBanner, detailsButton; none was changed. Not verified: the whole desktop suite (bun test src) was not run, per the dispatch's scope (no module mocks were added, so cross-file interference is not expected); AC10 and AC20 (judged, browser dev build) were not checked in a browser; the dev server was not used. The .metaproject changes in git status predate this task. No commit made."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md
+@@ 120,159 @@
+ - 2026-11-23 - orchestrator: T18 returned DONE_WITH_CONCERNS (the worker of T6/T13). Checked before accepting, all run by the orchestrator: result file valid against `task-implementer-output` with every must_read entry cited; `bun test` of the two test files 24 and 12 pass; the scratch-copy mutant check: P1, P4 to P9, P11, P13, P14, P17, P18, P20, P21 killed, L1, L2, L8 killed; the scratch-copy red check with both production files at HEAD: the F-007 test and the F-022 test fail, everything else passes; the production diff read in full (the fact row built from parts, `if (edge.from === edge.to) continue;` in `groupRelationships`, the now unreachable guard in the second-step row removed). Concerns, kept: (1) mutant P3 survives — it drops the `drafting` check in `draft()`, and the Draft button is disabled while a draft runs, so no DOM path tells the two apart; the worker notes that the check itself does not stop two calls inside one React batch (noticed, not touched). (2) L3 is invalid: its anchor was the guard F-022 removed; the self-loop test covers that behaviour. (3) One existing test was moved to a fixture without second-step edges, because the fact row of its old fixture now carries the second-step count; its assertions are unchanged. (4) Not seen rendered: the longer fact row at the narrowest panel width; to be measured in the live pass of this round. Committed as 09dcae28b.
+ - 2026-11-23T10:07:00Z - task-done: T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)
+ - 2026-11-23 - orchestrator: T19 returned DONE (the worker of T5/T12). Checked before accepting, run by the orchestrator: result file valid with every must_read entry cited; `bun test` of the two test files 51 and 27 pass; the scratch-copy mutant check reports all 22 killed (Y1 to Y9, Y12, Y16, Y18; G1 to G5, G7 to G11); `git diff --stat` shows no change in `graphLayout.ts` or `RelationshipGraph.tsx`. The worker diverged from four suggested fixes and says why: a sized Fit alone cannot kill G5 (the initial viewport equals what the mutant writes), cytoscape clamps zoom itself so G9 is pinned on the levels the component requests, G4 needs the palette tokens in a stylesheet because a style-attribute change also triggers the observer, Y7 is equivalent on a lone root. Not verified by anyone: hover fading, the cursor and zoom on a real canvas. Committed as 6ea8dca20.
+ - 2026-11-23T10:07:30Z - task-done: T19: Fix round 1: graph test strength (F-012, F-013, F-021)
+ - 2026-11-23 - orchestrator: T17 returned DONE_WITH_CONCERNS (a new worker on Opus) with two `behavior_changes` marked `needs_operator`. Checked before asking, run by the orchestrator: result file valid with every must_read entry cited; `bun test` of `MetaprojectView.dom.test.tsx` 47 pass and `App.dom.test.tsx` 1 pass; `bunx tsc --noEmit` exit 0; the scratch-copy red check with `MetaprojectView.tsx`, `OpenSpecView.tsx` and `App.tsx` at HEAD: exactly the eight new tests fail (F-001 two, F-003, F-004 two, F-005, F-006, F-008); the production diff read (a `visible` prop from App.tsx, `placeFiltersPopover`, a quiet catalog re-read that updates only the freshness when the snapshot is unchanged, a lookup token, `seenNodes` filled in an effect, `choose()` in OpenSpecView calling `onLocation` before it zeroes the scroll). `metaproject.css` and `useExplorerNavigation.ts` were not changed.
+ - 2026-11-23 - orchestrator: F-001 after the fix, measured live with the uncommitted change (browser dev build, dark, 720x480, Graph, Agent Bus). Chromium 156: one-line banner — below the button, top 229, max-height 243, content 229, inside the window; Details expanded (button at 331 to 355) — above the button, inline bottom 153, box 98 to 327, every control inside the window. System WKWebView (macOS 26.7.3): the same two states — below at 229 to 421, above at 135 to 327; at 1024x768 with Details expanded — below at 333 to 525. Displacement from the inline coordinates (0, 0) in all three. The clipping of round 1 (51 px and 17 px) is gone in both engines. The browser dev build opens a "Choose a GitHub account" dialog on reload; it was dismissed with "Later" for the screenshot.
+ - 2026-11-23 - orchestrator: operator asked about the two `needs_operator` entries of T17 with the host question tool, a screenshot of the 720x480 state attached. Answers verbatim. F-001, the popover opens above its button when it does not fit below: "Над кнопкой (Recommended)" — as implemented. F-003, an open popover when the user leaves the explorer's view (implemented: hidden, shown again on return with focus moved into it): "Закрывать при уходе (Recommended)" — not what was implemented, so the T17 worker changes it before the task-boundary commit: the popover closes when the view is hidden; inside the explorer (Graph, Wiki, OpenSpec) it stays open as before.
+ - 2026-11-23T10:03:47.846Z - task-done: T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)
+ - 2026-11-23 - orchestrator: T17 returned DONE after the change the operator's answer asked for. Checked before accepting, run by the orchestrator: result file valid with every must_read entry cited, both `behavior_changes` entries now carry the operator's answer and `needs_operator: false`; `bun test` 47 pass and 1 pass; `bunx tsc --noEmit` exit 0; the scratch-copy red check with the three production files at HEAD: the eight T17 tests fail, the changed F-003 test among them. Live in the browser dev build (Chromium 156, 1024x768) with the change: an open Filters popover is gone from the DOM while Flows is shown, an Escape dispatched there is not prevented, and on return the Filters button reads `aria-expanded=false`, focus is on the body, selection and caption are as before; Graph to Wiki to Graph inside the explorer leaves an open popover open. F-004 live, counted on the bridge's WebSocket: no Metaproject request while away, exactly one `catalog` request on return, no loading banner, no relationships or detail request. Not verified live: F-008, because this project has no OpenSpec entries (the view reads "OpenSpec missing."); it rests on its DOM test. The worker's `noticed_not_touched`, kept for the completion report: any same-snapshot catalog reload other than the quiet one (Retry, Refresh) still blanks the Wiki article and re-reads relationships; the popover is not placed again when the content pane scrolls under its button. Committed as the T17 boundary commit.
+ - 2026-11-23T10:32:00Z - task-done: T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)
+ - 2026-11-23T10:03:49.241Z - task-attempt: T20: started (attempt 1) — 515-T20 (fix round 1)
+ - 2026-11-23T10:03:50.347Z - task-attempt: T21: started (attempt 1) — 515-T21 (fix round 1)
+ - 2026-11-23T10:07:07.012Z - task-done: T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)
+ - 2026-11-23 - orchestrator: live check of what T18 left unseen (browser dev build, Chromium 156, 1024x768, Graph, Agent Bus, depth 2 through the Filters popover): the Relationships fact reads `0 incoming · 13 outgoing · 337 second-step · limited`, wraps onto two lines in the 240 px value column of the 380 px panel, no horizontal overflow and no clipping; the Relationships tab count is 350, which is 13 + 337, so the two numbers under the same word now add up (F-007). During this check the explorer showed "Project knowledge changed while loading" with "Refresh catalog" and no graph until it was pressed: the task-boundary commits changed the snapshot while the page was open. That is the existing snapshot-mismatch behaviour, not part of this round's fixes.
+ - 2026-11-23 - orchestrator: T21 returned DONE (the worker of T9/T15, Sonnet). Checked before accepting, run by the orchestrator: `results/T9.result.json`, `results/T15.result.json` and `results/T21.result.json` each valid against `task-implementer-output` with every entry of its resolved file cited; `bun run docs:check` exit 0 (0 broken links, 67 tests pass); the guide diff read in full: the intro (Back restores the place in an OpenSpec document; the catalog is re-read on return), step 2 of Graph (the popover opens below or above its button and also closes on leaving the tab; filter choices kept), step 6 (the Relationships fact with the second-step count; a relationship from an item to itself is neither listed nor counted), and four re-flowed lines whose wording is unchanged; the three protected places are untouched. The worker left out, on purpose, that the popover stays open across Graph, Wiki and OpenSpec. F-010 is closed this way: the orchestrator wrote `resolved/T9.implement.json` and `resolved/T15.implement.json` on the current head, and the worker wrote the two result files from commits 5955bf547 and be1e15e8d; both say in `notes` that they were written during T21, after acceptance. So the dispatch files of T9 and T15 now name files that exist; they still did not exist when those tasks ran. Open from the worker: it did not re-check at head the banner wording and the Wiki block's "except Defines and Calls" sentence. Committed as the T21 boundary commit.
+ - 2026-11-23T10:44:00Z - task-done: T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)
+ - 2026-11-23T10:12:10.719Z - task-done: T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)
+ - 2026-11-23 - orchestrator: T20 returned DONE (the worker of T17, Opus). Checked before accepting, run by the orchestrator: result file valid with every must_read entry cited; only the two test files changed; the scratch-copy mutant check: A1 killed; N1, N2, N4, N5 killed; V1 to V4, V7, V8, V8b, V9 to V14, V16, V17, V30, V31 killed; V5, V6 and V15 invalid because T17 moved their lines, so the orchestrator applied the same three changes on the new lines in a scratch copy (`(graphState.graph !== "missing")`, `onDraft={onDraft}`, `const left = rect.right - POPOVER_WIDTH;`) and each is killed by the test the worker names. N3 survives: it deletes `if (next === leaving) return;` in `enter()`, which no caller can reach with the current route object (visit builds a new route, navigate returns a new object or null, switchView enters only on another mode); kept as an equivalent mutant and listed under noticed_not_touched. Committed as the T20 boundary commit.
+ - 2026-11-23T10:58:00Z - task-done: T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)
+ - 2026-11-23 - orchestrator: after fix round 1, on the head that holds T17 to T21, run by the orchestrator: `cd apps/desktop && bunx tsc --noEmit` exit 0; `bun test src` 904 pass, 0 fail across 89 files (842 before the round); `bunx vite build` exit 0; root `bun run typecheck` exit 0; `bun run docs:check` exit 0. Mutants of round 1 after the fixes: of the 67 survivors, 64 are now killed (three of them on lines T17 moved), L3 is gone with the guard F-022 removed, and two are equivalent (P3, N3).
++- 2026-11-23T10:12:37.125Z - task-attempt: T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows
++- 2026-11-23 - orchestrator: review round 2 planned on head b1538097e (`keryx review plan`, package `.metaproject/reviews/2026-11-23-review-flow-branch-r02`): delta round over 60cbe1c56..b1538097e, 88 fix hunks, 10 slices (3 fix, 1 new, 6 second-look), 13 reviewers (review-clean-code and review-style are new in the roster), 53 dispatches, 28-70 min by `keryx review estimate` — over the 40-dispatch threshold, so the operator confirms. Of the 53: 24 read slice-03 (the code and tests the fixes changed) and slice-04 (new hunks), 17 read slice-01 and slice-02 (the flow package's dispatch, resolved-context and result JSON of T17 to T21), 12 are a second look by review-logic and review-security-code at the six slices of round 1's whole diff. The plan lists F-015, F-016 and F-017 as carried open: the T20 commit message names them as a range ("F-014 to F-018"), which the tool does not expand; they were fixed in T20.
++- 2026-11-23 - orchestrator: operator asked with the host question tool which part of round 2 to run. Answer verbatim: "Только код правок (Recommended)" — the 24 dispatches over slice-03 and slice-04; not read in this round: the flow package's JSON files of the fix tasks and the second look at round 1's diff. `keryx review confirm-plan` accepts only a plain yes for the plan as a whole, so the operator was asked once more, with the plan key 487f9329f4c92447, "53 dispatches, expected duration 28-70 min" and the statement that only 24 of them will run. Answer verbatim: "yes". Recorded in the package's `plan-confirmation.json`. The 29 dispatches that do not run stay missing in the round; closing the round with them unrun is the operator's waiver.
++- 2026-11-23 - orchestrator: review round 2 run on head b1538097e: 24 reviewer dispatches (13 reviewers over slice-03 and slice-04; sonnet, review-regression on opus), one verifier pass (haiku), one premise pass (opus). Result: 13 findings, 0 blocker, 0 major, 9 minor, 4 info. All 22 findings of round 1 that were in the fix loop are closed against the code; F-022 is closed with a regression (round 2's F-001). Round 2's minors: F-001 a node whose only relationships are links to itself gets a blank Relationships list and the Wiki count still includes them (left by the F-022 fix); F-002 a Wiki-link lookup or a load-more page in flight is dropped when the user leaves the view and returns (brought by the F-004 fix); F-003 a failed quiet catalog re-read shows the error banner (brought by the F-004 fix); F-004 the node-memory write has two spellings; F-005 finding ids in test names; F-006 to F-009 test gaps in the fix code (16 of 34 new mutants survive, two of them judged redundant code). Info, not in the fix loop: F-010 one catalog read per return with no coalescing, F-011 and F-012 the popover is not placed again when its content grows or the page scrolls under it (unmeasured), F-013 two readers of the graph state (not reachable today).
++- 2026-11-23 - orchestrator: evidence run by the orchestrator in round 2: `keryx review mutate` over round 1's 82 mutants on this head (76 killed, 2 survived as equivalent, 4 invalid on moved lines) and over the 34 mutants review-testing-practices proposed for the fix code (18 killed, 16 survived, 0 invalid; research-evidence/mutation-2.md). Verifier: 10 confirmed (4 by the recorded mutation run, 6 by site check), 0 refuted, 3 unverifiable (F-002 not reproduced by a run, F-011 and F-012 need a render). Premise: 8 upheld, 1 challenged (F-005). Not rendered live: F-001 (none of the project's 129 wiki pages links to itself; the producer's path to a self edge was read in src/integrations/metaproject-explorer.ts:79 and :159-163).
++- 2026-11-23 - orchestrator: `keryx review ingest` refused review-regression's minor about the dropped lookup (`non-regression-severity`: a minor cannot be a scope-B claim); the reviewer had asked for it to be filed under scope A rather than raised. The orchestrator put the claim to review-logic (the reviewer of the same slice) as a scope-A question; it traced and confirmed it at minor (research-evidence/followup-review-logic-w3.txt) and adds that against the base branch this is not a regression, because there the explorer unmounted on leaving. It is round 2's F-002.
++- 2026-11-23 - orchestrator: operator asked with the host question tool about F-005, which the premise judge held (the repository already titles tests with the finding id they answer, about 20 test files outside this branch, and no rule says otherwise). Answer verbatim: "dismiss". `keryx review decide-premise` refused the first record because the question's text did not carry the finding id; asked once more with the id in the question, answer verbatim: "dismiss"; recorded in the package's operator-decisions.json. F-005 is closed without a change.
++- 2026-11-23 - orchestrator: round 2 verdict (`keryx review verdict`): no open blockers or majors; 8 minor to address (F-001 to F-004, F-006 to F-009). Readiness is NOT READY on four items that follow from the operator's choice of scope (files-covered, blast-radius, reviewers, ledger census): closing the round with the 29 dispatches unrun is the operator's waiver. Fix round 2: T22 (behaviour: F-001 to F-004) then T23 (test strength: F-006 to F-009), sequential because both edit MetaprojectView.dom.test.tsx; then review round 3 over the fix commits.
++- 2026-11-23T10:52:22.579Z - task-attempt: T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)
++- 2026-11-23T10:52:22.786Z - task-added: T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)
++- 2026-11-23T10:52:22.977Z - task-added: T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)
++- 2026-11-23T10:52:23.173Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round
++- 2026-11-23T10:53:40.447Z - task-attempt: T22: started (attempt 1) — 515-T22 (fix round 2)
++- 2026-11-23T11:04:12.196Z - task-done: T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)
++- 2026-11-23 - orchestrator: T22 accepted (worker on opus, STATUS: DONE_WITH_CONCERNS). Verified by the orchestrator: the result file validates against its resolved context; `bunx tsc --noEmit` exit 0; MetaprojectView.dom.test.tsx 71 pass, RelationshipList.dom.test.tsx 13, NodeDetailsPanel.dom.test.tsx 24, App.dom.test.tsx 2, RelationshipGraph.dom.test.tsx 27, graphLayout.test.ts 51, each in its own process; in a scratch copy with the two production files put back to HEAD, seven of the new tests fail (six in the explorer file, one in the list file) and nothing else does, which also reproduces round 2's F-002 by a run (the verifier had it as unverifiable); the diff was read. What changed: the list's empty note and the Wiki disclosure, its condition and its count, come from the grouping rule (F-001); the catalog effect has its own counter `catalogRead`, and `project.current`, the guard of `openPath` and `loadMoreSearch`, moves only for a read that is not quiet (F-002); a quiet read neither clears nor sets `error` (F-003); `remember` is a stable callback that the effect calls (F-004). Committed as the T22 boundary commit a37719ff2.
++- 2026-11-23 - orchestrator: T22 reported two choices the state x event matrix does not decide; the orchestrator took the default each finding's finish line implies and did not put them to the operator, because both are narrow timing cases with an existing designed response. They are named in the completion report for the operator to overrule. (1) A quiet re-read that finds a changed snapshot replaces the catalog and does not cancel a wiki-link lookup in flight; if that lookup's answer comes from the new snapshot, the existing "Project knowledge changed while loading" banner with Refresh catalog shows. The alternative, dropping the lookup silently, is the defect F-002 was filed for. (2) A return while a catalog read is already in flight (a Retry, the reload after a rebuild) starts no quiet read; the read in flight finishes and shows its own result or failure. The alternative, letting the quiet read replace it, would hide that read's failure. Noticed by the worker and left: the sum incoming + outgoing + second-step is now written in two files (NodeDetailsPanel.tsx:242 and MetaprojectView.tsx).
++- 2026-11-23T11:04:34.114Z - task-attempt: T23: started (attempt 1) — 515-T23 (fix round 2)
++- 2026-11-23T11:14:40.285Z - task-done: T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)
++- 2026-11-23 - orchestrator: T23 accepted (worker on opus, STATUS: DONE). Verified by the orchestrator: the result file validates against its resolved context; in a scratch copy, round 2's surviving mutants re-run against the new tests: R2-2, R2-4, R2-5, R2-6, R2-7, R2-9, R2-16, R2-17, R2-19, R2-26 and R2-28 killed; R2-14 and R2-23, whose lines T22 moved, killed on their new lines; R2-18 survives and is kept as equivalent (the snapshot check in `graphState` cannot change the result, because every full load clears `freshness` in the same update that replaces the catalog); the five branches T22 added (the two `!quiet` gates, the `catalogPending` check and its reset, the `!quietRead.current` gate in the cleanup), mutated by the orchestrator's own script, are all killed, four of them by T22's tests. Ten tests added to MetaprojectView.dom.test.tsx (81 pass) and one to App.dom.test.tsx (3 pass). One production change, a test seam with no change of behaviour: the work-view block of App.tsx is now the exported component `MetaprojectWork`, which takes an optional `explorer` component and passes it `visible`; ProjectWindow renders it with the same props as before. The diff was read. Committed as the T23 boundary commit.
++- 2026-11-23 - orchestrator: after fix round 2, on the head that holds T22 and T23, run by the orchestrator: `cd apps/desktop && bunx tsc --noEmit` exit 0; `bun test src` 922 pass, 0 fail across 89 files (904 before the round); `bunx vite build` exit 0. Seen live in the browser dev build (Chromium, the worktree's own data): on return to the Metaproject view exactly one `catalog` request leaves and no other, with no alert, the open Wiki page and its Relationships disclosure kept (Agent Bus: "Relationships 13" over 13 rows); the Filters popover opens, closes on leaving the view and stays closed on return, with the explorer hidden and mounted once, after the App.tsx change too. Not seen live: a wiki page that links to itself (the project has none), a failed quiet re-read, a lookup in flight across leaving and returning (each rests on its DOM test); the native Tauri window.
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 10,51 @@
+ | T2 | implement | Implement per plan (scaffold; superseded by T5–T8) | — | — |
+ | T3 | test | Add/adjust tests and make them pass (scaffold; tests live in T5–T8, suite in T10) | — | — |
+ | T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 | — |
+ | T5 | implement | Graph layout module and RelationshipGraph component (new files) | — | AC1, AC2, AC3, AC4 |
+ | T6 | implement | NodeDetailsPanel and RelationshipList components (new files) | — | AC7, AC8, AC9 |
+ | T7 | implement | Explorer navigation and state fixes D1–D7 | — | AC11, AC12, AC13, AC14, AC15, AC16 (and the code for AC10) |
+ | T8 | implement | Integrate graph and panel into the explorer; filters, counts, cleanup | T5, T6, T7, T12, T13 | AC17, AC18, AC19 (and the code for AC5, AC6, AC20) |
+ | T9 | docs | Update the Desktop Metaproject guide | T12, T13 | AC21 |
+ | T10 | verify | Desktop typecheck and full desktop test suite pass | T8 | AC19 |
+ | T11 | verify | Live browser verification at three window sizes, dark and light | T8, T14 | AC5, AC6, AC10, AC20 |
+ | T12 | implement | Graph polish from the isolated live preview | T5 | AC1, AC2, AC3, AC4 |
+ | T13 | implement | Panel and relationship list polish from the isolated live preview | T6 | AC7, AC8, AC9 |
+ | T14 | implement | Compact filter bar and one-row header on narrow hosts (became the Filters popover) | T8 | AC17, AC19, AC20 |
+ | T15 | docs | Align the guide with the final screen and refresh its screenshots | T14 | AC21 |
+ | T16 | implement | One-line freshness banner with details on demand | T14 | AC19, AC20 |
+ | T17 | implement | Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008) | — | AC10, AC11, AC14, AC16, AC17, AC19, AC20 |
+ | T18 | implement | Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022) | — | AC7, AC8, AC9, AC19 |
+ | T19 | test | Fix round 1: graph test strength (F-012, F-013, F-021) | — | AC1, AC2, AC3, AC4, AC6, AC19 |
+ | T20 | test | Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018) | T17 | AC10, AC11, AC12, AC13, AC16, AC17, AC19 |
+ | T21 | docs | Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes) | T17, T18 | AC21 |
++| T22 | implement | Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004) | — | AC7, AC10, AC14, AC16, AC19 |
++| T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
+ 
+ ## Context
+ 
+ - **T1.** Done by the review that preceded this flow; its findings are in `context.md`,
+   "Agent Findings".
+ 
+ ## Implement
+ 
+ - **T5 — graph (wave 1).** New files only, in `apps/desktop/src/metaproject/`: `graphLayout.ts`
+   (pure `layoutNeighborhood`), `graphLayout.test.ts`, `RelationshipGraph.tsx`,
+   `RelationshipGraph.dom.test.tsx`, `graph.css`. Design: `plan.md`, "Graph: a local neighbourhood in
+   columns". Export contract: `plan.md`, "Interfaces between tasks".
+ - **T6 — panel (wave 1).** New files only, in `apps/desktop/src/metaproject/`:
+   `NodeDetailsPanel.tsx`, `NodeDetailsPanel.dom.test.tsx`, `RelationshipList.tsx`,
+   `RelationshipList.dom.test.tsx`, `nodePanel.css`. Design: `plan.md`, "Panel: a summary of the
+   node". The behaviour of the Wiki / OpenSpec document tabs is carried over from
+   `GraphNodePanel.tsx`, which stays untouched until T8.
+ - **T7 — navigation and state (wave 1).** Defects D1–D7 of `context.md` in `MetaprojectView.tsx`
+   (outside the `Graph`, `RelationshipList` and `<GraphNodePanel>` parts), `useExplorerNavigation.ts`
+   and `apps/desktop/src/App.tsx`, with tests in `MetaprojectView.dom.test.tsx`. Behaviour per cell:
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 70,126 @@
+ - **T11.** The orchestrator opens the browser dev build on this repository and checks AC5, AC6,
+   AC10 and AC20, recording the measured values in `journal.md`.
+ 
+ ## Polish and follow-up tasks (added after the first plan)
+ 
+ - **T12 — graph polish.** Changes the orchestrator asked for after seeing the graph on an isolated
+   live preview; dispatch `dispatch/T12.dispatch.json`.
+ - **T13 — panel and list polish.** The same for the details panel and the relationship list;
+   dispatch `dispatch/T13.dispatch.json`.
+ - **T14 — filters.** Started as a compact filter bar; on the operator's request it became a "Filters"
+   button that opens a popover; dispatch `dispatch/T14.dispatch.json`.
+ - **T15 — guide alignment.** The guide brought in line with the final screen, with the two
+   screenshots replaced; dispatch `dispatch/T15.dispatch.json`.
+ - **T16 — freshness banner.** One line with "Details" on demand; dispatch `dispatch/T16.dispatch.json`.
+ 
+ ## Review
+ 
+ - **T4.** `review-orchestrator` on the flow's diff, with fix rounds through `task-implementer`.
+   Round 1: package `.metaproject/reviews/2026-11-23-review-flow-branch` (29 findings: 2 major,
+   20 minor, 7 info).
++  Round 2 (delta over the fixes of round 1): package
++  `.metaproject/reviews/2026-11-23-review-flow-branch-r02` (13 findings: 9 minor, 4 info; one minor
++  dismissed by the operator).
+ 
+ ## Fix round 1 (findings of review round 1)
+ 
+ Each task's finish line is in its dispatch file; the findings are in the review package's
+ `findings.json`. Info findings are not fixed; they are listed in the completion report.
+ 
+ - **T17 — explorer behaviour.** F-001 (the Filters popover runs past a 720×480 window), F-003 (its
+   Escape layer outlives the visible view), F-004 (re-read the catalog on return, upheld by the
+   operator), F-005 (Wiki-link lookups settled by arrival order), F-006 (a catalog walk on every
+   render), F-008 (Back in OpenSpec lands at the top, upheld by the operator).
+ - **T18 — details panel and relationship list.** F-007 (the fact row also shows the second-step
+   count, the operator's choice), F-022 (a self-loop counted in the panel and skipped in the graph
+   caption), F-019 and F-020 (surviving mutants of the panel and the list).
+ - **T19 — graph test strength.** F-012, F-013, F-021: 22 surviving mutants of `graphLayout.ts` and
+   `RelationshipGraph.tsx`.
+ - **T20 — explorer test strength.** F-011, F-014 to F-018: 26 surviving mutants of
+   `MetaprojectView.tsx`, `useExplorerNavigation.ts` and `App.tsx`; after T17, which edits the same files.
+ - **T21 — flow record and guide.** F-009 (this file), F-010 (the resolved-context and result files the
+   T9 and T15 dispatches name), and the guide where T17 and T18 change what it describes.
++
++## Fix round 2 (findings of review round 2)
++
++The finding ids below are round 2's. Each task's finish line is in its dispatch file; the findings are
++in `.metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json`. F-005 (finding ids in test
++names) was dismissed by the operator; the info findings F-010 to F-013 are not fixed.
++
++- **T22 — explorer behaviour the first fixes left.** F-001 (a node whose only relationships are links
++  to itself gets a blank Relationships list, and the Wiki count still includes them), F-002 (a
++  Wiki-link lookup or a "load more" page in flight is dropped when the user leaves the view and
++  returns), F-003 (a failed quiet catalog re-read shows the error banner), F-004 (two spellings of the
++  node-memory write).
++- **T23 — test strength of the first fixes.** F-006 to F-009: 14 surviving mutants of the Filters
++  popover placement, the quiet catalog re-read, the node memory and the `visible` wiring in `App.tsx`;
++  after T22, which edits the same files.

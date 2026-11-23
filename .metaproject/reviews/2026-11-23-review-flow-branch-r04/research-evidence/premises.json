@@ -1,0 +1,132 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:316-317",
+          "says": "comment on the `error` state: 'A quiet re-read that succeeds removes only a catalog read's failure; a rebuild's stands until the next read or rebuild the user starts.' It states the behaviour R4-10 and R4-11 break; added in 46c472162 (this round), so it supports the finding and ratifies nothing"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json:8",
+          "says": "finish line 'every read that is not quiet behaves as today', plus 'mutate what you added for F-001 yourself (... each place that clears or keeps the banner) ... and add a test for any that survives'. This sets a minimum and does not limit what the tests may pin; R4-10 breaks 'as today' for a loud read"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:65",
+          "says": "the worker's assumption: 'A rebuild that the user starts still clears whatever banner stands (catalog or rebuild), as before this task; the new test pins that'. The worker meant the rebuild case to be pinned too, and the new test pins only the catalog case"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:380,677",
+          "says": "the two clears at a start predate the branch (git blame: db6438889, an ancestor of base 1358d962f); this round changed only their value from \"\" to null. Nothing in the record says their rebuild-source case was left unpinned on purpose"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "I looked in T24's request, result and fix-round-3.md, the journal (lines 147, 155, 163, 173), the operator decisions of rounds 1 and 2, round 3's premises, and plan.md's state x event matrix (lines 169-185). The matrix has no row for a failed catalog read or a failed rebuild, and no operator answer touches these clears. The only finish line on them asks for more tests, not fewer. The worker's own assumption says the rebuild case is pinned, and the code comment states the behaviour as a contract. Info finding F-009 notes that today's app onRebuild never rejects. That is about whether the path can be reached, not a sign that anyone chose to leave it unpinned: the component handles a rejecting onRebuild on purpose (the catch at :680-681 and the pinned test at MetaprojectView.dom.test.tsx:1418). The test gap stays as reported."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "round 2's finish line (committed in 8e0f656fb, this round's base): 'the quiet read still drops its own superseded result'. R4-8 breaks this rule: a superseded quiet read still clears a later read's catalog banner"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:331",
+          "says": "comment: 'The catalog read whose result may still apply; every read, the quiet one included, supersedes the last.' The guards at :389 and :407 rely on this rule, and R4-8 and R4-7 bypass it"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:155",
+          "says": "the two timing choices taken without the operator (a quiet read that finds a changed snapshot does not cancel a lookup in flight; a return during a read in flight starts no quiet read). Neither concerns the banner of a superseded read"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "Both mutants break a rule the flow wrote down before this round: superseded reads drop their result. T24's table of banner states (results/T24.result.json:84) has no row for a superseded read, and nothing in T24's request, result, fix-round-3.md or the journal says that ordering was left to reading alone. No operator answer or practice source makes the gap smaller. Upheld."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:84",
+          "says": "the table's header reads 'Standing banner x following event -> banner after (test that pins it)', so the parenthesis is meant to name the pinning test. The last cell names 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown'"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1575-1594",
+          "says": "the cited test's onRebuild is `async () => true` (:1585). The rebuild succeeds and the catalog reload after it fails (source `catalog`), so no failed rebuild is ever followed by a read or rebuild the user starts"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "The record says a named test pins the cell, and the named test does not exercise it. Nothing in T24's request, the journal (line 173 calls the table complete: 'no cell was left undecided') or fix-round-3.md says the citation was meant only as a loose pointer. The behaviour the cell states is true (:380 and :677 do not read `source`), so the defect is the claim of a pin, as the finding says. Upheld."
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:22",
+          "says": "the flow's id convention, committed in 8e0f656fb (this round's base): 'Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`'. A bare id means the task's own round, and only an older round's id is spelled out. T24.request.json:22 restates it for round 3 (that file is in this round's range, so it is cited only as the restatement)"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json:3",
+          "says": "sibling result file, before this round's base: 'Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)'. Bare ids sit under a title that names the fix round. T23.result.json:3 and T20.result.json:3 have the same form"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:3",
+          "says": "T24's own title: 'Fix round 3: ... (F-001 to F-005)'. The file names its round in the same place and form as its siblings, so 'never says whose round they are' is not accurate"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:73",
+          "says": "'(round 2's behaviour, the defect F-001 names)': the worker spells out the round when it means an older one and leaves its own round's id bare, which follows the convention"
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/research-evidence/premises.json:143",
+          "says": "round 3's F-008 was upheld because 'The dispatch's own id convention is what the sentence departs from': it was a round-1 id written bare in a round-2 file. Bare own-round ids in the same file were not faulted"
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/operator-decisions.json:8",
+          "says": "the operator dismissed round 2's F-005 (bare finding ids in test titles, e.g. '(F-012)'), keeping them 'so these four files stay consistent with the rest of the suite'. This is the operator's only recorded answer on how finding ids are written"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "task-implementer output contract (.metaproject/skills/gdskills/orchestration/task-implementer/output-contract.schema.json, field `notes`, lines 116-118)",
+          "says": "`notes` is free text for 'Warnings, blockers, or additional context'. Neither the contract nor .metaproject/rules nor the flow-orchestrator skill says how a result file must write finding ids"
+        }
+      ],
+      "reasoning": "Round 3's F-008 targeted an older round's id written bare, which broke the convention. Every id in T24's result belongs to the task's own round, and the one older-round reference is spelled out, so the file follows the convention. Every fix result of this flow (T17 to T23) is written the same way, under a title that names its fix round. Adding a key to T24 alone would make it the only result file that differs from its siblings, which counts against the premise. The operator's one answer on finding-id style kept bare ids for consistency. The ambiguity the reviewer describes (a reader matching F-004 to round 2's T22 title) is real, but it applies to the flow-wide convention, not to a slip in T24. Whether result files must carry their round's key is a record-keeping convention for the operator to set.",
+      "question": "F-004: in every fix task's result file in this flow, finding ids from the task's own review round are written bare (F-001, F-004) under a title that names the fix round, and only an older round's id is spelled out ('round 2's F-003'). T24's result file does the same. Should T24's result file still get a note saying its ids are review round 3's?",
+      "options": [
+        "uphold: add the note (or write \"round 3's F-00n\") in T24's result file",
+        "dismiss: keep the flow's convention, where a bare id belongs to the task's own round"
+      ]
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md:3",
+          "says": "'What the orchestrator ran before it accepted T24, written out so that the runs can be repeated from this file.' It names its own run as the orchestrator's, and its 86 pass + 1 fail matches the 87 tests at head (:12)"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:173",
+          "says": "the acceptance entry says the orchestrator's runs are 'written out in verification/fix-round-3.md' and gives no count for the red check, so it does not settle which figure governs"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json:84",
+          "says": "'exit 1; 85 pass | 1 fail' for the red run, then 'Green with the change: 87 pass, 0 fail'. The same notes say T24-9 'first survived; killed after adding' a test, which could explain a red run on 86 tests, but the file never links the two and gives no test-file state for the red run"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:169",
+          "says": "precedent: round 3's F-008 was fixed by rewording a result file after acceptance, with a note, so correcting T24's record is not barred"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "Neither record claims to be the count of record over the other. fix-round-3.md claims only its own runs, and the result file claims only the worker's. The finding calls these 'the same red run', which is loose: they are two runs. But the defect holds. T24's result puts a red total of 86 tests next to a green total of 87 for the same test file, with no word that the red run predates a test. A reader comparing the two records cannot tell why they differ, and nothing in either record or the journal says the difference was known and accepted. No operator answer or project rule covers it. Upheld; the finding's own suggested fix already allows either record to carry the explanation."
+    }
+  ]
+}

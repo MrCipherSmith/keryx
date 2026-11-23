@@ -1,0 +1,34 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "slice-03 read in full (11 hunks in 3 files, removed lines only). Three of its lines belong to this round (the old `useState(\"\")` of `error`, the old `setError(\"\")` in rebuild(), the old `setError(errMessage(cause))`); every other hunk was gone at 8e0f656fb, as `git grep` at that commit shows, and what a user sees in its place at head agrees with the code and with the user guide. Through the UX lens the removed half of T24 costs the user nothing: the same banner text, role and Retry are rendered from `error.message`. No findings.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Hunks in this round's range (8e0f656fb..744d9ef75): the removed half of T24 (commit 46c472162)
+
+1. MetaprojectView.tsx `-  const [error, setError] = useState("");`. At head: `useState<{ source: "catalog" | "rebuild"; message: string } | null>(null)`.
+2. MetaprojectView.tsx `-    setError("");` in rebuild(). At head `setError(null)`; starting a rebuild still removes a standing banner.
+3. MetaprojectView.tsx `-      if (generation === project.current) setError(errMessage(cause));` (rebuild's catch). At 8e0f656fb this line already read `if (mounted.current) setError(errMessage(cause))` (see `git show 46c472162`), so the `generation` guard and its `const generation = project.current;` line (the hunk at old line 676) left before this round. What T24 itself replaced is `setError(errMessage(cause))` of rebuild() by `setError({ source: "rebuild", ... })` and the same call of the catalog effect (loud reads only) by `source: "catalog"`.
+
+What the user sees in their place: the unchanged banner at MetaprojectView.tsx:846-851, `<div className="inline-banner tone-warn" role="alert"><span>{error.message}</span> ... Retry`. Same text, same alert role, same Retry. The one visible difference is behavioural and is slice-01's to judge: a successful quiet re-read removes a `catalog` banner and leaves a `rebuild` one. The cells that fall under my lens: a failed rebuild's message staying after a quiet success is the stated intent (the user's own action failed and nothing they did since says it works); Retry on that banner starts a catalog read, not a rebuild, exactly as at 8e0f656fb (pre-existing; Rebuild graph stays in the toolbar while the graph is not ready). Nothing in the three removed lines is lost to the user.
+
+## Hunks out of this round's range (gone at 8e0f656fb; round 2 checked their removal)
+
+4. `-const GRAPH_PADDING = 36;`, 5. `-  nodes,`, 6. `-  nodes: MetaprojectNode[];` (RepositoryMarkdown), 7. `-    const generation = project.current;`: no user-visible content. A `git grep` at 8e0f656fb finds no `GRAPH_PADDING`, `relation-actions` or `max-width: 700px` in apps/desktop/src.
+8. The `catalog.truncated` banner "Catalog is limited. Search for more results.": not in MetaprojectView.tsx at 8e0f656fb or at head; the only hit of the text is MetaprojectView.dom.test.tsx:690, which asserts its absence. In its place the list header reads "Catalog · shown of total" (guide lines 93-95), so a truncated catalog is still told by its numbers, and the guide no longer mentions the banner. Agrees with round 2; adds nothing.
+9. `-problem={documentProblem || (snapshotMismatch ? "The project index changed. Refresh to look up linked documents." : "")}`: at 8e0f656fb and at head the prop is `documentsProblem` (MetaprojectView.tsx:973) and carries the same sentence, rendered by NodeDetailsPanel.tsx:294 as `<Problem message={documentsProblem} onRetry={onRetry} />`. The text the user reads did not go. The page-level banner "Project knowledge changed while loading." with Refresh catalog (MetaprojectView.tsx:852-857) is the guide's row at line 274. The two messages name one condition in different words ("project index changed" in the panel, "Project knowledge changed" on the page); wording drift that predates the round, with the same Refresh action, so not a finding here.
+10. `-onDraft={catalog.graph === "ready" && !documents?.truncated ? onDraft : undefined}`: at head `onDraft={graphState.graph === "ready" && !documents?.truncated ? onDraft : undefined}` (line 985). A rewrite to the freshness-aware value; not a user-visible removal.
+11. OpenSpecView.tsx `-    if (content.current) content.current.scrollTop = 0;`: the same line is at head (OpenSpecView.tsx:83) and at 8e0f656fb:83. The slice shows it removed only because the merge-base has it elsewhere; the scroll reset on choosing an OpenSpec item stands.
+12. metaproject.css `-.metaproject-relation-actions ...` and `-@media (max-width: 700px) { ... }` (the stacked narrow layout): neither is in the stylesheet at 8e0f656fb or at head. At head the narrow rules are `@container metaproject (max-width: 760px)` (metaproject.css:127-139): tighter gutters, a 150-190 px list column beside the content (two columns, not stacked), `min-block-size: 160px` for the graph, one header row. Agrees with round 2; the claim of at least 140 px of graph at 720x480 is AC20's and rests on the recorded live check, not on my measurement.
+
+## Checks not run
+- No render supplied and exec budget 0: nothing measured at 720x480 or 1180x780.
+- T24's banner states were read in code, not run; the native Tauri window and older-macOS WebKit were not seen.
+
+Routing audit: graph_used not-relevant (slice-bounded), wiki_used not-relevant, ctx_used yes, raw_rg_used no.

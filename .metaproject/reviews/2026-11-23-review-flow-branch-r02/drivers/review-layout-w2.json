@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-layout",
+  "wave": 2,
+  "waves": 4,
+  "slices": [
+    "slice-02"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-02",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-02.diff",
+      "bytes": 107940
+    }
+  ],
+  "result": "raw/review-layout-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+}

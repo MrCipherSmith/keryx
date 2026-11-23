@@ -1,0 +1,89 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T6",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "NodeDetailsPanel and RelationshipList components (new files)",
+    "description": "Build the new node details panel and the shared relationship list of the Desktop Metaproject explorer as NEW FILES ONLY. Nothing existing is edited and nothing is wired in yet; task T8 does that afterwards.\n\nCreate in apps/desktop/src/metaproject/:\n1. RelationshipList.tsx - exports `RelationshipList` with the same name and props as the function now exported from MetaprojectView.tsx (lines 228-276), which stays untouched. New behaviour: root-adjacent relationships grouped by direction (Incoming, Outgoing) and then by relationship kind, each group with a heading and a count; a row shows the other node's title, a kind badge and its path, and calls `select(id)`; relationships between two non-root nodes form a separate 'Second step' group whose rows name both ends and can open either; evidence is shown as at most two example lines; provenance digests are not shown; the truncated and empty states keep a clear message.\n2. NodeDetailsPanel.tsx - exports `NodeDetailsPanel` and `isOpenSpecNode` with exactly the contract of plan.md, 'Interfaces between tasks'. Structure per plan.md, 'Panel: a summary of the node': header (kind badge, close, title, monospace path with a 'Copy path' control), facts, one tab bar with counts (Relationships, Wiki, OpenSpec; Relationships is the default), tab bodies. The Wiki and OpenSpec tabs carry over the behaviour of GraphNodePanel.tsx: linked documents from the `documents` projection, the suggested component page, preview, Open, Find, Draft and the 'This CLI does not support OpenSpec' message. Also carried over: the resize handle with its keyboard support, Escape to close, and the compact mode below an 820 px host. Differences from GraphNodePanel: (a) docked, the panel does not move focus when it opens; in compact mode it is a right-anchored drawer that leaves part of the content visible, takes focus on open and returns it on close; (b) the preview text is cleaned of Markdown markers (blockquote `>`, `**`, `__`, single `_` or `*` emphasis, backticks, list markers) and skips metadata lines such as 'Covers:', 'Version:', 'Type:', 'Status:'; (c) one primary action per tab body, the rest quiet.\n3. nodePanel.css - styles for both, imported by the components, built from the app's tokens and existing shared classes (plan.md, 'Design direction'; context.md, 'What the app already has to build with').\n4. NodeDetailsPanel.dom.test.tsx and RelationshipList.dom.test.tsx.\n\nThe counts 'N incoming · M outgoing' come from the root-adjacent edges of `relationships` (`edge.to === root` is incoming, `edge.from === root` is outgoing). While `relationships` is null and `relationshipsPending` is true show a loading state; with a non-empty `relationshipsProblem` show the message and a Retry that calls `onRetry`. A change of the `revealRelationships` number switches to the Relationships tab and scrolls it into view.\n\nUse tokens and existing shared classes; add a class only where nothing fits. No raw colour values. Targets at least 24x24 px, visible focus, headings in order (the panel title is an h2).",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+    "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+    "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "src/integrations/metaproject-explorer-contract.ts",
+    "apps/desktop/src/styles/tokens.css",
+    "apps/desktop/src/styles/components.css",
+    "apps/desktop/src/styles/flows.css",
+    "apps/desktop/src/styles.css",
+    "apps/desktop/src/components/ui.tsx",
+    "apps/desktop/src/components/Icon.tsx",
+    "apps/desktop/src/test/dom.ts",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/NodeDetailsPanel.tsx, apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx, apps/desktop/src/metaproject/RelationshipList.tsx, apps/desktop/src/metaproject/RelationshipList.dom.test.tsx, apps/desktop/src/metaproject/nodePanel.css. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
+    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T07:25:39Z",
+    "created_by": "flow-orchestrator"
+  }
+}

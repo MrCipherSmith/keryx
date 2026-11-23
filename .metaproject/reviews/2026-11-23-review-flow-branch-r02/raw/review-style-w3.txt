@@ -1,0 +1,11 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "slice-04 is removals only: the unused GRAPH_PADDING constant, the unused `nodes` prop of RepositoryMarkdown, a stale `generation` local, the old inline graph/truncation banners and relation-actions CSS, and a guide paragraph. A search of apps/desktop/src found no remaining reference to the removed names (GRAPH_PADDING, metaproject-relation-actions, project.current in the rebuild path); the two RepositoryMarkdown matches are its own definition and use. No naming, readability or structure finding. Not verified: whether the removed banners and the onDraft/problem props moved elsewhere, since that is behaviour, not style.",
+  "findings": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

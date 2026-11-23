@@ -1,0 +1,490 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Flow 515 review round 5, the last the loop allows: the commits of fix round 4 (tasks T26 and T27), which answered the findings of review round 4. Fix round 4 added four DOM tests and corrected the flow's record; it changed no production file.",
+   "flags": [],
+   "mode": "review-flow",
+   "range": "744d9ef7542f..857036d02174",
+   "flow": "515"
+  },
+  "git": {
+   "repo": "keryx",
+   "branch": "feat/desktop-metaproject-redesign",
+   "base": "origin/main",
+   "head": "857036d02174a396b2acecf09cdcaf2560484a93",
+   "merge_base": "1358d962f4dfc07a9e086a533f51e75aa757dfcd",
+   "previous_head": "744d9ef7542f94e3442b120fe265d97f11923ea1"
+  },
+  "pr": null,
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T26.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T26.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+   ],
+   "changed_lines": 805,
+   "risk_areas": [
+    "the four tests fix round 4 added at the end of apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx (held reads, a rejecting onRebuild, the order of a superseded read)",
+    "the flow's record: results/T24.result.json (one cell reworded), verification/fix-round-3.md (a paragraph added), verification/fix-round-4.md (new), tasks.md, journal.md, and T26's dispatch, request, resolved-context and result files"
+   ],
+   "names_of_what_the_fixes_changed": [
+    "No production name changed in this round; MetaprojectView.tsx, App.tsx and every other file under apps/desktop/src outside the one test file are untouched."
+   ]
+  },
+  "requirements": {
+   "issue_url": null,
+   "task_docs": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+   ],
+   "acceptance_criteria": [
+    "AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word \"limited\" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]",
+    "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
+    "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
+    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+    "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+    "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without \"Loading project knowledge…\"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]",
+    "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+   ]
+  },
+  "rules": [
+   ".metaproject/rules/core/frontend-assistant.mdc",
+   ".metaproject/rules/core/ui-anti-slop.mdc",
+   ".metaproject/rules/core/layout-rendering.mdc",
+   ".metaproject/rules/core/tdd-workflow.mdc",
+   ".metaproject/rules/core/error-handling.mdc",
+   ".metaproject/rules/process/agent-conduct.mdc"
+  ],
+  "cross_repo": [],
+  "memory": {
+   "query": "desktop metaproject explorer error banner superseded read rebuild tests",
+   "status_filter": "accepted",
+   "searched": true,
+   "entries": [
+    {
+     "path": ".metaproject/memory/lessons/theme-switch-repaint.md",
+     "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+     "type": "lesson",
+     "status": "accepted",
+     "summary": "A theme switch must repaint what was already rendered; colours stored as resolved values keep the old palette."
+    },
+    {
+     "path": ".metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+     "title": "Flow ids are allocated per clone, not per checkout",
+     "type": "constraint",
+     "status": "accepted",
+     "summary": "Flow ids are reserved in the git common directory, so every linked worktree of a clone shares the id space."
+    }
+   ],
+   "note": "One search for the round, at `review start`; the entries of earlier rounds that still apply are listed."
+  },
+  "routing": {
+   "selected_reviewers": [
+    "review-frontend",
+    "review-logic",
+    "review-regression",
+    "review-style",
+    "review-testing-practices"
+   ],
+   "skipped_reviewers": [],
+   "reasons": {
+    "selected": "The set `keryx review required --depth auto --style` routed to the round's one slice (5 reviewers, 5 dispatches); the path-gated roles own no file of this diff.",
+    "operator_scope": "The operator chose in round 2 to read only the code of the fixes; this package holds only the commits of fix round 4."
+   }
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "budget": {
+    "per_reviewer_prompt_tokens": 150000,
+    "max_findings": 12
+   },
+   "omissions": [],
+   "model_plan": {
+    "strategy": "adaptive",
+    "operator_answer": "by tier: deep on Opus, standard on Sonnet, light on Haiku (round 1 start answer)",
+    "source": "the tier of each dispatch is computed by `keryx review tier`"
+   }
+  }
+ },
+ "reviewer": "review-logic",
+ "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+ "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/skills/gdskills/review/review-logic/SKILL.md",
+ "scope_mode": "diff",
+ "slices": [
+  "slice-01"
+ ],
+ "context_doc": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+ "issue_url": null,
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "provider": "anthropic",
+  "model": "claude-opus-5-5",
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "anthropic",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+  },
+  "routed": true
+ },
+ "budget": {
+  "max_prompt_tokens": 150000,
+  "max_findings": 12
+ },
+ "branch": "feat/desktop-metaproject-redesign",
+ "base_sha": "744d9ef7542f94e3442b120fe265d97f11923ea1",
+ "pr_context": null,
+ "round": 5,
+ "is_fix_round": true,
+ "allowed_tools": "read-only",
+ "exec_budget_s": 0,
+ "prior_findings": [
+  {
+   "round": 4,
+   "finding": {
+    "id": "F-001",
+    "global_id": "2026-11-23-review-flow-branch-r04#F-001",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 317,
+    "quote": "// removes only a catalog read's failure; a rebuild's stands until the next read or rebuild the user starts.",
+    "problem": "The clear a read the user starts makes at its start (the effect body, line 380) and the clear a rebuild makes at its start (rebuild(), line 677) are pinned for a standing catalog-source error only. Run in a scratch copy of apps/desktop at 744d9ef75 against MetaprojectView.dom.test.tsx (baseline exit 0, 87 pass): R4-10 (the effect body's `setError(null);` -> `setError(current => current?.source === \"rebuild\" ? current : null);`, so a loud read keeps a failed rebuild's banner) SURVIVED (exit 0); R4-11 (rebuild()'s `setError(null);` -> the same functional form, so a second rebuild keeps the first one's failure message) SURVIVED (exit 0). Killed for contrast: T24-8 and T24-9 (the clears removed altogether), R4-4, R4-9. T24.result.json's table has the cells 'failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before' and cites 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown'; that test makes a catalog read fail after a rebuild and never starts a read or a rebuild while a rebuild's failure stands. No test builds `source: \"rebuild\"` followed by Retry, Refresh catalog, or a second Rebuild graph.",
+    "impact": "Today's code is correct. The next editor who makes the clear conditional on source (the natural reading of 'a quiet success clears only a catalog failure') keeps the table's cell green: after a failed rebuild, Retry on its banner would leave the 'Rebuild failed' message above a catalog that has just loaded, and a second Rebuild graph would show the old failure while it runs. The comment that T24-3 is equivalent depends on the loud start clear, so this clear is the one thing that keeps a rebuild's banner from outliving the next read.",
+    "suggested_fix": "One test: onRebuild throws, banner shows the rebuild message; click Retry on the banner (read succeeds) and expect no banner; repeat with a second Rebuild graph click held pending and expect no banner while 'Rebuilding…' shows. Kills R4-10 and R4-11.",
+    "evidence": "Mutation R4-10 and R4-11 survived; T24-8, T24-9 killed (verification/fix-round-3.md and my own run, script r4_mutants.py in the session scratchpad). The cells are in results/T24.result.json notes. Introduced by the work that answered round 3's F-001 (the table of states). Introduced or left by the work that answered round 3's F-001. The orchestrator re-ran the reviewer's 12 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md, spec mutants-r4.json: 5 killed, 7 survived, 0 invalid); of the ids this finding names, every one survived there as well. The quote is the comment on the `error` state that states the behaviour R4-10 and R4-11 break; the two clears the finding names are `setError(null);` at the start of a read that is not quiet (line 380) and in rebuild(), the line after `setRebuilding(true);` (line 677). The reviewer quoted `setError(null);`, which occurs on both lines; the quote was moved at normalisation to a line that occurs once. The same unpinned cell is cited with a test that does not exercise it in T24's result file, which is this round's F-003. Normalisation notes: the quote is a part of the reviewer's, cut at normalisation so that it sits on one line of the file.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit c8db67492: Tests 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds' and 'a second rebuild removes the first one's failure banner while it runs' in MetaprojectView.dom.test.tsx; mutants R4-10 and R4-11 are killed, each by one of them, in a scratch copy (verification/fix-round-4.md). No production change.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 4,
+   "finding": {
+    "id": "F-002",
+    "global_id": "2026-11-23-review-flow-branch-r04#F-002",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 392,
+    "quote": "if (quiet) setError(current => current?.source === \"catalog\" ? null : current);",
+    "problem": "The order of the new clear against the 'superseded read' check and the latest-read guard of the failure write are unpinned. R4-8 (the clear moved above `if (generation !== catalogRead.current) return;`, so a quiet read that a later read has superseded still clears a catalog banner when it lands) SURVIVED (exit 0). R4-7 (`if (generation === catalogRead.current && !quiet) setError(` -> `if (!quiet) setError(`, so a superseded read's late failure writes the banner) SURVIVED (exit 0). R4-2 (clear only in the changed-snapshot branch), R4-3 (only in the unchanged one) and R4-4 killed. No fixture holds a catalog read in flight, starts a later read, and lets the first land.",
+    "impact": "Trigger for R4-8's shape: a quiet re-read on return is slow; the user clicks Rebuild graph; the reload fails and shows its banner; the quiet read then lands and a version of the clear above the check removes that failure banner. Trigger for R4-7's shape: a read A is slow, a later read B starts and clears, A fails late, and its stale message stands above B's catalog until Retry. Production is correct; the next editor of the effect's body has no test to tell the two orders apart.",
+    "suggested_fix": "Two tests with a held read: (a) held quiet read, then a failing Rebuild reload, then release the quiet read as a success: the rebuild-reload banner stays; (b) held loud read, a later read that succeeds, then the first rejects: no banner. Kills R4-8 and R4-7.",
+    "evidence": "Mutation R4-7 and R4-8 survived my run of 14 mutants against MetaprojectView.dom.test.tsx (baseline 87 pass, exit 0). R4-7's line is old (T22's catalogRead) but the line was changed by this round. The T24 table has no cell for a superseded read. Introduced or left by the work that answered round 3's F-001. The orchestrator re-ran the reviewer's 12 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md, spec mutants-r4.json: 5 killed, 7 survived, 0 invalid); of the ids this finding names, every one survived there as well.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit c8db67492: Tests 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands' and 'a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded'; mutants R4-8 and R4-7 are killed, each by one of them (verification/fix-round-4.md). The worker found both cases reachable by a user: Rebuild graph is disabled only while a rebuild runs. No production change.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 4,
+   "finding": {
+    "id": "F-003",
+    "global_id": "2026-11-23-review-flow-branch-r04#F-003",
+    "severity": "minor",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    "line": 84,
+    "quote": "- failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before ('after a quiet re-read on return, a rebuild's failed catalog reload is still shown').",
+    "problem": "A cell of T24's banner table cites a test that does not exercise the cell. The cell is about a standing failed rebuild (source `rebuild`) followed by a read or rebuild the user starts. The test it names, MetaprojectView.dom.test.tsx:1575, never fails a rebuild: its `onRebuild` is `async () => true`, the rebuild succeeds, and what fails is the catalog reload after it (source `catalog`), which the test shows is still displayed. No test in the file has a failed rebuild followed by Retry, Refresh or a second Rebuild: the only failed-rebuild fixtures are at :1424 (followed by quiet re-reads only) and :1702 (followed by the release of a read already in flight). The code does clear at both starts (MetaprojectView.tsx:380 and :677, neither conditional on `source`), so the behaviour the cell states is true; what is wrong is the claim that a named test pins it. The header of the table is 'banner after (test that pins it)'. Consequence for the next editor: a change that clears at a loud read's start only when `error.source === \"catalog\"` leaves every test green (T24-8 removes the clear altogether and is killed by the catalog-source Retry step at :1612, which cannot tell the two apart), and the table says it is covered.",
+    "impact": "A reader who trusts the table believes the failed-rebuild cell is pinned and will not add the test; the only cost is to the next editor of this code and of the record.",
+    "suggested_fix": "Either replace the citation with 'not pinned by a test; follows from :380 and :677, which do not read `source`', or add the test (a rebuild that throws, then Retry with a working read, expect no banner) and cite it; the same sentence belongs in the journal only if the table is quoted there (it is not).",
+    "evidence": "Introduced or left by the work that answered round 3's F-001. The test gap behind the cell is this round's F-001; this finding is the record's claim that a named test pins it.",
+    "confidence": "high",
+    "reviewer": "review-logic"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit 924b2b82c: The cell of T24's banner table on a failed rebuild followed by a read or a rebuild the user starts now names T26's two tests, says the test it named when T24 was accepted does not fail a rebuild, and says it was reworded after acceptance; results/T24.result.json still validates against its resolved context. Done by the orchestrator.",
+   "prior_findings_status": "open",
+   "disposition_owner": true
+  },
+  {
+   "round": 4,
+   "finding": {
+    "id": "F-005",
+    "global_id": "2026-11-23-review-flow-branch-r04#F-005",
+    "severity": "minor",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    "line": 12,
+    "quote": "`MetaprojectView.dom.test.tsx`: 86 pass, 1 fail: “a quiet re-read that succeeds after a failed catalog reload removes its\nbanner, whether the snapshot changed or not”.",
+    "problem": "The same red run is counted differently in two records. results/T24.result.json notes: `85 pass | 1 fail` for the file restored to HEAD, with `Green with the change: 87 pass, 0 fail`. fix-round-3.md says 86 pass, 1 fail. The test file is the same in both runs, so the totals should be equal: 85+1=86 against green 87 cannot be, and 86+1=87 can. A person repeating the red check from fix-round-3.md and getting either number cannot tell which record is right; the file exists so that the runs can be repeated.",
+    "impact": "not stated by the reviewer",
+    "suggested_fix": "Say in fix-round-3.md which run it counts (the orchestrator's) and that the worker's figure was 85, or correct the result file; either way one total for 87 tests.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 3. The orchestrator's own red run (scratch_check3.py red, in its session scratch directory) printed 86 pass, 1 fail on the file at head, which holds 87 tests. The orchestrator's reading, not checked against the worker's run: the two counts agree only if the worker's red run was made before its last test in that file was added; the result file does not say so. Normalisation notes: the same defect was raised by review-logic (review-logic-w12, F-002, info).",
+    "confidence": "medium",
+    "reviewer": "review-style"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit 924b2b82c: verification/fix-round-3.md now says its red run is the orchestrator's on the committed test file (86 + 1 = 87 tests) and that T24's result file counts 85 for its own run, one test fewer, which fits a run made before the worker's last test was added; it says the result file does not record when its run was made. Done by the orchestrator.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  }
+ ],
+ "known_findings": [
+  {
+   "id": "F-004",
+   "global_id": "2026-11-23-review-flow-branch-r04#F-004",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+   "line": 84,
+   "quote": "suggested_fix diverged: F-004 — used Rebuild graph (onRebuild resolving true) as the loud read for both the lookup and the page, not Refresh catalog",
+   "problem": "The result file uses bare finding ids (`F-001 banner table`, `F-004`, `F-003`, `F-005`, and in `description` `F-001:`, `F-002 to F-005:`) and never says whose round they are. Three review rounds number findings from F-001, and the same flow.json lists T22 as `Fix round 2: ... (F-001, F-002, F-003, F-004)`. The file also uses `R3-4`, `R3-19` and `T24-7` as mutant ids, so a reader sees ids of three kinds side by side with no key. The key exists only in dispatch/T24.request.json (`Finding ids in this task are round 3's`) and the commit message; dispatch/T24.dispatch.json, whose description also opens with a bare `F-001 (left by the fix of round 2's F-003)`, does not carry it. A reader of the result alone who sees `F-004` can take it for round 2's F-004 (the T22 title lists F-001 to F-004 of round 2) and look in the wrong findings.json."
+  },
+  {
+   "id": "F-006",
+   "global_id": "2026-11-23-review-flow-branch-r04#F-006",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+   "line": 13,
+   "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 | — |",
+   "problem": "The file's opening says the table follows flow.json, and the journal's T25 entry says the 25 rows were compared by script on kind and dependencies. That comparison holds: kind and dependsOn match for all 25 tasks. Titles do not: flow.json has T4 'Self-review and prepare draft PR' (tasks.md: 'Review round on the integrated change'), T2 'Implement per plan', T3 'Add/adjust tests and make them pass', T7 'Explorer navigation and state fixes D1-D7' (hyphen, tasks.md has an en dash) and T14 'Compact filter bar and one-row header on narrow hosts'. The tasks.md titles of T2, T3, T7 and T14 are annotated or typographically changed, and T4's is a different name."
+  },
+  {
+   "id": "F-007",
+   "global_id": "2026-11-23-review-flow-branch-r04#F-007",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+   "line": 98,
+   "quote": "It rests on the live check: in the browser dev build the explorer is hidden while another view is shown and one `catalog` request leaves on return (journal, the entries on T23 and T24).",
+   "problem": "fix-round-3.md names the T23 entry of the journal as a source of the live check; that entry holds none. The journal's entry on T23 (line 158, 'T23 accepted ...') records scratch-copy mutant runs and test counts and no browser check. The live check of the explorer hidden and mounted once with one `catalog` request on return is the next entry (line 159, 'after fix round 2, on the head that holds T22 and T23'), which is not the entry on T23; T24's entry (line 173) records three returns with one `catalog` request each and no alert, and does not say the explorer was hidden. T24's result file points at 'journal.md line 159', which is the right place."
+  },
+  {
+   "id": "F-008",
+   "global_id": "2026-11-23-review-flow-branch-r04#F-008",
+   "reviewer": "review-style",
+   "severity": "info",
+   "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+   "line": 15,
+   "quote": "## Review round 3's surviving mutants",
+   "problem": "The heading can be read two ways: mutants that survive (now), or mutants that survived review round 3's run. Nine of the eleven entries under it end in `**killed**`; only R3-13 and R3-20 say `survived`. A reader who scans headings takes the whole section for open gaps. fix-round-2.md titled its equivalent section by the task whose tests were run (`T23: review round 2's surviving mutants`) and had the same shape, so this is a carry-over, not a new departure."
+  },
+  {
+   "id": "F-009",
+   "global_id": "2026-11-23-review-flow-branch-r04#F-009",
+   "reviewer": "review-ui-ux",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 681,
+   "quote": "if (mounted.current) setError({ source: \"rebuild\", message: errMessage(cause) });",
+   "problem": "The kept-on-purpose rebuild banner is not reachable from the app. rebuild() sets source \"rebuild\" only when onRebuild() rejects. The app's onRebuild (App.tsx rebuildGraph: `new Promise<boolean>(resolve => { void runProject([\"gdgraph\", \"build\"], ..., code => resolve(code === 0)).then(started => { if (!started) resolve(false); }); })`) never rejects: a failed build resolves false, and useProjectRunner reports it as an error toast (\"Build Metaproject graph failed\", exit code). So every row of the worker's table with 'failed rebuild' is pinned by tests that reject onRebuild by hand, and none is seen by a user today. If a later onRebuild does reject, the banner would read as the raw error text, would not say that the rebuild failed (the banner carries no copy from `source`), and its Retry re-reads the catalog and does not rebuild; the loud read clears the message at its start (`setError(null)`), so after one click the failure is gone, the graph is still stale, and nothing was rebuilt."
+  },
+  {
+   "id": "F-010",
+   "global_id": "2026-11-23-review-flow-branch-r04#F-010",
+   "reviewer": "review-ui-ux",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 676,
+   "quote": "setRebuilding(true);",
+   "problem": "A Rebuild the user starts clears a standing catalog-read failure at its start, whatever the build does next (the new test 'a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone' pins it, and the result file's assumption says it is as before). With the app's onRebuild a failed build resolves false, so no catalog read follows. Trigger: a catalog reload failed after a first success (banner 'The index is being written.' with Retry), the graph is not ready so 'Rebuild graph' shows, the user clicks it, the build exits non-zero. Outcome: the red alert is gone, no catalog read was made, the screen holds the old catalog, and the only signal is the toast about the build. A later return does not report it either (a failed quiet re-read shows nothing)."
+  },
+  {
+   "id": "F-009",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-009",
+   "reviewer": "review-degradation",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 403,
+   "quote": "if (generation === catalogRead.current && !quiet) setError(errMessage(cause));",
+   "problem": "The quiet re-read on return can no longer report a failure, and one `error` state serves two causes. (a) Trigger: the catalog cannot be read at all (CLI missing or crashing) and the user returns to the view. Outcome: every return fails quietly; the banner keeps the last freshness read (for example no banner when the graph was ready), and a graph-ready explorer has no visible Refresh control (the Rebuild button exists only while graph !== 'ready', line 876). Round 2's head showed the CLI message with Retry. (b) Trigger: a loud catalog read fails after the first load (the reload after a rebuild, a Retry or Refresh), then the user leaves and returns while the CLI works again. Outcome: the quiet read succeeds and may replace the catalog, but the standing banner with its CLI message and Retry stays, because `error` is cleared only by a loud read (line 378) or by rebuild() (line 673). Round 2's head cleared it on that read. Refute: on the base branch nothing was read on return, so (a) showed nothing and (b) kept its banner until Retry, so neither is worse than base. Other reads (search, detail, relationships) still show their own errors, and Retry on the banner works."
+  },
+  {
+   "id": "F-010",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-010",
+   "reviewer": "review-ui-ux",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 701,
+   "quote": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }",
+   "problem": "UNVERIFIED (derived from code). Choice 1 of the brief: a wiki-link lookup started under snapshot one and not cancelled when a quiet re-read replaces the catalog with snapshot two compares its answer with the `snapshotId` it captured at click time, not with the current catalog. The banner 'Project knowledge changed while loading' with Refresh catalog then shows although the catalog on screen is already the new one."
+  },
+  {
+   "id": "F-011",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-011",
+   "reviewer": "review-clean-code",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 414,
+   "quote": "if (!quietRead.current) project.current++;",
+   "problem": "Clean Code - comments. The effect's cleanup decides whether to retire pending work by reading quietRead.current, which at that moment holds the intent of the next run (the visible effect set it just before bumping revision), not of the run being cleaned up. The comment above it ('Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work') describes the unmount case and does not say the condition reads the successor's flag. It works because React runs a cleanup before the next body, and the body resets the flag at line 375."
+  },
+  {
+   "id": "F-012",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-012",
+   "reviewer": "review-clean-code",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 716,
+   "quote": "const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;",
+   "problem": "Clean Code - DRY. The total of the three summarizeRelationships fields is spelled here and at NodeDetailsPanel.tsx:242 (`summary.incoming + summary.outgoing + summary.secondStep`). Two copies, below the three-copy threshold, so not a finding by the rule. Noted because 'rows the list shows' is now defined by two sums plus the `empty` const in RelationshipList (a third form of the same rule)."
+  },
+  {
+   "id": "F-013",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-013",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+   "line": 1496,
+   "quote": "stubBox(filtersButton(), { left: 544, top: 478, right: 615, bottom: 502 });",
+   "problem": "UNVERIFIED (derived from code; no real-layout measurement exists for these inputs). The T23 placement tests pin placeFiltersPopover() arithmetic against inputs happy-dom invents. (1) stubPopoverContentHeight returns one constant scrollHeight for the popover; in a browser scrollHeight is also the full content height under a max-height, so the model matches, but the constants (229, 500) are fixed numbers and do not follow a content change (the known Reset-filters row, F-011). The stub also answers scrollHeight only, so an edit that read offsetHeight (capped by max-height) instead would pass every test. (2) The bottom-edge test puts the button at top 478 / bottom 502 in a 480 px window, so the button's own box lies partly outside the window. A real Filters button sits inside the explorer's .view and is in the window when the popover opens; the branch the test pins (bottom = max(8, 480 - 478 + 4) = 8) is reachable in a real layout only when the page has scrolled the button under the window edge. The Math.max(POPOVER_MARGIN, ...) floor is pinned by an input a real layout reaches rarely, and a button inside the window with less than 4 px under it is the case the floor really serves. (3) The 30 px window test leaves scrollHeight at happy-dom's 0; with a real content height the result is the same (above -12 is not greater than below -6), so that one holds."
+  },
+  {
+   "id": "F-014",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-014",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "line": 638,
+   "quote": "const edgeKinds = new Set(projection.edges.map((edge) => edge.kind));",
+   "problem": "legendFor is the one reader of a projection's edges in apps/desktop/src/metaproject that does not use the grouping rule of F-001's fix. It builds the line-style legend from the raw edge list, self-loops and edges with an end outside the projection included, while layoutNeighborhood (line 506, `if (edge.from === edge.to) return;`) and groupRelationships leave both out. For a wiki page whose only edge is a `links` edge to itself, the graph draws the root alone and its legend still lists 'Dashed line' with 'Links'. This file is outside slice-02 and the legend is a kind set, not a count or an emptiness test, so this is noted, not a defect of the fix round."
+  },
+  {
+   "id": "F-015",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-015",
+   "reviewer": "review-style",
+   "severity": "info",
+   "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+   "line": 50,
+   "quote": "T22's branches (own_mutants.py): T23-1 :376 `if (!quiet) {` -> `{` killed by T22's lookup-in-flight, page-in-flight and standing-error tests;",
+   "problem": "Mutants of code that T22 added are given the ids T23-1 to T23-5, a prefix that is T23's own task id, next to round 2's mutant ids R2-n which name the review round that proposed them. The journal's T23 entry describes the same five mutants ('the five branches T22 added ... mutated by the orchestrator's own script') without any id, and names no script, so the ids can be matched to the journal only through this notes field."
+  },
+  {
+   "id": "F-005",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-005",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+   "line": 314,
+   "quote": "describe(\"RelationshipGraph viewport (F-012)\", () => {",
+   "problem": "Fix-round bookkeeping is written into test names and comments: describe(\"... (F-012)\"), describe(\"... (F-013)\"), describe(\"... (F-013, AC6)\") in RelationshipGraph.dom.test.tsx:314/351/402, describe(\"layoutNeighborhood — review round 1 fixtures (F-021)\") in graphLayout.test.ts:508, the banner comment \"Test strength after review round 1 (T20)\" in MetaprojectView.dom.test.tsx:1019, and \"(second-step counts: F-007 test below)\" in NodeDetailsPanel.dom.test.tsx:119. The ids name findings of one review package and one flow task; finding ids restart per round (this round's reviewers number from F-001 again), and the package under .metaproject/reviews is a work record, not part of the source. The test titles say where a test came from, not what it pins."
+  },
+  {
+   "id": "F-010",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-010",
+   "reviewer": "review-highload",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 335,
+   "quote": "const returned = visible && !wasVisible.current;",
+   "problem": "Every hidden-to-shown change of the explorer starts one catalog read (one `metaproject_request` invoke, one CLI process per request in platform/metaproject.ts:57) with no coalescing and no cancellation. A read that a later return supersedes is dropped by the generation guard (`generation !== project.current`), but its process still runs to completion. This answers round-1 F-004 (stale catalog on return)."
+  },
+  {
+   "id": "F-011",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-011",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 209,
+   "quote": "const place = () => setPosition(placeFiltersPopover(anchor.getBoundingClientRect(), panel.current?.scrollHeight ?? 0));",
+   "problem": "UNVERIFIED (derived from code and the journal's numbers). The popover is placed on open and on window resize only, from the content height at that moment. The footer `{filtersChanged && (<div className=\"menu-footer metaproject-filters-pop-footer\">` adds a Reset filters row the first time Direction, Depth or a type chip is changed while the popover is open. Case 720x480, one-line banner, Chromium 156 as measured in the journal: placed below, top 229, content 229, max-height 243 (= 480 - 8 - 229). A Reset row of roughly 30 to 40 px (not measured) makes the content about 260 to 270, above the 243 cap, so the popover gains an inner scroll on the first filter change and Reset filters sits below the fold of the popover. The popover itself stays inside the window (the cap holds), so this is not the F-001 defect; it is the same shape with a smaller amount, reachable by scrolling inside the popover."
+  },
+  {
+   "id": "F-012",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-012",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 211,
+   "quote": "window.addEventListener(\"resize\", place);",
+   "problem": "UNVERIFIED (derived from code; the T17 worker lists it under noticed_not_touched). Nothing places the popover again when the page or the content pane scrolls under its button, when the freshness banner changes height (Details toggled while the popover is open is a press outside, so it closes it; a catalog or banner update that arrives while it is open is not), or when the explorer layout changes without a window resize. The popover is position: fixed with the coordinates of the open moment, so it stays inside the window (its edge and max-height were computed against window.innerHeight) but no longer sits against its button."
+  },
+  {
+   "id": "F-013",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-013",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 496,
+   "quote": "if (catalog.graph === \"missing\" && protocol !== 2) return;",
+   "problem": "Two readers of the graph state now use different sources. The relationships effect (lines 488 and 496) reads `catalog.graph` and `catalog.truncated`; the freshness banner, `showGraph` (line 704), `onDraft` (line 959) and `freshnessOpen` read `graphState`, which takes the quiet re-read's value while its snapshotId equals the catalog's. They can differ only if a quiet re-read returns the same snapshotId with a different `graph` value."
+  }
+ ],
+ "layers": {
+  "version": 1,
+  "files": [
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.dispatch.json",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.request.json",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T26.implement.json",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T26.result.json",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+   ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+   "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "prHead": "857036d02174a396b2acecf09cdcaf2560484a93",
+  "graphCommit": "857036d02174a396b2acecf09cdcaf2560484a93",
+  "maxBytes": 8192,
+  "affected": {
+   "depth": 2,
+   "files": []
+  },
+  "symbols": [],
+  "relatedTests": [
+   "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+ },
+ "metaproject": {
+  "memory": [
+   {
+    "path": ".metaproject/memory/lessons/theme-switch-repaint.md",
+    "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+    "type": "lesson",
+    "status": "accepted",
+    "summary": "A theme switch must repaint what was already rendered; colours stored as resolved values keep the old palette."
+   },
+   {
+    "path": ".metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+    "title": "Flow ids are allocated per clone, not per checkout",
+    "type": "constraint",
+    "status": "accepted",
+    "summary": "Flow ids are reserved in the git common directory, so every linked worktree of a clone shares the id space."
+   }
+  ]
+ }
+}

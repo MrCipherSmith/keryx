@@ -1,0 +1,166 @@
+# Tasks
+
+Task definitions live here; task **statuses** live in flow.json and are managed
+only via `keryx flow task done <id> <taskId>`. The table follows `flow.json`: T12–T16 were added
+while the screen was tuned on a live preview, T17–T21 after review round 1, T22–T23 after review
+round 2, T24–T25 after review round 3, T26–T27 after review round 4; the journal records why.
+
+| ID | Kind | Title | Depends on | Criteria |
+|----|------|-------|------------|----------|
+| T1 | context | Collect remaining context | — | — |
+| T2 | implement | Implement per plan (scaffold; superseded by T5–T8) | — | — |
+| T3 | test | Add/adjust tests and make them pass (scaffold; tests live in T5–T8, suite in T10) | — | — |
+| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27 | — |
+| T5 | implement | Graph layout module and RelationshipGraph component (new files) | — | AC1, AC2, AC3, AC4 |
+| T6 | implement | NodeDetailsPanel and RelationshipList components (new files) | — | AC7, AC8, AC9 |
+| T7 | implement | Explorer navigation and state fixes D1–D7 | — | AC11, AC12, AC13, AC14, AC15, AC16 (and the code for AC10) |
+| T8 | implement | Integrate graph and panel into the explorer; filters, counts, cleanup | T5, T6, T7, T12, T13 | AC17, AC18, AC19 (and the code for AC5, AC6, AC20) |
+| T9 | docs | Update the Desktop Metaproject guide | T12, T13 | AC21 |
+| T10 | verify | Desktop typecheck and full desktop test suite pass | T8 | AC19 |
+| T11 | verify | Live browser verification at three window sizes, dark and light | T8, T14 | AC5, AC6, AC10, AC20 |
+| T12 | implement | Graph polish from the isolated live preview | T5 | AC1, AC2, AC3, AC4 |
+| T13 | implement | Panel and relationship list polish from the isolated live preview | T6 | AC7, AC8, AC9 |
+| T14 | implement | Compact filter bar and one-row header on narrow hosts (became the Filters popover) | T8 | AC17, AC19, AC20 |
+| T15 | docs | Align the guide with the final screen and refresh its screenshots | T14 | AC21 |
+| T16 | implement | One-line freshness banner with details on demand | T14 | AC19, AC20 |
+| T17 | implement | Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008) | — | AC10, AC11, AC14, AC16, AC17, AC19, AC20 |
+| T18 | implement | Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022) | — | AC7, AC8, AC9, AC19 |
+| T19 | test | Fix round 1: graph test strength (F-012, F-013, F-021) | — | AC1, AC2, AC3, AC4, AC6, AC19 |
+| T20 | test | Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018) | T17 | AC10, AC11, AC12, AC13, AC16, AC17, AC19 |
+| T21 | docs | Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes) | T17, T18 | AC21 |
+| T22 | implement | Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004) | — | AC7, AC10, AC14, AC16, AC19 |
+| T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
+| T24 | implement | Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005) | — | AC10, AC14, AC16, AC19 |
+| T25 | docs | Fix round 3: flow record (F-006, F-007, F-008) | — | — |
+| T26 | implement | Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002) | — | AC10, AC14, AC16, AC19 |
+| T27 | docs | Fix round 4: flow record (F-003, F-004, F-005) | — | — |
+
+## Context
+
+- **T1.** Done by the review that preceded this flow; its findings are in `context.md`,
+  "Agent Findings".
+
+## Implement
+
+- **T5 — graph (wave 1).** New files only, in `apps/desktop/src/metaproject/`: `graphLayout.ts`
+  (pure `layoutNeighborhood`), `graphLayout.test.ts`, `RelationshipGraph.tsx`,
+  `RelationshipGraph.dom.test.tsx`, `graph.css`. Design: `plan.md`, "Graph: a local neighbourhood in
+  columns". Export contract: `plan.md`, "Interfaces between tasks".
+- **T6 — panel (wave 1).** New files only, in `apps/desktop/src/metaproject/`:
+  `NodeDetailsPanel.tsx`, `NodeDetailsPanel.dom.test.tsx`, `RelationshipList.tsx`,
+  `RelationshipList.dom.test.tsx`, `nodePanel.css`. Design: `plan.md`, "Panel: a summary of the
+  node". The behaviour of the Wiki / OpenSpec document tabs is carried over from
+  `GraphNodePanel.tsx`, which stays untouched until T8.
+- **T7 — navigation and state (wave 1).** Defects D1–D7 of `context.md` in `MetaprojectView.tsx`
+  (outside the `Graph`, `RelationshipList` and `<GraphNodePanel>` parts), `useExplorerNavigation.ts`
+  and `apps/desktop/src/App.tsx`, with tests in `MetaprojectView.dom.test.tsx`. Behaviour per cell:
+  `plan.md`, "State × event matrix".
+- **T8 — integration (wave 2).** Replace the inline `Graph` with `RelationshipGraph` and
+  `GraphNodePanel` with `NodeDetailsPanel`; import `RelationshipList` from its own file; render the
+  relationship list in the panel and no longer under the canvas; give the graph the freed height;
+  human-readable filter labels, `defines` / `calls` disabled without a symbol layer; "shown of total"
+  in the list header instead of the "Catalog is limited" banner; scroll the selected row into view;
+  keep the previous graph, marked busy, while a new selection loads; wire `onShowHidden` to
+  `revealRelationships`; show explorer banners above the OpenSpec view; delete `GraphNodePanel.tsx`,
+  the replaced CSS and the dead `@media (max-width: 700px)` block; update the tests.
+
+## Docs
+
+- **T9.** `docs/docs/guides/desktop-metaproject.md`: "Trace relationships in Graph", the Wiki
+  section and the opening paragraph, to match what ships. Screenshots are out of scope.
+
+## Verify
+
+- **T10.** `cd apps/desktop && bunx tsc --noEmit && bun test src` on the integrated head.
+- **T11.** The orchestrator opens the browser dev build on this repository and checks AC5, AC6,
+  AC10 and AC20, recording the measured values in `journal.md`.
+
+## Polish and follow-up tasks (added after the first plan)
+
+- **T12 — graph polish.** Changes the orchestrator asked for after seeing the graph on an isolated
+  live preview; dispatch `dispatch/T12.dispatch.json`.
+- **T13 — panel and list polish.** The same for the details panel and the relationship list;
+  dispatch `dispatch/T13.dispatch.json`.
+- **T14 — filters.** Started as a compact filter bar; on the operator's request it became a "Filters"
+  button that opens a popover; dispatch `dispatch/T14.dispatch.json`.
+- **T15 — guide alignment.** The guide brought in line with the final screen, with the two
+  screenshots replaced; dispatch `dispatch/T15.dispatch.json`.
+- **T16 — freshness banner.** One line with "Details" on demand; dispatch `dispatch/T16.dispatch.json`.
+
+## Review
+
+- **T4.** `review-orchestrator` on the flow's diff, with fix rounds through `task-implementer`.
+  Round 1: package `.metaproject/reviews/2026-11-23-review-flow-branch` (29 findings: 2 major,
+  20 minor, 7 info).
+  Round 2 (delta over the fixes of round 1): package
+  `.metaproject/reviews/2026-11-23-review-flow-branch-r02` (13 findings: 9 minor, 4 info; one minor
+  dismissed by the operator).
+  Round 3 (the commits of fix round 2): package
+  `.metaproject/reviews/2026-11-23-review-flow-branch-r03` (15 findings: 8 minor, 7 info).
+  Round 4 (the commits of fix round 3): package
+  `.metaproject/reviews/2026-11-23-review-flow-branch-r04` (10 findings: 5 minor, 5 info; one minor
+  dismissed by the operator).
+
+## Fix round 1 (findings of review round 1)
+
+Each task's finish line is in its dispatch file; the findings are in the review package's
+`findings.json`. Info findings are not fixed; they are listed in the completion report.
+
+- **T17 — explorer behaviour.** F-001 (the Filters popover runs past a 720×480 window), F-003 (its
+  Escape layer outlives the visible view), F-004 (re-read the catalog on return, upheld by the
+  operator), F-005 (Wiki-link lookups settled by arrival order), F-006 (a catalog walk on every
+  render), F-008 (Back in OpenSpec lands at the top, upheld by the operator).
+- **T18 — details panel and relationship list.** F-007 (the fact row also shows the second-step
+  count, the operator's choice), F-022 (a self-loop counted in the panel and skipped in the graph
+  caption), F-019 and F-020 (surviving mutants of the panel and the list).
+- **T19 — graph test strength.** F-012, F-013, F-021: 22 surviving mutants of `graphLayout.ts` and
+  `RelationshipGraph.tsx`.
+- **T20 — explorer test strength.** F-011, F-014 to F-018: 26 surviving mutants of
+  `MetaprojectView.tsx`, `useExplorerNavigation.ts` and `App.tsx`; after T17, which edits the same files.
+- **T21 — flow record and guide.** F-009 (this file), F-010 (the resolved-context and result files the
+  T9 and T15 dispatches name), and the guide where T17 and T18 change what it describes.
+
+## Fix round 2 (findings of review round 2)
+
+The finding ids below are round 2's. Each task's finish line is in its dispatch file; the findings are
+in `.metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json`. F-005 (finding ids in test
+names) was dismissed by the operator; the info findings F-010 to F-013 are not fixed.
+
+- **T22 — explorer behaviour the first fixes left.** F-001 (a node whose only relationships are links
+  to itself gets a blank Relationships list, and the Wiki count still includes them), F-002 (a
+  Wiki-link lookup or a "load more" page in flight is dropped when the user leaves the view and
+  returns), F-003 (a failed quiet catalog re-read shows the error banner), F-004 (two spellings of the
+  node-memory write).
+- **T23 — test strength of the first fixes.** F-006 to F-009: 14 surviving mutants of the Filters
+  popover placement, the quiet catalog re-read, the node memory and the `visible` wiring in `App.tsx`;
+  after T22, which edits the same files.
+
+## Fix round 3 (findings of review round 3)
+
+The finding ids below are round 3's. The finish line of T24 is in its dispatch file; the findings are in
+`.metaproject/reviews/2026-11-23-review-flow-branch-r03/findings.json`. The info findings F-009 to F-015
+are not fixed.
+
+- **T24 — catalog error and test strength.** F-001 (the banner of a failed catalog read stays after a
+  later quiet re-read has succeeded), F-002 to F-005 (14 surviving mutants of the list's empty note, the
+  Wiki disclosure's count, the counter that retires pending lookups and pages, and the `MetaprojectWork`
+  wiring).
+- **T25 — flow record.** Done by the orchestrator, with no dispatch file: F-006 (this file gave T4 the
+  dependencies it had before T22 and T23), F-007 (the journal's entries on T22 and T23 named no script
+  for the runs they report; `verification/fix-round-2.md` now holds the commands and the mutants),
+  F-008 (T22's result file named "F-005" without its round).
+
+## Fix round 4 (findings of review round 4)
+
+The finding ids below are round 4's. The finish line of T26 is in its dispatch file; the findings are in
+`.metaproject/reviews/2026-11-23-review-flow-branch-r04/findings.json`. F-004 (T24's result file writes its
+own round's finding ids bare) was dismissed by the operator; the info findings F-006 to F-010 are not fixed.
+
+- **T26 — tests of the error state.** F-001 (a standing rebuild error is unpinned against the clears a read
+  or a rebuild the user starts makes at its start: R4-10, R4-11) and F-002 (the order of the quiet clear
+  against the superseded-read check, and the latest-read guard of the failure write: R4-7, R4-8). Tests
+  only; the production code is correct.
+- **T27 — flow record.** Done by the orchestrator, with no dispatch file: F-003 (a cell of T24's banner
+  table cites a test that does not exercise it; the cell now names T26's test) and F-005 (the red run
+  counted 85 in T24's result file and 86 in `verification/fix-round-3.md`; that file now says which run it
+  counts and why the two differ).

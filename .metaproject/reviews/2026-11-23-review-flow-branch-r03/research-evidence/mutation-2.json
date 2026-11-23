@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+  "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 2235
+  },
+  "mutants": [
+    {
+      "id": "R3-1",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "  }, [nodes, remember]);",
+      "replacement": "  });",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 589,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 769
+    },
+    {
+      "id": "R3-2",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "currentProjection && mode === \"wiki\" && wikiRelationshipRows > 0 && (",
+      "replacement": "currentProjection && mode === \"wiki\" && currentProjection.edges.length > 0 && (",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 945,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1043
+    },
+    {
+      "id": "R3-3",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "{wikiRelationshipRows}</span>",
+      "replacement": "{currentProjection.edges.length}</span>",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 947,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1090
+    },
+    {
+      "id": "R3-4",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep",
+      "replacement": "wikiRelationships.incoming + wikiRelationships.outgoing",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 716,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 2118
+    },
+    {
+      "id": "R3-5",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "wikiRelationshipRows > 0 &&",
+      "replacement": "wikiRelationshipRows >= 0 &&",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 945,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2251
+    },
+    {
+      "id": "R3-6",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "() => mode === \"wiki\" && currentProjection ? summarizeRelationships(currentProjection) : null",
+      "replacement": "() => currentProjection ? summarizeRelationships(currentProjection) : null",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 713,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1747
+    },
+    {
+      "id": "R3-7",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "anchor": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;",
+      "replacement": "const empty = !groups.incoming.length && !groups.outgoing.length;",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 213,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1889
+    },
+    {
+      "id": "R3-8",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "anchor": "{empty && <p",
+      "replacement": "{projection.edges.length === 0 && <p",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 219,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1859
+    },
+    {
+      "id": "R3-9",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "anchor": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;",
+      "replacement": "const empty = !groups.incoming.length || !groups.outgoing.length || !groups.secondStep.length;",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 213,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1706
+    },
+    {
+      "id": "R3-10",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>",
+      "replacement": "<RetainedView active={workView === \"metaproject\"} visible={workView === \"metaproject\"}>",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 170,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1809
+    },
+    {
+      "id": "R3-11",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>",
+      "replacement": "<RetainedView active={view === \"metaproject\"} visible={view === \"metaproject\"}>",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 170,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1680
+    },
+    {
+      "id": "R3-12",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "<MetaprojectView cwd={cwd} visible={view === \"metaproject\"} onRebuild={onRebuild} onDraft={onDraft} />",
+      "replacement": "<MetaprojectView cwd={cwd} visible={workView === \"metaproject\"} onRebuild={onRebuild} onDraft={onDraft} />",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 172,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 293
+    },
+    {
+      "id": "R3-13",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "<MetaprojectWork cwd={cwd} view={view} workView={workView}",
+      "replacement": "<MetaprojectWork cwd={cwd} view={workView} workView={workView}",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 618,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1564
+    },
+    {
+      "id": "R3-14",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "explorer: MetaprojectView = LazyMetaprojectView }",
+      "replacement": "explorer: MetaprojectView = (() => null) as ComponentType<ExplorerProps> }",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 161,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1886
+    },
+    {
+      "id": "R3-15",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "onRebuild={onRebuild} onDraft={onDraft} />",
+      "replacement": "onRebuild={async () => false} onDraft={onDraft} />",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 172,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1857
+    },
+    {
+      "id": "R3-16",
+      "file": "apps/desktop/src/App.tsx",
+      "anchor": "<Suspense fallback={<p role=\"status\">Loading Metaproject…</p>}>\n        <MetaprojectView cwd",
+      "replacement": "<Suspense fallback={null}>\n        <MetaprojectView cwd",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 171,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1765
+    },
+    {
+      "id": "R3-17",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "generation === project.current && shownSelection.current === from",
+      "replacement": "shownSelection.current === from",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 695,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1853
+    },
+    {
+      "id": "R3-18",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "projectGeneration !== project.current",
+      "replacement": "false",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 654,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1982
+    },
+    {
+      "id": "R3-19",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "      project.current++;\n      setError(\"\");",
+      "replacement": "      setError(\"\");",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 377,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1690
+    },
+    {
+      "id": "R3-20",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "if (!quietRead.current) project.current++;",
+      "replacement": "",
+      "command": "ln -sfn /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules apps/desktop/node_modules && cd apps/desktop && for f in src/App.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipGraph.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx src/metaproject/graphLayout.test.ts; do bun test --bail $f || exit 1; done",
+      "line": 414,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1839
+    }
+  ],
+  "totals": {
+    "killed": 6,
+    "survived": 14,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-23T11:32:58.985Z",
+  "head": "8e0f656fb2aa3a2173487d4f6ca4ff1c89aa933a",
+  "treeHash": "d567bb394841be48c9b1dbdee877bf1ad8910f1eee2834d20b356f6ea466822f",
+  "loadavg": [
+    9.57275390625,
+    11.67822265625,
+    11.279296875
+  ],
+  "provenanceMs": 573,
+  "copyMs": 27240,
+  "mutantsMs": 32690
+}

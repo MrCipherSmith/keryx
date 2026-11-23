@@ -1,0 +1,124 @@
+{
+  "task": {
+    "task_id": "fix-17",
+    "task_name": "Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Six findings of review round 1 in the Metaproject explorer, one major and five minor. Each is in `fix_context.review_feedback` with its file, line and the reviewer's suggested fix; the full text, the quoted code and the evidence are in findings.json. The task is done when every line below holds, each fix has a test that fails without it (shown with `scratch_check.py red`), the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (major). With the freshness banner's Details expanded at a 720x480 window, the open Filters popover runs past the window bottom (51 px in Chromium, 17 px in WebKit) and cannot scroll. Finish line: at any window height from 480 px up and any position of the Filters button, the popover's bottom edge is at most the window height minus 8 px; when its content needs more room than that, it scrolls inside; when the window is resized while it is open, it is placed again. The shared menu component (apps/desktop/src/components/Menu.tsx, the lines that bound a menu by `window.innerHeight`) is the sibling to follow. The popover stays anchored to its button and keeps its horizontal clamp. happy-dom has no layout, so the test drives the anchor's `getBoundingClientRect` and `window.innerHeight` and asserts the style the popover gets.\nF-003. `FiltersPopover` registers on the app-wide Escape stack while it is mounted, and the explorer is now kept mounted, hidden, after its first visit, so an open popover leaves `overlayOpen()` true in other views and eats their first Escape. Finish line: while the explorer's view is hidden, the explorer holds no Escape layer and no window listener of the popover. The operator's earlier choice that the popover stays open across setting changes and across the Graph, Wiki and OpenSpec switches inside the explorer stays as it is.\nF-004. The operator upheld it: re-read the catalog silently when the view is shown again, keeping the selection, filters and history (first answer «Перечитывать», recorded as uphold). Finish line: when the explorer becomes visible again after having been hidden, it reads the catalog once, without a loading state that hides the content; mode, query, selection, filters, panel state and Back history are as they were (AC10); a rebuild in flight is not disturbed (AC14); the first mount still reads once, not twice.\nF-005. Two Wiki-link lookups started from the same page are settled by whichever read returns first. Finish line: only the lookup started last may open a document or show the unresolved-path message; an earlier one that returns later does nothing.\nF-006. Every explorer render walks the whole catalog to fill `seenNodes`. Finish line: the map is filled when the node list changes, not on every render; Back to a node opened from a lookup still finds it.\nF-008. The operator upheld it: fix choose() in OpenSpecView in this flow, with a test that restores the scroll position (first answer «Починить сейчас», recorded as uphold). This lifts, for this one change, the plan's limit that OpenSpecView is edited for imports only. Finish line: after opening OpenSpec document A, scrolling it, opening document B and pressing Back, A is shown at the offset it was left at; B still opens at its top.\n\nF-003 and F-004 need the explorer to know whether its view is shown: `RetainedView` in App.tsx already has `visible`; pass it to `MetaprojectView` as an optional prop that defaults to true, so every existing caller and test keeps working. Another implementer adds tests to these two test files right after you (task T20: test strength of the same code), so leave the files' helpers and fixtures in a state others can build on.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/metaproject/metaproject.css",
+      "apps/desktop/src/metaproject/OpenSpecView.tsx",
+      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "apps/desktop/src/App.tsx",
+      "apps/desktop/src/App.dom.test.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+      "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 1. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. The review package is .metaproject/reviews/2026-11-23-review-flow-branch: report.md (the round's report), findings.json (every finding with its file, line, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-1-compact.txt (each mutant of the mutation pass: file:line, the anchor, its replacement, killed or survived). Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies the review's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T17.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-001",
+        "file": "apps/desktop/src/metaproject/metaproject.css",
+        "severity": "CRITICAL",
+        "message": "Filters popover is clipped by 51 px at the 720x480 minimum window when the stale banner is expanded, and cannot scroll. The popover is a fixed-position .menu whose top is computed once as anchor.bottom + 4 (MetaprojectView.tsx FiltersPopover: `setPosition({ left, top: rect.bottom + 4 })`). The only height limit is the shared .menu max-block-size of 400px, a fixed number, not a function of the room below the anchor. The rule above adds no max-block-size or overflow clamp tied to the window, so when the anchor sits low the popover runs past the window edge. Its content (229 px) is below 400 px, so it never becomes scrollable either and the last row is unreachable.",
+        "suggested_fix": "Bound the popover by the room below its anchor: compute `maxHeight = window.innerHeight - top - 8` next to `top` in FiltersPopover and set `max-block-size: min(400px, that)` with `overflow-y: auto`; or flip it above the anchor when there is more room there. Re-measure at 720x480 with Details expanded: popover bottom at or below 472 and scrollHeight greater than clientHeight.",
+        "reviewer": "review-layout",
+        "line": 90,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-003",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "FiltersPopover registers on the app-wide Escape stack (components/ui.tsx:44-70: window keydown listener, `e.preventDefault(); top.current?.()` for the top entry) and so makes `overlayOpen()` true (ui.tsx:81). On base the explorer was unmounted when the user left the view, taking any popover with it. On head the explorer is mounted but hidden (RetainedView), and `filtersOpen` is deliberately kept across view switches (comment 'Open or closed is explorer state ... survives a view or tab switch'). The only close paths are Escape, a mousedown outside, or the button. A keyboard user can Tab to the sidebar nav and press Enter (no mousedown, popover has no focus-out close) and arrive in another view with the popover open but hidden.",
+        "suggested_fix": "Close the popover when its view is hidden: pass the RetainedView `visible` flag into MetaprojectView and call setFiltersOpen(false) on becoming hidden, or mount FiltersPopover only while visible. Add a test that switches view with the popover open and checks overlayOpen() is false.",
+        "reviewer": "review-degradation",
+        "line": 176,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-004",
+        "file": "apps/desktop/src/App.tsx",
+        "severity": "WARNING",
+        "message": "Base: `{workView === \"metaproject\" && <div className=\"view\" ...><MetaprojectView/></div>}` unmounted the explorer whenever the user left it (workView = view except while in Settings, App.tsx:481), so every return re-ran the catalog read and refreshed the 'Graph is stale/missing' freshness banner, node list and counts. Head keeps Explorer mounted; the catalog effect in MetaprojectView.tsx (`useEffect(() => { if (protocol === null) return; const generation = ++project.current; ... read(cwd, { action: \"catalog\" })`) depends only on protocol/cwd/read/revision, and RetainedView passes the explorer no visibility or 'returned' signal. After the first visit the catalog is read again only on cwd change, Retry/Refresh/Rebuild or revision bump.",
+        "suggested_fix": "Give the retained explorer a refresh trigger on becoming visible again (pass `visible` through and bump `revision` on a hidden-to-visible transition when the catalog was loaded earlier than a threshold, or re-read the catalog silently and keep the selection when the snapshot id is unchanged). Alternatively state in the guide that the catalog is not refreshed on return.",
+        "reviewer": "review-degradation",
+        "line": 151,
+        "premise_verdict": "owner-decision",
+        "premise_answer": "uphold"
+      },
+      {
+        "id": "F-005",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "Concurrent wiki-link lookups are won by whichever read returns first",
+        "suggested_fix": "Keep a lookup counter in a ref, increment it in openPath, and have `current()` also require `token === lookup.current` (the pattern `latestSearch.current.generation` already uses nearby).",
+        "reviewer": "review-highload",
+        "line": 615,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-006",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "Per-render walk over every catalog node to fill seenNodes. One Map.set per node in the Explorer render body, on every render (search keystroke, each pointermove of the panel resize drag), although `nodes` is memoized and changes rarely.",
+        "suggested_fix": "Populate seenNodes in the useMemo that builds `nodes`, or in an effect keyed on `nodes`.",
+        "reviewer": "review-performance",
+        "line": 512,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-008",
+        "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+        "severity": "WARNING",
+        "message": "Recorded OpenSpec scroll defect still live: choose() zeroes the content pane before the history entry is recorded. T7's result lists under noticed_not_touched that OpenSpecView choose() sets the content scrollTop to 0 before calling onLocation, so the entry being left records scroll 0. At head the code is unchanged: `if (content.current) content.current.scrollTop = 0;` runs before `onLocation?.(next)`. useExplorerNavigation.enter calls remember(leaving), which reads `pane?.scrollTop` of `.metaproject-content` (PANES index CONTENT_PANE) at that moment. The content ref in OpenSpecView is that same element (`<section ref={content} className=\"metaproject-content\"`). The T8 dispatch listed OpenSpecView.tsx among its target_files, but nothing in slice-03 shows this item was taken or declined.",
+        "suggested_fix": "In choose(), do not reset scrollTop before onLocation; let navigate(..., { resetContent: true }) seed the new entry at 0 (the hook already supports it), or record the offsets before zeroing. Or record the item as accepted in the journal.",
+        "reviewer": "review-logic",
+        "line": 80,
+        "premise_verdict": "challenged",
+        "premise_answer": "uphold"
+      }
+    ],
+    "original_task_ids": [
+      "task-7",
+      "task-8",
+      "task-14"
+    ],
+    "iteration": 1
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

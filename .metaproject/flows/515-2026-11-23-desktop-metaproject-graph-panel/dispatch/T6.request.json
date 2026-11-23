@@ -1,0 +1,45 @@
+{
+  "task": {
+    "task_id": "task-6",
+    "task_name": "NodeDetailsPanel and RelationshipList components (new files)",
+    "task_type": "ui_component",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Build the new node details panel and the shared relationship list of the Desktop Metaproject explorer as NEW FILES ONLY. Nothing existing is edited and nothing is wired in yet; task T8 does that afterwards.\n\nCreate in apps/desktop/src/metaproject/:\n1. RelationshipList.tsx - exports `RelationshipList` with the same name and props as the function now exported from MetaprojectView.tsx (lines 228-276), which stays untouched. New behaviour: root-adjacent relationships grouped by direction (Incoming, Outgoing) and then by relationship kind, each group with a heading and a count; a row shows the other node's title, a kind badge and its path, and calls `select(id)`; relationships between two non-root nodes form a separate 'Second step' group whose rows name both ends and can open either; evidence is shown as at most two example lines; provenance digests are not shown; the truncated and empty states keep a clear message.\n2. NodeDetailsPanel.tsx - exports `NodeDetailsPanel` and `isOpenSpecNode` with exactly the contract of plan.md, 'Interfaces between tasks'. Structure per plan.md, 'Panel: a summary of the node': header (kind badge, close, title, monospace path with a 'Copy path' control), facts, one tab bar with counts (Relationships, Wiki, OpenSpec; Relationships is the default), tab bodies. The Wiki and OpenSpec tabs carry over the behaviour of GraphNodePanel.tsx: linked documents from the `documents` projection, the suggested component page, preview, Open, Find, Draft and the 'This CLI does not support OpenSpec' message. Also carried over: the resize handle with its keyboard support, Escape to close, and the compact mode below an 820 px host. Differences from GraphNodePanel: (a) docked, the panel does not move focus when it opens; in compact mode it is a right-anchored drawer that leaves part of the content visible, takes focus on open and returns it on close; (b) the preview text is cleaned of Markdown markers (blockquote `>`, `**`, `__`, single `_` or `*` emphasis, backticks, list markers) and skips metadata lines such as 'Covers:', 'Version:', 'Type:', 'Status:'; (c) one primary action per tab body, the rest quiet.\n3. nodePanel.css - styles for both, imported by the components, built from the app's tokens and existing shared classes (plan.md, 'Design direction'; context.md, 'What the app already has to build with').\n4. NodeDetailsPanel.dom.test.tsx and RelationshipList.dom.test.tsx.\n\nThe counts 'N incoming · M outgoing' come from the root-adjacent edges of `relationships` (`edge.to === root` is incoming, `edge.from === root` is outgoing). While `relationships` is null and `relationshipsPending` is true show a loading state; with a non-empty `relationshipsProblem` show the message and a Retry that calls `onRetry`. A change of the `revealRelationships` number switches to the Relationships tab and scrolls it into view.\n\nUse tokens and existing shared classes; add a class only where nothing fits. No raw colour values. Targets at least 24x24 px, visible focus, headings in order (the panel title is an h2).",
+    "target_files": [
+      "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "apps/desktop/src/metaproject/nodePanel.css"
+    ],
+    "acceptance_criteria": [
+      "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+      "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+      "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

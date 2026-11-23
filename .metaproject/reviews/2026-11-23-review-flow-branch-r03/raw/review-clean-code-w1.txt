@@ -1,0 +1,42 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Read slice-02 in full. The catalog effect carries three refs and a quiet flag that gate four statements, but each ref has one job and the comments say which; the remaining cost is that the cleanup reads the next run's flag. The sum incoming + outgoing + second-step has two spellings, below the three-copy threshold. MetaprojectWork's renamed parameter shadows nothing and is a documented test seam.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 414,
+      "quote": "if (!quietRead.current) project.current++;",
+      "problem": "Clean Code - comments. The effect's cleanup decides whether to retire pending work by reading quietRead.current, which at that moment holds the intent of the next run (the visible effect set it just before bumping revision), not of the run being cleaned up. The comment above it ('Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work') describes the unmount case and does not say the condition reads the successor's flag. It works because React runs a cleanup before the next body, and the body resets the flag at line 375.",
+      "impact": "An editor who moves the reset of quietRead (line 375) earlier, or lets another path set the flag between runs, changes whether pending wiki-link lookups and result pages are retired, with no signal at this line. Not a defect today; the two hidden-and-shown in-flight tests pin the visible behaviour.",
+      "suggested_fix": "Extend the comment: 'quietRead already holds the next run's intent here: the visible effect sets it before bumping revision.'"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "confidence": "high",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 716,
+      "quote": "const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;",
+      "problem": "Clean Code - DRY. The total of the three summarizeRelationships fields is spelled here and at NodeDetailsPanel.tsx:242 (`summary.incoming + summary.outgoing + summary.secondStep`). Two copies, below the three-copy threshold, so not a finding by the rule. Noted because 'rows the list shows' is now defined by two sums plus the `empty` const in RelationshipList (a third form of the same rule).",
+      "impact": "A fourth group added to groupRelationships has to be added to both sums and to `empty`; a miss shows a count that disagrees with the list, the class of round 2's F-001.",
+      "suggested_fix": "Add a `total` to the summarizeRelationships result and use it at both sites."
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+
+Dispositions checked against the code at head, not the commit message: F-001 (RelationshipList `empty` comes from the groups; the Wiki disclosure is counted from summarizeRelationships), F-002 (project.current moves only for a non-quiet read; the effect's guard reads catalogRead), F-003 (catch and setError gated by !quiet; catalogPending blocks a quiet read during a reload), F-004 (the effect calls remember, now a stable useCallback). F-006 to F-009 not checked. No tests run (read-only).

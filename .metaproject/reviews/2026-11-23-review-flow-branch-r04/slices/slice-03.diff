@@ -1,0 +1,117 @@
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 37,41 @@
+   cwd: string,
+   request: MetaprojectRequest,
+ ) => Promise<MetaprojectResponse>;
+ const EMPTY_HITS: readonly MetaprojectHit[] = [];
+-const GRAPH_PADDING = 36;
+ const DOCUMENT_EDGES = ["describes", "links"] as const;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 62,64 @@
+ function RepositoryMarkdown({
+   text,
+-  nodes,
+   source,
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 68,69 @@
+   text: string;
+-  nodes: MetaprojectNode[];
+   source: string;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 310,315 @@
+   } | null>(null);
+   const [snapshotMismatch, setSnapshotMismatch] = useState(false);
+   const [detail, setDetail] = useState<MetaprojectDetail | null>(null);
+   const [projection, setProjection] = useState<MetaprojectNeighbors | null>(
+     null,
+   );
+-  const [error, setError] = useState("");
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 676,676 @@
+-    const generation = project.current;
+     setRebuilding(true);
+-    setError("");
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 681,681 @@
+-      if (generation === project.current) setError(errMessage(cause));
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 893,895 @@
+             </div>
+           )}
+-          {catalog.truncated && (
+-            <div className="inline-banner tone-neutral" role="status">Catalog is limited. Search for more results.</div>
+-          )}
+           <div className={`metaproject-panes${mode === "graph" ? " metaproject-graph-panes" : ""}`}>
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 975,977 @@
+-              problem={documentProblem || (snapshotMismatch ? "The project index changed. Refresh to look up linked documents." : "")}
+               openSpec={protocol === 2}
+               readPreview={preview}
+               width={panelWidth}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 982,983 @@
+-              onDraft={catalog.graph === "ready" && !documents?.truncated ? onDraft : undefined}
+               onFind={kind => kind === "wiki"
+                 ? visit({ mode: "wiki", query: activeNode.path, selection: "" })
+
+--- apps/desktop/src/metaproject/OpenSpecView.tsx
+@@ 60,80 @@
+   const searchCache = useRef(new Map<string, Search>());
+   const listKey = JSON.stringify([cwd, snapshot, revision, collection]);
+   const list = listed?.key === listKey ? listed.result : null;
+   const listSnapshot = list?.snapshotId;
+   const searchQuery = query.trim();
+   const searchKey = JSON.stringify([listKey, listSnapshot, searchQuery]);
+   const hits = found?.key === searchKey ? found.result : null;
+   const detail = loaded?.selection === selected && loaded.result.snapshotId === listSnapshot ? loaded.result : null;
+   const latest = useRef({ active, searchKey, selected, serial: 0 });
+   if (latest.current.active !== active || latest.current.searchKey !== searchKey || latest.current.selected !== selected) {
+     latest.current = { active, searchKey, selected, serial: latest.current.serial + 1 };
+   }
+ 
+   const sectionList = useRef<HTMLElement>(null);
+   const content = useRef<HTMLElement>(null);
+   const markdown = useRef<HTMLDivElement>(null);
+   useEffect(() => {
+     if (!controlledCollection && location) { setCollection(location.collection); setSelected(location); }
+   }, [controlledCollection, location]);
+   const choose = (next: OpenSpecLocation | null) => {
+-    if (content.current) content.current.scrollTop = 0;
+     if (!controlledCollection) setSelected(next);
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 104,111 @@
+ }
+ .metaproject-article-header h2 { margin: 0 0 var(--sp-1); font-size: var(--fs-lg); }
+ .metaproject-article-header { margin-block-end: var(--sp-3); }
+ .metaproject-article .md :not(pre) > code { overflow-wrap: anywhere; }
+ .metaproject-relationship-section summary { min-block-size: 28px; padding-block: var(--sp-1); font-weight: 600; }
+ .metaproject-relationship-section summary .count-label { margin-inline-start: var(--sp-1); }
+-.metaproject-relation-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+-.metaproject-relation-actions .btn {
+-  max-inline-size: 100%;
+-  block-size: auto;
+-  min-block-size: 28px;
+-  padding-block: var(--sp-1);
+-  white-space: normal;
+-  text-align: start;
+-  overflow-wrap: anywhere;
+-}
+-
+-@media (max-width: 700px) {
+-  .metaproject-header, .metaproject-panes { padding-inline: var(--sp-3); }
+-  .metaproject-panes { display: flex; flex-direction: column; overflow: auto; }
+-  .metaproject-list { flex: none; max-block-size: min(180px, 28vh); }
+-  .metaproject-content { flex: none; overflow: visible; }
+-}
+-
+ .openspec-view { display: flex; flex: 1; min-block-size: 0; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); }
+ .openspec-view .metaproject-panes { padding: 0; }

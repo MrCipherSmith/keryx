@@ -1,0 +1,34 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Every hunk of slice-04 was read and each removed line was checked against head, the merge-base 1358d962f4df and the round-1 base 60cbe1c565f4; no consumer at head still depends on what the hunks remove, so no regression is reported. Note on the slice: its hunks are deletions relative to the merge-base (for example `const GRAPH_PADDING = 36;`, `nodes: MetaprojectNode[];`, `const generation = project.current;` in rebuild, the \"Catalog is limited\" banner, the `problem=` prop, the 700px media block and the guide sentence are already absent at 60cbe1c565f4), placed at head line numbers; only the App.tsx hunk is a change of 60cbe1c565f4..b1538097e636 (commit 7dd7288ad adds `visible={view === \"metaproject\"}`). The blast-radius record dropped 25 files by cap and 1 by pre-filter, and its 40 retained entries are all text links (name mentions), none of which imports or styles a symbol or class these hunks remove; the radius could answer the question only for the code edges, and the CSS and guide removals were checked by a search of apps/desktop/src and the guide instead.",
+  "findings": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "coverage": {
+    "hunks_checked": [
+      "apps/desktop/src/App.tsx:596 — `visible={view === \"metaproject\"}` added; MetaprojectView's only consumers are App.tsx:55/596 (lazy import) and MetaprojectView.dom.test.tsx:8/21; the prop defaults to true (`visible = true`), so the test renders without it keep the old behaviour. RetainedView (App.tsx:148) is passed the same `visible` expression, so the popover close and the quiet re-read follow the same switch that hides the view.",
+      "MetaprojectView.tsx `GRAPH_PADDING` removed — no reference left in apps/desktop/src (graph fitting moved to RelationshipGraph); tsc exit 0 on head per the brief.",
+      "MetaprojectView.tsx RepositoryMarkdown `nodes` prop removed — the merge-base `select` callback resolved links with `nodes.find`; head routes every link through `openPath` (MetaprojectView.tsx:669-693), which still opens a loaded node first (`nodes.find(item => item.path === path)`) and otherwise looks it up. The only caller is MetaprojectView.tsx:728.",
+      "MetaprojectView.tsx rebuild `const generation = project.current;` removed — merge-base guarded setRebuilding(false) by `generation === project.current`, which left the control stuck when a catalog reload bumped `project.current` (AC14); head guards by `mounted.current` (650-665). A project change remounts Explorer (`key={props.cwd}`), so a stale project still cannot write state. While hidden (now kept mounted), a resolved rebuild bumps `revision` and reloads the catalog; that is the intended effect and not a lost behaviour.",
+      "MetaprojectView.tsx graph warning banner — replaced by the freshness banner (852-868) that still shows the state and the Rebuild graph control; the reason moves behind Details. Same control, same disabled-while-rebuilding binding.",
+      "MetaprojectView.tsx \"Catalog is limited\" banner removed — replaced by the list heading `Catalog · N of M` from `catalog.counts` (709-710) in Graph and Wiki modes, as AC17 requires; MetaprojectView.dom.test.tsx:690 pins the banner's absence.",
+      "MetaprojectView.tsx `problem=` prop — renamed `documentsProblem=` (947) with the same snapshot-mismatch message; NodeDetailsPanel is the only consumer.",
+      "MetaprojectView.tsx `onDraft` — now gated on `graphState.graph` (959); `graphState` equals `catalog` unless a quiet re-read of the same snapshot supplied newer freshness, so the draft action follows the shown banner.",
+      "metaproject.css `.metaproject-relation-actions` rules removed — no class user anywhere in apps/desktop/src at head.",
+      "metaproject.css `@media (max-width: 700px)` block removed — the native window's minimum width is 720 (apps/desktop/src-tauri/tauri.conf.json:20), so the block could not match in the app; narrow hosts are handled by `@container metaproject (max-width: 760px)` (metaproject.css:128-139), which also applies to OpenSpecView's `.metaproject-panes` (OpenSpecView.tsx:306).",
+      "docs/docs/guides/desktop-metaproject.md:212 — the sentence claiming Graph shows the same selection was replaced (AC21); the following example sentence still reads correctly (212-216)."
+    ],
+    "not_verified": [
+      "No test, build or browser run (allowed_tools read-only, exec_budget_s 0); the brief's evidence (tsc, 904 tests, vite build) is relied on, not re-run.",
+      "The 25 cap-dropped and 1 pre-filtered blast-radius files were not read; by the record they are text-link or graph-storage entries, not importers of the removed symbols."
+    ]
+  }
+}
+
+No findings. slice-04 was read in full; every removed symbol, prop, CSS class and guide sentence was traced to its consumers at head (search: `keryx ctx rg` over apps/desktop/src and the guide), and none still depends on what was removed.
+
+Routing audit: graph_used: no (the payload's `layers.affected` and the blast-radius record supplied the dependents; not re-queried); wiki_used: not-relevant (no intent question the diff and ACs did not settle); ctx_used: yes (`keryx ctx rg`); raw_rg_used: no (raw `git log -p`/`git show` used with the keryx:raw marker to read the range diff and historic blobs).

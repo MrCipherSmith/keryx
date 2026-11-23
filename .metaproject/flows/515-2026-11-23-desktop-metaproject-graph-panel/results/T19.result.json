@@ -1,0 +1,37 @@
+{
+  "task_id": "fix-19",
+  "task_name": "Fix round 1: graph test strength (F-012, F-013, F-021)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "Strengthened the tests of graphLayout.ts and RelationshipGraph.tsx so that all 22 surviving mutants of review round 1 are killed; no production file changed. F-021 (Y1-Y9, Y12, Y16, Y18): new layout fixtures for a root self-loop, a second-step node touching a hidden and a drawn first-step neighbour, a node reachable only through a second-step node, edge widths for counts 1, 16 and 2^20, a neighbour whose largest count is not on its last edge, a fitting asymmetric layout centred in the box, a non-integer column cap, a zero/negative text scale, and colour parsing of 3/4-digit hex, percentage channels and alpha, and an out-of-range alpha. F-012 (G5, G9): the viewport container is given a size in the DOM test (clientWidth/clientHeight stubbed on the element), Fit is checked against computeViewport's zoom and pan; on a zero-sized container a user viewport survives Fit; the zoom levels the component requests on the cytoscape seam are recorded and never leave 0.3..2.5. F-013 (G1-G4, G7, G8, G10, G11): an overflow entry with an invalid side asks for nothing; hovering a node fades all but its closed neighbourhood and captions, highlights the neighbourhood and sets a pointer cursor, mouseout clears both; hovering '+N more' shows a pointer and fades nothing; a file-kind root gets border width 2 while a file neighbour keeps 1; an edge between two non-root nodes carries the second-step class; changing data-palette alone (token values from a stylesheet, no style attribute change) re-colours labels in place; a prefers-color-scheme change (matchMedia stubbed) re-colours labels and the listener is removed on unmount.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/graphLayout.test.ts",
+    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run separately: ESLint does not cover apps/desktop (verify_lint false in the request)",
+  "type_check_result": "pass: `cd apps/desktop && bunx tsc --noEmit` exits 0 with no output",
+  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts` 51 pass, 0 fail; `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx` 27 pass, 0 fail. Scratch-copy mutation check: `scratch_check.py mutants --ids Y1,Y2,Y3,Y4,Y5,Y6,Y7,Y8,Y9,Y12,Y16,Y18 --tests src/metaproject/graphLayout.test.ts` 12 killed; `scratch_check.py mutants --ids G1,G2,G3,G4,G5,G7,G8,G9,G10,G11 --tests src/metaproject/RelationshipGraph.dom.test.tsx` 10 killed; none survived, none invalid.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "followed" },
+    { "path": ".metaproject/rules/core/cli-interface-design.mdc", "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043", "how": "read" }
+  ],
+  "not_touched": [
+    { "path": "apps/desktop/src/metaproject/graphLayout.ts", "reason": "Every Y mutant is killed by tests alone; no seam or behaviour change was needed and no defect was exposed (all new tests pass on the current code)." },
+    { "path": "apps/desktop/src/metaproject/RelationshipGraph.tsx", "reason": "Every G mutant is killed through the existing createCytoscape seam and DOM; no production change was needed and no defect was exposed." }
+  ],
+  "notes": "Reproduction: every finding reproduced (the 22 mutants survived on the previous tests per mutation-1-compact.txt), and each new test was confirmed in the scratch copy to fail under its mutant. suggested_fix diverged: F-012 — besides stubbing the size and asserting Fit's zoom and pan, G5 is killed by a zero-sized Fit after the test sets a non-default viewport: with the initial viewport (zoom 1, pan 0) the mutant writes the same values and is equivalent, so the suggested sized-Fit assertion alone would not kill it. G9: cytoscape clamps zoom to its own minZoom/maxZoom options, so an assertion on cy.zoom() after repeated Zoom in would not kill the mutant either; the test records the levels the component requests on the seam (allowed by the dispatch). F-013 — data-palette is flipped with token values from a <style> sheet rather than style.setProperty, because a root style-attribute change also triggers the observer and would hide the G4 mutant; the colour-scheme listener is pinned with a stubbed matchMedia. F-021 — Y7 needs an asymmetric layout (root plus one long neighbour) because a lone root's bounds centre equals the root and the mutant is equivalent there; Y12 is pinned by textScale 0 and -2 laying out exactly like the default. In AC3's sense the drawn-anchor fixture puts the hidden anchor on the outgoing side and the drawn one on the incoming side, so the choice is visible as the node's side. Mutants G6 and Y19 were already killed and were not rerun. No production code changed; the dev server serving this worktree was not touched, and red checks ran only through scratch_check.py. Not verified: the hover fading, cursor and zoom requests on a real canvas (headless cytoscape only); the whole desktop suite (AC19's `bun test src`) was not run, per the instruction to run only my own test files; another lane's uncommitted files (NodeDetailsPanel*, RelationshipList*) were left alone."
+}

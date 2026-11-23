@@ -1,0 +1,845 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T26.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T26.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "files": [],
+  "dropped": [
+    {
+      "file": "apps/desktop/src/components/Toasts.tsx",
+      "hop": 1,
+      "fanIn": 14,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/components/Markdown.tsx",
+      "hop": 1,
+      "fanIn": 13,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/Composer.tsx",
+      "hop": 1,
+      "fanIn": 7,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+      "hop": 1,
+      "fanIn": 6,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "hop": 1,
+      "fanIn": 4,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueOriginDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueWork.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/project/GitHubSettings.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLifecycle.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewQuestion.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/ActivityPanel.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/AttachmentImage.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/CommandCard.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/components/imagePreview.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowsBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/nodePanel.css",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/BrowserPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/ChangesPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/ConsentDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/CookieImportDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/FilesPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/TerminalPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRunDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewSessions.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/Approvals.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/DelegateResultCard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/ProvidersDialog.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionView.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/SubagentArchive.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/UserMessage.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/styles/components.css",
+      "hop": 1,
+      "fanIn": 2,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueFilters.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesView.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/graph.css",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/panels/SidePanel.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ProjectReviewRules.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/PullRequestAutomation.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWatcher.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/review/SessionReviewActivity.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/RunsTab.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/session/SchedulesTab.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/shell/RoutingDialog.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/shell/Welcome.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 44 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/keryx-dashboard.html",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src-tauri/icons/icon.icns",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/components/Markdown.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md) is mentioned by 113 files, over the 20-file hub limit; its consumers are not followed one by one"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.dispatch.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.request.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T26.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T26.result.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 11,
+    "changedFilesResolved": 1,
+    "changedFilesUnresolved": 10,
+    "candidates": 0,
+    "retained": 0,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 0,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 80,
+    "droppedTestConsumer": 0,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {}
+  },
+  "graph": {
+    "nodes": 4670,
+    "edges": 17773
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 2,
+    "textHubs": [
+      {
+        "key": "btn",
+        "kind": "css-class",
+        "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+        "hits": 113
+      },
+      {
+        "key": "btn-sm",
+        "kind": "css-class",
+        "via": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+        "hits": 44
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [],
+  "testCommand": "bun test"
+}

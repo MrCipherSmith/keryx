@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-branch#F-004",
+      "answer": "uphold",
+      "reason": "The operator's first answer to this finding was «Перечитывать (Recommended)»: re-read the catalog silently when the view is shown again, keeping the selection, filters and history.",
+      "quote": "uphold",
+      "at": "2026-11-23T09:38:09.352Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "0a7c9b3cf0b1bcf5cda7d0a88b64970f1cace210e2541cd9c24f779f487f7103"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "AskUserQuestion",
+        "questionText": "Запись решения по находке F-004 (каталог не перечитывается при возврате на вкладку Metaproject). Вы ответили «Перечитывать». Инструмент принимает только слово uphold или dismiss — какое записать?",
+        "answerText": "uphold",
+        "time": "2026-11-23T09:38:09.352Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-branch#F-007",
+      "answer": "uphold",
+      "reason": "The operator's first answer to this finding was «Дополнить строку фактов (Recommended)»: the fact row also shows the second-step count; the tab count stays.",
+      "quote": "uphold",
+      "at": "2026-11-23T09:38:09.701Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "0db34ce2fb9e3f11c94ad4acbe501f84a991c40026a5af88175e3959a2593a29"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "AskUserQuestion",
+        "questionText": "Запись решения по находке F-007 (счётчик вкладки Relationships включает второй шаг, строка фактов — нет). Вы ответили «Дополнить строку фактов». Какое слово записать — uphold или dismiss?",
+        "answerText": "uphold",
+        "time": "2026-11-23T09:38:09.701Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-branch#F-008",
+      "answer": "uphold",
+      "reason": "The operator's first answer to this finding was «Починить сейчас (Recommended)»: fix choose() in OpenSpecView in this flow, with a test that restores the scroll position.",
+      "quote": "uphold",
+      "at": "2026-11-23T09:38:10.065Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "19c313778def6f183d77a276550b7032bff06532d10d1d5a07fbf843258a9fe7"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "AskUserQuestion",
+        "questionText": "Запись решения по находке F-008 («Назад» в OpenSpec возвращает документ в начало). Вы ответили «Починить сейчас». Какое слово записать — uphold или dismiss?",
+        "answerText": "uphold",
+        "time": "2026-11-23T09:38:10.065Z"
+      }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "task": {
+    "task_id": "fix-21",
+    "task_name": "Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)",
+    "task_type": "mixed",
+    "complexity": "low",
+    "dependencies": [],
+    "description": "Two things, both in files of the documentation lane. The task is done when both finish lines hold, `bun run docs:check` passes from the repository root, and nothing outside the owned files changed.\n\n1. The guide after the fixes of review round 1. Tasks T17 and T18 changed what a user sees (their result files say exactly what; the strings are in the TSX at head): the Relationships fact of the details panel also shows the second-step count when there are second-step relationships (`2 incoming · 2 outgoing · 1 second-step`); a relationship from a node to itself is neither listed nor counted; the Filters popover opens above its button when there is no room below it, closes when you leave the Metaproject view, and stays open across Graph, Wiki and OpenSpec; on return to Metaproject from another view everything is as you left it and the catalog is re-read quietly, so the freshness banner is current; Back to an earlier OpenSpec document returns to the place you were reading. Finish line: every sentence of docs/docs/guides/desktop-metaproject.md that describes one of these parts of the screen matches the screen, and a reader is told what they need to use it; the guide stays a task-oriented guide, not a list of changes, so a detail no reader acts on is left out. The constraints of the earlier guide tasks stay: do not touch the paragraph that starts 'Desktop sends read requests', the section 'Inspect the module from the CLI', or the table under 'Recover from common problems'; keep the image paths, the stated limits, the guide's voice and second person. AC21 keeps holding.\n\n2. Finding F-010. The dispatch files of T9 and T15 name `resolved/T<n>.implement.json` as existing and require `results/T<n>.result.json`; neither file was ever written, so both guide tasks ran without a resolved-context file and were accepted on the orchestrator's own checks. The orchestrator has now written the two resolved-context files, on the current head. Finish line: `results/T9.result.json` and `results/T15.result.json` exist and each passes `keryx skills contracts validate <result> --schema task-implementer-output --resolved <its resolved file>`. Each says what that task changed in the guide (commit 5955bf547 is T9, commit be1e15e8d is T15: read them with `git show`), cites every must_read entry of its resolved file in `project_context_applied` as read now, and says in `notes` that the result was written during T21, after the task had been accepted, because review round 1 found the file missing. Where a must_read rule asks for something the guide at head does not meet, fix it in the guide under point 1 and say so; where a rule does not apply to a documentation file, say why in its citation.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix.",
+    "target_files": [
+      "docs/docs/guides/desktop-metaproject.md",
+      ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json",
+      ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T15.result.json"
+    ],
+    "acceptance_criteria": [
+      "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 1. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. The review package is .metaproject/reviews/2026-11-23-review-flow-branch: report.md (the round's report), findings.json (every finding with its file, line, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-1-compact.txt (each mutant of the mutation pass: file:line, the anchor, its replacement, killed or survived). Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies the review's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-010",
+        "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+        "severity": "WARNING",
+        "message": "T9 dispatch names files as existing that are absent at head, and requires a result file the journal says was not requested. T9.dispatch.json has context_refs entry `resolved/T9.implement.json` with \"exists\": true and output_contract.artifact_path `results/T9.result.json`, and a constraint to validate that result against the resolved file. Neither file is in the flow folder at head (resolved/ holds T5-T8, T12-T14, T16; results/ holds T5-T8, T12-T14, T16), and git history has no record of them. The journal entry for T9 says \"No result JSON was requested for this docs task\", which contradicts the dispatch. T15 (also docs, flow.json status done) has no result or resolved file either. flow.json marks both T9 and T15 done with disposition completed.",
+        "suggested_fix": "Either record in flow.json dispositionReason for T9 and T15 that the docs workers returned inline and no result artifact exists, or remove the stale context_refs entry and output_contract from T9.dispatch.json. Do not edit flow.json by hand; use the keryx flow CLI.",
+        "reviewer": "review-logic",
+        "line": 32,
+        "premise_verdict": "upheld"
+      }
+    ],
+    "original_task_ids": [
+      "task-9",
+      "task-15"
+    ],
+    "iteration": 1
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

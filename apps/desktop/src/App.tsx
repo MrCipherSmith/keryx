@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
 import { isTauri } from "./platform/backend";
 import {
@@ -52,7 +52,7 @@ import { supportsProviders } from "./acp/providers";
 import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
 import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
 
-const MetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
+const LazyMetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
 
 export function App() {
   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
@@ -141,6 +141,37 @@ function PathPrompt({ title, onDone }: { title: string; onDone: (v: string | nul
         <span className="field-hint">Browser dev mode has no folder picker. The bridge opens this path on your machine.</span>
       </label>
     </Dialog>
+  );
+}
+
+/** Mounts a view on its first visit and keeps it mounted, hidden, afterwards, so its state survives view switches. */
+export function RetainedView({ active, visible, children }: { active: boolean; visible: boolean; children: ReactNode }) {
+  const [visited, setVisited] = useState(active);
+  if (active && !visited) setVisited(true);
+  return visited || active ? <div className="view" hidden={!visible}>{children}</div> : null;
+}
+
+type ExplorerProps = { cwd: string; visible?: boolean; onRebuild: () => Promise<boolean>; onDraft?: (task: string) => Promise<void> };
+
+/**
+ * The Metaproject explorer in the work area: mounted on its first visit and kept, and told whether it is the
+ * shown view, so it closes its Filters popover on leaving and re-reads its catalog on return.
+ * `explorer` is a test seam (the app passes nothing); bun's module mocks would outlive one test file.
+ */
+export function MetaprojectWork({ cwd, view, workView, onRebuild, onDraft, explorer: MetaprojectView = LazyMetaprojectView }: {
+  cwd: string;
+  view: View;
+  workView: Exclude<View, "settings">;
+  onRebuild: () => Promise<boolean>;
+  onDraft: (task: string) => Promise<void>;
+  explorer?: ComponentType<ExplorerProps>;
+}) {
+  return (
+    <RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
+      <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
+        <MetaprojectView cwd={cwd} visible={view === "metaproject"} onRebuild={onRebuild} onDraft={onDraft} />
+      </Suspense>
+    </RetainedView>
   );
 }
 
@@ -583,14 +614,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
       </div>}
-      {workView === "metaproject" && <div className="view" hidden={view !== "metaproject"}>
-        <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
-          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} onDraft={async task => {
-            if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
-            setView("session");
-          }} />
-        </Suspense>
-      </div>}
+      {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
+      <MetaprojectWork cwd={cwd} view={view} workView={workView} onRebuild={rebuildGraph} onDraft={async task => {
+        if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+        setView("session");
+      }} />
       <div className="view" hidden={view !== "review"}>
         {reviewDisconnected ? (
           <EmptyState title="GitHub is not connected" icon="pr">

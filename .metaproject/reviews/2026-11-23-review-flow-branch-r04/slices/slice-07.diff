@@ -1,0 +1,2868 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.dispatch.json
+@@ 1,91 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T7",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Explorer navigation and state fixes D1-D7",
++    "description": "Fix seven navigation and state defects of the Desktop Metaproject explorer: D1-D7 in context.md, 'Defects this flow fixes'. Each fix comes with a test that fails before it. What the user must see in each situation is decided in plan.md, 'State x event matrix'.\n\nD1 (App.tsx:586) - the explorer must not lose its state when the user leaves the work view: mount it on first visit and keep it mounted and hidden afterwards, the way the session view is kept; it stays keyed by project folder. AC10 is checked live by the orchestrator; add the best automated test that is practical for the mount logic.\nD2 - selections are history entries: a node selected in Graph (from the list, the canvas or a panel row), a page selected in Wiki and an entry opened in OpenSpec can be returned to with Back, restoring panel state and scroll the way `visit` already does. Typing in the search field, changing filters and resizing or closing the panel are not history entries. Re-selecting the current selection adds nothing.\nD3 - in Wiki, the 'first wiki page' default applies only while the query is empty. With a non-empty query and no selection, the article area shows an empty state that names the query and offers to clear the search, never an unrelated article. 'Find an OpenSpec document' keeps the query when the collection is switched.\nD4 - in Wiki mode the neighbours read uses depth 1, direction 'both' and every relationship kind except `defines` and `calls`, whatever the Graph filters are; Graph mode keeps using the filters.\nD5 - `rebuild()` always clears `rebuilding` when the rebuild settles and re-reads the catalog on success, even if the catalog was reloaded in between; only an unmount or a project change suppresses the state write.\nD6 - a failed negotiation shows its error with a Retry control and without the 'Loading project knowledge...' banner; Retry negotiates again and on success loads the catalog; 'Checking OpenSpec support...' is not shown next to the error.\nD7 - a wiki link whose target path is not among the loaded nodes triggers one lookup read (a `search` for the resolved path, then an exact `node.path` match) and opens the target; if nothing matches, a visible inline status names the unresolved path; the href path is percent-decoded and a leading '/' resolves from the repository root.\n\nStay inside your files. In MetaprojectView.tsx do not change the `Graph` function, the `RelationshipList` function or the `<GraphNodePanel ...>` element and its props: task T8 replaces all three right after you. Two other implementers are adding new files in apps/desktop/src/metaproject/ at the same time.",
++    "intent": "implement"
++  },
++  "acceptance_criteria": [
++    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++    "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without \"Loading project knowledge…\"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/OpenSpecView.tsx",
++    "apps/desktop/src/metaproject/GraphNodePanel.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/platform/metaproject.ts",
++    "src/integrations/metaproject-explorer-contract.ts",
++    "apps/desktop/src/components/ui.tsx",
++    "apps/desktop/src/test/dom.ts",
++    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/useExplorerNavigation.ts, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/App.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
++    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T07:25:39Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.request.json
+@@ 1,48 @@
++{
++  "task": {
++    "task_id": "task-7",
++    "task_name": "Explorer navigation and state fixes D1-D7",
++    "task_type": "fix",
++    "complexity": "high",
++    "dependencies": [],
++    "description": "Fix seven navigation and state defects of the Desktop Metaproject explorer: D1-D7 in context.md, 'Defects this flow fixes'. Each fix comes with a test that fails before it. What the user must see in each situation is decided in plan.md, 'State x event matrix'.\n\nD1 (App.tsx:586) - the explorer must not lose its state when the user leaves the work view: mount it on first visit and keep it mounted and hidden afterwards, the way the session view is kept; it stays keyed by project folder. AC10 is checked live by the orchestrator; add the best automated test that is practical for the mount logic.\nD2 - selections are history entries: a node selected in Graph (from the list, the canvas or a panel row), a page selected in Wiki and an entry opened in OpenSpec can be returned to with Back, restoring panel state and scroll the way `visit` already does. Typing in the search field, changing filters and resizing or closing the panel are not history entries. Re-selecting the current selection adds nothing.\nD3 - in Wiki, the 'first wiki page' default applies only while the query is empty. With a non-empty query and no selection, the article area shows an empty state that names the query and offers to clear the search, never an unrelated article. 'Find an OpenSpec document' keeps the query when the collection is switched.\nD4 - in Wiki mode the neighbours read uses depth 1, direction 'both' and every relationship kind except `defines` and `calls`, whatever the Graph filters are; Graph mode keeps using the filters.\nD5 - `rebuild()` always clears `rebuilding` when the rebuild settles and re-reads the catalog on success, even if the catalog was reloaded in between; only an unmount or a project change suppresses the state write.\nD6 - a failed negotiation shows its error with a Retry control and without the 'Loading project knowledge...' banner; Retry negotiates again and on success loads the catalog; 'Checking OpenSpec support...' is not shown next to the error.\nD7 - a wiki link whose target path is not among the loaded nodes triggers one lookup read (a `search` for the resolved path, then an exact `node.path` match) and opens the target; if nothing matches, a visible inline status names the unresolved path; the href path is percent-decoded and a leading '/' resolves from the repository root.\n\nStay inside your files. In MetaprojectView.tsx do not change the `Graph` function, the `RelationshipList` function or the `<GraphNodePanel ...>` element and its props: task T8 replaces all three right after you. Two other implementers are adding new files in apps/desktop/src/metaproject/ at the same time.",
++    "target_files": [
++      "apps/desktop/src/metaproject/MetaprojectView.tsx",
++      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/App.tsx"
++    ],
++    "acceptance_criteria": [
++      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
++      "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without \"Loading project knowledge…\"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]"
++    ],
++    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
++    "existing_tests": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
++    ],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json"
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json
+@@ 1,97 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T8",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
++    "description": "Put the new graph and the new details panel into the Desktop Metaproject explorer and finish the Graph screen. The parts exist and are committed: `RelationshipGraph` (RelationshipGraph.tsx, graph.css, graphLayout.ts), `NodeDetailsPanel` and `RelationshipList` (NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css) and the shared `labels.ts`. Their export contracts are in plan.md, 'Interfaces between tasks'. Layout and behaviour per situation are decided in plan.md ('Design direction', 'State x event matrix').\n\nIn MetaprojectView.tsx:\n1. Swap. Use `RelationshipGraph` in place of the inline `Graph` function, `NodeDetailsPanel` in place of `GraphNodePanel`, and `RelationshipList` from ./RelationshipList in place of the inline one. Delete the two inline functions and GraphNodePanel.tsx; anything that imported `isOpenSpecNode` from it imports it from ./NodeDetailsPanel.\n2. Graph mode layout: the filter bar, then the graph filling the remaining height of the content column. The relationship list is no longer rendered under the canvas; it is the panel's Relationships tab. Wiki mode keeps its Relationships disclosure with `RelationshipList`.\n3. Panel wiring: `relationships` is the current filtered projection of the selection (null while it loads or after a failure) with `relationshipsPending` and `relationshipsProblem`; the document props carry what `projection`, `pending` and `problem` carried; `onSelect` selects a neighbour; the graph's `onShowHidden` opens the panel and bumps the number passed as `revealRelationships`.\n4. While the relationships of a new selection load, the previous graph stays rendered with `busy` instead of being unmounted; it is dropped when the read fails or the view changes.\n5. Filters: labels from RELATIONSHIP_KIND_LABELS; one compact row (selects for direction and depth, `.chip-btn` toggles for kinds); `defines` and `calls` disabled with a stated reason when `catalog.hasSymbolLayer` is false; a Reset control when the filters differ from their defaults.\n6. List header: 'Catalog · <shown> of <total>' with the total from `catalog.counts` (files + wiki + modules), replacing the 'Catalog is limited. Search for more results.' banner; 'Results · <n>' while searching.\n7. The selected list row is scrolled into view when the selection changes (for example from the graph).\n8. Explorer banners (protocol error, read error, snapshot mismatch) render above the OpenSpec view, not below it. The freshness banner reads as one sentence ('Graph is stale: <reason>'), not 'Graph stale. an untracked ...'.\n9. Carried over from the review of the navigation task: the Wiki empty state must not say 'No Wiki page matches' while a search is still running; `useExplorerNavigation.ts` restores the scroll of `.metaproject-node-body`, the old panel body class, and must point at the new panel body; keep a map of nodes already seen so that Back to a node shows its panel at once instead of waiting for its projection.\n\nIn metaproject.css: remove the rules the swap makes dead (`.metaproject-node-*`, `.metaproject-relations`, the old `.metaproject-graph*` rules), remove the `@media (max-width: 700px)` block (the window cannot be narrower than 720 px, so it never applies) and, where a narrow layout is needed, use a container query on the explorer as `.composer` does elsewhere in the app. The three columns are list, content, panel. At the minimum window (720x480, a 660 px wide host) with the panel closed and no warning banner at least 140 px of graph height must be visible without scrolling (AC20); the orchestrator measures this in a browser.\n\nTests (MetaprojectView.dom.test.tsx): update what the swap changes (the Wiki tab must be activated before 'Open in Wiki'; the old relationship row texts are gone) and add tests for AC17. cytoscape cannot create a canvas under happy-dom; `RelationshipGraph` has a test-only `createCytoscape` prop (see RelationshipGraph.dom.test.tsx for the headless factory) — give the explorer a way to pass it in tests so the graph can mount there.\n\nYou may edit the graph and panel files only to fix a defect the integration exposes, and you say which.",
++    "intent": "implement"
++  },
++  "acceptance_criteria": [
++    "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
++    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
++    "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
++    "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
++    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++    "apps/desktop/src/metaproject/OpenSpecView.tsx",
++    "apps/desktop/src/metaproject/GraphNodePanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/nodePanel.css",
++    "apps/desktop/src/metaproject/labels.ts",
++    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
++    "apps/desktop/src/styles/components.css",
++    "apps/desktop/src/styles/flows.css",
++    "apps/desktop/src/components/ui.tsx"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/metaproject.css, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/metaproject/useExplorerNavigation.ts, apps/desktop/src/metaproject/OpenSpecView.tsx, apps/desktop/src/metaproject/GraphNodePanel.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
++    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T07:48:50Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json
+@@ 1,50 @@
++{
++  "task": {
++    "task_id": "task-8",
++    "task_name": "Integrate graph and panel into the explorer; filters, counts, cleanup",
++    "task_type": "mixed",
++    "complexity": "high",
++    "dependencies": [],
++    "description": "Put the new graph and the new details panel into the Desktop Metaproject explorer and finish the Graph screen. The parts exist and are committed: `RelationshipGraph` (RelationshipGraph.tsx, graph.css, graphLayout.ts), `NodeDetailsPanel` and `RelationshipList` (NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css) and the shared `labels.ts`. Their export contracts are in plan.md, 'Interfaces between tasks'. Layout and behaviour per situation are decided in plan.md ('Design direction', 'State x event matrix').\n\nIn MetaprojectView.tsx:\n1. Swap. Use `RelationshipGraph` in place of the inline `Graph` function, `NodeDetailsPanel` in place of `GraphNodePanel`, and `RelationshipList` from ./RelationshipList in place of the inline one. Delete the two inline functions and GraphNodePanel.tsx; anything that imported `isOpenSpecNode` from it imports it from ./NodeDetailsPanel.\n2. Graph mode layout: the filter bar, then the graph filling the remaining height of the content column. The relationship list is no longer rendered under the canvas; it is the panel's Relationships tab. Wiki mode keeps its Relationships disclosure with `RelationshipList`.\n3. Panel wiring: `relationships` is the current filtered projection of the selection (null while it loads or after a failure) with `relationshipsPending` and `relationshipsProblem`; the document props carry what `projection`, `pending` and `problem` carried; `onSelect` selects a neighbour; the graph's `onShowHidden` opens the panel and bumps the number passed as `revealRelationships`.\n4. While the relationships of a new selection load, the previous graph stays rendered with `busy` instead of being unmounted; it is dropped when the read fails or the view changes.\n5. Filters: labels from RELATIONSHIP_KIND_LABELS; one compact row (selects for direction and depth, `.chip-btn` toggles for kinds); `defines` and `calls` disabled with a stated reason when `catalog.hasSymbolLayer` is false; a Reset control when the filters differ from their defaults.\n6. List header: 'Catalog · <shown> of <total>' with the total from `catalog.counts` (files + wiki + modules), replacing the 'Catalog is limited. Search for more results.' banner; 'Results · <n>' while searching.\n7. The selected list row is scrolled into view when the selection changes (for example from the graph).\n8. Explorer banners (protocol error, read error, snapshot mismatch) render above the OpenSpec view, not below it. The freshness banner reads as one sentence ('Graph is stale: <reason>'), not 'Graph stale. an untracked ...'.\n9. Carried over from the review of the navigation task: the Wiki empty state must not say 'No Wiki page matches' while a search is still running; `useExplorerNavigation.ts` restores the scroll of `.metaproject-node-body`, the old panel body class, and must point at the new panel body; keep a map of nodes already seen so that Back to a node shows its panel at once instead of waiting for its projection.\n\nIn metaproject.css: remove the rules the swap makes dead (`.metaproject-node-*`, `.metaproject-relations`, the old `.metaproject-graph*` rules), remove the `@media (max-width: 700px)` block (the window cannot be narrower than 720 px, so it never applies) and, where a narrow layout is needed, use a container query on the explorer as `.composer` does elsewhere in the app. The three columns are list, content, panel. At the minimum window (720x480, a 660 px wide host) with the panel closed and no warning banner at least 140 px of graph height must be visible without scrolling (AC20); the orchestrator measures this in a browser.\n\nTests (MetaprojectView.dom.test.tsx): update what the swap changes (the Wiki tab must be activated before 'Open in Wiki'; the old relationship row texts are gone) and add tests for AC17. cytoscape cannot create a canvas under happy-dom; `RelationshipGraph` has a test-only `createCytoscape` prop (see RelationshipGraph.dom.test.tsx for the headless factory) — give the explorer a way to pass it in tests so the graph can mount there.\n\nYou may edit the graph and panel files only to fix a defect the integration exposes, and you say which.",
++    "target_files": [
++      "apps/desktop/src/metaproject/MetaprojectView.tsx",
++      "apps/desktop/src/metaproject/metaproject.css",
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++      "apps/desktop/src/metaproject/OpenSpecView.tsx",
++      "apps/desktop/src/metaproject/GraphNodePanel.tsx"
++    ],
++    "acceptance_criteria": [
++      "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
++      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
++      "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
++      "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
++      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
++    ],
++    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
++    "existing_tests": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/App.dom.test.tsx"
++    ],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json"
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json
+@@ 1,82 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T9",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Update the Desktop Metaproject guide",
++    "description": "Bring the user guide docs/docs/guides/desktop-metaproject.md in line with the redesigned Graph screen of the Desktop Metaproject explorer. What ships is in the code named under files_to_read and, for the part being integrated right now, in the T8 dispatch description. The guide is written for a developer using the app; keep its voice, its second person and its level of detail.\n\nWhat changed and must be described:\n- Graph: a local neighbourhood in columns. What points at the selected item is on its left, what it points at is on its right, second-step items are further out. Each group has a caption with the relationship type and a count; a column shows at most 12 items and collapses the rest into a '+N more' entry that opens the relationship list; item shape and border show its kind and line style shows the relationship family, both explained by the legend under the graph; zoom in, zoom out and fit controls; clicking an item selects it.\n- Details panel: kind, title, path with a Copy path control, facts (module, page type, status, relationship counts), and three tabs with counts: Relationships (the default; grouped into Incoming and Outgoing, then by type; a row selects that item; examples open from the control at the end of a row), Wiki and OpenSpec (linked documents with a preview, Open, Find, Draft).\n- Filters carry readable names (Imports, Assets, Describes, Wiki links, Contains, Defines, Calls, Changes spec, Spec context); Defines and Calls are disabled until the symbol layer is enabled.\n- The list header shows how many catalog items are shown out of the total.\n- Back steps through the items you selected, not only through view switches; the explorer keeps its view, search, selection and filters when you leave the Metaproject tab and return.\n- Wiki: the Relationships block of an article always shows direct relationships of every type and no longer follows the Graph filters; a link to a page or file that is not loaded yet is looked up and opened, and an unresolved link says which path it could not find; 'Find a Wiki page' with no match says so and offers to clear the search.\n- A failed check of the selected CLI shows its error with Retry.\n\nConstraints on the edit:\n- The guide must no longer say or imply that the Wiki view shows the same search and selection as Graph (each view keeps its own); this includes the alt text of the wiki image.\n- The relationship-type table keeps every existing row and gains rows for `changes-spec` and `spec-context`, with the readable name next to each id.\n- Another branch has already edited this file in three places; do not touch them, so the two branches merge cleanly: the paragraph in 'Data, checkout boundaries and limits' that starts 'Desktop sends read requests', the whole section 'Inspect the module from the CLI', and the table under 'Recover from common problems' (add no row to it and change none).\n- Leave the two image files and their paths alone; the orchestrator replaces the screenshots separately. Update only their alt texts to describe the new screen.\n- Limits stated in the guide (200 items, 200 nodes, 400 edges, two steps) stay as they are.",
++    "intent": "implement"
++  },
++  "acceptance_criteria": [
++    "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json",
++    "docs/docs/guides/desktop-metaproject.md",
++    "apps/desktop/src/metaproject/labels.ts",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only docs/docs/guides/desktop-metaproject.md. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
++    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T07:56:18Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.request.json
+@@ 1,37 @@
++{
++  "task": {
++    "task_id": "task-9",
++    "task_name": "Update the Desktop Metaproject guide",
++    "task_type": "mixed",
++    "complexity": "low",
++    "dependencies": [],
++    "description": "Bring the user guide docs/docs/guides/desktop-metaproject.md in line with the redesigned Graph screen of the Desktop Metaproject explorer. What ships is in the code named under files_to_read and, for the part being integrated right now, in the T8 dispatch description. The guide is written for a developer using the app; keep its voice, its second person and its level of detail.\n\nWhat changed and must be described:\n- Graph: a local neighbourhood in columns. What points at the selected item is on its left, what it points at is on its right, second-step items are further out. Each group has a caption with the relationship type and a count; a column shows at most 12 items and collapses the rest into a '+N more' entry that opens the relationship list; item shape and border show its kind and line style shows the relationship family, both explained by the legend under the graph; zoom in, zoom out and fit controls; clicking an item selects it.\n- Details panel: kind, title, path with a Copy path control, facts (module, page type, status, relationship counts), and three tabs with counts: Relationships (the default; grouped into Incoming and Outgoing, then by type; a row selects that item; examples open from the control at the end of a row), Wiki and OpenSpec (linked documents with a preview, Open, Find, Draft).\n- Filters carry readable names (Imports, Assets, Describes, Wiki links, Contains, Defines, Calls, Changes spec, Spec context); Defines and Calls are disabled until the symbol layer is enabled.\n- The list header shows how many catalog items are shown out of the total.\n- Back steps through the items you selected, not only through view switches; the explorer keeps its view, search, selection and filters when you leave the Metaproject tab and return.\n- Wiki: the Relationships block of an article always shows direct relationships of every type and no longer follows the Graph filters; a link to a page or file that is not loaded yet is looked up and opened, and an unresolved link says which path it could not find; 'Find a Wiki page' with no match says so and offers to clear the search.\n- A failed check of the selected CLI shows its error with Retry.\n\nConstraints on the edit:\n- The guide must no longer say or imply that the Wiki view shows the same search and selection as Graph (each view keeps its own); this includes the alt text of the wiki image.\n- The relationship-type table keeps every existing row and gains rows for `changes-spec` and `spec-context`, with the readable name next to each id.\n- Another branch has already edited this file in three places; do not touch them, so the two branches merge cleanly: the paragraph in 'Data, checkout boundaries and limits' that starts 'Desktop sends read requests', the whole section 'Inspect the module from the CLI', and the table under 'Recover from common problems' (add no row to it and change none).\n- Leave the two image files and their paths alone; the orchestrator replaces the screenshots separately. Update only their alt texts to describe the new screen.\n- Limits stated in the guide (200 items, 200 nodes, 400 edges, two steps) stay as they are.",
++    "target_files": [
++      "docs/docs/guides/desktop-metaproject.md"
++    ],
++    "acceptance_criteria": [
++      "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
++    ],
++    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
++    "existing_tests": [],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json"
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 1,13 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "515",
++  "slug": "desktop-metaproject-graph-panel",
++  "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++  "status": "in-progress",
++  "createdAt": "2026-11-23T07:14:05.302Z",
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 15,97 @@
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Context collected by the preceding review and folded into context.md (Agent Findings)"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Superseded by T5-T8, which split the implementation by file ownership"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Tests are written inside each implement task (T5-T8); the full suite is verify task T10"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [
++        "T8",
++        "T9",
++        "T10",
++        "T11",
++        "T14",
++        "T15",
++        "T16",
++        "T17",
++        "T18",
++        "T19",
++        "T20",
++        "T21",
++        "T22",
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 101,102 @@
++      ],
++      "attempts": {
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 104,113 @@
++        "log": [
++          {
++            "at": "2026-11-23T10:12:37.125Z",
++            "outcome": "started",
++            "detail": "review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
++          },
++          {
++            "at": "2026-11-23T10:52:22.579Z",
++            "outcome": "failed",
++            "detail": "review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 124,601 @@
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T5",
++      "title": "Graph layout module and RelationshipGraph component (new files)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:25:40.538Z",
++            "outcome": "started",
++            "detail": "515-T5"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC1",
++        "AC2",
++        "AC3",
++        "AC4"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "NodeDetailsPanel and RelationshipList components (new files)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:25:41.096Z",
++            "outcome": "started",
++            "detail": "515-T6"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC7",
++        "AC8",
++        "AC9"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Explorer navigation and state fixes D1-D7",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:25:41.654Z",
++            "outcome": "started",
++            "detail": "515-T7"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC10",
++        "AC11",
++        "AC12",
++        "AC13",
++        "AC14",
++        "AC15",
++        "AC16"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5",
++        "T6",
++        "T7",
++        "T12",
++        "T13"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:54:41.505Z",
++            "outcome": "started",
++            "detail": "515-T8"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC17",
++        "AC18",
++        "AC19"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "Update the Desktop Metaproject guide",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T12",
++        "T13"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:56:19.119Z",
++            "outcome": "started",
++            "detail": "515-T9"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC21"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T10",
++      "title": "Desktop typecheck and full desktop test suite pass",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "cd apps/desktop && bunx tsc --noEmit exit 0; bun test src 833 pass, 0 fail on the tree committed as 8cd85cdec; keryx health run --changed PASS"
++    },
++    {
++      "id": "T11",
++      "title": "Live browser verification at three window sizes, dark and light",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T8",
++        "T14"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Live browser check passed after T14: AC5, AC6, AC10 and AC20 hold; measured values are in journal.md (T11 first and second live pass)"
++    },
++    {
++      "id": "T12",
++      "title": "Graph polish from the isolated live preview",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:46:12.081Z",
++            "outcome": "started",
++            "detail": "515-T12"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC1",
++        "AC2",
++        "AC3",
++        "AC4"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T13",
++      "title": "Panel and relationship list polish from the isolated live preview",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T6"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:46:12.731Z",
++            "outcome": "started",
++            "detail": "515-T13"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC7",
++        "AC8",
++        "AC9"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T14",
++      "title": "Compact filter bar and one-row header on narrow hosts",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:11:50.862Z",
++            "outcome": "started",
++            "detail": "515-T14"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC17",
++        "AC19",
++        "AC20"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T15",
++      "title": "Align the guide with the final screen and refresh its screenshots",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T14"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:36:10.435Z",
++            "outcome": "started",
++            "detail": "515-T15"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC21"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T16",
++      "title": "One-line freshness banner with details on demand",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T14"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:36:10.782Z",
++            "outcome": "started",
++            "detail": "515-T16"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC19",
++        "AC20"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T17",
++      "title": "Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T09:45:33.930Z",
++            "outcome": "started",
++            "detail": "515-T17 (fix round 1)"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T18",
++      "title": "Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T09:45:34.640Z",
++            "outcome": "started",
++            "detail": "515-T18 (fix round 1)"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T19",
++      "title": "Fix round 1: graph test strength (F-012, F-013, F-021)",
++      "kind": "test",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T09:45:35.567Z",
++            "outcome": "started",
++            "detail": "515-T19 (fix round 1)"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T20",
++      "title": "Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)",
++      "kind": "test",
++      "status": "done",
++      "dependsOn": [
++        "T17"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T10:03:49.241Z",
++            "outcome": "started",
++            "detail": "515-T20 (fix round 1)"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T21",
++      "title": "Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T17",
++        "T18"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T10:03:50.347Z",
++            "outcome": "started",
++            "detail": "515-T21 (fix round 1)"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T22",
++      "title": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T10:53:40.447Z",
++            "outcome": "started",
++            "detail": "515-T22 (fix round 2)"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC7",
++        "AC10",
++        "AC14",
++        "AC16",
++        "AC19"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T23",
++      "title": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
++      "kind": "test",
++      "status": "done",
++      "dependsOn": [
++        "T22"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:04:34.114Z",
++            "outcome": "started",
++            "detail": "515-T23 (fix round 2)"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC10",
++        "AC14",
++        "AC19",
++        "AC20"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 650,1014 @@
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-23T07:14:05.302Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-23T07:21:57.079Z",
++      "event": "task-added",
++      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
++    },
++    {
++      "at": "2026-11-23T07:21:57.264Z",
++      "event": "task-added",
++      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
++    },
++    {
++      "at": "2026-11-23T07:21:57.446Z",
++      "event": "task-added",
++      "detail": "T7: Explorer navigation and state fixes D1-D7"
++    },
++    {
++      "at": "2026-11-23T07:22:04.623Z",
++      "event": "task-added",
++      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
++    },
++    {
++      "at": "2026-11-23T07:22:04.803Z",
++      "event": "task-added",
++      "detail": "T9: Update the Desktop Metaproject guide"
++    },
++    {
++      "at": "2026-11-23T07:22:04.986Z",
++      "event": "task-added",
++      "detail": "T10: Desktop typecheck and full desktop test suite pass"
++    },
++    {
++      "at": "2026-11-23T07:22:05.167Z",
++      "event": "task-added",
++      "detail": "T11: Live browser verification at three window sizes, dark and light"
++    },
++    {
++      "at": "2026-11-23T07:22:05.351Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-23T07:22:05.545Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-23T07:22:05.725Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11 (was empty) — The review round runs on the integrated and verified change"
++    },
++    {
++      "at": "2026-11-23T07:22:40.995Z",
++      "event": "origin-set",
++      "detail": "unknown -> human-request; quote: \"в графе тоже не понятно что, в деталях ноды визуально все сливается\"; source: operator session, 2026-11-23 (The owner asked for the review and then to start with the graph and the details panel)"
++    },
++    {
++      "at": "2026-11-23T07:22:41.181Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-23T07:22:41.545Z",
++      "event": "frozen",
++      "detail": "21 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-23T07:22:41.733Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-23T07:25:40.538Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 515-T5"
++    },
++    {
++      "at": "2026-11-23T07:25:41.096Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 515-T6"
++    },
++    {
++      "at": "2026-11-23T07:25:41.654Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 515-T7"
++    },
++    {
++      "at": "2026-11-23T07:38:59.635Z",
++      "event": "task-done",
++      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
++    },
++    {
++      "at": "2026-11-23T07:46:10.344Z",
++      "event": "task-done",
++      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
++    },
++    {
++      "at": "2026-11-23T07:46:10.580Z",
++      "event": "task-added",
++      "detail": "T12: Graph polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:46:10.824Z",
++      "event": "task-added",
++      "detail": "T13: Panel and relationship list polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:46:11.022Z",
++      "event": "task-depends-set",
++      "detail": "T8: dependsOn T5, T6, T7, T12, T13 (was T5, T6, T7) — Integration builds on the polished graph and panel"
++    },
++    {
++      "at": "2026-11-23T07:46:12.081Z",
++      "event": "task-attempt",
++      "detail": "T12: started (attempt 1) — 515-T12"
++    },
++    {
++      "at": "2026-11-23T07:46:12.731Z",
++      "event": "task-attempt",
++      "detail": "T13: started (attempt 1) — 515-T13"
++    },
++    {
++      "at": "2026-11-23T07:47:51.679Z",
++      "event": "task-done",
++      "detail": "T7: Explorer navigation and state fixes D1-D7"
++    },
++    {
++      "at": "2026-11-23T07:51:36.145Z",
++      "event": "task-done",
++      "detail": "T13: Panel and relationship list polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:54:41.305Z",
++      "event": "task-done",
++      "detail": "T12: Graph polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:54:41.505Z",
++      "event": "task-attempt",
++      "detail": "T8: started (attempt 1) — 515-T8"
++    },
++    {
++      "at": "2026-11-23T07:56:18.905Z",
++      "event": "task-depends-set",
++      "detail": "T9: dependsOn T12, T13 (was T8) — The guide describes behaviour fixed by the plan and the T8 dispatch, and touches only the guide file, so it runs beside T8 instead of after it"
++    },
++    {
++      "at": "2026-11-23T07:56:19.119Z",
++      "event": "task-attempt",
++      "detail": "T9: started (attempt 1) — 515-T9"
++    },
++    {
++      "at": "2026-11-23T07:58:34.745Z",
++      "event": "task-done",
++      "detail": "T9: Update the Desktop Metaproject guide"
++    },
++    {
++      "at": "2026-11-23T08:06:08.524Z",
++      "event": "task-done",
++      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
++    },
++    {
++      "at": "2026-11-23T08:06:50.450Z",
++      "event": "task-done",
++      "detail": "T10: Desktop typecheck and full desktop test suite pass"
++    },
++    {
++      "at": "2026-11-23T08:11:49.484Z",
++      "event": "task-added",
++      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
++    },
++    {
++      "at": "2026-11-23T08:11:49.658Z",
++      "event": "task-added",
++      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
++    },
++    {
++      "at": "2026-11-23T08:11:49.842Z",
++      "event": "task-depends-set",
++      "detail": "T11: dependsOn T8, T14 (was T8) — The live check is repeated after the filter bar fix"
++    },
++    {
++      "at": "2026-11-23T08:11:50.028Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15 (was T8, T9, T10, T11) — The review round runs on the final verified change"
++    },
++    {
++      "at": "2026-11-23T08:11:50.862Z",
++      "event": "task-attempt",
++      "detail": "T14: started (attempt 1) — 515-T14"
++    },
++    {
++      "at": "2026-11-23T08:21:15.922Z",
++      "event": "task-done",
++      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
++    },
++    {
++      "at": "2026-11-23T08:23:02.341Z",
++      "event": "task-done",
++      "detail": "T11: Live browser verification at three window sizes, dark and light"
++    },
++    {
++      "at": "2026-11-23T08:36:09.362Z",
++      "event": "task-added",
++      "detail": "T16: One-line freshness banner with details on demand"
++    },
++    {
++      "at": "2026-11-23T08:36:09.594Z",
++      "event": "task-depends-set",
++      "detail": "T15: dependsOn T14 (was T14) — The guide task runs beside the banner task; it describes the banner from the T16 dispatch"
++    },
++    {
++      "at": "2026-11-23T08:36:09.842Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16 (was T8, T9, T10, T11, T14, T15) — The review round runs on the final verified change"
++    },
++    {
++      "at": "2026-11-23T08:36:10.436Z",
++      "event": "task-attempt",
++      "detail": "T15: started (attempt 1) — 515-T15"
++    },
++    {
++      "at": "2026-11-23T08:36:10.782Z",
++      "event": "task-attempt",
++      "detail": "T16: started (attempt 1) — 515-T16"
++    },
++    {
++      "at": "2026-11-23T08:37:57.245Z",
++      "event": "task-done",
++      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
++    },
++    {
++      "at": "2026-11-23T08:40:21.193Z",
++      "event": "task-done",
++      "detail": "T16: One-line freshness banner with details on demand"
++    },
++    {
++      "at": "2026-11-23T09:42:00.923Z",
++      "event": "task-added",
++      "detail": "T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)"
++    },
++    {
++      "at": "2026-11-23T09:42:01.154Z",
++      "event": "task-added",
++      "detail": "T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)"
++    },
++    {
++      "at": "2026-11-23T09:42:01.468Z",
++      "event": "task-added",
++      "detail": "T19: Fix round 1: graph test strength (F-012, F-013, F-021)"
++    },
++    {
++      "at": "2026-11-23T09:42:11.497Z",
++      "event": "task-added",
++      "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
++    },
++    {
++      "at": "2026-11-23T09:42:11.714Z",
++      "event": "task-added",
++      "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
++    },
++    {
++      "at": "2026-11-23T09:42:12.006Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 (was T8, T9, T10, T11, T14, T15, T16) — review round 1 found 1 major and 20 minor findings; the round closes after the fix tasks T17-T21"
++    },
++    {
++      "at": "2026-11-23T09:45:33.930Z",
++      "event": "task-attempt",
++      "detail": "T17: started (attempt 1) — 515-T17 (fix round 1)"
++    },
++    {
++      "at": "2026-11-23T09:45:34.640Z",
++      "event": "task-attempt",
++      "detail": "T18: started (attempt 1) — 515-T18 (fix round 1)"
++    },
++    {
++      "at": "2026-11-23T09:45:35.567Z",
++      "event": "task-attempt",
++      "detail": "T19: started (attempt 1) — 515-T19 (fix round 1)"
++    },
++    {
++      "at": "2026-11-23T09:51:36.890Z",
++      "event": "task-done",
++      "detail": "T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)"
++    },
++    {
++      "at": "2026-11-23T09:51:37.087Z",
++      "event": "task-done",
++      "detail": "T19: Fix round 1: graph test strength (F-012, F-013, F-021)"
++    },
++    {
++      "at": "2026-11-23T10:03:47.846Z",
++      "event": "task-done",
++      "detail": "T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)"
++    },
++    {
++      "at": "2026-11-23T10:03:49.241Z",
++      "event": "task-attempt",
++      "detail": "T20: started (attempt 1) — 515-T20 (fix round 1)"
++    },
++    {
++      "at": "2026-11-23T10:03:50.347Z",
++      "event": "task-attempt",
++      "detail": "T21: started (attempt 1) — 515-T21 (fix round 1)"
++    },
++    {
++      "at": "2026-11-23T10:07:07.012Z",
++      "event": "task-done",
++      "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
++    },
++    {
++      "at": "2026-11-23T10:12:10.719Z",
++      "event": "task-done",
++      "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
++    },
++    {
++      "at": "2026-11-23T10:12:37.125Z",
++      "event": "task-attempt",
++      "detail": "T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
++    },
++    {
++      "at": "2026-11-23T10:52:22.579Z",
++      "event": "task-attempt",
++      "detail": "T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
++    },
++    {
++      "at": "2026-11-23T10:52:22.786Z",
++      "event": "task-added",
++      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
++    },
++    {
++      "at": "2026-11-23T10:52:22.977Z",
++      "event": "task-added",
++      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
++    },
++    {
++      "at": "2026-11-23T10:52:23.173Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round"
++    },
++    {
++      "at": "2026-11-23T10:53:40.447Z",
++      "event": "task-attempt",
++      "detail": "T22: started (attempt 1) — 515-T22 (fix round 2)"
++    },
++    {
++      "at": "2026-11-23T11:04:12.196Z",
++      "event": "task-done",
++      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
++    },
++    {
++      "at": "2026-11-23T11:04:34.114Z",
++      "event": "task-attempt",
++      "detail": "T23: started (attempt 1) — 515-T23 (fix round 2)"
++    },
++    {
++      "at": "2026-11-23T11:14:40.285Z",
++      "event": "task-done",
++      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 1060,1148 @@
++    }
++  ],
++  "origin": {
++    "kind": "human-request",
++    "quote": "в графе тоже не понятно что, в деталях ноды визуально все сливается",
++    "source": "operator session, 2026-11-23"
++  },
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx"
++    },
++    "AC5": {
++      "kind": "judged"
++    },
++    "AC6": {
++      "kind": "judged"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx"
++    },
++    "AC9": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
++    },
++    "AC10": {
++      "kind": "judged"
++    },
++    "AC11": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC12": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC13": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC14": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC15": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC16": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC17": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC18": {
++      "kind": "invariant",
++      "check": "test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx"
++    },
++    "AC19": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
++    },
++    "AC20": {
++      "kind": "judged"
++    },
++    "AC21": {
++      "kind": "judged"
++    }
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json
+@@ 1,140 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/labels.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json
+@@ 1,140 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/labels.ts",
++    "apps/desktop/src/metaproject/nodePanel.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json
+@@ 1,114 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/metaproject.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T15.implement.json
+@@ 1,119 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "docs/docs/guides/desktop-metaproject.md"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145",
++      "bytes": 3361,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "task-text:cli",
++      "tier": "must_read",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json
+@@ 1,112 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T17.implement.json
+@@ 1,134 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.dom.test.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/OpenSpecView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/App.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json
+@@ 1,105 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/nodePanel.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "task-text:--ids",
++      "tier": "must_read",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T19.implement.json
+@@ 1,131 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graphLayout.test.ts",
++    "apps/desktop/src/metaproject/graphLayout.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "task-text:--ids",
++      "tier": "must_read",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T20.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.dom.test.tsx",
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/App.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "task-text:--ids",
++      "tier": "must_read",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T21.implement.json
+@@ 1,121 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T15.result.json",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json",
++    "docs/docs/guides/desktop-metaproject.md"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145",
++      "bytes": 3361,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "task-text:cli",
++      "tier": "must_read",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json
+@@ 1,104 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}

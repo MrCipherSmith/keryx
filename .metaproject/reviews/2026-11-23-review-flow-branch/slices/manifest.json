@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 80739,
+      "contentHash": "ec15c1b0cb43f3ab514e629b363555f177398138e7874caa0869129b5b3c19fe",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 145496,
+      "contentHash": "ec25b58b4c64fd3712313b84169dd867fea00b92542ea6399d7fbd6acc3c84af",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T12.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T13.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T14.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T15.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T16.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T5.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T6.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T7.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json"
+      ],
+      "domain": ".metaproject",
+      "split": "file",
+      "roles": [
+        "review-logic"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 145969,
+      "contentHash": "507f7eb164b6a754cc9d2047b181051be55523e0d57f2b18093909c94ead2fe0",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T12.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T14.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json"
+      ],
+      "domain": ".metaproject",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-highload",
+        "review-logic",
+        "review-regression",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only",
+          "audit sample: a light slice read deep to measure light routing"
+        ]
+      },
+      "audit": true
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 115645,
+      "contentHash": "30540ca57a381147fdd0b77599eb2ba40abd40d463c0e6f5cf84a3cc21aabdad",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+        "apps/desktop/src/App.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+        "apps/desktop/src/metaproject/graphLayout.test.ts"
+      ],
+      "domain": ".metaproject, apps [test]",
+      "split": "file",
+      "roles": [
+        "review-frontend",
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 123422,
+      "contentHash": "c562719030f43c57313cec01f7ba5965ecd29ca83cd36f13c72d083cbc8a4d23",
+      "files": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "apps/desktop/src/metaproject/graph.css"
+      ],
+      "domain": "apps",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/App.tsx, apps/desktop/src/metaproject/GraphNodePanel.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx (+3)"
+        ]
+      }
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 67140,
+      "contentHash": "88d80bce98bd9fabad3b21972f070f546c72b5e1fbba83e930431ab8affae887",
+      "files": [
+        "apps/desktop/src/metaproject/graphLayout.ts",
+        "apps/desktop/src/metaproject/labels.ts",
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/metaproject/nodePanel.css",
+        "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+        "docs/docs/guides/desktop-metaproject.md"
+      ],
+      "domain": "apps, docs [docs]",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/graphLayout.ts, apps/desktop/src/metaproject/labels.ts, apps/desktop/src/metaproject/useExplorerNavigation.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "path": "docs/docs/images/desktop-metaproject/graph.jpg",
+      "reason": "binary",
+      "detail": "binary: the diff carries no reviewable text for this file",
+      "bytes": 0
+    },
+    {
+      "path": "docs/docs/images/desktop-metaproject/wiki.jpg",
+      "reason": "binary",
+      "detail": "binary: the diff carries no reviewable text for this file",
+      "bytes": 0
+    }
+  ],
+  "totals": {
+    "slices": 6,
+    "bytes": 678411,
+    "files": 62,
+    "omittedFiles": 2,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

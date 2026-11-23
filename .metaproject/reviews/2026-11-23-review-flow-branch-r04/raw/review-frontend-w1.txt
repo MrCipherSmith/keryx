@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "F-001 of round 3 is closed: the functional setError in the catalog effect's async continuation clears a catalog-sourced error on a successful quiet read before the snapshot branch, and keeps a rebuild-sourced one. Through the React lifecycle lens I found no defect in the order of the updates, the superseded or unmounted read, the readers of the now-object state, or the held-promise tests. No findings. Not run (read-only, exec budget 0): no test was executed; I rely on the orchestrator's recorded tsc, bun test and mutant runs.",
+  "findings": [],
+  "prior_dispositions": [ { "id": "F-001", "disposition": "closed" } ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Checks behind the disposition (code at head, MetaprojectView.tsx; hunks of slice-01 read in full):
+
+- Order against setCatalog/setFreshness: the clear sits after `if (generation !== catalogRead.current) return;` and `loaded.current = true`, before the `quiet && same snapshot` branch, so both success paths share it. The continuation runs outside a React event handler; React 18 batches it, so the three setters land in one render and the order among them cannot show an intermediate frame. The updater is pure (reads only `current`).
+- Against a rebuild() setError between start and end of the read: the updater reads the latest queued state, so a `rebuild` error set while the quiet read was in flight is kept (`current?.source === "catalog" ? null : current`). A rebuild started after the read has settled sets its own error later. A rebuild's setError(null) at its start while a quiet read is in flight is followed by that read's updater on null, which returns null. No lost update.
+- Superseded read: a later effect run and the cleanup both bump `catalogRead`, so a superseded or unmounted read returns at the guard before reaching setError. A loud read supersedes a quiet one, and its own start clears the error. Unmounted: the guard returns first; React 18 also ignores a setState after unmount without warning.
+- Readers of `error`: lines 380, 392, 407, 677, 681 write; the banner at 846-848 reads `error &&` (null is falsy, object truthy) and `error.message`. No prop, dependency array or other reader remains that expects a string (checked with keryx ctx rg for every `error` token in the file). The effect's dependency list does not include `error`, so the new state does not retrigger it.
+- Tests: the held promises are released inside `act(async () => { release(); })`; showView, button clicks and the rebuild flows are wrapped in `act`. The 'in flight then succeeds' test sets the rebuild error, releases the held read inside act, and asserts the message stays, which is the cell F-001's fix could break.
+- App.dom.test.tsx: the explorer stand-ins render and unmount inside `React.act`; the lazy-fallback test removes the tree inside act, so the real explorer does not mount.
+
+Cells I looked for beyond the worker's table and found no gap in: a failed quiet read while a catalog error stands (guard `!quiet` in the catch keeps it, pinned by the first test); a rebuild that fails while a loud read is held (stays, pinned); a Retry after a rebuild failure (loud read clears at start).
+
+Not verified: nothing was run. Not seen live: a failed catalog read followed by a successful quiet re-read (rests on its DOM test); the native Tauri window.
+
+Routing audit: graph_used no (not relevant, slice supplied); wiki_used no (not relevant); ctx_used yes (keryx ctx rg); raw_rg_used no.

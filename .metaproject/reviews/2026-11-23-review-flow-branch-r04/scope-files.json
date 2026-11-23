@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-2.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+  ],
+  "changedLines": 1496
+}

@@ -1,0 +1,364 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Flow 515 review round 4: a delta round over the commits of fix round 3 (tasks T24 and T25), which answered the findings of review round 3. By the operator's choice since round 2 the round reads the fix slice and the new slices only, not the second look at earlier rounds' diff.",
+   "flags": [],
+   "mode": "review-flow",
+   "range": "8e0f656fb2aa..744d9ef7542f",
+   "flow": "515"
+  },
+  "git": {
+   "repo": "keryx",
+   "branch": "feat/desktop-metaproject-redesign",
+   "base": "origin/main",
+   "head": "744d9ef7542f94e3442b120fe265d97f11923ea1",
+   "merge_base": "1358d962f4dfc07a9e086a533f51e75aa757dfcd",
+   "previous_head": "8e0f656fb2aa3a2173487d4f6ca4ff1c89aa933a"
+  },
+  "pr": null,
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-2.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/OpenSpecView.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/metaproject.css"
+   ],
+   "changed_lines": 1496,
+   "risk_areas": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx (the `error` state, now an object with its source; who sets and clears it; the banner that renders it)",
+    "the nine tests fix round 3 added in MetaprojectView.dom.test.tsx, RelationshipList.dom.test.tsx and App.dom.test.tsx",
+    "the flow's record: tasks.md, journal.md, verification/fix-round-2.md and fix-round-3.md, results/T22.result.json and T24.result.json"
+   ],
+   "names_of_what_the_fixes_changed": [
+    "`error` of the explorer: was a string, is `{ source, message } | null`. Writers: the catalog effect (a read that is not quiet clears it at its start and sets source `catalog` on failure; a quiet read that succeeds clears a `catalog` one) and rebuild() (clears at its start, sets source `rebuild` on failure). Reader: the banner, `error.message`, whose Retry starts a read that is not quiet.",
+    "No other production name changed in this round; App.tsx, RelationshipList.tsx and NodeDetailsPanel.tsx are untouched."
+   ]
+  },
+  "requirements": {
+   "issue_url": null,
+   "task_docs": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+   ],
+   "acceptance_criteria": [
+    "AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word \"limited\" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]",
+    "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
+    "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
+    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+    "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+    "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without \"Loading project knowledge…\"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]",
+    "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+   ]
+  },
+  "rules": [
+   ".metaproject/rules/core/frontend-assistant.mdc",
+   ".metaproject/rules/core/ui-anti-slop.mdc",
+   ".metaproject/rules/core/layout-rendering.mdc",
+   ".metaproject/rules/core/tdd-workflow.mdc",
+   ".metaproject/rules/core/error-handling.mdc",
+   ".metaproject/rules/process/agent-conduct.mdc"
+  ],
+  "cross_repo": [],
+  "memory": {
+   "query": "desktop metaproject explorer catalog error banner quiet re-read relationship list tests",
+   "status_filter": "accepted",
+   "searched": true,
+   "entries": [
+    {
+     "path": ".metaproject/memory/lessons/theme-switch-repaint.md",
+     "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+     "type": "lesson",
+     "status": "accepted",
+     "summary": "A theme switch must repaint what was already rendered; colours stored as resolved values keep the old palette."
+    },
+    {
+     "path": ".metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+     "title": "Flow ids are allocated per clone, not per checkout",
+     "type": "constraint",
+     "status": "accepted",
+     "summary": "Flow ids are reserved in the git common directory, so every linked worktree of a clone shares the id space."
+    }
+   ],
+   "note": "One search for the round, at `review start`; the entries of earlier rounds that still apply are listed."
+  },
+  "routing": {
+   "selected_reviewers": [
+    "review-architecture",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices",
+    "review-ui-ux"
+   ],
+   "skipped_reviewers": [],
+   "reasons": {
+    "selected": "The set `keryx review plan` computed for the delta round (12 reviewers, 38 dispatches, within the operator threshold).",
+    "operator_scope": "The operator chose in round 2 to read only the code of the fixes; the orchestrator applies that choice here: the 18 dispatches over slice-01 (fix), slice-02 and slice-03 (new) run, the 20 second-look dispatches over slice-04 to slice-13 do not."
+   }
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "budget": {
+    "per_reviewer_prompt_tokens": 150000,
+    "max_findings": 12
+   },
+   "omissions": [
+    "docs/docs/images/desktop-metaproject/graph.jpg: binary (binary: the diff carries no reviewable text for this file)",
+    "docs/docs/images/desktop-metaproject/wiki.jpg: binary (binary: the diff carries no reviewable text for this file)",
+    "slice-04 to slice-13 (second look): not dispatched in this round, by the operator's choice of scope since round 2"
+   ],
+   "model_plan": {
+    "strategy": "adaptive",
+    "operator_answer": "by tier: deep on Opus, standard on Sonnet, light on Haiku (round 1 start answer)",
+    "source": "the tier of each dispatch is computed by `keryx review tier`"
+   }
+  }
+ },
+ "reviewer": "review-security-code",
+ "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+ "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+ "scope_mode": "diff",
+ "slices": [
+  "slice-03"
+ ],
+ "context_doc": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+ "issue_url": null,
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "floor:security",
+   "resolve:ranking-refused"
+  ],
+  "provider": "anthropic",
+  "model": "claude-fable-5-2",
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "anthropic",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+  },
+  "routed": true
+ },
+ "budget": {
+  "max_prompt_tokens": 150000,
+  "max_findings": 12
+ },
+ "branch": "feat/desktop-metaproject-redesign",
+ "base_sha": "8e0f656fb2aa3a2173487d4f6ca4ff1c89aa933a",
+ "pr_context": null,
+ "round": 4,
+ "is_fix_round": false,
+ "allowed_tools": "read-only",
+ "exec_budget_s": 0,
+ "prior_findings": [],
+ "known_findings": [
+  {
+   "id": "F-009",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-009",
+   "reviewer": "review-degradation",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 403,
+   "quote": "if (generation === catalogRead.current && !quiet) setError(errMessage(cause));",
+   "problem": "The quiet re-read on return can no longer report a failure, and one `error` state serves two causes. (a) Trigger: the catalog cannot be read at all (CLI missing or crashing) and the user returns to the view. Outcome: every return fails quietly; the banner keeps the last freshness read (for example no banner when the graph was ready), and a graph-ready explorer has no visible Refresh control (the Rebuild button exists only while graph !== 'ready', line 876). Round 2's head showed the CLI message with Retry. (b) Trigger: a loud catalog read fails after the first load (the reload after a rebuild, a Retry or Refresh), then the user leaves and returns while the CLI works again. Outcome: the quiet read succeeds and may replace the catalog, but the standing banner with its CLI message and Retry stays, because `error` is cleared only by a loud read (line 378) or by rebuild() (line 673). Round 2's head cleared it on that read. Refute: on the base branch nothing was read on return, so (a) showed nothing and (b) kept its banner until Retry, so neither is worse than base. Other reads (search, detail, relationships) still show their own errors, and Retry on the banner works."
+  },
+  {
+   "id": "F-010",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-010",
+   "reviewer": "review-ui-ux",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 701,
+   "quote": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }",
+   "problem": "UNVERIFIED (derived from code). Choice 1 of the brief: a wiki-link lookup started under snapshot one and not cancelled when a quiet re-read replaces the catalog with snapshot two compares its answer with the `snapshotId` it captured at click time, not with the current catalog. The banner 'Project knowledge changed while loading' with Refresh catalog then shows although the catalog on screen is already the new one."
+  },
+  {
+   "id": "F-011",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-011",
+   "reviewer": "review-clean-code",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 414,
+   "quote": "if (!quietRead.current) project.current++;",
+   "problem": "Clean Code - comments. The effect's cleanup decides whether to retire pending work by reading quietRead.current, which at that moment holds the intent of the next run (the visible effect set it just before bumping revision), not of the run being cleaned up. The comment above it ('Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work') describes the unmount case and does not say the condition reads the successor's flag. It works because React runs a cleanup before the next body, and the body resets the flag at line 375."
+  },
+  {
+   "id": "F-012",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-012",
+   "reviewer": "review-clean-code",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 716,
+   "quote": "const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;",
+   "problem": "Clean Code - DRY. The total of the three summarizeRelationships fields is spelled here and at NodeDetailsPanel.tsx:242 (`summary.incoming + summary.outgoing + summary.secondStep`). Two copies, below the three-copy threshold, so not a finding by the rule. Noted because 'rows the list shows' is now defined by two sums plus the `empty` const in RelationshipList (a third form of the same rule)."
+  },
+  {
+   "id": "F-013",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-013",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+   "line": 1496,
+   "quote": "stubBox(filtersButton(), { left: 544, top: 478, right: 615, bottom: 502 });",
+   "problem": "UNVERIFIED (derived from code; no real-layout measurement exists for these inputs). The T23 placement tests pin placeFiltersPopover() arithmetic against inputs happy-dom invents. (1) stubPopoverContentHeight returns one constant scrollHeight for the popover; in a browser scrollHeight is also the full content height under a max-height, so the model matches, but the constants (229, 500) are fixed numbers and do not follow a content change (the known Reset-filters row, F-011). The stub also answers scrollHeight only, so an edit that read offsetHeight (capped by max-height) instead would pass every test. (2) The bottom-edge test puts the button at top 478 / bottom 502 in a 480 px window, so the button's own box lies partly outside the window. A real Filters button sits inside the explorer's .view and is in the window when the popover opens; the branch the test pins (bottom = max(8, 480 - 478 + 4) = 8) is reachable in a real layout only when the page has scrolled the button under the window edge. The Math.max(POPOVER_MARGIN, ...) floor is pinned by an input a real layout reaches rarely, and a button inside the window with less than 4 px under it is the case the floor really serves. (3) The 30 px window test leaves scrollHeight at happy-dom's 0; with a real content height the result is the same (above -12 is not greater than below -6), so that one holds."
+  },
+  {
+   "id": "F-014",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-014",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/graphLayout.ts",
+   "line": 638,
+   "quote": "const edgeKinds = new Set(projection.edges.map((edge) => edge.kind));",
+   "problem": "legendFor is the one reader of a projection's edges in apps/desktop/src/metaproject that does not use the grouping rule of F-001's fix. It builds the line-style legend from the raw edge list, self-loops and edges with an end outside the projection included, while layoutNeighborhood (line 506, `if (edge.from === edge.to) return;`) and groupRelationships leave both out. For a wiki page whose only edge is a `links` edge to itself, the graph draws the root alone and its legend still lists 'Dashed line' with 'Links'. This file is outside slice-02 and the legend is a kind set, not a count or an emptiness test, so this is noted, not a defect of the fix round."
+  },
+  {
+   "id": "F-015",
+   "global_id": "2026-11-23-review-flow-branch-r03#F-015",
+   "reviewer": "review-style",
+   "severity": "info",
+   "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+   "line": 50,
+   "quote": "T22's branches (own_mutants.py): T23-1 :376 `if (!quiet) {` -> `{` killed by T22's lookup-in-flight, page-in-flight and standing-error tests;",
+   "problem": "Mutants of code that T22 added are given the ids T23-1 to T23-5, a prefix that is T23's own task id, next to round 2's mutant ids R2-n which name the review round that proposed them. The journal's T23 entry describes the same five mutants ('the five branches T22 added ... mutated by the orchestrator's own script') without any id, and names no script, so the ids can be matched to the journal only through this notes field."
+  },
+  {
+   "id": "F-005",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-005",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+   "line": 314,
+   "quote": "describe(\"RelationshipGraph viewport (F-012)\", () => {",
+   "problem": "Fix-round bookkeeping is written into test names and comments: describe(\"... (F-012)\"), describe(\"... (F-013)\"), describe(\"... (F-013, AC6)\") in RelationshipGraph.dom.test.tsx:314/351/402, describe(\"layoutNeighborhood — review round 1 fixtures (F-021)\") in graphLayout.test.ts:508, the banner comment \"Test strength after review round 1 (T20)\" in MetaprojectView.dom.test.tsx:1019, and \"(second-step counts: F-007 test below)\" in NodeDetailsPanel.dom.test.tsx:119. The ids name findings of one review package and one flow task; finding ids restart per round (this round's reviewers number from F-001 again), and the package under .metaproject/reviews is a work record, not part of the source. The test titles say where a test came from, not what it pins."
+  },
+  {
+   "id": "F-010",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-010",
+   "reviewer": "review-highload",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 335,
+   "quote": "const returned = visible && !wasVisible.current;",
+   "problem": "Every hidden-to-shown change of the explorer starts one catalog read (one `metaproject_request` invoke, one CLI process per request in platform/metaproject.ts:57) with no coalescing and no cancellation. A read that a later return supersedes is dropped by the generation guard (`generation !== project.current`), but its process still runs to completion. This answers round-1 F-004 (stale catalog on return)."
+  },
+  {
+   "id": "F-011",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-011",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 209,
+   "quote": "const place = () => setPosition(placeFiltersPopover(anchor.getBoundingClientRect(), panel.current?.scrollHeight ?? 0));",
+   "problem": "UNVERIFIED (derived from code and the journal's numbers). The popover is placed on open and on window resize only, from the content height at that moment. The footer `{filtersChanged && (<div className=\"menu-footer metaproject-filters-pop-footer\">` adds a Reset filters row the first time Direction, Depth or a type chip is changed while the popover is open. Case 720x480, one-line banner, Chromium 156 as measured in the journal: placed below, top 229, content 229, max-height 243 (= 480 - 8 - 229). A Reset row of roughly 30 to 40 px (not measured) makes the content about 260 to 270, above the 243 cap, so the popover gains an inner scroll on the first filter change and Reset filters sits below the fold of the popover. The popover itself stays inside the window (the cap holds), so this is not the F-001 defect; it is the same shape with a smaller amount, reachable by scrolling inside the popover."
+  },
+  {
+   "id": "F-012",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-012",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 211,
+   "quote": "window.addEventListener(\"resize\", place);",
+   "problem": "UNVERIFIED (derived from code; the T17 worker lists it under noticed_not_touched). Nothing places the popover again when the page or the content pane scrolls under its button, when the freshness banner changes height (Details toggled while the popover is open is a press outside, so it closes it; a catalog or banner update that arrives while it is open is not), or when the explorer layout changes without a window resize. The popover is position: fixed with the coordinates of the open moment, so it stays inside the window (its edge and max-height were computed against window.innerHeight) but no longer sits against its button."
+  },
+  {
+   "id": "F-013",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-013",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 496,
+   "quote": "if (catalog.graph === \"missing\" && protocol !== 2) return;",
+   "problem": "Two readers of the graph state now use different sources. The relationships effect (lines 488 and 496) reads `catalog.graph` and `catalog.truncated`; the freshness banner, `showGraph` (line 704), `onDraft` (line 959) and `freshnessOpen` read `graphState`, which takes the quiet re-read's value while its snapshotId equals the catalog's. They can differ only if a quiet re-read returns the same snapshotId with a different `graph` value."
+  }
+ ],
+ "layers": {
+  "version": 1,
+  "files": [
+   "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "apps/desktop/src/metaproject/OpenSpecView.tsx",
+   "apps/desktop/src/metaproject/metaproject.css"
+  ],
+  "prHead": "744d9ef7542f94e3442b120fe265d97f11923ea1",
+  "graphCommit": "744d9ef7542f94e3442b120fe265d97f11923ea1",
+  "maxBytes": 8192,
+  "affected": {
+   "depth": 2,
+   "files": [
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/main.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+    "apps/desktop/src/test/app-navigation.fixture.tsx"
+   ]
+  },
+  "symbols": [],
+  "relatedTests": [
+   "apps/desktop/src/App.dom.test.tsx",
+   "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+ },
+ "metaproject": {
+  "memory": [
+   {
+    "path": ".metaproject/memory/lessons/theme-switch-repaint.md",
+    "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+    "type": "lesson",
+    "status": "accepted",
+    "summary": "A theme switch must repaint what was already rendered; colours stored as resolved values keep the old palette."
+   },
+   {
+    "path": ".metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+    "title": "Flow ids are allocated per clone, not per checkout",
+    "type": "constraint",
+    "status": "accepted",
+    "summary": "Flow ids are reserved in the git common directory, so every linked worktree of a clone shares the id space."
+   }
+  ]
+ }
+}

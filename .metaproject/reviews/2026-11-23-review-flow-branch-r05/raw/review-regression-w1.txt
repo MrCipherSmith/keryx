@@ -1,0 +1,55 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression found: the four tests appended to MetaprojectView.dom.test.tsx change nothing an earlier test in the file sees (they are last, reuse unchanged helpers, patch no globals and release every promise they hold), and every consumer of the changed record files that a search found still gets valid input: T24.result.json and T26.result.json validate against their resolved contexts, and flow.json and tasks.md agree at head on all 27 task ids, kinds and dependencies (T4 depends on T8..T27, T26 and T27 done, T4 todo). The blast radius could not answer the question for 10 of the 11 changed files (Markdown and JSON records are not graph nodes, recorded as unresolved); the one resolved file, the test file, has 0 dependents; 0 files were dropped by the cap and 80 were dropped as text hubs (the css classes `btn` and `btn-sm` quoted in a mutant anchor of verification/fix-round-4.md), so consumers were enumerated by search instead. Round 4's F-001, F-002, F-003 and F-005 are closed against the code and the record; no test was run (exec budget 0).",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Notes (what was checked, how, and what was not)
+
+Slice coverage: slice-01 read in full (1236 lines: T26 dispatch, request, resolved context and result; the flow.json, journal.md and tasks.md hunks; the T24.result.json hunk; the fix-round-3.md hunk; fix-round-4.md; the test-file hunk).
+
+1. The test file (apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, commit c8db67492, test file only).
+   - The four tests are the last four in the file (lines 1815, 1831, 1849, 1874 at head). Bun runs a file's tests in declaration order; no config randomises (root bunfig.toml sets preload and `pathIgnorePatterns = ["apps/desktop/**"]`; apps/desktop has no bunfig.toml), so no earlier test runs after them.
+   - Shared state: they render into the shared `root` that `beforeEach` (line 25) resets to null, use the unchanged helpers `button` (28), `listRow` (33), `request` (51), `showView` (1314), `catalogErrorBanner` (1318), the module fixture `catalog` (16, not mutated: test 3 resolves with it as is) and `ViewProps` (9). They patch no global (no `window.setTimeout =`, `innerWidth`, `Object.defineProperty(window`, `mock.module`; the file's patches are at lines 344, 811, 1029-1038, all earlier).
+   - Pending work: test 1 holds nothing; test 2 calls `finish(false)`; test 3 calls `releaseQuiet()` (read 2 lands superseded and returns at MetaprojectView.tsx:389, its `finally` at :409 is a no-op); test 4 calls `failFirstReload()` (read 2 rejects superseded, the guard at :407 writes nothing). Every rejection is awaited by the catalog effect or rebuild(), so none is unhandled. Nothing outlives its test into afterAll's unmount and `unregisterDom()`, or into the next file of a one-process run.
+   - Titles: 91 tests, all titles unique; no new title is a substring of an existing one or the reverse, so a name-pattern filter for an existing test does not start matching a new one.
+   - Consumers of the file, by search (`keryx ctx rg` over src, apps/desktop/src, scripts, .github, docs, .metaproject outside this flow and the review packages): no module imports it; .github/workflows/desktop-check.yml:72 `bun test src` and ci.yml:110 `bun test src/metaproject/` (job desktop-metaproject-acceptance) run it with no name pattern and no count; docs/requirements/keryx-metaproject-openspec/prd.md (lines 43, 49, 55, 67, 79), specification.md (171, 183) and flow 514's acCheck in .metaproject/flows/514-2026-11-22-metaproject-openspec/flow.json:799 run the whole file and read only its exit code. With 91 pass in its own process (research-evidence/verify-tests-to-run-1.txt) and `bun test src` 935 pass, 0 fail (fix-round-4.md), all of them still pass. `bun test src/metaproject/` itself was not in any evidence I saw and was not run by me.
+
+2. results/T24.result.json (commit 924b2b82c, one cell of `notes` reworded after acceptance).
+   - `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json`: valid, exit 0, "every must_read entry cited, nothing drifted". The same for T26.result.json against resolved/T26.implement.json: valid, exit 0.
+   - `keryx flow task done --result` pins nothing to replay: src/flow/task-project-context.ts reads the result once, at task-done time (checkTaskProjectContext), and stores no hash, so a later reword cannot trip it.
+   - Other readers, by search for `.result.json`, `/results/`, and the result fields `acceptance_criteria_met|files_modified|project_context_applied` in src and apps/desktop/src: src/session/state-task-details.ts:42 reads `results/<id>.json` (not `<id>.result.json`, so it reads neither T24's nor T26's file, before or after this change); src/gdskills/resolved-context-check.ts is the validator above. No code reads the banner table in `notes`. The review tool relocates prior findings by quote (src/review/prior-round.ts:637 relocateFinding, src/review/locate.ts:196 locateQuote): F-003's quote is gone from the file because the cell was reworded, which is the fix; the dismissed F-004's quote ("suggested_fix diverged: F-004 — ...") is still present on the same line.
+   - The two titles the reworded cell cites exist verbatim at test-file lines 1815 and 1831.
+
+3. flow.json and tasks.md (the flow tooling's view).
+   - At head 857036d02, compared by a read-only script over `git show 857036d02:<file>`: 27 tasks in flow.json, 27 rows in tasks.md, no task whose kind or dependsOn differs, no row missing from flow.json. T4 dependsOn T8, T9, T10, T11, T14..T27 in both; T4 status todo with attempts.count 6 and 6 log entries; every other task done. T26 and T27 carry the same key sets as T24 (no dispositionReason) and T25 (with one); the new history events use the kinds already in the file (task-attempt, task-added, task-depends-set, task-done). T26 is the first task of this flow with a non-empty evidenceRefs; the schema field is an array of strings (src/flow/schema.ts:248) and its readers (src/review/pr-context.ts:90, src/session/state-task-details.ts:53) treat each entry as a string; the path it names exists.
+   - Readers of tasks.md by search: src/flow/service.ts:2030 (presence only), src/review/pr-context.ts:17 (an 1800-character excerpt), src/session/state-task-details.ts:37 (task sections by heading `^#+ T<n>`; this file has none, before and after). No code parses the table, so the agreement above is the orchestrator's own convention, and it holds.
+   - Transient only: at the intermediate commit 924b2b82c, tasks.md already had the T26 and T27 rows and gave T4 dependencies through T27 while the committed flow.json still had 25 tasks; flow.json caught up in 857036d02. No tool reads an intermediate commit's flow record, so this is not filed.
+   - `keryx flow check` (flow.json against flowStateSchema) was not run: it is not in this run's allowed commands. The new entries' key sets equal entries the file already held.
+
+4. journal.md, verification/fix-round-3.md, verification/fix-round-4.md and T26's dispatch, request and resolved files.
+   - journal.md readers: src/review/pr-context.ts:125 (tail excerpt, 512 KB read cap; the file is 84 KB), src/product/corpus.ts:170 (no size cap), src/flow/store.ts:260 (append). The new lines have the existing `- <at> - <event>: <detail>` and `- 2026-11-23 - orchestrator: ...` shapes.
+   - fix-round-3.md and fix-round-4.md: no code reads either (`keryx ctx rg "verification/fix-round|fix-round-[0-9]\.md" src apps scripts`: 0 matches); flow.json's T26 evidenceRefs names fix-round-4.md. The six lines added to fix-round-3.md shift later lines by six; the prior findings quoting that file (round 4's F-005, F-007, F-008) are relocated by quote, and their quotes are unchanged.
+   - T26.dispatch.json, T26.request.json and resolved/T26.implement.json are new; nothing but the task's own worker and validator read them.
+
+Prior dispositions (checked against the code at head and the record, not the commit messages)
+- F-001 closed: "a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds" (1815) reaches the clear at MetaprojectView.tsx:380 through the banner's Retry (:849) with a {source: "rebuild"} error standing; under R4-10 the loud success clears nothing (:392 runs for quiet reads only), so the banner would stay and the test's `toBeUndefined()` fails. "a second rebuild removes the first one's failure banner while it runs" (1831) asserts no banner while "Rebuilding…" is disabled, which R4-11's form of :677 would break. research-evidence/t26-mutants-1.txt records both killed by these tests.
+- F-002 closed: test 1849 holds the quiet re-read (read 2), lets Rebuild graph (enabled: :890 is disabled only by `rebuilding`) start read 3, which fails and sets the banner, then releases read 2 as a success; R4-8 (the clear above :389) would remove the banner. Test 1874 holds the first rebuild's reload, lets a second one succeed, then rejects the first; R4-7 (dropping `generation === catalogRead.current` at :407) would write the banner. Both killed in t26-mutants-1.txt.
+- F-003 closed: the cell now names the two tests above (both exist verbatim), says the earlier-cited test does not fail a rebuild and that it was reworded after acceptance; the file validates against resolved/T24.implement.json.
+- F-005 closed: the paragraph added to fix-round-3.md says 86 + 1 is the committed file. Counted by `git show`: the test file holds 87 `test(` calls at 46c472162 and 744d9ef75, and 91 at 857036d02.
+
+Not verified: no test, build or mutant run of my own (allowed_tools read-only, exec_budget_s 0); the kills rest on my reading of MetaprojectView.tsx at head and on the orchestrator's t26-mutants-1.txt. Besides the listed commands I ran short read-only Python scripts that parse the test file and `git show` output (test counts, title uniqueness, flow.json against tasks.md); they write nothing.
+
+Routing audit: graph_used: yes (the blast-radius record and the payload's layers; `keryx gdgraph affected` not re-run, the layers block already gives 0 affected files at head); wiki_used: not-relevant (no domain question; the changes are a test file and the flow's record); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`, `keryx ctx run -- git log`); raw_rg_used: no.

@@ -1,0 +1,20 @@
+Live measurement by the orchestrator, 2026-11-23, head 60cbe1c56, browser dev build
+(`bun run dev:browser` from apps/desktop, http://localhost:1420), dark theme, viewport emulated at 720x480,
+Metaproject > Graph, catalog node "Agent Bus" selected, depth 1. Read with getBoundingClientRect in the page.
+
+Filters popover (`.metaproject-filters-pop`, position fixed, z-index 70, max-block-size 400px, overflow-y auto):
+
+1. Stale banner in its one-line state (the default):
+   Filters button bottom 225; popover top 232, bottom 455, right 610; window 720x480.
+   Not cut: 25 px of room below. Every control is inside the window (lowest chip bottom 419).
+   A screenshot taken at once after the click shows the popover half transparent over the graph: that is the
+   `pop-in` animation; one second later computed opacity is 1 and elementFromPoint at four points inside the
+   popover returns popover elements.
+
+2. Stale banner with "Details" expanded (banner 122 px tall):
+   Filters button bottom 301; popover top 308, bottom 531; window height 480.
+   Cut at the bottom by 51 px. scrollHeight equals clientHeight (229), so the popover does not scroll and the
+   last row ("Not available: ..." note and the lower chips) is outside the window.
+   In the same state the graph box is 196 px tall (top 272).
+
+Not measured: light theme, 1180x780 and 1440x900 with the popover open, the native Tauri window.

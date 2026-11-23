@@ -1,0 +1,26 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Read slice-03 in full (App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, OpenSpecView.tsx, RelationshipList.tsx, six test files, the guide). Naming, structure and the new constants and helpers (placeFiltersPopover, POPOVER_MARGIN/GAP, quietRead, graphState, lookup token) read consistently with the surrounding code; one minor: the node-memory fix left a helper beside an inlined copy of its body.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 572,
+      "quote": "for (const node of nodes) seenNodes.current.set(node.id, node);",
+      "problem": "The fix for round-1 F-006 moved the node-memory fill into an effect and wrote the map write inline, while the `remember` helper declared three lines above (`const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };`) does the same write and is still used at line 603 (`if (node) remember(node);`). The same operation now has two spellings in one component.",
+      "impact": "A reader must check that the inline write and `remember` are the same operation; a later change to what the memory stores (a cap, a copy) has to be made in both.",
+      "suggested_fix": "Call the helper in the effect: `for (const node of nodes) remember(node);`.",
+      "confidence": "high",
+      "evidence": "keryx ctx rg 'remember' MetaprojectView.tsx --all: declaration at 569, one use at 603; effect body at 572 inlines the set. Convention: the Name row of .metaproject/rules/core/solid-principles.mdc (one concept, one name).",
+      "class_scope": null
+    }
+  ],
+  "prior_dispositions": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}

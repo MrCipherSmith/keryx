@@ -1,0 +1,1272 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "515",
+  "slug": "desktop-metaproject-graph-panel",
+  "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T07:14:05.302Z",
+  "updatedAt": "2026-11-23T12:45:05.928Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected by the preceding review and folded into context.md (Agent Findings)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T5-T8, which split the implementation by file ownership"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests are written inside each implement task (T5-T8); the full suite is verify task T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T14",
+        "T15",
+        "T16",
+        "T17",
+        "T18",
+        "T19",
+        "T20",
+        "T21",
+        "T22",
+        "T23",
+        "T24",
+        "T25",
+        "T26",
+        "T27"
+      ],
+      "attempts": {
+        "count": 7,
+        "log": [
+          {
+            "at": "2026-11-23T10:12:37.125Z",
+            "outcome": "started",
+            "detail": "review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
+          },
+          {
+            "at": "2026-11-23T10:52:22.579Z",
+            "outcome": "failed",
+            "detail": "review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
+          },
+          {
+            "at": "2026-11-23T11:15:31.676Z",
+            "outcome": "started",
+            "detail": "review round 3 on the head that holds fix round 2 (T22, T23)"
+          },
+          {
+            "at": "2026-11-23T11:39:20.414Z",
+            "outcome": "failed",
+            "detail": "review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
+          },
+          {
+            "at": "2026-11-23T12:08:34.514Z",
+            "outcome": "started",
+            "detail": "review round 4 on the head that holds fix round 3 (T24, T25)"
+          },
+          {
+            "at": "2026-11-23T12:19:08.921Z",
+            "outcome": "failed",
+            "detail": "review round 4 on 744d9ef75: no blocker or major, 4 minor to address and 1 held for the operator (F-004), 5 info; fix round 4 follows (T26, T27)"
+          },
+          {
+            "at": "2026-11-23T12:28:14.527Z",
+            "outcome": "started",
+            "detail": "review round 5 on the head that holds fix round 4 (T26, T27)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "five review rounds run, the loop's limit; round 5 on 857036d02: 0 blocker, 0 major, 1 minor (a test title's wording, F-001), 2 info; open findings carried to the completion report"
+    },
+    {
+      "id": "T5",
+      "title": "Graph layout module and RelationshipGraph component (new files)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:25:40.538Z",
+            "outcome": "started",
+            "detail": "515-T5"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "NodeDetailsPanel and RelationshipList components (new files)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:25:41.096Z",
+            "outcome": "started",
+            "detail": "515-T6"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC7",
+        "AC8",
+        "AC9"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Explorer navigation and state fixes D1-D7",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:25:41.654Z",
+            "outcome": "started",
+            "detail": "515-T7"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC11",
+        "AC12",
+        "AC13",
+        "AC14",
+        "AC15",
+        "AC16"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:54:41.505Z",
+            "outcome": "started",
+            "detail": "515-T8"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC17",
+        "AC18",
+        "AC19"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Update the Desktop Metaproject guide",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:56:19.119Z",
+            "outcome": "started",
+            "detail": "515-T9"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC21"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Desktop typecheck and full desktop test suite pass",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "cd apps/desktop && bunx tsc --noEmit exit 0; bun test src 833 pass, 0 fail on the tree committed as 8cd85cdec; keryx health run --changed PASS"
+    },
+    {
+      "id": "T11",
+      "title": "Live browser verification at three window sizes, dark and light",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Live browser check passed after T14: AC5, AC6, AC10 and AC20 hold; measured values are in journal.md (T11 first and second live pass)"
+    },
+    {
+      "id": "T12",
+      "title": "Graph polish from the isolated live preview",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:46:12.081Z",
+            "outcome": "started",
+            "detail": "515-T12"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Panel and relationship list polish from the isolated live preview",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T07:46:12.731Z",
+            "outcome": "started",
+            "detail": "515-T13"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC7",
+        "AC8",
+        "AC9"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Compact filter bar and one-row header on narrow hosts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:11:50.862Z",
+            "outcome": "started",
+            "detail": "515-T14"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC17",
+        "AC19",
+        "AC20"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Align the guide with the final screen and refresh its screenshots",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:36:10.435Z",
+            "outcome": "started",
+            "detail": "515-T15"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC21"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "One-line freshness banner with details on demand",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T08:36:10.782Z",
+            "outcome": "started",
+            "detail": "515-T16"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC19",
+        "AC20"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T09:45:33.930Z",
+            "outcome": "started",
+            "detail": "515-T17 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T09:45:34.640Z",
+            "outcome": "started",
+            "detail": "515-T18 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Fix round 1: graph test strength (F-012, F-013, F-021)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T09:45:35.567Z",
+            "outcome": "started",
+            "detail": "515-T19 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:03:49.241Z",
+            "outcome": "started",
+            "detail": "515-T20 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T17",
+        "T18"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:03:50.347Z",
+            "outcome": "started",
+            "detail": "515-T21 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:53:40.447Z",
+            "outcome": "started",
+            "detail": "515-T22 (fix round 2)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC7",
+        "AC10",
+        "AC14",
+        "AC16",
+        "AC19"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:04:34.114Z",
+            "outcome": "started",
+            "detail": "515-T23 (fix round 2)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC14",
+        "AC19",
+        "AC20"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:39:22.052Z",
+            "outcome": "started",
+            "detail": "515-T24 (fix round 3)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC14",
+        "AC16",
+        "AC19"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Fix round 3: flow record (F-006, F-007, F-008)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:41:39.242Z",
+            "outcome": "started",
+            "detail": "515-T25 (fix round 3, the orchestrator's own record)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tasks.md follows flow.json again, verification/fix-round-2.md written, one sentence of results/T22.result.json reworded"
+    },
+    {
+      "id": "T26",
+      "title": "Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:19:46.144Z",
+            "outcome": "started",
+            "detail": "515-T26 (fix round 4, worker on opus)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC14",
+        "AC16",
+        "AC19"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "Fix round 4: flow record (F-003, F-004, F-005)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:27:32.122Z",
+            "outcome": "started",
+            "detail": "515-T27 (fix round 4, the orchestrator's own record)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "T24's banner-table cell cites T26's tests; fix-round-3.md explains the two red-run counts; tasks.md has fix round 4"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T07:14:05.302Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T07:21:57.079Z",
+      "event": "task-added",
+      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
+    },
+    {
+      "at": "2026-11-23T07:21:57.264Z",
+      "event": "task-added",
+      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
+    },
+    {
+      "at": "2026-11-23T07:21:57.446Z",
+      "event": "task-added",
+      "detail": "T7: Explorer navigation and state fixes D1-D7"
+    },
+    {
+      "at": "2026-11-23T07:22:04.623Z",
+      "event": "task-added",
+      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
+    },
+    {
+      "at": "2026-11-23T07:22:04.803Z",
+      "event": "task-added",
+      "detail": "T9: Update the Desktop Metaproject guide"
+    },
+    {
+      "at": "2026-11-23T07:22:04.986Z",
+      "event": "task-added",
+      "detail": "T10: Desktop typecheck and full desktop test suite pass"
+    },
+    {
+      "at": "2026-11-23T07:22:05.167Z",
+      "event": "task-added",
+      "detail": "T11: Live browser verification at three window sizes, dark and light"
+    },
+    {
+      "at": "2026-11-23T07:22:05.351Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T07:22:05.545Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T07:22:05.725Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11 (was empty) — The review round runs on the integrated and verified change"
+    },
+    {
+      "at": "2026-11-23T07:22:40.995Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"в графе тоже не понятно что, в деталях ноды визуально все сливается\"; source: operator session, 2026-11-23 (The owner asked for the review and then to start with the graph and the details panel)"
+    },
+    {
+      "at": "2026-11-23T07:22:41.181Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T07:22:41.545Z",
+      "event": "frozen",
+      "detail": "21 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T07:22:41.733Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-23T07:25:40.538Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 515-T5"
+    },
+    {
+      "at": "2026-11-23T07:25:41.096Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 515-T6"
+    },
+    {
+      "at": "2026-11-23T07:25:41.654Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 515-T7"
+    },
+    {
+      "at": "2026-11-23T07:38:59.635Z",
+      "event": "task-done",
+      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
+    },
+    {
+      "at": "2026-11-23T07:46:10.344Z",
+      "event": "task-done",
+      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
+    },
+    {
+      "at": "2026-11-23T07:46:10.580Z",
+      "event": "task-added",
+      "detail": "T12: Graph polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:46:10.824Z",
+      "event": "task-added",
+      "detail": "T13: Panel and relationship list polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:46:11.022Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T5, T6, T7, T12, T13 (was T5, T6, T7) — Integration builds on the polished graph and panel"
+    },
+    {
+      "at": "2026-11-23T07:46:12.081Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 515-T12"
+    },
+    {
+      "at": "2026-11-23T07:46:12.731Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 515-T13"
+    },
+    {
+      "at": "2026-11-23T07:47:51.679Z",
+      "event": "task-done",
+      "detail": "T7: Explorer navigation and state fixes D1-D7"
+    },
+    {
+      "at": "2026-11-23T07:51:36.145Z",
+      "event": "task-done",
+      "detail": "T13: Panel and relationship list polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:54:41.305Z",
+      "event": "task-done",
+      "detail": "T12: Graph polish from the isolated live preview"
+    },
+    {
+      "at": "2026-11-23T07:54:41.505Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 515-T8"
+    },
+    {
+      "at": "2026-11-23T07:56:18.905Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T12, T13 (was T8) — The guide describes behaviour fixed by the plan and the T8 dispatch, and touches only the guide file, so it runs beside T8 instead of after it"
+    },
+    {
+      "at": "2026-11-23T07:56:19.119Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 515-T9"
+    },
+    {
+      "at": "2026-11-23T07:58:34.745Z",
+      "event": "task-done",
+      "detail": "T9: Update the Desktop Metaproject guide"
+    },
+    {
+      "at": "2026-11-23T08:06:08.524Z",
+      "event": "task-done",
+      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
+    },
+    {
+      "at": "2026-11-23T08:06:50.450Z",
+      "event": "task-done",
+      "detail": "T10: Desktop typecheck and full desktop test suite pass"
+    },
+    {
+      "at": "2026-11-23T08:11:49.484Z",
+      "event": "task-added",
+      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
+    },
+    {
+      "at": "2026-11-23T08:11:49.658Z",
+      "event": "task-added",
+      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
+    },
+    {
+      "at": "2026-11-23T08:11:49.842Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T8, T14 (was T8) — The live check is repeated after the filter bar fix"
+    },
+    {
+      "at": "2026-11-23T08:11:50.028Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15 (was T8, T9, T10, T11) — The review round runs on the final verified change"
+    },
+    {
+      "at": "2026-11-23T08:11:50.862Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 515-T14"
+    },
+    {
+      "at": "2026-11-23T08:21:15.922Z",
+      "event": "task-done",
+      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
+    },
+    {
+      "at": "2026-11-23T08:23:02.341Z",
+      "event": "task-done",
+      "detail": "T11: Live browser verification at three window sizes, dark and light"
+    },
+    {
+      "at": "2026-11-23T08:36:09.362Z",
+      "event": "task-added",
+      "detail": "T16: One-line freshness banner with details on demand"
+    },
+    {
+      "at": "2026-11-23T08:36:09.594Z",
+      "event": "task-depends-set",
+      "detail": "T15: dependsOn T14 (was T14) — The guide task runs beside the banner task; it describes the banner from the T16 dispatch"
+    },
+    {
+      "at": "2026-11-23T08:36:09.842Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16 (was T8, T9, T10, T11, T14, T15) — The review round runs on the final verified change"
+    },
+    {
+      "at": "2026-11-23T08:36:10.436Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 515-T15"
+    },
+    {
+      "at": "2026-11-23T08:36:10.782Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 515-T16"
+    },
+    {
+      "at": "2026-11-23T08:37:57.245Z",
+      "event": "task-done",
+      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
+    },
+    {
+      "at": "2026-11-23T08:40:21.193Z",
+      "event": "task-done",
+      "detail": "T16: One-line freshness banner with details on demand"
+    },
+    {
+      "at": "2026-11-23T09:42:00.923Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)"
+    },
+    {
+      "at": "2026-11-23T09:42:01.154Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)"
+    },
+    {
+      "at": "2026-11-23T09:42:01.468Z",
+      "event": "task-added",
+      "detail": "T19: Fix round 1: graph test strength (F-012, F-013, F-021)"
+    },
+    {
+      "at": "2026-11-23T09:42:11.497Z",
+      "event": "task-added",
+      "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
+    },
+    {
+      "at": "2026-11-23T09:42:11.714Z",
+      "event": "task-added",
+      "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
+    },
+    {
+      "at": "2026-11-23T09:42:12.006Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 (was T8, T9, T10, T11, T14, T15, T16) — review round 1 found 1 major and 20 minor findings; the round closes after the fix tasks T17-T21"
+    },
+    {
+      "at": "2026-11-23T09:45:33.930Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 515-T17 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T09:45:34.640Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 515-T18 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T09:45:35.567Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 515-T19 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T09:51:36.890Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)"
+    },
+    {
+      "at": "2026-11-23T09:51:37.087Z",
+      "event": "task-done",
+      "detail": "T19: Fix round 1: graph test strength (F-012, F-013, F-021)"
+    },
+    {
+      "at": "2026-11-23T10:03:47.846Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)"
+    },
+    {
+      "at": "2026-11-23T10:03:49.241Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 515-T20 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T10:03:50.347Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 515-T21 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T10:07:07.012Z",
+      "event": "task-done",
+      "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
+    },
+    {
+      "at": "2026-11-23T10:12:10.719Z",
+      "event": "task-done",
+      "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
+    },
+    {
+      "at": "2026-11-23T10:12:37.125Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
+    },
+    {
+      "at": "2026-11-23T10:52:22.579Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
+    },
+    {
+      "at": "2026-11-23T10:52:22.786Z",
+      "event": "task-added",
+      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
+    },
+    {
+      "at": "2026-11-23T10:52:22.977Z",
+      "event": "task-added",
+      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
+    },
+    {
+      "at": "2026-11-23T10:52:23.173Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round"
+    },
+    {
+      "at": "2026-11-23T10:53:40.447Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 515-T22 (fix round 2)"
+    },
+    {
+      "at": "2026-11-23T11:04:12.196Z",
+      "event": "task-done",
+      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
+    },
+    {
+      "at": "2026-11-23T11:04:34.114Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 515-T23 (fix round 2)"
+    },
+    {
+      "at": "2026-11-23T11:14:40.285Z",
+      "event": "task-done",
+      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
+    },
+    {
+      "at": "2026-11-23T11:15:31.676Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 3 on the head that holds fix round 2 (T22, T23)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.414Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.600Z",
+      "event": "task-added",
+      "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.777Z",
+      "event": "task-added",
+      "detail": "T25: Fix round 3: flow record (F-006, F-007, F-008)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.963Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23) — review round 3 asked for changes; the review task closes after fix round 3 (T24, T25) and a clean round"
+    },
+    {
+      "at": "2026-11-23T11:39:22.052Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 515-T24 (fix round 3)"
+    },
+    {
+      "at": "2026-11-23T11:41:39.242Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 515-T25 (fix round 3, the orchestrator's own record)"
+    },
+    {
+      "at": "2026-11-23T11:41:39.455Z",
+      "event": "task-done",
+      "detail": "T25: Fix round 3: flow record (F-006, F-007, F-008)"
+    },
+    {
+      "at": "2026-11-23T11:53:58.193Z",
+      "event": "task-done",
+      "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
+    },
+    {
+      "at": "2026-11-23T12:08:34.514Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 4 on the head that holds fix round 3 (T24, T25)"
+    },
+    {
+      "at": "2026-11-23T12:19:08.921Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — review round 4 on 744d9ef75: no blocker or major, 4 minor to address and 1 held for the operator (F-004), 5 info; fix round 4 follows (T26, T27)"
+    },
+    {
+      "at": "2026-11-23T12:19:09.112Z",
+      "event": "task-added",
+      "detail": "T26: Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002)"
+    },
+    {
+      "at": "2026-11-23T12:19:09.297Z",
+      "event": "task-added",
+      "detail": "T27: Fix round 4: flow record (F-003, F-004, F-005)"
+    },
+    {
+      "at": "2026-11-23T12:19:09.479Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25) — review round 4 asked for changes; the review task closes after fix round 4 (T26, T27) and a clean round"
+    },
+    {
+      "at": "2026-11-23T12:19:46.144Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 515-T26 (fix round 4, worker on opus)"
+    },
+    {
+      "at": "2026-11-23T12:27:31.764Z",
+      "event": "task-done",
+      "detail": "T26: Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002)"
+    },
+    {
+      "at": "2026-11-23T12:27:32.122Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 515-T27 (fix round 4, the orchestrator's own record)"
+    },
+    {
+      "at": "2026-11-23T12:27:32.433Z",
+      "event": "task-done",
+      "detail": "T27: Fix round 4: flow record (F-003, F-004, F-005)"
+    },
+    {
+      "at": "2026-11-23T12:28:14.527Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 7) — review round 5 on the head that holds fix round 4 (T26, T27)"
+    },
+    {
+      "at": "2026-11-23T12:45:05.928Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "в графе тоже не понятно что, в деталях ноды визуально все сливается",
+    "source": "operator session, 2026-11-23"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC18": {
+      "kind": "invariant",
+      "check": "test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
+    },
+    "AC20": {
+      "kind": "judged"
+    },
+    "AC21": {
+      "kind": "judged"
+    }
+  }
+}

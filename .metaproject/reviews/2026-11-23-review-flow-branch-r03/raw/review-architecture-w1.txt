@@ -1,0 +1,22 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Read all of slice-02. The two structural changes hold: MetaprojectWork takes a typed optional `explorer` seam whose default (the lazy explorer) is checked against the seam's props type, and MetaprojectView importing summarizeRelationships from RelationshipList.tsx points the same way NodeDetailsPanel.tsx already does (view/panel to list helper, no cycle), with the list's grouping rule now the single source for the empty note, the panel counts and the Wiki disclosure. No architectural violation found in the diff.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Checked against head: RelationshipList.tsx:50-79 (groupRelationships skips self-loops and edges with a missing end; summarizeRelationships counts those groups, so incoming+outgoing+secondStep equals the rows RelationshipList draws, which is what the Wiki disclosure now shows); the empty note in RelationshipList tests the same groups. Readers of summarizeRelationships: NodeDetailsPanel.tsx:199 and MetaprojectView.tsx:713, both on the groups. MetaprojectWork (App.tsx:161) is rendered once, by ProjectWindow (App.tsx:618); ExplorerProps (optional visible, onDraft) is compatible with MetaprojectView's props (MetaprojectView.tsx:141-155), so a new required prop there would fail the default assignment at typecheck. project.current is bumped only for non-quiet reads and cleanups (catalog effect), so openPath and loadMoreSearch keep their guard across a quiet return; catalogRead carries the supersede check; catalogPending gates the visible effect. Not run (read-only): tests, live behaviour.
+
+Routing audit: graph_used: no (not-relevant; slice read in full), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

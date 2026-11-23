@@ -1,0 +1,13 @@
+R4-1: survived — src/metaproject/MetaprojectView.tsx: '        if (quiet) setError(current => current?.source === "catalog" ?' -> '        setError(current => current?.source === "catalog" ? null : cur'
+R4-2: killed — (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not [4.11ms]
+R4-3: killed — (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not [36.72ms]
+R4-4: killed — (fail) a standing error, such as a failed rebuild's, survives a quiet re-read on return [25.58ms]
+R4-5: killed — (fail) explorer banners sit above the OpenSpec view and the freshness banner reads as one sentence [3.11ms]
+R4-6: survived — src/metaproject/MetaprojectView.tsx: 'if (mounted.current) setError({ source: "rebuild"' -> 'setError({ source: "rebuild"'
+R4-7: killed — (fail) a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded [1.88ms]
+R4-8: killed — (fail) a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands [22.73ms]
+R4-9: killed — (fail) a return after a failed first catalog read starts no read, and its failure and Retry stay [13.51ms]
+R4-10: killed — (fail) a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds [2.28ms]
+R4-11: killed — (fail) a second rebuild removes the first one's failure banner while it runs [2.54ms]
+R4-12: survived — src/metaproject/MetaprojectView.tsx: 'setError({ source: "catalog", message: errMessage(cause) });' -> 'setError({ source: quiet ? "rebuild" : "catalog", message: errMessage('
+mutants exit 0

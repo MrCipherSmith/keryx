@@ -1,0 +1,94 @@
+/* Relationship graph: HTML caption and legend around a cytoscape canvas. Tokens only. */
+.metaproject-rgraph {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 200px;
+  min-inline-size: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+}
+
+.metaproject-rgraph-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
+}
+.metaproject-rgraph-caption {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metaproject-rgraph-title { color: var(--fg); font-weight: 650; }
+.metaproject-rgraph-caption .badge { vertical-align: baseline; }
+
+.metaproject-rgraph-stage { position: relative; flex: 1 1 auto; min-block-size: 0; }
+.metaproject-rgraph-canvas { position: absolute; inset: 0; transition: opacity var(--dur) var(--ease-out); }
+.metaproject-rgraph.is-busy .metaproject-rgraph-canvas { opacity: 0.55; }
+.metaproject-rgraph-viewport { position: absolute; inset: 0; }
+
+.metaproject-rgraph-zoom {
+  display: flex;
+  flex: none;
+  gap: var(--sp-1);
+  margin-inline-start: auto;
+}
+/* Host controls (the explorer's Filters button) sit just left of the zoom controls. */
+.metaproject-rgraph-actions { display: flex; flex: none; align-items: center; gap: var(--sp-1); margin-inline-start: auto; }
+.metaproject-rgraph-actions + .metaproject-rgraph-zoom { margin-inline-start: 0; }
+.metaproject-rgraph-zoom .icon-btn {
+  inline-size: 24px;
+  block-size: 24px;
+  min-inline-size: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: var(--fs-md);
+  line-height: 1;
+}
+
+.metaproject-rgraph-legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+  padding: var(--sp-1) var(--sp-2);
+  list-style: none;
+  border-block-start: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.metaproject-rgraph-legend li { display: inline-flex; align-items: center; gap: var(--sp-1); }
+
+.metaproject-rgraph-swatch {
+  display: inline-block;
+  inline-size: 14px;
+  block-size: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--bg-surface);
+}
+.metaproject-rgraph-swatch.is-module { border: 2px solid var(--fg-muted); }
+.metaproject-rgraph-swatch.is-symbol { border-radius: 40%; }
+.metaproject-rgraph-swatch.is-wiki { border-color: var(--info); border-radius: 0; clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px); }
+.metaproject-rgraph-swatch.is-spec,
+.metaproject-rgraph-swatch.is-change,
+.metaproject-rgraph-swatch.is-archive { border-radius: 0; clip-path: polygon(0 0, 72% 0, 100% 50%, 72% 100%, 0 100%); }
+.metaproject-rgraph-swatch.is-spec { border-color: var(--ok); }
+.metaproject-rgraph-swatch.is-change { border: 3px double var(--warn); }
+.metaproject-rgraph-swatch.is-archive { border-style: dashed; border-color: var(--fg-muted); }
+
+.metaproject-rgraph-line { display: inline-block; inline-size: 18px; border-block-start: 2px solid var(--fg-muted); }
+.metaproject-rgraph-line.is-dashed { border-block-start-style: dashed; }
+.metaproject-rgraph-line.is-dotted { border-block-start-style: dotted; }

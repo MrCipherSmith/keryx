@@ -1,0 +1,42 @@
+{
+  "task": {
+    "task_id": "task-16",
+    "task_name": "One-line freshness banner with details on demand",
+    "task_type": "ui_component",
+    "complexity": "low",
+    "dependencies": [],
+    "description": "The freshness banner of the explorer prints the whole staleness reason. Seen live while files were being edited: 'Graph is stale: HEAD moved since the graph was built (built at ..., now ...); a tracked file was modified since the graph was built: <five paths> (+1 more)' — three lines, about 95 px, in the state a developer is in most of the time, taken straight from the graph's height. The operator chose: one line, details on demand.\n\nThe banner for a graph that is not ready (stale, missing, unknown) is one line: the state as a short sentence ('Graph is stale.'), a 'Details' disclosure button when there is a reason, and 'Rebuild graph'. 'Details' (`aria-expanded`, `aria-controls`) opens the full reason below the line inside the same banner, wrapping as needed; closed is the default, and it closes again when the reason text changes. With no reason there is no Details button. The 'Rebuild graph' control keeps its behaviour and its label while rebuilding. The banner stays one line down to a 660 px wide host.\n\nTests: closed by default the reason text is not rendered; Details opens and closes it; no Details button without a reason; Rebuild still calls onRebuild. Existing tests that read the banner text are updated to the new sentence and say so in the report.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/metaproject.css",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

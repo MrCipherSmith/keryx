@@ -1,0 +1,755 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md
+@@ 1,39 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++Commands run from the repository (worktree) root. "The browser dev build" is
++`cd apps/desktop && bun run dev:browser` opened on this repository with a built graph.
++
++## Criteria
++
++- AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]
++- AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]
++- AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]
++- AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word "limited" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]
++- AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]
++- AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]
++- AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a "Copy path" control that writes the path to the clipboard, and "N incoming · M outgoing" counts computed from the root-adjacent edges of the `relationships` projection, with "limited" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]
++- AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]
++- AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]
++- AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]
++- AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC12: "Find a Wiki page" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction "both" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the "Rebuild graph" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without "Loading project knowledge…"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading "/" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows "shown of total" from `catalog.counts` instead of the "Catalog is limited" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]
++- AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]
++- AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]
++- AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the "+N more" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows "the same search and selection as Graph"; its relationship-type table still lists every type. [verify: judged]
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md
+@@ 1,130 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-11-23T07:14:03.326Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.703] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++2. [1.65] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++3. [1.551] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++4. [1.536] gdctx-flag-allowlist-no-bundle-expansion (known-mistake/accepted) - known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md
++   A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:ctx, ripgrep, flag-parsing, entity:buildRgCommand, RG_SAFE_FLAGS, RG_SAFE_VALUE_FLAGS
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-3) author=unknown confirmedBy=Reproduced this session via `keryx ctx rg -il "todo" src`
++5. [1.536] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++Collected on 2026-11-23 by a review of the shipped module: a live pass in the browser dev build
++(`bun run dev:browser`, windows 1440×900, 1180×780, 720×480) plus four read-only reviewers
++(frontend logic, backend and data, product, UI/UX from code). Only what this flow needs is kept.
++
++### Where the code is
++
++| File | Lines | Holds |
++|---|---:|---|
++| `apps/desktop/src/metaproject/MetaprojectView.tsx` | 920 | `Graph` (cytoscape, lines 41–140), `RepositoryMarkdown` (142–226), `RelationshipList` (228–276, exported), `Explorer` (288–920): all reads, filters, banners, layout |
++| `apps/desktop/src/metaproject/GraphNodePanel.tsx` | 182 | The details panel: Wiki / OpenSpec tabs, linked documents, preview, Find, Draft, resize |
++| `apps/desktop/src/metaproject/useExplorerNavigation.ts` | 85 | Route (`graph` / `wiki` / `openspec`), history (`visit`, `back`), scroll restore |
++| `apps/desktop/src/metaproject/OpenSpecView.tsx` | 457 | OpenSpec view (not redesigned here) |
++| `apps/desktop/src/metaproject/metaproject.css` | 210 | All module styles |
++| `apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx` | 401 | DOM tests (happy-dom via `apps/desktop/src/test/dom.ts`); the base fixture has `graph: "missing"`, so the cytoscape canvas is never mounted in tests |
++| `apps/desktop/src/App.tsx` | — | Mounts the view at line 586 as `{workView === "metaproject" && …}`: it unmounts when the work view changes; `onRebuild={rebuildGraph}` (line 188), `onDraft` opens a session and calls `setView("session")` |
++| `src/integrations/metaproject-explorer-contract.ts` | — | Shared types, read-only for this flow: `MetaprojectNode {id, kind, title, path, module?, pageType?, status?, line?}`, `MetaprojectEdge {from, to, kind, evidence?, provenance?, count?}`, `MetaprojectNeighbors {root, nodes, edges, truncated, snapshotId}`, `MetaprojectCatalog {graph, graphReason?, hasWikiLayer, hasSymbolLayer, counts {files, wiki, modules}}`; limits 200 nodes / 400 edges |
++
++### Measured facts (browser dev build, this repository)
++
++- Graph box 440×194 px at 1180×780 with the panel open; cytoscape zoom 0.30–0.50, so the 11 px
++  labels paint at 3.3–5.5 px. Layout is `preset` on one ring of radius 180 (`MetaprojectView.tsx:74`).
++- A module with 30 neighbours: 31 nodes, 33 edges (18 `contains`, 15 `imports`). Depth 2 from
++  `module:apps/desktop/src`: 200 nodes, 269 edges, `truncated: true`.
++- Node data sent to cytoscape is `{id, label}` only; edge data carries `label: edge.kind` that no
++  style reads. The instance is destroyed and rebuilt on every selection.
++- Colours are read once at mount (`getComputedStyle`); after a theme change the labels keep the old
++  theme's colour until the next selection.
++- Panel: three font sizes (12/13/15 px), two text colours; surface vs page contrast 1.10:1, border vs
++  surface 1.36:1; the preview extraction (`GraphNodePanel.tsx:82-84`) strips headings and backticks
++  but not `>` or `**`.
++- A relationship has direction relative to the root: `edge.to === root` is incoming,
++  `edge.from === root` is outgoing. Depth 1 is always a star (only root-adjacent edges).
++- `catalog.counts`, `hasSymbolLayer` and `hasWikiLayer` are validated but never read by the UI.
++- Window: default 1180×780, minimum 720×480 (`apps/desktop/src-tauri/tauri.conf.json`). The
++  `@media (max-width: 700px)` block in `metaproject.css` can never apply.
++
++### Defects this flow fixes (confirmed by code reading; L = also reproduced live)
++
++| # | Defect | Where |
++|---|---|---|
++| D1 | L — leaving the work view unmounts the explorer: mode, query, selection, filters, Back history are lost | `App.tsx:586` |
++| D2 | L — Back records only `visit()`; graph hops use `setRoute` and are not in history | `MetaprojectView.tsx:585`, `useExplorerNavigation.ts:34-40` |
++| D3 | L — "Find a Wiki page" → `visit({mode: "wiki", query: path, selection: ""})`; the empty selection falls back to the first wiki page, so "No results" sits beside an unrelated article | `MetaprojectView.tsx:911`, `:318` |
++| D4 | L — the neighbours read uses Graph's `depth, direction, kinds` in Wiki mode too (13 → 350 relationships at depth 2) | `MetaprojectView.tsx:485` |
++| D5 | `rebuild()` compares `project.current` captured at start; any catalog reload bumps it, so `setRebuilding(false)` and the revision bump are both skipped | `MetaprojectView.tsx:637-649`, `:374`, `:398` |
++| D6 | Negotiation failure sets `protocolError` only; `loading` stays `true` and the catalog effect returns while `protocol === null`; the banner has no Retry | `MetaprojectView.tsx:311`, `:344`, `:373`, `:700` |
++| D7 | A wiki link resolves only against loaded nodes (≤200 catalog nodes, hits, current projection); otherwise the click does nothing. `href` is compared without `decodeURIComponent`; a leading `/` resolves under the page's folder | `MetaprojectView.tsx:210-219` |
++
++### What the app already has to build with (no new patterns needed)
++
++- Tokens: `apps/desktop/src/styles/tokens.css` (light `:root`, dark `:root[data-theme="dark"]`),
++  12 colour palettes in `apps/desktop/src/styles/themes.css` (`data-palette`). Roles used here:
++  `--bg-canvas`, `--bg-surface`, `--bg-sunken`, `--bg-selected`, `--bg-hover`, `--fg`, `--fg-muted`,
++  `--fg-subtle`, `--accent`, `--accent-text`, `--border`, `--border-strong`, `--ok`, `--warn`,
++  `--info`, `--danger` (each with `-soft`), `--sp-1..7` (4/8/12/16/24/32/48), `--fs-xs/sm/md/lg/xl`
++  (11/12/13/15/20 × `--text-scale`), `--r-sm/md/lg`, `--dur-fast`, `--dur`, `--shadow-sheet`.
++- Patterns: `.info-panel`, `.info-section`, `.info-row` / `.info-key` / `.info-val(.mono)` in
++  `apps/desktop/src/styles.css`; `.badge(-ok/-warn/-info/-neutral)`, `.chip-btn`, `.count-label`,
++  `.tab-count` in `apps/desktop/src/styles/components.css`; underline `.tabs` / `.tab[aria-selected]`
++  in `apps/desktop/src/styles/flows.css`; `.section-title`; `.activity-row`; `EmptyState` and
++  `Spinner` in `apps/desktop/src/components/ui.tsx`; `.side-resize`; icons in
++  `apps/desktop/src/components/Icon.tsx` (`file`, `folder`, `archive`, `checklist`, `pencil`,
++  `branch`, `search`, `x`, `arrowLeft`). No icon exists for "symbol" or "wiki".
++- Text contrast of `--fg` and `--fg-muted` passes on every background in all 14 themes
++  (computed by the UI/UX reviewer: minimum 4.95:1).
++
++### Constraints from parallel work
++
++- Session `fix-metaproject-explorer` (own worktree) changes `src/integrations/metaproject-explorer*.ts`,
++  `apps/desktop/src-tauri/src/metaproject.rs` and `apps/desktop/src/platform/metaproject.ts`.
++  This flow must not edit those files.
++- Three implementers of the first wave work in this one worktree at the same time on disjoint file
++  sets; see `plan.md`, "File ownership".
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md
+@@ 1,61 @@
++# Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes
++
++Status: formalized
++Source: user description (owner's review request of 2026-11-23, then "start with the graph and the details panel")
++
++## Problem
++
++The Metaproject screen of Keryx Desktop (`apps/desktop/src/metaproject/`) does not let a
++developer read what a project object is connected to. A review of the shipped screen on this
++repository (4,659 files, 200 modules, 125 wiki pages) measured, in the browser dev build:
++
++- **The graph is unreadable.** At the default 1180×780 window the canvas gets 440×194 px (9% of
++  the window). Every neighbour sits on one ring regardless of direction and depth, as an identical
++  grey circle; labels render at 3.3–5.5 px; edge kinds are passed to cytoscape but never drawn;
++  there is no legend. At depth 2 the ring is 200 nodes spaced 2.6 px apart with a 13.6 px diameter.
++- **The node details panel says nothing about the node.** It is 380 px wide and holds only a
++  Wiki / OpenSpec document lookup. Its text uses three sizes (12/13/15 px) and two colours; section
++  heading and body are the same size; every button looks the same; the previews show raw Markdown
++  (`> **Covers:** …`).
++- **Navigation and state are fragile.** Leaving the work view destroys mode, query, selection and
++  Back history. Back ignores hops between graph nodes. "Find a Wiki page" lands on "No results"
++  next to an unrelated article. Graph filters silently change the Relationships block in Wiki
++  (13 → 350 relationships). "Rebuilding…" can stick. A failed protocol negotiation leaves
++  "Loading project knowledge…" forever. Wiki links to pages outside the loaded 200 nodes do
++  nothing.
++
++The owner's stated complaints: the graph is not understandable, and in the node details
++everything visually merges. (The third complaint, a tree instead of the flat sidebar list, needs a
++new backend action and is a separate piece of work.)
++
++## Expected Outcome
++
++- The graph is a readable local neighbourhood: incoming neighbours left of the selected node,
++  outgoing right, second-step nodes further out; node kind and relationship kind are visible on the
++  canvas and explained by a legend; labels are legible at the default window size; an over-full side
++  is capped with a "+N more" entry instead of overlapping.
++- The node details panel is a summary of the node: identity, path with copy, relationship counts,
++  the relationships themselves grouped by direction and kind, then linked documents — with a visible
++  hierarchy built from the app's existing tokens and patterns.
++- Explorer state survives leaving the work view; Back steps through in-view navigation; the Find,
++  Rebuild, negotiation and wiki-link dead ends are gone; Wiki relationships no longer depend on Graph
++  filter state.
++
++## Outcome criteria
++
++- On the default 1180×780 window, a module with 30 or more neighbours is readable in the graph
++  without zooming: rendered label size is at least 9 px (it was 3.3–5.5 px), measured in the browser
++  dev build before and after.
++
++## Out of Scope
++
++- The sidebar tree (needs a new explorer action and a relaxed capability handshake).
++- Any change to the explorer contract, the CLI, the Rust core or the dev bridge:
++  `src/integrations/**`, `apps/desktop/src-tauri/**`, `apps/desktop/dev/**`,
++  `apps/desktop/src/platform/metaproject.ts`. A parallel session is fixing the backend defects there
++  (unstable v2 snapshot id, per-request staleness check, exact-match capability handshake).
++- Per-request latency (about 0.8 s per read) and read cancellation or queueing.
++- A redesign of the OpenSpec view.
++- Actions on a found object beyond "Copy path" (open in Files, send to a session, start a flow).
++- New screenshots for `docs/docs/images/desktop-metaproject/` (they need a native capture).
++- New dependencies: the graph stays on core `cytoscape`.
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md
+@@ 1,159 @@
++# Flow Journal
++
++- 2026-11-23T07:14:05.302Z - flow created
++- 2026-11-23T07:21:57.079Z - task-added: T5: Graph layout module and RelationshipGraph component (new files)
++- 2026-11-23T07:21:57.264Z - task-added: T6: NodeDetailsPanel and RelationshipList components (new files)
++- 2026-11-23T07:21:57.446Z - task-added: T7: Explorer navigation and state fixes D1-D7
++- 2026-11-23T07:22:04.623Z - task-added: T8: Integrate graph and panel into the explorer; filters, counts, cleanup
++- 2026-11-23T07:22:04.803Z - task-added: T9: Update the Desktop Metaproject guide
++- 2026-11-23T07:22:04.986Z - task-added: T10: Desktop typecheck and full desktop test suite pass
++- 2026-11-23T07:22:05.167Z - task-added: T11: Live browser verification at three window sizes, dark and light
++- 2026-11-23T07:22:05.351Z - task-done: T2: Implement per plan
++- 2026-11-23T07:22:05.545Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-11-23T07:22:05.725Z - task-depends-set: T4: dependsOn T8, T9, T10, T11 (was empty) — The review round runs on the integrated and verified change
++- 2026-11-23T07:22:40.995Z - origin-set: unknown -> human-request; quote: "в графе тоже не понятно что, в деталях ноды визуально все сливается"; source: operator session, 2026-11-23 (The owner asked for the review and then to start with the graph and the details panel)
++- 2026-11-23T07:22:41.181Z - task-done: T1: Collect remaining context
++- 2026-11-23T07:22:41.545Z - frozen: 21 criteria; checksum recorded
++- 2026-11-23T07:22:41.733Z - started
++- 2026-11-23T07:25:40.538Z - task-attempt: T5: started (attempt 1) — 515-T5
++- 2026-11-23T07:25:41.096Z - task-attempt: T6: started (attempt 1) — 515-T6
++- 2026-11-23T07:25:41.654Z - task-attempt: T7: started (attempt 1) — 515-T7
++- 2026-11-23 - orchestrator: operator decisions at start (asked with the host question tool). Process: "new flow" (not a resume of flow 512, not an unmanaged run). Execution metrics: "no". Operator instruction for roles: the orchestrator plans, directs and verifies; implementation is done by worker agents on Opus or Sonnet.
++- 2026-11-23 - orchestrator: worktree `.claude/worktrees/metaproject-redesign`, branch `feat/desktop-metaproject-redesign`, base `main` at 1b994df18. Baseline before any change: `cd apps/desktop && bunx tsc --noEmit` clean; `bun test src` 742 pass, 0 fail. ESLint does not cover `apps/desktop` (ignored in `eslint.config.mjs`), so there is no lint gate for this change.
++- 2026-11-23 - orchestrator: no `.metaproject/tasks.config.json`, so `review.jev.edit_guard` is not configured; edit guard not installed.
++- 2026-11-23 - orchestrator: wave 1 dispatched in parallel on Opus as `task-implementer` workers: T5 (graph, new files), T6 (panel, new files), T7 (navigation and state fixes). File ownership per `plan.md`. Dispatch and request files: `dispatch/T5..T7.*.json`, validated against `subagent-dispatch` and `task-implementer-input`.
++- 2026-11-23 - orchestrator: `keryx gdgraph build` in this worktree modified three tracked generated files under `.metaproject/data/gdgraph/`; they are not part of this flow and are left out of every commit.
++- 2026-11-23 - orchestrator: T6 returned DONE_WITH_CONCERNS. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx` 17 pass, 0 fail (run by the orchestrator); `bunx tsc --noEmit` shows no error in T6's five files (the remaining errors are in files of the two lanes still running); only the five owned files were created; code read by the orchestrator, exports match plan.md "Interfaces between tasks".
++- 2026-11-23 - orchestrator: T6 concerns recorded. (1) The render is unverified until T11 (no layout in happy-dom). (2) The 2 s timer that clears the copy feedback has no test. (3) `nodePanel.css` uses a few px values for geometry (2px gaps, 6px path offset, 32px row, 380px drawer cap, 76px key column), as the shared stylesheets do. (4) For T8: the test at `MetaprojectView.dom.test.tsx` 343-359 must activate the Wiki tab before "Open in Wiki"; the test at 75-88 asserts the old row text; the `.metaproject-node-*` and `.metaproject-relations` rules become dead.
++- 2026-11-23 - orchestrator: T6 follow-ups given to T8 (integration defects; T8 may edit T6 files for them): the Module fact shows the raw node id (`module:<path>`) — show the path and make it select the module; relationship-kind headings show raw ids (`changes-spec`) — use the same human-readable labels as the filters and the legend, from one source; relationship rows wrap long paths over several lines — keep a row to one line with the full path in the title.
++- 2026-11-23 - orchestrator: T6 reported five `behavior_changes` with `needs_operator: true` (copy feedback inline rather than a toast; the tab returns to Relationships when another node is selected; second-step rows as text with two quiet Open buttons; the compact drawer has no scrim and no focus trap; the counts fact is labelled "Relations" and the module is shown as its id). Decision on timing: the operator delegated direction to the orchestrator and cannot judge these before a render exists, so they are HELD, the implemented choices are provisional, and they are put to the operator together with the live render at T11. An answer other than the implemented choice becomes a fix task. This departs from "ask before the boundary commit" in timing only and is reported to the operator.
++- 2026-11-23T07:38:59.635Z - task-done: T6: NodeDetailsPanel and RelationshipList components (new files)
++- 2026-11-23 - orchestrator: T5 returned DONE_WITH_CONCERNS. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `bun test src/metaproject/graphLayout.test.ts src/metaproject/RelationshipGraph.dom.test.tsx` 46 pass, 0 fail (run by the orchestrator); no type error in T5's files; only the five owned files were created; `RelationshipGraph.tsx`, `graph.css` and the head of `graphLayout.ts` read by the orchestrator; exports match plan.md "Interfaces between tasks" (one optional test-only prop `createCytoscape` added, because cytoscape cannot create a canvas under happy-dom).
++- 2026-11-23 - orchestrator: early live check of T5 and T6 in isolation (temporary harness `apps/desktop/zz-preview.html` + `apps/desktop/dev/zz-preview.tsx` on real projections of this repository, Vite on port 1423; the harness is not committed). Measured on the live cytoscape instance in a 440x470 box, dark theme unless noted: module `apps/desktop/src/components` depth 1 (31 nodes): zoom 0.908, labels 10.9 px, 0 overlapping nodes, 0 nodes outside the viewport, captions "imports · 7", "imports · 5", "contains · 18", overflow "+11 more"; module `apps/desktop/src` depth 2 (200 nodes, truncated): zoom 0.96, labels 11.5 px, 0 overlaps, overflow "+3 more" and "+171 more"; file `src/bus/leases.ts` (light theme) and wiki page "Agent Bus" render with the right shapes and line styles; module `src/commands` depth 1 (200 nodes, truncated) in an 836 px box: labels 11.5 px. Before the change the same box painted labels at 3.3-5.5 px.
++- 2026-11-23 - orchestrator: defects found in that live check, turned into two polish tasks before integration. Graph (T12): the zoom controls cover the "+N more" entry; the column cap hides whole relationship kinds (for `leases.ts` the containing module and the describing wiki page sit behind 12 imports; for the `src` module its three files; for "Agent Bus" its wiki link); nodes inside a group are cut alphabetically although module imports carry a `count`; two drawn nodes can carry the same label ("commands", "agents", "review"); the middle ellipsis drops the test suffix ("imagePrevi…est.ts"); node boxes in a column are centred, which gives a ragged edge towards the root; captions and legend show raw kind ids; `graph.css` fixes the component's height with a clamp. Panel (T13): the Module fact shows the raw id; kind headings and badges show raw ids; long rows wrap over several lines; evidence lines take two to five lines per row; the second-step group can be 250 rows long; the counts fact is labelled "Relations" while the tab says "Relationships".
++- 2026-11-23 - orchestrator: T5 concerns recorded. The component test was written after the component, so it was never seen red. The live render of hover fading, wheel zoom and the zoom buttons is unverified until T11. T5 `behavior_changes` with `needs_operator: true` (change nodes get a double border so spec and change differ by more than colour; the caption counts relationships, not neighbours; caption and legend are rows above and below the canvas rather than overlays) are HELD for the operator with the live render at T11, like T6's. Noted, not touched: `apps/desktop/src/test/bun-test.d.ts` declares only some `bun:test` matchers.
++- 2026-11-23T07:46:10.344Z - task-done: T5: Graph layout module and RelationshipGraph component (new files)
++- 2026-11-23T07:46:10.580Z - task-added: T12: Graph polish from the isolated live preview
++- 2026-11-23T07:46:10.824Z - task-added: T13: Panel and relationship list polish from the isolated live preview
++- 2026-11-23T07:46:11.022Z - task-depends-set: T8: dependsOn T5, T6, T7, T12, T13 (was T5, T6, T7) — Integration builds on the polished graph and panel
++- 2026-11-23T07:46:12.081Z - task-attempt: T12: started (attempt 1) — 515-T12
++- 2026-11-23T07:46:12.731Z - task-attempt: T13: started (attempt 1) — 515-T13
++- 2026-11-23 - orchestrator: T12 (graph polish, items G1-G8) and T13 (panel polish, items P1-P6) dispatched in parallel to the workers that built T5 and T6, on Opus; dispatch and request files `dispatch/T12.*.json`, `dispatch/T13.*.json`, validated. Both share a new `labels.ts` whose exact content is in both dispatches. T8 now depends on T5, T6, T7, T12, T13.
++- 2026-11-23 - orchestrator: T7 returned DONE_WITH_CONCERNS. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `bun test src/metaproject/MetaprojectView.dom.test.tsx src/App.dom.test.tsx` 27 pass, 0 fail; `bunx tsc --noEmit` exit 0; whole desktop suite `bun test src` 812 pass, 0 fail (baseline 742) — all run by the orchestrator; only the four owned files plus the new `src/App.dom.test.tsx` changed; the full diff of `App.tsx`, `useExplorerNavigation.ts` and `MetaprojectView.tsx` read by the orchestrator; the `Graph` function, the `RelationshipList` function and the `<GraphNodePanel>` element are untouched. The worker reports each of the six new tests (AC11-AC16) failing before its fix and the D1 mount test failing with the old mount rule restored; the orchestrator did not re-run those red states.
++- 2026-11-23 - orchestrator: T7 concerns recorded. (1) AC10 is unverified until the live check at T11. (2) Real negotiation against the Tauri core is untested; only the injected `negotiate` seam is. (3) Noticed, not fixed: `OpenSpecView.tsx` `choose()` zeroes the content scroll before `onLocation`, so Back to an earlier OpenSpec entry lands at the top of that document; out of scope of this flow unless the operator asks. (4) Noticed, not fixed: after Back to a graph node that was reached through a lookup, the panel can stay hidden until the node's projection arrives, because the node is not among the loaded nodes — given to T8 (keep a map of nodes already seen). (5) For T8: the Wiki empty state shows the title "No Wiki page matches" while its body says "Searching the Wiki…" — make the title say it is searching while a search is in flight; `useExplorerNavigation.ts` restores the scroll of `.metaproject-node-body`, the old panel body class — point it at the new panel body.
++- 2026-11-23 - orchestrator: T7 `behavior_changes` with `needs_operator: true` (wording of the Wiki empty state and its "Clear search" action; the OpenSpec collection switch keeps the query on every switch; unresolved-link messages as an inline status line above the article; re-selecting the shown node reopens a closed panel without a history entry, and Retry has no pending label) are HELD for the operator with the live render at T11, like T5's and T6's.
++- 2026-11-23T07:47:51.679Z - task-done: T7: Explorer navigation and state fixes D1-D7
++- 2026-11-23 - orchestrator: T13 returned DONE_WITH_CONCERNS. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx` 21 pass, 0 fail and `bunx tsc --noEmit` with no error, both run by the orchestrator; `labels.ts` matches the content given in the dispatch; only the six owned files changed. Live in the isolated harness (380 px panel, dark for file `src/bus/leases.ts`, light for module `apps/desktop/src/components`): all 33 relationship rows are 32 px high on one line, no horizontal overflow, smallest button side 24 px, headings "Incoming 10 / Imports 10 / Outgoing 23 / Imports 5 / Contains 18", Module fact "src/bus" as a control, fact label "Relationships", evidence behind a toggle at the row end ("7 imports"). The worker reports nine new tests failing before the change; the orchestrator did not re-run that red state.
++- 2026-11-23 - orchestrator: T13 concerns recorded. The second-step disclosure marker in WebKit and the tag-chip contrast across palettes are unverified until T11. T13 `behavior_changes` with `needs_operator: true` (the evidence control is a toggle button at the end of the row rather than a disclosure under it; second-step rows get the same toggle and tags and are all rendered inside the closed disclosure; second-step rows name the kind in lower case and a count without evidence lines is plain muted text) are HELD for the operator with the live render at T11.
++- 2026-11-23T07:51:36.145Z - task-done: T13: Panel and relationship list polish from the isolated live preview
++- 2026-11-23 - orchestrator: T12 returned DONE. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `bun test src/metaproject/graphLayout.test.ts src/metaproject/RelationshipGraph.dom.test.tsx` 57 pass, 0 fail; `bunx tsc --noEmit` exit 0; whole desktop suite `bun test src` 827 pass, 0 fail — all run by the orchestrator; only the five owned files changed. Live in the isolated harness, 440x470 box: module `apps/desktop/src` depth 2 (200 nodes): zoom 0.894, labels 10.7 px, 0 overlaps among nodes, captions and overflow entries, neither "+3 more" nor "+171 more" covered by the zoom controls (now in the caption row), no duplicate labels ("src/commands", "session/commands"), captions "Imports · 12", "Contains · 3", "Imports · 33", "Contains · 150"; module `src/commands` depth 1 (light theme): imports ordered by count, "Contains · 106" keeps two files, "+182 more"; file `src/bus/leases.ts`: its module and its describing wiki page are drawn, ".test.ts" survives the label shortening. The worker reports 13 of the new tests failing against the previous versions of its files, at least one per item G1-G8; the orchestrator did not re-run that red state.
++- 2026-11-23 - orchestrator: T12 choices recorded, none marked `needs_operator`: a duplicate title that is not a file name is labelled "title · suffix"; duplicates are checked across every drawn node; slot sharing also applies to second-step columns; a node's ordering weight is the largest `count` among its root edges on its side. The three T5 choices held for the operator are unchanged.
++- 2026-11-23 - orchestrator: T8 (integration) dispatched on Opus to the worker that did T7, which knows `MetaprojectView.tsx`; dispatch and request files `dispatch/T8.*.json`, validated.
++- 2026-11-23T07:54:41.305Z - task-done: T12: Graph polish from the isolated live preview
++- 2026-11-23T07:54:41.505Z - task-attempt: T8: started (attempt 1) — 515-T8
++- 2026-11-23T07:56:18.905Z - task-depends-set: T9: dependsOn T12, T13 (was T8) — The guide describes behaviour fixed by the plan and the T8 dispatch, and touches only the guide file, so it runs beside T8 instead of after it
++- 2026-11-23T07:56:19.119Z - task-attempt: T9: started (attempt 1) — 515-T9
++- 2026-11-23 - orchestrator: operator confirmed the timing of the held `behavior_changes` questions, verbatim: "ок, вопросы задашь на T11 с рендером". All `needs_operator` entries of T5, T6, T7, T13 (and T8, if it reports any) are asked together at T11 with the live render.
++- 2026-11-23 - orchestrator: T9 (guide) dispatched on Sonnet beside T8; its dependency was changed from T8 to T12, T13 because it touches only `docs/docs/guides/desktop-metaproject.md`. The parallel backend branch (`fix-/strange-benz-fd7d42`, commit 357e30d8d, PR 1293) edited three places of the same guide; the T9 dispatch forbids touching them.
++- 2026-11-23 - orchestrator: T9 returned DONE (worker on Sonnet). Checked before accepting: the full diff of `docs/docs/guides/desktop-metaproject.md` read by the orchestrator; the three places the parallel backend branch edited (the "Desktop sends read requests" paragraph, the section "Inspect the module from the CLI", the table under "Recover from common problems") are untouched and the nearest hunk of this change is more than ten lines away from them; image paths and stated limits unchanged; the relationship-type table keeps its seven rows and gains `changes-spec` and `spec-context` with their names in the app; `bun run docs:check` re-run by the orchestrator (result in the next entry). No result JSON was requested for this docs task.
++- 2026-11-23 - orchestrator: T9 open points, to settle against the integrated screen at T11 (AC21 is judged there): the guide describes the filter row, Reset, the disabled Defines and Calls and the "Catalog · shown of total" header from the T8 dispatch, before T8 landed; it says the Wiki Relationships block shows "every type" although `defines` and `calls` are left out; the evidence control is described as "such as 2 examples" while module imports read "7 imports"; the two screenshots still show the old screen.
++- 2026-11-23T07:58:34.745Z - task-done: T9: Update the Desktop Metaproject guide
++- 2026-11-23 - orchestrator: T8 returned DONE_WITH_CONCERNS. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx` holds (AC18); `cd apps/desktop && bunx tsc --noEmit` exit 0 and `bun test src` 833 pass, 0 fail (AC19) — run by the orchestrator; only the four owned files changed plus the deleted `GraphNodePanel.tsx`; no graph or panel file was edited. The worker reports 10 tests failing before the change and, for the scroll-into-view and busy-graph tests, a temporary revert of each behaviour that made its test fail; the orchestrator did not re-run those red states. The live render of the integrated screen is checked next (T11).
++- 2026-11-23 - orchestrator: T8 `behavior_changes` with `needs_operator: true`, HELD for the operator with the live render at T11: a note in the content column when the graph is missing; the symbol-layer reason as a visible note under the filter row plus a tooltip; chips that are on show a check icon and "Reset filters" appears only when filters differ from the defaults; the Wiki empty-state wording while searching; on a narrow host the graph's minimum height is 160 px with tighter gutters and a narrower list. Also chosen by the worker: the list total is never shown smaller than the number of rows; a relationships read error is a banner in the content column only while the panel is closed.
++- 2026-11-23T08:06:08.524Z - task-done: T8: Integrate graph and panel into the explorer; filters, counts, cleanup
++- 2026-11-23T08:06:50.450Z - task-done: T10: Desktop typecheck and full desktop test suite pass
++- 2026-11-23 - orchestrator: T10 closed: `cd apps/desktop && bunx tsc --noEmit` exit 0 and `bun test src` 833 pass, 0 fail on the tree committed as 8cd85cdec; `keryx health run --changed` PASS (optional sources sonarqube and coverage produced no result). The temporary preview harness files were deleted; nothing of it was committed.
++- 2026-11-23 - orchestrator: T11 first live pass, browser dev build (`bun run dev:browser` from this worktree, this repository opened, graph rebuilt and `ready`), measured on the live cytoscape instance and the DOM. AC5 at 1180x780 with the panel open (graph stage 438x374): module `apps/desktop/src/components` depth 1 (31 nodes) labels 9.7 px, 0 overlaps among nodes, captions and overflow entries, 0 nodes outside the viewport; the same module depth 2 (200-node projection, truncated) zoom 0.8, labels 9.6 px, 0 overlaps, 24 of 44 drawn nodes outside the viewport (outer columns need panning, as designed). AC5 holds. AC6: after setting `data-theme="light"` and `data-palette="light-sky"` on the document element, without a selection change, the label colour went from rgb(225,236,229) to rgb(27,43,63), which is the new `--fg` (#1b2b3f); label on canvas contrast 12.13:1. AC6 holds. AC10: with query "apps/desktop/src/components", module `components` selected, depth 2 and the panel open, Flows then Metaproject showed the same view, query, selection, depth, open panel and Back. AC10 holds. Back from `components` returned to `acp` (AC11 live). "Find a Wiki page" for `components` showed "No Wiki page matches" naming the path, with Clear search and no article (AC12 live). List header "Catalog · 200 of 4995"; no "Catalog is limited" banner; selected row visible in the list.
++- 2026-11-23 - orchestrator: T11 defect: AC20 does NOT hold at the minimum window. At 720x480 with the panel closed and no banner the graph box shows 114 px (stage 81 px); the criterion asks for at least 140 px. Cause: the filter bar is 182 px there (131 px at a 796 px content column, 158 px at 440 px, 190 px with "Reset filters") and the header wraps to two rows (91 px). At 1440x900 (acp, depth 2, panel closed) labels 13.8 px, 0 overlaps, filter bar 134 px. The compact panel at 720 px is a right-anchored drawer 380 px wide that leaves 272 px of content visible and takes focus; Escape closes it and returns focus. Fix task T14 added (compact filter bar behind a "Types" disclosure, one-row header on a narrow host); T15 added to align the guide with the final screen and refresh its screenshots. T11 stays open until the re-check after T14.
++- 2026-11-23T08:11:49.484Z - task-added: T14: Compact filter bar and one-row header on narrow hosts
++- 2026-11-23T08:11:49.658Z - task-added: T15: Align the guide with the final screen and refresh its screenshots
++- 2026-11-23T08:11:49.842Z - task-depends-set: T11: dependsOn T8, T14 (was T8) — The live check is repeated after the filter bar fix
++- 2026-11-23T08:11:50.028Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15 (was T8, T9, T10, T11) — The review round runs on the final verified change
++- 2026-11-23T08:11:50.862Z - task-attempt: T14: started (attempt 1) — 515-T14
++- 2026-11-23 - orchestrator: operator direction on the filter block, verbatim: "а тебе не кажется что блок с фильтрами занимает слишком много места, может его спрятать в кнопку и открывать в модалке или поповере?". Decision: a popover, not a modal and not a row in the flow — one "Filters" button in the graph's header row opens a non-modal popover with Direction, Depth, the relationship types, the symbol-layer reason and Reset; the graph stays visible behind it and nothing pushes it down. A modal was rejected because it hides the graph the filters act on. T14 was already dispatched with an expanding second row; its dispatch was revised in place (same dispatch id 515-T14, same attempt) and the running worker was told. `RelationshipGraph.tsx`, `graph.css` and `RelationshipGraph.dom.test.tsx` were added to T14's files for the new `actions` slot.
++- 2026-11-23 - orchestrator: the parallel backend branch was squash-merged into `main` as 1358d962f (PR 1293), by its own session. This flow's branch is still based on 1b994df18; bringing `main` into it is left for the completion step and needs the operator's ask.
++- 2026-11-23 - orchestrator: T14 returned DONE_WITH_CONCERNS, built to the revised popover design. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `cd apps/desktop && bunx tsc --noEmit` exit 0 and `bun test src` 838 pass, 0 fail, run by the orchestrator; only the six owned files changed. Live in the browser dev build at 1180x780 with the panel open (module `apps/desktop/src/components`, depth 1): the filter block is gone, a "Filters" button sits in the graph header left of the zoom controls, the graph box is 440x500 (stage 438x441) with a three-line stale banner above it, labels 11.6 px (9.7 px before), 0 overlaps, 0 nodes outside the viewport. The popover is a 320x229 dialog labelled "Graph filters" under the button, inside the window, not covering the zoom controls; focus moves to the Direction select; the button carries `aria-haspopup="dialog"`, `aria-expanded="true"` and the title "Both · 1 step · 7 of 9 types"; Defines and Calls are disabled with the reason shown; smallest control side 24 px. The worker reports 8 tests failing against the committed versions of its files; the orchestrator did not re-run that red state. The worker also reports that it cut four committed tests by accident while rewriting the test file and restored them from HEAD; the suite count (833 + 5 new = 838) is consistent with that.
++- 2026-11-23 - orchestrator: T14 `behavior_changes` with `needs_operator: true`, HELD for the operator: the Filters button has a trailing chevron instead of an icon (the shared icon set has no funnel glyph) and its tooltip states the settings even at the defaults; the popover is 320 px wide, right-aligned with the button, Direction and Depth above the types, Reset at the bottom right; the popover stays open while settings change and across a switch to Wiki and back; without a graph the button sits in a slim right-aligned row.
++- 2026-11-23 - orchestrator: noticed in the live check, not part of T14: the freshness banner prints the whole staleness reason (here three lines, about 95 px: "HEAD moved since the graph was built (…); a tracked file was modified since the graph was built: <five paths> (+1 more)"), which takes graph height in the state a developer is in most of the time. Candidate for the next fix task: one line with the details on demand.
++- 2026-11-23T08:21:15.922Z - task-done: T14: Compact filter bar and one-row header on narrow hosts
++- 2026-11-23 - orchestrator: T11 second live pass after T14 (commit 6d3676542, graph rebuilt and `ready`, no banner), browser dev build from this worktree. AC20, minimum window 720x480 with the panel closed: header one row (53 px), graph box 434x330 fully visible (stage 271 px) — at least 140 px holds (it was 114 px); no page or content scroll; labels 9.6 px. At 1180x780 with the panel open, file `src/bus/leases.ts` (17 drawn nodes): graph stage 438x528, zoom 1.107, labels 13.3 px, 0 overlaps among nodes, captions and overflow entries; captions "Imports · 12", "Describes · 1", "Contains · 1", "Imports · 4"; panel facts "Module src/bus · Relationships 14 incoming · 4 outgoing", tabs "Relationships 18 · Wiki 1 · OpenSpec 0". Light theme (`light-sky`) at the same size: graph and panel re-coloured, label colour rgb(27,43,63) equals `--fg` #1b2b3f, no clipped heading, tab, caption or list header text. With the first pass (AC5, AC6, AC10 and the 1440x900 and drawer checks) AC5, AC6, AC10 and AC20 hold. Before this flow the same window gave the graph 440x194 px and labels of 3.3-5.5 px.
++- 2026-11-23 - orchestrator: not re-measured in the second pass: 1440x900 and the depth-2 case after T14 (T14 removed the filter block and added a header button; the graph component's layout code did not change). Hover fading and wheel zoom were not exercised.
++- 2026-11-23T08:23:02.341Z - task-done: T11: Live browser verification at three window sizes, dark and light
++- 2026-11-23 - orchestrator: held `behavior_changes` put to the operator with the live render (three screenshots of the final screen sent: dark, light, filters popover). Four questions asked with the host question tool; answers verbatim. (1) "На глубине 2 при открытой панели граф Metaproject шире своей области: внешние колонки частично уходят за край. Как показывать такой граф?" — "Читаемо, с панорамой (Recommended)": the automatic zoom floor of 0.8 stays. (2) "Когда вы выбираете другой узел, панель деталей возвращается на вкладку Relationships, даже если была открыта Wiki или OpenSpec. Как должна вести себя вкладка?" — "Сбрасывать (Recommended)": T6's choice stays. (3) "Заголовок графа считает связи («10 incoming · 23 outgoing»), а подписи колонок — узлы («Imports · 7») … Что показывать в заголовке графа?" — "Связи (Recommended)": T5's choice stays. (4) "Баннер «Graph is stale» печатает полную причину со списком файлов — до трёх строк, около 95 px … Сжать баннер?" — "Одна строка (Recommended)": new task T16.
++- 2026-11-23 - orchestrator: the other `needs_operator` entries were consolidated rather than asked one by one, because they are presentation details of the same screen the operator was shown: T5 (double border on change nodes; caption and legend as rows around the canvas), T6 (inline copy feedback; second-step rows as text with two Open buttons; drawer without scrim or focus trap), T7 (Wiki empty-state wording with Clear search; OpenSpec collection switch keeps the query; unresolved-link messages as an inline status; re-selecting the shown node reopens a closed panel without a history entry; Retry without a pending label), T13 (evidence toggle at the row end; second-step rows with the same toggle inside the closed disclosure; lower-case kind in second-step rows), T8 (note when the graph is missing; chips with a check icon; narrow-host minimum graph height 160 px), T14 (chevron on the Filters button; 320 px popover layout; popover stays open across setting changes and view switches; slim row for the button without a graph). They are listed to the operator in the report as kept as implemented, open to change; none was answered individually. The symbol-layer note and "Reset filters" placement of T8 were superseded by the T14 popover.
++- 2026-11-23T08:36:09.362Z - task-added: T16: One-line freshness banner with details on demand
++- 2026-11-23T08:36:09.594Z - task-depends-set: T15: dependsOn T14 (was T14) — The guide task runs beside the banner task; it describes the banner from the T16 dispatch
++- 2026-11-23T08:36:09.842Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15, T16 (was T8, T9, T10, T11, T14, T15) — The review round runs on the final verified change
++- 2026-11-23T08:36:10.436Z - task-attempt: T15: started (attempt 1) — 515-T15
++- 2026-11-23T08:36:10.782Z - task-attempt: T16: started (attempt 1) — 515-T16
++- 2026-11-23 - orchestrator: T16 (one-line freshness banner, Opus, the worker of T7/T8/T14) and T15 (guide alignment, Sonnet, the worker of T9) dispatched in parallel; dispatch files `dispatch/T15.*.json`, `dispatch/T16.*.json`, validated. The orchestrator replaced `docs/docs/images/desktop-metaproject/graph.jpg` and `wiki.jpg` with captures of the new screen from the browser dev build (1180x780 window, dark theme, title bar and project rail cropped off; 759x501 px, the previous files were 1090x686 px).
++- 2026-11-23 - orchestrator: T15 returned DONE. Checked before accepting: the full diff of the guide read by the orchestrator; the paragraph "Desktop sends read requests", the section "Inspect the module from the CLI" and the table under "Recover from common problems" are untouched; image paths and stated limits unchanged; `bun run docs:check` re-run by the orchestrator (0 broken links, tests pass). The guide now describes the Filters popover, the header row of the graph, the Wiki block without Defines and Calls, both forms of the evidence control, the one-line banner with Details, the closed "Second step" disclosure, and alt texts that match the two new screenshots. Open until T16 lands: the banner wording in the guide comes from the T16 dispatch.
++- 2026-11-23T08:37:57.245Z - task-done: T15: Align the guide with the final screen and refresh its screenshots
++- 2026-11-23 - orchestrator: T16 returned DONE_WITH_CONCERNS. Checked before accepting: result file valid against `task-implementer-output` with every must_read entry cited; `cd apps/desktop && bunx tsc --noEmit` exit 0 and `bun test src` 841 pass, 0 fail, run by the orchestrator; only the three owned files changed. Live in the browser dev build with a stale graph: the banner reads "Graph is stale." with "Details" and "Rebuild graph" on one line, 46 px high at 1180x780 and at 720x480 (it was about 95 px); Details (`aria-expanded`) opens the full reason inside the banner (104 px open) and closes it; at 720x480 with the banner shown the graph box still has 272 px visible. The worker reports three tests failing against the committed `MetaprojectView.tsx` and one new test that was never red because it guards behaviour that already held; the orchestrator did not re-run the red state.
++- 2026-11-23 - orchestrator: T16 `behavior_changes` with `needs_operator: true`, kept as implemented and listed to the operator: Details is a small ghost button with a chevron between the sentence and Rebuild, the reason opens as plain small text inside the banner; open or closed is explorer state keyed to the reason text, so it survives leaving the tab and closes when the reason changes.
++- 2026-11-23 - orchestrator: the guide's banner wording ("Graph is stale.", "Graph is missing.", "Details", "Rebuild graph", one line) matches the screen. AC21 holds on the orchestrator's reading of the guide against the final screen.
++- 2026-11-23T08:40:21.193Z - task-done: T16: One-line freshness banner with details on demand
++- 2026-11-23 - orchestrator: first-green gate. Every implement, docs and verify task is done (15 of 16; T4, the review, remains); `cd apps/desktop && bunx tsc --noEmit` exit 0, `bun test src` 841 pass, `bunx vite build` succeeds, `keryx health run --changed` reports no gate condition. Operator asked with the host question tool, answers verbatim: "Что делать перед ревью-раундом?" — "Стандартное ревью (Recommended)" (offered hardening options, not taken: fix Back to an earlier OpenSpec document landing at its top; add "Draft Wiki page" to the Wiki empty state). "Подтянуть main в ветку feat/desktop-metaproject-redesign до ревью?" — "Да, смержить main (Recommended)".
++- 2026-11-23 - orchestrator: on that ask, `origin/main` (1358d962f, the squash of PR 1293) was merged into the flow branch as 8ff5482ea; the guide auto-merged, no conflict. On the merged tree: desktop `bunx tsc --noEmit` exit 0, desktop `bun test src` 842 pass, 0 fail, `bun test src/integrations/metaproject-explorer.test.ts` 19 pass, `bun run docs:check` passes, root `bun run typecheck` exit 0. The review round uses `origin/main` as its base, so the diff holds this flow's changes only.
++- 2026-11-23 - orchestrator: review round 1 start (T4). Operator asked with the host question tool, answers verbatim: reviewer set — "Полный по плану (Recommended)" (the 11 reviewers `keryx review plan` computed: architecture, degradation, frontend, highload, layout, logic, performance, regression, security-code, testing-practices, ui-ux); counterpart verification — "Включить (Recommended)"; models — "По тирам (Recommended)" (deep on Opus: review-regression and review-premise; standard on Sonnet: the other ten reviewers; light on Haiku: the verifier). Package `.metaproject/reviews/2026-11-23-review-flow-branch`, base `1358d962f` (merge-base with origin/main), head `60cbe1c56`, 6 slices, 31 dispatches, round 1 of 5. Not in any slice: the two guide screenshots (`docs/docs/images/desktop-metaproject/graph.jpg`, `wiki.jpg`), binary.
++- 2026-11-23 - orchestrator: impacted tests for the round (`tests-to-run.json`, 9 files) run through `keryx review verify-run`. One process for all files: 16 of 22 DOM tests fail on "Happy DOM has already been globally registered" — a property of running that subset together (`research-evidence/verify-tests-to-run-1.txt`). One process per file: 140 pass, 2 fail, both in `apps/desktop/src/panels/SideTabs.dom.test.tsx` ("Export named 'browserFrame' not found in module …/platform/panels.ts"); the same two fail the same way on the base checkout at `1b994df18`, so the failure predates this flow and the diff touches neither file (`research-evidence/verify-tests-to-run-2.txt`). The whole desktop suite `bun test src` passes (842).
++- 2026-11-23 - orchestrator: review round 1 ran to the end of its reviewer waves (T4). 31 reviewer dispatches over six slices (ten reviewers on the host alias `sonnet`, review-regression on `opus`), two verifier passes on `haiku`, one premise pass on `opus`; `keryx review next` printed `done`. One reply was returned in the wrong shape (review-layout wave 1 had no `status` in its JSON object); the reviewer was resumed once to rewrite it and the brief was amended with the required fields. `keryx review tier` resolved every tier to the session model (session-fallback), so the drivers now record the alias each dispatch ran on. Consolidated: 29 findings — 2 major, 20 minor, 7 info; no blocker.
++- 2026-11-23 - orchestrator: what was run for the round, beyond reading. (1) `keryx review mutate` over the 82 mutants review-testing-practices proposed, six test files per mutant, in a scratch copy: 15 killed, 67 survived, 0 invalid (`research-evidence/mutation-1.md`); none killed in `App.tsx` (1) and `useExplorerNavigation.ts` (5). The tool's scratch copy has no `apps/desktop/node_modules`, so the test command links it. (2) The six test files of the change against the base's production files, in a scratch copy: all red (`verify-red-on-parent-1.txt`). (3) The Filters popover measured in the browser pane (Chromium 156) and, with a small Swift script that loads the dev build in the system WKWebView (AppleWebKit 605.1.15, macOS 26.7.3), in the engine a Tauri window uses: at 720x480 with the freshness Details expanded it runs past the window bottom by 51 px and 17 px and does not scroll; with the one-line banner it fits (`verify-F-001-2.txt`, `verify-F-001-3.txt`, `live-filters-popover-720x480.txt`). (4) The same two engines for the claim that the new size container traps the fixed popover: displacement (0, 0) in both (`verify-F-002-2.txt`, `live-filters-popover-containing-block.txt`). The Rust shell of the desktop app was not built; no Rust toolchain on this machine.
++- 2026-11-23 - orchestrator: verifier and premise. Verifier pass 2 over all 29: 20 confirmed (12 by execution), 2 refuted (F-002, the containing-block claim, by execution in two engines; F-029, the screenshot alt text, by site check), 7 unverifiable. Premise judge over the 22 findings of minor and above: 18 upheld, 2 challenged (F-002, F-008), 2 owner-decision (F-004, F-007), 0 downgraded. `keryx review severity-audit` changed nothing. Verdict after ingest and the operator's answers: 1 open major (F-001, the popover clipped at 720x480), 20 minor to address, 6 info, 2 excluded as refuted.
++- 2026-11-23 - orchestrator: operator decisions on the held findings, asked with the host question tool. First asked with option labels in Russian; `keryx review decide-premise` refused them because the recorded words must say uphold or dismiss, so the same three were asked again with those two labels. Answers verbatim. F-004 (the retained explorer does not re-read the catalog on return): first "Перечитывать (Recommended)", then "uphold". F-007 (the Relationships tab count includes second-step rows, the fact row does not): first "Дополнить строку фактов (Recommended)", then "uphold". F-008 (Back to an earlier OpenSpec document lands at its top; declined before the review at the first-green gate): first "Починить сейчас (Recommended)", then "uphold". All three recorded in `operator-decisions.json` of the review package. F-002 is not held any more: the verifier's refutation excludes it; no change is planned for it, and WebKit of macOS versions older than 26 stays unmeasured.
++- 2026-11-23 - orchestrator: blast radius. The cap left 25 of 75 candidate files unread. Two chunk passes of review-regression on `sonnet` read the twelve application files among them (chunk-001: nine files linked by text match; chunk-014: `main.tsx`, `test/app-navigation.fixture.tsx`, `src-tauri/src/pick.js`): no regression. The other thirteen are generated: twelve `layers/graph/storage/calls.jsonl` files of earlier review packages, about 44 MB each, and `src/gdskills/bundled/stacks/php-laravel/governance/eval.json`; `keryx review chunks estimate` puts the whole run at about 133 million input tokens. Operator asked with the host question tool, answer verbatim: "Не читать (Recommended)". `keryx review chunks estimate --answer no` and the coverage waiver of `keryx review complete` take the operator's words only from a terminal, so that answer is recorded here and the readiness item `blast-radius` stays failing until the operator closes the round.
++- 2026-11-23 - orchestrator: gaps of this flow's own record that the round found and that are mine. `tasks.md` stops at T11 (F-009). The dispatch files of T9 and T15 name `resolved/T<n>.implement.json` with `"exists": true` and require `results/T<n>.result.json`; neither file was ever written: the dispatch generator sets that flag without looking, and both docs tasks were accepted on the orchestrator's own checks (entries of T9 and T15 above), so the two docs workers ran without a resolved-context file (F-010). Red checks in T14 and T16 swapped tracked files inside the shared worktree while the dev server was running (F-024); fix tasks from here on run a red check only in a scratch copy.
++- 2026-11-23T09:42:00.923Z - task-added: T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)
++- 2026-11-23T09:42:01.154Z - task-added: T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)
++- 2026-11-23T09:42:01.468Z - task-added: T19: Fix round 1: graph test strength (F-012, F-013, F-021)
++- 2026-11-23T09:42:11.497Z - task-added: T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)
++- 2026-11-23T09:42:11.714Z - task-added: T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)
++- 2026-11-23T09:42:12.006Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 (was T8, T9, T10, T11, T14, T15, T16) — review round 1 found 1 major and 20 minor findings; the round closes after the fix tasks T17-T21
++- 2026-11-23T09:45:33.930Z - task-attempt: T17: started (attempt 1) — 515-T17 (fix round 1)
++- 2026-11-23T09:45:34.640Z - task-attempt: T18: started (attempt 1) — 515-T18 (fix round 1)
++- 2026-11-23T09:45:35.567Z - task-attempt: T19: started (attempt 1) — 515-T19 (fix round 1)
++- 2026-11-23 - orchestrator: fix round 1 planned as five flow tasks with disjoint file ownership. T17 explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008; a new worker on Opus), T18 details panel and relationship list (F-007, F-022, F-019, F-020; the worker of T6/T13), T19 graph test strength (F-012, F-013, F-021; the worker of T5/T12), T20 explorer test strength (F-011, F-014 to F-018; after T17, same files), T21 flow record and guide (F-009, F-010, guide alignment; after T17 and T18). T4 now depends on all five. F-002 (refuted) and the seven info findings are not in a fix task. Dispatch and request files `dispatch/T17|T18|T19.*.json` validated against `subagent-dispatch` and `task-implementer-input`; each request carries `fix_context.review_feedback` with the finding ids, the reviewers' suggested fixes and, for F-004, F-007 and F-008, the premise verdict and the operator's uphold. Resolved context written on the current head (`resolved/T17|T18|T19.implement.json`, 12 entries each). `keryx review loop` for the three tasks: escalate no (one round seen). T17, T18 and T19 dispatched in parallel.
++- 2026-11-23 - orchestrator: red checks of fix tasks run in a scratch copy only. The dispatches name a tool the orchestrator wrote for this round (in the session scratchpad, not in the repository): it copies `apps/desktop` as it is on disk, links `node_modules`, then either puts named production files back to HEAD and runs the tests (a new test must fail there) or applies the review's mutants one by one. Tried on three mutants of the round (A1 survived, P2 killed, N1 survived, as in `mutation-1.md`). This answers F-024 for the rest of the flow.
++- 2026-11-23 - orchestrator: F-009 fixed by the orchestrator: `tasks.md` now follows `flow.json` (rows T12 to T21, the dependencies of T4, T8, T9 and T11, a section for the tasks added after the first plan and one for fix round 1).
++- 2026-11-23T09:51:36.890Z - task-done: T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)
++- 2026-11-23T09:51:37.087Z - task-done: T19: Fix round 1: graph test strength (F-012, F-013, F-021)
++- 2026-11-23 - orchestrator: T18 returned DONE_WITH_CONCERNS (the worker of T6/T13). Checked before accepting, all run by the orchestrator: result file valid against `task-implementer-output` with every must_read entry cited; `bun test` of the two test files 24 and 12 pass; the scratch-copy mutant check: P1, P4 to P9, P11, P13, P14, P17, P18, P20, P21 killed, L1, L2, L8 killed; the scratch-copy red check with both production files at HEAD: the F-007 test and the F-022 test fail, everything else passes; the production diff read in full (the fact row built from parts, `if (edge.from === edge.to) continue;` in `groupRelationships`, the now unreachable guard in the second-step row removed). Concerns, kept: (1) mutant P3 survives — it drops the `drafting` check in `draft()`, and the Draft button is disabled while a draft runs, so no DOM path tells the two apart; the worker notes that the check itself does not stop two calls inside one React batch (noticed, not touched). (2) L3 is invalid: its anchor was the guard F-022 removed; the self-loop test covers that behaviour. (3) One existing test was moved to a fixture without second-step edges, because the fact row of its old fixture now carries the second-step count; its assertions are unchanged. (4) Not seen rendered: the longer fact row at the narrowest panel width; to be measured in the live pass of this round. Committed as 09dcae28b.
++- 2026-11-23T10:07:00Z - task-done: T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)
++- 2026-11-23 - orchestrator: T19 returned DONE (the worker of T5/T12). Checked before accepting, run by the orchestrator: result file valid with every must_read entry cited; `bun test` of the two test files 51 and 27 pass; the scratch-copy mutant check reports all 22 killed (Y1 to Y9, Y12, Y16, Y18; G1 to G5, G7 to G11); `git diff --stat` shows no change in `graphLayout.ts` or `RelationshipGraph.tsx`. The worker diverged from four suggested fixes and says why: a sized Fit alone cannot kill G5 (the initial viewport equals what the mutant writes), cytoscape clamps zoom itself so G9 is pinned on the levels the component requests, G4 needs the palette tokens in a stylesheet because a style-attribute change also triggers the observer, Y7 is equivalent on a lone root. Not verified by anyone: hover fading, the cursor and zoom on a real canvas. Committed as 6ea8dca20.
++- 2026-11-23T10:07:30Z - task-done: T19: Fix round 1: graph test strength (F-012, F-013, F-021)
++- 2026-11-23 - orchestrator: T17 returned DONE_WITH_CONCERNS (a new worker on Opus) with two `behavior_changes` marked `needs_operator`. Checked before asking, run by the orchestrator: result file valid with every must_read entry cited; `bun test` of `MetaprojectView.dom.test.tsx` 47 pass and `App.dom.test.tsx` 1 pass; `bunx tsc --noEmit` exit 0; the scratch-copy red check with `MetaprojectView.tsx`, `OpenSpecView.tsx` and `App.tsx` at HEAD: exactly the eight new tests fail (F-001 two, F-003, F-004 two, F-005, F-006, F-008); the production diff read (a `visible` prop from App.tsx, `placeFiltersPopover`, a quiet catalog re-read that updates only the freshness when the snapshot is unchanged, a lookup token, `seenNodes` filled in an effect, `choose()` in OpenSpecView calling `onLocation` before it zeroes the scroll). `metaproject.css` and `useExplorerNavigation.ts` were not changed.
++- 2026-11-23 - orchestrator: F-001 after the fix, measured live with the uncommitted change (browser dev build, dark, 720x480, Graph, Agent Bus). Chromium 156: one-line banner — below the button, top 229, max-height 243, content 229, inside the window; Details expanded (button at 331 to 355) — above the button, inline bottom 153, box 98 to 327, every control inside the window. System WKWebView (macOS 26.7.3): the same two states — below at 229 to 421, above at 135 to 327; at 1024x768 with Details expanded — below at 333 to 525. Displacement from the inline coordinates (0, 0) in all three. The clipping of round 1 (51 px and 17 px) is gone in both engines. The browser dev build opens a "Choose a GitHub account" dialog on reload; it was dismissed with "Later" for the screenshot.
++- 2026-11-23 - orchestrator: operator asked about the two `needs_operator` entries of T17 with the host question tool, a screenshot of the 720x480 state attached. Answers verbatim. F-001, the popover opens above its button when it does not fit below: "Над кнопкой (Recommended)" — as implemented. F-003, an open popover when the user leaves the explorer's view (implemented: hidden, shown again on return with focus moved into it): "Закрывать при уходе (Recommended)" — not what was implemented, so the T17 worker changes it before the task-boundary commit: the popover closes when the view is hidden; inside the explorer (Graph, Wiki, OpenSpec) it stays open as before.
++- 2026-11-23T10:03:47.846Z - task-done: T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)
++- 2026-11-23 - orchestrator: T17 returned DONE after the change the operator's answer asked for. Checked before accepting, run by the orchestrator: result file valid with every must_read entry cited, both `behavior_changes` entries now carry the operator's answer and `needs_operator: false`; `bun test` 47 pass and 1 pass; `bunx tsc --noEmit` exit 0; the scratch-copy red check with the three production files at HEAD: the eight T17 tests fail, the changed F-003 test among them. Live in the browser dev build (Chromium 156, 1024x768) with the change: an open Filters popover is gone from the DOM while Flows is shown, an Escape dispatched there is not prevented, and on return the Filters button reads `aria-expanded=false`, focus is on the body, selection and caption are as before; Graph to Wiki to Graph inside the explorer leaves an open popover open. F-004 live, counted on the bridge's WebSocket: no Metaproject request while away, exactly one `catalog` request on return, no loading banner, no relationships or detail request. Not verified live: F-008, because this project has no OpenSpec entries (the view reads "OpenSpec missing."); it rests on its DOM test. The worker's `noticed_not_touched`, kept for the completion report: any same-snapshot catalog reload other than the quiet one (Retry, Refresh) still blanks the Wiki article and re-reads relationships; the popover is not placed again when the content pane scrolls under its button. Committed as the T17 boundary commit.
++- 2026-11-23T10:32:00Z - task-done: T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)
++- 2026-11-23T10:03:49.241Z - task-attempt: T20: started (attempt 1) — 515-T20 (fix round 1)
++- 2026-11-23T10:03:50.347Z - task-attempt: T21: started (attempt 1) — 515-T21 (fix round 1)
++- 2026-11-23T10:07:07.012Z - task-done: T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)
++- 2026-11-23 - orchestrator: live check of what T18 left unseen (browser dev build, Chromium 156, 1024x768, Graph, Agent Bus, depth 2 through the Filters popover): the Relationships fact reads `0 incoming · 13 outgoing · 337 second-step · limited`, wraps onto two lines in the 240 px value column of the 380 px panel, no horizontal overflow and no clipping; the Relationships tab count is 350, which is 13 + 337, so the two numbers under the same word now add up (F-007). During this check the explorer showed "Project knowledge changed while loading" with "Refresh catalog" and no graph until it was pressed: the task-boundary commits changed the snapshot while the page was open. That is the existing snapshot-mismatch behaviour, not part of this round's fixes.
++- 2026-11-23 - orchestrator: T21 returned DONE (the worker of T9/T15, Sonnet). Checked before accepting, run by the orchestrator: `results/T9.result.json`, `results/T15.result.json` and `results/T21.result.json` each valid against `task-implementer-output` with every entry of its resolved file cited; `bun run docs:check` exit 0 (0 broken links, 67 tests pass); the guide diff read in full: the intro (Back restores the place in an OpenSpec document; the catalog is re-read on return), step 2 of Graph (the popover opens below or above its button and also closes on leaving the tab; filter choices kept), step 6 (the Relationships fact with the second-step count; a relationship from an item to itself is neither listed nor counted), and four re-flowed lines whose wording is unchanged; the three protected places are untouched. The worker left out, on purpose, that the popover stays open across Graph, Wiki and OpenSpec. F-010 is closed this way: the orchestrator wrote `resolved/T9.implement.json` and `resolved/T15.implement.json` on the current head, and the worker wrote the two result files from commits 5955bf547 and be1e15e8d; both say in `notes` that they were written during T21, after acceptance. So the dispatch files of T9 and T15 now name files that exist; they still did not exist when those tasks ran. Open from the worker: it did not re-check at head the banner wording and the Wiki block's "except Defines and Calls" sentence. Committed as the T21 boundary commit.
++- 2026-11-23T10:44:00Z - task-done: T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)
++- 2026-11-23T10:12:10.719Z - task-done: T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)
++- 2026-11-23 - orchestrator: T20 returned DONE (the worker of T17, Opus). Checked before accepting, run by the orchestrator: result file valid with every must_read entry cited; only the two test files changed; the scratch-copy mutant check: A1 killed; N1, N2, N4, N5 killed; V1 to V4, V7, V8, V8b, V9 to V14, V16, V17, V30, V31 killed; V5, V6 and V15 invalid because T17 moved their lines, so the orchestrator applied the same three changes on the new lines in a scratch copy (`(graphState.graph !== "missing")`, `onDraft={onDraft}`, `const left = rect.right - POPOVER_WIDTH;`) and each is killed by the test the worker names. N3 survives: it deletes `if (next === leaving) return;` in `enter()`, which no caller can reach with the current route object (visit builds a new route, navigate returns a new object or null, switchView enters only on another mode); kept as an equivalent mutant and listed under noticed_not_touched. Committed as the T20 boundary commit.
++- 2026-11-23T10:58:00Z - task-done: T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)
++- 2026-11-23 - orchestrator: after fix round 1, on the head that holds T17 to T21, run by the orchestrator: `cd apps/desktop && bunx tsc --noEmit` exit 0; `bun test src` 904 pass, 0 fail across 89 files (842 before the round); `bunx vite build` exit 0; root `bun run typecheck` exit 0; `bun run docs:check` exit 0. Mutants of round 1 after the fixes: of the 67 survivors, 64 are now killed (three of them on lines T17 moved), L3 is gone with the guard F-022 removed, and two are equivalent (P3, N3).
++- 2026-11-23T10:12:37.125Z - task-attempt: T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows
++- 2026-11-23 - orchestrator: review round 2 planned on head b1538097e (`keryx review plan`, package `.metaproject/reviews/2026-11-23-review-flow-branch-r02`): delta round over 60cbe1c56..b1538097e, 88 fix hunks, 10 slices (3 fix, 1 new, 6 second-look), 13 reviewers (review-clean-code and review-style are new in the roster), 53 dispatches, 28-70 min by `keryx review estimate` — over the 40-dispatch threshold, so the operator confirms. Of the 53: 24 read slice-03 (the code and tests the fixes changed) and slice-04 (new hunks), 17 read slice-01 and slice-02 (the flow package's dispatch, resolved-context and result JSON of T17 to T21), 12 are a second look by review-logic and review-security-code at the six slices of round 1's whole diff. The plan lists F-015, F-016 and F-017 as carried open: the T20 commit message names them as a range ("F-014 to F-018"), which the tool does not expand; they were fixed in T20.
++- 2026-11-23 - orchestrator: operator asked with the host question tool which part of round 2 to run. Answer verbatim: "Только код правок (Recommended)" — the 24 dispatches over slice-03 and slice-04; not read in this round: the flow package's JSON files of the fix tasks and the second look at round 1's diff. `keryx review confirm-plan` accepts only a plain yes for the plan as a whole, so the operator was asked once more, with the plan key 487f9329f4c92447, "53 dispatches, expected duration 28-70 min" and the statement that only 24 of them will run. Answer verbatim: "yes". Recorded in the package's `plan-confirmation.json`. The 29 dispatches that do not run stay missing in the round; closing the round with them unrun is the operator's waiver.
++- 2026-11-23 - orchestrator: review round 2 run on head b1538097e: 24 reviewer dispatches (13 reviewers over slice-03 and slice-04; sonnet, review-regression on opus), one verifier pass (haiku), one premise pass (opus). Result: 13 findings, 0 blocker, 0 major, 9 minor, 4 info. All 22 findings of round 1 that were in the fix loop are closed against the code; F-022 is closed with a regression (round 2's F-001). Round 2's minors: F-001 a node whose only relationships are links to itself gets a blank Relationships list and the Wiki count still includes them (left by the F-022 fix); F-002 a Wiki-link lookup or a load-more page in flight is dropped when the user leaves the view and returns (brought by the F-004 fix); F-003 a failed quiet catalog re-read shows the error banner (brought by the F-004 fix); F-004 the node-memory write has two spellings; F-005 finding ids in test names; F-006 to F-009 test gaps in the fix code (16 of 34 new mutants survive, two of them judged redundant code). Info, not in the fix loop: F-010 one catalog read per return with no coalescing, F-011 and F-012 the popover is not placed again when its content grows or the page scrolls under it (unmeasured), F-013 two readers of the graph state (not reachable today).
++- 2026-11-23 - orchestrator: evidence run by the orchestrator in round 2: `keryx review mutate` over round 1's 82 mutants on this head (76 killed, 2 survived as equivalent, 4 invalid on moved lines) and over the 34 mutants review-testing-practices proposed for the fix code (18 killed, 16 survived, 0 invalid; research-evidence/mutation-2.md). Verifier: 10 confirmed (4 by the recorded mutation run, 6 by site check), 0 refuted, 3 unverifiable (F-002 not reproduced by a run, F-011 and F-012 need a render). Premise: 8 upheld, 1 challenged (F-005). Not rendered live: F-001 (none of the project's 129 wiki pages links to itself; the producer's path to a self edge was read in src/integrations/metaproject-explorer.ts:79 and :159-163).
++- 2026-11-23 - orchestrator: `keryx review ingest` refused review-regression's minor about the dropped lookup (`non-regression-severity`: a minor cannot be a scope-B claim); the reviewer had asked for it to be filed under scope A rather than raised. The orchestrator put the claim to review-logic (the reviewer of the same slice) as a scope-A question; it traced and confirmed it at minor (research-evidence/followup-review-logic-w3.txt) and adds that against the base branch this is not a regression, because there the explorer unmounted on leaving. It is round 2's F-002.
++- 2026-11-23 - orchestrator: operator asked with the host question tool about F-005, which the premise judge held (the repository already titles tests with the finding id they answer, about 20 test files outside this branch, and no rule says otherwise). Answer verbatim: "dismiss". `keryx review decide-premise` refused the first record because the question's text did not carry the finding id; asked once more with the id in the question, answer verbatim: "dismiss"; recorded in the package's operator-decisions.json. F-005 is closed without a change.
++- 2026-11-23 - orchestrator: round 2 verdict (`keryx review verdict`): no open blockers or majors; 8 minor to address (F-001 to F-004, F-006 to F-009). Readiness is NOT READY on four items that follow from the operator's choice of scope (files-covered, blast-radius, reviewers, ledger census): closing the round with the 29 dispatches unrun is the operator's waiver. Fix round 2: T22 (behaviour: F-001 to F-004) then T23 (test strength: F-006 to F-009), sequential because both edit MetaprojectView.dom.test.tsx; then review round 3 over the fix commits.
++- 2026-11-23T10:52:22.579Z - task-attempt: T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)
++- 2026-11-23T10:52:22.786Z - task-added: T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)
++- 2026-11-23T10:52:22.977Z - task-added: T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)
++- 2026-11-23T10:52:23.173Z - task-depends-set: T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round
++- 2026-11-23T10:53:40.447Z - task-attempt: T22: started (attempt 1) — 515-T22 (fix round 2)
++- 2026-11-23T11:04:12.196Z - task-done: T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)
++- 2026-11-23 - orchestrator: T22 accepted (worker on opus, STATUS: DONE_WITH_CONCERNS). Verified by the orchestrator: the result file validates against its resolved context; `bunx tsc --noEmit` exit 0; MetaprojectView.dom.test.tsx 71 pass, RelationshipList.dom.test.tsx 13, NodeDetailsPanel.dom.test.tsx 24, App.dom.test.tsx 2, RelationshipGraph.dom.test.tsx 27, graphLayout.test.ts 51, each in its own process; in a scratch copy with the two production files put back to HEAD, seven of the new tests fail (six in the explorer file, one in the list file) and nothing else does, which also reproduces round 2's F-002 by a run (the verifier had it as unverifiable); the diff was read. What changed: the list's empty note and the Wiki disclosure, its condition and its count, come from the grouping rule (F-001); the catalog effect has its own counter `catalogRead`, and `project.current`, the guard of `openPath` and `loadMoreSearch`, moves only for a read that is not quiet (F-002); a quiet read neither clears nor sets `error` (F-003); `remember` is a stable callback that the effect calls (F-004). Committed as the T22 boundary commit a37719ff2.
++- 2026-11-23 - orchestrator: T22 reported two choices the state x event matrix does not decide; the orchestrator took the default each finding's finish line implies and did not put them to the operator, because both are narrow timing cases with an existing designed response. They are named in the completion report for the operator to overrule. (1) A quiet re-read that finds a changed snapshot replaces the catalog and does not cancel a wiki-link lookup in flight; if that lookup's answer comes from the new snapshot, the existing "Project knowledge changed while loading" banner with Refresh catalog shows. The alternative, dropping the lookup silently, is the defect F-002 was filed for. (2) A return while a catalog read is already in flight (a Retry, the reload after a rebuild) starts no quiet read; the read in flight finishes and shows its own result or failure. The alternative, letting the quiet read replace it, would hide that read's failure. Noticed by the worker and left: the sum incoming + outgoing + second-step is now written in two files (NodeDetailsPanel.tsx:242 and MetaprojectView.tsx).
++- 2026-11-23T11:04:34.114Z - task-attempt: T23: started (attempt 1) — 515-T23 (fix round 2)
++- 2026-11-23T11:14:40.285Z - task-done: T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)
++- 2026-11-23 - orchestrator: T23 accepted (worker on opus, STATUS: DONE). Verified by the orchestrator: the result file validates against its resolved context; in a scratch copy, round 2's surviving mutants re-run against the new tests: R2-2, R2-4, R2-5, R2-6, R2-7, R2-9, R2-16, R2-17, R2-19, R2-26 and R2-28 killed; R2-14 and R2-23, whose lines T22 moved, killed on their new lines; R2-18 survives and is kept as equivalent (the snapshot check in `graphState` cannot change the result, because every full load clears `freshness` in the same update that replaces the catalog); the five branches T22 added (the two `!quiet` gates, the `catalogPending` check and its reset, the `!quietRead.current` gate in the cleanup), mutated by the orchestrator's own script, are all killed, four of them by T22's tests. Ten tests added to MetaprojectView.dom.test.tsx (81 pass) and one to App.dom.test.tsx (3 pass). One production change, a test seam with no change of behaviour: the work-view block of App.tsx is now the exported component `MetaprojectWork`, which takes an optional `explorer` component and passes it `visible`; ProjectWindow renders it with the same props as before. The diff was read. Committed as the T23 boundary commit.
++- 2026-11-23 - orchestrator: after fix round 2, on the head that holds T22 and T23, run by the orchestrator: `cd apps/desktop && bunx tsc --noEmit` exit 0; `bun test src` 922 pass, 0 fail across 89 files (904 before the round); `bunx vite build` exit 0. Seen live in the browser dev build (Chromium, the worktree's own data): on return to the Metaproject view exactly one `catalog` request leaves and no other, with no alert, the open Wiki page and its Relationships disclosure kept (Agent Bus: "Relationships 13" over 13 rows); the Filters popover opens, closes on leaving the view and stays closed on return, with the explorer hidden and mounted once, after the App.tsx change too. Not seen live: a wiki page that links to itself (the project has none), a failed quiet re-read, a lookup in flight across leaving and returning (each rests on its DOM test); the native Tauri window.
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md
+@@ 1,213 @@
++# Implementation Plan
++
++Status: formalized (orchestrator, 2026-11-23)
++
++## Approach
++
++Frontend-only change inside `apps/desktop/src/metaproject/` plus one mount change in
++`apps/desktop/src/App.tsx`. The explorer contract, the CLI, the Rust core and the dev bridge stay
++as they are; the graph stays on core `cytoscape` (no new dependency).
++
++The work is cut so that three implementers can run at once on disjoint files, followed by one
++integration task:
++
++1. **Wave 1, in parallel** — T5 and T6 only add new files; T7 edits existing ones. Nothing in
++   wave 1 changes a file another wave-1 task owns, and the tree type-checks after each of them.
++2. **Wave 2** — T8 swaps the new graph and panel into the explorer, removes the code they replace,
++   and tidies the layout.
++3. **Then** — T9 (guide), T10 (full checks), T11 (live browser verification by the orchestrator),
++   T4 (review round).
++
++Rejected alternatives:
++
++- *One implementer, one task.* Smallest coordination cost, but a 920-line file rewritten in one
++  dispatch has no verification point until the end.
++- *`cose` / `breadthfirst` / `concentric` layouts of core cytoscape.* None can put incoming
++  neighbours on one side and outgoing on the other; `concentric` is today's ring with a second
++  radius. A computed `preset` layout is deterministic and unit-testable.
++- *`cytoscape-dagre`.* Would layer depth-2 paths with crossing minimisation, but adds a dependency
++  for a depth of at most two.
++- *Lifting explorer state into a store to survive unmount.* More code than keeping the view mounted
++  after its first visit, which is how the session view already behaves.
++
++## Design direction
++
++There is no `DESIGN.md` in the repository. This section is the direction for this flow; it is
++derived from the app's existing tokens and screens and introduces no new visual language.
++
++- **Tokens only.** Colours, spacing, type sizes and radii come from
++  `apps/desktop/src/styles/tokens.css` and work in every palette of `themes.css`. No raw colour
++  values in components or CSS; cytoscape gets its colours by resolving tokens at runtime.
++- **Type.** Three sizes in the panel: `--fs-lg` (title), `--fs-md` (body, rows), `--fs-sm` (meta,
++  section headings). Section headings are `--fs-sm`, weight 650, `--fg-muted`. Paths are monospace.
++- **One primary action per surface.** Other actions are quiet (`.btn-ghost` or icon buttons).
++- **Meaning is never colour alone.** Node kinds differ by shape or border style and are named in a
++  legend; relationship kinds are named in group captions and differ by line style.
++- **Reuse.** `.info-panel` / `.info-section` / `.info-row`, `.badge`, `.chip-btn`, `.tabs` / `.tab`
++  with `.tab-count`, `.section-title`, `.activity-row`, `EmptyState`, `Spinner`, `.side-resize`,
++  `Icon`. A new class is added only where none of these fits, and lives in the task's own CSS file.
++- **States.** Every data area has loading, empty (specific reason and an action), error (cause and
++  Retry) and limited (says what is hidden) states. Focus rings stay visible; targets are at least
++  24×24 px; motion respects `prefers-reduced-motion`.
++
++### Graph: a local neighbourhood in columns
++
++Layout is computed by a pure function and handed to cytoscape as `preset` positions.
++
++- Columns, left to right: second-step incoming · incoming · **root** · outgoing · second-step
++  outgoing. A neighbour whose only edges with the root point at the root is *incoming*; one the root
++  points at is *outgoing*; one with both is placed with outgoing. A second-step node goes to the
++  outer column on the side of the first-step node it is attached to.
++- Inside a column nodes are grouped by relationship kind (in the order of
++  `METAPROJECT_EDGE_KINDS_V2`), then sorted by title. Each group has a caption such as
++  "imports · 15".
++- A column shows at most 12 nodes; the rest collapse into one "+N more" entry at the bottom of the
++  column. Hidden neighbours stay reachable in the panel's relationship list.
++- Nodes are rounded rectangles with the label inside, 24 px high, width from the label, at most
++  about 132 px (root up to 180 px); long labels are shortened in the middle so a file extension
++  survives. Column gap about 44 px, row pitch about 30 px. These numbers may be tuned as long as the
++  acceptance criteria hold.
++- Node kind → shape and tint: module (thicker `--fg-muted` border), file (plain), symbol (barrel),
++  wiki (cut rectangle, `--info`), spec and change (tag shape, `--ok` / `--warn`), archive (tag shape,
++  dashed border). The root keeps its kind's shape with an `--accent` border and `--bg-selected` fill.
++- Relationship kind → line style: solid for `imports`, `calls`, `asset`; dashed for `describes`,
++  `links`, `changes-spec`, `spec-context`; dotted for `contains`, `defines`. Module imports with a
++  `count` are thicker. Second-step edges are fainter.
++- Zoom: fit, but never automatically below 0.8 (12 px labels stay ≥ 9.6 px) or above 1.15. When the
++  layout is wider than the box at 0.8, centre on the root and let the user pan. Wheel zoom and three
++  overlay buttons (zoom in, zoom out, fit) are available; nodes are not draggable.
++- Overlay (HTML, not canvas): a caption "<root title> · N incoming · M outgoing" (plus "limited"
++  when the projection is truncated) and a legend listing only the node kinds and line styles present.
++- Interaction: tap a node selects it; tap "+N more" asks the host to reveal the relationship list;
++  hover highlights a node with its edges and fades the rest.
++- Lifecycle: one cytoscape instance per mount; a new projection replaces elements in a batch; the
++  select callback is read through a ref; colours are re-resolved when `data-theme` or
++  `data-palette` changes on the document element; label size follows `--text-scale`.
++- The canvas stays `aria-hidden`; the keyboard and screen-reader path is the relationship list.
++
++### Panel: a summary of the node
++
++- Header: kind badge with icon, close button; title; path in monospace with a "Copy path" control.
++- Facts (`.info-row`): module (files), page type and status (wiki, as a badge), line (symbols),
++  relationship counts "N incoming · M outgoing" from the current projection, with "limited" when it
++  is truncated.
++- One tab bar with counts: **Relationships** · **Wiki** · **OpenSpec**. Relationships is the default.
++- Relationships: adjacent relationships grouped by direction, then by kind; a row is the other
++  node's title, a kind badge and its path, and selects that node. Second-step relationships are a
++  separate group where each row names both ends and can open either. Evidence is shown as at most
++  two example lines; digests are not shown.
++- Wiki / OpenSpec: today's behaviour (linked documents, suggested component page, preview, Open,
++  Find, Draft), with a preview cleaned of Markdown markers and of the "Covers:" metadata line.
++- Docked on wide hosts with a resize handle; on a host narrower than 820 px it is a right-anchored
++  drawer that leaves part of the content visible, takes focus on open and returns it on close.
++  Docked, it does not move focus when it opens.
++
++## File ownership
++
++| Task | May create or edit | Must not edit |
++|---|---|---|
++| T5 graph | new: `graphLayout.ts`, `graphLayout.test.ts`, `RelationshipGraph.tsx`, `RelationshipGraph.dom.test.tsx`, `graph.css` (all in `apps/desktop/src/metaproject/`) | every existing file |
++| T6 panel | new: `NodeDetailsPanel.tsx`, `NodeDetailsPanel.dom.test.tsx`, `RelationshipList.tsx`, `RelationshipList.dom.test.tsx`, `nodePanel.css` (all in `apps/desktop/src/metaproject/`) | every existing file |
++| T7 navigation | `MetaprojectView.tsx` (not the `Graph` and `RelationshipList` components, not the `<GraphNodePanel>` element), `useExplorerNavigation.ts`, `MetaprojectView.dom.test.tsx`, `apps/desktop/src/App.tsx` | T5 and T6 files, `GraphNodePanel.tsx`, `metaproject.css` |
++| T8 integration | `MetaprojectView.tsx`, `metaproject.css`, `MetaprojectView.dom.test.tsx`, `OpenSpecView.tsx` (imports only), delete `GraphNodePanel.tsx`; T5/T6 files only to fix an integration defect | — |
++| T9 guide | `docs/docs/guides/desktop-metaproject.md` | code |
++
++Nobody edits `src/integrations/**`, `apps/desktop/src-tauri/**`, `apps/desktop/dev/**` or
++`apps/desktop/src/platform/metaproject.ts`.
++
++## Interfaces between tasks
++
++T8 integrates against exactly these exports. T5 and T6 may add optional props; they may not rename
++or drop these.
++
++```tsx
++// apps/desktop/src/metaproject/RelationshipGraph.tsx  (T5)
++export function RelationshipGraph(props: {
++  projection: MetaprojectNeighbors;                 // root = the selected node
++  busy?: boolean;                                    // a newer projection is loading: keep rendering, mark aria-busy, dim
++  onSelect: (id: string) => void;                    // a node was tapped
++  onShowHidden?: (side: "incoming" | "outgoing") => void; // a "+N more" entry was tapped
++}): JSX.Element;
++
++// apps/desktop/src/metaproject/RelationshipList.tsx  (T6) — same name and props as today's export in MetaprojectView.tsx
++export function RelationshipList(props: {
++  projection: MetaprojectNeighbors;
++  select: (id: string) => void;
++}): JSX.Element;
++
++// apps/desktop/src/metaproject/NodeDetailsPanel.tsx  (T6)
++export const isOpenSpecNode: (node: MetaprojectNode) => boolean;
++export function NodeDetailsPanel(props: {
++  node: MetaprojectNode;
++  relationships: MetaprojectNeighbors | null;        // filtered neighbourhood of `node`; null while loading or after a failure
++  relationshipsPending: boolean;
++  relationshipsProblem: string;                      // "" when none
++  revealRelationships?: number;                      // when this number changes: show the Relationships tab and scroll it into view
++  documents: MetaprojectNeighbors | null;            // linked-document neighbourhood (today's `projection` prop)
++  documentsPending: boolean;                         // today's `pending`
++  documentsProblem: string;                          // today's `problem`
++  suggestedWiki?: MetaprojectNode;
++  openSpec: boolean;                                 // the CLI supports OpenSpec
++  readPreview: (id: string) => Promise<MetaprojectDetail>;
++  width?: number;
++  onResize: (width: number) => void;
++  onClose: () => void;
++  onSelect: (id: string) => void;                    // select a neighbour in the graph
++  onOpen: (node: MetaprojectNode) => void;           // open a document in Wiki / OpenSpec
++  onFind: (tab: "wiki" | "openspec") => void;
++  onDraft?: (task: string) => Promise<void>;
++  onRetry: () => void;
++}): JSX.Element;
++```
++
++## State × event matrix
++
++Rows are states the explorer can be in; columns are the events this change reaches. A cell says
++what the user sees and which state survives. "—" means the event cannot happen in that state;
++"no change" means today's behaviour is kept.
++
++| state \ event | select a node (list, graph, panel row) | change a Graph filter | switch view (Graph / Wiki / OpenSpec) | leave the work view and return | Back | Retry / Refresh | theme or palette change | rebuild finishes |
++|---|---|---|---|---|---|---|---|---|
++| negotiating the protocol | — | — | no change | still negotiating; result applied on arrival (AC10) | — | — | no change | — |
++| negotiation failed | — | — | banner stays | banner and Retry still there (AC10) | — | re-negotiates; banner stays until success; no "Loading…" next to the error (AC15) | no change | — |
++| catalog loaded, nothing loading | new selection is a history entry (AC11); the list row is selected and scrolled into view (AC17) | relationships re-read with the new filters; not a history entry | each view keeps its own query and selection (no change) | mode, query, selection, filters, panel state and history are as they were (AC10) | previous selection, panel state and scroll restored (AC11) | no change | graph re-coloured in place, no selection change needed (AC6) | — |
++| relationships loading for a new selection | the newest selection wins; stale responses are dropped (no change) | same | Wiki's relationships use fixed defaults, never Graph's filters (AC13) | load continues, result applied on arrival (AC10) | previous route; stale response dropped | no change | no change | — |
++| … while a previous graph exists | previous graph stays rendered, marked busy, until the new one arrives (AC17) | same | — | — | same | — | — | — |
++| relationships failed | no change (error does not follow to the new selection) | re-read | no change | error still shown | no change | no change | — | — |
++| projection limited (truncated) | no change | no change | no change | no change | no change | no change | no change | — |
++| … column over the cap | "+N more" reveals the relationship list in the panel (AC2, AC8) | — | — | — | — | — | — | — |
++| snapshot mismatch | no change | no change | no change | banner still shown | no change | catalog re-read (no change) | — | — |
++| rebuilding the graph | allowed; rebuild continues | allowed | allowed | rebuild continues; button state correct on return | allowed | allowed; the rebuild's end still re-enables the button and re-reads the catalog (AC14) | — | button enabled again and catalog re-read, whatever reloaded meanwhile (AC14) |
++| Wiki with a query and no hits | — | no effect on Wiki (AC13) | no change | as left | previous route | — | — | — |
++| … arrived through "Find a Wiki page" | — | — | — | — | returns to the graph node | — | — | — |
++| … what the article area shows | an empty state naming the query, never an unrelated article (AC12) | | | | | | | |
++| typing in the search field | — | — | — | query kept | query edits are not history entries (AC11) | — | — | — |
++| Wiki article open, link clicked | target not loaded → one lookup read, then open; unresolved → inline message naming the path (AC16) | — | — | — | returns to the article | — | — | — |
++
++## Steps
++
++1. T5 — graph layout module and `RelationshipGraph` (new files).
++2. T6 — `NodeDetailsPanel` and `RelationshipList` (new files).
++3. T7 — navigation and state fixes D1–D7 in the explorer, the navigation hook and `App.tsx`.
++4. T8 — integrate T5 and T6 into the explorer; move the relationship list into the panel; compact,
++   labelled filters; counts in the list header; keep the previous graph while loading; delete the
++   replaced code and styles.
++5. T9 — update the Desktop Metaproject guide.
++6. T10 — desktop typecheck and the full desktop test suite.
++7. T11 — live browser verification (dev build) at 1180×780, 1440×900 and 720×480, dark and light.
++8. T4 — review round, fix rounds as needed.
++
++## Risks
++
++- **cytoscape under happy-dom.** The existing tests never mount the canvas. T5 keeps layout and
++  style mapping in pure, tested functions and keeps caption and legend in HTML; if cytoscape cannot
++  mount in happy-dom the component test injects a stand-in for the cytoscape factory and says so.
++- **Visual tuning without a browser.** Implementers verify with tests and the type checker; the
++  orchestrator verifies the render in T11. A fix round after T11 is expected and budgeted.
++- **Three lanes in one worktree.** Disjoint file ownership (table above), no `git stash`, no
++  `git add -A`, commits only by the orchestrator at task boundaries with explicit paths. A lane
++  that sees type errors in another lane's in-progress files reports them and does not touch them.
++- **`MetaprojectView.tsx` is edited by T7 and then T8.** They run one after the other.
++- **Parallel backend session** edits `apps/desktop/src/platform/metaproject.ts`; this flow does not.
++- **Keeping the view mounted** keeps its effects alive while hidden; the graph must tolerate a
++  zero-size container (it already guards `fit` on size).
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 1,4 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`. The table follows `flow.json`: T12–T16 were added
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 7,12 @@
++
++| ID | Kind | Title | Depends on | Criteria |
++|----|------|-------|------------|----------|
++| T1 | context | Collect remaining context | — | — |
++| T2 | implement | Implement per plan (scaffold; superseded by T5–T8) | — | — |
++| T3 | test | Add/adjust tests and make them pass (scaffold; tests live in T5–T8, suite in T10) | — | — |
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 14,32 @@
++| T5 | implement | Graph layout module and RelationshipGraph component (new files) | — | AC1, AC2, AC3, AC4 |
++| T6 | implement | NodeDetailsPanel and RelationshipList components (new files) | — | AC7, AC8, AC9 |
++| T7 | implement | Explorer navigation and state fixes D1–D7 | — | AC11, AC12, AC13, AC14, AC15, AC16 (and the code for AC10) |
++| T8 | implement | Integrate graph and panel into the explorer; filters, counts, cleanup | T5, T6, T7, T12, T13 | AC17, AC18, AC19 (and the code for AC5, AC6, AC20) |
++| T9 | docs | Update the Desktop Metaproject guide | T12, T13 | AC21 |
++| T10 | verify | Desktop typecheck and full desktop test suite pass | T8 | AC19 |
++| T11 | verify | Live browser verification at three window sizes, dark and light | T8, T14 | AC5, AC6, AC10, AC20 |
++| T12 | implement | Graph polish from the isolated live preview | T5 | AC1, AC2, AC3, AC4 |
++| T13 | implement | Panel and relationship list polish from the isolated live preview | T6 | AC7, AC8, AC9 |
++| T14 | implement | Compact filter bar and one-row header on narrow hosts (became the Filters popover) | T8 | AC17, AC19, AC20 |
++| T15 | docs | Align the guide with the final screen and refresh its screenshots | T14 | AC21 |
++| T16 | implement | One-line freshness banner with details on demand | T14 | AC19, AC20 |
++| T17 | implement | Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008) | — | AC10, AC11, AC14, AC16, AC17, AC19, AC20 |
++| T18 | implement | Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022) | — | AC7, AC8, AC9, AC19 |
++| T19 | test | Fix round 1: graph test strength (F-012, F-013, F-021) | — | AC1, AC2, AC3, AC4, AC6, AC19 |
++| T20 | test | Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018) | T17 | AC10, AC11, AC12, AC13, AC16, AC17, AC19 |
++| T21 | docs | Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes) | T17, T18 | AC21 |
++| T22 | implement | Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004) | — | AC7, AC10, AC14, AC16, AC19 |
++| T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 35,95 @@
++
++## Context
++
++- **T1.** Done by the review that preceded this flow; its findings are in `context.md`,
++  "Agent Findings".
++
++## Implement
++
++- **T5 — graph (wave 1).** New files only, in `apps/desktop/src/metaproject/`: `graphLayout.ts`
++  (pure `layoutNeighborhood`), `graphLayout.test.ts`, `RelationshipGraph.tsx`,
++  `RelationshipGraph.dom.test.tsx`, `graph.css`. Design: `plan.md`, "Graph: a local neighbourhood in
++  columns". Export contract: `plan.md`, "Interfaces between tasks".
++- **T6 — panel (wave 1).** New files only, in `apps/desktop/src/metaproject/`:
++  `NodeDetailsPanel.tsx`, `NodeDetailsPanel.dom.test.tsx`, `RelationshipList.tsx`,
++  `RelationshipList.dom.test.tsx`, `nodePanel.css`. Design: `plan.md`, "Panel: a summary of the
++  node". The behaviour of the Wiki / OpenSpec document tabs is carried over from
++  `GraphNodePanel.tsx`, which stays untouched until T8.
++- **T7 — navigation and state (wave 1).** Defects D1–D7 of `context.md` in `MetaprojectView.tsx`
++  (outside the `Graph`, `RelationshipList` and `<GraphNodePanel>` parts), `useExplorerNavigation.ts`
++  and `apps/desktop/src/App.tsx`, with tests in `MetaprojectView.dom.test.tsx`. Behaviour per cell:
++  `plan.md`, "State × event matrix".
++- **T8 — integration (wave 2).** Replace the inline `Graph` with `RelationshipGraph` and
++  `GraphNodePanel` with `NodeDetailsPanel`; import `RelationshipList` from its own file; render the
++  relationship list in the panel and no longer under the canvas; give the graph the freed height;
++  human-readable filter labels, `defines` / `calls` disabled without a symbol layer; "shown of total"
++  in the list header instead of the "Catalog is limited" banner; scroll the selected row into view;
++  keep the previous graph, marked busy, while a new selection loads; wire `onShowHidden` to
++  `revealRelationships`; show explorer banners above the OpenSpec view; delete `GraphNodePanel.tsx`,
++  the replaced CSS and the dead `@media (max-width: 700px)` block; update the tests.
++
++## Docs
++
++- **T9.** `docs/docs/guides/desktop-metaproject.md`: "Trace relationships in Graph", the Wiki
++  section and the opening paragraph, to match what ships. Screenshots are out of scope.
++
++## Verify
++
++- **T10.** `cd apps/desktop && bunx tsc --noEmit && bun test src` on the integrated head.
++- **T11.** The orchestrator opens the browser dev build on this repository and checks AC5, AC6,
++  AC10 and AC20, recording the measured values in `journal.md`.
++
++## Polish and follow-up tasks (added after the first plan)
++
++- **T12 — graph polish.** Changes the orchestrator asked for after seeing the graph on an isolated
++  live preview; dispatch `dispatch/T12.dispatch.json`.
++- **T13 — panel and list polish.** The same for the details panel and the relationship list;
++  dispatch `dispatch/T13.dispatch.json`.
++- **T14 — filters.** Started as a compact filter bar; on the operator's request it became a "Filters"
++  button that opens a popover; dispatch `dispatch/T14.dispatch.json`.
++- **T15 — guide alignment.** The guide brought in line with the final screen, with the two
++  screenshots replaced; dispatch `dispatch/T15.dispatch.json`.
++- **T16 — freshness banner.** One line with "Details" on demand; dispatch `dispatch/T16.dispatch.json`.
++
++## Review
++
++- **T4.** `review-orchestrator` on the flow's diff, with fix rounds through `task-implementer`.
++  Round 1: package `.metaproject/reviews/2026-11-23-review-flow-branch` (29 findings: 2 major,
++  20 minor, 7 info).
++  Round 2 (delta over the fixes of round 1): package
++  `.metaproject/reviews/2026-11-23-review-flow-branch-r02` (13 findings: 9 minor, 4 info; one minor
++  dismissed by the operator).
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md
+@@ 98,131 @@
++
++## Fix round 1 (findings of review round 1)
++
++Each task's finish line is in its dispatch file; the findings are in the review package's
++`findings.json`. Info findings are not fixed; they are listed in the completion report.
++
++- **T17 — explorer behaviour.** F-001 (the Filters popover runs past a 720×480 window), F-003 (its
++  Escape layer outlives the visible view), F-004 (re-read the catalog on return, upheld by the
++  operator), F-005 (Wiki-link lookups settled by arrival order), F-006 (a catalog walk on every
++  render), F-008 (Back in OpenSpec lands at the top, upheld by the operator).
++- **T18 — details panel and relationship list.** F-007 (the fact row also shows the second-step
++  count, the operator's choice), F-022 (a self-loop counted in the panel and skipped in the graph
++  caption), F-019 and F-020 (surviving mutants of the panel and the list).
++- **T19 — graph test strength.** F-012, F-013, F-021: 22 surviving mutants of `graphLayout.ts` and
++  `RelationshipGraph.tsx`.
++- **T20 — explorer test strength.** F-011, F-014 to F-018: 26 surviving mutants of
++  `MetaprojectView.tsx`, `useExplorerNavigation.ts` and `App.tsx`; after T17, which edits the same files.
++- **T21 — flow record and guide.** F-009 (this file), F-010 (the resolved-context and result files the
++  T9 and T15 dispatches name), and the guide where T17 and T18 change what it describes.
++
++## Fix round 2 (findings of review round 2)
++
++The finding ids below are round 2's. Each task's finish line is in its dispatch file; the findings are
++in `.metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json`. F-005 (finding ids in test
++names) was dismissed by the operator; the info findings F-010 to F-013 are not fixed.
++
++- **T22 — explorer behaviour the first fixes left.** F-001 (a node whose only relationships are links
++  to itself gets a blank Relationships list, and the Wiki count still includes them), F-002 (a
++  Wiki-link lookup or a "load more" page in flight is dropped when the user leaves the view and
++  returns), F-003 (a failed quiet catalog re-read shows the error banner), F-004 (two spellings of the
++  node-memory write).
++- **T23 — test strength of the first fixes.** F-006 to F-009: 14 surviving mutants of the Filters
++  popover placement, the quiet catalog re-read, the node memory and the `visible` wiring in `App.tsx`;
++  after T22, which edits the same files.

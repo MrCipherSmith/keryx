@@ -1,0 +1,51 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Read slice-02 in full and the effects, refs and MetaprojectWork at head. The lifecycle holds: the visible effect body runs in the commit that changes `visible`, and the catalog effect cleanup runs in the next commit (after setRevision), so `quietRead.current` is still true when the cleanup reads it; StrictMode's double invocation runs only on mount, where `quietRead` is false and `loaded` is false; async continuations write refs only under `generation === catalogRead.current`, which the cleanup has already moved after an unmount; `remember` is stable and `useMemo` over `currentProjection` is effective (the expression returns the `projection` reference or null); `MetaprojectWork` and `LazyMetaprojectView` are module-level, so no remount, and `onDraft` is not in any dependency list. One minor finding: a quiet re-read that succeeds does not clear a standing catalog-read error.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 378,
+      "quote": "setError(\"\");",
+      "problem": "Fix round 2 (answering F-003) made `setError(\"\")` run only for a non-quiet read (`if (!quiet) { project.current++; setError(\"\"); }`), and a quiet success never touches `error`. `error` is one state shared by a failed catalog read (Retry or Refresh that failed) and a failed rebuild. So after a loud catalog reload fails (banner with Retry, `loaded.current` still true from the earlier load), a successful quiet re-read on return replaces the catalog (changed snapshot: `setCatalog(result)`) or refreshes freshness, and the old failure message stays.",
+      "impact": "Trigger: a Retry or Refresh fails (CLI busy), the user leaves the Metaproject view and returns once the CLI works. Outcome: the quiet read succeeds and the catalog is current, but the alert 'The CLI is busy.' with Retry still shows over it until the user clicks Retry. No data is lost; the user sees a failure banner for a read that has since succeeded. The test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins the rebuild case, where keeping the message is right; it does not tell the two sources apart.",
+      "suggested_fix": "Keep rebuild's failure and the catalog read's failure apart (a second state, or remember which one set `error`), and let a successful quiet read clear the catalog-read one. If keeping the banner is the intended choice, say so in the comment at lines 334-336 and pin the catalog-read case with a test.",
+      "evidence": "Read MetaprojectView.tsx 371-416 (success path at 387-400 has no setError; catch at 403 sets it only for !quiet) and 671-681 (rebuild() writes the same `error`). Introduced by the fix that answered round 2's F-003 (T22). Not run (read-only).",
+      "confidence": "medium",
+      "reviewer": "review-frontend"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+
+## Frontend Review
+
+### Scope
+- Slice: slice-02 (App.tsx, MetaprojectView.tsx, RelationshipList.tsx and their three test files), range b1538097e636..8e0f656fb2aa, read in full; surrounding code read at head in MetaprojectView.tsx 255-780 and useExplorerNavigation.ts.
+- Tools: read-only; nothing run.
+
+### Lifecycle checks (what was looked at and found sound)
+- Quiet flag order: the visible effect sets `quietRead.current = true` and calls `setRevision` in the commit where `visible` changed; the catalog effect cleanup runs in the following commit, so it reads true and skips `project.current++`; the body then reads and resets the flag. Two dependency changes in one commit would need a loud `setRevision` (rebuild's reload) to land in the same batch as the return; the effect then runs once as quiet, and `rebuild()` already cleared `error` itself, so nothing visible differs.
+- StrictMode: the double invocation is mount only (body, cleanup, body); `wasVisible` starts equal to `visible`, so no quiet read starts; `catalogPending` ends true until the last generation settles.
+- `catalogPending`: written only under `generation === catalogRead.current`; a superseded or unmounted read never writes it; a failed first read resets it, so Retry works. The cleanup bumps `catalogRead`, so a continuation after unmount writes no ref or state.
+- `remember`: `useCallback` with `[]` is stable, so the effect still runs only when `nodes` changes.
+- `wikiRelationships`: `currentProjection` is the `projection` reference or null, so the memo holds; the row count (incoming + outgoing + second step) equals the panel tab count at NodeDetailsPanel.tsx:242 and the list's own `empty` test, so the disclosure, list and panel agree.
+- `MetaprojectWork`: module-level function; `explorer` defaults to the module const `LazyMetaprojectView`, so the element type is stable across renders and the explorer is not remounted; `onDraft` is only read when invoked (not in any effect dependency), as before; `setRoute` is a `useState` setter.
+- Known and accepted by the brief, not re-reported: a quiet read that finds a changed snapshot does not cancel a wiki-link lookup in flight; a return during a catalog read starts no quiet read.
+
+### Not checked
+- F-006, F-007 and F-008 (test-strength findings): I read the new tests but did not run them or the mutants, so I give no disposition.
+- Native Tauri window, WebKit on older macOS: not verifiable here.

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-branch-r04#F-004",
+      "answer": "dismiss",
+      "reason": "Every fix task's result file in this flow writes its own review round's finding ids bare under a title that names the fix round, and spells out an older round's id; T24's result file follows that convention, and the operator keeps it, as for round 2's F-005.",
+      "quote": "dismiss",
+      "at": "2026-11-23T12:20:27.562Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "05a02aba3962914888e64b521ee52167b762423d703753c164dbe788777b3693"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "AskUserQuestion-r04-F-004",
+        "questionText": "F-004 (раунд 4): в файлах результатов задач-исправлений этого потока номера находок своего раунда пишутся без раунда (F-001, F-004), а заголовок задачи называет раунд; номер находки старого раунда пишется полностью («round 2's F-003»). Файл результата T24 следует тому же правилу. Добавить в файл T24 пометку, что его номера — находки раунда 3?",
+        "answerText": "dismiss",
+        "time": "2026-11-23T12:20:27.562Z"
+      }
+    }
+  ]
+}

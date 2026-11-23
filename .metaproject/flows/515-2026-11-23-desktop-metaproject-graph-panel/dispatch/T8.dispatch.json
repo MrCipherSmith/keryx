@@ -1,0 +1,97 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T8",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
+    "description": "Put the new graph and the new details panel into the Desktop Metaproject explorer and finish the Graph screen. The parts exist and are committed: `RelationshipGraph` (RelationshipGraph.tsx, graph.css, graphLayout.ts), `NodeDetailsPanel` and `RelationshipList` (NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css) and the shared `labels.ts`. Their export contracts are in plan.md, 'Interfaces between tasks'. Layout and behaviour per situation are decided in plan.md ('Design direction', 'State x event matrix').\n\nIn MetaprojectView.tsx:\n1. Swap. Use `RelationshipGraph` in place of the inline `Graph` function, `NodeDetailsPanel` in place of `GraphNodePanel`, and `RelationshipList` from ./RelationshipList in place of the inline one. Delete the two inline functions and GraphNodePanel.tsx; anything that imported `isOpenSpecNode` from it imports it from ./NodeDetailsPanel.\n2. Graph mode layout: the filter bar, then the graph filling the remaining height of the content column. The relationship list is no longer rendered under the canvas; it is the panel's Relationships tab. Wiki mode keeps its Relationships disclosure with `RelationshipList`.\n3. Panel wiring: `relationships` is the current filtered projection of the selection (null while it loads or after a failure) with `relationshipsPending` and `relationshipsProblem`; the document props carry what `projection`, `pending` and `problem` carried; `onSelect` selects a neighbour; the graph's `onShowHidden` opens the panel and bumps the number passed as `revealRelationships`.\n4. While the relationships of a new selection load, the previous graph stays rendered with `busy` instead of being unmounted; it is dropped when the read fails or the view changes.\n5. Filters: labels from RELATIONSHIP_KIND_LABELS; one compact row (selects for direction and depth, `.chip-btn` toggles for kinds); `defines` and `calls` disabled with a stated reason when `catalog.hasSymbolLayer` is false; a Reset control when the filters differ from their defaults.\n6. List header: 'Catalog · <shown> of <total>' with the total from `catalog.counts` (files + wiki + modules), replacing the 'Catalog is limited. Search for more results.' banner; 'Results · <n>' while searching.\n7. The selected list row is scrolled into view when the selection changes (for example from the graph).\n8. Explorer banners (protocol error, read error, snapshot mismatch) render above the OpenSpec view, not below it. The freshness banner reads as one sentence ('Graph is stale: <reason>'), not 'Graph stale. an untracked ...'.\n9. Carried over from the review of the navigation task: the Wiki empty state must not say 'No Wiki page matches' while a search is still running; `useExplorerNavigation.ts` restores the scroll of `.metaproject-node-body`, the old panel body class, and must point at the new panel body; keep a map of nodes already seen so that Back to a node shows its panel at once instead of waiting for its projection.\n\nIn metaproject.css: remove the rules the swap makes dead (`.metaproject-node-*`, `.metaproject-relations`, the old `.metaproject-graph*` rules), remove the `@media (max-width: 700px)` block (the window cannot be narrower than 720 px, so it never applies) and, where a narrow layout is needed, use a container query on the explorer as `.composer` does elsewhere in the app. The three columns are list, content, panel. At the minimum window (720x480, a 660 px wide host) with the panel closed and no warning banner at least 140 px of graph height must be visible without scrolling (AC20); the orchestrator measures this in a browser.\n\nTests (MetaprojectView.dom.test.tsx): update what the swap changes (the Wiki tab must be activated before 'Open in Wiki'; the old relationship row texts are gone) and add tests for AC17. cytoscape cannot create a canvas under happy-dom; `RelationshipGraph` has a test-only `createCytoscape` prop (see RelationshipGraph.dom.test.tsx for the headless factory) — give the explorer a way to pass it in tests so the graph can mount there.\n\nYou may edit the graph and panel files only to fix a defect the integration exposes, and you say which.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+    "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
+    "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
+    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+    "apps/desktop/src/metaproject/OpenSpecView.tsx",
+    "apps/desktop/src/metaproject/GraphNodePanel.tsx",
+    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "apps/desktop/src/metaproject/graph.css",
+    "apps/desktop/src/metaproject/graphLayout.ts",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/nodePanel.css",
+    "apps/desktop/src/metaproject/labels.ts",
+    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+    "apps/desktop/src/styles/components.css",
+    "apps/desktop/src/styles/flows.css",
+    "apps/desktop/src/components/ui.tsx"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/metaproject.css, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/metaproject/useExplorerNavigation.ts, apps/desktop/src/metaproject/OpenSpecView.tsx, apps/desktop/src/metaproject/GraphNodePanel.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
+    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T07:48:50Z",
+    "created_by": "flow-orchestrator"
+  }
+}

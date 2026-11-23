@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx"
+  ],
+  "changedLines": 1316
+}

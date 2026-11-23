@@ -1,0 +1,23 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-01 read in full (journal.md, tasks.md, verification/fix-round-2.md, T22.result.json, the three test files and the five MetaprojectView.tsx hunks). Both prior findings of this reviewer are closed: tasks.md gives T4 the dependencies through T25 and names T22-T25 in its opening sentence, and T22's note now says 'Round 1's F-005'. The new code names (error as { source, message } | null, its two comments, the comment beside quietRead), the nine test titles and the new record entries carry the round of every finding id they use; no finding.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Notes (not findings):
+- F-006: the T4 row reads 'T8, ... T21, T22, T23, T24, T25'; the opening sentence reads 'T22-T23 after review round 2, T24-T25 after review round 3'; the two new rows and the 'Fix round 3' section say 'The finding ids below are round 3's'. Matches the journal's task-depends-set entry.
+- F-008: the sentence in T22.result.json now reads 'Round 1's F-005 token rule in openPath (lookup.current) is untouched' with a note that it was reworded in T25. The bare F-001..F-004 in the same notes string are round 2's, as before; not re-raised.
+- Code: error is { source: "catalog" | "rebuild"; message } | null, the same inline-object shape as searchError beside it; the comment above it, the one at the quiet success line and the one beside quietRead state the same rule consistently (duplication of comments is review-clean-code's). The nine test titles describe behaviour and carry no finding ids; the section banner 'Fix round 3 (T24)' repeats the pattern round 2's dismissed F-005 covers (known).
+- Record: bare ids in the T25 journal entry ('the info finding F-015') and the new tasks.md section sit inside sentences that open with 'Round 3's' or 'round 3's', so they read one way. Mutant ids R2-n / T23-n are explained in fix-round-2.md (answers round 3's F-015).
+- Not read: slice-02 and slice-03 (another dispatch). Nothing run (read-only, exec budget 0).
+Routing audit: graph_used no (not-relevant, slice supplied), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no.

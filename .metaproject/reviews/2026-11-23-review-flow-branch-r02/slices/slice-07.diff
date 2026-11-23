@@ -1,0 +1,2420 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json
+@@ 1,50 @@
++{
++  "task": {
++    "task_id": "task-8",
++    "task_name": "Integrate graph and panel into the explorer; filters, counts, cleanup",
++    "task_type": "mixed",
++    "complexity": "high",
++    "dependencies": [],
++    "description": "Put the new graph and the new details panel into the Desktop Metaproject explorer and finish the Graph screen. The parts exist and are committed: `RelationshipGraph` (RelationshipGraph.tsx, graph.css, graphLayout.ts), `NodeDetailsPanel` and `RelationshipList` (NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css) and the shared `labels.ts`. Their export contracts are in plan.md, 'Interfaces between tasks'. Layout and behaviour per situation are decided in plan.md ('Design direction', 'State x event matrix').\n\nIn MetaprojectView.tsx:\n1. Swap. Use `RelationshipGraph` in place of the inline `Graph` function, `NodeDetailsPanel` in place of `GraphNodePanel`, and `RelationshipList` from ./RelationshipList in place of the inline one. Delete the two inline functions and GraphNodePanel.tsx; anything that imported `isOpenSpecNode` from it imports it from ./NodeDetailsPanel.\n2. Graph mode layout: the filter bar, then the graph filling the remaining height of the content column. The relationship list is no longer rendered under the canvas; it is the panel's Relationships tab. Wiki mode keeps its Relationships disclosure with `RelationshipList`.\n3. Panel wiring: `relationships` is the current filtered projection of the selection (null while it loads or after a failure) with `relationshipsPending` and `relationshipsProblem`; the document props carry what `projection`, `pending` and `problem` carried; `onSelect` selects a neighbour; the graph's `onShowHidden` opens the panel and bumps the number passed as `revealRelationships`.\n4. While the relationships of a new selection load, the previous graph stays rendered with `busy` instead of being unmounted; it is dropped when the read fails or the view changes.\n5. Filters: labels from RELATIONSHIP_KIND_LABELS; one compact row (selects for direction and depth, `.chip-btn` toggles for kinds); `defines` and `calls` disabled with a stated reason when `catalog.hasSymbolLayer` is false; a Reset control when the filters differ from their defaults.\n6. List header: 'Catalog · <shown> of <total>' with the total from `catalog.counts` (files + wiki + modules), replacing the 'Catalog is limited. Search for more results.' banner; 'Results · <n>' while searching.\n7. The selected list row is scrolled into view when the selection changes (for example from the graph).\n8. Explorer banners (protocol error, read error, snapshot mismatch) render above the OpenSpec view, not below it. The freshness banner reads as one sentence ('Graph is stale: <reason>'), not 'Graph stale. an untracked ...'.\n9. Carried over from the review of the navigation task: the Wiki empty state must not say 'No Wiki page matches' while a search is still running; `useExplorerNavigation.ts` restores the scroll of `.metaproject-node-body`, the old panel body class, and must point at the new panel body; keep a map of nodes already seen so that Back to a node shows its panel at once instead of waiting for its projection.\n\nIn metaproject.css: remove the rules the swap makes dead (`.metaproject-node-*`, `.metaproject-relations`, the old `.metaproject-graph*` rules), remove the `@media (max-width: 700px)` block (the window cannot be narrower than 720 px, so it never applies) and, where a narrow layout is needed, use a container query on the explorer as `.composer` does elsewhere in the app. The three columns are list, content, panel. At the minimum window (720x480, a 660 px wide host) with the panel closed and no warning banner at least 140 px of graph height must be visible without scrolling (AC20); the orchestrator measures this in a browser.\n\nTests (MetaprojectView.dom.test.tsx): update what the swap changes (the Wiki tab must be activated before 'Open in Wiki'; the old relationship row texts are gone) and add tests for AC17. cytoscape cannot create a canvas under happy-dom; `RelationshipGraph` has a test-only `createCytoscape` prop (see RelationshipGraph.dom.test.tsx for the headless factory) — give the explorer a way to pass it in tests so the graph can mount there.\n\nYou may edit the graph and panel files only to fix a defect the integration exposes, and you say which.",
++    "target_files": [
++      "apps/desktop/src/metaproject/MetaprojectView.tsx",
++      "apps/desktop/src/metaproject/metaproject.css",
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++      "apps/desktop/src/metaproject/OpenSpecView.tsx",
++      "apps/desktop/src/metaproject/GraphNodePanel.tsx"
++    ],
++    "acceptance_criteria": [
++      "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++      "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
++      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
++      "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
++      "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
++      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
++    ],
++    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
++    "existing_tests": [
++      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "apps/desktop/src/App.dom.test.tsx"
++    ],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json"
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json
+@@ 1,82 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "515",
++  "dispatch_id": "515-T9",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Update the Desktop Metaproject guide",
++    "description": "Bring the user guide docs/docs/guides/desktop-metaproject.md in line with the redesigned Graph screen of the Desktop Metaproject explorer. What ships is in the code named under files_to_read and, for the part being integrated right now, in the T8 dispatch description. The guide is written for a developer using the app; keep its voice, its second person and its level of detail.\n\nWhat changed and must be described:\n- Graph: a local neighbourhood in columns. What points at the selected item is on its left, what it points at is on its right, second-step items are further out. Each group has a caption with the relationship type and a count; a column shows at most 12 items and collapses the rest into a '+N more' entry that opens the relationship list; item shape and border show its kind and line style shows the relationship family, both explained by the legend under the graph; zoom in, zoom out and fit controls; clicking an item selects it.\n- Details panel: kind, title, path with a Copy path control, facts (module, page type, status, relationship counts), and three tabs with counts: Relationships (the default; grouped into Incoming and Outgoing, then by type; a row selects that item; examples open from the control at the end of a row), Wiki and OpenSpec (linked documents with a preview, Open, Find, Draft).\n- Filters carry readable names (Imports, Assets, Describes, Wiki links, Contains, Defines, Calls, Changes spec, Spec context); Defines and Calls are disabled until the symbol layer is enabled.\n- The list header shows how many catalog items are shown out of the total.\n- Back steps through the items you selected, not only through view switches; the explorer keeps its view, search, selection and filters when you leave the Metaproject tab and return.\n- Wiki: the Relationships block of an article always shows direct relationships of every type and no longer follows the Graph filters; a link to a page or file that is not loaded yet is looked up and opened, and an unresolved link says which path it could not find; 'Find a Wiki page' with no match says so and offers to clear the search.\n- A failed check of the selected CLI shows its error with Retry.\n\nConstraints on the edit:\n- The guide must no longer say or imply that the Wiki view shows the same search and selection as Graph (each view keeps its own); this includes the alt text of the wiki image.\n- The relationship-type table keeps every existing row and gains rows for `changes-spec` and `spec-context`, with the readable name next to each id.\n- Another branch has already edited this file in three places; do not touch them, so the two branches merge cleanly: the paragraph in 'Data, checkout boundaries and limits' that starts 'Desktop sends read requests', the whole section 'Inspect the module from the CLI', and the table under 'Recover from common problems' (add no row to it and change none).\n- Leave the two image files and their paths alone; the orchestrator replaces the screenshots separately. Update only their alt texts to describe the new screen.\n- Limits stated in the guide (200 items, 200 nodes, 400 edges, two steps) stay as they are.",
++    "intent": "implement"
++  },
++  "acceptance_criteria": [
++    "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json",
++    "docs/docs/guides/desktop-metaproject.md",
++    "apps/desktop/src/metaproject/labels.ts",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "File ownership: create or edit only docs/docs/guides/desktop-metaproject.md. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
++    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
++    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
++    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json`).",
++    "Do not ask the user questions and do not spawn subagents."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T9.result.json"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T07:56:18Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.request.json
+@@ 1,37 @@
++{
++  "task": {
++    "task_id": "task-9",
++    "task_name": "Update the Desktop Metaproject guide",
++    "task_type": "mixed",
++    "complexity": "low",
++    "dependencies": [],
++    "description": "Bring the user guide docs/docs/guides/desktop-metaproject.md in line with the redesigned Graph screen of the Desktop Metaproject explorer. What ships is in the code named under files_to_read and, for the part being integrated right now, in the T8 dispatch description. The guide is written for a developer using the app; keep its voice, its second person and its level of detail.\n\nWhat changed and must be described:\n- Graph: a local neighbourhood in columns. What points at the selected item is on its left, what it points at is on its right, second-step items are further out. Each group has a caption with the relationship type and a count; a column shows at most 12 items and collapses the rest into a '+N more' entry that opens the relationship list; item shape and border show its kind and line style shows the relationship family, both explained by the legend under the graph; zoom in, zoom out and fit controls; clicking an item selects it.\n- Details panel: kind, title, path with a Copy path control, facts (module, page type, status, relationship counts), and three tabs with counts: Relationships (the default; grouped into Incoming and Outgoing, then by type; a row selects that item; examples open from the control at the end of a row), Wiki and OpenSpec (linked documents with a preview, Open, Find, Draft).\n- Filters carry readable names (Imports, Assets, Describes, Wiki links, Contains, Defines, Calls, Changes spec, Spec context); Defines and Calls are disabled until the symbol layer is enabled.\n- The list header shows how many catalog items are shown out of the total.\n- Back steps through the items you selected, not only through view switches; the explorer keeps its view, search, selection and filters when you leave the Metaproject tab and return.\n- Wiki: the Relationships block of an article always shows direct relationships of every type and no longer follows the Graph filters; a link to a page or file that is not loaded yet is looked up and opened, and an unresolved link says which path it could not find; 'Find a Wiki page' with no match says so and offers to clear the search.\n- A failed check of the selected CLI shows its error with Retry.\n\nConstraints on the edit:\n- The guide must no longer say or imply that the Wiki view shows the same search and selection as Graph (each view keeps its own); this includes the alt text of the wiki image.\n- The relationship-type table keeps every existing row and gains rows for `changes-spec` and `spec-context`, with the readable name next to each id.\n- Another branch has already edited this file in three places; do not touch them, so the two branches merge cleanly: the paragraph in 'Data, checkout boundaries and limits' that starts 'Desktop sends read requests', the whole section 'Inspect the module from the CLI', and the table under 'Recover from common problems' (add no row to it and change none).\n- Leave the two image files and their paths alone; the orchestrator replaces the screenshots separately. Update only their alt texts to describe the new screen.\n- Limits stated in the guide (200 items, 200 nodes, 400 edges, two steps) stay as they are.",
++    "target_files": [
++      "docs/docs/guides/desktop-metaproject.md"
++    ],
++    "acceptance_criteria": [
++      "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
++    ],
++    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
++    "existing_tests": [],
++    "existing_stories": [],
++    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
++  },
++  "workspace": {
++    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
++    "branch": "feat/desktop-metaproject-redesign",
++    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
++    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json"
++  },
++  "automation": {
++    "skip_confirmation": true,
++    "auto_commit": false,
++    "verify_lint": false,
++    "verify_types": true,
++    "verify_tests": true,
++    "verify_stories": false,
++    "max_self_fix_attempts": 3,
++    "commit_message_style": "conventional"
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 1,13 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "515",
++  "slug": "desktop-metaproject-graph-panel",
++  "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
++  "status": "in-progress",
++  "createdAt": "2026-11-23T07:14:05.302Z",
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 15,90 @@
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Context collected by the preceding review and folded into context.md (Agent Findings)"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Superseded by T5-T8, which split the implementation by file ownership"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Tests are written inside each implement task (T5-T8); the full suite is verify task T10"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [
++        "T8",
++        "T9",
++        "T10",
++        "T11",
++        "T14",
++        "T15",
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 97,411 @@
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T5",
++      "title": "Graph layout module and RelationshipGraph component (new files)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:25:40.538Z",
++            "outcome": "started",
++            "detail": "515-T5"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC1",
++        "AC2",
++        "AC3",
++        "AC4"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "NodeDetailsPanel and RelationshipList components (new files)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:25:41.096Z",
++            "outcome": "started",
++            "detail": "515-T6"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC7",
++        "AC8",
++        "AC9"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Explorer navigation and state fixes D1-D7",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:25:41.654Z",
++            "outcome": "started",
++            "detail": "515-T7"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC10",
++        "AC11",
++        "AC12",
++        "AC13",
++        "AC14",
++        "AC15",
++        "AC16"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5",
++        "T6",
++        "T7",
++        "T12",
++        "T13"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:54:41.505Z",
++            "outcome": "started",
++            "detail": "515-T8"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC17",
++        "AC18",
++        "AC19"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "Update the Desktop Metaproject guide",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T12",
++        "T13"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:56:19.119Z",
++            "outcome": "started",
++            "detail": "515-T9"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC21"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T10",
++      "title": "Desktop typecheck and full desktop test suite pass",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "cd apps/desktop && bunx tsc --noEmit exit 0; bun test src 833 pass, 0 fail on the tree committed as 8cd85cdec; keryx health run --changed PASS"
++    },
++    {
++      "id": "T11",
++      "title": "Live browser verification at three window sizes, dark and light",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T8",
++        "T14"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Live browser check passed after T14: AC5, AC6, AC10 and AC20 hold; measured values are in journal.md (T11 first and second live pass)"
++    },
++    {
++      "id": "T12",
++      "title": "Graph polish from the isolated live preview",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:46:12.081Z",
++            "outcome": "started",
++            "detail": "515-T12"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC1",
++        "AC2",
++        "AC3",
++        "AC4"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T13",
++      "title": "Panel and relationship list polish from the isolated live preview",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T6"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T07:46:12.731Z",
++            "outcome": "started",
++            "detail": "515-T13"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC7",
++        "AC8",
++        "AC9"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T14",
++      "title": "Compact filter bar and one-row header on narrow hosts",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:11:50.862Z",
++            "outcome": "started",
++            "detail": "515-T14"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC17",
++        "AC19",
++        "AC20"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T15",
++      "title": "Align the guide with the final screen and refresh its screenshots",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T14"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:36:10.435Z",
++            "outcome": "started",
++            "detail": "515-T15"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC21"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T16",
++      "title": "One-line freshness banner with details on demand",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T14"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T08:36:10.782Z",
++            "outcome": "started",
++            "detail": "515-T16"
++          }
++        ]
++      },
++      "acRefs": [
++        "AC19",
++        "AC20"
++      ],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 522,761 @@
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-23T07:14:05.302Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-23T07:21:57.079Z",
++      "event": "task-added",
++      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
++    },
++    {
++      "at": "2026-11-23T07:21:57.264Z",
++      "event": "task-added",
++      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
++    },
++    {
++      "at": "2026-11-23T07:21:57.446Z",
++      "event": "task-added",
++      "detail": "T7: Explorer navigation and state fixes D1-D7"
++    },
++    {
++      "at": "2026-11-23T07:22:04.623Z",
++      "event": "task-added",
++      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
++    },
++    {
++      "at": "2026-11-23T07:22:04.803Z",
++      "event": "task-added",
++      "detail": "T9: Update the Desktop Metaproject guide"
++    },
++    {
++      "at": "2026-11-23T07:22:04.986Z",
++      "event": "task-added",
++      "detail": "T10: Desktop typecheck and full desktop test suite pass"
++    },
++    {
++      "at": "2026-11-23T07:22:05.167Z",
++      "event": "task-added",
++      "detail": "T11: Live browser verification at three window sizes, dark and light"
++    },
++    {
++      "at": "2026-11-23T07:22:05.351Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-23T07:22:05.545Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-23T07:22:05.725Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11 (was empty) — The review round runs on the integrated and verified change"
++    },
++    {
++      "at": "2026-11-23T07:22:40.995Z",
++      "event": "origin-set",
++      "detail": "unknown -> human-request; quote: \"в графе тоже не понятно что, в деталях ноды визуально все сливается\"; source: operator session, 2026-11-23 (The owner asked for the review and then to start with the graph and the details panel)"
++    },
++    {
++      "at": "2026-11-23T07:22:41.181Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-23T07:22:41.545Z",
++      "event": "frozen",
++      "detail": "21 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-23T07:22:41.733Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-23T07:25:40.538Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 515-T5"
++    },
++    {
++      "at": "2026-11-23T07:25:41.096Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 515-T6"
++    },
++    {
++      "at": "2026-11-23T07:25:41.654Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 515-T7"
++    },
++    {
++      "at": "2026-11-23T07:38:59.635Z",
++      "event": "task-done",
++      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
++    },
++    {
++      "at": "2026-11-23T07:46:10.344Z",
++      "event": "task-done",
++      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
++    },
++    {
++      "at": "2026-11-23T07:46:10.580Z",
++      "event": "task-added",
++      "detail": "T12: Graph polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:46:10.824Z",
++      "event": "task-added",
++      "detail": "T13: Panel and relationship list polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:46:11.022Z",
++      "event": "task-depends-set",
++      "detail": "T8: dependsOn T5, T6, T7, T12, T13 (was T5, T6, T7) — Integration builds on the polished graph and panel"
++    },
++    {
++      "at": "2026-11-23T07:46:12.081Z",
++      "event": "task-attempt",
++      "detail": "T12: started (attempt 1) — 515-T12"
++    },
++    {
++      "at": "2026-11-23T07:46:12.731Z",
++      "event": "task-attempt",
++      "detail": "T13: started (attempt 1) — 515-T13"
++    },
++    {
++      "at": "2026-11-23T07:47:51.679Z",
++      "event": "task-done",
++      "detail": "T7: Explorer navigation and state fixes D1-D7"
++    },
++    {
++      "at": "2026-11-23T07:51:36.145Z",
++      "event": "task-done",
++      "detail": "T13: Panel and relationship list polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:54:41.305Z",
++      "event": "task-done",
++      "detail": "T12: Graph polish from the isolated live preview"
++    },
++    {
++      "at": "2026-11-23T07:54:41.505Z",
++      "event": "task-attempt",
++      "detail": "T8: started (attempt 1) — 515-T8"
++    },
++    {
++      "at": "2026-11-23T07:56:18.905Z",
++      "event": "task-depends-set",
++      "detail": "T9: dependsOn T12, T13 (was T8) — The guide describes behaviour fixed by the plan and the T8 dispatch, and touches only the guide file, so it runs beside T8 instead of after it"
++    },
++    {
++      "at": "2026-11-23T07:56:19.119Z",
++      "event": "task-attempt",
++      "detail": "T9: started (attempt 1) — 515-T9"
++    },
++    {
++      "at": "2026-11-23T07:58:34.745Z",
++      "event": "task-done",
++      "detail": "T9: Update the Desktop Metaproject guide"
++    },
++    {
++      "at": "2026-11-23T08:06:08.524Z",
++      "event": "task-done",
++      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
++    },
++    {
++      "at": "2026-11-23T08:06:50.450Z",
++      "event": "task-done",
++      "detail": "T10: Desktop typecheck and full desktop test suite pass"
++    },
++    {
++      "at": "2026-11-23T08:11:49.484Z",
++      "event": "task-added",
++      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
++    },
++    {
++      "at": "2026-11-23T08:11:49.658Z",
++      "event": "task-added",
++      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
++    },
++    {
++      "at": "2026-11-23T08:11:49.842Z",
++      "event": "task-depends-set",
++      "detail": "T11: dependsOn T8, T14 (was T8) — The live check is repeated after the filter bar fix"
++    },
++    {
++      "at": "2026-11-23T08:11:50.028Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15 (was T8, T9, T10, T11) — The review round runs on the final verified change"
++    },
++    {
++      "at": "2026-11-23T08:11:50.862Z",
++      "event": "task-attempt",
++      "detail": "T14: started (attempt 1) — 515-T14"
++    },
++    {
++      "at": "2026-11-23T08:21:15.922Z",
++      "event": "task-done",
++      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
++    },
++    {
++      "at": "2026-11-23T08:23:02.341Z",
++      "event": "task-done",
++      "detail": "T11: Live browser verification at three window sizes, dark and light"
++    },
++    {
++      "at": "2026-11-23T08:36:09.362Z",
++      "event": "task-added",
++      "detail": "T16: One-line freshness banner with details on demand"
++    },
++    {
++      "at": "2026-11-23T08:36:09.594Z",
++      "event": "task-depends-set",
++      "detail": "T15: dependsOn T14 (was T14) — The guide task runs beside the banner task; it describes the banner from the T16 dispatch"
++    },
++    {
++      "at": "2026-11-23T08:36:09.842Z",
++      "event": "task-depends-set",
++      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16 (was T8, T9, T10, T11, T14, T15) — The review round runs on the final verified change"
++    },
++    {
++      "at": "2026-11-23T08:36:10.436Z",
++      "event": "task-attempt",
++      "detail": "T15: started (attempt 1) — 515-T15"
++    },
++    {
++      "at": "2026-11-23T08:36:10.782Z",
++      "event": "task-attempt",
++      "detail": "T16: started (attempt 1) — 515-T16"
++    },
++    {
++      "at": "2026-11-23T08:37:57.245Z",
++      "event": "task-done",
++      "detail": "T15: Align the guide with the final screen and refresh its screenshots"
++    },
++    {
++      "at": "2026-11-23T08:40:21.193Z",
++      "event": "task-done",
++      "detail": "T16: One-line freshness banner with details on demand"
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json
+@@ 842,930 @@
++    }
++  ],
++  "origin": {
++    "kind": "human-request",
++    "quote": "в графе тоже не понятно что, в деталях ноды визуально все сливается",
++    "source": "operator session, 2026-11-23"
++  },
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx"
++    },
++    "AC5": {
++      "kind": "judged"
++    },
++    "AC6": {
++      "kind": "judged"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx"
++    },
++    "AC9": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
++    },
++    "AC10": {
++      "kind": "judged"
++    },
++    "AC11": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC12": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC13": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC14": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC15": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC16": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC17": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC18": {
++      "kind": "invariant",
++      "check": "test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx"
++    },
++    "AC19": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
++    },
++    "AC20": {
++      "kind": "judged"
++    },
++    "AC21": {
++      "kind": "judged"
++    }
++  }
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json
+@@ 1,140 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/labels.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T13.implement.json
+@@ 1,140 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/labels.ts",
++    "apps/desktop/src/metaproject/nodePanel.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T14.implement.json
+@@ 1,114 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/metaproject.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T16.implement.json
+@@ 1,112 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json
+@@ 1,139 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/graphLayout.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "task-text:tokens",
++      "tier": "must_read",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T6.implement.json
+@@ 1,113 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/GraphNodePanel.tsx",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/nodePanel.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/GraphNodePanel.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T7.implement.json
+@@ 1,131 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "task-text:retry",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T8.implement.json
+@@ 1,150 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/OpenSpecView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/frontend-assistant.mdc",
++      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
++      "bytes": 1074,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/api-contracts.mdc",
++      "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145",
++      "bytes": 3361,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T12.result.json
+@@ 1,58 @@
++{
++  "task_id": "task-12",
++  "task_name": "Graph polish from the isolated live preview",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "Fixed G1-G8 from the live preview. G1: the zoom controls moved out of the canvas into a header row next to the caption, right-aligned; the caption truncates before them. G2: a column's 12 slots are spread over its kind groups (each group gets up to 2 slots in kind order while slots remain, the rest go in kind order); an over-full column still shows exactly 12 nodes and one overflow entry with total minus 12. G3: inside a group nodes are ordered by edge count descending, then title, then id. G4: drawn nodes sharing a title are labelled with the shortest distinguishing path suffix, shortened in the middle if needed. G5: shortenMiddle cuts at a dot boundary, keeping the longest dotted tail of the last path segment that fits in half the budget. G6: boxes, captions and the overflow entry are flush with the column edge facing the root. G7: captions, legend and node-kind labels come from the new shared labels.ts. G8: the height clamp is gone; the component fills its host with flex: 1 1 auto and min-block-size: 200px. RelationshipGraph's export contract is unchanged.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/graphLayout.test.ts",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
++    "apps/desktop/src/metaproject/graph.css"
++  ],
++  "files_created": [],
++  "not_touched": [
++    { "path": "apps/desktop/src/metaproject/labels.ts", "reason": "Committed by the T13 lane in 3ce6184c6 with exactly the dispatch content; the copy this task wrote is byte-identical (no diff against HEAD), so there is no change to commit." }
++  ],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "pass (keryx health run --changed --source eslint,typescript: PASS, 0 findings; ESLint does not cover apps/desktop)",
++  "type_check_result": "pass: `cd apps/desktop && bunx tsc --noEmit` exits 0 with no errors in any file",
++  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts src/metaproject/RelationshipGraph.dom.test.tsx` 57 passed, 0 failed (graphLayout 41, RelationshipGraph 16). Red check: the same tests run against the HEAD versions of graphLayout.ts, RelationshipGraph.tsx and graph.css (staged as temporary zz-red-* copies, deleted afterwards) gave 44 pass, 13 fail, with at least one failing test for each of G1-G8.",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" }
++  ],
++  "assumptions": [
++    "G2 applies to every column, including the second-step columns.",
++    "G3 weight of a first-step node is the largest count among its root-adjacent edges on its side; for a second-step node it is the count of the attaching edge; an edge without count weighs 0.",
++    "G4 disambiguates across all drawn nodes of the graph (root included), not per column, because the same title can appear on both sides.",
++    "G5 looks for dotted tails only in the last path segment, and requires at least one head character before the ellipsis."
++  ],
++  "behavior_changes": [
++    {
++      "description": "G4 for nodes whose path does not end in their title (symbols, wiki pages titled differently from their file): the label is '<title> · <shortest distinguishing path suffix>', e.g. 'run · a.ts', so the title is not lost; a node whose path ends in its title gets the bare suffix ('src/commands').",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": ["Always use the bare path suffix, as the dispatch worded it (symbols would then show only their file name)"]
++    },
++    {
++      "description": "G1: the three zoom controls stay 24x24 icon buttons with a border, now in the header row instead of floating over the canvas; the header's right padding is var(--sp-1).",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": ["Borderless ghost buttons in the header"]
++    }
++  ],
++  "notes": "labels.ts did not exist when this task started; it was written with exactly the dispatch content, and meanwhile the T13 lane committed the same content in 3ce6184c6, so the file is unchanged against HEAD. The G8 test reads graph.css as text and checks the .metaproject-rgraph block, because happy-dom does not apply stylesheets. A temporary scratch script staged the HEAD copies for the red check through Bun.spawnSync git show; all zz-red-* files were deleted afterwards and nothing outside the six owned files remains changed. TDD order: the implementation was written before the new tests, and red was then shown against the HEAD code rather than observed before writing it. Not verified without a browser: how the header row looks with the controls (wrapping or truncation at 440 px), G6 alignment on screen, the filled height in the real explorer host, and the shortened labels' real widths at runtime. The T5 behavior choices held for the operator (double border on change nodes, relationship counts in the caption, caption and legend as rows) are unchanged."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T13.result.json
+@@ 1,62 @@
++{
++  "task_id": "task-13",
++  "task_name": "Panel and relationship list polish from the isolated live preview",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "P1: the Module fact shows the module path (id without 'module:') as a link-style button (min 24 px high) that calls onSelect(node.module). P2: list h4 headings use RELATIONSHIP_KIND_LABELS, node-kind badges (rows and header) use NODE_KIND_LABELS, second-step rows name the kind as the lowercased label; labels.ts created with exactly the dispatched content (it did not exist). P3: an adjacent row is a flex line: title (.truncate, max 60%), kind badge, path (.truncate, flex 1, min 4ch), origin tags; the button keeps title=<full path>; the li wraps only opened evidence to a full-width line. P4: evidence sits behind a toggle button (aria-expanded, aria-controls, closed by default) at the row end, labelled '<count> imports' when the edge has a count, else 'N example(s)'; opening shows at most two lines plus 'and N more'. An evidence item equal to either end's path is dropped, and when one is present the origin words beside it (lowercase-hyphen tokens like 'related-code', 'key-files', 'frontmatter') become .tag chips on the row; a row whose evidence was only that has no toggle. A count with no remaining lines shows as muted text. P5: the second-step group is a <details> closed by default whose summary holds the h3 'Second step <count>'; its rows use the same evidence toggle and origin tags. P6: the counts fact is labelled 'Relationships'; the fact key column is 14ch so it fits and follows the text scale.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/metaproject/nodePanel.css"
++  ],
++  "files_created": [
++    "apps/desktop/src/metaproject/labels.ts"
++  ],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not run: ESLint does not cover apps/desktop; automation.verify_lint is false",
++  "type_check_result": "pass: `cd apps/desktop && bunx tsc --noEmit` reports 0 errors in the whole desktop project at the time of the run",
++  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx` 21 passed, 0 failed; `bun test src/metaproject/NodeDetailsPanel.dom.test.tsx` 13 passed, 0 failed. Before the implementation the 9 new or changed tests (P1-P6) failed and 12 passed.",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "skill_drift": "missing: apps/desktop/src/metaproject has no project-skill",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "read" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "assumptions": [
++    "An evidence item counts as repeating the path when it equals the path of either end of the edge (the neighbour or the root), because from the file's side a describes edge repeats the root's path, not the wiki page's.",
++    "An origin word is a lowercase word or hyphenated words with no slash, colon or space; such words become tags only when the evidence also repeats a path, otherwise they stay example lines."
++  ],
++  "behavior_changes": [
++    {
++      "description": "The evidence disclosure is a small toggle button at the end of the row (chevron + '7 imports' or 'N examples') that opens the lines on a full-width line below, rather than a <details> under each row, so a closed row stays one line.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["a <details> element under every row (adds a summary line per row)"]
++    },
++    {
++      "description": "Second-step rows also get the evidence toggle and origin tags; the second-step rows are all rendered (inside the closed disclosure) rather than lazily on open.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["drop evidence from second-step rows", "render second-step rows only once the disclosure is opened"]
++    },
++    {
++      "description": "Second-step rows name the relationship with the lowercased label ('Client imports Server', 'wiki links'), and a module import with a count but no evidence lines shows the count ('7 imports') as muted text at the row end.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["show the capitalised label", "hide a count that has no evidence"]
++    }
++  ],
++  "notes": "Export contracts unchanged: NodeDetailsPanel props, isOpenSpecNode and RelationshipList({projection, select}) are as in plan.md. New additive exports from RelationshipList.tsx: rowEvidence and RowEvidence. RelationshipList still works outside the panel (it brings its own CSS import and needs no panel context). labels.ts did not exist when checked and was created with exactly the dispatched content. A file of another lane (graphLayout.ts) shows as modified in git status; not touched. Not verified (needs a browser): that rows really stay on one line at 380 px with long titles and paths, the ellipsis position, the toggle and origin tag fitting beside a truncated path, the summary marker of the second-step disclosure in WebKit, and contrast of the .tag chips in all palettes. Tests check classes and attributes, not layout. nodePanel.css adds geometry values in px and ch (2px gaps, 24/28px heights, 60% title cap, 4ch path minimum, 14ch key column); no raw colour values. No commits (auto_commit false)."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T14.result.json
+@@ 1,49 @@
++{
++  "task_id": "task-14",
++  "task_name": "Compact filter bar and one-row header on narrow hosts",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "Item 1 (revised design, popover): the filter block is gone from the content column. A 'Filters' chip button sits in RelationshipGraph's header row left of the zoom controls, passed through a new optional `actions` slot (additive; every existing prop kept). Where no graph is drawn (graph missing, no projection yet) the same button sits in a slim right-aligned row of its own. The button (aria-haspopup=dialog, aria-expanded, aria-controls while open) opens FiltersPopover: a non-modal role=dialog labelled 'Graph filters' on the app's menu surface (.menu, --shadow-pop, fixed position right-aligned under the button, clamped to the window), following Menu.tsx's pattern (useEscape layer, capture-phase outside mousedown). It holds Direction and Depth selects, a 'Relationship types · n of N' heading with the labelled kind chips, the symbol-layer reason (only while Defines/Calls are disabled) and 'Reset filters' in a menu footer (only while filters differ from defaults). Changes apply at once; the graph stays visible behind it. Focus moves to the first control on open; Escape or a press outside closes it and puts focus back on the button; the button itself toggles it. While filters differ from defaults the button reads 'Filters · <n>' (n = number of differing settings among direction, depth and types) and takes the pressed chip look (data-changed); its title always states the current settings, e.g. 'Both · 2 steps · 4 of 7 types'. Open/closed is explorer useState (survives tab switches, no history entry). Item 2: inside the existing @container metaproject (max-width: 760px) block the '.flows-heading' is visually hidden with the sr-only declarations (still in the accessibility tree), so the header is one row. Item 3: with the filter block gone and a one-row header, the graph gets the height the 182 px bar and the second header row took; not measured here.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/graph.css",
++    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx"
++  ],
++  "files_created": [],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
++  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0",
++  "test_result": "pass: cd apps/desktop && bun test src -> 838 passed, 0 failed across 89 files (baseline 833; +4 explorer tests, +1 RelationshipGraph test). Red: with the committed (HEAD) MetaprojectView.tsx and RelationshipGraph.tsx swapped in temporarily, bun test of the two test files gave 45 pass, 8 fail: the actions-slot test, the 4 new popover tests and the 3 updated AC17/AC13 filter tests (all 'Missing Filters button' or missing action); then my versions were restored and re-verified. AC11-AC16 and AC17 tests pass.",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "partial: AC17 and AC19 pass by command; AC20's minimum-window clause (>= 140 px of graph at 720x480) is judged by the orchestrator in a browser and was not measured here",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "noticed_not_touched": [
++    { "what": "The shared icon set has no funnel/filter glyph (only clearFilters, a funnel with an x), so the Filters button uses a trailing chevron instead of a filter icon.", "where": "apps/desktop/src/components/Icon.tsx PATHS" }
++  ],
++  "assumptions": [
++    "'How many settings differ' counts three settings: direction, depth and the set of relationship types (any difference in types counts once), so the count is 1-3.",
++    "The popover is not built on Menu.tsx itself, because Menu closes on every item selection and its items are menuitems; it reuses Menu's surface class (.menu, .menu-header, .menu-footer), positioning, useEscape layer and outside-press handling instead.",
++    "A press outside returns focus to the button (as the dispatch says), unlike Menu.tsx, which leaves focus where the press went."
++  ],
++  "behavior_changes": [
++    { "description": "The Filters button text is 'Filters' at the defaults and 'Filters · <n>' when n settings differ, with a trailing chevron; its tooltip always shows the current settings ('Both · 1 step · 5 of 7 types').", "user_visible": true, "needs_operator": true, "alternatives": ["Tooltip only while filters differ", "A leading icon instead of the chevron (needs a new glyph in Icon.tsx)"] },
++    { "description": "The popover is 320 px wide, right-aligned with the button and opens below it; inside: Direction and Depth on one row, a 'Relationship types · n of N' heading, the chips, the symbol-layer note, and 'Reset filters' at the bottom right.", "user_visible": true, "needs_operator": true, "alternatives": ["Left-aligned with the button", "Reset at the top next to the heading"] },
++    { "description": "The popover stays open while the user changes settings (each change applies at once) and stays open across a switch to Wiki and back, because open/closed is explorer state; it is only rendered in Graph mode.", "user_visible": true, "needs_operator": true, "alternatives": ["Close the popover when the view changes"] },
++    { "description": "When no graph is drawn (graph missing or no projection yet), the Filters button sits alone in a slim right-aligned row at the top of the content column.", "user_visible": true, "needs_operator": true, "alternatives": ["Left-aligned slim row", "Put the button in the list header instead"] }
++  ],
++  "not_touched": [],
++  "notes": "The expanding-row version written before the revision was replaced, not kept. While rewriting the tests, a cut accidentally dropped four committed tests (header counts, scroll-into-view, busy graph, banners); they were restored verbatim from HEAD and pass. The RelationshipGraph change is only the additive `actions` prop, its header slot and two CSS rules (actions left of zoom). The dev server on 1420/1421 was not touched; it picked up the file changes, including the few seconds while the HEAD versions were swapped in for the red check. Not verified without a browser: the >= 140 px graph height at 720x480 (AC20), the popover position and clamping, that it does not cover the zoom buttons, that the header really stays on one row at 660 px, and chip wrapping inside the popover."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T16.result.json
+@@ 1,39 @@
++{
++  "task_id": "task-16",
++  "task_name": "One-line freshness banner with details on demand",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "The freshness banner (catalog.graph !== 'ready') is one line: the state as a short sentence ('Graph is stale.' / 'Graph is missing.' / 'Graph is unknown.'), a ghost 'Details' disclosure button with a chevron (aria-expanded, aria-controls) only when catalog.graphReason is set, and the unchanged 'Rebuild graph' control (same behaviour and 'Rebuilding…' label). Details opens the full reason as a paragraph below the line inside the same banner (flex-basis 100%, wraps with overflow-wrap anywhere); closed by default. Open state is stored as the reason text that was opened, so it is open only while catalog.graphReason equals it: a changed reason closes it. CSS keeps the first line on one row (state text ellipsizes, Details and Rebuild do not shrink).",
++  "files_modified": [
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
++  ],
++  "files_created": [],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
++  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0",
++  "test_result": "pass: cd apps/desktop && bun test src -> 841 passed, 0 failed across 89 files (baseline 838; +3 tests). Red: against the committed MetaprojectView.tsx (swapped in temporarily, then restored) the test file gave 36 pass, 3 fail: the updated freshness-sentence assertion, 'one sentence with the reason hidden until Details opens it' and 'open freshness details close again when the reason text changes'. The new test 'no Details button without a reason, and Rebuild still runs' passed on the old code too; it guards behaviour that already held.",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "partial: AC19 passes by command and the AC11-AC17 tests pass; AC20 is judged by the orchestrator in a browser (the one-line banner down to a 660 px host was not measured here)",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "assumptions": [
++    "The state word is shown as the CLI reports it ('stale', 'missing', 'unknown') in 'Graph is <state>.', as before T16."
++  ],
++  "behavior_changes": [
++    { "description": "Details is a ghost small button labelled 'Details' with a chevron (down when closed, up when open) placed between the state sentence and 'Rebuild graph'; the opened reason is plain small text on its own line under them, inside the banner.", "user_visible": true, "needs_operator": true, "alternatives": ["A text link 'Details' instead of a button", "Show the reason as a tooltip on the state sentence"] },
++    { "description": "Open/closed is explorer state keyed by the reason text: it survives leaving the tab and a catalog reload with the same reason, and closes when the reason changes.", "user_visible": true, "needs_operator": true, "alternatives": ["Close on every catalog reload"] }
++  ],
++  "not_touched": [],
++  "notes": "Existing tests changed: 'explorer banners sit above the OpenSpec view and the freshness banner reads as one sentence' now expects 'Graph is stale.' in the banner instead of 'Graph is stale: an untracked file changed'. The test 'wiki stays readable without a graph…' still passes unchanged: it asserts 'Graph is missing', which the new sentence 'Graph is missing.' contains. Not verified without a browser: the banner staying one line at a 660 px host, the height of the closed and the open banner, and the reason wrapping. The dev server on 1420/1421 was not touched, but it served the committed MetaprojectView.tsx for the few seconds of the red check."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json
+@@ 1,76 @@
++{
++  "task_id": "task-5",
++  "task_name": "Graph layout module and RelationshipGraph component (new files)",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "New pure layout module graphLayout.ts (layoutNeighborhood in five direction columns with relationship-kind groups and captions, column cap 12 with a '+N more' overflow entry, incoming/outgoing counts, computeViewport with automatic zoom clamped to 0.8..1.15 and root-centred panning, shortenMiddle, nodeKindStyle/edgeKindStyle/legendFor style mapping, toOpaqueColor), the RelationshipGraph component (core cytoscape with preset positions, one instance per mount, batched element replacement, callbacks through refs, token colours re-resolved on data-theme/data-palette/style changes and prefers-color-scheme, label size following --text-scale, zero-size guard, HTML caption, HTML legend, zoom in/out/fit buttons, hover highlight, '+N more' calls onShowHidden), graph.css, and tests for both. Nothing existing was edited and nothing is wired into the screen.",
++  "files_modified": [],
++  "files_created": [
++    "apps/desktop/src/metaproject/graphLayout.ts",
++    "apps/desktop/src/metaproject/graphLayout.test.ts",
++    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
++    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
++    "apps/desktop/src/metaproject/graph.css"
++  ],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "pass (keryx health run --changed --source eslint,typescript: PASS, 0 findings; ESLint does not cover apps/desktop)",
++  "type_check_result": "pass for owned files: `cd apps/desktop && bunx tsc --noEmit` reports no error in the five T5 files; 3 errors remain in other lanes' in-progress files (src/App.dom.test.tsx lines 6 and 13: RetainedView not exported by App; src/metaproject/MetaprojectView.dom.test.tsx line 484: unknown prop 'negotiate')",
++  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts src/metaproject/RelationshipGraph.dom.test.tsx` 46 passed, 0 failed (graphLayout 32, RelationshipGraph 14)",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
++    { "path": ".metaproject/rules/core/security-baseline.mdc", "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee", "how": "read" }
++  ],
++  "noticed_not_touched": [
++    { "what": "apps/desktop/src/test/bun-test.d.ts declares only a slice of bun:test matchers (no toBeLessThan, toBeDefined, toBeCloseTo, toBeGreaterThanOrEqual), so tests that use them pass under bun but fail `tsc --noEmit`; T5 tests were rewritten to the declared matchers instead of extending the shim.", "where": "apps/desktop/src/test/bun-test.d.ts" }
++  ],
++  "assumptions": [
++    "A second-step node touching several first-step neighbours is attached to the first drawn (not overflowed) neighbour in projection edge order; a node reachable only through another second-step node (possible in a truncated projection) is attached through that node and placed on its side.",
++    "A group caption counts every node of that kind in the column, including those collapsed into '+N more'.",
++    "The legend lists node kinds of every node in the projection, including hidden ones, as AC4 says 'present in the projection'."
++  ],
++  "behavior_changes": [
++    {
++      "description": "Change nodes get a double 3 px border in addition to the --warn tint, so spec and change (both tag-shaped) differ by more than colour; the plan named only the tint.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["Plain tag with only the --warn tint, as the plan worded it (spec and change then differ by colour alone)", "round-tag shape for change"]
++    },
++    {
++      "description": "The caption counts are root-adjacent relationships per direction (edge.to === root / edge.from === root), matching how NodeDetailsPanel counts in AC7, not distinct neighbour nodes; a neighbour with edges both ways counts on both sides while it is drawn only on the outgoing side.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["Count distinct neighbour nodes per drawn column"]
++    },
++    {
++      "description": "Caption and legend are HTML rows above and below the canvas inside the component's bordered box, not floated over the canvas, so they never cover node labels; this costs roughly two text lines of graph height.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["Absolutely positioned overlays on top of the canvas"]
++    },
++    {
++      "description": "Geometry tuned from the plan's starting numbers so a depth-1 layout fits 440 px at zoom 0.8: node width at most 128 px (plan about 132), root at most 168 px (plan up to 180), column gap 40 px (plan about 44); long labels are therefore shortened a little earlier.",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": ["Plan numbers 132/180/44, which do not fit 440 px at zoom 0.8 with 16 px padding"]
++    },
++    {
++      "description": "Nodes with no edge to the root, a first-step node or an attached second-step node (only possible in a truncated projection) are not drawn; edges to nodes hidden in a '+N more' entry are not drawn either.",
++      "user_visible": true,
++      "needs_operator": false,
++      "alternatives": ["Draw unattached nodes in the outgoing outer column", "Draw edges to the '+N more' entry"]
++    }
++  ],
++  "notes": "Cytoscape cannot mount under happy-dom ('Could not create canvas of type 2d', probed). RelationshipGraph therefore takes an optional `createCytoscape` factory prop that only the DOM test passes (a headless cytoscape); the app always uses core cytoscape. The exported contract otherwise matches plan.md exactly (projection, busy?, onSelect, onShowHidden?), plus exported RelationshipGraphProps and CytoscapeFactory types. A one-off probe with styleEnabled headless cytoscape (deleted afterwards, then kept as a real test) confirmed the stylesheet parses without warnings; it caught `font-weight: 650`, which cytoscape rejects, now 600. Token resolution reads the host's computed custom properties with a fallback to the root element (happy-dom does not inherit custom properties). TDD order: the layout tests were run red (module missing) before graphLayout.ts was written; the component was written before its DOM test, so that test was not observed red. Not verified without a browser: real canvas render, label sizes at the live zoom (AC5), theme re-colouring on a real palette switch (AC6, covered only by the headless test), hover fading, wheel zoom, the zoom buttons' effect, legend swatch shapes and the 440 px fit on screen. No project-skill routes to apps/desktop/src/metaproject (keryx skills route not run; no skill was relied on)."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json
+@@ 1,75 @@
++{
++  "task_id": "task-6",
++  "task_name": "NodeDetailsPanel and RelationshipList components (new files)",
++  "task_type": "ui_component",
++  "status": "success",
++  "description": "New files only, nothing wired in. RelationshipList.tsx exports RelationshipList ({projection, select}, same name and props as the MetaprojectView export) plus pure helpers groupRelationships / summarizeRelationships and a NodeKindBadge. It groups root-adjacent relationships into Incoming and Outgoing (h3 with count), then by relationship kind in METAPROJECT_EDGE_KINDS_V2 order (h4 with count), rows sorted by title; a row is a button with the neighbour's title, a node-kind text badge and its monospace path and calls select(id); edges between two non-root nodes form a 'Second step' group whose rows name both ends and offer quiet 'Open <title>' buttons for either end; at most two evidence lines plus 'and N more'; provenance digests are never shown; limited and empty states have messages. NodeDetailsPanel.tsx exports NodeDetailsPanel with exactly the plan.md props and isOpenSpecNode, plus markdownPreview. Header: kind badge with icon, close, h2 title, monospace path with a 'Copy path' icon button (lib/format copyText) and an inline 'Copied' / 'Could not copy' status. Facts (.info-section/.info-row): module, page type, status badge, line, and 'N incoming · M outgoing[ · limited]' from summarizeRelationships. One underline .tabs bar (Relationships default, Wiki, OpenSpec) with .tab-count counts and arrow/Home/End keys. Relationships body: loading row while null+pending, inline-banner alert + Retry (onRetry) on a problem, else RelationshipList with onSelect. A change of revealRelationships switches to Relationships and scrolls the body into view. Wiki/OpenSpec bodies carry over GraphNodePanel: linked documents from `documents`, suggested component page, preview of the first document, Open (first one primary, others ghost), pending/problem/Retry, EmptyState with Find (primary) and Draft (ghost), the unsupported-CLI message. Carried over: resize separator with pointer and ArrowLeft/ArrowRight/Home/End, Escape to close, compact mode below an 820 px host. Docked it does not move focus; compact it is a right-anchored drawer (min(380px, 100% - 72px)) that focuses its close button and returns focus on close/unmount. markdownPreview drops front matter, headings, rules, tables, fenced code and metadata lines (Covers, Version, Type, Status, ...), strips blockquote, list, bold/italic (* and _), strike, link and backtick markers, prefers the first prose paragraph, caps at 360 chars. nodePanel.css holds only metaproject-details-* / metaproject-rel-* classes on top of shared .badge, .tabs/.tab/.tab-count, .info-section/.info-row, .activity-row, .btn/.btn-ghost/.btn-primary, .icon-btn, .inline-banner, .loading-row, .empty-state, .side-resize; tokens only, no raw colours.",
++  "files_modified": [],
++  "files_created": [
++    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
++    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
++    "apps/desktop/src/metaproject/nodePanel.css"
++  ],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not run: ESLint does not cover apps/desktop (task context); automation.verify_lint is false",
++  "type_check_result": "pass for owned files: `cd apps/desktop && bunx tsc --noEmit` reports 0 errors in NodeDetailsPanel*, RelationshipList*, nodePanel.css; 11 errors remain in files owned by other lanes (src/App.dom.test.tsx x2 RetainedView missing, src/metaproject/graphLayout.test.ts x8 matcher typings, src/metaproject/MetaprojectView.dom.test.tsx:484 'negotiate' prop)",
++  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx` 17 passed, 0 failed (11 + 6); RED confirmed before implementation (modules missing)",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "all",
++  "skill_drift": "missing: apps/desktop/src/metaproject has no project-skill (keryx skills route returned only generic catalog skills)",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "followed" }
++  ],
++  "noticed_not_touched": [
++    { "what": "After T8 swaps GraphNodePanel for NodeDetailsPanel, the test 'a graph node opens its linked Wiki in place and Back restores the graph selection' clicks 'Open in Wiki' directly; Relationships is now the default tab, so the test must first activate the Wiki tab ([role=tab][data-tab=wiki]).", "where": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:343-359" },
++    { "what": "The test 'direction, depth and type controls filter the accessible relationship list' asserts the old row text 'Guide → describes → Client' and 'Client → imports → Server'; the new RelationshipList renders grouped rows (title, badge, path) and second-step rows as 'Client imports Server' with 'Open Client' / 'Open Server' buttons, so these assertions need updating when T8 switches the import.", "where": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:75-88" },
++    { "what": "The .metaproject-node-panel / .metaproject-node-* / .metaproject-relations rules become dead once T8 removes GraphNodePanel and the old RelationshipList; the new components do not use them.", "where": "apps/desktop/src/metaproject/metaproject.css:149-192" }
++  ],
++  "assumptions": [
++    "The Relationships tab count is the number of listed edges (incoming + outgoing + second step); the Wiki count excludes the suggested component page; counts are hidden while their projection is null.",
++    "The aside keeps aria-label 'Graph node details' and the close button 'Close graph node details' so the explorer's existing tests and selectors keep working after T8.",
++    "A self-loop on the root counts once, as outgoing; an edge whose ends are not in the projection is left out (as the old list did)."
++  ],
++  "behavior_changes": [
++    {
++      "description": "Copy path feedback is an inline status next to the button ('Copied' with a check icon, or 'Could not copy') that clears after 2 s, not a toast: the panel then needs no ToastProvider.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["toast via useToast like SessionInfoPanel's CopyButton", "no feedback beyond the icon change"]
++    },
++    {
++      "description": "The chosen tab is remembered per node: selecting another node returns the panel to the Relationships tab (the old panel also reset per node, to Wiki or OpenSpec by kind).",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["keep the chosen tab across node selections"]
++    },
++    {
++      "description": "Second-step rows show 'From kind To' with two quiet 'Open <title>' buttons rather than the whole row being a button; evidence beyond two lines is summarised as 'and N more'; a module import with a count shows '<count> imports' under the path.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["make each end title itself the button", "hide edge counts", "expandable full evidence list"]
++    },
++    {
++      "description": "In compact mode the drawer is min(380px, host width - 72px) wide with the sheet shadow and a slide-in animation (disabled under prefers-reduced-motion by the global rule); there is no scrim and Tab is not trapped, since part of the content stays visible and usable.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["use the stored panel width in compact mode too", "add a scrim and focus trap like Sheet"]
++    },
++    {
++      "description": "The facts row for relationship counts is labelled 'Relations' (fits the shared 74-76 px .info-key column); module is shown as the raw module id because the panel receives no catalog to resolve its title.",
++      "user_visible": true,
++      "needs_operator": true,
++      "alternatives": ["label 'Relationships' with a wider key column", "resolve the module title from the projection nodes when present"]
++    }
++  ],
++  "notes": "Extra exports beyond plan.md's interface (allowed: additive only): RelationshipList.tsx also exports NodeKindBadge, groupRelationships, summarizeRelationships and their types; NodeDetailsPanel.tsx also exports markdownPreview. The required exports match plan.md 'Interfaces between tasks' exactly. Not verified: the live render (spacing, contrast in all palettes, drawer overlap at 720x480, scrollIntoView behaviour) - happy-dom has no layout, so visual checks are left to the orchestrator's browser pass (T11). nodePanel.css uses a few raw px sizes for geometry (2px gaps, 6px code top padding to align with the 28px copy button, 32px row min-height, 380px drawer cap, 76px fact key column), as the shared stylesheets do; no raw colour values. Tests never wait on wall-clock time; the 2 s copy-feedback timer is not exercised. No commits (auto_commit false)."
++}
+
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T7.result.json
+@@ 1,52 @@
++{
++  "task_id": "task-7",
++  "task_name": "Explorer navigation and state fixes D1-D7",
++  "task_type": "fix",
++  "status": "success",
++  "description": "D1: App.tsx mounts the Metaproject view on first visit through a new exported RetainedView and keeps it mounted and hidden afterwards (still inside the cwd-keyed ProjectWindow and the cwd-keyed Explorer). D2: useExplorerNavigation gains a stable navigate() (history entry that carries list/panel scroll, optionally resetting the content pane) and stable visit/back/switchView; Graph selections (list, canvas, relationship rows), Wiki result selections and OpenSpec location changes are history entries; re-selecting the shown node adds nothing (it only reopens a closed panel); query edits, filters and panel close/resize stay setRoute. D3: the first-Wiki-page default applies only while the Wiki query is empty; with a query and no selection the article area shows an EmptyState naming the query with a Clear search action; switching the OpenSpec collection keeps the query. D4: Wiki-mode neighbours read uses depth 1, direction both and all kinds except defines/calls (v1 or v2 list by protocol); Graph keeps its filters. D5: rebuild() writes state unless the explorer unmounted (mounted ref), so a catalog reload during a rebuild no longer leaves the button stuck and the catalog is re-read on success. D6: optional negotiate prop (defaults to negotiateMetaproject; when given, negotiation runs even with injected request fakes); the failure banner has Retry, which re-negotiates and keeps the banner until success; 'Loading project knowledge…' and 'Checking OpenSpec support…' are hidden while the error shows. D7: Wiki links are percent-decoded, a leading '/' resolves from the repository root, a path not among loaded nodes triggers one search read with an exact node.path match, and an unresolved or undecodable path shows an inline status naming it.",
++  "files_modified": [
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
++  ],
++  "files_created": [
++    "apps/desktop/src/App.dom.test.tsx"
++  ],
++  "files_deleted": [],
++  "commits": [],
++  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
++  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0 with no errors in any file",
++  "test_result": "pass: cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx src/App.dom.test.tsx -> 27 passed, 0 failed (20 existing unchanged + 6 new in MetaprojectView.dom.test.tsx + 1 new in App.dom.test.tsx). All 6 new MetaprojectView tests were run before the fix and failed for the defect (no Back button; article rendered beside the Find search; depth 2/kinds without imports in Wiki; Rebuild control stuck; no Retry/negotiate seam; no lookup read). The App.dom test was seen failing with the old mount rule (active-only) restored temporarily, then passing with the fix. Full desktop suite not run (scoped by dispatch).",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "partial: AC11-AC16 pass with their named command; AC10 is judged live by the orchestrator (code for D1 and an automated mount test are in place, not verified in a browser)",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "noticed_not_touched": [
++    { "what": "OpenSpecView's choose() sets the content pane's scrollTop to 0 before calling onLocation, so the history entry being left records scroll 0 and Back to a previous OpenSpec entry returns to the top of its document instead of where the user was.", "where": "apps/desktop/src/metaproject/OpenSpecView.tsx choose()" },
++    { "what": "Back to a Graph node that was opened from a lookup result (not in catalog, hits or projection) can show no panel if knownSelection has since moved to another node, because activeNode is resolved only from loaded nodes or the last knownSelection.", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx activeNode / knownSelection" }
++  ],
++  "assumptions": [
++    "Every distinct OpenSpec location reported through onLocation (entry, artifact, section or fragment change) is a history entry; equal locations add nothing.",
++    "For AC14 a catalog reload is any re-run of the catalog effect; the test triggers it by passing a new request function for the same project.",
++    "A Graph selection keeps the list and panel scroll of the entry being left; a Wiki or OpenSpec selection resets only the content pane, as the old code did for Wiki."
++  ],
++  "behavior_changes": [
++    { "description": "Wiki article area with a query and no selection: EmptyState titled 'Choose a result for “<query>”' when there are results, or 'No Wiki page matches “<query>”' otherwise; body text 'Pick a page from the results to read it.' / 'Searching the Wiki…' / 'Clear the search to read the first Wiki page.'; one 'Clear search' button that clears the Wiki query (not a history entry), after which the first Wiki page shows again.", "user_visible": true, "needs_operator": true, "alternatives": ["One fixed title such as 'No page selected for “<query>”' regardless of results", "Clear search also returns to the previous route instead of showing the first page", "No action button, text only"] },
++    { "description": "Switching the OpenSpec collection (Specs / Changes / Archive) now keeps the search query for every switch, not only after 'Find an OpenSpec document'.", "user_visible": true, "needs_operator": true, "alternatives": ["Keep the query only when the route came from 'Find an OpenSpec document' and clear it on manual switches as before"] },
++    { "description": "Unresolved Wiki link messages, shown as an inline status line above the article body: 'No indexed project file at <path>.', 'Could not look up <path>: <error>' and, for an href that cannot be percent-decoded, 'The link <href> is not a valid repository path.' The message clears on the next link click and is hidden when another page is selected.", "user_visible": true, "needs_operator": true, "alternatives": ["Show it as a warning banner with role=alert at the top of the content area", "Open the Wiki search with the path as query instead of a message"] },
++    { "description": "Clicking the already-shown Graph node while its panel is closed reopens the panel without a history entry; while the panel is open it does nothing. The negotiation Retry button stays enabled while a retry is in flight and shows no pending state; the error banner stays until a negotiation succeeds.", "user_visible": true, "needs_operator": true, "alternatives": ["Treat reopening the panel as a history entry", "Disable Retry and label it 'Retrying…' while negotiation is in flight"] }
++  ],
++  "not_touched": [],
++  "notes": "Graph, RelationshipList and the <GraphNodePanel> element and its props are unchanged for T8. RepositoryMarkdown now takes openPath(path, fragment, resolved) instead of nodes/select; T8 should keep that if it moves the article. New optional MetaprojectView prop negotiate?: (cwd) => Promise<1|2> is a test seam; production passes nothing and behaves as before (negotiation only when no request fakes are injected). useExplorerNavigation now exports its Route type and returns navigate in addition to the previous fields; visit/back/switchView are stable callbacks. No existing test was changed: all 20 previously passing tests in MetaprojectView.dom.test.tsx still pass. The test runner output under keryx ctx run hung in the background twice (piping through ctx), so tests were run directly into a scratchpad log and filtered; nothing was skipped. Type errors in files owned by other lanes: none seen (tsc clean). tests_written: 7; tests_passing: 27; tests_failing: 0; coverage: AC11-AC16 one test each in MetaprojectView.dom.test.tsx, D1 mount logic in App.dom.test.tsx."
++}

@@ -1,0 +1,36 @@
+STATUS: DONE
+
+## Performance Review
+
+Slice: slice-02, read in full (1080 lines of diff); App.tsx, MetaprojectView.tsx and RelationshipList.tsx also read at head where the hunks needed surroundings. Read-only run, nothing executed.
+
+Per-path counts, as asked:
+
+- summarizeRelationships in the explorer's useMemo (MetaprojectView.tsx, wikiRelationships): runs only in Wiki mode, and only when `currentProjection` changes. `currentProjection = projection?.root === selection ? projection : null` returns the `projection` state object itself or null, so its identity is stable between renders. The dependencies [mode, currentProjection] are stable, so a keystroke in the search field does not recompute it. Input size: one neighbourhood projection, at most about 200 nodes and 269 edges (AC2's fixture), a read bounded by the CLI's depth/limit. groupRelationships is O(E + N) plus byKind (one filter per edge kind over the root-adjacent rows) and one sort of rows by title per kind. That is microseconds at this size, once per selection or filter change.
+- groupRelationships a second time, in RelationshipList under the disclosure: unmemoized and runs on every render of the explorer while Wiki mode shows a projection, including search keystrokes. This is not new in this slice. RelationshipList already called groupRelationships in its body at base b1538097e, and the `empty` test adds only three `.length` reads on arrays that call already built. The new memo adds one grouping per projection change. Result: two groupings per projection change plus one per later render, over at most a few hundred edges, with no I/O. Below the bar for a finding.
+- `empty` in RelationshipList: three array-length reads per render, no allocation. Nothing to report.
+- Node-memory effect through useCallback: `remember` has an empty dependency list, so its identity is fixed for the component's life and the effect's dependencies [nodes, remember] move exactly when `nodes` moves, as before. `nodes` is memoized on [catalog, hits, projection]. The effect does one Map.set per node when that list changes (catalog load, search result, projection read), O(nodes) with nodes at most a few thousand. The fix does not change how often it runs. seenNodes is a grow-only map for the explorer's life, already so at base and bounded by the nodes one project's reads return, so it is not a finding.
+- MetaprojectWork between ProjectWindow and the explorer: it receives the inline `onDraft` arrow, new on every render of ProjectWindow, as the explorer received it before the extraction. MetaprojectWork is not memoized and neither is MetaprojectView, so both re-render with ProjectWindow whether or not the arrow is stable; a stable arrow would save no render. `onDraft` is not in any dependency array of the explorer (MetaprojectView.tsx:981 passes it to NodeDetailsPanel as a prop). `onRebuild` is a useCallback (App.tsx:219) and is read only inside rebuild() (line 675). So the arrow's identity triggers no effect, refetch or re-memo. The extraction adds one function-component layer per ProjectWindow render, which costs nothing measurable. The Suspense and RetainedView wiring is unchanged.
+- Catalog effect (the T22 `catalogRead`, `project` and `catalogPending` refs): refs only; no new request path. A return while a read is pending now starts no second read, so it removes a duplicate catalog read compared with round 2. Dependencies [cwd, read, revision, protocol, setRoute] are unchanged.
+
+Summary: blocker 0 | major 0 | minor 0 | info 0
+
+Clean areas: re-renders (stable memo and callback dependencies), expensive computation in render (bounded and memoized), redundant API calls (one `catalog` read per return, none while a read is pending), memory (no new listener or unbounded collection), bundle imports (only a named import of summarizeRelationships), sync blocking (none).
+
+Prior findings I checked against the code (not owner of any):
+- F-001: closed. `empty` is derived from the three groups, and the Wiki disclosure is shown and counted from summarizeRelationships; both pinned by the two new tests.
+- F-004: closed. The effect calls the stable `remember`.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No performance finding in slice-02. The new summarizeRelationships memo runs once per projection change in Wiki mode over at most about 200 nodes and 269 edges, with stable dependencies. The `empty` test, the useCallback-based node-memory effect and the MetaprojectWork extraction add no render-path cost, and the inline onDraft arrow reaches no dependency array.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

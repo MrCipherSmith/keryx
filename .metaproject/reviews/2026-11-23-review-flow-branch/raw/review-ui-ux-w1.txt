@@ -1,0 +1,37 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "reviewer": "review-ui-ux",
+  "round": 1,
+  "slices": ["slice-05"],
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "criterion": "Nielsen #4 consistency; Nielsen #2 match between system and real world",
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "quote": "relationships: summary ? summary.incoming + summary.outgoing + summary.secondStep : undefined,",
+      "evidence": "Code reading, not a render. The Relationships tab count adds secondStep edges; the Relationships fact row in the same panel header (`${summary.incoming} incoming · ${summary.outgoing} outgoing`) and the graph caption count only root-adjacent edges. A node with 5 incoming, 4 outgoing and 3 second-step edges shows 'Relationships 12' on the tab and '5 incoming · 4 outgoing' two rows above it. Unverified on screen; a live read of such a node would settle it.",
+      "impact": "Two adjacent numbers for the same word disagree, so the user cannot tell whether the tab includes extra rows. The 'Second step' group sits inside a collapsed <details>, so the extra rows are not visible until opened.",
+      "fix": "Either show the tab count as incoming + outgoing only (matching the fact row and caption) or add the second-step count to the fact row (for example '5 incoming · 4 outgoing · 3 second-step')."
+    },
+    {
+      "id": "UX-002",
+      "severity": "info",
+      "criterion": "Unverified: popover viewport clamp (WCAG 1.4.10 / Nielsen #1)",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "setPosition({ left, top: rect.bottom + 4 });",
+      "evidence": "FiltersPopover clamps the left edge to the window but not the bottom edge, and measures the anchor once (dependency [anchor]); it does not re-measure on window resize. The popover holds two selects, up to 9 type chips and a footer. The journal's 720x480 measurements were taken with the popover closed, so whether it is cut off at that height is not measured. Geometry belongs to review-layout; filed here only because it affects the Filters control's reachability.",
+      "impact": "If the popover is taller than the space below the button, its Reset control or lower chips could fall outside the window with no way to scroll them.",
+      "fix": "Settle with a render at 720x480 with the popover open; if cut off, clamp top to the window height or give .metaproject-filters-pop a max-block-size with overflow auto."
+    }
+  ],
+  "checks_not_run": [
+    "Live render at 1440/768/390 px, light and dark: not supplied and not allowed (read-only, exec_budget_s 0); the orchestrator's journal measurements (T11, T14, T16) were not re-checked.",
+    "Computed contrast of token pairs, target size of .icon-btn (copy path, close) and focus-ring visibility: need the rendered stylesheet; nodePanel.css and metaproject.css are outside slice-05.",
+    "Reduced motion: the only transition in graph.css is opacity (not 'transition: all'); no motion branch was checked on a render."
+  ],
+  "summary": "Slice-05 (App.tsx, GraphNodePanel removal, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css) read in full. Product: Metaproject explorer in a desktop developer app; audience: developers; primary task: pick a node and see what it connects to and which documents describe it; surface: app screen, so marketing tells do not apply. States are covered well: loading, error with Retry, empty with action, busy graph, disabled symbol types with a stated reason, protocol Retry. Semantics are sound: tablist with roving tabindex and arrow keys, aria-expanded/controls on disclosures, text badges for node kind, an accessible list as the alternative to the aria-hidden canvas, shape plus line style (not colour alone) in the legend. No blocker or major findings. Slop score: 0 tells."
+}

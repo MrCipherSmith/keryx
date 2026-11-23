@@ -1,0 +1,85 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T5",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Graph layout module and RelationshipGraph component (new files)",
+    "description": "Build the new relationship graph of the Desktop Metaproject explorer as NEW FILES ONLY. Nothing existing is edited and nothing is wired into the screen yet; task T8 does that afterwards.\n\nCreate in apps/desktop/src/metaproject/:\n1. graphLayout.ts - a pure, DOM-free module exporting `layoutNeighborhood(projection, options?)`. It turns a MetaprojectNeighbors projection into positioned boxes: the root, first-step and second-step nodes in direction columns, one caption per relationship-kind group, one overflow entry per over-full column, the edges to draw, and the incoming and outgoing counts. The middle-ellipsis label shortener and the style mapping (node kind to shape or border treatment; relationship kind to solid, dashed or dotted) are also exported pure functions so they can be unit-tested.\n2. RelationshipGraph.tsx - the React component with exactly the export contract of plan.md, 'Interfaces between tasks'. It draws the layout with core cytoscape (`preset` positions) and renders an HTML caption, an HTML legend and three zoom controls (zoom in, zoom out, fit) over the canvas.\n3. graph.css - its styles, imported by the component.\n4. graphLayout.test.ts and RelationshipGraph.dom.test.tsx.\n\nThe design is fixed in plan.md, 'Graph: a local neighbourhood in columns' and 'Design direction'. The numbers there (column cap 12, automatic zoom never below 0.8 or above 1.15, node and gap sizes) are the starting point; tune them only while AC1-AC4 hold and a depth-1 layout still fits a 440 px wide canvas at zoom 0.8 or more. The implementation being replaced is the `Graph` function in MetaprojectView.tsx, lines 41-140: read it for how colours are resolved from CSS tokens, how the ResizeObserver fit works and how cleanup is done. Do not modify it.\n\nEasy to get wrong:\n- cytoscape does not understand CSS variables. Resolve each token to a computed colour at mount and again whenever `data-theme` or `data-palette` changes on document.documentElement; blend a translucent token (the `-soft` ones) to an opaque colour before handing it to cytoscape. Label size follows `--text-scale`.\n- One cytoscape instance per mount. A new `projection` replaces the elements in a batch; `onSelect` and `onShowHidden` are read through refs, so a new callback identity does not rebuild the graph.\n- The container can be zero-sized, because the view stays mounted while hidden: never fit or zoom a zero-sized container, and fit when it gets a size.\n- The existing tests never mount cytoscape under happy-dom. If it cannot mount there, give the component a seam for the cytoscape factory that only the test uses and say so in your report. The caption and legend test must still run.\n- Group captions and '+N more' entries are part of the layout output so overlap can be tested. '+N more' is tappable and calls `onShowHidden(side)`; captions are not interactive.\n- The canvas wrapper stays aria-hidden; caption and legend are real text. No raw colour values in the component or the CSS.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word \"limited\" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "src/integrations/metaproject-explorer-contract.ts",
+    "apps/desktop/src/styles/tokens.css",
+    "apps/desktop/src/test/dom.ts",
+    "apps/desktop/src/components/Icon.tsx",
+    ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/graphLayout.ts, apps/desktop/src/metaproject/graphLayout.test.ts, apps/desktop/src/metaproject/RelationshipGraph.tsx, apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx, apps/desktop/src/metaproject/graph.css. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
+    "Parallel lanes: two other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Shell: a hook refuses raw rg, grep, sed, head and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T5.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T5.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T07:25:39Z",
+    "created_by": "flow-orchestrator"
+  }
+}

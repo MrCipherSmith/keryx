@@ -1,0 +1,81 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Read slice-03 in full (2295 lines) and walked the consumers at head of every name the fixes changed. App.tsx is the only caller of MetaprojectView and passes `visible`; OpenSpecView's only owner is MetaprojectView, whose onLocation reaches useExplorerNavigation.navigate, which records the leaving scroll synchronously, so the reorder works as claimed; the quiet catalog path leaves the fetch effects alone because they guard on local `active` flags, and the stale `catalog.graph` it leaves in place (MetaprojectView.tsx:496) cannot be reached, because a graph appearing or disappearing changes `nodes` and so the snapshot id. Two side effects nobody asked for: (1) the self-loop skip in groupRelationships leaves two dependents that still count raw `projection.edges.length` (the Wiki view's Relationships disclosure and RelationshipList's empty note), so a wiki page that links to its own file shows a count one higher than its list, or an empty disclosure; (2) the quiet re-read on return bumps `project.current`, which silently retires a wiki-link lookup or a 'load more' search page still pending when the user came back. Both are minor (a wrong count or a dropped click, recoverable), so the scope-B screen will refuse them as non-regression-severity; I report them at their honest severity so they can be filed under scope A. The blast-radius record dropped 25 candidates by its 40-file cap (and 1 by pre-filter). All 40 retained rows are text links (class names, event names) with no code path to the changed symbols, so the radius did not answer this question; the consumers above were found with keryx ctx rg instead.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "<summary>Relationships <span className=\"count-label\">{currentProjection.edges.length}</span></summary>",
+      "problem": "The fix for round-1 F-022 made `groupRelationships` (RelationshipList.tsx) skip every edge with `edge.from === edge.to`, so self-loops are no longer listed or counted. Two dependents of the same projection were not changed and still count raw edges. One is the Wiki view's Relationships disclosure in MetaprojectView.tsx, which renders only when `currentProjection.edges.length > 0` and shows `currentProjection.edges.length` as its count. The other is RelationshipList's own empty note, `{projection.edges.length === 0 && <p className=\"metaproject-rel-note\">No relationships for these filters.</p>}`. Trigger: a wiki page that links to its own file, for example `[Leases](agent-bus.md#leases)` inside agent-bus.md. The producer emits that link as a self `links` edge, because src/integrations/metaproject-explorer.ts:79 keeps a link with a filename and a fragment, and :160-163 pushes `{ from: page.node.id, to: found.id, kind: \"links\" }` without comparing the two ends. Before the fix the self edge was one outgoing row, so the disclosure count matched its list. Now the count is one higher than the rows listed. On a page whose only relationship is the self link, the Wiki view shows 'Relationships 1', and opening it shows an empty block, with no group and no 'No relationships' note, because edges.length is still 1. In the Graph details panel the same projection reads '0 incoming · 0 outgoing' with a tab count of 0, over a Relationships body that is blank where it used to say why.",
+      "impact": "The Wiki disclosure count disagrees with the list under it, and a page that links only to itself shows an empty disclosure and an empty panel body with no explanation. This is the same kind of count disagreement F-022 was fixed to remove, moved to a sibling site. No data is lost, nothing crashes and reading is unaffected. Dangling edges already caused the same mismatch before this round; the fix adds self-loops as a second cause.",
+      "suggested_fix": "Count what groupRelationships keeps. In MetaprojectView, gate and count the Wiki disclosure on `summarizeRelationships(currentProjection)` (incoming + outgoing + secondStep). In RelationshipList, show the empty note when the three groups are empty rather than when `projection.edges.length === 0`. Add a test: a Wiki page whose only edge is a self link shows no Relationships disclosure, and RelationshipList over a self-loop-only projection says 'No relationships for these filters.'",
+      "evidence": "Read at head. groupRelationships begins with `if (edge.from === edge.to) continue;` (RelationshipList.tsx, slice-03 hunk @@ 26,75). MetaprojectView.tsx:923-925 gates and counts the Wiki disclosure on `currentProjection.edges.length`. RelationshipList.tsx:217 gates the empty note on `projection.edges.length === 0`. Producer: src/integrations/metaproject-explorer.ts:79 (link regex `/\\]\\(([^)#?]+)(?:#[^)]*)?\\)/g`, which keeps `self.md#x`) and :160-163 (no self check). Not checked live: no project page with a self link was rendered. The v2 producer's `source.relationships.links` (metaproject-explorer-v2.ts:137) was not read.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:923 (Wiki disclosure gate, raw edges.length) - breaks",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:925 (Wiki disclosure count, raw edges.length) - breaks",
+          "apps/desktop/src/metaproject/RelationshipList.tsx:217 (empty note, raw edges.length) - breaks",
+          "apps/desktop/src/metaproject/NodeDetailsPanel.tsx:199 (summary via summarizeRelationships) - consistent with the fix",
+          "apps/desktop/src/metaproject/RelationshipList.tsx:210 (RelationshipList groups via groupRelationships) - consistent with the fix"
+        ],
+        "enumeration_method": "keryx ctx rg 'groupRelationships|summarizeRelationships' apps/desktop/src (8 matches in 3 files: RelationshipList.tsx, NodeDetailsPanel.tsx and the test). Then keryx ctx rg --all 'RelationshipList|relationship-section|edges\\.length|...' apps/desktop/src/metaproject excluding tests, to find every reader of the same projection that counts edges itself: MetaprojectView.tsx:923 and :925, and RelationshipList.tsx:217."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "const current = () => token === lookup.current && generation === project.current && shownSelection.current === from && activeMode.current === \"wiki\";",
+      "problem": "The fix for round-1 F-004 added a `visible` effect. On a hidden-to-visible change it sets `quietRead.current = true` and bumps `revision`, which re-runs the catalog effect. That effect starts with `const generation = ++project.current;` (and its cleanup increments project.current again). Two pieces of code use `project.current` as a guard that the project has not changed: openPath's lookup check `generation === project.current` (MetaprojectView.tsx:678-679), and loadMoreSearch's checks `projectGeneration !== project.current` (:638) and `projectGeneration === project.current` (:644). Before this round, leaving the view and coming back never touched project.current. Now any return retires work still pending on that same, unchanged project. Trigger: in Wiki, click a link to a page that is not loaded (or press 'load more' with protocol 2), switch to another view, and come back before the search read resolves. Outcome: the lookup resolves, current() is false, and nothing happens. The target does not open, and the 'No indexed project file' or 'Could not look up' message is not shown either. A pending 'load more' page is dropped the same way, and its error is suppressed too.",
+      "impact": "A click the user made is silently lost if they leave the explorer and return while its read is in flight. The page stays as it was with no message, and the user has to click again. The window is short, and the work is recoverable by repeating the click.",
+      "suggested_fix": "Do not count a quiet re-read as a project change. Give the catalog effect a separate generation for its own result check, and bump `project.current` only on a non-quiet read (cwd, protocol, Retry, Refresh, Rebuild). Alternatively, skip `++project.current` when `quiet` is true and guard the quiet result with a local token. Add a test: start a wiki-link lookup, call renderFilters({visible:false}) then ({visible:true}), resolve the lookup, and expect the target to open.",
+      "evidence": "Read at head: the visible effect and `const quiet = quietRead.current;` after `const generation = ++project.current;` (slice-03 hunk @@ 272,404). Generation readers found with keryx ctx rg --all 'project\\.current' apps/desktop/src/metaproject excluding tests: MetaprojectView.tsx:367, 377, 392, 394, 398 (the catalog effect itself), :630/:638/:644 (loadMoreSearch) and :678/:679 (openPath). The search, detail, relationships and documents effects (:401-536) use local `active` flags and are not affected. The test 'of several pending wiki-link lookups only the one started last…' does not hide and show the view, so it does not cover this case. Not reproduced live.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:679 (openPath current())",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:638 (loadMoreSearch result guard)",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:644 (loadMoreSearch error guard)"
+        ],
+        "enumeration_method": "keryx ctx rg --all 'project\\.current' over apps/desktop/src/metaproject (non-test). Every reader outside the catalog effect itself is listed. No other file reads `project`, which is a ref local to Explorer."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" },
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" },
+    { "id": "F-011", "disposition": "closed" },
+    { "id": "F-022", "disposition": "regressed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+
+Notes on the dispositions (each checked against the code at head; findings I did not check are left out):
+- F-003 closed: `const filters = visible && filtersOpen && filtersAnchor && (` unmounts FiltersPopover, and with it its useEscape layer and window listeners, while the view is hidden, and the `visible` effect calls setFiltersOpen(false) on leaving. App.tsx:596 is the only caller and passes `visible={view === "metaproject"}`. Pinned by 'leaving the explorer's view closes its Filters popover…'.
+- F-004 closed: a hidden-to-visible change re-reads the catalog once, and an unchanged snapshot updates only `freshness` (graphState). Pinned by two tests. Its side effect is F-002 above.
+- F-005 closed: the `lookup` token in openPath. F-006 closed: seenNodes is filled in an effect keyed on `nodes`; `select` and `activeNode` still read `nodes` first.
+- F-007 closed: the fact row adds `N second-step` only when secondStep > 0.
+- F-008 closed: choose() calls onLocation before it zeroes scrollTop. useExplorerNavigation.navigate → enter → remember(leaving) reads the pane scroll synchronously, so the leaving entry records the real offset.
+- F-011 closed: the new App.dom test renders active=true with visible=false.
+- F-022 regressed: the panel and the graph caption now agree, but the fix created F-001 above (the Wiki disclosure and the RelationshipList empty note still count raw edges).
+
+Scope-B screen: both findings are minor and will be refused as `non-regression-severity`. They are reported at their honest severity, not raised to pass the screen; the orchestrator may refile them under scope A.
+
+Routing audit: graph_used: no (the payload's layers block was used, and its affected set at the PR head — main.tsx, useExplorerNavigation.ts, app-navigation.fixture.tsx — was taken as given). wiki_used: not-relevant (the question is code-level consumer behaviour). ctx_used: yes (keryx ctx rg for every consumer search, keryx ctx read for the blast-radius brief). raw_rg_used: no.

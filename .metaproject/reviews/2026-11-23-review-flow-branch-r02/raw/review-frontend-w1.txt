@@ -1,0 +1,37 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Slice-03 read in full (all hunks of App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, OpenSpecView.tsx, RelationshipList.tsx, their six test files and the guide). The fix code holds up through the React/MobX-lifecycle lens: the FiltersPopover resize listener is removed in its cleanup, the popover is unmounted (not only hidden) while the view is hidden so its Escape layer is gone, the quiet catalog re-read consumes its flag once and falls through to a full load when the snapshot differs, the freshness override is keyed on the snapshot id and cleared by every full load, and the seenNodes effect is keyed on the node list and runs before any later event. F-003 is closed; no new findings. Not verified: native Tauri window, live behaviour of a hidden cytoscape canvas after return (outside this slice).",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-003", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## Frontend Review
+
+### F-003 disposition: closed
+- Code: `const filters = visible && filtersOpen && filtersAnchor && (<FiltersPopover .../>)` unmounts the popover in the same render in which `visible` turns false, so `useEscape` and the window `mousedown`/`resize` listeners are cleaned up at once; the effect on `[visible]` then calls `setFiltersOpen(false)`, so it stays closed on return and `closeFilters()` (which focuses the anchor) is not called, so focus does not move.
+- Test: "leaving the explorer's view closes its Filters popover, leaving no Escape layer, and the return moves no focus" asserts dialog null, `overlayOpen()` false, an Escape not `defaultPrevented`, `aria-expanded` false after return and `document.activeElement` unchanged. A switch inside the explorer (Wiki and back) is shown to leave it open.
+- App.tsx passes `visible={view === "metaproject"}`, so Settings over the work view also closes it.
+
+### Checked through the frontend lens, no defect
+- FiltersPopover: the resize listener is added and removed in one effect keyed on `[anchor]`; `place` reads `scrollHeight` (the content height whatever the inline max-height) so a resize recomputes from content. Switching between `top` and `bottom` placement replaces the style object, so React drops the unused key. A content change after open (the Reset footer) stays bounded by the max-height set at placement.
+- Visible effect: `returned` and `wasVisible` are updated in the effect; a catalog still loading (`loaded.current` false) is left alone; `quietRead` is read and reset at the start of the catalog effect, so it cannot leak into a later read. A quiet read of another snapshot takes the full path (`setCatalog`, `setFreshness(null)`). A rebuild in flight keeps running (its `mounted` ref and `setRevision` are independent of the bump) and its end still re-reads.
+- `freshness` / `graphState`: used consistently for the banner, `showGraph`, Draft gating and `freshnessOpen`; `catalog` still drives counts, nodes and symbol-layer filters, which an unchanged snapshot cannot change. A failed quiet read shows the ordinary non-destructive `error` banner.
+- `seenNodes` effect: the previous commit's effect has already remembered any node a later Back needs; `select` and `activeNode` fall back to the ref. The Map write count test pins that unrelated renders do not rewrite it.
+- Lookup token (F-005): every `openPath` takes a token; loaded-node and invalid-link branches also take one, so they cancel a pending lookup. Behaviour matches the test.
+- OpenSpecView `choose`: `onLocation` is called before `scrollTop = 0`, so the entry being left records its scroll.
+- RelationshipList / NodeDetailsPanel: self-loop skip at both steps matches the graph layout; dropping the `to.id !== from.id` guard in SecondStepGroup is safe because self-loops no longer reach it; fact row adds the second-step count only when present.
+- Tests: `stubPopoverContentHeight`, `stubWindowHeight/Width` and `holdDebounce` restore what they replace in `finally`. `holdDebounce` replaces `window.setTimeout` wholesale and keeps only the last callback; it works today (suite green per the brief), but a test helper that swallows any other timer scheduled inside the try is fragile. Not a defect in this change; not filed.
+
+### Not verified
+Native Tauri window; hover/zoom on a real canvas; a retained hidden cytoscape instance after return (outside slice-03); Back in OpenSpec live (no entries in the project). No test was run (read-only, exec budget 0).
+
+### Routing audit
+graph_used: no (slice supplied, not-relevant); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

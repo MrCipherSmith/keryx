@@ -1,0 +1,62 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 3's F-001 is closed: the code at head clears a catalog-sourced error on a successful quiet re-read, before the snapshot branch, so both branches share it, and a rebuild-sourced one stays; I checked every row of the worker's table against MetaprojectView.tsx (effect 373-420, rebuild 675-685, banner 846-851) and found the rows true to the code. No render was supplied (code mode only, live checks not run). Two info findings, both about states the real app can or cannot reach: the rebuild-sourced banner that is kept on purpose cannot be produced by the app's own onRebuild (it resolves false and the failure goes to a toast), and a rebuild that fails removes a standing catalog-failure banner without reading the catalog.",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "info",
+      "criterion": "Nielsen #9 (error recovery) / #2 (match with the real world): UNVERIFIED, derived from code",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "if (mounted.current) setError({ source: \"rebuild\", message: errMessage(cause) });",
+      "problem": "The kept-on-purpose rebuild banner is not reachable from the app. rebuild() sets source \"rebuild\" only when onRebuild() rejects. The app's onRebuild (App.tsx rebuildGraph: `new Promise<boolean>(resolve => { void runProject([\"gdgraph\", \"build\"], ..., code => resolve(code === 0)).then(started => { if (!started) resolve(false); }); })`) never rejects: a failed build resolves false, and useProjectRunner reports it as an error toast (\"Build Metaproject graph failed\", exit code). So every row of the worker's table with 'failed rebuild' is pinned by tests that reject onRebuild by hand, and none is seen by a user today. If a later onRebuild does reject, the banner would read as the raw error text, would not say that the rebuild failed (the banner carries no copy from `source`), and its Retry re-reads the catalog and does not rebuild; the loud read clears the message at its start (`setError(null)`), so after one click the failure is gone, the graph is still stale, and nothing was rebuilt.",
+      "impact": "Today: nothing, the path has no trigger; the tests and the table describe a state no user reaches. If it becomes reachable: a user who clicks Retry on a failed rebuild believes the build was retried, and instead loses the message while the graph stays stale (the 'Rebuild graph' button below still shows).",
+      "suggested_fix": "Either say in the comment at the `error` state that the rebuild source exists for an onRebuild that rejects and the app's does not, or, when it is wired up, give the rebuild banner its own copy ('Rebuild failed: ...') and its action the same name; use `error.source` in the banner, which nothing reads now.",
+      "confidence": "medium",
+      "evidence": "Read App.tsx 219-222 and useProjectRunner.ts 37-65 (every failure path returns false or toasts; none throws to the caller); MetaprojectView.tsx 675-685 and 846-851. Not run: no render, read-only."
+    },
+    {
+      "id": "UX-002",
+      "severity": "info",
+      "criterion": "Nielsen #1 (visibility of system status): UNVERIFIED, derived from code",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "quote": "setRebuilding(true);\n    setError(null);",
+      "problem": "A Rebuild the user starts clears a standing catalog-read failure at its start, whatever the build does next (the new test 'a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone' pins it, and the result file's assumption says it is as before). With the app's onRebuild a failed build resolves false, so no catalog read follows. Trigger: a catalog reload failed after a first success (banner 'The index is being written.' with Retry), the graph is not ready so 'Rebuild graph' shows, the user clicks it, the build exits non-zero. Outcome: the red alert is gone, no catalog read was made, the screen holds the old catalog, and the only signal is the toast about the build. A later return does not report it either (a failed quiet re-read shows nothing).",
+      "impact": "The user is shown an older catalog with no indication that the last read of it failed; the stale graph banner and the build toast stay, so they are not misled about the build, only about the catalog read.",
+      "suggested_fix": "Clear the banner when the rebuild's reload succeeds (the loud read already clears at its start) and leave it when onRebuild resolves false; or accept it as designed and keep the test.",
+      "confidence": "medium",
+      "evidence": "MetaprojectView.tsx 675-685 and the test at slice-01.diff 823-844. Not run: no render, read-only."
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+
+## Disposition of F-001 (my round-3 UX-001, normalised as F-001)
+
+Closed. MetaprojectView.tsx 390-392: after the superseded check `if (generation !== catalogRead.current) return;`, `if (quiet) setError(current => current?.source === "catalog" ? null : current);` runs before `if (quiet && result.snapshotId === loadedSnapshot.current)`, so both the unchanged-snapshot branch and the replace branch clear a catalog-sourced banner. A superseded quiet read cannot clear a banner a newer read set. The functional update reads the error standing when the read lands.
+
+## The banner as a user meets it now (rows of results/T24.result.json checked against the code)
+
+| Standing banner x event | User sees | Truthful about the last thing asked? |
+|---|---|---|
+| First read failed x return | Banner and Retry stay; empty explorer; nothing starts (`!loaded.current`). | Yes, nothing is loaded, so it is true. Asymmetry: a failure of a later reload heals itself on return and this one does not; costs one Retry click. Not filed. |
+| Failed reload (Retry, Refresh, post-rebuild) x quiet success, same or changed snapshot | Banner disappears without a click; freshness line or catalog updates. | Yes: the read it reported has been superseded by one that worked; the removal is silent (no role=status message), the layout shifts by one banner height. Acceptable. |
+| Same x quiet failure | Banner stays with its own message; the quiet failure is not shown. | Yes, the banner still describes the last user-visible read. |
+| Same x loud read | Cleared at start, shown again with the new message on failure. | Yes. |
+| Failed rebuild x quiet success or failure | Banner stays. | Yes, but see UX-001: with the app's onRebuild this state cannot occur. |
+| Failed rebuild x Retry | Message disappears at the click (loud read clears at start), no rebuild runs. | Not truthful about the rebuild; "Retry" names no action. See UX-001 (unreachable today). |
+| Failed rebuild x loud read already in flight then succeeds | Rebuild message stays. | Yes. |
+| Failed catalog read x user Rebuild | Banner cleared at the click, even when the build then fails and nothing is read. | Partly: see UX-002. |
+
+A cell the table does not have: a rebuild that resolves false (the app's real failure of a build) while a catalog banner stands, UX-002.
+
+## Checks not run
+
+No render was supplied: nothing was measured (contrast, target size, banner geometry at 1440/768/390) and no screen was seen; a failed catalog read followed by a quiet success was not seen live (the journal says so too). Read-only: no tests run. The hunks of the flow's record (journal, tasks.md, fix-round-2.md, T22 result) were read and are outside the lens.

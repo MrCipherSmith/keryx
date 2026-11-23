@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 124992,
+      "contentHash": "5d0f93108ff246ba5dd7d16061632db64f5da0546e3e3f4a8e30bce688933aea",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+      ],
+      "domain": ".metaproject, .metaproject [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 59175,
+      "contentHash": "7261e661cec258fa18c11b96912ff630f528ac63a51a8aa6192564b991097e77",
+      "files": [
+        "apps/desktop/src/App.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/RelationshipList.tsx"
+      ],
+      "domain": "apps [test], apps",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/App.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/RelationshipList.tsx"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 2,
+    "bytes": 184167,
+    "files": 17,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 2
+  },
+  "host": "claude-code"
+}

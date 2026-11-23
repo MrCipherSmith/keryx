@@ -1,0 +1,519 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Answering round 2's F-003, a quiet re-read neither clears `error` at its start (`if (!quiet) { project.current++; setError(\"\"); }`) nor sets it on failure. The `error` state holds two unrelated things: a failed catalog read and a failed rebuild (rebuild() sets it at line 677). Keeping it across a quiet read is right for the rebuild failure, which the test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins. For a catalog-read failure it is wrong: a quiet read that succeeds has just shown that the catalog can be read, and neither of its success branches (the unchanged-snapshot branch above, or `setCatalog(result)` below it) touches `error`.",
+    "impact": "Trigger: a catalog read the user started fails after a first success (Retry, Refresh catalog, or the reload after a successful rebuild; `loaded.current` stays true and `catalogPending` is reset in `finally`), the banner 'The index is being written.' with Retry shows, the user leaves the view and returns once the CLI works. The quiet read succeeds, replaces the catalog if the snapshot moved or updates the freshness line if not, and the failure banner stays above the fresh data. The user must click Retry, which runs a loud read and retires pending lookups and pages (project.current moves). No data is lost and nothing else is wrong; the cost is a banner that says the read failed over a catalog that has since been read.",
+    "suggested_fix": "Record where the standing error came from (a `catalogFailed` ref or a field on the error state: 'catalog' or 'rebuild'). On a successful quiet read, clear the error only when it came from a catalog read; leave a rebuild error. Add a test: reload fails, hide and show with a working read, expect no catalog error banner.",
+    "evidence": "Read MetaprojectView.tsx 371-416 (effect), 671-681 (rebuild sets the same `error`), 842-847 (one banner for both). keryx ctx rg for `setError|error &&` in MetaprojectView.tsx: writers at 378 (loud read start), 403 (catch, loud only), 673 and 677 (rebuild); no writer on a successful quiet read. Introduced by the fix that answered round 2's F-003; the test 'a return after a failed first catalog read starts no read, and its failure and Retry stay' covers loaded.current === false, not a failed reload after a first success. Not run: the tool limits forbid it; read from code. Introduced or left by the work that answered round 2's F-003. review-degradation files the same outcome as part (b) of its info finding, and review-regression and review-highload describe it without filing it. It follows from the finish line the orchestrator gave task T22 for round 2's F-003 (a quiet re-read neither shows nor clears the error banner), which did not tell a failed catalog read from a failed rebuild; the T22 worker implemented that line as written, and one test pins the rebuild case. Normalisation notes: the same defect was raised by review-frontend (review-frontend-w1, F-001, minor); the same defect was raised by review-ui-ux (review-ui-ux-w1, UX-001, minor).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 390,
+    "quote": "setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'setError(' on MetaprojectView.tsx gives four writers: 378 (loud read start), 403 (catch, guarded by !quiet), 673 and 677 (rebuild). The quiet success path (387-400: setFreshness at 390, setCatalog at 393, setFreshness(null) at 394, setSnapshotMismatch(false) at 395) writes no error. The banner that reads error is at 842-847. The quoted line is at 390 and matches. The rendered banner was not run; the outcome follows from the writer list.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch/operator-decisions.json:8",
+          "says": "the operator's only recorded intent on this path: 're-read the catalog silently when the view is shown again, keeping the selection, filters and history' — it asks for a silent read, and says nothing about keeping a failed read's banner over a catalog that has since been read"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "orchestrator's finish line for round 2's F-003: 'a quiet re-read neither shows nor clears the error banner'; the same paragraph motivates it by 'a standing message (for example of a failed rebuild) disappears when the user returns' — the line was written for the rebuild case and does not tell a catalog-read failure from a rebuild failure; it is in this branch and was never put to the operator, so it cannot ratify itself"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:334-336",
+          "says": "comment added by T22: 'a failure leaves the explorer as it was, any standing error included' — speaks to a failed quiet read, not to a successful one; in-branch"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1418",
+          "says": "test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins only the rebuild case, which the suggested fix keeps"
+        }
+      ],
+      "reasoning": "Looked in the round-1 and round-2 operator decisions, the journal (lines 103, 146, 154-155, 159), T22's dispatch and result, the guide (lines 8-11, 104-105) and the code. No operator answer and no designed response covers a catalog-read failure banner left standing over a successful quiet read; the only signal is the orchestrator's in-branch finish line, whose stated reason (a failed rebuild's message) the suggested fix preserves. The T22 worker did not list this as a behaviour choice, and journal line 155 names only two other defaults for the operator to overrule. The fix makes the banner agree with the data under it and leaves the pinned rebuild case intact. Upheld."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The `empty` test T22 added (answering F-001 of round 2) is pinned on one side only. Mutants run in a scratch copy of apps/desktop at 8e0f656fb, tests RelationshipList.dom.test.tsx and MetaprojectView.dom.test.tsx (baseline exit 0): R3-9 (`&&` -> `||`, so the note shows whenever any one group is empty) SURVIVED; R3-7 (the `!groups.secondStep.length` term dropped, so a projection with only second-step rows says 'No relationships') SURVIVED; R3-8 (back to `projection.edges.length === 0`) killed by 'a projection whose every edge is left out says it has no relationships'. No fixture builds a projection that has rows in some groups but not in others and asserts the note is absent; the only 'not empty' fixtures have all three groups filled. R3-7 is not equivalent: groupRelationships (RelationshipList.tsx:54-62) puts an edge between two non-root nodes into secondStep, so a projection with no root-adjacent edge and one such edge lists a row.",
+    "impact": "A later edit of the condition keeps both RelationshipList and the Wiki disclosure green while showing 'No relationships for these filters.' above a populated list. No runtime defect today: the gate is correct.",
+    "suggested_fix": "In RelationshipList.dom.test.tsx add a projection with incoming rows only (outgoing empty) and one with a single second-step edge and no adjacent edge; assert the note is absent and the matching group heading present.",
+    "evidence": "Mutation: R3-9 and R3-7 survived (anchor `const empty = ...`, replacement as above); R3-8 killed. Same gate class as round 2's F-001, which the fix pinned only on the all-empty side. Introduced or left by the work that answered round 2's F-001. The orchestrator re-ran the reviewer's 20 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 6 killed, 14 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "line": 213,
+    "quote": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.json (head 8e0f656fb2aa, baseline exit 0): R3-7 (RelationshipList.tsx:213, drop !groups.secondStep.length) survived, exit 0; R3-9 (line 213, && to ||) survived, exit 0; R3-8 (line 219, back to projection.edges.length === 0) killed, exit 1. Line 213 holds the quoted const empty; groupRelationships at RelationshipList.tsx:54-61 puts a non-root edge into secondStep, so R3-7 is not equivalent. The only empty-note test (RelationshipList.dom.test.tsx:129-141) has all edges left out, and its note checks (125, 139) cover the all-empty side only.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "finish line: 'whenever the list has no row to show, it says No relationships for these filters.' — the behaviour the surviving mutants R3-7 and R3-9 break in the other direction (a note over a populated list)"
+        }
+      ],
+      "reasoning": "A test gap reported with surviving mutants on a gate T22 added. Nothing in T22's dispatch, result (noticed_not_touched, assumptions) or the journal (line 154) says the partly-filled case was left unpinned on purpose; the dispatch asked that each fix have a test, and the finish line names the rule both mutants break. By the skill a test gap stays as reported unless intent or practice shrinks it; none does."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The Wiki disclosure's count, which the comment above it says 'counts the rows its list shows', is pinned for incoming/outgoing rows only. R3-4 (`+ wikiRelationships.secondStep` dropped from the sum) SURVIVED the MetaprojectView and RelationshipList DOM tests. The fixtures in 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' carry a self-link and one root-adjacent `describes` edge; none carries a second-step edge, so the list's 'Second step N' group and the label can disagree unseen. Killed for contrast: R3-2 (condition back to `currentProjection.edges.length > 0`), R3-3 (label back to `edges.length`), R3-5 (`> 0` -> `>= 0`). R3-6 (drop `mode === \"wiki\" &&` in the memo) survived and is equivalent: the value is read only inside the Wiki branch.",
+    "impact": "Round 2's F-001 was a count that disagreed with the list beside it; the secondStep term is the one place where that can recur without a failing test.",
+    "suggested_fix": "Add a second-step edge between two non-root nodes to the second `readWith` in that test and assert the label is '2' with 'Second step' group rows present.",
+    "evidence": "Mutation R3-4 survived; R3-2, R3-3, R3-5 killed. Introduced or left by the work that answered round 2's F-001. The orchestrator re-ran the reviewer's 20 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 6 killed, 14 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 716,
+    "quote": "const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mutation-2.json: R3-4 (MetaprojectView.tsx:716, drop + wikiRelationships.secondStep) survived, exit 0; R3-2 (line 945), R3-3 (line 947) and R3-5 (line 945) killed, exit 1. R3-6 (line 713, drop mode === 'wiki') survived, exit 0; equivalent because wikiRelationships is read only at 716 and wikiRelationshipRows only under mode === 'wiki' at 945. The named test (MetaprojectView.dom.test.tsx:1321-1342) has a self-link and one describes edge (page to file) and no second-step edge.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json:35",
+          "says": "the worker's assumption: 'The Wiki disclosure's number of rows that list shows includes second-step rows' — the secondStep term is a deliberate part of the count, and the surviving mutant R3-4 removes it unseen"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:711",
+          "says": "comment: 'The Wiki disclosure counts the rows its list shows, by the list's own grouping rule'"
+        }
+      ],
+      "reasoning": "The signals say the second-step term was chosen, which supports pinning it; nothing says it was meant to rest on reading alone. A test gap with a surviving mutant and no intent or practice against it is upheld."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "T22 split `project.current` so that only a non-quiet catalog read retires pending wiki-link lookups and pages of results. The tests added pin the new direction (a quiet read must not retire: T23-1 and T23-5 killed by 'a wiki-link lookup in flight ... still settles' and 'a page of results in flight ... is still appended') but nothing pins the old direction, that a real read still retires them. In the scratch copy: R3-20 (cleanup bump removed: `if (!quietRead.current) project.current++;` -> ``) SURVIVED all of MetaprojectView.dom.test.tsx (exit 0); R3-19 (the `project.current++;` inside `if (!quiet) {` removed) SURVIVED (exit 0); R3-17 (`generation === project.current &&` dropped from openPath's `current()`) and R3-18 (`projectGeneration !== project.current` replaced by `false` in loadMoreSearch) SURVIVED (exit 0). No test starts a lookup or a load-more, then runs Refresh, Retry or Rebuild, and asserts the late answer is dropped.",
+    "impact": "The counter that T22 re-wired, and its two readers, can be deleted or broken with the suite green: a lookup begun before a Refresh would then apply after it. No defect today; the next editor of this counter is unprotected in exactly the direction round 2's F-002 was about.",
+    "suggested_fix": "Hold a wiki-link lookup (as the T23 lookup test does), click Refresh catalog (or Rebuild with onRebuild returning true), release the lookup, and assert its target does not open and no 'No indexed project file' message shows; the same for a held load-more page.",
+    "evidence": "Mutation R3-17, R3-18, R3-19, R3-20 all survived; T23-1 and T23-5 (no --bail) fail exactly the lookup, page and standing-error tests. Introduced or left by the work that answered round 2's F-002. The orchestrator re-ran the reviewer's 20 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 6 killed, 14 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 414,
+    "quote": "if (!quietRead.current) project.current++;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mutation-2.json: R3-17 (MetaprojectView.tsx:695), R3-18 (line 654), R3-19 (line 377) and R3-20 (line 414) all survived, exit 0 each, over all six test files. Lines match: 695 holds generation === project.current, 654 holds projectGeneration !== project.current, 377 holds project.current++ inside if (!quiet), 414 holds if (!quietRead.current) project.current++. Minor inaccuracy in the finding: moved-mutants-2.txt records one killing test per T23 mutant (T23-1 and T23-5 both by the wiki-link lookup test), not a page test and a standing-error test; this does not change the survivals.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "finish line for round 2's F-002: 'everything that retired pending work before round 1's fix still retires it (another project or protocol, Retry, Refresh, Rebuild)' — the direction the surviving mutants R3-17 to R3-20 break"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:326-328",
+          "says": "comment: project 'Retires pending work ... moved by every catalog read except the quiet one'"
+        }
+      ],
+      "reasoning": "The finish line and the comment both state the loud-read retirement as required behaviour; T22's red check and T23's own mutants pin only the quiet direction (T23.result.json notes). No signal that the loud direction was left to the live check. Upheld."
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The stand-in explorer pins `visible` handed to the explorer, and nothing else of MetaprojectWork, so the test would pass if MetaprojectWork stopped rendering the real explorer in the app. Mutants in a scratch copy, App.dom.test.tsx (baseline exit 0): R3-14 (default `explorer = LazyMetaprojectView` -> a component returning null) SURVIVED; R3-13 (ProjectWindow's `<MetaprojectWork cwd={cwd} view={view} workView={workView}` -> `view={workView}`) SURVIVED, since no test renders ProjectWindow; R3-10 (RetainedView `visible={view === \"metaproject\"}` -> `visible={workView === \"metaproject\"}`) SURVIVED: the Settings step of the test asserts only `given.at(-1)` is false, not that the wrapper is hidden, so the explorer would stay on screen under Settings; R3-15 (`onRebuild={onRebuild}` -> `async () => false`) SURVIVED, and R3-16 (Suspense fallback removed) SURVIVED. R3-12 (explorer `visible` -> workView) and, from round 2, R2-28 are killed. R3-11 (RetainedView `active` -> `view === ...`) survived and is near-equivalent: it differs only for a first mount while Settings is shown.",
+    "impact": "F-009 asked that the `visible` wiring be pinned; the prop is, but the wrapper's own hidden state under Settings, the app's call site and the default explorer are covered by the live check only. The hidden-under-Settings case is the one the test's own last step names.",
+    "suggested_fix": "In the Settings step add `expect(host.querySelector(\"p\")?.closest(\"[hidden]\")).not.toBeNull()` (kills R3-10). For the default explorer, render MetaprojectWork once without `explorer` and assert the Suspense fallback 'Loading Metaproject…' shows (kills R3-14 and R3-16 without a module mock). The call-site mutant R3-13 needs either a test of ProjectWindow or stating that it rests on the live check.",
+    "evidence": "Mutation R3-10, R3-13, R3-14, R3-15, R3-16 survived; R3-12 killed. The `explorer` prop is the T23 seam (App.tsx:161). Introduced or left by the work that answered round 2's F-009. The orchestrator re-ran the reviewer's 20 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 6 killed, 14 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "line": 68,
+    "quote": "test(\"the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return\", async () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mutation-2.json on App.dom.test.tsx and the other five files: R3-10 (App.tsx:170, visible uses workView) survived, exit 0; R3-13 (App.tsx:618, view={workView}) survived; R3-14 (App.tsx:161, default explorer) survived; R3-15 (App.tsx:172, onRebuild) survived; R3-16 (App.tsx:171, Suspense fallback) survived; R3-12 (App.tsx:172, visible uses workView) killed, exit 1. The named test is App.dom.test.tsx:68-87; its Settings step (85-86) asserts only given.at(-1) false, and the wrapper hidden check (80) is in the flows step only. App.dom.test.tsx imports only RetainedView and MetaprojectWork from ./App, so no test renders App's ProjectWindow (the one ProjectWindow in tests is a local function in shell/ProjectNavigation.dom.test.tsx).",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json:8",
+          "says": "for R2-28 'the reviewer accepts as an alternative a statement that the wiring rests on the live check only; prefer a test if the composition can be rendered with the explorer stubbed' — T23 chose the test, and wrote no such statement"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:159",
+          "says": "live check after T23: 'the Filters popover opens, closes on leaving the view and stays closed on return, with the explorer hidden and mounted once, after the App.tsx change too' — it exercises the real explorer and ProjectWindow's call site (R3-13, R3-14) but was taken with another work view, not Settings, and the entry does not say the wiring rests on it"
+        }
+      ],
+      "reasoning": "Looked for the statement round 2's F-009 offered as an alternative: neither the journal nor T23's result makes it (T23.result.json:43 lists it only as a rejected alternative). The live check at journal line 159 covers part of what the mutants show unpinned, but not the wrapper's hidden state under Settings (R3-10), which the test's own last step names. The finding's suggested fix already allows the statement route for the call site. No intent or practice shrinks the gap. Upheld."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The task table was extended for T22 and T23 (two new rows, a Review paragraph and a Fix round 2 section) but the T4 row was not updated. flow.json at head has T4 dependsOn [T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23] (set by the history event 'task-depends-set: T4: dependsOn ... T22, T23 — the review task closes after fix round 2 (T22, T23) and a clean round'). tasks.md says T4 waits for T21 only. Checked mechanically: parsing the table and flow.json, T4 is the only one of 23 rows whose dependency column differs from flow.json (kinds, and the dependencies of T22 '—' and T23 'T22', all agree). This is the class round 1 found in this file (the table no longer following flow.json), one row wide.",
+    "impact": "Whoever reads tasks.md to see what must finish before the review task closes is told T21; flow.json, which the CLI enforces, also holds the review back until T22 and T23 are done. The two records of the same dependency disagree in the file a human opens first.",
+    "suggested_fix": "Change the T4 row's dependency cell to 'T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23'.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 2. The orchestrator wrote this file by hand when it added T22 and T23: it added their two rows and a section and left the T4 row and the sentence above the table as they were. The same class as round 1's F-009. Normalisation notes: the same defect was raised by review-style (review-style-w1, F-001, minor).",
+    "confidence": "high",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    "line": 12,
+    "quote": "| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 | — |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "tasks.md line 12, T4 row: dependency cell 'T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21'. flow.json T4 dependsOn (lines 84-99) lists the same twelve plus T22 and T23. Compared the other 22 rows of the table with flow.json dependsOn (T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 to T23, T1 to T3, T5 to T7): all agree, so T4 is the only differing row.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md:3-5",
+          "says": "the file declares 'The table follows flow.json'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:117",
+          "says": "round 1's F-009 was fixed by making 'tasks.md now follows flow.json (... the dependencies of T4 ...)'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:151",
+          "says": "task-depends-set: T4 dependsOn ... T21, T22, T23 — the value tasks.md:12 does not carry"
+        }
+      ],
+      "reasoning": "Every signal says the table is meant to mirror flow.json, and the T4 row was kept in step with it after round 1. The stale row is an omission, not a choice. Upheld."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The journal's T23 acceptance entry says R2-14 and R2-23 'killed on their new lines' and five of T22's branches 'killed' by 'the orchestrator's own script' and names no script. The result file names it as 'own_mutants.py (scratchpad)'; the dispatch files name scratch_check2.py by an absolute path under /private/tmp/claude-502/.../scratchpad/. Neither script is a tracked file (git ls-files finds neither); they exist only in one session's temporary directory. The mutants themselves (anchor and replacement for R2-14, R2-23 and T23-1..T23-5) are written nowhere in the record. The only persisted evidence of these runs is the round-3 package's research-evidence/moved-mutants-1.txt, which the journal cannot cite because it was written later. The T22 entry has the same shape: 'in a scratch copy with the two production files put back to HEAD, seven of the new tests fail' names neither the tool nor the command (the result file names scratch_check2.py red --restore ...).",
+    "impact": "A statement that something was verified has to name what verified it, so the next editor can run it again. Here the claim 'all killed' for the branches T22 added (the branches whose tests T23 chose not to add: 'No T22 branch survived, so no test was added for them') cannot be re-run from the repository; the next reviewer re-derives the mutants from prose.",
+    "suggested_fix": "In the T23 entry, name the script and where it is kept (or write the seven mutants, file:line and replacement, into the entry or into a tracked file next to it); in the T22 entry name scratch_check2.py red with its --restore arguments. Or say the runs rest on the worker's report.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 2. The scripts are scratch_check2.py and moved_mutants.py in the orchestrator's session scratch directory; the outputs of the second one are in this package as research-evidence/moved-mutants-1.txt and moved-mutants-2.txt, which is untracked. Normalisation notes: the quote is a part of the reviewer's, cut at normalisation so that it sits on one line of the file.",
+    "confidence": "medium",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    "line": 158,
+    "quote": "mutated by the orchestrator's own script, are all killed, four of them by T22's tests.",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "journal.md line 158 (T23 entry) reads 'mutated by the orchestrator's own script, are all killed, four of them by T22's tests' and names no script; journal.md line 154 (T22 entry) names no tool for 'seven of the new tests fail'. The names appear only in results and dispatch files: T22.result.json test_result (scratch_check2.py red) and T23.result.json (own_mutants.py). keryx ctx rg --hidden --files with globs *mutants* and *scratch_check* finds no file named scratch_check2.py, moved_mutants.py or own_mutants.py in the working tree (gitignored files not searched; git ls-files was not run).",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:116",
+          "says": "an earlier entry (committed in b1538097e, before the commits under review) records that the check tool lives 'in the session scratchpad, not in the repository' — the location of the tool was chosen and stated, which answers the 'not a tracked file' part"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:137",
+          "says": "the sibling round-1 entry writes the moved mutants it ran by hand into the journal: '(`(graphState.graph !== \"missing\")`, `onDraft={onDraft}`, `const left = rect.right - POPOVER_WIDTH;`)' — the T23 entry (line 158) does not, for the same kind of run"
+        }
+      ],
+      "reasoning": "No project rule says what a journal entry must carry (searched .metaproject/rules and the flow-orchestrator skill for 'journal'). Line 116 shows the scratch-only tool was a stated choice, so that part of the finding is weak; but the core of the finding, that the mutants the T23 entry calls 'all killed' are written nowhere in the record, runs against the flow's own earlier practice at line 137, and the suggested fix (write the mutants, or say the runs rest on the worker's report) moves the entry toward that sibling. Upheld."
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The same `notes` string uses round 2's ids for the four findings it answers (F-001 to F-004) and here F-005 for round 1's finding (Wiki-link lookups settled by arrival order; the dispatch says 'round 1's F-005 rule'). Round 2 also has an F-005, the one the operator dismissed ('finding ids in test names', named in tasks.md and in the journal). The sentence does not say which round it means, and no id in this file is marked with its round.",
+    "impact": "A later reader who looks up F-005 in the round-2 package finds the dismissed test-naming finding and reads 'untouched' as a statement about it; the actual guard (the lookup token of round 1's F-005 in `openPath`) is not found from the sentence.",
+    "suggested_fix": "Write 'round 1's F-005 token rule in openPath (lookup.current) is untouched', as the dispatch does.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 2. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation.",
+    "confidence": "medium",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    "line": 63,
+    "quote": "The F-005 token rule in openPath (lookup.current) is untouched.",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-008",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T22.result.json notes (line 112 of the file) contain 'The F-005 token rule in openPath (lookup.current) is untouched.' The same notes use round 2's ids F-001 to F-004 for the fixes, and round 2's F-005 (finding ids in test names) was dismissed by the operator (journal.md line 146), so the sentence is ambiguous as the finding says.",
+      "verifier": "review-verifier"
+    },
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:21",
+          "says": "the dispatch set the convention: 'Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`' — the result's 'The F-005 token rule' breaks it"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json:542-566",
+          "says": "T22 is closed with empty evidenceRefs and no pinned result; nothing in the record fixes the result file's content against later correction"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:134",
+          "says": "precedent: the result files of T9 and T15 were written after acceptance and 'both say in notes that they were written during T21, after acceptance' — the flow amends result files after a task is closed, with a note"
+        }
+      ],
+      "reasoning": "The dispatch's own id convention is what the sentence departs from, and round 2 does have an F-005 (dismissed by the operator, operator-decisions.json r02:6), so the ambiguity is real. T22 was not closed with --result (flow.json holds no pin for it), and the flow has amended result files after acceptance before, with a note, so a correction is not barred. Upheld."
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "The quiet re-read on return can no longer report a failure, and one `error` state serves two causes. (a) Trigger: the catalog cannot be read at all (CLI missing or crashing) and the user returns to the view. Outcome: every return fails quietly; the banner keeps the last freshness read (for example no banner when the graph was ready), and a graph-ready explorer has no visible Refresh control (the Rebuild button exists only while graph !== 'ready', line 876). Round 2's head showed the CLI message with Retry. (b) Trigger: a loud catalog read fails after the first load (the reload after a rebuild, a Retry or Refresh), then the user leaves and returns while the CLI works again. Outcome: the quiet read succeeds and may replace the catalog, but the standing banner with its CLI message and Retry stays, because `error` is cleared only by a loud read (line 378) or by rebuild() (line 673). Round 2's head cleared it on that read. Refute: on the base branch nothing was read on return, so (a) showed nothing and (b) kept its banner until Retry, so neither is worse than base. Other reads (search, detail, relationships) still show their own errors, and Retry on the banner works.",
+    "impact": "Nothing is lost: a user with an unreadable catalog sees other panes fail with their own messages, and a stale banner clears with one Retry click. It is the price of the decision the T22 worker marked as needing the operator, and of sharing one `error` between catalog reads and rebuild failures: the explorer cannot tell a rebuild failure (which a successful read does not cure) from a catalog failure (which it does).",
+    "suggested_fix": "Optional: let a quiet read that succeeds clear an error only when it came from a catalog read (a separate `catalogError` beside the rebuild's), and surface a quiet failure after N consecutive ones. Not worth a third fix round on its own.",
+    "evidence": "Introduced or left by the work that answered round 2's F-003. Part (b) of this finding, a standing catalog error that outlives a later successful quiet read, is in the record as the minor finding raised by review-logic; what stays here is part (a): a quiet re-read that fails is never reported. The operator's answer to round 1's F-004 was to re-read silently. Normalisation notes: the same defect was raised by review-security-code (review-security-code-w1, F-001, info); the same defect was raised by review-ui-ux (review-ui-ux-w1, UX-002, info).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 403,
+    "quote": "if (generation === catalogRead.current && !quiet) setError(errMessage(cause));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "base-diff",
+    "global_id": "2026-11-23-review-flow-branch-r03#F-009",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Mechanism of part (a) confirmed by the code: the catch at MetaprojectView.tsx:403 sets error only when !quiet, and the rebuild button is inside the graph !== 'ready' block (line 876, Rebuild graph at 887). So a failed quiet re-read sets no banner. Not checked: the outcome with the CLI failing, and the base-branch comparison in the finding's Refute line, which needed a base checkout and a run. Part (b) rests on F-001 (checked above).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "UNVERIFIED (derived from code). Choice 1 of the brief: a wiki-link lookup started under snapshot one and not cancelled when a quiet re-read replaces the catalog with snapshot two compares its answer with the `snapshotId` it captured at click time, not with the current catalog. The banner 'Project knowledge changed while loading' with Refresh catalog then shows although the catalog on screen is already the new one.",
+    "impact": "Trigger: click an unloaded Wiki link, leave and return within one CLI read, with the project's knowledge changed in between. The link does not open, the banner says to refresh a catalog that is already fresh, Refresh catalog reloads it again (and drops the lookup), and the user clicks the link a second time. Narrow; costs one click and a misleading banner.",
+    "suggested_fix": "Compare against the current snapshot (a ref of `loadedSnapshot.current`) and, when it differs only because the catalog moved on, run the lookup again instead of showing the banner; or clear a pending lookup's banner when a quiet read replaces the catalog.",
+    "evidence": "Read the openPath hunk (@@ 691,736 @@: `const snapshotId = catalog?.snapshotId;` captured before the await) and the catalog effect that calls `setSnapshotMismatch(false)` only at the moment of replacement, before the lookup answers. Introduced or left by the work that answered round 2's F-002. This is the first of the two choices the T22 worker marked as needing the operator and the orchestrator took by default; review-logic and review-highload judged it a defensible default that costs one click.",
+    "confidence": "low",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 701,
+    "quote": "if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-010",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "The named sites exist: openPath captures snapshotId at MetaprojectView.tsx:693, compares at 701 with the quoted line, and setSnapshotMismatch(false) is at 395 on replacement. The user-visible outcome (a banner showing after a click, leave and return within one read) needs a run that no one recorded; nothing was run.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "Clean Code - comments. The effect's cleanup decides whether to retire pending work by reading quietRead.current, which at that moment holds the intent of the next run (the visible effect set it just before bumping revision), not of the run being cleaned up. The comment above it ('Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work') describes the unmount case and does not say the condition reads the successor's flag. It works because React runs a cleanup before the next body, and the body resets the flag at line 375.",
+    "impact": "An editor who moves the reset of quietRead (line 375) earlier, or lets another path set the flag between runs, changes whether pending wiki-link lookups and result pages are retired, with no signal at this line. Not a defect today; the two hidden-and-shown in-flight tests pin the visible behaviour.",
+    "suggested_fix": "Extend the comment: 'quietRead already holds the next run's intent here: the visible effect sets it before bumping revision.'",
+    "evidence": "Introduced or left by the work that answered round 2's F-002.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 414,
+    "quote": "if (!quietRead.current) project.current++;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-011",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.tsx:347-348: the visible effect sets quietRead.current = true, then bumps revision. Line 375 resets quietRead in the catalog effect body. Lines 413-414: the cleanup comment says 'Leaving the explorer ... retires its pending work' and the condition reads quietRead.current, which at that moment holds the successor run's intent (React runs the cleanup before the next body). The comment does not say so.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "Clean Code - DRY. The total of the three summarizeRelationships fields is spelled here and at NodeDetailsPanel.tsx:242 (`summary.incoming + summary.outgoing + summary.secondStep`). Two copies, below the three-copy threshold, so not a finding by the rule. Noted because 'rows the list shows' is now defined by two sums plus the `empty` const in RelationshipList (a third form of the same rule).",
+    "impact": "A fourth group added to groupRelationships has to be added to both sums and to `empty`; a miss shows a count that disagrees with the list, the class of round 2's F-001.",
+    "suggested_fix": "Add a `total` to the summarizeRelationships result and use it at both sites.",
+    "evidence": "Introduced or left by the work that answered round 2's F-001. First noted by the T22 worker under noticed_not_touched (results/T22.result.json).",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 716,
+    "quote": "const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "The same three-field sum appears at MetaprojectView.tsx:716 (quoted line, exact) and NodeDetailsPanel.tsx:242 (summary.incoming + summary.outgoing + summary.secondStep). The empty const at RelationshipList.tsx:213 is a third form of the rule. The count of copies is as the finding states.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-layout",
+    "severity": "info",
+    "problem": "UNVERIFIED (derived from code; no real-layout measurement exists for these inputs). The T23 placement tests pin placeFiltersPopover() arithmetic against inputs happy-dom invents. (1) stubPopoverContentHeight returns one constant scrollHeight for the popover; in a browser scrollHeight is also the full content height under a max-height, so the model matches, but the constants (229, 500) are fixed numbers and do not follow a content change (the known Reset-filters row, F-011). The stub also answers scrollHeight only, so an edit that read offsetHeight (capped by max-height) instead would pass every test. (2) The bottom-edge test puts the button at top 478 / bottom 502 in a 480 px window, so the button's own box lies partly outside the window. A real Filters button sits inside the explorer's .view and is in the window when the popover opens; the branch the test pins (bottom = max(8, 480 - 478 + 4) = 8) is reachable in a real layout only when the page has scrolled the button under the window edge. The Math.max(POPOVER_MARGIN, ...) floor is pinned by an input a real layout reaches rarely, and a button inside the window with less than 4 px under it is the case the floor really serves. (3) The 30 px window test leaves scrollHeight at happy-dom's 0; with a real content height the result is the same (above -12 is not greater than below -6), so that one holds.",
+    "impact": "No user-visible defect is claimed. The tests would stay green if the content-height source changed to a capped measure, and they pin the 8 px floor with an off-window button. Probe that would settle it: in the browser dev build at 720x480, open Filters with the freshness Details open and read the popover's scrollHeight, offsetHeight and getBoundingClientRect() before and after a resize to 700x480, and compare with the top and maxHeight the code sets.",
+    "suggested_fix": "Optional, tests only: give the scrollHeight stub an offsetHeight twin that honours the inline max-height, and add one case whose button box lies inside the window with under 4 px below it. No production change.",
+    "evidence": "Introduced or left by the work that answered round 2's F-006.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "line": 1496,
+    "quote": "stubBox(filtersButton(), { left: 544, top: 478, right: 615, bottom: 502 });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-013",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Constants at MetaprojectView.tsx:170-175 (POPOVER_WIDTH 320, POPOVER_MARGIN 8, POPOVER_GAP 4, MENU_MAX_HEIGHT 420) and the arithmetic at 186-193 match the finding's bottom = max(8, 480 - 478 + 4) = 8. The stub constants 229 and 500 are at MetaprojectView.dom.test.tsx lines 849, 1458 and 1473, and the bottom-edge fixture (line 1496) matches the quote. Whether the tests would miss an offsetHeight change, and how the popover lays out in a real browser, needs a measurement that the finding itself says was not recorded.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "legendFor is the one reader of a projection's edges in apps/desktop/src/metaproject that does not use the grouping rule of F-001's fix. It builds the line-style legend from the raw edge list, self-loops and edges with an end outside the projection included, while layoutNeighborhood (line 506, `if (edge.from === edge.to) return;`) and groupRelationships leave both out. For a wiki page whose only edge is a `links` edge to itself, the graph draws the root alone and its legend still lists 'Dashed line' with 'Links'. This file is outside slice-02 and the legend is a kind set, not a count or an emptiness test, so this is noted, not a defect of the fix round.",
+    "impact": "Not stated: the legend names a line style no drawn line uses, for a projection that no page of this project produces today (none of the 129 wiki pages links to itself, per round 2's evidence).",
+    "suggested_fix": "Build `edgeKinds` from the edges the layout keeps (or skip `edge.from === edge.to` in legendFor) if the 'exactly the line styles present' wording of AC4 is meant to cover drawn lines.",
+    "evidence": "keryx ctx rg for `\\.edges|edges\\b.*(length|\\.some|\\.every)` over apps/desktop/src/metaproject excluding tests: readers are RelationshipList.tsx:54 (groupRelationships), graphLayout.ts:464/475/505 (layout, self-loop skipped at 506), graphLayout.ts:638 (legend, raw), NodeDetailsPanel.tsx:85 (document neighbours, not a count), MetaprojectView.tsx:363 (catalog index). Introduced or left by the work that answered round 2's F-001.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/graphLayout.ts",
+    "line": 638,
+    "quote": "const edgeKinds = new Set(projection.edges.map((edge) => edge.kind));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-014",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "graphLayout.ts:638 builds edgeKinds from projection.edges with no filter (quoted line, exact). layoutNeighborhood skips self-loops at line 506 (also 216 in groupRelationships path). legendFor filters lines by edgeKinds (644), and EDGE_LINE_STYLES maps links to dashed (605) with label 'Dashed line' (614). The mechanism that the legend lists a line style the layout does not draw is confirmed by the code; the drawn result was not rendered.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-015",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Mutants of code that T22 added are given the ids T23-1 to T23-5, a prefix that is T23's own task id, next to round 2's mutant ids R2-n which name the review round that proposed them. The journal's T23 entry describes the same five mutants ('the five branches T22 added ... mutated by the orchestrator's own script') without any id, and names no script, so the ids can be matched to the journal only through this notes field.",
+    "impact": "'T23-3' reads as a mutant of T23's tests or a third item of T23, not as a mutant of T22's `catalogPending` guard; the same five mutants have an id in one file and none in the other.",
+    "suggested_fix": "Name them for what they mutate (for example T22-m1 to T22-m5) or say 'ids of this task's own mutants' once, and give the journal entry the same ids.",
+    "evidence": "Introduced or left by the work that answered the flow record of fix round 2. Normalisation notes: confidence was not stated by the reviewer and is set at normalisation.",
+    "confidence": "medium",
+    "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+    "line": 50,
+    "quote": "T22's branches (own_mutants.py): T23-1 :376 `if (!quiet) {` -> `{` killed by T22's lookup-in-flight, page-in-flight and standing-error tests;",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-23-review-flow-branch-r03#F-015",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T23.result.json notes contain the quoted text: \"T22's branches (own_mutants.py): T23-1 :376 ... killed by T22's lookup-in-flight, page-in-flight and standing-error tests;\". The ids T23-1 to T23-5 appear there and in moved-mutants-2.txt; journal.md line 158 describes the same five mutants without ids. The naming problem is as the finding states.",
+      "verifier": "review-verifier"
+    }
+  }
+]

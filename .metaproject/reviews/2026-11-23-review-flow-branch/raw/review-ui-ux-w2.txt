@@ -1,0 +1,28 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Slice-06 (graphLayout.ts, labels.ts, metaproject.css, nodePanel.css, useExplorerNavigation.ts, the user guide) was read in full in code mode. The CSS keeps tokens only, 24 px minimum targets, focus-visible rings, text labels next to every colour or shape cue, and the guide matches the visible strings I checked in the TSX (Reset filters, Details, Clear search, Second step, Copy path, Find a Wiki page, Draft Wiki page, Draft OpenSpec change). One minor finding: the Filters popover is cut at the bottom at 720x480 when the freshness Details are open (measured by the orchestrator; geometry is also review-layout's). Checks not run: no render supplied to me, so contrast, tab-order, grayscale and reduced-motion checks on the render were not run; the details drawer's slide-in animation relies on the global reduced-motion rule in styles/tokens.css, which I saw but did not test.",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "criterion": "Nielsen #3 (user control) / WCAG 1.4.10 reflow-adjacent: controls reachable. Geometry also belongs to review-layout; filed here for the usability effect",
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "quote": ".metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }",
+      "evidence": "Orchestrator live measurement (research-evidence/live-filters-popover-720x480.txt), 720x480, dark, Details expanded (banner 122 px): Filters button bottom 301, popover top 308, bottom 531, window height 480 -> cut by 51 px; scrollHeight equals clientHeight (229), so the popover does not scroll and the lower chips and the 'Not available' note are outside the window. In the default one-line banner state the popover fits (bottom 455, 25 px spare). The popover inherits `.menu` (max-height: min(420px, calc(100vh - 80px)), position: fixed), whose limit does not account for the popover's top offset. The placement is set in the TSX (wave 1 slice); this CSS adds no max-block-size of its own.",
+      "impact": "At the minimum window size, with the freshness reason open, the user cannot reach the lowest filter chips or Reset filters in the popover and cannot scroll to them. Closing the banner Details recovers it, so the case is narrow and has a workaround.",
+      "fix": "Give `.metaproject-filters-pop` a max-block-size derived from the space below its anchor (for example a custom property set by the placement code, or `max-block-size: calc(100vh - var(--pop-top) - var(--sp-3))`) with overflow-y: auto, so it scrolls instead of being clipped."
+    }
+  ],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+
+Notes
+- Read in full: all hunks of slice-06 (graphLayout.ts 1-690, labels.ts, both metaproject.css hunks, nodePanel.css, useExplorerNavigation.ts, desktop-metaproject.md).
+- Verified at head: `.menu` rule in apps/desktop/src/styles.css:142; the guide's button names exist in NodeDetailsPanel.tsx, MetaprojectView.tsx, RelationshipList.tsx.
+- Keep: the graph's meaning is carried by shape, border style and line style plus a legend (no colour-only cue); the header heading is hidden visually in the narrow container but kept for assistive technology.
+- Checks not run: contrast on computed colours, Tab order and focus visibility on the render, grayscale read, reduced-motion emulation, light theme and 1180x780 / 1440x900 with the popover open (not measured by the orchestrator either).

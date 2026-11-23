@@ -1,0 +1,217 @@
+# keryx review verify-run
+finding: tests-to-run
+command: cd apps/desktop && bun test src/panels/ChromeView.dom.test.tsx src/panels/SidePanels.dom.test.tsx src/panels/SideTabs.dom.test.tsx src/review/ReviewDetail.dom.test.tsx src/session/ActivityPanel.dom.test.tsx src/session/CommandCard.dom.test.tsx src/session/Composer.dom.test.tsx src/session/SessionInfoPanel.dom.test.tsx && cd ../.. && bun test src/remote/format-html.test.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign
+time: 2026-11-23T08:46:57.389Z
+exit: 1
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+src/panels/SideTabs.dom.test.tsx:
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+
+The above error occurred in one of your React components:
+
+    at Lazy
+    at div
+    at Suspense
+    at div
+    at aside
+    at SidePanel (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/panels/SidePanel.tsx:41:9)
+    at div
+    at AppShell (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/shell/AppShell.tsx:137:19)
+    at ToastProvider (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/components/Toasts.tsx:24:31)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+(fail) switching tabs shows Activity and Info in the same panel, with Activity's sub-tabs [19.82ms]
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+
+The above error occurred in one of your React components:
+
+    at Lazy
+    at div
+    at Suspense
+    at div
+    at aside
+    at SidePanel (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/panels/SidePanel.tsx:41:9)
+    at div
+    at AppShell (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/shell/AppShell.tsx:137:19)
+    at ToastProvider (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/components/Toasts.tsx:24:31)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+(fail) Show subagent on a tool card opens Activity on that subagent, even from the Browser tab [3.34ms]
+
+src/panels/SidePanels.dom.test.tsx:
+SyntaxError: Export named 'browserFrame' not found in module '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/platform/panels.ts'.
+(fail) (unnamed) [0.63ms]
+90 |   document.body.append(host);
+91 |   root = client.createRoot(host);
+92 | });
+93 | 
+94 | afterAll(async () => {
+95 |   await act(() => root.unmount());
+                       ^
+TypeError: undefined is not an object (evaluating 'root.unmount')
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/panels/SidePanels.dom.test.tsx:95:19)
+      at act (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/react/cjs/react.development.js:2512:16)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/panels/SidePanels.dom.test.tsx:95:9)
+(fail) (unnamed) [0.25ms]
+
+src/panels/ChromeView.dom.test.tsx:
+22 |      * @param [options.url] URL.
+23 |      * @param [options.settings] Settings.
+24 |      */
+25 |     static register(options) {
+26 |         if (this.#registered !== null) {
+27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');
+                           ^
+error: Failed to register. Happy DOM has already been globally registered.
+      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)
+      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/test/dom.ts:8:21)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/panels/ChromeView.dom.test.tsx:20:3)
+(fail) (unnamed) [0.18ms]
+28 |   root = client.createRoot(host);
+29 |   await act(() => root.render(createElement(ChromeView, { tab: 5, io })));
+30 | });
+31 | 
+32 | afterAll(async () => {
+33 |   await act(() => root.unmount());
+             ^
+TypeError: act is not a function. (In 'act(() => root.unmount())', 'act' is undefined)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/panels/ChromeView.dom.test.tsx:33:9)
+(fail) (unnamed) [0.15ms]
+
+src/review/ReviewDetail.dom.test.tsx:
+22 |      * @param [options.url] URL.
+23 |      * @param [options.settings] Settings.
+24 |      */
+25 |     static register(options) {
+26 |         if (this.#registered !== null) {
+27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');
+                           ^
+error: Failed to register. Happy DOM has already been globally registered.
+      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)
+      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/test/dom.ts:8:21)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/review/ReviewDetail.dom.test.tsx:15:3)
+(fail) (unnamed) [0.20ms]
+22 |   document.body.append(trigger, host);
+23 |   root = (await import("react-dom/client")).createRoot(host);
+24 | });
+25 | 
+26 | afterAll(async () => {
+27 |   await act(async () => root.unmount());
+             ^
+TypeError: act is not a function. (In 'act(async () => root.unmount())', 'act' is undefined)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/review/ReviewDetail.dom.test.tsx:27:9)
+(fail) (unnamed) [0.15ms]
+
+src/session/SessionInfoPanel.dom.test.tsx:
+22 |      * @param [options.url] URL.
+23 |      * @param [options.settings] Settings.
+24 |      */
+25 |     static register(options) {
+26 |         if (this.#registered !== null) {
+27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');
+                           ^
+error: Failed to register. Happy DOM has already been globally registered.
+      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)
+      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/test/dom.ts:8:21)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/SessionInfoPanel.dom.test.tsx:18:3)
+(fail) (unnamed) [0.17ms]
+34 |     configurable: true,
+35 |   });
+36 |   await act(() => root.render(null));
+37 | });
+38 | afterAll(async () => {
+39 |   await act(() => root.unmount());
+             ^
+TypeError: act is not a function. (In 'act(() => root.unmount())', 'act' is undefined)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/SessionInfoPanel.dom.test.tsx:39:9)
+(fail) (unnamed) [0.15ms]
+
+src/session/Composer.dom.test.tsx:
+22 |      * @param [options.url] URL.
+23 |      * @param [options.settings] Settings.
+24 |      */
+25 |     static register(options) {
+26 |         if (this.#registered !== null) {
+27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');
+                           ^
+error: Failed to register. Happy DOM has already been globally registered.
+      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)
+      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/test/dom.ts:8:21)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/Composer.dom.test.tsx:14:3)
+(fail) (unnamed) [0.20ms]
+22 |   document.body.append(host);
+23 |   root = client.createRoot(host);
+24 | });
+25 | 
+26 | afterAll(async () => {
+27 |   await act(() => root.unmount());
+             ^
+TypeError: act is not a function. (In 'act(() => root.unmount())', 'act' is undefined)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/Composer.dom.test.tsx:27:9)
+(fail) (unnamed) [0.15ms]
+
+src/session/ActivityPanel.dom.test.tsx:
+22 |      * @param [options.url] URL.
+23 |      * @param [options.settings] Settings.
+24 |      */
+25 |     static register(options) {
+26 |         if (this.#registered !== null) {
+27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');
+                           ^
+error: Failed to register. Happy DOM has already been globally registered.
+      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)
+      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/test/dom.ts:8:21)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/ActivityPanel.dom.test.tsx:16:3)
+(fail) (unnamed) [0.18ms]
+23 |   document.body.append(host);
+24 |   root = client.createRoot(host);
+25 | });
+26 | 
+27 | afterAll(async () => {
+28 |   await act(() => root.unmount());
+             ^
+TypeError: act is not a function. (In 'act(() => root.unmount())', 'act' is undefined)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/ActivityPanel.dom.test.tsx:28:9)
+(fail) (unnamed) [0.17ms]
+
+src/session/CommandCard.dom.test.tsx:
+22 |      * @param [options.url] URL.
+23 |      * @param [options.settings] Settings.
+24 |      */
+25 |     static register(options) {
+26 |         if (this.#registered !== null) {
+27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');
+                           ^
+error: Failed to register. Happy DOM has already been globally registered.
+      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)
+      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/test/dom.ts:8:21)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/CommandCard.dom.test.tsx:14:3)
+(fail) (unnamed) [0.19ms]
+21 |   document.body.append(host);
+22 |   root = client.createRoot(host);
+23 | });
+24 | 
+25 | afterAll(async () => {
+26 |   await act(() => root.unmount());
+             ^
+TypeError: act is not a function. (In 'act(() => root.unmount())', 'act' is undefined)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop/src/session/CommandCard.dom.test.tsx:26:9)
+(fail) (unnamed) [0.15ms]
+
+ 6 pass
+ 16 fail
+ 27 expect() calls
+Ran 22 tests across 8 files. [224.00ms]

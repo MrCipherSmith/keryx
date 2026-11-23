@@ -1,0 +1,38 @@
+range: origin/main...60cbe1c565f4 (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: degradation
+
+QUESTION: after this change, is the code worse than on the base branch: in behaviour, in defaults, in speed or in
+structure, and can that be shown? Scope is the diff plus the consumers below. The consumer list is the code
+graph's, not yours: trace those, and say so when you traced fewer.
+
+CHANGED SHARED EXPORTS (17):
+  - apps/desktop/src/App.dom.test.tsx  (every export)
+  - apps/desktop/src/App.tsx  (every export)
+  - apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx  (every export)
+  - apps/desktop/src/metaproject/MetaprojectView.tsx  (every export)
+  - apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx  (every export)
+  - apps/desktop/src/metaproject/NodeDetailsPanel.tsx  (every export)
+  - apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx  (every export)
+  - apps/desktop/src/metaproject/RelationshipGraph.tsx  (every export)
+  - apps/desktop/src/metaproject/RelationshipList.dom.test.tsx  (every export)
+  - apps/desktop/src/metaproject/RelationshipList.tsx  (every export)
+  - apps/desktop/src/metaproject/graph.css  (every export)
+  - apps/desktop/src/metaproject/graphLayout.test.ts  (every export)
+  - apps/desktop/src/metaproject/graphLayout.ts  AUTO_ZOOM, COLUMN_CAP, EdgeKindStyle, GRAPH_GEOMETRY, GROUP_MIN_SLOTS, GraphColorToken, GraphColumn, GraphLegend, GraphSide, GraphViewport, LINE_STYLES_IN_ORDER, LINE_STYLE_LABELS, LaidOutCaption, LaidOutEdge, LaidOutNode, LaidOutOverflow, LayoutBounds, LayoutBox, LayoutOptions, LineStyle, NODE_KINDS_IN_ORDER, NeighborhoodLayout, NodeBorderStyle, NodeKindStyle, NodeShape, VIEWPORT_PADDING, computeViewport, edgeKindLabel, edgeKindStyle, layoutNeighborhood, legendFor, nodeKindStyle, shortenMiddle, toOpaqueColor
+  - apps/desktop/src/metaproject/labels.ts  NODE_KIND_LABELS, RELATIONSHIP_KIND_LABELS
+  - apps/desktop/src/metaproject/metaproject.css  (every export)
+  - apps/desktop/src/metaproject/nodePanel.css  (every export)
+  - apps/desktop/src/metaproject/useExplorerNavigation.ts  Route, useExplorerNavigation
+
+CONSUMERS (2 of 2; the files that import the module holding each changed export, or a barrel re-exporting it; most imported first, cap 40):
+  - apps/desktop/src/main.tsx  imports apps/desktop/src/App.tsx  [fan-in 0]
+  - apps/desktop/src/test/app-navigation.fixture.tsx  imports apps/desktop/src/App.tsx  [fan-in 0]
+
+CAP: the cap of 40 dropped no consumer (2 found). The cap is one budget shared by all changed exports, not one per export.
+
+omitted with a reason: 0 unrelated-symbol, 0 hub-damped, 464 text-hub, 9 test-consumer. They are context, not owed a chunk pass.
+9 tests exercise the changed code — run them: `bun test apps/desktop/src/panels/ChromeView.dom.test.tsx apps/desktop/src/panels/SidePanels.dom.test.tsx apps/desktop/src/panels/SideTabs.dom.test.tsx apps/desktop/src/review/ReviewDetail.dom.test.tsx apps/desktop/src/session/ActivityPanel.dom.test.tsx apps/desktop/src/session/CommandCard.dom.test.tsx apps/desktop/src/session/Composer.dom.test.tsx apps/desktop/src/session/SessionInfoPanel.dom.test.tsx src/remote/format-html.test.ts`
+tests to run: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch/tests-to-run.json
+cap: 25 of 75 candidate files were NOT reviewed (blast_radius_max_files=40). They are listed in the record. Cut blast radius: run the waves — keryx review chunks plan --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch
+unresolved: 46 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

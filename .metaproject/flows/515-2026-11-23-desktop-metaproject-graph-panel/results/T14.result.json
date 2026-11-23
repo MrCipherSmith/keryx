@@ -1,0 +1,49 @@
+{
+  "task_id": "task-14",
+  "task_name": "Compact filter bar and one-row header on narrow hosts",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "Item 1 (revised design, popover): the filter block is gone from the content column. A 'Filters' chip button sits in RelationshipGraph's header row left of the zoom controls, passed through a new optional `actions` slot (additive; every existing prop kept). Where no graph is drawn (graph missing, no projection yet) the same button sits in a slim right-aligned row of its own. The button (aria-haspopup=dialog, aria-expanded, aria-controls while open) opens FiltersPopover: a non-modal role=dialog labelled 'Graph filters' on the app's menu surface (.menu, --shadow-pop, fixed position right-aligned under the button, clamped to the window), following Menu.tsx's pattern (useEscape layer, capture-phase outside mousedown). It holds Direction and Depth selects, a 'Relationship types · n of N' heading with the labelled kind chips, the symbol-layer reason (only while Defines/Calls are disabled) and 'Reset filters' in a menu footer (only while filters differ from defaults). Changes apply at once; the graph stays visible behind it. Focus moves to the first control on open; Escape or a press outside closes it and puts focus back on the button; the button itself toggles it. While filters differ from defaults the button reads 'Filters · <n>' (n = number of differing settings among direction, depth and types) and takes the pressed chip look (data-changed); its title always states the current settings, e.g. 'Both · 2 steps · 4 of 7 types'. Open/closed is explorer useState (survives tab switches, no history entry). Item 2: inside the existing @container metaproject (max-width: 760px) block the '.flows-heading' is visually hidden with the sr-only declarations (still in the accessibility tree), so the header is one row. Item 3: with the filter block gone and a one-row header, the graph gets the height the 182 px bar and the second header row took; not measured here.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "apps/desktop/src/metaproject/graph.css",
+    "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
+  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0",
+  "test_result": "pass: cd apps/desktop && bun test src -> 838 passed, 0 failed across 89 files (baseline 833; +4 explorer tests, +1 RelationshipGraph test). Red: with the committed (HEAD) MetaprojectView.tsx and RelationshipGraph.tsx swapped in temporarily, bun test of the two test files gave 45 pass, 8 fail: the actions-slot test, the 4 new popover tests and the 3 updated AC17/AC13 filter tests (all 'Missing Filters button' or missing action); then my versions were restored and re-verified. AC11-AC16 and AC17 tests pass.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "partial: AC17 and AC19 pass by command; AC20's minimum-window clause (>= 140 px of graph at 720x480) is judged by the orchestrator in a browser and was not measured here",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "The shared icon set has no funnel/filter glyph (only clearFilters, a funnel with an x), so the Filters button uses a trailing chevron instead of a filter icon.", "where": "apps/desktop/src/components/Icon.tsx PATHS" }
+  ],
+  "assumptions": [
+    "'How many settings differ' counts three settings: direction, depth and the set of relationship types (any difference in types counts once), so the count is 1-3.",
+    "The popover is not built on Menu.tsx itself, because Menu closes on every item selection and its items are menuitems; it reuses Menu's surface class (.menu, .menu-header, .menu-footer), positioning, useEscape layer and outside-press handling instead.",
+    "A press outside returns focus to the button (as the dispatch says), unlike Menu.tsx, which leaves focus where the press went."
+  ],
+  "behavior_changes": [
+    { "description": "The Filters button text is 'Filters' at the defaults and 'Filters · <n>' when n settings differ, with a trailing chevron; its tooltip always shows the current settings ('Both · 1 step · 5 of 7 types').", "user_visible": true, "needs_operator": true, "alternatives": ["Tooltip only while filters differ", "A leading icon instead of the chevron (needs a new glyph in Icon.tsx)"] },
+    { "description": "The popover is 320 px wide, right-aligned with the button and opens below it; inside: Direction and Depth on one row, a 'Relationship types · n of N' heading, the chips, the symbol-layer note, and 'Reset filters' at the bottom right.", "user_visible": true, "needs_operator": true, "alternatives": ["Left-aligned with the button", "Reset at the top next to the heading"] },
+    { "description": "The popover stays open while the user changes settings (each change applies at once) and stays open across a switch to Wiki and back, because open/closed is explorer state; it is only rendered in Graph mode.", "user_visible": true, "needs_operator": true, "alternatives": ["Close the popover when the view changes"] },
+    { "description": "When no graph is drawn (graph missing or no projection yet), the Filters button sits alone in a slim right-aligned row at the top of the content column.", "user_visible": true, "needs_operator": true, "alternatives": ["Left-aligned slim row", "Put the button in the list header instead"] }
+  ],
+  "not_touched": [],
+  "notes": "The expanding-row version written before the revision was replaced, not kept. While rewriting the tests, a cut accidentally dropped four committed tests (header counts, scroll-into-view, busy graph, banners); they were restored verbatim from HEAD and pass. The RelationshipGraph change is only the additive `actions` prop, its header slot and two CSS rules (actions left of zoom). The dev server on 1420/1421 was not touched; it picked up the file changes, including the few seconds while the HEAD versions were swapped in for the red check. Not verified without a browser: the >= 140 px graph height at 720x480 (AC20), the popover position and clamping, that it does not cover the zoom buttons, that the header really stays on one row at 660 px, and chip wrapping inside the popover."
+}

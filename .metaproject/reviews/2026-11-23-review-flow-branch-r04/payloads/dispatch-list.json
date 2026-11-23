@@ -1,0 +1,454 @@
+[
+ {
+  "name": "review-architecture-w1",
+  "reviewer": "review-architecture",
+  "wave": 1,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-architecture-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-architecture-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-degradation-w1",
+  "reviewer": "review-degradation",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-degradation-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-degradation-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-degradation-w2",
+  "reviewer": "review-degradation",
+  "wave": 2,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-degradation-w2.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-degradation-w2.json",
+  "skill": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-frontend-w1",
+  "reviewer": "review-frontend",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-frontend-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-frontend-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [
+   "F-001"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-frontend-w2",
+  "reviewer": "review-frontend",
+  "wave": 2,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-frontend-w2.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-frontend-w2.json",
+  "skill": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-highload-w1",
+  "reviewer": "review-highload",
+  "wave": 1,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-highload-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-highload-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-layout-w1",
+  "reviewer": "review-layout",
+  "wave": 1,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-layout-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-layout-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-layout/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-logic-w1",
+  "reviewer": "review-logic",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-logic-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-logic-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [
+   "F-001",
+   "F-006",
+   "F-007"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-logic-w12",
+  "reviewer": "review-logic",
+  "wave": 12,
+  "slices": [
+   "slice-02",
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-02.diff",
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-logic-w12.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-logic-w12.json",
+  "skill": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-performance-w1",
+  "reviewer": "review-performance",
+  "wave": 1,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-performance-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-performance-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-performance/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-regression-w1",
+  "reviewer": "review-regression",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-regression-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-regression-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+  "tier": "deep",
+  "alias": "opus",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-regression-w2",
+  "reviewer": "review-regression",
+  "wave": 2,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-regression-w2.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-regression-w2.json",
+  "skill": ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+  "tier": "deep",
+  "alias": "opus",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-security-code-w11",
+  "reviewer": "review-security-code",
+  "wave": 11,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-security-code-w11.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-security-code-w11.json",
+  "skill": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-style-w1",
+  "reviewer": "review-style",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-style-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-style-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [
+   "F-006",
+   "F-008"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-style-w2",
+  "reviewer": "review-style",
+  "wave": 2,
+  "slices": [
+   "slice-02",
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-02.diff",
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-style-w2.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-style-w2.json",
+  "skill": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-testing-practices-w1",
+  "reviewer": "review-testing-practices",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-testing-practices-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-testing-practices-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "run-tests",
+  "exec_budget_s": 300,
+  "fix": true,
+  "owned": [
+   "F-002",
+   "F-003",
+   "F-004",
+   "F-005"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-ui-ux-w1",
+  "reviewer": "review-ui-ux",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-ui-ux-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-ui-ux-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [
+   "F-001"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-ui-ux-w2",
+  "reviewer": "review-ui-ux",
+  "wave": 2,
+  "slices": [
+   "slice-03"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-ui-ux-w2.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/payloads/review-ui-ux-w2.json",
+  "skill": ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": false,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@744d9ef = head; wiki none; memory none"
+  ]
+ }
+]

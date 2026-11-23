@@ -1,0 +1,204 @@
+{
+ "F-001": {
+  "raw": "review-layout-w2",
+  "source_id": "LY-001",
+  "merged": [
+   [
+    "review-ui-ux-w2",
+    "UX-001",
+    "review-ui-ux"
+   ],
+   [
+    "review-ui-ux-w1",
+    "UX-002",
+    "review-ui-ux"
+   ]
+  ]
+ },
+ "F-002": {
+  "raw": "review-frontend-w3",
+  "source_id": "FE-W3-001",
+  "merged": []
+ },
+ "F-003": {
+  "raw": "review-degradation-w1",
+  "source_id": "F-002",
+  "merged": [
+   [
+    "review-highload-w2",
+    "F-001",
+    "review-highload"
+   ],
+   [
+    "review-frontend-w2",
+    0,
+    "review-frontend"
+   ],
+   [
+    "review-logic-w5",
+    "F-001",
+    "review-logic"
+   ]
+  ]
+ },
+ "F-004": {
+  "raw": "review-degradation-w1",
+  "source_id": "F-001",
+  "merged": []
+ },
+ "F-005": {
+  "raw": "review-highload-w2",
+  "source_id": "F-002",
+  "merged": []
+ },
+ "F-006": {
+  "raw": "review-performance-w1",
+  "source_id": "F-001",
+  "merged": [
+   [
+    "review-degradation-w1",
+    "F-003",
+    "review-degradation"
+   ]
+  ]
+ },
+ "F-007": {
+  "raw": "review-ui-ux-w1",
+  "source_id": "UX-001",
+  "merged": []
+ },
+ "F-008": {
+  "raw": "review-logic-w3",
+  "source_id": "F-001",
+  "merged": []
+ },
+ "F-009": {
+  "raw": "review-logic-w1",
+  "source_id": "F-001",
+  "merged": []
+ },
+ "F-010": {
+  "raw": "review-logic-w3",
+  "source_id": "F-002",
+  "merged": []
+ },
+ "F-011": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-001",
+  "merged": []
+ },
+ "F-012": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-002",
+  "merged": []
+ },
+ "F-013": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-003",
+  "merged": [
+   [
+    "review-logic-w4",
+    "F-002",
+    "review-logic"
+   ]
+  ]
+ },
+ "F-014": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-004",
+  "merged": []
+ },
+ "F-015": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-005",
+  "merged": [
+   [
+    "review-logic-w4",
+    "F-003",
+    "review-logic"
+   ]
+  ]
+ },
+ "F-016": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-006",
+  "merged": []
+ },
+ "F-017": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-007",
+  "merged": []
+ },
+ "F-018": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-008",
+  "merged": [
+   [
+    "review-logic-w4",
+    "F-001",
+    "review-logic"
+   ]
+  ]
+ },
+ "F-019": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-009",
+  "merged": []
+ },
+ "F-020": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-010",
+  "merged": []
+ },
+ "F-021": {
+  "raw": "review-testing-practices-w1",
+  "source_id": "F-011",
+  "merged": []
+ },
+ "F-022": {
+  "raw": "review-logic-w5",
+  "source_id": "F-002",
+  "merged": []
+ },
+ "F-023": {
+  "raw": "review-frontend-w1",
+  "source_id": "F-001",
+  "merged": [
+   [
+    "review-testing-practices-w1",
+    "F-012",
+    "review-testing-practices"
+   ]
+  ]
+ },
+ "F-024": {
+  "raw": "review-highload-w1",
+  "source_id": "F-001",
+  "merged": []
+ },
+ "F-025": {
+  "raw": "review-architecture-w3",
+  "source_id": "F-001",
+  "merged": []
+ },
+ "F-026": {
+  "raw": "review-architecture-w3",
+  "source_id": "F-002",
+  "merged": []
+ },
+ "F-027": {
+  "raw": "review-frontend-w3",
+  "source_id": "FE-W3-002",
+  "merged": []
+ },
+ "F-028": {
+  "raw": "review-layout-w2",
+  "source_id": "LY-002",
+  "merged": []
+ },
+ "F-029": {
+  "raw": "review-logic-w6",
+  "source_id": "F-001",
+  "merged": []
+ }
+}

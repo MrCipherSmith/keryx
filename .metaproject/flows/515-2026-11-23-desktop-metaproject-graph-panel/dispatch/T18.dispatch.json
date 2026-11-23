@@ -1,0 +1,89 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T18",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)",
+    "description": "Four findings of review round 1 in the node details panel and the relationship list: two about behaviour, two about tests that do not pin behaviour. Each is in `fix_context.review_feedback`; the full text and evidence are in findings.json, the mutants in research-evidence/mutation-1-compact.txt. The task is done when every line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-007. The operator upheld it with this fix: the fact row also shows the second-step count; the tab count stays (first answer «Дополнить строку фактов», recorded as uphold). Finish line: when the projection has second-step relationships, the Relationships fact row reads like `5 incoming · 4 outgoing · 3 second-step` (the same middle dot and wording style as today, `limited` still appended when the projection is truncated); with none it reads exactly as today, so AC7's text holds. The tab count is unchanged. A test asserts both forms and fails without the change (`scratch_check.py red`).\nF-022. A self-loop edge (from and to are both the root) is listed and counted as outgoing in the panel, while the graph caption skips it (`layoutNeighborhood` in graphLayout.ts returns early on `edge.from === edge.to`), so the two counts on one screen differ. Finish line: the panel uses the graph's rule — a self-loop is not listed and not counted, at the first step and at the second — with a test that fails without the change. graphLayout.ts belongs to another lane: read it, do not edit it.\nF-019. Fifteen mutants of NodeDetailsPanel.tsx survive: P1, P3, P4, P5, P6, P7, P8, P9, P11, P13, P14, P17, P18, P20, P21. Finish line: `scratch_check.py mutants --ids <those> --tests src/metaproject/NodeDetailsPanel.dom.test.tsx` reports each as killed, or your result names the ones that cannot be killed by a DOM test and says why (an equivalent mutant, or behaviour only a layout engine shows).\nF-020. Four mutants of RelationshipList.tsx survive: L1, L2, L3, L8. Same finish line with `--tests src/metaproject/RelationshipList.dom.test.tsx`. If the F-022 change moves or removes an anchor, the tool reports the mutant as invalid: say which line now carries that behaviour and show the test that pins it.\n\nA test added here asserts what a user or a caller can observe (rendered text, roles, a callback's arguments), not the wording of the source.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix.",
+    "intent": "fix"
+  },
+  "acceptance_criteria": [
+    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+    "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.request.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/reviews/2026-11-23-review-flow-branch/report.md",
+    ".metaproject/reviews/2026-11-23-review-flow-branch/findings.json",
+    ".metaproject/reviews/2026-11-23-review-flow-branch/research-evidence/mutation-1-compact.txt",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/graphLayout.ts",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/NodeDetailsPanel.tsx, apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx, apps/desktop/src/metaproject/RelationshipList.tsx, apps/desktop/src/metaproject/RelationshipList.dom.test.tsx, apps/desktop/src/metaproject/nodePanel.css. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, package.json or any lockfile. No new dependencies.",
+    "Parallel lanes: other implementers work in this worktree right now on other files. If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
+    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "The fix context (each finding's id, file, line, the reviewer's message and suggested fix, and the operator's answer for an upheld held finding) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T18.request.json under fix_context.review_feedback.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T18.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T18.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T09:45:07Z",
+    "created_by": "flow-orchestrator"
+  }
+}

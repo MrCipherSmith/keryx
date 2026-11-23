@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-security-code",
+  "wave": 4,
+  "waves": 8,
+  "slices": [
+    "slice-07"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-07",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-07.diff",
+      "bytes": 146286
+    }
+  ],
+  "result": "raw/review-security-code-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+}

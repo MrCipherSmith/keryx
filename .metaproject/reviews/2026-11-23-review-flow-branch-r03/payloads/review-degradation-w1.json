@@ -1,0 +1,533 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Flow 515 review round 3: the commits of fix round 2 (tasks T22 and T23), which answered the findings of review round 2. The round reads the code and tests those commits changed (slice-02) and the flow's own record of them (slice-01).",
+   "flags": [],
+   "mode": "review-flow",
+   "range": "b1538097e636..8e0f656fb2aa",
+   "flow": "515"
+  },
+  "git": {
+   "repo": "keryx",
+   "branch": "feat/desktop-metaproject-redesign",
+   "base": "origin/main",
+   "head": "8e0f656fb2aa3a2173487d4f6ca4ff1c89aa933a",
+   "merge_base": "1358d962f4dfc07a9e086a533f51e75aa757dfcd",
+   "previous_head": "b1538097e636d9ec4c08f013b196e716ba09b18d"
+  },
+  "pr": null,
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.dispatch.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx"
+   ],
+   "changed_lines": 1316,
+   "risk_areas": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx (the catalog effect: `catalogRead`, `project.current`, `catalogPending`, the quiet read's error handling; the Wiki Relationships disclosure)",
+    "apps/desktop/src/metaproject/RelationshipList.tsx (the empty note)",
+    "apps/desktop/src/App.tsx (the work-view block extracted into the exported MetaprojectWork component)"
+   ],
+   "names_of_what_the_fixes_changed": [
+    "`project.current` of MetaprojectView.tsx: read by openPath and loadMoreSearch as their 'same project' guard; written by the catalog effect and its cleanup.",
+    "`catalogRead` and `catalogPending` (new refs): read and written by the catalog effect; `catalogPending` is also read by the visible effect.",
+    "`error` state: set and cleared by the catalog effect (not by a quiet read any more) and by rebuild(); rendered as the catalog error banner with Retry.",
+    "`summarizeRelationships` of RelationshipList.tsx: used by NodeDetailsPanel.tsx (fact row, tab count) and now by MetaprojectView.tsx (the Wiki disclosure).",
+    "`remember`: called by the node-memory effect and by viewInGraph.",
+    "`MetaprojectWork` (new export of App.tsx): rendered by ProjectWindow and by App.dom.test.tsx; the lazy explorer is now the const `LazyMetaprojectView`."
+   ]
+  },
+  "requirements": {
+   "issue_url": null,
+   "task_docs": [
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/description.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md"
+   ],
+   "acceptance_criteria": [
+    "AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+    "AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word \"limited\" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]",
+    "AC5: In the browser dev build at a 1180×780 window with the details panel open, graph node labels render at 9 px or more and no two nodes overlap, both for a module with at least 30 neighbours at depth 1 and for a 200-node projection at depth 2 (measured on the live cytoscape instance: label font size × zoom, and node bounding boxes). [verify: judged]",
+    "AC6: Changing `data-theme` or `data-palette` on the document element re-colours the mounted graph without a selection change: after the switch the label colour equals the new theme's `--fg`. [verify: judged]",
+    "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC8: Relationships is the default tab and lists root-adjacent relationships grouped by direction and then relationship kind; activating a row calls `onSelect` with that neighbour's id; relationships between two non-root nodes are listed in a separate group whose rows can open either endpoint; a change of `revealRelationships` switches to the Relationships tab. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx`]",
+    "AC9: A linked-document preview contains no Markdown markers and skips metadata: for a page whose body starts with a `> **Covers:**` blockquote line followed by a prose paragraph, the preview is that prose paragraph with no `>`, `**`, emphasis underscores or backticks. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+    "AC11: Back steps through in-view navigation: after selecting nodes A, then B, then C in Graph, Back shows B and Back again shows A; typing in the search field adds no history entries. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC12: \"Find a Wiki page\" for a node with no matching page shows, in the article area, an empty state that names the searched text, and renders no wiki article. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC13: The Wiki view's relationships read does not depend on Graph filter state: with Graph depth set to 2 and a relationship type unticked, the neighbours request issued in Wiki mode has depth 1, direction \"both\" and every non-symbol relationship kind. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC15: A failed protocol negotiation is recoverable: the error is shown with a Retry control and without \"Loading project knowledge…\"; activating Retry negotiates again and, on success, loads the catalog. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC17: In Graph mode the relationship list is rendered in the details panel and not under the canvas; filter controls carry human-readable labels; `defines` and `calls` are disabled with a stated reason when the catalog reports no symbol layer; the list header shows \"shown of total\" from `catalog.counts` instead of the \"Catalog is limited\" banner; the selected list row is scrolled into view when the selection changes; while relationships for a new selection load, the previous graph stays rendered and is marked busy. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC18: The replaced panel file is gone: `apps/desktop/src/metaproject/GraphNodePanel.tsx` does not exist. [verify: invariant `test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]",
+    "AC21: `docs/docs/guides/desktop-metaproject.md` describes the column layout, the legend, the \"+N more\" entry, the panel's Relationships / Wiki / OpenSpec tabs and that Back steps through selections; it no longer says the Wiki view shows \"the same search and selection as Graph\"; its relationship-type table still lists every type. [verify: judged]"
+   ]
+  },
+  "rules": [
+   ".metaproject/rules/core/frontend-assistant.mdc",
+   ".metaproject/rules/core/ui-anti-slop.mdc",
+   ".metaproject/rules/core/layout-rendering.mdc",
+   ".metaproject/rules/core/tdd-workflow.mdc",
+   ".metaproject/rules/core/error-handling.mdc",
+   ".metaproject/rules/process/agent-conduct.mdc"
+  ],
+  "cross_repo": [],
+  "memory": {
+   "query": "desktop metaproject explorer quiet catalog re-read filters popover relationship list",
+   "status_filter": "accepted",
+   "searched": true,
+   "entries": [
+    {
+     "path": ".metaproject/memory/lessons/theme-switch-repaint.md",
+     "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+     "type": "lesson",
+     "status": "accepted",
+     "summary": "A theme switch must repaint what was already rendered; colours stored as resolved values keep the old palette."
+    },
+    {
+     "path": ".metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+     "title": "Flow ids are allocated per clone, not per checkout",
+     "type": "constraint",
+     "status": "accepted",
+     "summary": "Flow ids are reserved in the git common directory, so every linked worktree of a clone shares the id space."
+    }
+   ],
+   "note": "One search for the round, at `review start`; the entries of earlier rounds that still apply are listed."
+  },
+  "routing": {
+   "selected_reviewers": [
+    "review-architecture",
+    "review-clean-code",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices",
+    "review-ui-ux"
+   ],
+   "skipped_reviewers": [],
+   "reasons": {
+    "selected": "The set `keryx review required --depth auto --style` computed for this range (13 reviewers, 15 dispatches); the two readability reviewers are on because they raised findings in round 2."
+   }
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "budget": {
+    "per_reviewer_prompt_tokens": 150000,
+    "max_findings": 12
+   },
+   "omissions": [],
+   "model_plan": {
+    "strategy": "adaptive",
+    "operator_answer": "by tier: deep on Opus, standard on Sonnet, light on Haiku (round 1 start answer)",
+    "source": "the tier of each dispatch is computed by `keryx review tier`"
+   }
+  }
+ },
+ "reviewer": "review-degradation",
+ "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+ "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/skills/gdskills/review/review-degradation/SKILL.md",
+ "scope_mode": "diff",
+ "slices": [
+  "slice-02"
+ ],
+ "context_doc": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+ "issue_url": null,
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "provider": "anthropic",
+  "model": "claude-fable-5-2",
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "anthropic",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+  },
+  "routed": true
+ },
+ "budget": {
+  "max_prompt_tokens": 150000,
+  "max_findings": 12
+ },
+ "branch": "feat/desktop-metaproject-redesign",
+ "base_sha": "b1538097e636d9ec4c08f013b196e716ba09b18d",
+ "pr_context": null,
+ "round": 3,
+ "is_fix_round": true,
+ "allowed_tools": "read-only",
+ "exec_budget_s": 0,
+ "prior_findings": [
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-001",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-001",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "line": 217,
+    "quote": "{projection.edges.length === 0 && <p className=\"metaproject-rel-note\">No relationships for these filters.</p>}",
+    "problem": "Answering F-022, groupRelationships() now drops every self-loop (`if (edge.from === edge.to) continue;`), but the empty state still tests `projection.edges.length === 0`, the raw edge count. A projection whose only edges are self-loops (or edges with an end absent from the projection, which groupRelationships already dropped) has edges.length > 0 and groups that are all empty: no note, no group, an empty `<div class=\"metaproject-rel\">`. The same raw count feeds the Wiki disclosure label at MetaprojectView.tsx:925, `<summary>Relationships <span className=\"count-label\">{currentProjection.edges.length}</span></summary>`, so that label counts edges the list now omits. This is the F-022 class (a count that disagrees with the list beside it) at two sites the fix did not reach.",
+    "impact": "Trigger: select a wiki page whose only relationship is a `links` edge to itself (the F-022 example), in Graph with the panel open on Relationships, or in Wiki. The panel's fact row says '0 incoming · 0 outgoing', the tab count is 0, and the tab body is blank with no explanation. In Wiki the disclosure reads 'Relationships 1' and opens onto nothing. Before the fix the self-loop row was listed, so the blank state is new. No data is lost; the user cannot tell whether the list failed to load.",
+    "suggested_fix": "Decide the empty note from the groups, not the raw edges: `const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;` and render the note when `empty`. In MetaprojectView.tsx show the disclosure and its count from `summarizeRelationships(currentProjection)` (incoming + outgoing), or from the same groups, not from `edges.length`.",
+    "evidence": "Introduced or left by the fix that answered round 1's F-022. Checked by the orchestrator at head: the producer does emit the self edge. src/integrations/metaproject-explorer.ts:79 keeps a Markdown link with a file name and a fragment, and :159-163 pushes `{ from: page.node.id, to: found.id, kind: \"links\" }` without comparing the two ends, so a wiki page that links to a heading of its own file gets a `links` edge to itself. None of this project's 129 wiki pages has such a link (scanned with the producer's own link pattern), so the state was not rendered live. Normalisation notes: the same defect was raised by review-regression (review-regression-w3, F-001, minor); the same defect was raised by review-ui-ux (review-ui-ux-w3, F-001, minor).",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "class_scope": {
+     "sites": [
+      "apps/desktop/src/metaproject/RelationshipList.tsx:217",
+      "apps/desktop/src/metaproject/MetaprojectView.tsx:923",
+      "apps/desktop/src/metaproject/MetaprojectView.tsx:925"
+     ],
+     "enumeration_method": "keryx ctx rg for groupRelationships|summarizeRelationships over apps/desktop/src/metaproject excluding tests: callers are RelationshipList.tsx:76 (summarize), :210 (RelationshipList) and NodeDetailsPanel.tsx:199, all of which read the groups and so skip self-loops; then keryx ctx rg for `edges.length` in MetaprojectView.tsx and RelationshipList.tsx: two readers still use the raw count (RelationshipList.tsx:217 and MetaprojectView.tsx:923/925). Read from code, not run."
+    }
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit a37719ff2: RelationshipList shows 'No relationships for these filters.' when its three groups are empty, not when the raw edge list is; the Wiki view's Relationships disclosure is shown and counted from summarizeRelationships() (incoming + outgoing + second-step). Tests 'a projection whose every edge is left out says it has no relationships' and 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none'; both red against the previous production files in a scratch copy. Live: Agent Bus reads 'Relationships 13' over 13 rows. Not seen live: a page that links to itself (the project has none).",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-002",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-002",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 367,
+    "quote": "const generation = ++project.current;",
+    "problem": "The quiet re-read added for F-004 goes through the catalog effect. On a hidden-to-visible change the visible effect (`if (!returned || !loaded.current) return; quietRead.current = true; setRevision(value => value + 1);`) bumps `revision`, a dependency of the catalog effect. React runs that effect's cleanup (`project.current++`) and then its body (`const generation = ++project.current;`), so project.current moves by two even when the re-read finds the same snapshotId and changes nothing. openPath captured `const generation = project.current;` and its `current()` requires `generation === project.current`; loadMoreSearch captured `const projectGeneration = project.current;` and checks `projectGeneration !== project.current` after its read (line 638) and in its catch (line 644). Both therefore see the guard fail and return. openPath has already cleared the unresolved message (`setUnresolvedLink(null)`), so no message is shown; loadMoreSearch appends nothing and sets no error. The unchanged-snapshot branch (`setFreshness(...); return;`) does not restore the counter. The other guards do not help: latestSearch.generation moves only when the query or catalog snapshotId changes (not here), and the token in openPath and shownSelection/activeMode all still match, so project.current is the only guard that fails.",
+    "impact": "Trigger: click an unloaded Wiki link (a `search` read) or 'load more' in a protocol 2 search, leave the Metaproject view before the read resolves, and return before it resolves, which means within one local CLI read. The lookup does not open its target and the page of results is not appended, with no message, and the project did not change. The user clicks the link or the load-more control again: pageInFlight is cleared in `finally` and the cursor is unchanged, and openPath starts a new lookup. If the read resolves while the view is still hidden the guard passes and the result is applied as before. On base the explorer unmounted on leaving and dropped the same work, so this is not a regression against base. The same retirement already happens on a Refresh, a Rebuild or a catalog reload.",
+    "suggested_fix": "Keep project.current for real project changes and give the quiet same-snapshot re-read its own counter: let the effect skip `++project.current` and the cleanup bump while `quiet` is set, guarding that read by a separate ref; or restore project.current in the unchanged-snapshot branch. Add a test that holds a wiki-link lookup, hides and shows the explorer, then releases it and checks the target opens.",
+    "evidence": "Introduced or left by the fix that answered round 1's F-004. First raised by review-regression (slice-03) as its F-002, at minor; `keryx review ingest` refuses a minor from the scope-B reviewer (`non-regression-severity`), and that reviewer asked for it to be filed under scope A. The orchestrator put the claim to review-logic, which had read the same slice, as a scope-A question; its reply is research-evidence/followup-review-logic-w3.txt, and this finding is that reply. Against the base branch this is not a regression: there the explorer unmounted on leaving and dropped the same work; it is a defect of the fix round's own change, which kept the explorer mounted and then retired the work on return. Normalisation notes: the same defect was raised by review-regression (review-regression-w3, F-002, minor).",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "class_scope": {
+     "sites": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx:678-679 (openPath current())",
+      "apps/desktop/src/metaproject/MetaprojectView.tsx:630,638,644 (loadMoreSearch)"
+     ],
+     "enumeration_method": "keryx ctx rg for `project\\.current|projectGeneration` in MetaprojectView.tsx: 18 matches; writers are the catalog effect (lines 367 and 398); readers that capture and compare are openPath and loadMoreSearch only; the remaining reads (lines 377, 392, 394) are the effect's own guards. The other in-flight reads (neighbors, documents, search effect, preview) are guarded by effect-local `active` flags and are not retired by the bump."
+    }
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit a37719ff2: The catalog effect takes its generation from a new ref `catalogRead`; `project.current`, the guard of openPath and loadMoreSearch, moves only for a read that is not quiet and, in the effect's cleanup, only when the next run is not quiet. Tests 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' and 'a page of results in flight when the explorer is hidden and shown again is still appended'; both red against the previous production files.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-003",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-003",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 392,
+    "quote": "if (generation === project.current) setError(errMessage(cause));",
+    "problem": "A failed quiet re-read on return shows the loud catalog error over a working explorer. The fix round added a quiet catalog re-read when the explorer becomes visible again (`quietRead.current = true; setRevision(...)`, lines 335-343). The load effect it reuses clears and sets `error` unconditionally: `setError(\"\")` at line 370 and `setError(errMessage(cause))` in the catch at line 392. On base nothing was read on return, so nothing could fail there. Trigger: the user leaves the Metaproject tab and comes back while the CLI read fails (CLI busy or exiting, a rebuild writing the index, a transient spawn error). Outcome: the `{error && ...role=\"alert\"}` banner (line 820) appears with the CLI message and a Retry button above an explorer whose catalog, graph and selection are still valid; Retry runs a non-quiet read, which replaces the catalog and may drop the selection if the snapshot moved. The quiet read was meant to be invisible (its comment says 'quietly'); only its success path is. The test at MetaprojectView.dom.test.tsx:889 covers the unchanged-snapshot success path only.",
+    "impact": "not stated by the reviewer",
+    "suggested_fix": "In the catch, when `quiet` is true, keep the loaded catalog and skip `setError` (and do not clear a standing error at line 370 for a quiet read); the next real read or the user's Retry reports a persistent failure.",
+    "evidence": "consumer-trace: read MetaprojectView.tsx 326-343 (quietRead set on return), 365-400 (effect: `quiet` is read but only consulted on the success path at 379; the catch at 391-392 and `setError(\"\")` at 370 ignore it), 820-825 (banner). refute: looked for a guard on `quiet` in the catch or on `loaded.current` in the banner and found none; the base had no read on return, so this is new. Introduced or left by the fix that answered round 1's F-004. The other reviewers that read this path (review-frontend, review-highload, review-logic, review-ui-ux) describe the same behaviour as the existing error banner with Retry and did not file it. The T17 result file describes only the success paths of the re-read and says nothing about a failed one.",
+    "confidence": "medium",
+    "reviewer": "review-degradation",
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit a37719ff2: A quiet read neither clears `error` at its start nor sets it on failure; a return while a catalog read is in flight starts no quiet read (new ref `catalogPending`). Tests 'a failed quiet re-read on return shows no error and leaves the explorer as it was', 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' and 'a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown'; all red against the previous production files. Live: one `catalog` request on return, no alert.",
+   "prior_findings_status": "open",
+   "disposition_owner": true
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-004",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-004",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 572,
+    "quote": "for (const node of nodes) seenNodes.current.set(node.id, node);",
+    "problem": "The fix for round-1 F-006 moved the node-memory fill into an effect and wrote the map write inline, while the `remember` helper declared three lines above (`const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };`) does the same write and is still used at line 603 (`if (node) remember(node);`). The same operation now has two spellings in one component.",
+    "impact": "A reader must check that the inline write and `remember` are the same operation; a later change to what the memory stores (a cap, a copy) has to be made in both.",
+    "suggested_fix": "Call the helper in the effect: `for (const node of nodes) remember(node);`.",
+    "evidence": "keryx ctx rg 'remember' MetaprojectView.tsx --all: declaration at 569, one use at 603; effect body at 572 inlines the set. Convention: the Name row of .metaproject/rules/core/solid-principles.mdc (one concept, one name). Introduced or left by the fix that answered round 1's F-006. review-clean-code (slice-03) noted the same two spellings below its three-copy threshold and did not file it.",
+    "confidence": "high",
+    "reviewer": "review-style"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit a37719ff2: `remember` is a stable useCallback with an empty dependency list, and the effect calls it with dependencies [nodes, remember]; no behaviour change, so no red test.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-006",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-006",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 190,
+    "quote": "if (needed > below && above > below) {",
+    "problem": "Five gates of placeFiltersPopover and its resize cleanup are unpinned. Mutants run in a scratch copy, suite green: R2-2 (`needed > below` only: flips above although there is less room above), R2-4 (`Math.max(POPOVER_MARGIN, ...)` on bottom), R2-5 (`Math.min(MENU_MAX_HEIGHT, above)` -> `above`), R2-6/R2-7 (the `Math.max(0, ...)` floor and the MENU_MAX_HEIGHT cap below), R2-9 (the resize listener is never removed). The two placement tests drive only the two clean cases: content 0 px with room below (305/167), content 229 px with 14 px below and 418 above; no fixture has content too tall for below while above is smaller, a button within 4 px of the window bottom, a window taller than 420 px, or an unmount followed by a resize.",
+    "impact": "The next edit to the placement can put the popover on the side with less room or let it run past the window edge, and a resize listener can leak, with all tests green. R2-8 and R2-1/R2-3/R2-10/R2-11 are killed, so the two main paths are pinned; the bounds are not.",
+    "suggested_fix": "Add: stubPopoverContentHeight(500) with the button at top 250 / bottom 274 in a 480 window (more room below than above) and assert style.top and no style.bottom (R2-2); a window of 900 with the popover below asserts maxHeight 420 (R2-7); a button at top 478 asserts bottom 8 (R2-4); content 229 with a button at top 600 in a 700 window asserts maxHeight 420 (R2-5); spy on window.removeEventListener, unmount the view and assert a \"resize\" removal (R2-9).",
+    "evidence": "mutants R2-2, R2-4, R2-5, R2-6, R2-7, R2-9 SURVIVED; R2-1, R2-3, R2-8, R2-10, R2-11 killed (table above). Gate added answering round-1 F-001 (review-layout). Introduced or left by the fix that answered round 1's F-001. The orchestrator re-ran the reviewer's 34 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 18 killed, 16 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit 8f5bf6d14: Five tests for the bounds of placeFiltersPopover and for the resize listener of a closed popover; in a scratch copy on this head mutants R2-2, R2-4, R2-5, R2-6, R2-7 and R2-9 are killed.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-007",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-007",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "line": 379,
+    "quote": "if (quiet && result.snapshotId === loadedSnapshot.current) {",
+    "problem": "The quiet catalog path added for round-1 F-004 is pinned by one fixture (same snapshot id, graph ready then stale) and one rebuild fixture. Surviving mutants: R2-16 (`if (quiet)`: a return after the project changed would drop the new catalog and only update freshness), R2-17 (no `setFreshness(null)` after a full load: a later full read of the same snapshot keeps showing the earlier quiet freshness), R2-18 (`freshness ?? catalog`: ignores the snapshot match in graphState), R2-19 (`quietRead.current` never reset: a later Retry or Rebuild read is treated as quiet), R2-14 (`!loaded.current` guard: a return while the first read is loading starts a second read), R2-26 (freshness reason read from the catalog, not graphState). No fixture returns to the view with a changed snapshot id, or follows a quiet read with a rebuild or Retry.",
+    "impact": "Each gate is correct today; the first three decide whether the explorer shows current data after a return, and a regression in any is silent.",
+    "suggested_fix": "Extend the 'shown again' test: a third read returns snapshotId \"two\" with new nodes, assert the list shows them (R2-16, R2-18); after the stale quiet read click Rebuild graph with a read returning graph ready and assert no 'Graph is stale' banner (R2-17, R2-19); count catalog reads for a return while the first read is pending (R2-14); open Details on the quiet-stale banner and assert the reason text (R2-26).",
+    "evidence": "mutants R2-14, R2-16, R2-17, R2-18, R2-19, R2-26 SURVIVED; R2-15 and R2-25 killed. Introduced or left by the fix that answered round 1's F-004. The orchestrator re-ran the reviewer's 34 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 18 killed, 16 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit 8f5bf6d14: Tests for a return after the project's knowledge changed, a return after a failed first read, a graph gone stale while hidden with its reason under Details and a rebuild's reload after it; mutants R2-16, R2-17, R2-19 and R2-26 are killed, R2-14 is killed on the line T22 moved it to; R2-18 survives and is kept as equivalent (every full load clears `freshness` in the same update that replaces the catalog, so the snapshot check in `graphState` cannot change the result).",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-008",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-008",
+    "severity": "minor",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "line": 974,
+    "quote": "test(\"a render that changes no node list leaves the explorer's node memory alone\", async () => {",
+    "problem": "The test asserts only `expect(writes).toBe(0)` after patching Map.prototype.set, with no positive artifact that the effect still fills the memory. Deleting the effect body (`for (const node of nodes) seenNodes.current.set(node.id, node);`, R2-23) leaves the suite green: writes are 0 either way. Only R2-24 (effect without its dependency) is killed. No other test reaches a node that exists only in seenNodes (a lookup result) through Back.",
+    "impact": "The memory that makes Back show the panel of a looked-up node at once can be removed with all tests green. The test also patches a global prototype to observe an internal field.",
+    "suggested_fix": "Open a wiki link whose target comes from a `search` hit that is not in the catalog, open another page, press Back and assert the target's panel title shows; and in the same test assert writes > 0 when the node list changes (for example a search that adds a hit).",
+    "evidence": "mutant R2-23 SURVIVED; R2-24 killed. Fix answering round-1 F-006. Introduced or left by the fix that answered round 1's F-006. The orchestrator re-ran the reviewer's 34 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 18 killed, 16 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit 8f5bf6d14: Test 'a node known only from a search hit keeps its panel once the search is cleared, and Back returns to it at once'; mutant R2-23 is killed on the line T22 moved it to.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  },
+  {
+   "round": 2,
+   "finding": {
+    "id": "F-009",
+    "global_id": "2026-11-23-review-flow-branch-r02#F-009",
+    "severity": "minor",
+    "file": "apps/desktop/src/App.tsx",
+    "line": 596,
+    "quote": "<MetaprojectView cwd={cwd} visible={view === \"metaproject\"} onRebuild={rebuildGraph} onDraft={async task => {",
+    "problem": "The one line that makes the fixes for round-1 F-003 and F-004 work in the app is unpinned: removing `visible={view === \"metaproject\"}` (R2-28) leaves every suite green, because the explorer tests pass `visible` themselves and App.dom.test.tsx renders only RetainedView. With the prop missing the default `true` applies and the popover stays open and the catalog is never re-read on return.",
+    "impact": "A refactor of the composition root can silently undo both fixes.",
+    "suggested_fix": "Cheapest: export a small wrapper or render App's work-view block in a DOM test with a stub MetaprojectView and assert it receives visible=false while another view is shown; or state in the flow that the wiring is covered by the live check only.",
+    "evidence": "mutant R2-28 SURVIVED. Related, not a finding: R2-12 (drop `visible &&` from `const filters`) and R2-30 (delete the scrollTop line in OpenSpecView.choose()) also survive, but both are redundant behind the visible effect and the navigation hook's resetContent seed (a restored entry starts at 0 anyway): equivalent for every input a test can drive; the reorder R2-29 is killed. Introduced or left by the fix that answered round 1's F-003 and F-004. The orchestrator re-ran the reviewer's 34 mutants through `keryx review mutate` with all six test files per mutant (research-evidence/mutation-2.md: 18 killed, 16 survived, 0 invalid); the killed and surviving ids are the ones this finding names.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices"
+   },
+   "claimed_disposition": "fixed",
+   "claimed_evidence": "commit 8f5bf6d14: The work-view block of App.tsx is now the exported component MetaprojectWork, which passes `visible` to the explorer and takes an optional `explorer` component as a test seam; test 'the Metaproject explorer is told it is hidden while another view or Settings is shown, and shown again on return'; mutant R2-28 is killed. Live after the change: the popover closes on leaving the view, one `catalog` request on return.",
+   "prior_findings_status": "open",
+   "disposition_owner": false
+  }
+ ],
+ "known_findings": [
+  {
+   "id": "F-005",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-005",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+   "line": 314,
+   "quote": "describe(\"RelationshipGraph viewport (F-012)\", () => {",
+   "problem": "Fix-round bookkeeping is written into test names and comments: describe(\"... (F-012)\"), describe(\"... (F-013)\"), describe(\"... (F-013, AC6)\") in RelationshipGraph.dom.test.tsx:314/351/402, describe(\"layoutNeighborhood — review round 1 fixtures (F-021)\") in graphLayout.test.ts:508, the banner comment \"Test strength after review round 1 (T20)\" in MetaprojectView.dom.test.tsx:1019, and \"(second-step counts: F-007 test below)\" in NodeDetailsPanel.dom.test.tsx:119. The ids name findings of one review package and one flow task; finding ids restart per round (this round's reviewers number from F-001 again), and the package under .metaproject/reviews is a work record, not part of the source. The test titles say where a test came from, not what it pins."
+  },
+  {
+   "id": "F-010",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-010",
+   "reviewer": "review-highload",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 335,
+   "quote": "const returned = visible && !wasVisible.current;",
+   "problem": "Every hidden-to-shown change of the explorer starts one catalog read (one `metaproject_request` invoke, one CLI process per request in platform/metaproject.ts:57) with no coalescing and no cancellation. A read that a later return supersedes is dropped by the generation guard (`generation !== project.current`), but its process still runs to completion. This answers round-1 F-004 (stale catalog on return)."
+  },
+  {
+   "id": "F-011",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-011",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 209,
+   "quote": "const place = () => setPosition(placeFiltersPopover(anchor.getBoundingClientRect(), panel.current?.scrollHeight ?? 0));",
+   "problem": "UNVERIFIED (derived from code and the journal's numbers). The popover is placed on open and on window resize only, from the content height at that moment. The footer `{filtersChanged && (<div className=\"menu-footer metaproject-filters-pop-footer\">` adds a Reset filters row the first time Direction, Depth or a type chip is changed while the popover is open. Case 720x480, one-line banner, Chromium 156 as measured in the journal: placed below, top 229, content 229, max-height 243 (= 480 - 8 - 229). A Reset row of roughly 30 to 40 px (not measured) makes the content about 260 to 270, above the 243 cap, so the popover gains an inner scroll on the first filter change and Reset filters sits below the fold of the popover. The popover itself stays inside the window (the cap holds), so this is not the F-001 defect; it is the same shape with a smaller amount, reachable by scrolling inside the popover."
+  },
+  {
+   "id": "F-012",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-012",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 211,
+   "quote": "window.addEventListener(\"resize\", place);",
+   "problem": "UNVERIFIED (derived from code; the T17 worker lists it under noticed_not_touched). Nothing places the popover again when the page or the content pane scrolls under its button, when the freshness banner changes height (Details toggled while the popover is open is a press outside, so it closes it; a catalog or banner update that arrives while it is open is not), or when the explorer layout changes without a window resize. The popover is position: fixed with the coordinates of the open moment, so it stays inside the window (its edge and max-height were computed against window.innerHeight) but no longer sits against its button."
+  },
+  {
+   "id": "F-013",
+   "global_id": "2026-11-23-review-flow-branch-r02#F-013",
+   "reviewer": "review-logic",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "line": 496,
+   "quote": "if (catalog.graph === \"missing\" && protocol !== 2) return;",
+   "problem": "Two readers of the graph state now use different sources. The relationships effect (lines 488 and 496) reads `catalog.graph` and `catalog.truncated`; the freshness banner, `showGraph` (line 704), `onDraft` (line 959) and `freshnessOpen` read `graphState`, which takes the quiet re-read's value while its snapshotId equals the catalog's. They can differ only if a quiet re-read returns the same snapshotId with a different `graph` value."
+  },
+  {
+   "id": "F-023",
+   "global_id": "2026-11-23-review-flow-branch#F-023",
+   "reviewer": "review-frontend",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+   "line": 143,
+   "quote": "expect(block).toContain(\"min-block-size: 200px;\");",
+   "problem": "The G8 test reads graph.css from disk and matches a regex over its text, including the exact declaration `min-block-size: 200px;`. It verifies the stylesheet's spelling, not that the graph fills its host, and it will fail on any harmless reformat or a change of the minimum (the T8 notes lower the minimum to 160px in a narrow container, done in metaproject.css)."
+  },
+  {
+   "id": "F-025",
+   "global_id": "2026-11-23-review-flow-branch#F-025",
+   "reviewer": "review-architecture",
+   "severity": "info",
+   "file": "apps/desktop/src/App.tsx",
+   "line": 148,
+   "quote": "export function RetainedView(",
+   "problem": "RetainedView is a generic view-retention helper exported from the composition root. `export function RetainedView({ active, visible, children })` lives in App.tsx and is exported only so App.dom.test.tsx can import it (`(await import(\"./App\")).RetainedView`). The component has no dependency on App state; the existing session/flows/issues views still use the inline `hidden={view !== ...}` pattern, so two retention idioms now coexist in one file. This is a placement opinion, not a violation of a named rule."
+  },
+  {
+   "id": "F-026",
+   "global_id": "2026-11-23-review-flow-branch#F-026",
+   "reviewer": "review-architecture",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "line": 16,
+   "quote": "export const isOpenSpecNode",
+   "problem": "isOpenSpecNode is exported but has no importer outside its own file. `export const isOpenSpecNode` is used only inside NodeDetailsPanel.tsx (line 87); the keryx ctx rg search over apps/desktop/src found no other import. The plan's interface section lists it as an export, which explains it, so this is a note on a public surface nobody consumes."
+  },
+  {
+   "id": "F-027",
+   "global_id": "2026-11-23-review-flow-branch#F-027",
+   "reviewer": "review-frontend",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+   "line": 29,
+   "quote": "previousRoutes.current = history;",
+   "problem": "`back` reads `previousRoutes.current`, which is refreshed from `history` only on render, while `enter` updates `current.current` eagerly but not `previousRoutes.current`. Two calls in one event tick, `navigate`/`visit` then `back`, would pop the entry before the one just pushed."
+  },
+  {
+   "id": "F-028",
+   "global_id": "2026-11-23-review-flow-branch#F-028",
+   "reviewer": "review-layout",
+   "severity": "info",
+   "file": "apps/desktop/src/metaproject/metaproject.css",
+   "line": 131,
+   "quote": ".metaproject-graph-panes:has(.metaproject-details:not(.compact)) { grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) auto; }",
+   "problem": "Narrow-host container rule for the docked panel looks unreachable (unverified). This rule sits inside `@container metaproject (max-width: 760px)` and matches only while the panel is docked (not .compact). NodeDetailsPanel.tsx sets compact when `availableWidth < COMPACT_BELOW` (820, lines 11 and 154). If availableWidth is the width of the panes area, it is not wider than the .metaproject container, so a docked panel implies a container of about 820 px or more, outside the 760 px query, and the narrower 150-180 px list column may never apply."
+  }
+ ],
+ "layers": {
+  "version": 1,
+  "files": [
+   "apps/desktop/src/App.dom.test.tsx",
+   "apps/desktop/src/App.tsx",
+   "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+   "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+   "apps/desktop/src/metaproject/RelationshipList.tsx"
+  ],
+  "prHead": "8e0f656fb2aa3a2173487d4f6ca4ff1c89aa933a",
+  "graphCommit": "8e0f656fb2aa3a2173487d4f6ca4ff1c89aa933a",
+  "maxBytes": 8192,
+  "affected": {
+   "depth": 2,
+   "files": [
+    "apps/desktop/src/main.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/test/app-navigation.fixture.tsx"
+   ]
+  },
+  "symbols": [],
+  "relatedTests": [
+   "apps/desktop/src/App.dom.test.tsx",
+   "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+   "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+   "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+ },
+ "metaproject": {
+  "memory": [
+   {
+    "path": ".metaproject/memory/lessons/theme-switch-repaint.md",
+    "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+    "type": "lesson",
+    "status": "accepted",
+    "summary": "A theme switch must repaint what was already rendered; colours stored as resolved values keep the old palette."
+   },
+   {
+    "path": ".metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+    "title": "Flow ids are allocated per clone, not per checkout",
+    "type": "constraint",
+    "status": "accepted",
+    "summary": "Flow ids are reserved in the git common directory, so every linked worktree of a clone shares the id space."
+   }
+  ]
+ }
+}

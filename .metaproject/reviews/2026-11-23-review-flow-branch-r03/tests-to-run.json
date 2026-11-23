@@ -1,0 +1,9 @@
+[
+  {
+    "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  }
+]

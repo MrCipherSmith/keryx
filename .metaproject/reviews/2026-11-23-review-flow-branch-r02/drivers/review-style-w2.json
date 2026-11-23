@@ -1,0 +1,37 @@
+{
+ "reviewer": "review-style",
+ "wave": 2,
+ "waves": 3,
+ "slices": [
+  "slice-03"
+ ],
+ "slicePaths": [
+  {
+   "id": "slice-03",
+   "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-03.diff",
+   "bytes": 128602
+  }
+ ],
+ "result": "raw/review-style-w2.txt",
+ "definition": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "provider": "anthropic",
+  "model": "sonnet",
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "anthropic",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+  },
+  "routed": true,
+  "tier_printed_model": "claude-fable-5-2",
+  "model_note": "host alias the dispatch runs on; the host reports no exact model id. `keryx review tier` resolves every tier to the session model (tier_resolution session-fallback), and the operator's answer \"by tier\" is applied through the host aliases."
+ }
+}

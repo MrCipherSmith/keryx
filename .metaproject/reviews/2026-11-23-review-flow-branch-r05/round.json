@@ -1,0 +1,41 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "not-consulted",
+      "detail": "--no-prior-round"
+    },
+    {
+      "source": "git-history",
+      "result": "not-consulted",
+      "detail": "--no-prior-round"
+    },
+    {
+      "source": "github-block",
+      "result": "not-consulted",
+      "detail": "--no-prior-round"
+    },
+    {
+      "source": "github-comments",
+      "result": "not-consulted",
+      "detail": "--no-prior-round"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "--no-prior-round"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": null,
+    "head": "857036d02174a396b2acecf09cdcaf2560484a93"
+  },
+  "fixHunks": [],
+  "newHunks": [],
+  "carried": []
+}

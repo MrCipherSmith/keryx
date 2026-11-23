@@ -6,8 +6,15 @@
   box-shadow: inset 0 -2px var(--accent-text), var(--shadow-1);
 }
 
+.metaproject { container: metaproject / inline-size; }
 .metaproject .inline-banner { flex-wrap: wrap; overflow-wrap: anywhere; }
 .metaproject-rebuild { min-inline-size: 116px; }
+/* Freshness: one line (state, Details, Rebuild); the full reason opens below it inside the banner. */
+.metaproject .metaproject-freshness { align-items: center; gap: var(--sp-1) var(--sp-2); }
+.metaproject-freshness-state { flex: 1 1 auto; min-inline-size: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metaproject-freshness-toggle { flex: none; gap: 2px; }
+.metaproject-freshness .metaproject-rebuild { flex: none; }
+.metaproject-freshness-reason { order: 1; flex: 1 0 100%; margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .metaproject-panes {
   display: grid;
   grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
@@ -19,11 +26,11 @@
 .metaproject-list, .metaproject-content { min-inline-size: 0; overflow: auto; }
 .metaproject-content { display: flex; flex-direction: column; gap: var(--sp-4); }
 .metaproject-content > * { flex: none; min-inline-size: 0; }
-.metaproject-list h2, .metaproject-relationship-section h2 {
+.metaproject-list h2 {
   margin: 0 0 var(--sp-2);
   font-size: var(--fs-md);
 }
-.metaproject-list ul, .metaproject-relations {
+.metaproject-list ul {
   display: grid;
   gap: var(--sp-1);
   list-style: none;
@@ -73,31 +80,20 @@ button.metaproject-row[aria-current="true"] {
   border-radius: var(--r-md);
   background: var(--bg-surface);
 }
-.metaproject-controls label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  min-block-size: 28px;
-}
-.metaproject-controls fieldset {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--sp-2);
-  min-inline-size: 0;
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-.metaproject-controls legend { padding: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
-.metaproject-controls input[type="checkbox"] { accent-color: var(--accent); }
-.metaproject-graph {
-  position: relative;
-  block-size: clamp(220px, 34vh, 300px);
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--bg-sunken);
-}
+/* Graph filters: a "Filters" button (graph header, or a slim row when no graph is drawn) opens a
+   popover on the app's menu surface; the graph stays visible behind it. */
+.metaproject-filters-toggle { flex: none; }
+.metaproject-filters-toggle[aria-expanded="true"],
+.metaproject-filters-toggle[data-changed="true"],
+.metaproject-kind-chips .chip-btn[aria-pressed="true"] { color: var(--fg); background: var(--bg-selected); border-color: var(--accent); }
+.metaproject-filter-strip { display: flex; justify-content: flex-end; }
+.metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+.metaproject-filters-pop .menu-header { padding-inline: 0; }
+.metaproject-filters-pop-row { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+.metaproject-filter { display: inline-flex; align-items: center; gap: var(--sp-1); min-block-size: 24px; font-size: var(--fs-sm); color: var(--fg-muted); }
+.metaproject-kind-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); min-inline-size: 0; }
+.metaproject-filter-note { margin: 0; font-size: var(--fs-xs); color: var(--fg-muted); }
+.metaproject-filters-pop-footer { display: flex; justify-content: flex-end; margin-top: 0; padding-inline: 0; }
 
 .metaproject-article, .metaproject-relationship-section {
   padding: var(--sp-3);
@@ -111,84 +107,35 @@ button.metaproject-row[aria-current="true"] {
 .metaproject-article .md :not(pre) > code { overflow-wrap: anywhere; }
 .metaproject-relationship-section summary { min-block-size: 28px; padding-block: var(--sp-1); font-weight: 600; }
 .metaproject-relationship-section summary .count-label { margin-inline-start: var(--sp-1); }
-.metaproject-relation-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.metaproject-relation-actions .btn {
-  max-inline-size: 100%;
-  block-size: auto;
-  min-block-size: 28px;
-  padding-block: var(--sp-1);
-  white-space: normal;
-  text-align: start;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 700px) {
-  .metaproject-header, .metaproject-panes { padding-inline: var(--sp-3); }
-  .metaproject-panes { display: flex; flex-direction: column; overflow: auto; }
-  .metaproject-list { flex: none; max-block-size: min(180px, 28vh); }
-  .metaproject-content { flex: none; overflow: visible; }
-}
-
 .openspec-view { display: flex; flex: 1; min-block-size: 0; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); }
 .openspec-view .metaproject-panes { padding: 0; }
 .openspec-view .metaproject-controls [aria-pressed="true"] { background: var(--bg-selected); border-color: var(--accent); }
 
-.metaproject-graph-viewport { position: absolute; inset: 0; }
+/* Graph mode: list · content · docked panel; the graph takes the content column's remaining height. */
 .metaproject-graph-panes { position: relative; }
-.metaproject-graph-panes:has(.metaproject-node-panel:not(.compact)) {
+.metaproject-graph-panes:has(.metaproject-details:not(.compact)) {
   grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) auto;
 }
-.metaproject-graph-panes .metaproject-content { min-block-size: 0; }
-.metaproject-graph-panes .metaproject-graph { flex: 1 1 auto; min-block-size: 160px; }
-.metaproject-graph-panes .metaproject-relationship-section {
-  flex: 0 1 36%;
-  min-block-size: 68px;
-  overflow: auto;
-}
-
-.metaproject-node-panel {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-block-size: 0;
-  min-inline-size: 0;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-}
-.metaproject-node-panel.compact {
-  position: absolute;
-  inset: var(--sp-2);
-  z-index: 4;
-  box-shadow: var(--shadow-1);
-}
-.metaproject-node-panel .sheet-head { padding: var(--sp-3); overflow-wrap: anywhere; }
-.metaproject-node-panel h2 { margin: 0; font-size: var(--fs-lg); }
-.metaproject-node-resize::before {
-  content: "";
-  position: absolute;
-  inset: 0 2px;
-  background: var(--border);
-}
-.metaproject-node-resize:focus-visible { background: var(--accent-soft); outline-offset: 2px; }
-.metaproject-node-tabs { align-self: flex-start; margin: var(--sp-3) var(--sp-3) 0; }
-.metaproject-node-tabs [aria-selected="true"],
+.metaproject-graph-panes .metaproject-content { min-block-size: 0; overflow: hidden; }
+.metaproject-graph-panes .metaproject-content > .metaproject-rgraph { flex: 1 1 auto; }
 .metaproject-artifacts [aria-pressed="true"] {
   color: var(--fg);
   background: var(--bg-selected);
   border-color: var(--accent);
 }
-.metaproject-node-body { min-block-size: 0; overflow: auto; padding: var(--sp-3); }
-.metaproject-node-document + .metaproject-node-document { margin-block-start: var(--sp-3); padding-block-start: var(--sp-3); border-block-start: 1px solid var(--border); }
-.metaproject-node-document h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); overflow-wrap: anywhere; }
-.metaproject-node-document .btn { margin-block-start: var(--sp-2); }
-.metaproject-node-preview {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  margin: var(--sp-2) 0 0;
+
+/* Narrow hosts (the window's minimum is 720 px): tighter gutters, a narrower list, more graph height. */
+@container metaproject (max-width: 760px) {
+  .metaproject-header { padding-inline: var(--sp-3); }
+  .metaproject-panes { gap: var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); }
+  .metaproject-graph-panes:has(.metaproject-details:not(.compact)) { grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) auto; }
+  .metaproject-content { gap: var(--sp-2); }
+  /* One header row: the heading is hidden visually but stays for assistive technology. */
+  .metaproject-header .flows-heading {
+    position: absolute; inline-size: 1px; block-size: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .metaproject-graph-panes .metaproject-content > .metaproject-rgraph { min-block-size: 160px; }
+  .metaproject > .inline-banner { margin-inline: var(--sp-3); }
 }
 
 .metaproject-document-actions, .metaproject-artifacts, .metaproject-related-document {

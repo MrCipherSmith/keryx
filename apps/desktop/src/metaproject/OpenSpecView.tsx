@@ -77,9 +77,10 @@ export function OpenSpecView({ cwd, active = true, query, collection: controlled
     if (!controlledCollection && location) { setCollection(location.collection); setSelected(location); }
   }, [controlledCollection, location]);
   const choose = (next: OpenSpecLocation | null) => {
-    if (content.current) content.current.scrollTop = 0;
     if (!controlledCollection) setSelected(next);
+    // The owner records the document being left, its scroll included, before the new one opens at the top.
     onLocation?.(next);
+    if (content.current) content.current.scrollTop = 0;
   };
   const select = (entry: Entry, source?: Source, section?: string) =>
     choose({ id: entry.id, collection, ...(source && { artifact: source.path, digest: source.digest }), ...(section && { section }) });

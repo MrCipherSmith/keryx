@@ -1,0 +1,68 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "10 findings: 9 confirmed (F-001, F-002 and F-010 by recorded runs in research-evidence/mutation-2.json and the baseline of that run; F-003, F-004, F-005, F-006, F-007, F-008 by site-check of the named files, quotes and lines; F-005 confirms that the two records disagree, not which count is right), 0 refuted, 1 unverifiable (F-009: the 'never rejects' premise was read in App.tsx and useProjectRunner.ts, but the consequence for a future onRebuild that rejects is not settled by any run). No run was made by the verifier; all runs cited are recorded runs at head 744d9ef7542f.",
+  "verifications": [
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.json (head 744d9ef7542f, baseline exit 0): R4-10 (MetaprojectView.tsx:380 setError(null) -> functional form keeping source 'rebuild') survived, exit 0; R4-11 (:677 setError(null) -> same form) survived, exit 0; R4-4 (:392 'catalog' -> 'rebuild') and R4-9 (:849 Retry onClick emptied) killed, exit 1. Lines 380 and 677 read at head and hold the quoted setError(null). Tests: MetaprojectView.dom.test.tsx 1596 (return after failed first read: Retry clears) and 1418 (standing rebuild error survives quiet re-read) are the only ones touching these clears; no test has source 'rebuild' followed by Retry or a second Rebuild (confirmed by rg of setError/rebuild fixtures: rebuild failures only at 1424 and 1702). T24-8 and T24-9 killed per research-evidence/t24-mutants-1.txt:7 and T24.result.json notes."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-2.json: R4-8 (MetaprojectView.tsx:389 quiet clear moved above 'if (generation !== catalogRead.current) return;') survived, exit 0; R4-7 (:407 'if (generation === catalogRead.current && !quiet) setError(' -> 'if (!quiet) setError(') survived, exit 0; R4-2 (:391 clear moved into changed-snapshot branch) killed, exit 1; R4-3 (clear only in unchanged branch) killed, exit 1; R4-4 killed, exit 1. Quoted line at MetaprojectView.tsx:392 read at head. Held-read fixtures (1434, 1692, 1713, 1743) hold a reload or lookup and do not start a later catalog read that lands first, consistent with the finding."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-003",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "MetaprojectView.dom.test.tsx:1575-1594: the test titled 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown' has onRebuild: async () => true (line 1585), so the rebuild succeeds; the rejection (line 1581) is the catalog reload after it. It makes no read or rebuild after the failure beyond the reload. The only tests whose onRebuild rejects are at 1424 (followed by quiet re-reads only, 1428-1431) and 1702 (followed by release of a held read, 1709-1710). T24.result.json notes row 'failed rebuild x loud read started after it, or a new rebuild' cites this test at 1575, so the cell is not pinned by the cited test. Test 1612 (Retry) is a catalog-source failure, not a rebuild failure."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-004",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T24.result.json notes name ids without a round: 'F-001 banner table', 'F-004 — used Rebuild graph ...', 'F-003 — added a new test', 'F-005 — R3-14 and R3-16'; description 'F-001:' and 'F-002 to F-005:'; mutant ids R3-4, R3-19, T24-7 present. flow.json T22 title lists '(F-001, F-002, F-003, F-004)'. The key 'Finding ids in this task are round 3's' is in dispatch/T24.request.json (context field); dispatch/T24.dispatch.json description opens with 'Five minor findings of review round 3' and then a bare 'F-001 (left by the fix of round 2's F-003)' paragraph, so the round is named once there but the key sentence is absent. Caveat: T24 task_name in T24.result.json says 'Fix round 3 ... (F-001 to F-005)', so the round is visible in the title; the claim is about the notes and the bare ids."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-005",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "T24.result.json notes: red run of F-001's test 'restored to HEAD ... 85 pass | 1 fail' and 'Green with the change: 87 pass, 0 fail'; test_result field '87 pass 0 fail'. fix-round-3.md:12 says 'MetaprojectView.dom.test.tsx: 86 pass, 1 fail' for the same red check. The file holds 87 tests (rg of test() titles at head: 87 matches), so 85+1 and 86+1 cannot both be the same run. The records disagree; which count is right is not settled here."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-006",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Compared all 25 rows of tasks.md (lines 10-34) with flow.json tasks by hand: same 25 ids; kind and dependsOn equal; titles differ for T2 (tasks.md 'Implement per plan (scaffold; superseded by T5–T8)' vs flow 'Implement per plan'), T3 (annotated '(scaffold; ...)' vs plain), T4 ('Review round on the integrated change' vs flow 'Self-review and prepare draft PR'), T7 (en dash 'D1–D7' vs flow hyphen 'D1-D7'), T14 ('... (became the Filters popover)' vs flow without it). All other 20 titles match. tasks.md line 4 says the table follows flow.json."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-007",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "fix-round-3.md:98 cites 'journal, the entries on T23 and T24' for the live check. journal.md:158 (T23 accepted) lists scratch-copy mutant runs and test counts, no browser check. journal.md:159 (after fix round 2, on the head that holds T22 and T23) holds the live check: one catalog request, explorer hidden and mounted once. journal.md:173 (T24 accepted) records three returns with one catalog request each and no alert, and does not mention the explorer being hidden. T24.result.json notes cite 'journal.md line 159', which is the right place."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-008",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "fix-round-3.md:15 heading '## Review round 3's surviving mutants' covers R3-4, R3-7, R3-9, R3-10, R3-13, R3-14, R3-15, R3-16, R3-17, R3-18, R3-20 (11 entries; R3-19 sits under the next heading at line 196+). Recorded results: 9 killed, 2 survived (R3-13 and R3-20). fix-round-2.md:37 uses '## T23: review round 2's surviving mutants'. Wording caveat: entries do not literally 'end in **killed**'; the result is written as '**killed** by <test>' mid-line. The substance (9 of 11 killed under a surviving-sounding heading) holds."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-009",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "Sites exist: App.tsx:218-222 (rebuildGraph: runProject(...).then(started => { if (!started) resolve(false); }) with code => resolve(code === 0)); useProjectRunner.ts:37-67 (every failure path returns false after a toast or a complete() call; no throw reaches the caller). MetaprojectView.tsx:681 writes source 'rebuild' only in rebuild()'s catch, and :848-849 is the banner whose Retry re-reads the catalog (setRevision). So the quoted state is reachable only if onRebuild rejects, and the app's onRebuild does not in the code read. Whether a future rejecting onRebuild would show a banner that does not say the rebuild failed is a rendering claim; not run, no render recorded. Unverifiable with what would settle it: a DOM test rendering the banner with a rejecting onRebuild (the existing 1424 test already does so and shows the raw message), plus a check of the copy the banner would show for source 'rebuild'."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r04#F-010",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The behaviour is pinned by a passing test at head: MetaprojectView.dom.test.tsx:1790-1811 ('a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone'): after a failed reload (1797), a second Rebuild graph clears the banner (1807) and finish(false) leaves it cleared with catalogReads still 2 (1809-1810). research-evidence/mutation-2.json baseline (head 744d9ef7542f, all six files, exit 0) includes this file, so the test passes at head. The clear is MetaprojectView.tsx:677 (quoted setRebuilding(true) at :676). The slice text cited at slice-01.diff:823 holds the test title. Whether clearing here is a defect is a judgement the finding itself leaves open; the factual claim is confirmed."
+    }
+  ],
+  "stats": { "confirmed": 9, "refuted": 0, "unverifiable": 1, "not_checked": 0 }
+}

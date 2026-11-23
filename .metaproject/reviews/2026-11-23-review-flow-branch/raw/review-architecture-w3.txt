@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice 05 follows the plan's component split and file ownership: graph layout and canvas are in RelationshipGraph/graphLayout, the details panel and relationship list are separate modules, GraphNodePanel is removed, and dependencies run one way (MetaprojectView -> NodeDetailsPanel/RelationshipGraph/RelationshipList -> labels/graphLayout/contract) with no cycle. The explorer's I/O stays behind injected seams (request, requestV2, negotiate, createCytoscape). No layer, direction, boundary or DIP violation found; two info-level placement notes only.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/App.tsx",
+      "line": 148,
+      "title": "RetainedView is a generic view-retention helper exported from the composition root",
+      "problem": "`export function RetainedView({ active, visible, children })` lives in App.tsx and is exported only so App.dom.test.tsx can import it (`(await import(\"./App\")).RetainedView`). The component has no dependency on App state; the existing session/flows/issues views still use the inline `hidden={view !== ...}` pattern, so two retention idioms now coexist in one file. This is a placement opinion, not a violation of a named rule.",
+      "why_it_matters": "Testing it requires importing the whole App module graph, and the next view that needs retention has to import from App.tsx.",
+      "suggested_fix": "Optional: move it to apps/desktop/src/components/ui (or shell/) and import it in App.tsx; the test then imports it directly."
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "line": 16,
+      "title": "isOpenSpecNode is exported but has no importer outside its own file",
+      "problem": "`export const isOpenSpecNode` is used only inside NodeDetailsPanel.tsx (line 87); the keryx ctx rg search over apps/desktop/src found no other import. The plan's interface section lists it as an export, which explains it, so this is a note on a public surface nobody consumes.",
+      "why_it_matters": "A public export with no consumer widens the module's surface for no current caller.",
+      "suggested_fix": "Drop `export` if the plan's listed interface is no longer required, or leave it as the plan states."
+    }
+  ],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+
+## Architecture Review
+
+### Review Scope
+- Branch: feat/desktop-metaproject-redesign; merge-base 1358d962f4dfc07a9e086a533f51e75aa757dfcd; head 60cbe1c565f4e478833605b41c49c2827eed2bbf
+- Scope mode: diff (supplied slice-05, read in full: App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx)
+- Stack detected: React (no MobX) with cytoscape
+
+### Summary
+The change matches plan.md's components, interfaces and ownership. Cytoscape is confined to RelationshipGraph, pure layout is in graphLayout, and the panel and list are presentational with state owned by Explorer. No cycles or outward dependencies.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 2
+
+### Layer Violations
+None detected. (Explorer remains a large stateful component; size concerns belong to review-clean-code.)
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected. Test seams (`negotiate`, `createCytoscape`, `request`, `requestV2`) are injected at the I/O and canvas boundaries.
+
+### Framework-Specific
+React: effect cleanup and ref-held callbacks are in place; no violation. See F-001 and F-002 (info).
+
+Not run (read-only, exec budget 0): tests. The payload's layers block had empty wiki and memory. One keryx ctx rg usage search was run over apps/desktop/src.

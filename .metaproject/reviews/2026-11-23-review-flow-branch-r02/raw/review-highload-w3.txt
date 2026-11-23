@@ -1,0 +1,54 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Read slice-03 in full and checked the fix code against MetaprojectView.tsx at head. The quiet catalog re-read holds under hide/show during a read or a rebuild: the generation guard drops a superseded read, a quiet flag is consumed by exactly the run it was set for, and a rebuild that ends later takes the full (non-quiet) path. The lookup token and the visible gate close F-003 and F-005. One info note on the cost of a catalog read per return; no defect found.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 335,
+      "quote": "const returned = visible && !wasVisible.current;",
+      "problem": "Every hidden-to-shown change of the explorer starts one catalog read (one `metaproject_request` invoke, one CLI process per request in platform/metaproject.ts:57) with no coalescing and no cancellation. A read that a later return supersedes is dropped by the generation guard (`generation !== project.current`), but its process still runs to completion. This answers round-1 F-004 (stale catalog on return).",
+      "impact": "Trigger: a user pressing the Metaproject and Flows shortcuts back and forth N times in a row. That is N catalog reads, N-1 of them with discarded results. The load is user-paced and bounded by key repeat; the cost of one catalog read (graph freshness check plus a catalog of up to the contract's node cap) was not measured here. No data is lost and no state is wrong; this is waste only, which is why it is info.",
+      "suggested_fix": "Optional: skip the quiet read when the previous catalog read finished less than a few seconds ago (keep a timestamp next to `loaded`), or leave it as is and accept the cost.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+## High-Load Review (round 2, slice-03, fix slice)
+
+Scope: delta 60cbe1c565f4..b1538097e636, read-only; no load profile provided, triggers are the concrete interleavings below. Read in full: the hunks of App.tsx, MetaprojectView.tsx, NodeDetailsPanel.tsx, OpenSpecView.tsx, RelationshipList.tsx, the six test files and the guide. Re-read MetaprojectView.tsx, App.tsx and platform/metaproject.ts at head for the catalog effect, the lookup and the Escape layer.
+
+### Prior findings
+
+- F-003 closed. `const filters = visible && filtersOpen && filtersAnchor && (...)` unmounts FiltersPopover in the same render in which `visible` turns false, so the `useEscape` layer and the window `mousedown`/`resize` listeners are removed at once, with no gap before the effect that calls `setFiltersOpen(false)`. Settings opened over the explorer sets `visible` false too (App.tsx passes `view === "metaproject"`). The test 'leaving the explorer's view closes its Filters popover ...' pins `overlayOpen()` false, an unprevented Escape in the other view, and no focus move on return. The only other keydown listener in the folder (line 106) is on a markdown area, not window level.
+- F-005 closed. `const token = ++lookup.current` is taken at every link click, including a click on an already-loaded node or an invalid href, and `current()` now requires `token === lookup.current`. Click A (pending), click B (pending): A is dropped whichever read returns first, B settles. Click A pending, then click a loaded link: the second click bumps the token and A is dropped. The test with three pending lookups resolves them in the order missing, first, second and checks that only the last settles; removing the token would make the first two visible (a "wiki/missing.md" message and an opened panel), so the behaviour is pinned.
+
+### Quiet re-read (answer to round-1 F-004), checked as new code
+
+- Return while the first catalog read is in flight: `!loaded.current` returns early, nothing is queued, the result applies on arrival.
+- Return, then hide and return again before the quiet read ends: each return sets `quietRead` and bumps `revision`; the effect cleanup does `project.current++`, so the first read is dropped and the second runs quiet. The flag is read and cleared at the start of the run, so it cannot leak to a later read in this path.
+- Return during a rebuild: the quiet read runs, the rebuild keeps running (`mounted` ref, not tied to `visible`), and its end bumps `revision` with `quietRead` already false, so it takes the full path, calls `setCatalog` and `setFreshness(null)`. Pinned by 'a return during a rebuild ...' (reads 2 then 3, control enabled again).
+- Rebuild ends while a quiet read is in flight: the bump cleans up the quiet read and starts a full one; no stale write.
+- Quiet read with an unchanged snapshotId updates only `freshness`; `graphState` uses it only while `freshness.snapshotId === catalog.snapshotId`, and a changed snapshot goes through the full path, which also clears freshness. snapshotId is a hash over nodes, edges, page digests and layerStats (metaproject-explorer.ts:174), so catalog fields other than the graph freshness cannot change under an unchanged id; moving the freshness-only fields out of `catalog` is therefore sound.
+- A failed quiet read shows the existing error banner with Retry and keeps the catalog; Retry is a full read. Acceptable.
+- Remaining read of `catalog.graph` at line 496 (`if (catalog.graph === "missing" && protocol !== 2) return;`) is not switched to `graphState`; a graph going missing/ready changes nodes and edges and so the snapshotId, which takes the full path, so I could not construct a state where it matters.
+
+### Other hunks
+
+OpenSpecView `choose()` order, the node-memory effect (`seenNodes` filled in an effect; the render reads `nodes` first, and `select` reads `seenNodes` only after commit), the popover placement and resize listener (added and removed in one effect keyed on `anchor`), `groupRelationships` self-loop skip, the fact row and the tests: no concurrency or resource defect found.
+
+Clean areas: Part 0 (multi-session; the slice touches no shared state files), A (shared mutable state: the refs are written from a single React thread and guarded by generation or token), B (listeners cleaned), C (the in-process `searchCache` stays capped at 12), D to G (no transactions, queues, retries or idempotent writes in the slice).
+
+Not verified: the cost of one catalog read, the native Tauri window, and any run of the tests (read-only, exec budget 0).

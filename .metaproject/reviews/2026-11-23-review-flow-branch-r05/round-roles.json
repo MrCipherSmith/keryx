@@ -1,0 +1,6 @@
+{
+  "enabled": [
+    "review-clean-code",
+    "review-style"
+  ]
+}

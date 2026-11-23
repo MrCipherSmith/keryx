@@ -1,0 +1,18 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-03 holds removed lines only; the hunks of this round are the old `const [error, setError] = useState(\"\");` (hunk @@ 310,315), `setError(\"\");` in rebuild() (hunk @@ 676,676) and `if (generation === project.current) setError(errMessage(cause));` (hunk @@ 681,681); every other hunk (GRAPH_PADDING, the `nodes` prop of RepositoryMarkdown, the catalog-truncated banner, the documentProblem/onDraft props, OpenSpecView scrollTop, the relation-actions and 700px CSS) is a removal of earlier rounds and was read but not judged. The tagged `error` state { source: \"catalog\" | \"rebuild\", message } | null sits well with the file's other error states: `error` is the only one with two independent writers (the catalog effect and rebuild()), and the tag is the only way the third party that clears it, a later quiet read, can tell whose failure it holds; detailError, relationshipError and documentProblem each have one writing effect that resets itself at its own start, and searchError carries a key (query) because its reader filters by what is on screen. No layer, dependency-direction or boundary defect found in the 20 changed lines.",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Notes (not findings)
+
+- Source in the state or in who writes it: in the state. The writer of a rebuild failure and the reader that decides whether a quiet success may remove it are different pieces of code at different times (rebuild() at line 681; the functional updater at line 392), so only a tag stored with the value carries the fact between them. Two states (catalogError, rebuildError) would force two banners or a merge at render time and would not be simpler; the single banner with one Retry stays as it was.
+- The read-outcome / screen separation: searchError is stored with its key and the screen derives what to show (line 568, `searchError?.query === searchQuery`); detailError, relationshipError and documentProblem are cleared by their own effect's start (lines 475, 502, 539). `error` follows the second pattern for the loud catalog read (cleared at line 380, written at 407) and adds one outcome-driven clear on a quiet success (line 392). That clear is a state write from the read's outcome, as at lines 397-399, and uses a functional updater, which the stale closure of the async body requires. It sits after the generation guard (line 389) and before the same-snapshot early return, so it applies to both quiet paths. Nothing needs to move.
+- Cells checked in the code, through this lens: standing rebuild error, then quiet success: kept (updater returns `current`). Standing catalog error, then quiet success: cleared. Quiet failure: writes nothing (line 407 `!quiet`). Rebuild started over a standing catalog error: cleared at line 677 and replaced on failure with source rebuild. A rebuild failing after a quiet success has cleared nothing: the rebuild's own write comes last. Retry (line 849) after a rebuild failure starts a catalog read, not a rebuild; unchanged by this round, and the banner reader still ignores `source`, so `source` has exactly one consumer (line 392). That is correct today; if a later change gives the banner a different Retry per source, the tag is already there.
+- Not done: no test or server run (read-only, exec budget 0); the nine tests of the round were not read (not this slice).

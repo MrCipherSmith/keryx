@@ -1,0 +1,64 @@
+{
+  "task_id": "fix-22",
+  "task_name": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "F-001: RelationshipList decides its empty note from the groups (incoming, outgoing, second step all empty), not from projection.edges.length; the Wiki view's Relationships disclosure is shown only when summarizeRelationships(currentProjection) gives at least one row, and its count is incoming + outgoing + secondStep, the same sum the panel's Relationships tab uses. F-002: the catalog effect has its own counter, catalogRead, for dropping a superseded catalog result; project.current (the guard of openPath and loadMoreSearch) moves only for a non-quiet read and in the effect's cleanup when the next run is not quiet, so a lookup or page in flight across a hide/show settles. F-003: a quiet read neither clears error at its start nor sets it on failure; a return while a catalog read is in flight starts no quiet read (catalogPending), so that read's own failure is still shown. F-004: remember is a stable useCallback and the effect calls it, with remember in its dependency list.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: ESLint does not cover apps/desktop",
+  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit exits 0)",
+  "test_result": "pass: MetaprojectView.dom.test.tsx 71 pass 0 fail; RelationshipList.dom.test.tsx 13 pass 0 fail; NodeDetailsPanel.dom.test.tsx 24 pass 0 fail; App.dom.test.tsx 2 pass 0 fail (each in its own process). OpenSpecView.dom.test.tsx does not exist. Red check (scratch_check2.py red --restore src/metaproject/MetaprojectView.tsx,src/metaproject/RelationshipList.tsx): MetaprojectView.dom.test.tsx exit 1, 65 pass | 6 fail; RelationshipList.dom.test.tsx exit 1, 12 pass | 1 fail.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "NodeDetailsPanel computes the Relationships tab count as summary.incoming + summary.outgoing + summary.secondStep inline; MetaprojectView now computes the same sum for the Wiki disclosure. Two spellings of one count across two files; a `relationshipRows(summary)` helper exported from RelationshipList would make it one. NodeDetailsPanel is outside this task's ownership.", "where": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx:242 (counts.relationships) and MetaprojectView.tsx:716 (wikiRelationshipRows)" },
+    { "what": "When a protocol change and a return to the view land in the same commit, React runs all effect cleanups and then the bodies: the visible effect sets quietRead before the catalog effect body reads it, so the protocol-change read runs as quiet (no error clear, failure silent). The next commit's revision bump then runs a loud read, so the final state is loud, but one read is spent. Pre-existing ordering, not changed here.", "where": "MetaprojectView.tsx visible effect (340-349) and catalog effect (371-416)" }
+  ],
+  "assumptions": [
+    "The Wiki disclosure's 'number of rows that list shows' includes second-step rows, as the panel's Relationships tab count does; the Wiki read is depth 1, so second-step rows appear only when a projection carries edges between two neighbours."
+  ],
+  "behavior_changes": [
+    {
+      "description": "A quiet re-read that finds a changed snapshot replaces the catalog (as before) but no longer retires a wiki-link lookup or a page of results still in flight. Such a lookup then settles against the snapshot it captured: if the answer comes from the new snapshot, the 'Project knowledge changed while loading' banner with Refresh catalog shows; a page of results is still dropped, because its search generation moves with the catalog snapshot.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": [
+        "Bump project.current when a quiet read applies a changed catalog, so pending lookups and pages are dropped silently as a Refresh would drop them."
+      ]
+    },
+    {
+      "description": "Returning to the view while a catalog read is already in flight (for example the reload after a successful rebuild, or a Retry) starts no quiet re-read; the read in flight is left to finish and shows its own result or failure. Before, the quiet read superseded it and that read's failure was lost.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": [
+        "Let the quiet read supersede the read in flight and inherit its loudness (report a failure).",
+        "Let the quiet read supersede it silently, as round 1's fix did on the success path."
+      ]
+    },
+    {
+      "description": "A Wiki page whose only relationships are left out by the grouping rule (a self `links` edge to a heading of its own file, or an edge with a missing end) shows no Relationships disclosure; otherwise the disclosure's count equals the rows it lists. The guide's sentences 'A relationship from an item to itself is neither listed nor counted.' and the table row 'A page has no **Relationships** section' already describe this; no guide sentence is contradicted.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": []
+    }
+  ],
+  "not_touched": [],
+  "notes": "Readers of what changed. (1) RelationshipList empty note: rendered by RelationshipList itself, which is used by NodeDetailsPanel.tsx:265 (panel Relationships tab) and MetaprojectView's Wiki disclosure; both now show the note whenever no row is listed. groupRelationships/summarizeRelationships are unchanged; summarizeRelationships is read by NodeDetailsPanel.tsx:199 (fact row and tab count) and now also by MetaprojectView (Wiki disclosure), so the fact row, tab count, disclosure count and listed rows come from groupRelationships. (2) project.current: read by openPath (MetaprojectView.tsx:694-695) and loadMoreSearch (646, 654, 660). They now see it unchanged across a quiet re-read and moved by every other catalog read (new protocol, Retry, Refresh catalog, Rebuild's reload, relationship/detail Retry, which all bump revision with quietRead false) and by the catalog effect's cleanup on unmount (another project remounts the Explorer by key). Round 1's F-005 token rule in openPath (lookup.current) is untouched (this sentence was reworded during T25, after the task had been accepted: review round 3's F-008 asked that the id carry its round). (3) catalogRead (new) is read only by the catalog effect: the quiet read still drops its own superseded result and a later read drops it. (4) catalogPending (new) is read only by the visible effect. (5) error: also set/cleared by rebuild() (673-681 region) and read by the banner; a quiet read no longer touches it. (6) remember: called by the node-memory effect and by viewInGraph (619); it is now stable (useCallback, empty deps; it writes only the seenNodes ref), so the effect's dependency list [nodes, remember] is honest and the effect still runs only when nodes changes (the existing test 'a render that changes no node list leaves the explorer's node memory alone' passes). Quiet-path lines for T23 (MetaprojectView.tsx after this change): refs project/catalogRead/catalogPending/loaded/loadedSnapshot/quietRead at 326-337; the visible effect at 340-349 with the new catalogPending guard at 346; the catalog effect at 371-416: generation from catalogRead at 373, loud-only project bump and setError(\"\") at 376-379, catalogPending set at 381, superseded check at 387, quiet unchanged-snapshot branch right after, catch with the quiet guard at 403, finally clearing catalogPending at 405-408, cleanup at 411-415. Test file: new helpers showView(props, visible) and catalogErrorBanner() sit after the last pre-existing test (around line 1313) for T23 to reuse; the new tests follow them. suggested_fix diverged: F-002 — the reviewer offered either skipping the project bump while quiet or restoring the counter in the unchanged-snapshot branch; I split the counter instead (catalogRead for superseded catalog results, project.current for retiring pending work) because the restore variant would still drop work when a quiet read applies a changed catalog mid-flight and would leave a window between bump and restore. F-003 — beyond the suggestion, a return while a catalog read is in flight now starts no quiet read, because otherwise the quiet read supersedes a loud read and its failure (which the finish line requires to be reported as today) would vanish. F-001 and F-004 followed the suggestions; for F-004 remember was made stable with useCallback so calling it from the effect keeps the dependency list honest, as the task required. All four findings reproduced (red output above). Red-run output quoted: 'restored to HEAD in the copy: src/metaproject/MetaprojectView.tsx', 'restored to HEAD in the copy: src/metaproject/RelationshipList.tsx', '== src/metaproject/MetaprojectView.dom.test.tsx: exit 1; 65 pass | 6 fail', failing: 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' (F-001), 'a wiki-link lookup in flight when the explorer is hidden and shown again still settles' and 'a page of results in flight when the explorer is hidden and shown again is still appended' (F-002), 'a failed quiet re-read on return shows no error and leaves the explorer as it was', 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' and 'a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown' (F-003); '== src/metaproject/RelationshipList.dom.test.tsx: exit 1; 12 pass | 1 fail', failing 'a projection whose every edge is left out says it has no relationships' (F-001). F-004 is a no-behaviour-change refactor and has no red test. Not verified: the whole desktop suite (bun test src) was not run, per the dispatch's scope; round 2's mutants were not run; AC10 (judged, browser dev build) was not checked in a browser. The .metaproject changes in git status predate this task. No commit made."
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 112926,
+      "contentHash": "ef68a5f10d93e3c6d24872898297b70cd47dc06ad1a6ea29997ca1bf26dab9b8",
+      "files": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.dispatch.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T26.request.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T26.implement.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T26.result.json",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+      ],
+      "domain": ".metaproject, .metaproject [docs], apps [test]",
+      "split": "domain",
+      "roles": [
+        "review-frontend",
+        "review-logic",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 1,
+    "bytes": 112926,
+    "files": 11,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

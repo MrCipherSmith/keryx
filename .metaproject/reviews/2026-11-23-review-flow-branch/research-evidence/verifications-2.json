@@ -1,0 +1,187 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "29 findings: 20 confirmed, 2 refuted, 7 unverifiable, 0 not checked. Execution 13 (recorded verify-run and mutate files, browser probes), site-check 16, reasoning 0. Pass 2 re-judged F-001 and F-002 on the WebKit and Chromium runs; F-002 is refuted in both engines measured, F-001 is confirmed in both (smaller in WebKit).",
+  "verifications": [
+    {
+      "finding": "2026-11-23-review-flow-branch#F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-F-001-3.txt (system WKWebView, AppleWebKit 605.1.15, 720x480, Details expanded): popover layoutBox bottom 497, cutBottomBy 17, scrolls false, maxHeight 400px. research-evidence/live-filters-popover-720x480.txt (Chromium 156, same state): bottom 531, cut by 51, no scroll. verify-F-001-2.txt (WKWebView, one-line banner): cutBottomBy -59, fits. Clip and no-scroll reproduce in both engines; the 51 px figure is Chromium-only, WebKit clips 17 px. Window minimum confirmed by rg of apps/desktop/src-tauri/tauri.conf.json (minWidth 720, minHeight 480). Quote confirmed at apps/desktop/src/metaproject/metaproject.css:90. Not measured: light theme, 1180x780 and 1440x900 with the popover open, native window resize."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "research-evidence/verify-F-002-2.txt (system WKWebView, AppleWebKit 605.1.15, 1024x768, section origin (60,77)): popover rect left 591.8 top 241.9, layoutBox left 587 top 239 equals its inline coordinates, displacementFromInline x 0 y 0. research-evidence/live-filters-popover-containing-block.txt (Chromium 156): popover rect 587,239 equals inline, offset 0,0. The container is present (verify-F-002-1.txt: metaproject.css:9 container: metaproject / inline-size), so the sites exist and the displacement the finding claims does not occur in these two engines. Not measured: older WebKit, the native Tauri window, the Escape and outside-press paths."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-003",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'survives a view or tab switch|useEscape\\(\\(\\) => close.current\\(\\)\\)' apps/desktop/src/metaproject: MetaprojectView.tsx:176 useEscape(() => close.current()) and :259 comment saying filters state survives a view or tab switch. Sites exist. The overlayOpen() consequence and the Escape path need a run, not run. No test covers it (mutants V-series in mutation-1-compact.txt did not target the Escape stack)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-004",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'return visited || active' apps/desktop/src: App.tsx:151 return visited || active ? <div className=\"view\" hidden={!visible}>... so the retained wrapper exists, with App.tsx:594 passing visible={view === \"metaproject\"}. The catalog effect and the stale-banner outcome after return were not run; base App.tsx was not re-read."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-005",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'const current = () => generation' apps/desktop/src: MetaprojectView.tsx:615 holds the quoted guard. The race depends on read latency between two lookups; that needs a timing run, not performed. mutation-1-compact.txt V11 (removal of if (!current()) return) and V31 survived, which says the guard is untested, not that the race exists."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-006",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'for (const node of nodes) remember' apps/desktop/src: MetaprojectView.tsx:512 holds the loop. The site exists. Its placement in the render body and any measurable cost were not read or timed; a performance claim needs a measurement."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-007",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'secondStep|summary.incoming' apps/desktop/src/metaproject/NodeDetailsPanel.tsx: line 242 relationships: summary.incoming + summary.outgoing + summary.secondStep; line 247 fact row ${summary.incoming} incoming ${summary.outgoing} outgoing. The two numbers are computed differently in code. The on-screen rendering was not measured."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-008",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'onLocation|scrollTop = 0' apps/desktop/src/metaproject/OpenSpecView.tsx: line 80 if (content.current) content.current.scrollTop = 0; precedes line 82 onLocation?.(next); so the ordering in the finding is literal. Whether the leaving entry records 0 depends on remember() reading scrollTop at enter time in useExplorerNavigation.ts, and the restore was not run."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-009",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read of .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md: table row T4 depends on T8, T9, T10, T11 (quote matches), T9 and T10 and T11 depend on T8, and the table ends at T11 with no T12-T16 rows. keryx ctx rg '\"T1[2-6]\"' over flow.json: 15 matches, so flow.json has T12 to T16. The dependency sets in flow.json were not read in full."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-010",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read of .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T9.dispatch.json: context_refs lists resolved/T9.implement.json with exists true, and the constraint requires validating against it. Read of .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T9.implement.json: 'File does not exist'. keryx ctx rg '\"T9\"|\"T15\"' over results/ and resolved/: no matches. The T15 part of the finding was not checked."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-011",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt, row A1: survived (App.tsx:151 hidden={!visible} -> hidden={!active}; the six test files stayed green). Quote confirmed by keryx ctx rg 'RetainedView' apps/desktop/src: App.dom.test.tsx:27 holds the single-value render."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-012",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: G5 survived, G9 survived, G6 killed. The finding names G5 and G9 as green, which matches; G6 is killed, so the test's zero-size guard is partly pinned."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-013",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: G1, G2, G3, G4, G7, G8, G10, G11 all survived (six test files green with each change)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-014",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: N1, N2, N3, N4, N5 all survived (N2 is the .metaproject-details-body -> .metaproject-node-body selector swap)."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-015",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V1 survived, V30 survived."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-016",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V8 survived, V8b survived."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-017",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V2, V3, V4, V5, V6, V7, V13, V14, V15, V17 all survived."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-018",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: V9, V10, V11, V12, V16, V31 survived; V19 killed (matches the finding's 'V19 RED')."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-019",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: P1, P3, P4, P5, P6, P7, P8, P9, P11, P13, P14, P17, P18, P20, P21 survived; P2 killed."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-020",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: L1, L2, L3, L8 survived; L5, L6 killed."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-021",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/mutation-1-compact.txt: Y1, Y2, Y3, Y4, Y5, Y6, Y7, Y8, Y9, Y12, Y16, Y18 survived; Y19 killed."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-022",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'edge.from === projection.root|edge.from === edge.to' apps/desktop/src/metaproject: RelationshipList.tsx:57 pushes root-outgoing edges with no self-loop test; graphLayout.ts:506 if (edge.from === edge.to) return; so the two paths diverge on self-edges. Whether the producer emits self-edges was not checked, so the finding's trigger stays conditional."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-023",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'min-block-size: 200px' apps/desktop/src/metaproject: RelationshipGraph.dom.test.tsx:143 expect(block).toContain(\"min-block-size: 200px;\"); graph.css:6 holds the same declaration. The test pins the literal stylesheet text. The brittleness judgement is opinion and was not tested."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-024",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'it served the committed MetaprojectView.tsx' .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results: match in results/T16.result.json (notes field). The flow's own record states the swap of tracked files during the red check. Whether another lane read the swapped file was not established."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-025",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'RetainedView' apps/desktop/src: App.tsx:148 export function RetainedView; App.dom.test.tsx:6 and :13 reach it only through await import(\"./App\"). The export exists for the test. The placement opinion and the claim about the other views' hidden= pattern were not checked."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-026",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'isOpenSpecNode' apps/desktop/src: 2 matches, both in NodeDetailsPanel.tsx (line 16 export const, line 87 use). No import elsewhere under apps/desktop/src."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-027",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'previousRoutes.current = history' apps/desktop/src: useExplorerNavigation.ts:29 holds the render-time refresh. The claim that enter() does not refresh previousRoutes and that two calls in one tick break back() needs a run; not performed."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-028",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'COMPACT_BELOW|availableWidth' apps/desktop/src/metaproject/NodeDetailsPanel.tsx: COMPACT_BELOW = 820 (line 11), availableWidth state (line 151), compact = availableWidth > 0 && availableWidth < 820 (line 154). Whether a docked panel can sit inside a container narrower than 760 px was not measured at 760-820 px; the reviewer's own probe is still outstanding."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch#F-029",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'twelve importing files' docs/docs/guides: desktop-metaproject.md:107 holds the alt text. Read of docs/docs/images/desktop-metaproject/graph.jpg: left column shows 10 import nodes, a '+2 more' entry, the caption 'Imports · 12', one Describes and one Contains node. The 12 imports are 10 drawn plus 2 collapsed, so the picture does not contradict the alt text's count. The finding's premise (picture draws ten, alt says twelve) does not hold as a contradiction."
+    }
+  ],
+  "stats": {
+    "confirmed": 20,
+    "refuted": 2,
+    "unverifiable": 7,
+    "not_checked": 0
+  }
+}

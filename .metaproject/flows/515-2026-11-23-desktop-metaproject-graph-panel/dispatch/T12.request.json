@@ -1,0 +1,48 @@
+{
+  "task": {
+    "task_id": "task-12",
+    "task_name": "Graph polish from the isolated live preview",
+    "task_type": "ui_component",
+    "complexity": "medium",
+    "dependencies": [],
+    "description": "Fix eight defects the orchestrator found when it rendered the new graph on real projections of this repository in a browser (440x470 px box, and 836x470). AC1-AC4 must keep passing; add or adjust tests for each item that is testable without a browser.\n\nG1. The zoom controls sit over the canvas at the bottom right and cover the '+N more' entry. Move the three controls out of the canvas into the caption row, right-aligned; the caption text truncates before them.\nG2. The column cap hides whole relationship kinds. Seen live: for file src/bus/leases.ts the containing module and the describing wiki page were hidden behind 12 imports; for module apps/desktop/src its three files; for wiki page 'Agent Bus' its wiki link. Spread a column's 12 slots over its kind groups: every group present shows at least 2 nodes (all of them if it has fewer) while slots remain, taken in kind order, and the slots left over are filled in kind order. A column over the cap still shows exactly 12 nodes and one overflow entry with total minus 12 (AC2).\nG3. Inside a group, order by the edge `count` descending when the edges carry one (module imports), then by title. Today the cut is alphabetical, so a module with 88 imports shows the first 12 by name.\nG4. Two drawn nodes can carry the same label (seen: 'commands' twice, 'agents' twice, 'review' twice). When drawn nodes share a title, label each with the shortest path suffix that tells them apart (for example 'src/commands' and 'hub/commands'), shortened in the middle if it does not fit.\nG5. The middle ellipsis drops a test suffix: 'imagePreview.dom.test.ts' became 'imagePrevi…est.ts'. Cut at a '.' boundary when the name has one, keeping the longest dotted tail that fits in half the budget ('imagePre….test.ts').\nG6. Node boxes in a column are centred on one x, which leaves a ragged edge towards the root. Align them on the edge that faces the root: incoming columns flush right, outgoing columns flush left, with their captions and the overflow entry aligned the same way. AC1 and AC3 still hold on box positions.\nG7. Group captions and the legend show raw kind ids ('imports · 7', 'Solid line: imports, asset'). Use RELATIONSHIP_KIND_LABELS and NODE_KIND_LABELS from the shared labels file ('Imports · 7', 'Solid line: Imports, Assets').\nG8. graph.css fixes the component height with `block-size: clamp(220px, 34vh, 300px)`. Remove the clamp: the component fills the height its host gives it (`flex: 1 1 auto`, `min-block-size: 200px`), because the explorer is about to give the graph the height the relationship list used to take.\n\nShared labels: apps/desktop/src/metaproject/labels.ts must exist with EXACTLY this content (the other polish lane needs the same file at the same time; if it already exists with this content, leave it; if it does not exist, create it):\n```ts\nimport type { MetaprojectEdgeKind, MetaprojectNodeKind } from \"../../../../src/integrations/metaproject-explorer-contract\";\n\n/** Human-readable names shown wherever a kind appears: filters, graph captions and legend, panel, lists. */\nexport const RELATIONSHIP_KIND_LABELS: Record<MetaprojectEdgeKind, string> = {\n  imports: \"Imports\",\n  asset: \"Assets\",\n  describes: \"Describes\",\n  links: \"Wiki links\",\n  contains: \"Contains\",\n  defines: \"Defines\",\n  calls: \"Calls\",\n  \"changes-spec\": \"Changes spec\",\n  \"spec-context\": \"Spec context\",\n};\n\nexport const NODE_KIND_LABELS: Record<MetaprojectNodeKind, string> = {\n  module: \"Module\",\n  file: \"File\",\n  symbol: \"Symbol\",\n  wiki: \"Wiki page\",\n  spec: \"Spec\",\n  change: \"Change\",\n  archive: \"Archived change\",\n};\n```\n",
+    "target_files": [
+      "apps/desktop/src/metaproject/graphLayout.ts",
+      "apps/desktop/src/metaproject/graphLayout.test.ts",
+      "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+      "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "apps/desktop/src/metaproject/graph.css",
+      "apps/desktop/src/metaproject/labels.ts"
+    ],
+    "acceptance_criteria": [
+      "AC1: `layoutNeighborhood` places every first-step neighbour whose only edges with the root point at the root left of the root, every neighbour the root points at right of it, and no two laid-out boxes (nodes, group captions, overflow entries) overlap, for a 31-node depth-1 projection of mixed `contains` and `imports` edges. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+      "AC2: When a side has more neighbours than the column cap of 12, the layout shows exactly 12 nodes in that column plus one overflow entry whose hidden count equals that side's neighbour count minus 12; a 200-node, 269-edge depth-2 projection lays out with no overlapping boxes and at most 12 nodes per column. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+      "AC3: Every second-step node is placed in the outer column on the side of the first-step node it is attached to, further from the root than every first-step node on that side. [verify: exec `cd apps/desktop && bun test src/metaproject/graphLayout.test.ts`]",
+      "AC4: `RelationshipGraph` renders an HTML caption with the root title and the incoming and outgoing counts (and the word \"limited\" for a truncated projection) and an HTML legend that names, with human-readable labels, exactly the node kinds and line styles present in the projection; the style mapping is a pure exported function that gives each of the seven node kinds a distinct shape-or-border treatment and maps the nine relationship kinds onto solid, dashed and dotted lines. [verify: exec `cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx`]"
+    ],
+    "context": "Flow 515 in the Keryx repository. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). Read the flow's plan.md (design, file ownership, interfaces, state x event matrix) and context.md (measured facts, defects D1-D7, reusable tokens and patterns) before writing code; they decide every design question, so do not re-decide them. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <your test files>`. ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts; apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx shows the pattern.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/graphLayout.test.ts",
+      "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom)."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T12.implement.json"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

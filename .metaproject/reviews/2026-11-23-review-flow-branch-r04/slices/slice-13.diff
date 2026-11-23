@@ -1,0 +1,1562 @@
+--- apps/desktop/src/metaproject/graphLayout.ts
+@@ 1,688 @@
++/**
++ * Pure, DOM-free layout of a Metaproject neighbourhood in direction columns:
++ * second-step incoming · incoming · root · outgoing · second-step outgoing.
++ * The result is handed to cytoscape as `preset` positions (box centres).
++ */
++import {
++  METAPROJECT_EDGE_KINDS_V2,
++  type MetaprojectEdge,
++  type MetaprojectEdgeKind,
++  type MetaprojectNeighbors,
++  type MetaprojectNode,
++  type MetaprojectNodeKind,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { NODE_KIND_LABELS, RELATIONSHIP_KIND_LABELS } from "./labels";
++
++export const COLUMN_CAP = 12;
++/** Each relationship-kind group of an over-full column keeps at least this many slots while slots remain. */
++export const GROUP_MIN_SLOTS = 2;
++
++/** Model-space sizes in px at zoom 1 and `--text-scale` 1. */
++export const GRAPH_GEOMETRY = {
++  nodeHeight: 24,
++  rowGap: 6,
++  captionHeight: 16,
++  captionGap: 4,
++  groupGap: 10,
++  overflowHeight: 20,
++  columnGap: 40,
++  nodeMinWidth: 44,
++  nodeMaxWidth: 128,
++  rootMaxWidth: 168,
++  labelPadding: 8,
++  labelCharWidth: 6.4,
++  captionPadding: 4,
++  captionCharWidth: 6.2,
++  labelFontSize: 12,
++  captionFontSize: 11,
++} as const;
++
++export const AUTO_ZOOM = { min: 0.8, max: 1.15 } as const;
++export const VIEWPORT_PADDING = 16;
++
++export type GraphSide = "incoming" | "outgoing";
++/** -2 second-step incoming, -1 incoming, 0 root, 1 outgoing, 2 second-step outgoing. */
++export type GraphColumn = -2 | -1 | 0 | 1 | 2;
++
++/** A box by its centre, as cytoscape positions nodes. */
++export interface LayoutBox {
++  x: number;
++  y: number;
++  width: number;
++  height: number;
++}
++
++export interface LaidOutNode extends LayoutBox {
++  id: string;
++  node: MetaprojectNode;
++  label: string;
++  role: "root" | "first" | "second";
++  side: GraphSide | null;
++  column: GraphColumn;
++  /** The relationship kind the node is grouped under; absent for the root. */
++  group?: MetaprojectEdgeKind;
++  /** For a second-step node: the neighbour it is attached to. */
++  via?: string;
++}
++
++export interface LaidOutCaption extends LayoutBox {
++  id: string;
++  text: string;
++  kind: MetaprojectEdgeKind;
++  side: GraphSide;
++  column: GraphColumn;
++}
++
++export interface LaidOutOverflow extends LayoutBox {
++  id: string;
++  text: string;
++  side: GraphSide;
++  column: GraphColumn;
++  /** Nodes of the column that are not drawn. */
++  hidden: number;
++  /** Nodes assigned to the column, drawn or not. */
++  total: number;
++}
++
++export interface LaidOutEdge {
++  id: string;
++  from: string;
++  to: string;
++  kind: MetaprojectEdgeKind;
++  /** Line width in px; module imports with a `count` are thicker. */
++  width: number;
++  /** Neither end is the root: drawn fainter. */
++  secondStep: boolean;
++}
++
++export interface LayoutBounds {
++  x1: number;
++  y1: number;
++  x2: number;
++  y2: number;
++  width: number;
++  height: number;
++}
++
++export interface NeighborhoodLayout {
++  root: LaidOutNode | null;
++  nodes: LaidOutNode[];
++  captions: LaidOutCaption[];
++  overflow: LaidOutOverflow[];
++  edges: LaidOutEdge[];
++  /** Root-adjacent relationships pointing at the root. */
++  incoming: number;
++  /** Root-adjacent relationships the root points at. */
++  outgoing: number;
++  truncated: boolean;
++  bounds: LayoutBounds;
++}
++
++export interface LayoutOptions {
++  columnCap?: number;
++  textScale?: number;
++}
++
++interface Entry {
++  node: MetaprojectNode;
++  side: GraphSide;
++  group: MetaprojectEdgeKind;
++  /** The largest edge `count` linking the node into its column; 0 when the edges carry none. */
++  weight: number;
++  via?: string;
++}
++
++interface ColumnSelection {
++  /** Drawn entries, in group order and, inside a group, by weight then title. */
++  shown: Entry[];
++  totals: Map<MetaprojectEdgeKind, number>;
++  total: number;
++  side: GraphSide | null;
++}
++
++interface StackedColumn {
++  nodes: LaidOutNode[];
++  captions: LaidOutCaption[];
++  overflow: LaidOutOverflow | null;
++  width: number;
++}
++
++interface ColumnSpan {
++  left: number;
++  right: number;
++}
++
++const KIND_ORDER = new Map<MetaprojectEdgeKind, number>(METAPROJECT_EDGE_KINDS_V2.map((kind, index) => [kind, index]));
++
++function kindRank(kind: MetaprojectEdgeKind): number {
++  return KIND_ORDER.get(kind) ?? METAPROJECT_EDGE_KINDS_V2.length;
++}
++
++function firstKind(kinds: Iterable<MetaprojectEdgeKind>): MetaprojectEdgeKind | undefined {
++  let best: MetaprojectEdgeKind | undefined;
++  for (const kind of kinds) if (best === undefined || kindRank(kind) < kindRank(best)) best = kind;
++  return best;
++}
++
++/** The dotted tails of the last path segment, longest first: "a.dom.test.ts" → [".dom.test.ts", ".test.ts", ".ts"]. */
++function dottedTails(text: string): string[] {
++  const base = text.slice(text.lastIndexOf("/") + 1);
++  const tails: string[] = [];
++  for (let index = base.indexOf(".", 1); index > 0; index = base.indexOf(".", index + 1)) tails.push(base.slice(index));
++  return tails;
++}
++
++/**
++ * Shortens `text` to `maxChars` characters with an ellipsis in the middle. When the name has dots,
++ * the cut keeps the longest dotted tail that fits in half the budget, so ".test.ts" survives.
++ */
++export function shortenMiddle(text: string, maxChars: number): string {
++  if (!Number.isInteger(maxChars) || maxChars < 1) {
++    throw new RangeError(`maxChars must be a positive integer, got ${maxChars}`);
++  }
++  const chars = Array.from(text);
++  if (chars.length <= maxChars) return text;
++  if (maxChars === 1) return "…";
++  const available = maxChars - 1;
++  const dotted = dottedTails(text).find((tail) => {
++    const length = Array.from(tail).length;
++    return length <= Math.floor(maxChars / 2) && length <= available - 1;
++  });
++  const tail = dotted !== undefined ? Array.from(dotted).length : Math.max(0, Math.min(available - 1, Math.floor(available * 0.4)));
++  const head = available - tail;
++  return `${chars.slice(0, head).join("")}…${chars.slice(chars.length - tail).join("")}`;
++}
++
++function nodeBox(title: string, maxWidth: number, textScale: number): { label: string; width: number } {
++  const g = GRAPH_GEOMETRY;
++  const charWidth = g.labelCharWidth * textScale;
++  const maxChars = Math.max(1, Math.floor((maxWidth - 2 * g.labelPadding) / charWidth));
++  const label = shortenMiddle(title, maxChars);
++  const width = Math.min(maxWidth, Math.max(g.nodeMinWidth, Array.from(label).length * charWidth + 2 * g.labelPadding));
++  return { label, width };
++}
++
++function textWidth(text: string, textScale: number): number {
++  const g = GRAPH_GEOMETRY;
++  return Array.from(text).length * g.captionCharWidth * textScale + 2 * g.captionPadding;
++}
++
++/** Splits root-adjacent neighbours into sides; a neighbour with edges both ways goes with outgoing. */
++function firstStep(rootId: string, edges: readonly MetaprojectEdge[]): Map<string, Omit<Entry, "node">> {
++  type Seen = { kinds: Set<MetaprojectEdgeKind>; weight: number };
++  const incoming = new Map<string, Seen>();
++  const outgoing = new Map<string, Seen>();
++  for (const edge of edges) {
++    if (edge.from === edge.to) continue;
++    const [bucket, other] = edge.from === rootId ? [outgoing, edge.to] : edge.to === rootId ? [incoming, edge.from] : [null, ""];
++    if (!bucket) continue;
++    const seen = bucket.get(other) ?? { kinds: new Set<MetaprojectEdgeKind>(), weight: 0 };
++    seen.kinds.add(edge.kind);
++    seen.weight = Math.max(seen.weight, edge.count ?? 0);
++    bucket.set(other, seen);
++  }
++  const result = new Map<string, Omit<Entry, "node">>();
++  for (const [id, seen] of outgoing) result.set(id, { side: "outgoing", group: firstKind(seen.kinds) ?? "imports", weight: seen.weight });
++  for (const [id, seen] of incoming) {
++    if (!result.has(id)) result.set(id, { side: "incoming", group: firstKind(seen.kinds) ?? "imports", weight: seen.weight });
++  }
++  return result;
++}
++
++/**
++ * Attaches every other node to a first-step neighbour (a drawn one first, in edge order),
++ * then, for a truncated projection, to an already attached second-step node.
++ */
++function secondStep(
++  rootId: string,
++  edges: readonly MetaprojectEdge[],
++  nodes: ReadonlyMap<string, MetaprojectNode>,
++  first: ReadonlyMap<string, { side: GraphSide }>,
++  drawnFirst: ReadonlySet<string>,
++): Entry[] {
++  const attached = new Map<string, Entry>();
++  const candidates = (preferDrawn: boolean, anchors: ReadonlyMap<string, { side: GraphSide }>) => {
++    let progress = false;
++    for (const edge of edges) {
++      for (const [self, other] of [[edge.from, edge.to], [edge.to, edge.from]] as const) {
++        if (self === rootId || first.has(self) || attached.has(self) || self === other) continue;
++        const anchor = anchors.get(other);
++        const node = nodes.get(self);
++        if (!anchor || !node || (preferDrawn && !drawnFirst.has(other))) continue;
++        attached.set(self, { node, side: anchor.side, group: edge.kind, weight: edge.count ?? 0, via: other });
++        progress = true;
++      }
++    }
++    return progress;
++  };
++  candidates(true, first);
++  candidates(false, first);
++  while (candidates(false, attached));
++  return [...attached.values()];
++}
++
++function sortEntries(entries: Entry[]): Entry[] {
++  return [...entries].sort(
++    (a, b) =>
++      kindRank(a.group) - kindRank(b.group) ||
++      b.weight - a.weight ||
++      a.node.title.localeCompare(b.node.title) ||
++      a.node.id.localeCompare(b.node.id),
++  );
++}
++
++/**
++ * Chooses the drawn entries of one column. Every group gets up to GROUP_MIN_SLOTS slots in kind
++ * order while slots remain; the slots left over are filled in kind order.
++ */
++function selectColumn(entries: Entry[], cap: number): ColumnSelection {
++  const groups = new Map<MetaprojectEdgeKind, Entry[]>();
++  for (const entry of sortEntries(entries)) {
++    const group = groups.get(entry.group) ?? [];
++    group.push(entry);
++    groups.set(entry.group, group);
++  }
++  const slots = new Map<MetaprojectEdgeKind, number>();
++  let left = cap;
++  for (const [kind, group] of groups) {
++    const take = Math.min(GROUP_MIN_SLOTS, group.length, left);
++    slots.set(kind, take);
++    left -= take;
++  }
++  for (const [kind, group] of groups) {
++    const taken = slots.get(kind) ?? 0;
++    const extra = Math.min(group.length - taken, left);
++    slots.set(kind, taken + extra);
++    left -= extra;
++  }
++  const totals = new Map([...groups].map(([kind, group]) => [kind, group.length]));
++  return {
++    shown: [...groups].flatMap(([kind, group]) => group.slice(0, slots.get(kind) ?? 0)),
++    totals,
++    total: entries.length,
++    side: entries[0]?.side ?? null,
++  };
++}
++
++/**
++ * Labels drawn nodes by title; nodes that share a title get the shortest path suffix that tells
++ * them apart ("src/commands", "hub/commands"), prefixed by the title when the path does not end in it.
++ */
++function distinctTitles(nodes: readonly MetaprojectNode[]): Map<string, string> {
++  const byTitle = new Map<string, MetaprojectNode[]>();
++  for (const node of nodes) byTitle.set(node.title, [...(byTitle.get(node.title) ?? []), node]);
++  const titles = new Map<string, string>();
++  for (const [title, group] of byTitle) {
++    if (group.length < 2) {
++      for (const node of group) titles.set(node.id, title);
++      continue;
++    }
++    const segments = group.map((node) => node.path.split("/").filter(Boolean));
++    const longest = Math.max(1, ...segments.map((parts) => parts.length));
++    let depth = 1;
++    while (depth < longest && new Set(segments.map((parts) => parts.slice(-depth).join("/"))).size < group.length) depth++;
++    group.forEach((node, index) => {
++      const parts = segments[index] ?? [];
++      const suffix = parts.slice(-depth).join("/") || node.id;
++      const base = parts[parts.length - 1] ?? "";
++      const endsInTitle = base === title || base.startsWith(`${title}.`);
++      titles.set(node.id, endsInTitle ? suffix : `${title} · ${suffix}`);
++    });
++  }
++  return titles;
++}
++
++/** Stacks one column top to bottom (captions, nodes, overflow), centred on y = 0, x still 0. */
++function stackColumn(
++  selection: ColumnSelection,
++  column: GraphColumn,
++  role: "first" | "second",
++  textScale: number,
++  titles: ReadonlyMap<string, string>,
++): StackedColumn {
++  const g = GRAPH_GEOMETRY;
++  const nodes: LaidOutNode[] = [];
++  const captions: LaidOutCaption[] = [];
++  let cursor = 0;
++  let group: MetaprojectEdgeKind | undefined;
++  for (const entry of selection.shown) {
++    if (entry.group !== group) {
++      if (group !== undefined) cursor += g.groupGap;
++      group = entry.group;
++      const text = `${edgeKindLabel(group)} · ${selection.totals.get(group) ?? 0}`;
++      captions.push({
++        id: `caption:${column}:${group}`,
++        text,
++        kind: group,
++        side: entry.side,
++        column,
++        x: 0,
++        y: cursor + g.captionHeight / 2,
++        width: textWidth(text, textScale),
++        height: g.captionHeight,
++      });
++      cursor += g.captionHeight + g.captionGap;
++    } else {
++      cursor += g.rowGap;
++    }
++    const box = nodeBox(titles.get(entry.node.id) ?? entry.node.title, g.nodeMaxWidth, textScale);
++    nodes.push({
++      id: entry.node.id,
++      node: entry.node,
++      label: box.label,
++      role,
++      side: entry.side,
++      column,
++      group: entry.group,
++      ...(entry.via !== undefined && { via: entry.via }),
++      x: 0,
++      y: cursor + g.nodeHeight / 2,
++      width: box.width,
++      height: g.nodeHeight,
++    });
++    cursor += g.nodeHeight;
++  }
++  let overflow: LaidOutOverflow | null = null;
++  if (selection.total > selection.shown.length && selection.side) {
++    cursor += g.rowGap;
++    const hidden = selection.total - selection.shown.length;
++    const text = `+${hidden} more`;
++    overflow = {
++      id: `overflow:${column}`,
++      text,
++      side: selection.side,
++      column,
++      hidden,
++      total: selection.total,
++      x: 0,
++      y: cursor + g.overflowHeight / 2,
++      width: textWidth(text, textScale) + 2 * g.captionPadding,
++      height: g.overflowHeight,
++    };
++    cursor += g.overflowHeight;
++  }
++  const shift = -cursor / 2;
++  for (const box of [...nodes, ...captions, ...(overflow ? [overflow] : [])]) box.y += shift;
++  const width = Math.max(0, ...nodes.map((item) => item.width), ...captions.map((item) => item.width), overflow?.width ?? 0);
++  return { nodes, captions, overflow, width };
++}
++
++/** Horizontal extent of each column outward from the root; an empty column takes no space. */
++function columnSpans(widths: Record<GraphColumn, number>): Record<GraphColumn, ColumnSpan> {
++  const gap = GRAPH_GEOMETRY.columnGap;
++  const half = widths[0] / 2;
++  const innerLeft = widths[1] > 0 ? half + gap : half;
++  const innerRight = innerLeft + widths[1];
++  const outerLeft = (widths[1] > 0 ? innerRight : half) + gap;
++  const outerRight = outerLeft + widths[2];
++  const mirrorInnerLeft = widths[-1] > 0 ? half + gap : half;
++  const mirrorInnerRight = mirrorInnerLeft + widths[-1];
++  const mirrorOuterLeft = (widths[-1] > 0 ? mirrorInnerRight : half) + gap;
++  const mirrorOuterRight = mirrorOuterLeft + widths[-2];
++  return {
++    [-2]: { left: -mirrorOuterRight, right: -mirrorOuterLeft },
++    [-1]: { left: -mirrorInnerRight, right: -mirrorInnerLeft },
++    0: { left: -half, right: half },
++    1: { left: innerLeft, right: innerRight },
++    2: { left: outerLeft, right: outerRight },
++  } as Record<GraphColumn, ColumnSpan>;
++}
++
++/** Boxes sit flush against the column edge that faces the root. */
++function alignedX(column: GraphColumn, span: ColumnSpan, width: number): number {
++  if (column < 0) return span.right - width / 2;
++  if (column > 0) return span.left + width / 2;
++  return 0;
++}
++
++function boundsOf(boxes: readonly LayoutBox[]): LayoutBounds {
++  if (boxes.length === 0) return { x1: 0, y1: 0, x2: 0, y2: 0, width: 0, height: 0 };
++  const x1 = Math.min(...boxes.map((box) => box.x - box.width / 2));
++  const x2 = Math.max(...boxes.map((box) => box.x + box.width / 2));
++  const y1 = Math.min(...boxes.map((box) => box.y - box.height / 2));
++  const y2 = Math.max(...boxes.map((box) => box.y + box.height / 2));
++  return { x1, y1, x2, y2, width: x2 - x1, height: y2 - y1 };
++}
++
++function edgeWidth(edge: MetaprojectEdge): number {
++  return edge.count !== undefined && edge.count > 1 ? 1 + Math.min(2, Math.log2(edge.count) / 2) : 1;
++}
++
++function emptyLayout(projection: MetaprojectNeighbors): NeighborhoodLayout {
++  return { root: null, nodes: [], captions: [], overflow: [], edges: [], incoming: 0, outgoing: 0, truncated: projection.truncated, bounds: boundsOf([]) };
++}
++
++/** Lays out the neighbourhood of `projection.root` in direction columns. */
++export function layoutNeighborhood(projection: MetaprojectNeighbors, options: LayoutOptions = {}): NeighborhoodLayout {
++  const cap = options.columnCap ?? COLUMN_CAP;
++  if (!Number.isInteger(cap) || cap < 1) throw new RangeError(`columnCap must be a positive integer, got ${cap}`);
++  const textScale = options.textScale && options.textScale > 0 ? options.textScale : 1;
++  const nodes = new Map(projection.nodes.map((node) => [node.id, node]));
++  const rootNode = nodes.get(projection.root);
++  if (!rootNode) return emptyLayout(projection);
++
++  const first = firstStep(rootNode.id, projection.edges);
++  const firstEntries: Entry[] = [];
++  for (const [id, placement] of first) {
++    const node = nodes.get(id);
++    if (node) firstEntries.push({ node, ...placement });
++  }
++  const selections = new Map<GraphColumn, ColumnSelection>();
++  for (const [column, side] of [[-1, "incoming"], [1, "outgoing"]] as const) {
++    selections.set(column, selectColumn(firstEntries.filter((entry) => entry.side === side), cap));
++  }
++  const drawnFirst = new Set([...(selections.get(-1)?.shown ?? []), ...(selections.get(1)?.shown ?? [])].map((entry) => entry.node.id));
++  const second = secondStep(rootNode.id, projection.edges, nodes, first, drawnFirst);
++  for (const [column, side] of [[-2, "incoming"], [2, "outgoing"]] as const) {
++    selections.set(column, selectColumn(second.filter((entry) => entry.side === side), cap));
++  }
++
++  const titles = distinctTitles([rootNode, ...[...selections.values()].flatMap((selection) => selection.shown.map((entry) => entry.node))]);
++  const columns = new Map<GraphColumn, StackedColumn>();
++  for (const [column, selection] of selections) {
++    columns.set(column, stackColumn(selection, column, Math.abs(column) === 1 ? "first" : "second", textScale, titles));
++  }
++
++  const rootBox = nodeBox(titles.get(rootNode.id) ?? rootNode.title, GRAPH_GEOMETRY.rootMaxWidth, textScale);
++  const root: LaidOutNode = { id: rootNode.id, node: rootNode, label: rootBox.label, role: "root", side: null, column: 0, x: 0, y: 0, width: rootBox.width, height: GRAPH_GEOMETRY.nodeHeight };
++  const widthOf = (column: GraphColumn) => columns.get(column)?.width ?? 0;
++  const spans = columnSpans({ [-2]: widthOf(-2), [-1]: widthOf(-1), 0: root.width, 1: widthOf(1), 2: widthOf(2) } as Record<GraphColumn, number>);
++
++  const laidOut: LaidOutNode[] = [];
++  const captions: LaidOutCaption[] = [];
++  const overflow: LaidOutOverflow[] = [];
++  for (const [column, stacked] of columns) {
++    const span = spans[column];
++    for (const item of stacked.nodes) laidOut.push({ ...item, x: alignedX(column, span, item.width) });
++    for (const item of stacked.captions) captions.push({ ...item, x: alignedX(column, span, item.width) });
++    if (stacked.overflow) overflow.push({ ...stacked.overflow, x: alignedX(column, span, stacked.overflow.width) });
++  }
++
++  const drawn = new Set([root.id, ...laidOut.map((item) => item.id)]);
++  const edges: LaidOutEdge[] = [];
++  let incoming = 0;
++  let outgoing = 0;
++  projection.edges.forEach((edge, index) => {
++    if (edge.from === edge.to) return;
++    if (edge.to === root.id) incoming++;
++    if (edge.from === root.id) outgoing++;
++    if (!drawn.has(edge.from) || !drawn.has(edge.to)) return;
++    edges.push({
++      id: `edge-${index}`,
++      from: edge.from,
++      to: edge.to,
++      kind: edge.kind,
++      width: edgeWidth(edge),
++      secondStep: edge.from !== root.id && edge.to !== root.id,
++    });
++  });
++
++  return {
++    root,
++    nodes: laidOut,
++    captions,
++    overflow,
++    edges,
++    incoming,
++    outgoing,
++    truncated: projection.truncated,
++    bounds: boundsOf([root, ...laidOut, ...captions, ...overflow]),
++  };
++}
++
++export interface GraphViewport {
++  /** False for a zero-sized box or an empty layout: do not fit or zoom. */
++  usable: boolean;
++  zoom: number;
++  pan: { x: number; y: number };
++  padding: number;
++}
++
++/**
++ * Fits the layout into a `width` × `height` box, never below 0.8 or above 1.15.
++ * An axis that does not fit at that zoom is centred on the root instead, so the user pans.
++ */
++export function computeViewport(layout: NeighborhoodLayout, width: number, height: number, padding = VIEWPORT_PADDING): GraphViewport {
++  if (!layout.root || width <= 0 || height <= 0) return { usable: false, zoom: 1, pan: { x: 0, y: 0 }, padding };
++  const { bounds, root } = layout;
++  const innerWidth = Math.max(1, width - 2 * padding);
++  const innerHeight = Math.max(1, height - 2 * padding);
++  const fit = Math.min(innerWidth / Math.max(1, bounds.width), innerHeight / Math.max(1, bounds.height));
++  const zoom = Math.min(AUTO_ZOOM.max, Math.max(AUTO_ZOOM.min, fit));
++  const axis = (size: number, inner: number, low: number, high: number, rootAt: number) =>
++    size / 2 - zoom * ((high - low) * zoom <= inner ? (low + high) / 2 : rootAt);
++  return {
++    usable: true,
++    zoom,
++    pan: {
++      x: axis(width, innerWidth, bounds.x1, bounds.x2, root.x),
++      y: axis(height, innerHeight, bounds.y1, bounds.y2, root.y),
++    },
++    padding,
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Style mapping: meaning is never colour alone.
++
++export type NodeShape = "round-rectangle" | "barrel" | "cut-rectangle" | "tag";
++export type NodeBorderStyle = "solid" | "dashed" | "double";
++export type LineStyle = "solid" | "dashed" | "dotted";
++/** CSS custom properties the graph resolves to colours at runtime. */
++export type GraphColorToken = "--fg-muted" | "--fg-subtle" | "--border-strong" | "--info" | "--ok" | "--warn";
++
++export interface NodeKindStyle {
++  shape: NodeShape;
++  borderStyle: NodeBorderStyle;
++  borderWidth: number;
++  borderToken: GraphColorToken;
++  label: string;
++}
++
++export interface EdgeKindStyle {
++  lineStyle: LineStyle;
++  label: string;
++}
++
++export const NODE_KINDS_IN_ORDER: readonly MetaprojectNodeKind[] = ["module", "file", "symbol", "wiki", "spec", "change", "archive"];
++export const LINE_STYLES_IN_ORDER: readonly LineStyle[] = ["solid", "dashed", "dotted"];
++
++const NODE_KIND_TREATMENTS: Record<MetaprojectNodeKind, Omit<NodeKindStyle, "label">> = {
++  module: { shape: "round-rectangle", borderStyle: "solid", borderWidth: 2, borderToken: "--fg-muted" },
++  file: { shape: "round-rectangle", borderStyle: "solid", borderWidth: 1, borderToken: "--border-strong" },
++  symbol: { shape: "barrel", borderStyle: "solid", borderWidth: 1, borderToken: "--border-strong" },
++  wiki: { shape: "cut-rectangle", borderStyle: "solid", borderWidth: 1, borderToken: "--info" },
++  spec: { shape: "tag", borderStyle: "solid", borderWidth: 1, borderToken: "--ok" },
++  change: { shape: "tag", borderStyle: "double", borderWidth: 3, borderToken: "--warn" },
++  archive: { shape: "tag", borderStyle: "dashed", borderWidth: 1, borderToken: "--fg-muted" },
++};
++
++const EDGE_LINE_STYLES: Record<MetaprojectEdgeKind, LineStyle> = {
++  imports: "solid",
++  calls: "solid",
++  asset: "solid",
++  describes: "dashed",
++  links: "dashed",
++  "changes-spec": "dashed",
++  "spec-context": "dashed",
++  contains: "dotted",
++  defines: "dotted",
++};
++
++export const LINE_STYLE_LABELS: Record<LineStyle, string> = {
++  solid: "Solid line",
++  dashed: "Dashed line",
++  dotted: "Dotted line",
++};
++
++export function nodeKindStyle(kind: MetaprojectNodeKind): NodeKindStyle {
++  return { ...NODE_KIND_TREATMENTS[kind], label: NODE_KIND_LABELS[kind] };
++}
++
++export function edgeKindStyle(kind: MetaprojectEdgeKind): EdgeKindStyle {
++  return { lineStyle: EDGE_LINE_STYLES[kind], label: RELATIONSHIP_KIND_LABELS[kind] };
++}
++
++export function edgeKindLabel(kind: MetaprojectEdgeKind): string {
++  return RELATIONSHIP_KIND_LABELS[kind];
++}
++
++export interface GraphLegend {
++  nodeKinds: { kind: MetaprojectNodeKind; label: string }[];
++  lines: { style: LineStyle; label: string; kinds: string[] }[];
++}
++
++/** The node kinds and line styles present in the projection, in a fixed order. */
++export function legendFor(projection: MetaprojectNeighbors): GraphLegend {
++  const nodeKinds = new Set(projection.nodes.map((node) => node.kind));
++  const edgeKinds = new Set(projection.edges.map((edge) => edge.kind));
++  return {
++    nodeKinds: NODE_KINDS_IN_ORDER.filter((kind) => nodeKinds.has(kind)).map((kind) => ({ kind, label: NODE_KIND_LABELS[kind] })),
++    lines: LINE_STYLES_IN_ORDER.map((style) => ({
++      style,
++      label: LINE_STYLE_LABELS[style],
++      kinds: METAPROJECT_EDGE_KINDS_V2.filter((kind) => edgeKinds.has(kind) && EDGE_LINE_STYLES[kind] === style).map(edgeKindLabel),
++    })).filter((line) => line.kinds.length > 0),
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Colours: cytoscape takes no CSS variables and no translucency we want.
++
++interface Rgba {
++  r: number;
++  g: number;
++  b: number;
++  a: number;
++}
++
++function channel(value: string, scale: number): number {
++  return value.endsWith("%") ? (Number.parseFloat(value) / 100) * scale : Number.parseFloat(value);
++}
++
++function parseColor(value: string): Rgba | null {
++  const text = value.trim().toLowerCase();
++  const hex = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(text)?.[1];
++  if (hex) {
++    const full = hex.length <= 4 ? Array.from(hex, (digit) => digit + digit).join("") : hex;
++    const byte = (index: number) => Number.parseInt(full.slice(index, index + 2), 16);
++    return { r: byte(0), g: byte(2), b: byte(4), a: full.length === 8 ? byte(6) / 255 : 1 };
++  }
++  const rgb = /^rgba?\(\s*([\d.]+%?)[\s,]+([\d.]+%?)[\s,]+([\d.]+%?)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(text);
++  if (!rgb) return null;
++  const [, r = "0", g = "0", b = "0", a] = rgb;
++  return { r: channel(r, 255), g: channel(g, 255), b: channel(b, 255), a: a === undefined ? 1 : channel(a, 1) };
++}
++
++/**
++ * Returns `color` as an opaque `rgb()`, blending a translucent colour over `background`.
++ * A colour this parser does not read is returned unchanged.
++ */
++export function toOpaqueColor(color: string, background: string): string {
++  const fg = parseColor(color);
++  if (!fg) return color;
++  const bg = parseColor(background) ?? { r: fg.r, g: fg.g, b: fg.b, a: 1 };
++  const alpha = Math.min(1, Math.max(0, fg.a));
++  const mix = (front: number, back: number) => Math.round(front * alpha + back * (1 - alpha));
++  return `rgb(${mix(fg.r, bg.r)}, ${mix(fg.g, bg.g)}, ${mix(fg.b, bg.b)})`;
++}
+
+--- apps/desktop/src/metaproject/labels.ts
+@@ 1,24 @@
++import type { MetaprojectEdgeKind, MetaprojectNodeKind } from "../../../../src/integrations/metaproject-explorer-contract";
++
++/** Human-readable names shown wherever a kind appears: filters, graph captions and legend, panel, lists. */
++export const RELATIONSHIP_KIND_LABELS: Record<MetaprojectEdgeKind, string> = {
++  imports: "Imports",
++  asset: "Assets",
++  describes: "Describes",
++  links: "Wiki links",
++  contains: "Contains",
++  defines: "Defines",
++  calls: "Calls",
++  "changes-spec": "Changes spec",
++  "spec-context": "Spec context",
++};
++
++export const NODE_KIND_LABELS: Record<MetaprojectNodeKind, string> = {
++  module: "Module",
++  file: "File",
++  symbol: "Symbol",
++  wiki: "Wiki page",
++  spec: "Spec",
++  change: "Change",
++  archive: "Archived change",
++};
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 1,53 @@
+ .metaproject-header .search-field { flex: 1 1 220px; min-inline-size: 0; max-inline-size: 440px; }
+ .metaproject-header .segmented { flex: none; margin-inline-start: auto; }
+ .metaproject-header .segmented [aria-pressed="true"] {
+   color: var(--fg);
+   background: var(--bg-surface);
+   box-shadow: inset 0 -2px var(--accent-text), var(--shadow-1);
+ }
+ 
++.metaproject { container: metaproject / inline-size; }
+ .metaproject .inline-banner { flex-wrap: wrap; overflow-wrap: anywhere; }
+ .metaproject-rebuild { min-inline-size: 116px; }
++/* Freshness: one line (state, Details, Rebuild); the full reason opens below it inside the banner. */
++.metaproject .metaproject-freshness { align-items: center; gap: var(--sp-1) var(--sp-2); }
++.metaproject-freshness-state { flex: 1 1 auto; min-inline-size: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
++.metaproject-freshness-toggle { flex: none; gap: 2px; }
++.metaproject-freshness .metaproject-rebuild { flex: none; }
++.metaproject-freshness-reason { order: 1; flex: 1 0 100%; margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+ .metaproject-panes {
+   display: grid;
+   grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+   flex: 1;
+   min-block-size: 0;
+   gap: var(--sp-4);
+   padding: var(--sp-4) var(--sp-5) var(--sp-5);
+ }
+ .metaproject-list, .metaproject-content { min-inline-size: 0; overflow: auto; }
+ .metaproject-content { display: flex; flex-direction: column; gap: var(--sp-4); }
+ .metaproject-content > * { flex: none; min-inline-size: 0; }
+-.metaproject-list h2, .metaproject-relationship-section h2 {
++.metaproject-list h2 {
+   margin: 0 0 var(--sp-2);
+   font-size: var(--fs-md);
+ }
+-.metaproject-list ul, .metaproject-relations {
++.metaproject-list ul {
+   display: grid;
+   gap: var(--sp-1);
+   list-style: none;
+   padding: 0;
+   margin: 0;
+ }
+ .metaproject-row {
+   display: grid;
+   gap: var(--sp-1);
+   inline-size: 100%;
+   min-block-size: 28px;
+   padding: var(--sp-2) var(--sp-3);
+   border: 1px solid transparent;
+   border-radius: var(--r-md);
+   background: transparent;
+   color: inherit;
+   font: inherit;
+   text-align: start;
+   overflow-wrap: anywhere;
+ }
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 63,103 @@
+   font-size: var(--fs-sm);
+   overflow-wrap: anywhere;
+ }
+ .metaproject-snippet {
+   display: -webkit-box;
+   -webkit-box-orient: vertical;
+   -webkit-line-clamp: 2;
+   overflow: hidden;
+ }
+ 
+ .metaproject-controls {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: flex-start;
+   gap: var(--sp-2) var(--sp-3);
+   padding: var(--sp-3);
+   border: 1px solid var(--border);
+   border-radius: var(--r-md);
+   background: var(--bg-surface);
+ }
+-.metaproject-controls label {
+-  display: inline-flex;
+-  align-items: center;
+-  gap: var(--sp-1);
+-  min-block-size: 28px;
+-}
+-.metaproject-controls fieldset {
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 0 var(--sp-2);
+-  min-inline-size: 0;
+-  border: 0;
+-  padding: 0;
+-  margin: 0;
+-}
+-.metaproject-controls legend { padding: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+-.metaproject-controls input[type="checkbox"] { accent-color: var(--accent); }
+-.metaproject-graph {
+-  position: relative;
+-  block-size: clamp(220px, 34vh, 300px);
+-  overflow: hidden;
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-md);
+-  background: var(--bg-sunken);
+-}
++/* Graph filters: a "Filters" button (graph header, or a slim row when no graph is drawn) opens a
++   popover on the app's menu surface; the graph stays visible behind it. */
++.metaproject-filters-toggle { flex: none; }
++.metaproject-filters-toggle[aria-expanded="true"],
++.metaproject-filters-toggle[data-changed="true"],
++.metaproject-kind-chips .chip-btn[aria-pressed="true"] { color: var(--fg); background: var(--bg-selected); border-color: var(--accent); }
++.metaproject-filter-strip { display: flex; justify-content: flex-end; }
++.metaproject-filters-pop { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); }
++.metaproject-filters-pop .menu-header { padding-inline: 0; }
++.metaproject-filters-pop-row { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
++.metaproject-filter { display: inline-flex; align-items: center; gap: var(--sp-1); min-block-size: 24px; font-size: var(--fs-sm); color: var(--fg-muted); }
++.metaproject-kind-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); min-inline-size: 0; }
++.metaproject-filter-note { margin: 0; font-size: var(--fs-xs); color: var(--fg-muted); }
++.metaproject-filters-pop-footer { display: flex; justify-content: flex-end; margin-top: 0; padding-inline: 0; }
+ 
+ .metaproject-article, .metaproject-relationship-section {
+   padding: var(--sp-3);
+   border: 1px solid var(--border);
+   border-radius: var(--r-md);
+   background: var(--bg-surface);
+   overflow-wrap: anywhere;
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 112,157 @@
+ .openspec-view .metaproject-controls [aria-pressed="true"] { background: var(--bg-selected); border-color: var(--accent); }
+ 
+-.metaproject-graph-viewport { position: absolute; inset: 0; }
++/* Graph mode: list · content · docked panel; the graph takes the content column's remaining height. */
+ .metaproject-graph-panes { position: relative; }
+-.metaproject-graph-panes:has(.metaproject-node-panel:not(.compact)) {
++.metaproject-graph-panes:has(.metaproject-details:not(.compact)) {
+   grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) auto;
+ }
+-.metaproject-graph-panes .metaproject-content { min-block-size: 0; }
+-.metaproject-graph-panes .metaproject-graph { flex: 1 1 auto; min-block-size: 160px; }
+-.metaproject-graph-panes .metaproject-relationship-section {
+-  flex: 0 1 36%;
+-  min-block-size: 68px;
+-  overflow: auto;
+-}
+-
+-.metaproject-node-panel {
+-  position: relative;
+-  display: flex;
+-  flex-direction: column;
+-  min-block-size: 0;
+-  min-inline-size: 0;
+-  background: var(--bg-surface);
+-  border: 1px solid var(--border);
+-  border-radius: var(--r-md);
+-}
+-.metaproject-node-panel.compact {
+-  position: absolute;
+-  inset: var(--sp-2);
+-  z-index: 4;
+-  box-shadow: var(--shadow-1);
+-}
+-.metaproject-node-panel .sheet-head { padding: var(--sp-3); overflow-wrap: anywhere; }
+-.metaproject-node-panel h2 { margin: 0; font-size: var(--fs-lg); }
+-.metaproject-node-resize::before {
+-  content: "";
+-  position: absolute;
+-  inset: 0 2px;
+-  background: var(--border);
+-}
+-.metaproject-node-resize:focus-visible { background: var(--accent-soft); outline-offset: 2px; }
+-.metaproject-node-tabs { align-self: flex-start; margin: var(--sp-3) var(--sp-3) 0; }
+-.metaproject-node-tabs [aria-selected="true"],
++.metaproject-graph-panes .metaproject-content { min-block-size: 0; overflow: hidden; }
++.metaproject-graph-panes .metaproject-content > .metaproject-rgraph { flex: 1 1 auto; }
+ .metaproject-artifacts [aria-pressed="true"] {
+   color: var(--fg);
+   background: var(--bg-selected);
+   border-color: var(--accent);
+ }
+-.metaproject-node-body { min-block-size: 0; overflow: auto; padding: var(--sp-3); }
+-.metaproject-node-document + .metaproject-node-document { margin-block-start: var(--sp-3); padding-block-start: var(--sp-3); border-block-start: 1px solid var(--border); }
+-.metaproject-node-document h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); overflow-wrap: anywhere; }
+-.metaproject-node-document .btn { margin-block-start: var(--sp-2); }
+-.metaproject-node-preview {
+-  display: -webkit-box;
+-  -webkit-box-orient: vertical;
+-  -webkit-line-clamp: 4;
+-  overflow: hidden;
+-  overflow-wrap: anywhere;
+-  margin: var(--sp-2) 0 0;
++
++/* Narrow hosts (the window's minimum is 720 px): tighter gutters, a narrower list, more graph height. */
++@container metaproject (max-width: 760px) {
++  .metaproject-header { padding-inline: var(--sp-3); }
++  .metaproject-panes { gap: var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); }
++  .metaproject-graph-panes:has(.metaproject-details:not(.compact)) { grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) auto; }
++  .metaproject-content { gap: var(--sp-2); }
++  /* One header row: the heading is hidden visually but stays for assistive technology. */
++  .metaproject-header .flows-heading {
++    position: absolute; inline-size: 1px; block-size: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
++  }
++  .metaproject-graph-panes .metaproject-content > .metaproject-rgraph { min-block-size: 160px; }
++  .metaproject > .inline-banner { margin-inline: var(--sp-3); }
+ }
+ 
+ .metaproject-document-actions, .metaproject-artifacts, .metaproject-related-document {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: var(--sp-2);
+   margin-block: var(--sp-2);
+ }
+ .metaproject-related-document .btn, .metaproject-artifacts .btn {
+   block-size: auto;
+   min-block-size: 28px;
+   white-space: normal;
+   text-align: start;
+   overflow-wrap: anywhere;
+ }
+ .metaproject-document-links h3 { font-size: var(--fs-md); margin: 0; }
+ .metaproject-related-document summary { color: var(--fg-muted); font-size: var(--fs-sm); cursor: pointer; }
+ .metaproject-article .md { max-inline-size: 76ch; }
+
+--- apps/desktop/src/metaproject/nodePanel.css
+@@ 1,196 @@
++/* Node details panel and relationship list of the Metaproject explorer. Tokens only.
++   Type: --fs-lg title, --fs-md body and rows, --fs-sm meta and section headings. */
++
++/* ---- panel ---- */
++.metaproject-details {
++  position: relative;
++  display: flex;
++  flex-direction: column;
++  min-block-size: 0;
++  min-inline-size: 0;
++  background: var(--bg-surface);
++  border: 1px solid var(--border-strong);
++  border-radius: var(--r-md);
++}
++/* Below an 820 px host: a right-anchored drawer that leaves part of the content visible. */
++.metaproject-details.compact {
++  position: absolute;
++  inset-block: var(--sp-2);
++  inset-inline-end: var(--sp-2);
++  inline-size: min(380px, calc(100% - var(--sp-7) - var(--sp-5)));
++  z-index: 4;
++  box-shadow: var(--shadow-sheet);
++  animation: slide-in var(--dur) var(--ease-out);
++}
++.metaproject-details-resize::before {
++  content: "";
++  position: absolute;
++  inset: 0 2px;
++  background: var(--border);
++}
++.metaproject-details-resize:focus-visible { background: var(--accent-soft); outline-offset: 2px; }
++
++.metaproject-details-head {
++  display: grid;
++  gap: var(--sp-1);
++  padding: var(--sp-2) var(--sp-2) var(--sp-3) var(--sp-3);
++  flex: none;
++}
++.metaproject-details-toprow { display: flex; align-items: center; gap: var(--sp-2); }
++.metaproject-kind-badge { gap: var(--sp-1); }
++.metaproject-details-head h2 {
++  margin: 0;
++  font-size: var(--fs-lg);
++  font-weight: 650;
++  line-height: 1.3;
++  color: var(--fg);
++  overflow-wrap: anywhere;
++}
++.metaproject-details-path { display: flex; align-items: flex-start; gap: var(--sp-1); min-inline-size: 0; }
++.metaproject-details-path code {
++  flex: 1;
++  min-inline-size: 0;
++  padding-block-start: 6px;
++  font-family: var(--mono);
++  font-size: var(--fs-sm);
++  color: var(--fg-muted);
++  overflow-wrap: anywhere;
++}
++.metaproject-details-copied { align-self: center; font-size: var(--fs-sm); color: var(--fg-muted); }
++.metaproject-details-copied:empty { display: none; }
++
++.metaproject-details-facts {
++  flex: none;
++  padding: var(--sp-2) var(--sp-3) var(--sp-3);
++  border-block-start: 1px solid var(--border);
++}
++/* Wide enough for the longest key, "Relationships"; ch follows the text scale. */
++.metaproject-details-facts .info-key { inline-size: 14ch; font-size: var(--fs-sm); }
++.metaproject-details-module {
++  display: inline-flex;
++  align-items: center;
++  min-block-size: 24px;
++  max-inline-size: 100%;
++  font-family: var(--mono);
++  font-size: var(--fs-sm);
++  text-align: start;
++  overflow-wrap: anywhere;
++}
++.metaproject-details-facts .info-val { text-align: start; overflow-wrap: anywhere; }
++
++.metaproject-details-tabs { padding-inline: var(--sp-2); }
++.metaproject-details-tabs .tab:focus-visible { outline-offset: -2px; }
++
++.metaproject-details-body {
++  flex: 1;
++  min-block-size: 0;
++  overflow: auto;
++  overflow-wrap: anywhere;
++  padding: var(--sp-3);
++  display: grid;
++  align-content: start;
++  gap: var(--sp-3);
++}
++.metaproject-details-body > * { min-inline-size: 0; }
++.metaproject-details-body .inline-banner { margin: 0; flex-wrap: wrap; }
++.metaproject-details-body .empty-state { padding: var(--sp-5) var(--sp-3); }
++.metaproject-details-body .empty-state h3 { font-size: var(--fs-md); }
++.metaproject-details-loading { margin: 0; padding: var(--sp-2) 0; font-size: var(--fs-sm); }
++
++.metaproject-details-doc { display: grid; gap: var(--sp-1); }
++.metaproject-details-doc + .metaproject-details-doc { padding-block-start: var(--sp-3); border-block-start: 1px solid var(--border); }
++.metaproject-details-doc h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
++.metaproject-details-meta {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: var(--sp-2);
++  margin: 0;
++  font-size: var(--fs-sm);
++  color: var(--fg-muted);
++  overflow-wrap: anywhere;
++}
++.metaproject-details-preview {
++  display: -webkit-box;
++  -webkit-box-orient: vertical;
++  -webkit-line-clamp: 4;
++  overflow: hidden;
++  margin: var(--sp-1) 0 0;
++  font-size: var(--fs-md);
++  line-height: var(--lh);
++  color: var(--fg);
++}
++.metaproject-details-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-block-start: var(--sp-1); }
++
++/* ---- relationship list ---- */
++.metaproject-rel { display: grid; gap: var(--sp-4); min-inline-size: 0; }
++.metaproject-rel-note { margin: 0; font-size: var(--fs-sm); color: var(--fg-muted); }
++.metaproject-rel-group, .metaproject-rel-kind-group { display: grid; gap: var(--sp-1); min-inline-size: 0; }
++.metaproject-rel-group { gap: var(--sp-2); }
++.metaproject-rel-heading, .metaproject-rel-kind {
++  display: flex;
++  align-items: baseline;
++  gap: var(--sp-1);
++  margin: 0;
++  font-size: var(--fs-sm);
++  color: var(--fg-muted);
++}
++.metaproject-rel-heading { font-weight: 650; color: var(--fg); }
++.metaproject-rel-kind { font-weight: 500; padding-inline-start: var(--sp-2); }
++.metaproject-rel-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
++/* A row stays on one line: the title and path shorten with an ellipsis; opened evidence wraps below. */
++.metaproject-rel-item { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--sp-1); min-inline-size: 0; }
++.metaproject-rel-row { flex: 1 1 0; min-inline-size: 0; min-block-size: 28px; gap: var(--sp-2); }
++.metaproject-rel-row:focus-visible { outline-offset: -2px; }
++.metaproject-rel-title { font-size: var(--fs-md); color: var(--fg); }
++.metaproject-rel-row .metaproject-rel-title { flex: 0 1 auto; max-inline-size: 60%; }
++.metaproject-rel-path {
++  flex: 1 1 0;
++  min-inline-size: 4ch;
++  font-family: var(--mono);
++  font-size: var(--fs-sm);
++  color: var(--fg-muted);
++}
++.metaproject-rel-origin { flex: none; }
++.metaproject-rel-count { flex: none; font-size: var(--fs-sm); color: var(--fg-muted); white-space: nowrap; }
++.metaproject-rel-toggle { flex: none; gap: 2px; color: var(--fg-muted); }
++.metaproject-rel-evidence {
++  flex: 1 0 100%;
++  display: grid;
++  gap: 2px;
++  margin: 0;
++  padding: 0 var(--sp-2) var(--sp-1);
++  list-style: none;
++  font-size: var(--fs-sm);
++  color: var(--fg-muted);
++  overflow-wrap: anywhere;
++}
++.metaproject-rel-disclosure > summary {
++  display: flex;
++  align-items: center;
++  min-block-size: 24px;
++  cursor: default;
++  list-style-position: inside;
++}
++.metaproject-rel-disclosure > summary .metaproject-rel-heading { display: inline-flex; }
++.metaproject-rel-disclosure[open] > summary { margin-block-end: var(--sp-2); }
++.metaproject-rel-second {
++  display: grid;
++  gap: var(--sp-1);
++  padding: var(--sp-2);
++  border-radius: var(--r-md);
++  background: var(--bg-sunken);
++}
++.metaproject-rel-ends-label { margin: 0; overflow-wrap: anywhere; }
++.metaproject-rel-ends-label .metaproject-rel-origin { margin-inline-start: var(--sp-1); }
++.metaproject-rel-edge-kind { font-size: var(--fs-sm); color: var(--fg-muted); }
++.metaproject-rel-ends { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
++.metaproject-rel-ends .btn {
++  max-inline-size: 100%;
++  block-size: auto;
++  min-block-size: 24px;
++  padding-block: 2px;
++  white-space: normal;
++  text-align: start;
++  overflow-wrap: anywhere;
++}
+
+--- apps/desktop/src/metaproject/useExplorerNavigation.ts
+@@ 1,112 @@
+-import { useLayoutEffect, useRef, useState } from "react";
++import { useCallback, useLayoutEffect, useRef, useState } from "react";
+ import type { MetaprojectOpenSpecKind } from "../../../../src/integrations/metaproject-explorer-contract";
+ import type { OpenSpecLocation } from "./OpenSpecView";
+ 
+-type Route =
++export type Route =
+   | { mode: "graph"; query: string; selection: string; panelOpen: boolean; archive?: boolean }
+   | { mode: "wiki"; query: string; selection: string; fragment?: string }
+   | { mode: "openspec"; query: string; collection: MetaprojectOpenSpecKind; location: OpenSpecLocation | null };
+ 
+ const INITIAL: { [Mode in Route["mode"]]: Extract<Route, { mode: Mode }> } = {
+   graph: { mode: "graph", query: "", selection: "", panelOpen: false },
+   wiki: { mode: "wiki", query: "", selection: "" },
+   openspec: { mode: "openspec", query: "", collection: "spec", location: null },
+ };
+-const PANES = [".metaproject-panes", ".metaproject-list", ".metaproject-content", ".metaproject-node-body"];
++const PANES = [".metaproject-panes", ".metaproject-list", ".metaproject-content", ".metaproject-details-body"];
++const CONTENT_PANE = PANES.indexOf(".metaproject-content");
++const HISTORY_LIMIT = 40;
+ 
++/**
++ * Route and Back history of the explorer. `visit` and `navigate` add a history entry;
++ * `setRoute` changes the current entry in place (query edits, filters, panel close).
++ */
+ export function useExplorerNavigation() {
+   const [route, setRoute] = useState<Route>(INITIAL.graph);
+   const [history, setHistory] = useState<Route[]>([]);
++  const current = useRef(route);
++  current.current = route;
++  const previousRoutes = useRef(history);
++  previousRoutes.current = history;
+   const remembered = useRef<Partial<Record<Route["mode"], Route>>>({});
+   const scroll = useRef(new WeakMap<Route, number[]>());
+   const restore = useRef<Route | null>(null);
+   const root = useRef<HTMLElement>(null);
+ 
+-  function panes() {
+-    return PANES.map(selector => root.current?.querySelector<HTMLElement>(selector));
+-  }
++  const panes = useCallback(() => PANES.map(selector => root.current?.querySelector<HTMLElement>(selector)), []);
+ 
+-  function remember() {
+-    remembered.current[route.mode] = route;
+-    scroll.current.set(route, panes().map(pane => pane?.scrollTop ?? 0));
+-  }
++  const remember = useCallback((leaving: Route) => {
++    const offsets = panes().map(pane => pane?.scrollTop ?? 0);
++    remembered.current[leaving.mode] = leaving;
++    scroll.current.set(leaving, offsets);
++    return offsets;
++  }, [panes]);
+ 
+-  function visit(next: Route) {
+-    if (next === route) return;
+-    remember();
++  /** Move to `next` as a new history entry; `seed` is the scroll the new entry starts from. */
++  const enter = useCallback((next: Route, seed?: (offsets: number[]) => number[]) => {
++    const leaving = current.current;
++    if (next === leaving) return;
++    const offsets = remember(leaving);
++    if (seed) scroll.current.set(next, seed(offsets));
+     restore.current = next;
+-    setHistory(current => [...current.slice(-39), route]);
++    current.current = next;
++    setHistory(entries => [...entries.slice(1 - HISTORY_LIMIT), leaving]);
+     setRoute(next);
+-  }
++  }, [remember]);
+ 
+-  function switchView(mode: Route["mode"]) {
+-    if (mode !== route.mode) visit(remembered.current[mode] ?? INITIAL[mode]);
+-  }
++  const visit = useCallback((next: Route) => enter(next), [enter]);
+ 
+-  function back() {
+-    const previous = history.at(-1);
++  /**
++   * A selection inside the current view: a history entry that keeps the list and panel
++   * scroll where they are. `update` returns null when there is nothing to record.
++   */
++  const navigate = useCallback((update: (route: Route) => Route | null, options: { resetContent?: boolean } = {}) => {
++    const next = update(current.current);
++    if (next) enter(next, offsets => offsets.map((top, index) => options.resetContent && index === CONTENT_PANE ? 0 : top));
++  }, [enter]);
++
++  const switchView = useCallback((mode: Route["mode"]) => {
++    if (mode !== current.current.mode) enter(remembered.current[mode] ?? INITIAL[mode]);
++  }, [enter]);
++
++  const back = useCallback(() => {
++    const previous = previousRoutes.current.at(-1);
+     if (!previous) return;
+-    remember();
++    remember(current.current);
+     restore.current = previous;
+-    setHistory(current => current.slice(0, -1));
++    current.current = previous;
++    previousRoutes.current = previousRoutes.current.slice(0, -1);
++    setHistory(entries => entries.slice(0, -1));
+     setRoute(previous);
+-  }
++  }, [remember]);
+ 
+   useLayoutEffect(() => {
+     if (restore.current !== route || !root.current) return;
+     const area = root.current;
+     const offsets = scroll.current.get(route) ?? PANES.map(() => 0);
+     const apply = () => {
+       let settled = true;
+       panes().forEach((pane, index) => {
+         const top = offsets[index] ?? 0;
+         if (pane) pane.scrollTop = top;
+         if (top && (!pane || pane.scrollTop + 1 < top)) settled = false;
+       });
+       if (settled) stop();
+     };
+     const observer = new MutationObserver(apply);
+     function stop() {
+       observer.disconnect();
+       area.removeEventListener("wheel", stop);
+       area.removeEventListener("pointerdown", stop);
+       area.removeEventListener("keydown", stop);
+       if (restore.current === route) restore.current = null;
+     }
+     observer.observe(area, { subtree: true, childList: true, characterData: true });
+     area.addEventListener("wheel", stop, { passive: true });
+     area.addEventListener("pointerdown", stop);
+     area.addEventListener("keydown", stop);
+     apply();
+     return stop;
+-  }, [route]);
++  }, [route, panes]);
+ 
+-  return { route, setRoute, visit, switchView, back, canGoBack: history.length > 0, root };
++  return { route, setRoute, visit, navigate, switchView, back, canGoBack: history.length > 0, root };
+ }
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 1,233 @@
+ # Explore project knowledge in Keryx Desktop
+ 
+ Open **Metaproject** in a project window, or press **⌘5**. Use **Graph** to
+ trace relationships between project objects and **Wiki** to read articles.
+-Each view remembers its own search and selection. **Back** restores the
+-previous view, including the search and scroll position. The explorer
+-reads the open checkout locally and works without a GitHub account or a model
+-provider.
++Each view remembers its own search and selection. **Back** steps back through
++the items you selected, not only through view switches, and restores the
++search and scroll position of each step, including the place you were reading
++in an earlier OpenSpec document. If you leave the Metaproject tab and return,
++the explorer is as you left it, with its view, search, selection and filters.
++It also re-reads the catalog quietly, so the graph freshness banner is
++current. The explorer reads the open checkout locally and works without a
++GitHub account or a model provider.
+ 
+ ## Browse OpenSpec
+ 
+ Select **OpenSpec** to browse **Specs**, **Changes** and **Archive** from the
+ open checkout. Requirements and scenarios show their source; archived changes
+ provide historical context. Select **Archive** to search historical changes.
+ **Open current spec** opens the linked specification directly. Use **View in
+ Graph** when you want to explore its relationships. Missing or partial
+ OpenSpec data does not prevent using Graph and Wiki.
+ 
+ The same checkout-local reader is available in a terminal or Keryx Shell:
+ 
+ ```bash
+ keryx openspec list --kind spec --json
+ keryx openspec search "review" --scope all --json
+ keryx openspec show openspec/specs/review/spec.md --json
+ ```
+ 
+ ## Set up the project
+ 
+ 1. Install [Keryx Desktop and its matching CLI](../desktop-app.md#install).
+    In Desktop, use **Open Folder…** to open the repository or worktree you
+    want to explore.
+ 2. If the repository already has a `.metaproject/`, use that workspace.
+    Otherwise, initialize it from the repository root.
+ 
+    ```bash
+    keryx init --yes
+    ```
+ 
+-3. Open **Metaproject** and select **Rebuild graph** when the view reports
+-   **Graph missing** or **Graph stale**. The terminal panel shows the build
+-   progress. You can also build it from the same checkout in a terminal.
++3. Open **Metaproject** and select **Rebuild graph** when the banner reads
++   **Graph is missing.** or **Graph is stale.** The banner is one line. Select
++   **Details** beside it to read the reason. The terminal panel shows the
++   build progress. You can also build it from the same checkout in a terminal.
+ 
+    ```bash
+    keryx gdgraph build
+    ```
+ 
+ 4. If the wiki is empty, create pages for the components and architecture the
+    team wants to document. To start with graph-derived component drafts,
+    run `keryx wiki collect --limit 10`. To write a page by hand, scaffold it
+    with `keryx wiki new` and edit the resulting Markdown under
+    `.metaproject/wiki/`.
+ 
+    ```bash
+    keryx wiki new architecture event-delivery --title "Event delivery"
+    keryx wiki index
+    keryx wiki validate
+    ```
+ 
+    Reopen **Metaproject** to see new pages. Rebuild the graph after changing
+    which code a page covers so the `describes` relationships reflect the
+    change. Review generated drafts before relying on their prose. See the
+    [wiki module](../modules.md#gdwiki) for page types and lifecycle.
+ 
+ ### Enable symbol and call relationships
+ 
+ Files, modules, wiki pages and import relationships work with the file
+-graph. For symbol search and the **defines** and **calls** filters, enable the
+-optional symbol layer per checkout and rebuild it.
++graph. For symbol search and the **Defines** and **Calls** relationship types,
++which stay disabled in the Graph **Filters** popover until the symbol layer is
++on, enable the optional symbol layer per checkout and rebuild it.
+ 
+ ```bash
+ keryx gdgraph symbols enable
+ keryx gdgraph build
+ keryx gdgraph symbols status
+ ```
+ 
+ See the [symbol-layer setup](../complete-setup-and-agent-workflows.md#8-configure-the-optional-symbol-layer)
+ for the pinned grammar assets used by supported languages.
+ 
+ ## Find a page, file, module or symbol
+ 
+ Type a name, path, or phrase from a wiki page into **Search names, paths and
+ wiki text**. Use a repository-relative path such as `src/wiki/service.ts`
+ when several files share a name. Wiki body matches show a snippet so you can
+ see why a page matched. For example, searching for `inode-aware cursor` in
+ the Keryx repository finds the **Agent Bus** page.
+ 
+-Select a result to inspect it. The graph highlights the selected item and
+-shows the nodes related to it by the current filters. In **Wiki**, a page opens as a readable
++The list header shows how many catalog items are shown out of the total, as
++**Catalog · shown of total**. While you search it reads **Results** with
++the number of matches instead.
++
++Select a result to inspect it. In **Graph**, the selected item becomes the
++center of the graph, with the nodes related to it by the current graph
++filters around it. In **Wiki**, a page opens as a readable
+ article with its repository path. File and symbol results display their
+ identity and path. To inspect or edit their
+ source, open that path in your editor.
+ 
++If the check of the selected CLI fails, the explorer shows the error with a
++**Retry** button.
++
+ ## Trace relationships in Graph
+ 
+-![Graph view with Agent Bus selected, its related code highlighted, and the relationship controls and list visible](../images/desktop-metaproject/graph.jpg)
+-
+-1. Select a starting item. Use **Direction → Outgoing** to follow its
+-   dependencies or links, and **Incoming** to see what points to it.
+-   **Both** includes each direction.
+-2. Start at **1 step** for direct neighbors. Use **2 steps** to follow those
+-   neighbors one level further. Turn off unrelated relationship types to
+-   narrow a busy graph.
+-3. Click a node to select it and open the details pane. Use its **Wiki** or
+-   **OpenSpec** tab to preview linked documents, then open the full document
+-   with the named action. Drag the divider, or focus it and use the arrow
+-   keys, to change the pane width. Press **Escape** to close it. You can also
+-   select a neighboring node with **Tab** and **Enter** in the relationship list.
+-   A relationship between two second-step items offers an **Open** button for
+-   each endpoint.
+-4. Read the relationship row for the exact path or source evidence when
+-   available. Check the arrow direction before following a dependency.
+-
+-| Type | Direction |
+-| --- | --- |
+-| `imports` | A source file or module points to an imported file or module. |
+-| `asset` | A source file points to an asset it references. |
+-| `describes` | A wiki page points to code it covers. |
+-| `links` | A wiki page points to another page in the wiki. |
+-| `contains` | A module points to a file it contains. |
+-| `defines` | A file or symbol points to a symbol it defines. |
+-| `calls` | An indexed caller points to a resolved callee. |
++![Graph view with the file src/bus/leases.ts selected: twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left, the four files it imports on the right, group captions, a legend under the graph, and the details panel open on its Relationships tab](../images/desktop-metaproject/graph.jpg)
++
++The graph shows a local neighborhood of the selected item in columns. What
++points at the selected item is on its left, and what it points at is on its
++right. In the picture, `src/bus/leases.ts` is selected: the files that import
++it, the Agent Bus page that describes it and its module are on the left, and
++the four files it imports are on the right. With **2 steps**, items one step
++further out sit in additional columns beyond those, drawn fainter. The
++header row above the graph shows its caption, the zoom controls and the
++**Filters** button.
++
++1. Select a starting item, such as `src/bus/leases.ts`. The graph shows
++   what points to it and what it points at. Use **Filters** to follow only one
++   direction.
++2. Select **Filters** in the header row of the graph, next to the zoom
++   controls. A popover opens below the button, or above it when there is no
++   room below, with the graph visible behind it, and every change applies at
++   once. Press **Escape** or click outside to close it. It also closes when you
++   leave the Metaproject tab. Your filter choices are kept.
++   - **Direction**: **Outgoing** follows dependencies or links, **Incoming**
++     shows what points to the item, and **Both** includes each direction.
++   - **Depth**: start at **1 step** for direct neighbors. Use **2 steps** to
++     follow those neighbors one level further.
++   - **Relationship types**: turn off unrelated types to narrow a busy graph.
++     They are named **Imports**, **Assets**, **Describes**, **Wiki links**,
++     **Contains**, **Defines**, **Calls**, **Changes spec** and **Spec
++     context**. **Defines** and **Calls** are disabled, with the reason
++     shown, until the symbol layer is enabled.
++   - **Reset filters** restores the defaults. While the filters differ from
++     their defaults, the button reads **Filters · n** and is highlighted.
++3. Read the groups. Each group of items has a caption with its relationship
++   type and a count, for example **Imports · 7**. A column shows at most 12
++   items. When a column has more, it keeps a few items from each
++   relationship type and collapses the rest into a **+N more** entry. Click it
++   to open the full list in the **Relationships** tab of the details panel.
++4. Use the legend under the graph to read the shapes and lines. The shape and
++   border of an item show its kind, such as module, file, symbol, Wiki page,
++   spec or change. The line style shows the relationship family: solid,
++   dashed or dotted, with the relationship types that use it. The legend lists
++   only what the current graph contains. Meaning never depends on color alone.
++5. Use the zoom in, zoom out and fit controls in the graph's header row to
++   move around a large neighborhood. Click an item to select it. The graph
++   re-centers on it, and while its relationships load the previous graph stays
++   on screen, dimmed. **Back** returns to the item you selected before.
++6. Read the details panel for the selected item. It shows the kind, the title
++   and the path, with a **Copy path** control. Below are the facts: the
++   module, the page type, the status and the relationships, as in
++   `14 incoming · 4 outgoing`. When the neighborhood also has second-step
++   relationships, their count follows, as in `2 incoming · 2 outgoing · 1
++   second-step`. A relationship from an item to itself is neither listed nor
++   counted. Drag the
++   divider, or focus it and use the arrow keys, to change the panel width.
++   Press **Escape** to close it. Three tabs, each with a count, follow the
++   facts:
++
++   - **Relationships** is the default tab. It groups the relationships into
++     **Incoming** and **Outgoing**, then by type. Click a row to select that
++     item, or focus it with **Tab** and press **Enter**. The control at the end
++     of a row opens the source evidence for that relationship, when there is
++     any. For module imports it reads the count, such as **7 imports**;
++     otherwise it reads **N examples**. Relationships between two second-step
++     items sit in a **Second step** disclosure, closed until you open it. Each
++     relationship offers an **Open** button for each endpoint. Check the
++     direction before following a dependency.
++   - **Wiki** previews the linked Wiki page. **Open in Wiki** opens the full
++     page. When no page is linked, **Find a Wiki page** searches for one and
++     **Draft Wiki page** starts a session that prepares a draft.
++   - **OpenSpec** works the same way for specs and changes, with **Open in
++     OpenSpec**, **Find an OpenSpec document** and **Draft OpenSpec change**.
++
++| Type | Name in the app | Direction |
++| --- | --- | --- |
++| `imports` | Imports | A source file or module points to an imported file or module. |
++| `asset` | Assets | A source file points to an asset it references. |
++| `describes` | Describes | A wiki page points to code it covers. |
++| `links` | Wiki links | A wiki page points to another page in the wiki. |
++| `contains` | Contains | A module points to a file it contains. |
++| `defines` | Defines | A file or symbol points to a symbol it defines. |
++| `calls` | Calls | An indexed caller points to a resolved callee. |
++| `changes-spec` | Changes spec | An OpenSpec change points to a spec it changes. |
++| `spec-context` | Spec context | An OpenSpec document points to a spec or change that gives it context. |
+ 
+ For a dependency investigation, select the affected file, choose **Incoming**
+-and leave **imports** enabled. Start at one step and add the second step
++and leave **Imports** enabled. Start at one step and add the second step
+ when you need to see which modules use its direct consumers.
+ 
+ ## Read and follow links in Wiki
+ 
+-![Wiki view showing the Agent Bus article with the same search and selection as Graph](../images/desktop-metaproject/wiki.jpg)
++![Wiki view showing the Agent Bus article with its repository path and a View in Graph button, and the catalog list on the left headed Catalog · 100 of 125](../images/desktop-metaproject/wiki.jpg)
++
++Select **Wiki** in the view switcher to read a page. Wiki keeps its own
++search and selection, separate from Graph. Expand **Relationships** below the
++article to follow related pages or files. This block always shows the direct
++relationships of every type except **Defines** and **Calls**, and does not
++follow the Graph filters. The article also supports links to headings and
++indexed items in the project. A
++link to a page or file that is not loaded yet is looked up and opened. If a
++link cannot be resolved, the article says which path it could not find. HTTP
++and HTTPS links open in your browser.
+ 
+-Select **Wiki** in the view switcher to read the current page. Expand
+-**Relationships** below the article to follow related pages or files. The
+-article also supports links to headings and indexed items in the project.
+-HTTP and HTTPS links open in your browser.
++When a search from **Find a Wiki page** in the details panel has no match, the
++Wiki says that no page matches and offers **Clear search**.
+ 
+-Use **Graph** again to trace the same selection. To give an agent the same
+-context, use the path shown under the title in a session prompt. For example,
++To trace a page in **Graph**, select it there or use **View in Graph**. To
++give an agent the same context, use the path shown under the title in a session prompt. For example,
+ “Read `.metaproject/wiki/architecture/agent-bus.md` and trace the incoming
+ imports of `src/bus/leases.ts`.” The [agent context guide](give-an-agent-context.md)
+ covers how agents use the same wiki and graph data.
+ 
+ ## Data, checkout boundaries and limits
+ 
+ | Layer | Source | How it changes |
+ | --- | --- | --- |
+ | Wiki | Markdown under `.metaproject/wiki/` | Edit the project pages or use the wiki CLI. |
+ | File and symbol graph | Generated gdgraph artifacts for the open checkout | Run **Rebuild graph** or `keryx gdgraph build`. |
+ | Selection and filters | The active Desktop view | Search, select a result, or change the view controls. |
+ 
+ Desktop sends read requests for catalog, search, detail, and neighbors through
+ the local Keryx CLI. It reads from the project folder associated with the
+ view. A Git worktree has its own graph freshness and may show a different
+ catalog from the main checkout. Desktop checks graph freshness when it loads
+ the catalog; search, detail and neighbor reads skip that check. Read requests
+ leave your files alone. **Rebuild graph** writes the generated graph artifacts.
+ 
+ The result list shows up to 200 items. A neighborhood is limited to 200 nodes,

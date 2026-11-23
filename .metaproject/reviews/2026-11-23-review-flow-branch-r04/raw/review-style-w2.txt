@@ -1,0 +1,52 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-02 is consistent in task, mutant and file naming and fix-round-3.md follows fix-round-2.md's form. Three small readability defects: bare finding ids in T24.result.json with no statement of whose round they are, two different counts for the same red run, and a heading that calls killed mutants surviving. Slice-03: only the removed `useState(\"\")` and `setError(\"\")` lines of rebuild() are this round's; the change they are half of reads cleanly.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "confidence": "high",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+      "line": 87,
+      "quote": "suggested_fix diverged: F-004 — used Rebuild graph (onRebuild resolving true) as the loud read for both the lookup and the page, not Refresh catalog",
+      "problem": "The result file uses bare finding ids (`F-001 banner table`, `F-004`, `F-003`, `F-005`, and in `description` `F-001:`, `F-002 to F-005:`) and never says whose round they are. Three review rounds number findings from F-001, and the same flow.json lists T22 as `Fix round 2: ... (F-001, F-002, F-003, F-004)`. The file also uses `R3-4`, `R3-19` and `T24-7` as mutant ids, so a reader sees ids of three kinds side by side with no key. The key exists only in dispatch/T24.request.json (`Finding ids in this task are round 3's`) and the commit message; dispatch/T24.dispatch.json, whose description also opens with a bare `F-001 (left by the fix of round 2's F-003)`, does not carry it. A reader of the result alone who sees `F-004` can take it for round 2's F-004 (the T22 title lists F-001 to F-004 of round 2) and look in the wrong findings.json.",
+      "suggested_fix": "Qualify once at the top of notes (`F-n are review round 3's findings, R3-n its mutants, T24-n this task's mutants`) or write `round 3's F-004`, as the dispatch already does for round 2's F-003."
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+      "line": 703,
+      "quote": "`MetaprojectView.dom.test.tsx`: 86 pass, 1 fail: “a quiet re-read that succeeds after a failed catalog reload removes its\nbanner, whether the snapshot changed or not”.",
+      "problem": "The same red run is counted differently in two records. results/T24.result.json notes: `85 pass | 1 fail` for the file restored to HEAD, with `Green with the change: 87 pass, 0 fail`. fix-round-3.md says 86 pass, 1 fail. The test file is the same in both runs, so the totals should be equal: 85+1=86 against green 87 cannot be, and 86+1=87 can. A person repeating the red check from fix-round-3.md and getting either number cannot tell which record is right; the file exists so that the runs can be repeated.",
+      "suggested_fix": "Say in fix-round-3.md which run it counts (the orchestrator's) and that the worker's figure was 85, or correct the result file; either way one total for 87 tests."
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "confidence": "medium",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+      "line": 706,
+      "quote": "## Review round 3's surviving mutants",
+      "problem": "The heading can be read two ways: mutants that survive (now), or mutants that survived review round 3's run. Nine of the eleven entries under it end in `**killed**`; only R3-13 and R3-20 say `survived`. A reader who scans headings takes the whole section for open gaps. fix-round-2.md titled its equivalent section by the task whose tests were run (`T23: review round 2's surviving mutants`) and had the same shape, so this is a carry-over, not a new departure.",
+      "suggested_fix": "`## Mutants that survived review round 3, run against T24's tests`."
+    }
+  ],
+  "slices": [
+    "slice-02",
+    "slice-03"
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 1
+  }
+}
+
+Slice-03: the hunks that are this round's are the one with `const [error, setError] = useState("");` and the `setError("");` removed from rebuild(). The removed `const generation = project.current;` and `if (generation === project.current) setError(errMessage(cause));` are merge-base text from before this round (head's old line was `if (mounted.current) setError(errMessage(cause))`). The other hunks were removed before this round. The change those lines belong to (error as `{ source, message } | null`, comment on the state and on quietRead, one-line functional update) reads cleanly; no style finding.

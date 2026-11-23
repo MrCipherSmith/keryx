@@ -1,0 +1,76 @@
+{
+ "mutants": [
+  {
+   "id": "R4-1",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n",
+   "replacement": "        setError(current => current?.source === \"catalog\" ? null : current);\n"
+  },
+  {
+   "id": "R4-2",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setCatalog(result);\n",
+   "replacement": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setError(current => current?.source === \"catalog\" ? null : current);\n        setCatalog(result);\n"
+  },
+  {
+   "id": "R4-3",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          return;\n        }\n        setCatalog(result);\n",
+   "replacement": "        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet && result.snapshotId === loadedSnapshot.current) {\n          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });\n          setError(current => current?.source === \"catalog\" ? null : current);\n          return;\n        }\n        setCatalog(result);\n"
+  },
+  {
+   "id": "R4-4",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "current?.source === \"catalog\" ? null : current",
+   "replacement": "current?.source === \"rebuild\" ? null : current"
+  },
+  {
+   "id": "R4-5",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "<span>{error.message}</span>",
+   "replacement": "<span>{error.source}</span>"
+  },
+  {
+   "id": "R4-6",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (mounted.current) setError({ source: \"rebuild\"",
+   "replacement": "setError({ source: \"rebuild\""
+  },
+  {
+   "id": "R4-7",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (generation === catalogRead.current && !quiet) setError(",
+   "replacement": "if (!quiet) setError("
+  },
+  {
+   "id": "R4-8",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        if (generation !== catalogRead.current) return;\n        loaded.current = true;\n        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n",
+   "replacement": "        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\n        if (generation !== catalogRead.current) return;\n        loaded.current = true;\n        // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.\n"
+  },
+  {
+   "id": "R4-9",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "<span>{error.message}</span>\n          <button className=\"btn btn-sm\" onClick={() => setRevision(value => value + 1)}>",
+   "replacement": "<span>{error.message}</span>\n          <button className=\"btn btn-sm\" onClick={() => {}}>"
+  },
+  {
+   "id": "R4-10",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "      project.current++;\n      setError(null);\n",
+   "replacement": "      project.current++;\n      setError(current => current?.source === \"rebuild\" ? current : null);\n"
+  },
+  {
+   "id": "R4-11",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "    setRebuilding(true);\n    setError(null);\n",
+   "replacement": "    setRebuilding(true);\n    setError(current => current?.source === \"rebuild\" ? current : null);\n"
+  },
+  {
+   "id": "R4-12",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "setError({ source: \"catalog\", message: errMessage(cause) });",
+   "replacement": "setError({ source: quiet ? \"rebuild\" : \"catalog\", message: errMessage(cause) });"
+  }
+ ]
+}

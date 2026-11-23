@@ -1,0 +1,535 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (Clean Code - comments. The effect's cleanup decides whether to retire pending work by reading quietR) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-011 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-clean-code-w1 F-001 is carried through as canonical finding F-011; one finding per defect across reviewers.",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (Clean Code - DRY. The total of the three summarizeRelationships fields is spelled here and at NodeDe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-012 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-clean-code-w1 F-002 is carried through as canonical finding F-012; one finding per defect across reviewers.",
+      "finding": "F-012"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (The quiet re-read on return can no longer report a failure, and one `error` state serves two causes.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-009 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-degradation-w1 F-001 is carried through as canonical finding F-009; one finding per defect across reviewers.",
+      "finding": "F-009"
+    },
+    {
+      "id": "review-frontend-w1:F-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-001 (Fix round 2 (answering F-003) made `setError(\"\")` run only for a non-quiet read (`if (!quiet) { proj) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-frontend-w1 F-001 is merged into canonical finding F-001; one finding per defect across reviewers.",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-001 (UNVERIFIED (derived from code; no real-layout measurement exists for these inputs). The T23 placemen) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-013 (info, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx)",
+      "reason": "review-layout-w1 LY-001 is carried through as canonical finding F-013; one finding per defect across reviewers.",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The task table was extended for T22 and T23 (two new rows, a Review paragraph and a Fix round 2 sect) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-006 (minor, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md)",
+      "reason": "review-logic-w1 F-001 is carried through as canonical finding F-006; one finding per defect across reviewers.",
+      "finding": "F-006"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (The journal's T23 acceptance entry says R2-14 and R2-23 'killed on their new lines' and five of T22') real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-007 (minor, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md)",
+      "reason": "review-logic-w1 F-002 is carried through as canonical finding F-007; one finding per defect across reviewers.",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (Answering round 2's F-003, a quiet re-read neither clears `error` at its start (`if (!quiet) { proje) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-logic-w2 F-001 is carried through as canonical finding F-001; one finding per defect across reviewers.",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (legendFor is the one reader of a projection's edges in apps/desktop/src/metaproject that does not us) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-014 (info, apps/desktop/src/metaproject/graphLayout.ts)",
+      "reason": "review-logic-w2 F-002 is carried through as canonical finding F-014; one finding per defect across reviewers.",
+      "finding": "F-014"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (A quiet re-read on return that fails (CLI refused, index unreadable, malformed reply that throws on ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-009 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-security-code-w1 F-001 is merged into canonical finding F-009; one finding per defect across reviewers.",
+      "finding": "F-009"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The commit adds the rows for T22 and T23 and the 'Fix round 2' section, but leaves the T4 row and th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-006 (minor, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md)",
+      "reason": "review-style-w1 F-001 is merged into canonical finding F-006; one finding per defect across reviewers.",
+      "finding": "F-006"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The same `notes` string uses round 2's ids for the four findings it answers (F-001 to F-004) and her) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-008 (minor, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json)",
+      "reason": "review-style-w1 F-002 is carried through as canonical finding F-008; one finding per defect across reviewers.",
+      "finding": "F-008"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (Mutants of code that T22 added are given the ids T23-1 to T23-5, a prefix that is T23's own task id,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-015 (info, .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json)",
+      "reason": "review-style-w1 F-003 is carried through as canonical finding F-015; one finding per defect across reviewers.",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The `empty` test T22 added (answering F-001 of round 2) is pinned on one side only. Mutants run in a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-002 (minor, apps/desktop/src/metaproject/RelationshipList.tsx)",
+      "reason": "review-testing-practices-w1 F-001 is carried through as canonical finding F-002; one finding per defect across reviewers.",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The Wiki disclosure's count, which the comment above it says 'counts the rows its list shows', is pi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-003 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-testing-practices-w1 F-002 is carried through as canonical finding F-003; one finding per defect across reviewers.",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (T22 split `project.current` so that only a non-quiet catalog read retires pending wiki-link lookups ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-004 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-testing-practices-w1 F-003 is carried through as canonical finding F-004; one finding per defect across reviewers.",
+      "finding": "F-004"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (The stand-in explorer pins `visible` handed to the explorer, and nothing else of MetaprojectWork, so) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-005 (minor, apps/desktop/src/App.dom.test.tsx)",
+      "reason": "review-testing-practices-w1 F-004 is carried through as canonical finding F-005; one finding per defect across reviewers.",
+      "finding": "F-005"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (A quiet re-read that succeeds never touches `error`. Its full-replace branch clears `snapshotMismatc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-001 (minor, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-ui-ux-w1 UX-001 is merged into canonical finding F-001; one finding per defect across reviewers.",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-002 (UNVERIFIED (not seen live). When the quiet re-read on return fails, the explorer shows nothing and k) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-009 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-ui-ux-w1 UX-002 is merged into canonical finding F-009; one finding per defect across reviewers.",
+      "finding": "F-009"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-003",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-003 (UNVERIFIED (derived from code). Choice 1 of the brief: a wiki-link lookup started under snapshot one) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated-findings.json and the keryx:findings block of report.md: F-010 (info, apps/desktop/src/metaproject/MetaprojectView.tsx)",
+      "reason": "review-ui-ux-w1 UX-003 is carried through as canonical finding F-010; one finding per defect across reviewers.",
+      "finding": "F-010"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "priorDispositions": {
+      "F-001": "closed",
+      "F-002": "closed",
+      "F-003": "closed",
+      "F-004": "closed",
+      "F-006": "closed",
+      "F-007": "closed",
+      "F-008": "closed",
+      "F-009": "partial"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:91838d1eed4f",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:91838d1eed4f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:6b9ce60531ea",
+        "rawEvidence": "raw/review-clean-code-w1.txt#sha256:6b9ce60531ea",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:b1fb39c6b5a5",
+        "rawEvidence": "raw/review-degradation-w1.txt#sha256:b1fb39c6b5a5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:e1c21aea45be",
+        "rawEvidence": "raw/review-frontend-w1.txt#sha256:e1c21aea45be",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:1cbb1dd42cc7",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:1cbb1dd42cc7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:71a1811a7e87",
+        "rawEvidence": "raw/review-layout-w1.txt#sha256:71a1811a7e87",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:07c9a980ca4c",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:07c9a980ca4c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:72a8b4debc3d",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:72a8b4debc3d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:9c4a9380d805",
+        "rawEvidence": "raw/review-regression-w1.txt#sha256:9c4a9380d805",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/opus",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:f6506e54e847",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:f6506e54e847",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:099a95816f3f",
+        "rawEvidence": "raw/review-style-w1.txt#sha256:099a95816f3f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:489303f01df7",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:489303f01df7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:2d17f740921e",
+        "rawEvidence": "raw/review-ui-ux-w1.txt#sha256:2d17f740921e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/sonnet",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 15,
+    "known": 0,
+    "unknown": 15,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

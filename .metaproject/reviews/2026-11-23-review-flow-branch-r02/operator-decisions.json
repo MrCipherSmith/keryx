@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-branch-r02#F-005",
+      "answer": "dismiss",
+      "reason": "The repository already titles tests with the review finding id they answer (about 20 test files outside this branch) and no rule says otherwise; the operator keeps the ids, so these four files stay consistent with the rest of the suite.",
+      "quote": "dismiss",
+      "at": "2026-11-23T10:50:55.349Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "b7b92abfac4cfe84af5adbbf56b3cbb660d47ce905f9f33837493b7dc39f977b"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "AskUserQuestion-r02-F-005-b",
+        "questionText": "Запись решения по находке F-005 второго раунда ревью (номера находок в названиях тестов, например «RelationshipGraph viewport (F-012)»). Вы ответили dismiss, но инструмент не принял запись: в тексте моего вопроса не было номера находки. Какое решение по F-005 записать: dismiss или uphold?",
+        "answerText": "dismiss",
+        "time": "2026-11-23T10:50:55.349Z"
+      }
+    }
+  ]
+}

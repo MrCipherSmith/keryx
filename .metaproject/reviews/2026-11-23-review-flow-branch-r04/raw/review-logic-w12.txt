@@ -1,0 +1,76 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-02 (the flow's record of T24, flow.json, verification/fix-round-3.md): every file a dispatch or request names exists at head; flow.json, tasks.md and the journal agree on T24, T25 and T4's dependencies; every anchor of fix-round-3.md occurs exactly once at head and every line number in T24's result file matches MetaprojectView.tsx and App.tsx; test titles and counts (87, 14, 5, 24; nine tests added) match the files and commit 46c472162. Three small places where the record says more than what backs it: one cell of the banner table cites a test that does not pin it (minor), and two statements about what verified something that name a different or no source (info). slice-03: the code half of T24's change is correct under the logic lens; no defect found.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "title": "A cell of T24's banner table cites a test that does not exercise the cell",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+      "line": 84,
+      "quote": "- failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before ('after a quiet re-read on return, a rebuild's failed catalog reload is still shown').",
+      "problem": "The cell is about a standing failed rebuild (source `rebuild`) followed by a read or rebuild the user starts. The test it names, MetaprojectView.dom.test.tsx:1575, never fails a rebuild: its `onRebuild` is `async () => true`, the rebuild succeeds, and what fails is the catalog reload after it (source `catalog`), which the test shows is still displayed. No test in the file has a failed rebuild followed by Retry, Refresh or a second Rebuild: the only failed-rebuild fixtures are at :1424 (followed by quiet re-reads only) and :1702 (followed by the release of a read already in flight). The code does clear at both starts (MetaprojectView.tsx:380 and :677, neither conditional on `source`), so the behaviour the cell states is true; what is wrong is the claim that a named test pins it. The header of the table is 'banner after (test that pins it)'. Consequence for the next editor: a change that clears at a loud read's start only when `error.source === \"catalog\"` leaves every test green (T24-8 removes the clear altogether and is killed by the catalog-source Retry step at :1612, which cannot tell the two apart), and the table says it is covered.",
+      "why_it_matters": "A reader who trusts the table believes the failed-rebuild cell is pinned and will not add the test; the only cost is to the next editor of this code and of the record.",
+      "suggested_fix": "Either replace the citation with 'not pinned by a test; follows from :380 and :677, which do not read `source`', or add the test (a rebuild that throws, then Retry with a working read, expect no banner) and cite it; the same sentence belongs in the journal only if the table is quoted there (it is not).",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "title": "T24's result file gives the red run of the F-001 test as 85 pass, the green run as 87, without saying the file grew between them",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json",
+      "line": 84,
+      "quote": "exit 1; 85 pass | 1 fail / (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not'. Green with the change: 87 pass, 0 fail.",
+      "problem": "85 + 1 is 86 tests and the green figure is 87. The same red run in verification/fix-round-3.md (line 12, 'MetaprojectView.dom.test.tsx: 86 pass, 1 fail') is on the final file of 87 tests, and the journal says only that the new test 'fails and nothing else does'. The two are reconcilable: the worker's note itself says T24-9 'first survived; killed after adding' the test of 'a rebuild the user starts removes a failed catalog read's banner', which was added after the red run, so the worker's red run was on 86 tests. The result file does not say so, so a reader comparing the two records sees 85 and 86 for one run.",
+      "why_it_matters": "A reader reconciling the worker's numbers with the orchestrator's finds an unexplained difference of one; nothing else depends on it.",
+      "suggested_fix": "Add 'before the test of T24-9 was added' after the 85 in the result file's notes, or quote the orchestrator's 86 pass, 1 fail.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "title": "fix-round-3.md names the T23 entry of the journal as a source of the live check; that entry holds none",
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-3.md",
+      "line": 98,
+      "quote": "It rests on the live check: in the browser dev build the explorer is hidden while another view is shown and one `catalog` request leaves on return (journal, the entries on T23 and T24).",
+      "problem": "The journal's entry on T23 (line 158, 'T23 accepted ...') records scratch-copy mutant runs and test counts and no browser check. The live check of the explorer hidden and mounted once with one `catalog` request on return is the next entry (line 159, 'after fix round 2, on the head that holds T22 and T23'), which is not the entry on T23; T24's entry (line 173) records three returns with one `catalog` request each and no alert, and does not say the explorer was hidden. T24's result file points at 'journal.md line 159', which is the right place.",
+      "why_it_matters": "The sentence says what verified R3-13's call site and sends the reader to an entry that does not hold it; one line away there is the one that does.",
+      "suggested_fix": "Write 'journal, the entry after T23's (after fix round 2) and the entry on T24' or cite line 159 as the result file does.",
+      "confidence": "high"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+
+## Logic Review
+
+### Review Scope
+- Branch: feat/desktop-metaproject-redesign, range 8e0f656fb..744d9ef75
+- Spec compliance gate: skipped, no issue; the record was checked against the files and commits at head
+- Tools: read-only (Read, keryx ctx rg/read/run for git show and --stat, no test or build run)
+
+### Summary
+slice-02 and slice-03 read in full. The record of T24 agrees with commit 46c472162 except in the three places above. Nothing in slice-03 is a logic defect.
+
+### What was checked, slice-02
+- Dispatch and request: every path in `context_refs`, `files_to_read`, `target_files`, `existing_tests` exists at head (context.md, plan.md, acceptance-criteria.md, the two T22/T23 result files, round 3's report.md, findings.json, mutation-2.md, mutants-r3.json, RelationshipList.tsx, App.tsx, the three test files, the rule files of the resolved context). The scratch script path in the dispatch is in the session scratch directory and is not claimed to be tracked; fix-round-3.md says the scripts are untracked.
+- flow.json at head and tasks.md at head: T24 (implement, no dependencies, AC10, AC14, AC16, AC19) and T25 (docs, no dependencies) agree; T4 depends on T8 to T11, T14 to T25 in both; T4 attempt count 4 with four log entries; `updatedAt` equals T24's done time; the commit date of 46c472162 (15:53:58 +0400) equals that time.
+- resolved/T24.implement.json: its six `must_read` entries are the six cited in `project_context_applied` with the same sha256 values.
+- T24.result.json: `files_modified` is the four files of `git show --stat 46c472162` (227 insertions, 8 deletions); no file created or deleted. Test counts 87, 14, 5, 24 equal the `^test(` counts at head; nine tests added is 6 + 1 + 2 as the journal says. Test titles quoted in the notes all exist (MetaprojectView.dom.test.tsx:1396, 1418, 1575, 1596, 1643, 1692, 1713, 1743, 1771, 1790; RelationshipList.dom.test.tsx:193; App.dom.test.tsx:70, 93, 110). Line numbers in the notes agree with the head: :318, :380, :392, :407, :677, :681, :379, :418, :846-851, App.tsx:618. Table rows 1 to 9 agree with the code and the tests cited (I read tests :1396-:1432, :1575-:1616, :1643-:1811); row 10 is F-001. Claim that `error` has one reader and two writers holds (one `{error && (` at :846, `setError` called at :380, :392, :407, :677, :681). Docs guide lines 10-11 say what the note quotes.
+- fix-round-3.md: each anchor occurs exactly once in the file it names at head (R3-4 at MetaprojectView.tsx:720, R3-7/R3-9 at RelationshipList.tsx:213, R3-10 at App.tsx:170, R3-13 at :618, R3-14 at :161, R3-15 at :172, R3-16 at :171-172, R3-17 at :699, R3-18 at :658, R3-20 at :418, R3-19/T24-7/T24-8 at :379-380, T24-1 at :392, T24-4 at :407, T24-5 at :681, T24-6 at :407, T24-9 at :676-677); each replacement is what its heading says; the twelve named mutants of the journal's count (nine killed, R3-13 survived, R3-19 and R3-20 survived singly and killed together as T24-7) agree with the journal's entry on T24 and with the result file; the T24-3 and T24-10 sentence agrees with the result file's list of ten. `ComponentType` and `ExplorerProps` used in R3-14's replacement exist in App.tsx.
+- Not checked: the runs themselves (no execution allowed); the orchestrator's untracked scripts; sha256 values against disk.
+
+### slice-03
+Hunks read: GRAPH_PADDING, RepositoryMarkdown `nodes`, the catalog-banner and `@media` removals and the others the brief lists were removed before this round. This round's hunks are: the `useState("")` of `error` (hunk at old line 310-315); the rebuild() `setError("")` (hunk at 676); and the catch's setError (hunk at 681). Note that the catch line printed in slice-03 (`if (generation === project.current) setError(errMessage(cause));`, with the `const generation = project.current;` of hunk 676) is the form from before fix round 2; the line this round removed is `if (mounted.current) setError(errMessage(cause));` (commit 46c472162). Lens applied to the change those lines are half of (`git show 46c472162 -- MetaprojectView.tsx`, 20 lines, and the file at head):
+- The clear on a quiet success (:392) sits after the `generation !== catalogRead.current` return and before the unchanged-snapshot branch, so both success paths share it; the functional update reads the error standing when the read lands, so a failed rebuild (source `rebuild`) set while the quiet read was in flight is kept; it returns the same object for that case, so no re-render.
+- Quiet reads cannot start while a catalog read is pending (`catalogPending`) and cannot start before a first successful load (`loaded`), so the standing `catalog` error a quiet success clears can only come from a loud read that failed after the first load; a loud read that was in flight when a rebuild failed and then fails overrides the rebuild message with a catalog one, which is the latest failure and is not a defect.
+- rebuild() keeps `mounted.current` as its only guard; a project change remounts the explorer, so the older `generation` guard has no case left (not a defect).
+- The banner reads `error.message` only; Retry starts a loud read, as before. No other reader. No finding.
+
+### Routing audit
+graph_used: not-relevant (the slices are the flow's record and a 20-line diff); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg, read, run for git show and --stat); raw_rg_used: no.

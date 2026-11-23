@@ -1,0 +1,31 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "3 findings checked: 3 confirmed (1 execution, 2 site-check), 0 refuted, 0 unverifiable, 0 not checked. F-002 rests on the recorded mutation run mutation-1.json (R5-7 survived, exit 0, line 382) and on the absence of any assertion on the status text. F-001 and F-003 rest on the quoted lines read at head. The F-001 naming judgment is a reading that no run settles; only its factual premise is confirmed. The c8db67492 hash cited in F-003 impact comes from the reviewers' brief and was not independently checked.",
+  "verifications": [
+    {
+      "finding": "2026-11-23-review-flow-branch-r05#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Site-check, no run. The quoted title is present at apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1849 (keryx ctx rg). Its body matches the finding: onRebuild resolves true (line 1861); read 3, the catalog reload after the rebuild, rejects with 'The index is being written.' (line 1857), so the failing read is the catalog reload. The words 'failed rebuild' name a rejecting onRebuild in the other titles at lines 1692 (onRebuild throws, line 1702), 1815 (throws, line 1821) and 1831 ('the first one's failure banner', rejects at line 1836). The T24-table phrase 'a rebuild's failed catalog reload' is the title at line 1575. So the premise that the same words name two cases holds at head. The copies of the title were seen only in slices/slice-01.diff and scope.json (keryx ctx rg); the T26 result file and journal were not opened. Whether the title reads as ambiguous is a judgment no executed check settles."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r05#F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Recorded run: research-evidence/mutation-1.json, mutant R5-7 at apps/desktop/src/metaproject/MetaprojectView.tsx:382, anchor '    if (!loaded.current) setLoading(true);' replaced by '    setLoading(true);', status 'survived', exitCode 0, over the six test files (command in mutation-1.md line 3). Run head 857036d02174, totals killed 4 / survived 3. Line 382 read at head matches. The status text 'Loading project knowledge' renders at MetaprojectView.tsx:877 under 'loading'. The only assertion on that text in the DOM test file is at MetaprojectView.dom.test.tsx:514, which runs before any catalog read (after a failed negotiation), so no test checks the status on a later read. The 'status would show on every later read' step is code reading of lines 382 and 877, not a run; the survival is the executed part. The reviewer's '91 pass' count is not in the recorded files and was not checked."
+    },
+    {
+      "finding": "2026-11-23-review-flow-branch-r05#F-003",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read at head. verification/fix-round-4.md line 4 reads 'The runs were made on 2026-11-23 on the tree that became the T26 commit.' with no hash (the finding cites line 3, which is the preceding sentence, so the reference is off by one). verification/fix-round-3.md line 4 reads 'The runs were made on 2026-11-23 on the tree that became commit `46c472162`.' with the hash. The contrast the finding draws holds. The hash c8db67492 suggested in the impact is taken from the reviewers' brief, which was not in this verifier's inputs; it was not independently checked against git."
+    }
+  ],
+  "stats": {
+    "confirmed": 3,
+    "refuted": 0,
+    "unverifiable": 0,
+    "not_checked": 0
+  }
+}

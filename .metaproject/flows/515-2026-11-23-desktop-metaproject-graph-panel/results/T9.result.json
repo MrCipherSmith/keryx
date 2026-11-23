@@ -1,0 +1,69 @@
+{
+  "task_id": "task-9",
+  "task_name": "Update the Desktop Metaproject guide",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "T9 (commit 5955bf547) rewrote the guide for the redesigned Graph screen: column layout (incoming left, outgoing right, second step further out), group captions with counts, the 12-item column cap and the +N more entry, the legend, zoom and fit controls, click-to-select, the details panel (kind, title, path with Copy path, facts, Relationships / Wiki / OpenSpec tabs with counts), readable filter names with Defines and Calls disabled without the symbol layer, the catalog header Catalog shown of total, Back stepping through selections, the explorer keeping state across tab switches, Wiki behaviour (own search and selection, Relationships block independent of Graph filters, unresolved-link and no-match messages), Retry for a failed CLI check, and the relationship-type table with changes-spec and spec-context rows and a readable-name column. The Wiki image alt text no longer says it shows the same search and selection as Graph. Protected passages, image paths and stated limits were left unchanged.",
+  "files_modified": [
+    "docs/docs/guides/desktop-metaproject.md"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: documentation file; ESLint does not cover it",
+  "type_check_result": "not applicable: no TypeScript changed",
+  "test_result": "bun run docs:check passed: 0 broken links, 0 undeclared retired spellings, 67 tests pass, 0 fail",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/activity/implement.mdc",
+      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/frontend-assistant.mdc",
+      "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/api-contracts.mdc",
+      "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
+      "how": "n/a"
+    },
+    {
+      "path": ".metaproject/rules/core/cli-interface-design.mdc",
+      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
+      "how": "n/a"
+    }
+  ],
+  "noticed_not_touched": [],
+  "not_touched": [],
+  "notes": "Written during T21, after the task had been accepted, because review round 1 (finding F-010) found this result file missing; it was not written when the task ran. Citations are as read now in T21: implement.mdc: followed, followed for a docs change: files and code read before writing, one owned file, no back-compat surface touched; tdd-workflow.mdc: n/a, no logic changed, so no test to write; the guide is checked by bun run docs:check; error-handling.mdc: n/a, no code with failure paths written; the guide only describes the Retry control and unresolved-link message the UI already has; solid-principles.mdc: n/a, applies to classes and functions; a Markdown guide has none; coding-style.mdc: n/a, applies to TypeScript source; no TS file changed; frontend-assistant.mdc: followed, only its answer-format line applies: code samples stay in labelled fenced blocks and the change stays to what was asked; api-contracts.mdc: n/a, no HTTP endpoint designed or changed; async-patterns.mdc: n/a, promoted by the word retry in the task text (the Retry button); no async code written; cli-interface-design.mdc: n/a, promoted by the word CLI in the task text; no keryx command, flag, exit code or --json shape changed, and the guide's CLI section was not edited."
+}

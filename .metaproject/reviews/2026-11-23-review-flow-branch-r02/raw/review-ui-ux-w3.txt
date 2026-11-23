@@ -1,0 +1,43 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Slice-03 read in full (code mode, plus the journal's live records of T17/T18; no render of my own). F-001 and F-007 are closed: the popover is bounded by the room on its side and flips above its button, and the tab count now equals the fact row's parts. One new minor defect from the self-loop fix: a node whose only edges are self-loops gets a blank Relationships tab with no empty-state text. The popover placement, its silent close on leaving the view, the wrapping fact row and the guide's new sentences raised nothing further.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "criterion": "Nielsen #1 | State: empty (a data view with nothing to show needs a stated reason)",
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "quote": "{projection.edges.length === 0 && <p className=\"metaproject-rel-note\">No relationships for these filters.</p>}",
+      "problem": "The empty-state note tests the raw edge count, but the fix for round-1 F-022 made groupRelationships() drop every self-loop (`if (edge.from === edge.to) continue;`) before grouping. A projection whose edges are all self-loops (or all dangling) has edges.length > 0, so the note is not shown, while groups.incoming, groups.outgoing and groups.secondStep are all empty and DirectionGroup/SecondStepGroup return null. The fix round answered F-022; this gap is introduced by it (before it, a root self-loop was listed as an outgoing row).",
+      "impact": "Trigger: select a node whose only relationship is an edge to itself (for example a wiki page whose only `links` edge points at itself), with the producer emitting that edge (not verified that it does, as round 1's F-022 also noted). The panel's fact row reads '0 incoming · 0 outgoing' and the Relationships tab count is 0, but the tab body is blank: no list, no 'No relationships' text. The user cannot tell an empty result from a failed render, and loses the only trace that the link exists. Recoverable: the other tabs and the graph still work.",
+      "suggested_fix": "Decide emptiness from the grouped result: `!groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length` (keep the truncated note). Add a RelationshipList test with a projection of one self-loop edge asserting the note is shown.",
+      "evidence": "Read at head: RelationshipList.tsx lines 210-221 (groups computed first, note keyed on projection.edges.length) and slice hunk 2040-2053 (self-loop skipped before the dangling check). Not rendered; code reading only.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+
+## Summary
+
+Dispositions, judged against the code and the journal's records:
+
+- F-001 (Filters popover ran past the window, no scroll): closed. placeFiltersPopover() picks below or above by room, bounds max-height to the room on that side minus an 8 px margin, and re-places on resize; the journal's live measurement at 720x480 with Details expanded shows the box inside the window in Chromium 156 (98 to 327) and WKWebView (135 to 327). Above the button it covers the freshness banner and header only while open; Escape, a press outside or the button closes it and focus returns to the button; focus moves to the first select on open. No usability defect found in the operator's choice. Not covered: re-placing when the content pane scrolls or the banner changes height under an open popover (the T17 worker records this; any press outside dismisses it, so it is a narrow case).
+- F-007 (tab count vs fact row): closed. The fact row adds `N second-step` when there is one, so the tab count equals the sum of the row's parts (live: 13 + 337 = 350). The value column (.info-val, flex 1, min-width 0, no nowrap) wraps; the journal records a two-line wrap at 380 px with no clipping. Narrower panel widths were not measured by anyone.
+- F-003 and F-004 (checked as dependencies of the fix code I was told to review): closed. The popover is unmounted when `visible` is false and closed by an effect, so no Escape layer remains and focus is not moved on return; the quiet re-read keeps selection and article and shows a failed read as the existing Retry banner.
+
+Reviewed with no finding: the self-link no longer listed anywhere is stated in the guide ("neither listed nor counted") and matches the graph caption; apart from the blank-tab gap above it costs the user little. The guide's new sentences (popover below or above, closes on leaving the tab, fact row with second-step example, catalog re-read on return, OpenSpec scroll) match the code.
+
+Checks not run: no render of my own (code and journal only); the above-placement in light theme and at 1440x900 not measured by anyone; native Tauri window and older WebKit not verified.

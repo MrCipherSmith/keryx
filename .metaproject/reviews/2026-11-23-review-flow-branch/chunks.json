@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 25,
+  "droppedKey": "6c3e0e43d4836e18",
+  "fileBytes": {
+    ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl": 44058753,
+    ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl": 44090943,
+    ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl": 44051911,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl": 44213370,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl": 44214868,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl": 44217110,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl": 44240656,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl": 44243513,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl": 44251884,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl": 44207435,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl": 44341957,
+    ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl": 44341957,
+    "apps/desktop/src-tauri/src/pick.js": 11432,
+    "apps/desktop/src/main.tsx": 649,
+    "apps/desktop/src/review/PullRequestAutomation.tsx": 3152,
+    "apps/desktop/src/review/ReviewFilters.tsx": 4365,
+    "apps/desktop/src/review/ReviewWatcher.tsx": 8637,
+    "apps/desktop/src/session/RunsTab.tsx": 6977,
+    "apps/desktop/src/session/SchedulesTab.tsx": 7636,
+    "apps/desktop/src/shell/Welcome.tsx": 3714,
+    "apps/desktop/src/styles/flows.css": 14256,
+    "apps/desktop/src/styles/panels.css": 9456,
+    "apps/desktop/src/styles/review.css": 6953,
+    "apps/desktop/src/test/app-navigation.fixture.tsx": 14361,
+    "src/gdskills/bundled/stacks/php-laravel/governance/eval.json": 309091
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "apps/desktop/src/review/PullRequestAutomation.tsx",
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/review/ReviewWatcher.tsx",
+        "apps/desktop/src/session/RunsTab.tsx",
+        "apps/desktop/src/session/SchedulesTab.tsx",
+        "apps/desktop/src/shell/Welcome.tsx",
+        "apps/desktop/src/styles/flows.css",
+        "apps/desktop/src/styles/panels.css",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "bytes": 65146
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44058753
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44090943
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44051911
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44213370
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44214868
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44217110
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44240656
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44243513
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44251884
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44207435
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44341957
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl"
+      ],
+      "bytes": 44341957
+    },
+    {
+      "id": "chunk-014",
+      "files": [
+        "apps/desktop/src-tauri/src/pick.js",
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/test/app-navigation.fixture.tsx"
+      ],
+      "bytes": 26442
+    },
+    {
+      "id": "chunk-015",
+      "files": [
+        "src/gdskills/bundled/stacks/php-laravel/governance/eval.json"
+      ],
+      "bytes": 309091
+    }
+  ]
+}

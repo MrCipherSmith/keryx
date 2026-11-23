@@ -1,0 +1,129 @@
+[
+ {
+  "name": "review-frontend-w1",
+  "reviewer": "review-frontend",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/raw/review-frontend-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/payloads/review-frontend-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@857036d = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-logic-w1",
+  "reviewer": "review-logic",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/raw/review-logic-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/payloads/review-logic-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [
+   "F-003"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@857036d = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-regression-w1",
+  "reviewer": "review-regression",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/raw/review-regression-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/payloads/review-regression-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+  "tier": "deep",
+  "alias": "opus",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@857036d = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-style-w1",
+  "reviewer": "review-style",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/raw/review-style-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/payloads/review-style-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "fix": true,
+  "owned": [
+   "F-005"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@857036d = head; wiki none; memory none"
+  ]
+ },
+ {
+  "name": "review-testing-practices-w1",
+  "reviewer": "review-testing-practices",
+  "wave": 1,
+  "slices": [
+   "slice-01"
+  ],
+  "slice_paths": [
+   "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/.metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/slice-01.diff"
+  ],
+  "result": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/raw/review-testing-practices-w1.txt",
+  "payload": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/payloads/review-testing-practices-w1.json",
+  "skill": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+  "tier": "standard",
+  "alias": "sonnet",
+  "allowed_tools": "run-tests",
+  "exec_budget_s": 300,
+  "fix": true,
+  "owned": [
+   "F-001",
+   "F-002"
+  ],
+  "check_exit": 0,
+  "check": [
+   "layers: graph@857036d = head; wiki none; memory none"
+  ]
+ }
+]

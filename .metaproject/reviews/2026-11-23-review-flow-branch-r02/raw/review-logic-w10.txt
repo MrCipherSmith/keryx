@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-04 is removals only: the unused GRAPH_PADDING, the unused `nodes` prop of RepositoryMarkdown and the unused `generation` in rebuild(), the old catalog-based freshness banner, the Catalog-is-limited banner, dead `.metaproject-relation-actions` CSS, the 700px media query and a guide paragraph. Each removal was checked at head: nothing references the removed names, the replacements (graphState banner with Rebuild graph, documentsProblem and onDraft gates, the `@container metaproject (max-width: 760px)` block) are in place, and the limited-catalog banner removal is pinned by a DOM test and covered by the list heading. No defect found.",
+  "findings": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+Not verified: no tests were run (read-only, exec budget 0); App.tsx line 596 was read at head, where onDraft is still passed to MetaprojectView and consumed at MetaprojectView.tsx:959 through the graphState.graph === "ready" and documents truncation gate.

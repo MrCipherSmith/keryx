@@ -1,0 +1,146 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-branch/operator-decisions.json:8",
+          "says": "the operator's only recorded intent on this path: 're-read the catalog silently when the view is shown again, keeping the selection, filters and history' — it asks for a silent read, and says nothing about keeping a failed read's banner over a catalog that has since been read"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "orchestrator's finish line for round 2's F-003: 'a quiet re-read neither shows nor clears the error banner'; the same paragraph motivates it by 'a standing message (for example of a failed rebuild) disappears when the user returns' — the line was written for the rebuild case and does not tell a catalog-read failure from a rebuild failure; it is in this branch and was never put to the operator, so it cannot ratify itself"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:334-336",
+          "says": "comment added by T22: 'a failure leaves the explorer as it was, any standing error included' — speaks to a failed quiet read, not to a successful one; in-branch"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:1418",
+          "says": "test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins only the rebuild case, which the suggested fix keeps"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "Looked in the round-1 and round-2 operator decisions, the journal (lines 103, 146, 154-155, 159), T22's dispatch and result, the guide (lines 8-11, 104-105) and the code. No operator answer and no designed response covers a catalog-read failure banner left standing over a successful quiet read; the only signal is the orchestrator's in-branch finish line, whose stated reason (a failed rebuild's message) the suggested fix preserves. The T22 worker did not list this as a behaviour choice, and journal line 155 names only two other defaults for the operator to overrule. The fix makes the banner agree with the data under it and leaves the pinned rebuild case intact. Upheld."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "finish line: 'whenever the list has no row to show, it says No relationships for these filters.' — the behaviour the surviving mutants R3-7 and R3-9 break in the other direction (a note over a populated list)"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "A test gap reported with surviving mutants on a gate T22 added. Nothing in T22's dispatch, result (noticed_not_touched, assumptions) or the journal (line 154) says the partly-filled case was left unpinned on purpose; the dispatch asked that each fix have a test, and the finish line names the rule both mutants break. By the skill a test gap stays as reported unless intent or practice shrinks it; none does."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json:35",
+          "says": "the worker's assumption: 'The Wiki disclosure's number of rows that list shows includes second-step rows' — the secondStep term is a deliberate part of the count, and the surviving mutant R3-4 removes it unseen"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:711",
+          "says": "comment: 'The Wiki disclosure counts the rows its list shows, by the list's own grouping rule'"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "The signals say the second-step term was chosen, which supports pinning it; nothing says it was meant to rest on reading alone. A test gap with a surviving mutant and no intent or practice against it is upheld."
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:8",
+          "says": "finish line for round 2's F-002: 'everything that retired pending work before round 1's fix still retires it (another project or protocol, Retry, Refresh, Rebuild)' — the direction the surviving mutants R3-17 to R3-20 break"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/MetaprojectView.tsx:326-328",
+          "says": "comment: project 'Retires pending work ... moved by every catalog read except the quiet one'"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "The finish line and the comment both state the loud-read retirement as required behaviour; T22's red check and T23's own mutants pin only the quiet direction (T23.result.json notes). No signal that the loud direction was left to the live check. Upheld."
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json:8",
+          "says": "for R2-28 'the reviewer accepts as an alternative a statement that the wiring rests on the live check only; prefer a test if the composition can be rendered with the explorer stubbed' — T23 chose the test, and wrote no such statement"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:159",
+          "says": "live check after T23: 'the Filters popover opens, closes on leaving the view and stays closed on return, with the explorer hidden and mounted once, after the App.tsx change too' — it exercises the real explorer and ProjectWindow's call site (R3-13, R3-14) but was taken with another work view, not Settings, and the entry does not say the wiring rests on it"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "Looked for the statement round 2's F-009 offered as an alternative: neither the journal nor T23's result makes it (T23.result.json:43 lists it only as a rejected alternative). The live check at journal line 159 covers part of what the mutants show unpinned, but not the wrapper's hidden state under Settings (R3-10), which the test's own last step names. The finding's suggested fix already allows the statement route for the call site. No intent or practice shrinks the gap. Upheld."
+    },
+    {
+      "finding_id": "F-006",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/tasks.md:3-5",
+          "says": "the file declares 'The table follows flow.json'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:117",
+          "says": "round 1's F-009 was fixed by making 'tasks.md now follows flow.json (... the dependencies of T4 ...)'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:151",
+          "says": "task-depends-set: T4 dependsOn ... T21, T22, T23 — the value tasks.md:12 does not carry"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "Every signal says the table is meant to mirror flow.json, and the T4 row was kept in step with it after round 1. The stale row is an omission, not a choice. Upheld."
+    },
+    {
+      "finding_id": "F-007",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:116",
+          "says": "an earlier entry (committed in b1538097e, before the commits under review) records that the check tool lives 'in the session scratchpad, not in the repository' — the location of the tool was chosen and stated, which answers the 'not a tracked file' part"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:137",
+          "says": "the sibling round-1 entry writes the moved mutants it ran by hand into the journal: '(`(graphState.graph !== \"missing\")`, `onDraft={onDraft}`, `const left = rect.right - POPOVER_WIDTH;`)' — the T23 entry (line 158) does not, for the same kind of run"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "No project rule says what a journal entry must carry (searched .metaproject/rules and the flow-orchestrator skill for 'journal'). Line 116 shows the scratch-only tool was a stated choice, so that part of the finding is weak; but the core of the finding, that the mutants the T23 entry calls 'all killed' are written nowhere in the record, runs against the flow's own earlier practice at line 137, and the suggested fix (write the mutants, or say the runs rest on the worker's report) moves the entry toward that sibling. Upheld."
+    },
+    {
+      "finding_id": "F-008",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json:21",
+          "says": "the dispatch set the convention: 'Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`' — the result's 'The F-005 token rule' breaks it"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/flow.json:542-566",
+          "says": "T22 is closed with empty evidenceRefs and no pinned result; nothing in the record fixes the result file's content against later correction"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:134",
+          "says": "precedent: the result files of T9 and T15 were written after acceptance and 'both say in notes that they were written during T21, after acceptance' — the flow amends result files after a task is closed, with a note"
+        }
+      ],
+      "practice_sources": [],
+      "reasoning": "The dispatch's own id convention is what the sentence departs from, and round 2 does have an F-005 (dismissed by the operator, operator-decisions.json r02:6), so the ambiguity is real. T22 was not closed with --result (flow.json holds no pin for it), and the flow has amended result files after acceptance before, with a note, so a correction is not barred. Upheld."
+    }
+  ]
+}

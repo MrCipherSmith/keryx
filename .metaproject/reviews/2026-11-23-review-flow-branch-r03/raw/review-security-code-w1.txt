@@ -1,0 +1,49 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable weakness in slice-02. The four security-adjacent changes each stop before an attacker-controlled input: a failed quiet re-read is swallowed but is local-CLI output with the next real read still reporting; the wiki-link lookup still compares snapshotId and settles against its starting snapshot; the exported MetaprojectWork is passed an explorer only by in-process code (one production caller, one test); the Wiki counts are numbers rendered through React text. One info note on a silent quiet failure.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": 859,
+      "quote": "if (generation === catalogRead.current && !quiet) setError(errMessage(cause));",
+      "problem": "A quiet re-read on return that fails (CLI refused, index unreadable, malformed reply that throws on `result.snapshotId`) is dropped without any signal, and the explorer keeps showing the previously loaded catalog and its freshness. Every later return repeats the same silent failure; only a user-started read (Retry, Refresh, Rebuild) reports it. Reach checked: the catalog is output of the local keryx CLI run for the user's own cwd (requestMetaproject in platform/metaproject.ts, one CLI process per request); I found no input here an unprivileged attacker controls, and the stale data it keeps is data the user already trusted when it loaded. So there is no attack vector, and the outcome (a user not told that a re-read failed) costs nothing beyond staleness that the next real read corrects.",
+      "impact": "None reachable as a security impact. A user whose index was replaced or locked while the view was hidden sees the old catalog without a hint. Stated as info because the precondition (an attacker able to make the local CLI fail or tamper with the index) already means local code execution or write access to the project.",
+      "suggested_fix": "Optional: on a failed quiet read set a non-blocking freshness note (for example 'Could not check for changes') instead of nothing; not needed to close any security question.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+## Security Review (round 3, slice-02)
+
+Read in full: slice-02.diff (App.tsx, MetaprojectView.tsx, RelationshipList.tsx and their three test files); surrounding code at head only for the MetaprojectWork callers (keryx ctx rg). Not run: anything (read-only, exec budget 0).
+
+### Followed to the input an attacker could control
+
+1. Quiet read no longer shows errors (catch at MetaprojectView.tsx ~859, `!quiet`). A refused or tampered read on return is silent. Source of the read is the local CLI for the user's cwd; no remote or cross-user input. A standing error is kept (the effect does not clear it for a quiet read), a non-quiet read still shows its failure, and a return during a pending read starts none, so a user-started action always surfaces a persistent failure. Stops at: the attacker would need write access to the project's index or the CLI, which is already local code execution. Reported as info F-001.
+2. Wiki-link lookup surviving a catalog replacement (openPath ~950-960). `snapshotId` is captured before the read and compared with `result.snapshotId`; a mismatch sets the existing "Project knowledge changed" banner. A lookup that started against the old snapshot and is answered from the old snapshot opens a node from that snapshot (stale, not foreign data). The query is the href-derived repository path sent as a `search` string, never a file path read by the app, so a crafted `../` href yields a search query, not a file read (resolveRepositoryPath is unchanged by this slice). `project.current` is not bumped for a quiet read, but it still moves for a project change, protocol change, Retry, Refresh, Rebuild and unmount (cleanup bumps unless the next run is quiet); a cwd change remounts the explorer, so the one case where cleanup and a quiet flag coincide (cwd change at the instant of a return) is not reachable through the UI.
+3. Exported MetaprojectWork with an `explorer` prop. It is the single place a component is injected; callers are ProjectWindow (App.tsx:618, passes none, so the lazy MetaprojectView is used) and App.dom.test.tsx. The prop is a React component reference set in source, not read from props that originate in URL, IPC, storage or CLI data. Whoever can pass one already runs code in the renderer. The injected component receives cwd, visible, onRebuild and onDraft (onDraft opens a draft session); that is within the same trust boundary. Stops at the module boundary.
+4. Counts from grouped relationships. `wikiRelationshipRows` is a sum of three numbers from summarizeRelationships and is rendered as a React text child (escaped). Titles and paths in the list are rendered as text and `title` attributes by React, unchanged by this slice. Edge counts are bounded by the projection the CLI returns; no new unbounded loop (one extra grouping pass in a useMemo).
+
+### Prior findings checked against the code
+- F-001 (empty note, disclosure count): closed. `empty` is computed from the three groups; the Wiki disclosure is shown and counted from summarizeRelationships; both are pinned by the new tests.
+- F-002 (project.current moved by quiet re-read): closed. Quiet reads use `catalogRead`; the cleanup bumps `project.current` only when the next run is not quiet; tests hold a lookup and a page of results across hide/show.
+- F-003 (failed quiet read shows loud error): closed. catch and the `setError("")` are both gated on `!quiet`; `catalogPending` stops a return from starting a second read while one is in flight. Behaviour chosen by the operator-free defaults is sound through this lens: a failure of a read the user did not start is invisible, a failure of one the user started is shown.
+- F-009 (visible wiring unpinned): closed. `visible={view === "metaproject"}` is on the explorer in MetaprojectWork and a DOM test asserts true/false/true/false.
+
+### Clean areas
+Injection and XSS (no dangerouslySetInnerHTML or eval added; Markdown goes through the existing renderRepositoryMarkdown), command injection (no spawn arguments built here), path traversal (lookup is a search query), authz/IDOR (no multi-user surface), secrets and logging (none added), open redirect (none), postMessage/storage (none). The test files add no network, fixture secrets or global patches beyond Map/window stubs restored in finally blocks.

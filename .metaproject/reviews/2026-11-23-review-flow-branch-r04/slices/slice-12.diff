@@ -1,0 +1,2776 @@
+--- apps/desktop/src/App.tsx
+@@ 1,21 @@
+-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+ import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
+ import { isTauri } from "./platform/backend";
+ import {
+   acpStop,
+   pickFolder,
+   setFolderPrompter,
+   setWindowTitle,
+   settingsAddRecent,
+   settingsGet,
+   windowInitialCwd,
+   windowOpenProject,
+ } from "./platform/commands";
+ import { applyTheme, setPrefs, MOD } from "./lib/prefs";
+ import { basename, errMessage } from "./lib/format";
+ import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+ import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
+ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
+ import { SettingsView } from "./shell/SettingsView";
+ import { Welcome } from "./shell/Welcome";
+ import { UpdateBanner } from "./shell/UpdateBanner";
+
+--- apps/desktop/src/App.tsx
+@@ 35,75 @@
+ import type { FlowCard } from "./platform/commands";
+ import { laneOf, workPrompt } from "./flows/model";
+ import { useFlows } from "./flows/useFlows";
+ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
+ import type { ComposerHandle } from "./session/Composer";
+ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
+ import { SessionView } from "./session/SessionView";
+ import { modelOption, useAcpSession } from "./session/useAcpSession";
+ import { ProjectMenu } from "./project/ProjectMenu";
+ import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
+ import { TelegramServeSettings } from "./project/TelegramServeSettings";
+ import { TelegramBotSettings } from "./project/TelegramBotSettings";
+ import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
+ import { PROJECT_COMMANDS } from "./project/projectCommands";
+ import { useProjectRunner } from "./project/useProjectRunner";
+ import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
+ import { supportsProviders } from "./acp/providers";
+ import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
+ import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
+ 
+-const MetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
++const LazyMetaprojectView = lazy(() => import("./metaproject/MetaprojectView").then(module => ({ default: module.MetaprojectView })));
+ 
+ export function App() {
+   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
+   const [welcomeSettings, setWelcomeSettings] = useState(false);
+   const [prompt, setPrompt] = useState<{ title: string; resolve: (v: string | null) => void } | null>(null);
+ 
+   useEffect(() => {
+     applyTheme();
+     void windowInitialCwd()
+       .then((c) => setCwd(c ?? null))
+       .catch(() => setCwd(null));
+     if (!isTauri()) setFolderPrompter((title) => new Promise((resolve) => setPrompt({ title, resolve })));
+     return () => setFolderPrompter(null);
+   }, []);
+ 
+   useEffect(() => {
+     if (cwd === null) void setWindowTitle("Keryx");
+     if (cwd) void settingsAddRecent(cwd).catch(() => {});
+     if (cwd === null) void projectRegister(null).catch(() => {});
+     if (!isTauri() && cwd !== undefined) {
+
+--- apps/desktop/src/App.tsx
+@@ 127,197 @@
+           </button>
+         </>
+       }
+     >
+       <label className="field">
+         <span className="field-label">Absolute path</span>
+         <input
+           className="mono"
+           data-autofocus
+           placeholder="/Users/you/project"
+           value={value}
+           onChange={(e) => setValue(e.target.value)}
+           onKeyDown={(e) => e.key === "Enter" && value.trim() && onDone(value.trim())}
+         />
+         <span className="field-hint">Browser dev mode has no folder picker. The bridge opens this path on your machine.</span>
+       </label>
+     </Dialog>
+   );
+ }
+ 
++/** Mounts a view on its first visit and keeps it mounted, hidden, afterwards, so its state survives view switches. */
++export function RetainedView({ active, visible, children }: { active: boolean; visible: boolean; children: ReactNode }) {
++  const [visited, setVisited] = useState(active);
++  if (active && !visited) setVisited(true);
++  return visited || active ? <div className="view" hidden={!visible}>{children}</div> : null;
++}
++
++type ExplorerProps = { cwd: string; visible?: boolean; onRebuild: () => Promise<boolean>; onDraft?: (task: string) => Promise<void> };
++
++/**
++ * The Metaproject explorer in the work area: mounted on its first visit and kept, and told whether it is the
++ * shown view, so it closes its Filters popover on leaving and re-reads its catalog on return.
++ * `explorer` is a test seam (the app passes nothing); bun's module mocks would outlive one test file.
++ */
++export function MetaprojectWork({ cwd, view, workView, onRebuild, onDraft, explorer: MetaprojectView = LazyMetaprojectView }: {
++  cwd: string;
++  view: View;
++  workView: Exclude<View, "settings">;
++  onRebuild: () => Promise<boolean>;
++  onDraft: (task: string) => Promise<void>;
++  explorer?: ComponentType<ExplorerProps>;
++}) {
++  return (
++    <RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
++      <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
++        <MetaprojectView cwd={cwd} visible={view === "metaproject"} onRebuild={onRebuild} onDraft={onDraft} />
++      </Suspense>
++    </RetainedView>
++  );
++}
++
+ function useNarrow(px: number): boolean {
+   const [narrow, setNarrow] = useState(() => window.innerWidth < px);
+   useEffect(() => {
+     const mq = window.matchMedia(`(max-width: ${px - 1}px)`);
+     const on = () => setNarrow(mq.matches);
+     on();
+     mq.addEventListener("change", on);
+     return () => mq.removeEventListener("change", on);
+   }, [px]);
+   return narrow;
+ }
+ 
+ type Status = { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
+ 
+ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; onOpenProject: (cwd: string) => void; onCloseProject: () => void }) {
+   const s = useAcpSession(cwd);
+   const flows = useFlows(cwd);
+   const providers = useProvidersDialog();
+   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
+   const [view, setView] = useState<View>("session");
+
+--- apps/desktop/src/App.tsx
+@@ 597,641 @@
+     >
+       {/* The session view stays mounted so the transcript and draft survive view switches. */}
+       <div className="view" hidden={view !== "session"}>
+         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
+           reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
+           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
+             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
+             onContinuation={linkReviewContinuation} /> : undefined}
+           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
+       </div>
+       {workView === "flows" ? (
+         <div className="view" hidden={view !== "flows"}>
+           <FlowsBoard onOpenIssue={dir => openIssueOrigin({flowDir:dir})} initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
+         </div>
+       ) : null}
+       {issueWork.chooser}
+       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
+         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+       </div>}
+-      {workView === "metaproject" && <div className="view" hidden={view !== "metaproject"}>
+-        <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
+-          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} onDraft={async task => {
+-            if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+-            setView("session");
+-          }} />
+-        </Suspense>
+-      </div>}
++      {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
++      <MetaprojectWork cwd={cwd} view={view} workView={workView} onRebuild={rebuildGraph} onDraft={async task => {
++        if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
++        setView("session");
++      }} />
+       <div className="view" hidden={view !== "review"}>
+         {reviewDisconnected ? (
+           <EmptyState title="GitHub is not connected" icon="pr">
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+         ) : (
+           <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+               flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
+             setLinkedFlow(dir);
+             setView("flows");
+           }} />
+         )}
+       </div>
+       {view === "settings" ? (
+         <div className="view">
+           <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
+         </div>
+       ) : null}
+ 
+       {view === "session" && routingSession !== null && routingSession === state.sessionId &&
+
+--- apps/desktop/src/metaproject/GraphNodePanel.tsx
+@@ 1,1 @@
+-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+-import type { MetaprojectDetail, MetaprojectDetailV2, MetaprojectNeighbors, MetaprojectNode } from "../../../../src/integrations/metaproject-explorer-contract";
+-import { Icon } from "../components/Icon";
+-
+-const MIN_WIDTH = 300;
+-const DEFAULT_WIDTH = 380;
+-export const isOpenSpecNode = (node: MetaprojectNode) =>
+-  node.kind === "spec" || node.kind === "change" || node.kind === "archive";
+-
+-type Tab = "wiki" | "openspec";
+-
+-export function GraphNodePanel({ node, projection, pending, problem, suggestedWiki, openSpec, readPreview, width = DEFAULT_WIDTH, onResize, onClose, onOpen, onFind, onDraft, onRetry }: {
+-  node: MetaprojectNode;
+-  projection: MetaprojectNeighbors | null;
+-  pending: boolean;
+-  problem: string;
+-  suggestedWiki?: MetaprojectNode;
+-  openSpec: boolean;
+-  readPreview: (id: string) => Promise<MetaprojectDetail>;
+-  width?: number;
+-  onResize: (width: number) => void;
+-  onClose: () => void;
+-  onOpen: (node: MetaprojectNode) => void;
+-  onFind: (tab: Tab) => void;
+-  onDraft?: (task: string) => Promise<void>;
+-  onRetry: () => void;
+-}) {
+-  const panelId = useId();
+-  const panel = useRef<HTMLElement>(null);
+-  const close = useRef<HTMLButtonElement>(null);
+-  const tabs = useRef<HTMLDivElement>(null);
+-  const drag = useRef<{ pointer: number; x: number; width: number } | null>(null);
+-  const [tabChoice, setTab] = useState<{ node: string; value: Tab } | null>(null);
+-  const tab = tabChoice?.node === node.id ? tabChoice.value : isOpenSpecNode(node) ? "openspec" : "wiki";
+-  const [preview, setPreview] = useState<{ id: string; text: string } | null>(null);
+-  const [drafting, setDrafting] = useState(false);
+-  const [draftError, setDraftError] = useState("");
+-  const [availableWidth, setAvailableWidth] = useState(0);
+-  const compact = availableWidth > 0 && availableWidth < 820;
+-  const maxWidth = Math.max(MIN_WIDTH, Math.min(640, (availableWidth || 1180) - 440));
+-  const currentWidth = Math.min(width, maxWidth);
+-  const resize = (value: number) => onResize(Math.max(MIN_WIDTH, Math.min(maxWidth, value)));
+-
+-  useLayoutEffect(() => {
+-    const before = document.activeElement;
+-    const aside = panel.current;
+-    close.current?.focus();
+-    return () => {
+-      if (aside?.contains(document.activeElement) && before instanceof HTMLElement && before.isConnected) {
+-        before.focus({ preventScroll: true });
+-      }
+-    };
+-  }, []);
+-  useLayoutEffect(() => {
+-    const host = panel.current?.parentElement;
+-    if (!host) return;
+-    const measure = () => setAvailableWidth(host.clientWidth);
+-    measure();
+-    const observer = new ResizeObserver(measure);
+-    observer.observe(host);
+-    return () => observer.disconnect();
+-  }, []);
+-
+-  const documents = useMemo(() => {
+-    const neighbors = new Set(projection?.edges.map(edge => edge.from === node.id ? edge.to : edge.from));
+-    const linked = [node, ...(projection?.nodes.filter(item => item.id !== node.id && neighbors.has(item.id)) ?? [])]
+-      .filter(item => tab === "wiki" ? item.kind === "wiki" : isOpenSpecNode(item));
+-    if (tab === "wiki" && suggestedWiki && !linked.some(item => item.id === suggestedWiki.id)) {
+-      return [...linked, { ...suggestedWiki, suggested: true }];
+-    }
+-    return linked;
+-  }, [node, projection, suggestedWiki, tab]);
+-  const first = documents[0];
+-  const firstId = first?.id;
+-  useEffect(() => {
+-    if (!firstId) return;
+-    let active = true;
+-    void readPreview(firstId).then(detail => {
+-      if (!active || detail.node.id !== firstId) return;
+-      const artifact = (detail as unknown as MetaprojectDetailV2).openSpec?.artifact;
+-      const body = detail.markdown ?? artifact?.markdown ?? "";
+-      const text = body.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").split(/\r?\n\s*\r?\n/)
+-        .map(block => block.split(/\r?\n/).filter(line => line.trim() && !/^\s*(?:#|---|\x60\x60\x60|Version:|Type:|Status:)/.test(line)).join(" ").trim())
+-        .find(block => block && !block.startsWith("- "))?.replaceAll("\x60", "").slice(0, 360) ?? "";
+-      setPreview({ id: firstId, text });
+-    }).catch(() => {}); // Links remain usable when the optional preview cannot be read.
+-    return () => { active = false; };
+-  }, [firstId, readPreview]);
+-
+-  async function draft() {
+-    if (!onDraft || drafting) return;
+-    setDrafting(true);
+-    setDraftError("");
+-    try {
+-      const material = tab === "wiki" ? "Wiki page explaining how this node works" : "OpenSpec change documenting expected behavior";
+-      await onDraft(`Prepare a draft ${material} for ${JSON.stringify(node.path)} in this checkout. Check existing documents and links first. Show the proposed changes before writing any files.`);
+-    } catch (cause) {
+-      setDraftError(cause instanceof Error ? cause.message : String(cause));
+-    } finally {
+-      setDrafting(false);
+-    }
+-  }
+-
+-  return <aside
+-    id={panelId} ref={panel} aria-label="Graph node details"
+-    className={`metaproject-node-panel${compact ? " compact" : ""}`}
+-    style={compact ? undefined : { width: currentWidth }}
+-    onKeyDown={event => {
+-      if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
+-      event.preventDefault();
+-      onClose();
+-    }}
+-  >
+-    {!compact && <div
+-      className="side-resize metaproject-node-resize" role="separator" tabIndex={0}
+-      aria-orientation="vertical" aria-label="Resize graph node details" aria-controls={panelId}
+-      aria-valuenow={currentWidth} aria-valuemin={MIN_WIDTH} aria-valuemax={maxWidth}
+-      onPointerDown={event => {
+-        if (event.button !== 0) return;
+-        event.currentTarget.setPointerCapture(event.pointerId);
+-        drag.current = { pointer: event.pointerId, x: event.clientX, width: currentWidth };
+-      }}
+-      onPointerMove={event => {
+-        const start = drag.current;
+-        if (start?.pointer === event.pointerId) resize(start.width + start.x - event.clientX);
+-      }}
+-      onLostPointerCapture={() => { drag.current = null; }}
+-      onKeyDown={event => {
+-        const widths: Record<string, number> = { ArrowLeft: currentWidth + 32, ArrowRight: currentWidth - 32, Home: MIN_WIDTH, End: maxWidth };
+-        if (!Object.hasOwn(widths, event.key)) return;
+-        event.preventDefault();
+-        resize(widths[event.key]!);
+-      }}
+-    />}
+-    <header className="sheet-head">
+-      <div className="sheet-head-row">
+-        <h2>{node.title}</h2>
+-        <span className="grow" />
+-        <button ref={close} className="icon-btn" onClick={onClose} aria-label="Close graph node details" title="Close (Esc)"><Icon name="x" /></button>
+-      </div>
+-      <p className="metaproject-meta">{node.kind} · {node.path}</p>
+-    </header>
+-    <div className="segmented metaproject-node-tabs" role="tablist" aria-label="Node documentation" ref={tabs}
+-      onKeyDown={event => {
+-        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+-        event.preventDefault();
+-        const target = event.key === "Home" ? "wiki" : event.key === "End" ? "openspec" : tab === "wiki" ? "openspec" : "wiki";
+-        setTab({ node: node.id, value: target });
+-        tabs.current?.querySelector<HTMLElement>(`[data-tab="${target}"]`)?.focus();
+-      }}>
+-      {(["wiki", "openspec"] as const).map(kind => <button
+-        key={kind} role="tab" data-tab={kind} id={`${panelId}-${kind}`} aria-selected={tab === kind}
+-        tabIndex={tab === kind ? 0 : -1} aria-controls={`${panelId}-body`}
+-        onClick={() => { setTab({ node: node.id, value: kind }); setDraftError(""); }}
+-      >{kind === "wiki" ? "Wiki" : "OpenSpec"}</button>)}
+-    </div>
+-    <div className="metaproject-node-body" role="tabpanel" id={`${panelId}-body`} aria-labelledby={`${panelId}-${tab}`}>
+-      {tab === "openspec" && !openSpec ? <p>This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings.</p>
+-        : <>
+-          {documents.map(document => <section className="metaproject-node-document" key={document.id}>
+-            {document.id !== node.id && <h3>{document.title}</h3>}
+-            {(document.id !== node.id || document.status) && <p className="metaproject-meta">
+-              {[document.status, document.id !== node.id ? document.path : ""].filter(Boolean).join(" · ")}
+-            </p>}
+-            {"suggested" in document && <p className="metaproject-meta">Matching component page</p>}
+-            {preview?.id === document.id && preview.text && <p className="metaproject-node-preview">{preview.text}</p>}
+-            <button className="btn btn-sm" onClick={() => onOpen(document)}><Icon name="file" size={14} />{tab === "wiki" ? "Open in Wiki" : "Open in OpenSpec"}</button>
+-          </section>)}
+-          {pending && <p role="status">Looking for linked documents…</p>}
+-          {problem && <p role="alert">{problem} <button className="btn btn-sm" onClick={onRetry}>Retry</button></p>}
+-          {!documents.length && !pending && !problem && <div className="metaproject-node-document">
+-            <p>{tab === "wiki" ? "No Wiki page is linked to this node." : "No OpenSpec document is linked to this node."}</p>
+-            <button className="btn btn-sm" onClick={() => onFind(tab)}><Icon name="search" size={14} />{tab === "wiki" ? "Find a Wiki page" : "Find an OpenSpec document"}</button>
+-            {onDraft && <button className="btn btn-sm" disabled={drafting} onClick={() => void draft()}>
+-              <Icon name="pencil" size={14} />{drafting ? "Opening session…" : tab === "wiki" ? "Draft Wiki page" : "Draft OpenSpec change"}
+-            </button>}
+-            {draftError && <p role="alert">{draftError}</p>}
+-          </div>}
+-        </>}
+-    </div>
+-  </aside>;
+-}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 1,36 @@
+-import cytoscape from "cytoscape";
+-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import {
+   rankMetaprojectSearchHits,
+   METAPROJECT_EDGE_KINDS,
+   METAPROJECT_EDGE_KINDS_V2,
+   type MetaprojectCatalog,
+   type MetaprojectDetail,
+   type MetaprojectDirection,
+   type MetaprojectEdgeKind,
+   type MetaprojectHit,
+   type MetaprojectHitV2,
+   type MetaprojectSearchV2,
+   type MetaprojectRequestV2,
+   type MetaprojectV2Response,
+   type MetaprojectNeighbors,
+   type MetaprojectNode,
+   type MetaprojectRequest,
+   type MetaprojectResponse,
+   type MetaprojectSearch,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
+ import { Icon } from "../components/Icon";
+ import { renderRepositoryMarkdown } from "../components/Markdown";
++import { EmptyState, useEscape } from "../components/ui";
+ import { errMessage } from "../lib/format";
+ import { openExternal } from "../platform/commands";
+ import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
+ import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
+-import { GraphNodePanel } from "./GraphNodePanel";
++import { NodeDetailsPanel } from "./NodeDetailsPanel";
++import { RelationshipGraph, type CytoscapeFactory } from "./RelationshipGraph";
++import { RelationshipList, summarizeRelationships } from "./RelationshipList";
++import { RELATIONSHIP_KIND_LABELS } from "./labels";
+ import { useExplorerNavigation } from "./useExplorerNavigation";
+ import "./metaproject.css";
+ 
+ type Request = (
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 42,61 @@
++const sameLocation = (left: OpenSpecLocation | null, right: OpenSpecLocation | null) =>
++  left === right || (left !== null && right !== null && left.id === right.id && left.collection === right.collection &&
++    left.artifact === right.artifact && left.section === right.section && left.digest === right.digest && left.fragment === right.fragment);
+ 
+-function Graph({
+-  projection,
+-  selected,
+-  select,
+-}: {
+-  projection: MetaprojectNeighbors;
+-  selected: string;
+-  select: (id: string) => void;
+-}) {
+-  const container = useRef<HTMLDivElement>(null);
+-  useEffect(() => {
+-    const viewport = container.current;
+-    if (!viewport) return;
+-    const theme = getComputedStyle(viewport);
+-    const color = (token: string, fallback: string) =>
+-      theme.getPropertyValue(token).trim() || fallback;
+-    const neighbors = projection.nodes.filter((node) => node.id !== selected);
+-    const positions = new Map(neighbors.map((node, index) => [node.id, index]));
+-    const graph = cytoscape({
+-      container: viewport,
+-      elements: [
+-        ...projection.nodes.map((node) => {
+-          const index = positions.get(node.id) ?? 0;
+-          const angle = (2 * Math.PI * index) / Math.max(neighbors.length, 1);
+-          return {
+-            data: {
+-              id: node.id,
+-              label: node.title,
+-            },
+-            classes: node.id === selected ? "root-node" : undefined,
+-            position:
+-              node.id === selected
+-                ? { x: 0, y: 0 }
+-                : { x: 180 * Math.cos(angle), y: 180 * Math.sin(angle) },
+-          };
+-        }),
+-        ...projection.edges.map((edge, index) => ({
+-          data: {
+-            id: `edge-${index}`,
+-            source: edge.from,
+-            target: edge.to,
+-            label: edge.kind,
+-          },
+-        })),
+-      ],
+-      style: [
+-        {
+-          selector: "node",
+-          style: {
+-            label: "data(label)",
+-            "font-size": 11,
+-            color: color("--fg", "#aebbc9"),
+-            "background-color": color("--fg-muted", "#678499"),
+-            "text-wrap": "ellipsis",
+-            "text-max-width": "110px",
+-          },
+-        },
+-        {
+-          selector: "node.root-node",
+-          style: {
+-            "background-color": color("--accent", "#67b5a4"),
+-            "border-color": color("--fg", "#aebbc9"),
+-            "border-width": 2,
+-            width: 38,
+-            height: 38,
+-          },
+-        },
+-        {
+-          selector: "edge",
+-          style: {
+-            width: 1,
+-            "line-color": color("--fg-subtle", "#738798"),
+-            "target-arrow-color": color("--fg-subtle", "#738798"),
+-            "target-arrow-shape": "triangle",
+-            "curve-style": "bezier",
+-          },
+-        },
+-      ],
+-      layout: { name: "preset", fit: true, padding: GRAPH_PADDING },
+-      maxZoom: 1.8,
+-    });
+-    graph.on("tap", "node", (event) => select(event.target.id()));
+-    function fit() {
+-      if (viewport?.clientWidth && viewport.clientHeight) graph.resize().fit(graph.elements(), GRAPH_PADDING);
+-    }
+-    const firstFrame = requestAnimationFrame(fit);
+-    const observer = new ResizeObserver(fit);
+-    observer.observe(viewport);
+-    return () => {
+-      cancelAnimationFrame(firstFrame);
+-      observer.disconnect();
+-      graph.destroy();
+-    };
+-  }, [projection, selected, select]);
+-  return (
+-    <div className="metaproject-graph" aria-hidden="true">
+-      <div className="metaproject-graph-viewport" ref={container} />
+-    </div>
+-  );
++/**
++ * The repository path a Markdown link in `source` points at: percent-decoded, relative to the
++ * page's folder, or to the repository root when it starts with "/". Null when it cannot be decoded.
++ */
++function resolveRepositoryPath(source: string, href: string): string | null {
++  let path: string;
++  try { path = decodeURIComponent(href); } catch { return null; }
++  const base = path.startsWith("/") ? "" : source.slice(0, source.lastIndexOf("/") + 1);
++  const resolved: string[] = [];
++  for (const part of (base + path).split("/")) {
++    if (part === "..") resolved.pop();
++    else if (part && part !== ".") resolved.push(part);
++  }
++  return resolved.join("/");
+ }
+ 
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 65,67 @@
+-  select,
++  openPath,
+   fragment,
+ }: {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 70,91 @@
+-  select: (id: string, fragment?: string) => void;
++  /** `path` is the resolved repository path, or the raw href when it cannot be decoded. */
++  openPath: (path: string, fragment: string | undefined, resolved: boolean) => void;
+   fragment?: string;
+ }) {
+   const html = useMemo(() => renderRepositoryMarkdown(text), [text]);
+   const container = useRef<HTMLDivElement>(null);
+   useEffect(() => {
+     if (!fragment) return;
+     let decoded: string;
+     try { decoded = decodeURIComponent(fragment); } catch { return; }
+     const seen = new Map<string, number>();
+     for (const heading of container.current?.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6") ?? []) {
+       const base = (heading.textContent ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+       const count = seen.get(base) ?? 0;
+       seen.set(base, count + 1);
+       if ((count ? `${base}-${count}` : base) === decoded) { heading.tabIndex = -1; heading.focus(); heading.scrollIntoView?.({ block: "nearest" }); break; }
+     }
+   }, [html, fragment]);
+   return (
+     <div
+       className="md"
+       ref={container}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 109,309 @@
+           }
+           const seen = new Map<string, number>();
+           for (const heading of event.currentTarget.querySelectorAll<HTMLElement>(
+             "h1,h2,h3,h4,h5,h6",
+           )) {
+             const base = (heading.textContent ?? "")
+               .trim()
+               .toLowerCase()
+               .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+               .replace(/\s/g, "-");
+             const count = seen.get(base) ?? 0;
+             seen.set(base, count + 1);
+             if ((count ? `${base}-${count}` : base) === fragment) {
+               heading.scrollIntoView();
+               break;
+             }
+           }
+           return;
+         }
+         if (!path) return;
+-        const parts = (
+-          source.slice(0, source.lastIndexOf("/") + 1) + path
+-        ).split("/");
+-        const resolved: string[] = [];
+-        for (const part of parts) {
+-          if (part === "..") resolved.pop();
+-          else if (part && part !== ".") resolved.push(part);
+-        }
+-        const node = nodes.find((item) => item.path === resolved.join("/"));
+-        if (node) select(node.id, targetFragment);
++        const resolved = resolveRepositoryPath(source, path);
++        openPath(resolved ?? path, targetFragment, resolved !== null);
+       }}
+       onAuxClick={(event) => {
+         if ((event.target as Element).closest("a")) event.preventDefault();
+       }}
+     />
+   );
+ }
+ 
+-export function RelationshipList({
+-  projection,
+-  select,
+-}: {
+-  projection: MetaprojectNeighbors;
+-  select: (id: string) => void;
+-}) {
+-  const nodes = new Map(projection.nodes.map(node => [node.id, node]));
+-  return (
+-    <>
+-      {projection.truncated && <p role="status">Relationship projection is limited.</p>}
+-      {projection.edges.length === 0 && <p>No relationships for these filters.</p>}
+-      <ul className="metaproject-relations">
+-        {projection.edges.map((edge, index) => {
+-          const from = nodes.get(edge.from);
+-          const to = nodes.get(edge.to);
+-          if (!from || !to) return null;
+-          const label = `${from.title} → ${edge.kind} → ${to.title}`;
+-          const evidence = [
+-            ...(edge.evidence ?? []),
+-            ...(edge.provenance ?? []).map(item => `${item.path}${item.index === undefined ? "" : ` (link ${item.index})`} · ${item.digest}`),
+-          ].join(" · ");
+-          const adjacent = from.id === projection.root ? to : to.id === projection.root ? from : null;
+-          return (
+-            <li key={`${edge.from}-${edge.to}-${edge.kind}-${index}`}>
+-              {adjacent ? (
+-                <button className="metaproject-row" onClick={() => select(adjacent.id)} title={adjacent.path}>
+-                  {label}
+-                  {evidence && <span className="metaproject-meta">{evidence}</span>}
+-                </button>
+-              ) : (
+-                <div className="metaproject-row">
+-                  {label}
+-                  {evidence && <span className="metaproject-meta">{evidence}</span>}
+-                  <div className="metaproject-relation-actions">
+-                    <button className="btn" onClick={() => select(from.id)} title={from.path}>Open {from.title}</button>
+-                    {to.id !== from.id && (
+-                      <button className="btn" onClick={() => select(to.id)} title={to.path}>Open {to.title}</button>
+-                    )}
+-                  </div>
+-                </div>
+-              )}
+-            </li>
+-          );
+-        })}
+-      </ul>
+-    </>
+-  );
+-}
++type Negotiate = (cwd: string) => Promise<1 | 2>;
+ 
+ export function MetaprojectView(props: {
+   cwd: string;
+   onRebuild: () => Promise<boolean>;
+   onDraft?: (task: string) => Promise<void>;
+   request?: Request;
+   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
++  /** Protocol negotiation; given, it runs even when `request`/`requestV2` are injected. */
++  negotiate?: Negotiate;
++  /** Test seam for the graph canvas (happy-dom has none); the app passes nothing. */
++  createCytoscape?: CytoscapeFactory;
++  /**
++   * Whether the explorer's view is shown (the app keeps it mounted, hidden, after its first visit).
++   * Hidden, it holds no overlay; shown again, it re-reads the catalog quietly. Defaults to true.
++   */
++  visible?: boolean;
+ }) {
+   return <Explorer key={props.cwd} {...props} />;
+ }
+ 
++/** Every relationship kind except the symbol layer (`defines`, `calls`). */
++const SYMBOL_KINDS: readonly MetaprojectEdgeKind[] = ["defines", "calls"];
++const withoutSymbolKinds = (kinds: readonly MetaprojectEdgeKind[]) => kinds.filter(kind => !SYMBOL_KINDS.includes(kind));
++const WIKI_KINDS_V1 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS);
++const WIKI_KINDS_V2 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS_V2);
++const NO_SYMBOL_LAYER = "Not available: this project's graph has no symbol layer.";
++const sameKinds = (left: readonly MetaprojectEdgeKind[], right: readonly MetaprojectEdgeKind[]) =>
++  left.length === right.length && left.every(kind => right.includes(kind));
++
++const DIRECTION_LABELS: Record<MetaprojectDirection, string> = { both: "Both", incoming: "Incoming", outgoing: "Outgoing" };
++const POPOVER_WIDTH = 320;
++/** Room kept between the popover and the window edge, and between the popover and its button. */
++const POPOVER_MARGIN = 8;
++const POPOVER_GAP = 4;
++/** The shared `.menu` surface's own height cap (styles.css), kept when the popover is bounded inline. */
++const MENU_MAX_HEIGHT = 420;
++
++type PopoverPosition = { left: number; top?: number; bottom?: number; maxHeight?: number };
++
++/**
++ * Where the popover goes for its button: under it, or above it when its content does not fit below
++ * and there is more room above (the shared menu's "auto" placement). Its height is bounded by the
++ * room on that side, so its edge stays `POPOVER_MARGIN` inside the window and it scrolls inside.
++ */
++function placeFiltersPopover(rect: DOMRect, needed: number): PopoverPosition {
++  // Right-aligned with the button (it sits at the end of the graph header), kept inside the window.
++  const left = Math.max(POPOVER_MARGIN, Math.min(rect.right - POPOVER_WIDTH, window.innerWidth - POPOVER_WIDTH - POPOVER_MARGIN));
++  const height = window.innerHeight;
++  const below = height - POPOVER_MARGIN - (rect.bottom + POPOVER_GAP);
++  const above = rect.top - POPOVER_GAP - POPOVER_MARGIN;
++  if (needed > below && above > below) {
++    return { left, bottom: Math.max(POPOVER_MARGIN, height - rect.top + POPOVER_GAP), maxHeight: Math.min(MENU_MAX_HEIGHT, above) };
++  }
++  return { left, top: rect.bottom + POPOVER_GAP, maxHeight: Math.max(0, Math.min(MENU_MAX_HEIGHT, below)) };
++}
++
++/**
++ * A non-modal dialog anchored to its button, built on the app's menu surface (`.menu`): focus
++ * moves in on open; Escape or a press outside calls `onClose`, which gives focus back to the button.
++ * It is placed again when the window is resized.
++ */
++function FiltersPopover({ id, anchor, onClose, children }: { id: string; anchor: HTMLElement; onClose: () => void; children: ReactNode }) {
++  const panel = useRef<HTMLDivElement>(null);
++  const [position, setPosition] = useState<PopoverPosition>({ left: -9999, top: -9999 });
++  const close = useRef(onClose);
++  close.current = onClose;
++  useEscape(() => close.current());
++  useLayoutEffect(() => {
++    // scrollHeight is the content's full height, whatever max-height the last placement gave it.
++    const place = () => setPosition(placeFiltersPopover(anchor.getBoundingClientRect(), panel.current?.scrollHeight ?? 0));
++    place();
++    window.addEventListener("resize", place);
++    return () => window.removeEventListener("resize", place);
++  }, [anchor]);
++  useLayoutEffect(() => {
++    panel.current?.querySelector<HTMLElement>("select, button:not([disabled])")?.focus();
++  }, []);
++  useLayoutEffect(() => {
++    const onDown = (event: MouseEvent) => {
++      const target = event.target as Node;
++      if (panel.current?.contains(target) || anchor.contains(target)) return;
++      close.current();
++    };
++    window.addEventListener("mousedown", onDown, true);
++    return () => window.removeEventListener("mousedown", onDown, true);
++  }, [anchor]);
++  return (
++    <div ref={panel} id={id} className="menu metaproject-filters-pop" role="dialog" aria-label="Graph filters"
++      style={{ ...position, width: POPOVER_WIDTH }}>
++      {children}
++    </div>
++  );
++}
++
+ function Explorer({
+   cwd,
+   onRebuild,
+   onDraft,
+   request = requestMetaproject,
+   requestV2,
++  negotiate,
++  createCytoscape,
++  visible = true,
+ }: {
+   cwd: string;
+   onRebuild: () => Promise<boolean>;
+   onDraft?: (task: string) => Promise<void>;
+   request?: Request;
+   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
++  negotiate?: Negotiate;
++  createCytoscape?: CytoscapeFactory;
++  visible?: boolean;
+ }) {
++  const symbolReasonId = useId();
+   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
+-  const { route, setRoute, visit, switchView, back, canGoBack, root } = useExplorerNavigation();
++  const { route, setRoute, visit, navigate, switchView, back, canGoBack, root } = useExplorerNavigation();
+   const { mode, query } = route;
+   const [panelWidth, setPanelWidth] = useState(380);
+-  const [protocol, setProtocol] = useState<1 | 2 | null>(requestV2 ? 2 : request === requestMetaproject ? null : 1);
++  const negotiates = Boolean(negotiate) || (!requestV2 && request === requestMetaproject);
++  const [protocol, setProtocol] = useState<1 | 2 | null>(negotiates ? null : requestV2 ? 2 : 1);
+   const archiveSelection = useRef(false);
+   const [protocolError, setProtocolError] = useState("");
++  const [negotiation, setNegotiation] = useState(0);
+   useEffect(() => {
+-    if (requestV2 || request !== requestMetaproject) return;
++    if (!negotiates) return;
+     let active = true;
+-    void negotiateMetaproject(cwd).then(value => { if (active) setProtocol(value); }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
++    void (negotiate ?? negotiateMetaproject)(cwd).then(value => {
++      if (!active) return;
++      setProtocolError("");
++      setProtocol(value);
++    }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
+     return () => { active = false; };
+-  }, [cwd, request, requestV2]);
++  }, [cwd, negotiate, negotiates, negotiation]);
+   const read: Request = useMemo(() => protocol === 2
+     ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
+     : request, [protocol, request, requestV2]);
++  // The first Wiki page stands in for a missing selection only while nothing is searched.
+   const selection = route.mode === "graph" ? route.selection || catalog?.nodes[0]?.id || ""
+-    : route.mode === "wiki" ? route.selection || catalog?.nodes.find(node => node.kind === "wiki")?.id || "" : "";
++    : route.mode === "wiki" ? route.selection || (route.query.trim() ? "" : catalog?.nodes.find(node => node.kind === "wiki")?.id || "") : "";
++  const shownSelection = useRef(selection);
++  shownSelection.current = selection;
+   archiveSelection.current = route.mode === "graph" && Boolean(route.archive);
+   const [direction, setDirection] = useState<MetaprojectDirection>("both");
+   const [depth, setDepth] = useState<1 | 2>(1);
+-  const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(
+-    METAPROJECT_EDGE_KINDS.filter((kind) => kind !== "calls" && kind !== "defines"),
+-  );
++  const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(WIKI_KINDS_V1);
+   useEffect(() => {
+     if (protocol === 2) setKinds(current => [...new Set<MetaprojectEdgeKind>([...current, "changes-spec", "spec-context"])]);
+   }, [protocol]);
++  const defaultKinds = protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1;
++  const filtersChanged = direction !== "both" || depth !== 1 || !sameKinds(kinds, defaultKinds);
++  const resetFilters = () => { setDirection("both"); setDepth(1); setKinds(defaultKinds); };
++  const [revealRelationships, setRevealRelationships] = useState(0);
++  // Open or closed survives a switch between Graph, Wiki and OpenSpec and is not a history entry. Leaving the
++  // explorer's view closes it, and while hidden it is never mounted (no Escape layer, no window listener).
++  const [filtersOpen, setFiltersOpen] = useState(false);
++  const [filtersAnchor, setFiltersAnchor] = useState<HTMLButtonElement | null>(null);
++  const filtersDialogId = useId();
++  // The freshness reason is shown on demand; remembering which reason was opened closes it when the text changes.
++  const [freshnessReason, setFreshnessReason] = useState<string | null>(null);
++  const freshnessReasonId = useId();
++  // Wiki reads a page's relationships with fixed defaults; only Graph applies its filters.
++  const relationDepth = mode === "wiki" ? 1 : depth;
++  const relationDirection = mode === "wiki" ? "both" : direction;
++  const relationKinds = mode === "wiki" ? protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1 : kinds;
+   const [searchResult, setSearchResult] = useState<{
+     mode: "graph" | "wiki";
+     query: string;
+     snapshotId: string;
+     hits: MetaprojectHit[];
+     nextCursor?: string;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 324,336 @@
+   const [loadingRelationships, setLoadingRelationships] = useState(false);
+   const [searchAttempt, setSearchAttempt] = useState(0);
+   const [rebuilding, setRebuilding] = useState(false);
+   const [revision, setRevision] = useState(0);
++  // Retires pending work (wiki-link lookups, pages of results): moved by every catalog read except
++  // the quiet one, which is no new project, protocol, Retry, Refresh or Rebuild.
+   const project = useRef(0);
++  // The catalog read whose result may still apply; every read, the quiet one included, supersedes the last.
++  const catalogRead = useRef(0);
++  const catalogPending = useRef(false);
+   const loaded = useRef(false);
+   const loadedSnapshot = useRef<string>();
++  // Shown again after being hidden, the explorer re-reads the catalog once, quietly: an unchanged
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 339,379 @@
++  const quietRead = useRef(false);
++  const [freshness, setFreshness] = useState<Pick<MetaprojectCatalog, "snapshotId" | "graph" | "graphReason"> | null>(null);
++  const wasVisible = useRef(visible);
++  useEffect(() => {
++    const returned = visible && !wasVisible.current;
++    wasVisible.current = visible;
++    // Leaving the explorer's view closes the Filters popover; focus stays where the user went.
++    if (!visible) setFiltersOpen(false);
++    // A catalog still loading, or a reload in flight, is left to finish; its result, or its failure, is shown on arrival.
++    if (!returned || !loaded.current || catalogPending.current) return;
++    quietRead.current = true;
++    setRevision(value => value + 1);
++  }, [visible]);
+   const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
+   const pageInFlight = useRef(false);
+   const latestSearch = useRef({ query: "", snapshot: "", generation: 0 });
+   const content = useRef<HTMLElement>(null);
+   const searchCache = useRef(new Map<string, NonNullable<typeof searchResult>>());
+   const activeMode = useRef(mode);
+   activeMode.current = mode;
+   const [documents, setDocuments] = useState<MetaprojectNeighbors | null>(null);
+   const [documentProblem, setDocumentProblem] = useState("");
+   const panelOpen = route.mode === "graph" && route.panelOpen;
++  // The graph's freshness as last read: a quiet re-read's, while it is for the loaded snapshot.
++  const graphState = catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog;
+   const graphIndex = useMemo(
+     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
+     [catalog],
+   );
+   const selectedNode = graphIndex?.byId.get(selection);
+   const searchQuery = query.trim();
+   if (latestSearch.current.query !== searchQuery || latestSearch.current.snapshot !== catalog?.snapshotId) {
+     latestSearch.current = { query: searchQuery, snapshot: catalog?.snapshotId ?? "", generation: latestSearch.current.generation + 1 };
+   }
+   useEffect(() => {
+     if (protocol === null) return;
+-    const generation = ++project.current;
+-    setError("");
++    const generation = ++catalogRead.current;
++    const quiet = quietRead.current;
++    quietRead.current = false;
++    if (!quiet) {
++      project.current++;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 381,390 @@
++    }
+     if (!loaded.current) setLoading(true);
++    catalogPending.current = true;
+     void (async () => {
+       try {
+         const result = (await read(cwd, {
+           action: "catalog",
+         })) as MetaprojectCatalog;
+-        if (generation !== project.current) return;
++        if (generation !== catalogRead.current) return;
+         loaded.current = true;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 393,406 @@
++        if (quiet && result.snapshotId === loadedSnapshot.current) {
++          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });
++          return;
++        }
+         setCatalog(result);
++        setFreshness(null);
+         setSnapshotMismatch(false);
+         if (loadedSnapshot.current && loadedSnapshot.current !== result.snapshotId && !result.truncated) {
+           setRoute(current => current.mode !== "openspec" && !result.nodes.some(node => node.id === current.selection)
+             ? { ...current, selection: "" } : current);
+         }
+         loadedSnapshot.current = result.snapshotId;
+       } catch (cause) {
+-        if (generation === project.current) setError(errMessage(cause));
++        // A failed quiet read keeps the loaded catalog; the next read the user starts reports a lasting failure.
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 409,438 @@
+-        if (generation === project.current) setLoading(false);
++        if (generation === catalogRead.current) {
++          catalogPending.current = false;
++          setLoading(false);
++        }
+       }
+     })();
+     return () => {
+-      project.current++;
++      catalogRead.current++;
++      // Leaving the explorer (unmount, or a project change, which remounts it) retires its pending work.
++      if (!quietRead.current) project.current++;
+     };
+   }, [cwd, read, revision, protocol, setRoute]);
+   useEffect(() => {
+     if (!catalog || !searchQuery || mode === "openspec") return;
+     const key = JSON.stringify([catalog.snapshotId, mode, searchQuery]);
+     const cached = searchCache.current.get(key);
+     setSearchError(null);
+     if (cached) { setSearchResult(cached); return; }
+     setSearchResult(null);
+     let active = true;
+     const timer = window.setTimeout(() => {
+       void (async () => {
+         const previous = searchInFlight.current;
+         if (previous) await previous.catch(() => {});
+         if (!active) return;
+         const pending = Promise.resolve().then(() => protocol === 2 && mode === "wiki"
+           ? (requestV2 ?? requestMetaprojectV2)(cwd, { version: 2, action: "search", query: searchQuery, scopes: ["wiki"] }) as unknown as Promise<MetaprojectResponse>
+           : read(cwd, { action: "search", query: searchQuery }));
+         searchInFlight.current = pending;
+         try {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 485,556 @@
+         if (active) {
+           if (result.snapshotId !== catalog.snapshotId)
+             setSnapshotMismatch(true);
+           else if (result.node.id === selection) setDetail(result);
+         }
+       } catch (cause) {
+         if (active) setDetailError(errMessage(cause));
+       } finally {
+         if (active) setLoadingDetail(false);
+       }
+     })();
+     return () => {
+       active = false;
+     };
+   }, [catalog, cwd, mode, read, selection]);
+   useEffect(() => {
+     setProjection(null);
+     setRelationshipError("");
+     setLoadingRelationships(false);
+     if (!catalog || !selection || mode === "openspec") return;
+-    const neighborsRequest = { action: "neighbors", id: selection, depth, direction, kinds } as const;
++    const neighborsRequest = { action: "neighbors", id: selection, depth: relationDepth, direction: relationDirection, kinds: relationKinds } as const;
+     if (
+       protocol !== 2 && graphIndex && selectedNode &&
+       !catalog.truncated &&
+       selectedNode.kind !== "symbol" &&
+-      !kinds.includes("calls") &&
+-      !kinds.includes("defines")
++      !relationKinds.includes("calls") &&
++      !relationKinds.includes("defines")
+     ) {
+       setProjection(projectMetaprojectGraph(graphIndex, catalog, neighborsRequest));
+       return;
+     }
+     if (catalog.graph === "missing" && protocol !== 2) return;
+     let active = true;
+     setLoadingRelationships(true);
+     void (async () => {
+       try {
+         const result = (await read(cwd, neighborsRequest)) as MetaprojectNeighbors;
+         if (active) {
+           if (result.snapshotId !== catalog.snapshotId)
+             setSnapshotMismatch(true);
+           else if (result.root === selection) setProjection(result);
+         }
+       } catch (cause) {
+         if (active) setRelationshipError(errMessage(cause));
+       } finally {
+         if (active) setLoadingRelationships(false);
+       }
+     })();
+     return () => {
+       active = false;
+     };
+-  }, [graphIndex, selectedNode, catalog, cwd, mode, read, selection, depth, direction, kinds, protocol]);
++  }, [graphIndex, selectedNode, catalog, cwd, mode, read, selection, relationDepth, relationDirection, relationKinds, protocol]);
+   useEffect(() => {
+     setDocuments(null);
+     setDocumentProblem("");
+     if (!catalog || !selection || !panelOpen) return;
+     const input: Extract<MetaprojectRequest, { action: "neighbors" }> = {
+       action: "neighbors", id: selection, depth: 1, direction: "both",
+       kinds: protocol === 2 ? [...DOCUMENT_EDGES, "spec-context", "changes-spec"] : [...DOCUMENT_EDGES],
+     };
+     if (protocol === 1 && graphIndex && !catalog.truncated && selectedNode) {
+       setDocuments(projectMetaprojectGraph(graphIndex, catalog, input));
+       return;
+     }
+     let active = true;
+     void read(cwd, input).then(result => {
+       if (!active || !("root" in result) || result.root !== selection) return;
+       if (result.snapshotId !== catalog.snapshotId) setSnapshotMismatch(true);
+       else setDocuments(result);
+     }).catch(cause => { if (active) setDocumentProblem(errMessage(cause)); });
+     return () => { active = false; };
+   }, [catalog, cwd, graphIndex, panelOpen, protocol, read, selectedNode, selection]);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 566,675 @@
+       : null;
+   const hits = resolvedSearch?.hits ?? EMPTY_HITS;
+   const searchFailure = searchError?.query === searchQuery ? searchError.message : "";
+   const searching = Boolean(searchQuery && !resolvedSearch && !searchFailure && !snapshotMismatch);
+   const nodes = useMemo(
+     () => [
+       ...new Map(
+         [
+           ...(catalog?.nodes ?? []),
+           ...hits.map((hit) => hit.node),
+           ...(projection?.nodes ?? []),
+         ].map((node) => [node.id, node]),
+       ).values(),
+     ],
+     [catalog, hits, projection],
+   );
+   const results = useMemo(() => {
+     const results = protocol === 2 && searchQuery ? hits : rankMetaprojectSearchHits(searchQuery, catalog?.nodes ?? [], hits);
+     return mode === "wiki" ? results.filter(hit => hit.node.kind === "wiki") : results;
+   }, [catalog, hits, mode, searchQuery, protocol]);
+-  const knownSelection = useRef<MetaprojectNode>();
+-  const activeNode = nodes.find(node => node.id === selection) ?? (knownSelection.current?.id === selection ? knownSelection.current : undefined);
++  // Every node this explorer has shown or opened, so Back to one shows its panel at once even
++  // when it is not among the catalog, hits or current projection (for example a lookup result).
++  const seenNodes = useRef(new Map<string, MetaprojectNode>());
++  const remember = useCallback((node: MetaprojectNode) => { seenNodes.current.set(node.id, node); }, []);
++  // Filled when the node list changes, not on every render; the current render reads `nodes` itself.
++  useEffect(() => {
++    for (const node of nodes) remember(node);
++  }, [nodes, remember]);
++  const activeNode = nodes.find(node => node.id === selection) ?? seenNodes.current.get(selection);
+   const [suggestedWiki, setSuggestedWiki] = useState<{ root: string; node: MetaprojectNode } | null>(null);
+   const modulePath = activeNode?.kind === "module" ? activeNode.path : undefined;
+   useEffect(() => {
+     if (!panelOpen || !modulePath || !catalog) return;
+     let active = true;
+     void read(cwd, { action: "search", query: modulePath }).then(result => {
+       if (!active || !("hits" in result) || result.snapshotId !== catalog.snapshotId) return;
+       const match = result.hits.find(({ node }) => node.kind === "wiki" && node.pageType === "component" && node.title === `Module ${modulePath}`);
+       setSuggestedWiki(match ? { root: selection, node: match.node } : null);
+     }).catch(() => {});
+     return () => { active = false; };
+   }, [catalog, cwd, modulePath, panelOpen, read, selection]);
+   const graphNodes = useRef(nodes);
+   graphNodes.current = nodes;
+   const select = useCallback((id: string) => {
+-    const node = graphNodes.current.find(item => item.id === id);
+-    if (node) knownSelection.current = node;
+-    setRoute(current => current.mode === "graph"
+-      ? { ...current, selection: id, panelOpen: true, archive: node?.kind === "archive" }
+-      : current);
+-  }, [setRoute]);
++    const node = graphNodes.current.find(item => item.id === id) ?? seenNodes.current.get(id);
++    const archive = node?.kind === "archive";
++    if (id === shownSelection.current) {
++      // Re-selecting the shown node only opens its panel; it is not a new history entry.
++      setRoute(current => current.mode === "graph" && !current.panelOpen
++        ? { ...current, selection: id, panelOpen: true, archive } : current);
++      return;
++    }
++    navigate(current => current.mode === "graph" ? { ...current, selection: id, panelOpen: true, archive } : null);
++  }, [navigate, setRoute]);
+   const openSpec = (location: OpenSpecLocation) =>
+     visit({ mode: "openspec", query: "", collection: location.collection, location });
+   const viewInGraph = (id: string, node?: MetaprojectNode) => {
+-    if (node) knownSelection.current = node;
++    if (node) remember(node);
+     visit({ mode: "graph", query: "", selection: id, panelOpen: true, archive: node?.kind === "archive" });
+   };
+   const openDocument = (node: MetaprojectNode, fragment?: string) => {
+     switch (node.kind) {
+       case "wiki": visit({ mode: "wiki", query: "", selection: node.id, fragment }); break;
+       case "spec":
+       case "change":
+       case "archive": openSpec({ id: node.id, collection: node.kind, fragment }); break;
+       default: viewInGraph(node.id, node);
+     }
+   };
+   const openHit = (hit: MetaprojectHit) => {
+     if (mode === "wiki") {
+-      if (content.current) content.current.scrollTop = 0;
+-      setRoute(current => current.mode === "wiki" ? { ...current, selection: hit.node.id, fragment: undefined } : current);
++      if (hit.node.id === selection) return;
++      navigate(current => current.mode === "wiki" ? { ...current, selection: hit.node.id, fragment: undefined } : null, { resetContent: true });
+       return;
+     }
+     const v2 = protocol === 2 ? hit as MetaprojectHitV2 : null;
+     if (v2?.source && v2.section && (v2.scope === "spec" || v2.scope === "change" || v2.scope === "archive")) {
+       openSpec({ id: hit.node.id, collection: v2.scope, artifact: v2.source.path, digest: v2.source.digest, section: v2.section });
+     } else select(hit.node.id);
+   };
+   const loadMoreSearch = async () => {
+     if (protocol !== 2 || !resolvedSearch?.nextCursor || pageInFlight.current) return;
+     const cursor = resolvedSearch.nextCursor;
+     const generation = latestSearch.current.generation;
+     const projectGeneration = project.current;
+     const searchMode = resolvedSearch.mode;
+     pageInFlight.current = true;
+     try {
+       const page = await (requestV2 ?? requestMetaprojectV2)(cwd, {
+         version: 2, action: "search", query: searchQuery, cursor, expectedSnapshotId: resolvedSearch.snapshotId,
+         ...(searchMode === "wiki" && { scopes: ["wiki"] }),
+       });
+       if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current || searchMode !== activeMode.current) return;
+       if (page.snapshotId !== resolvedSearch.snapshotId) { setSnapshotMismatch(true); return; }
+       setSearchResult(current => current?.nextCursor === cursor && current.snapshotId === page.snapshotId
+         ? { mode: searchMode, query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
+         : current);
+     } catch (cause) {
+       if (generation === latestSearch.current.generation && projectGeneration === project.current)
+         setSearchError({ query: searchQuery, message: errMessage(cause) });
+     } finally { pageInFlight.current = false; }
+   };
++  // A rebuild outlives catalog reloads; only leaving the explorer (unmount, or a project
++  // change, which remounts it) stops it from writing state.
++  const mounted = useRef(true);
++  useEffect(() => {
++    mounted.current = true;
++    return () => { mounted.current = false; };
++  }, []);
+   const rebuild = async () => {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 679,680 @@
+-      if ((await onRebuild()) && generation === project.current)
+-        setRevision((value) => value + 1);
++      if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);
+     } catch (cause) {
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 683,847 @@
+-      if (generation === project.current) setRebuilding(false);
++      if (mounted.current) setRebuilding(false);
+     }
+   };
++  const [unresolvedLink, setUnresolvedLink] = useState<{ selection: string; path: string; message: string } | null>(null);
++  // Every link click takes a new token; only the lookup holding the latest one may settle.
++  const lookup = useRef(0);
++  const openPath = (path: string, fragment: string | undefined, resolved: boolean) => {
++    const token = ++lookup.current;
++    const from = selection;
++    const unresolved = (message: string) => setUnresolvedLink({ selection: from, path, message });
++    setUnresolvedLink(null);
++    if (!resolved) { unresolved(`The link ${path} is not a valid repository path.`); return; }
++    const loaded = nodes.find(item => item.path === path);
++    if (loaded) { openDocument(loaded, fragment); return; }
++    const snapshotId = catalog?.snapshotId;
++    const generation = project.current;
++    const current = () => token === lookup.current && generation === project.current && shownSelection.current === from && activeMode.current === "wiki";
++    void (async () => {
++      try {
++        const result = await read(cwd, { action: "search", query: path });
++        if (!current()) return;
++        if (!("hits" in result)) throw new Error(`The lookup of ${path} returned no search results.`);
++        if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }
++        const target = result.hits.find(hit => hit.node.path === path)?.node;
++        if (target) openDocument(target, fragment);
++        else unresolved(`No indexed project file at ${path}.`);
++      } catch (cause) {
++        if (current()) unresolved(`Could not look up ${path}: ${errMessage(cause)}`);
++      }
++    })();
++  };
+   const currentProjection = projection?.root === selection ? projection : null;
++  // The Wiki disclosure counts the rows its list shows, by the list's own grouping rule, as the panel's Relationships tab does.
++  const wikiRelationships = useMemo(
++    () => mode === "wiki" && currentProjection ? summarizeRelationships(currentProjection) : null,
++    [mode, currentProjection],
++  );
++  const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;
++  // While the next selection's relationships load, the last graph stays on screen, marked busy;
++  // a failed read or leaving Graph drops it.
++  const lastGraph = useRef<MetaprojectNeighbors | null>(null);
++  if (mode !== "graph" || relationshipError) lastGraph.current = null;
++  else if (currentProjection) lastGraph.current = currentProjection;
++  // A projection for another root means the read for this selection has not started yet.
++  const relationshipsLoading = loadingRelationships || (projection !== null && projection.root !== selection);
++  const graphProjection = mode !== "graph" ? null : currentProjection ?? (relationshipsLoading ? lastGraph.current : null);
++  const graphBusy = graphProjection !== null && graphProjection !== currentProjection;
++  const showGraph = graphState !== null && (graphState.graph !== "missing" || protocol === 2);
++  const list = useRef<HTMLElement>(null);
++  useEffect(() => {
++    list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
++  }, [selection, mode]);
++  const shownTotal = catalog ? mode === "wiki" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;
++  const listHeading = searchQuery ? `Results · ${results.length}` : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
++  const showHidden = useCallback(() => {
++    setRoute(current => current.mode === "graph" && !current.panelOpen ? { ...current, panelOpen: true } : current);
++    setRevealRelationships(value => value + 1);
++  }, [setRoute]);
+   const detailPanel = detail?.node.id === selection && detail.node.kind === "wiki" && (
+     <article className="metaproject-article">
+       <header className="metaproject-article-header">
+         <h2>{detail.node.title}</h2>
+         <p className="metaproject-meta">
+           {[detail.node.pageType, detail.node.status, detail.node.path].filter(Boolean).join(" · ")}
+         </p>
+         <button className="btn btn-sm" onClick={() => viewInGraph(detail.node.id, detail.node)}><Icon name="branch" size={14} />View in Graph</button>
+       </header>
++      {unresolvedLink?.selection === selection && (
++        <p className="metaproject-meta" role="status">{unresolvedLink.message}</p>
++      )}
+       {detail.markdown && (
+-        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path}
+-          select={(id, fragment) => { const node = nodes.find(item => item.id === id); if (node) openDocument(node, fragment); }}
++        <RepositoryMarkdown text={detail.markdown} source={detail.node.path} openPath={openPath}
+           fragment={route.mode === "wiki" ? route.fragment : undefined} />
+       )}
+     </article>
+   );
++  const kindChoices = protocol === 2 ? METAPROJECT_EDGE_KINDS_V2 : METAPROJECT_EDGE_KINDS;
++  const kindsOn = kindChoices.filter(kind => kinds.includes(kind) && !(SYMBOL_KINDS.includes(kind) && !catalog?.hasSymbolLayer)).length;
++  const changedSettings = (direction !== "both" ? 1 : 0) + (depth !== 1 ? 1 : 0) + (sameKinds(kinds, defaultKinds) ? 0 : 1);
++  const filterSummary = `${DIRECTION_LABELS[direction]} · ${depth === 1 ? "1 step" : "2 steps"} · ${kindsOn} of ${kindChoices.length} types`;
++  const closeFilters = () => { setFiltersOpen(false); filtersAnchor?.focus(); };
++  // One element for the button: in the graph's header when a graph is drawn, otherwise in a slim row of its own.
++  const filtersButton = (
++    <button ref={setFiltersAnchor} type="button" className="chip-btn metaproject-filters-toggle"
++      aria-haspopup="dialog" aria-expanded={filtersOpen} aria-controls={filtersOpen ? filtersDialogId : undefined}
++      data-changed={changedSettings ? "true" : undefined} title={filterSummary}
++      onClick={() => setFiltersOpen(open => !open)}>
++      {changedSettings ? `Filters · ${changedSettings}` : "Filters"}<Icon name="chevronDown" size={12} />
++    </button>
++  );
++  const filters = visible && filtersOpen && filtersAnchor && (
++    <FiltersPopover id={filtersDialogId} anchor={filtersAnchor} onClose={closeFilters}>
++      <div className="metaproject-filters-pop-row">
++        <label className="metaproject-filter">
++          <span>Direction</span>
++          <select className="select-compact" aria-label="Direction" value={direction}
++            onChange={event => setDirection(event.target.value as MetaprojectDirection)}>
++            <option value="both">Both</option>
++            <option value="incoming">Incoming</option>
++            <option value="outgoing">Outgoing</option>
++          </select>
++        </label>
++        <label className="metaproject-filter">
++          <span>Depth</span>
++          <select className="select-compact" aria-label="Depth" value={depth}
++            onChange={event => setDepth(event.target.value === "2" ? 2 : 1)}>
++            <option value="1">1 step</option>
++            <option value="2">2 steps</option>
++          </select>
++        </label>
++      </div>
++      <div className="menu-header">Relationship types · {kindsOn} of {kindChoices.length}</div>
++      <div className="metaproject-kind-chips" role="group" aria-label="Relationship types">
++        {kindChoices.map(kind => {
++          const unavailable = SYMBOL_KINDS.includes(kind) && !catalog?.hasSymbolLayer;
++          const on = kinds.includes(kind) && !unavailable;
++          return (
++            <button key={kind} type="button" className="chip-btn" aria-pressed={on} disabled={unavailable}
++              aria-describedby={unavailable ? symbolReasonId : undefined} title={unavailable ? NO_SYMBOL_LAYER : undefined}
++              onClick={() => setKinds(current => current.includes(kind) ? current.filter(value => value !== kind) : [...current, kind])}>
++              {on && <Icon name="check" size={12} />}{RELATIONSHIP_KIND_LABELS[kind]}
++            </button>
++          );
++        })}
++      </div>
++      {catalog && !catalog.hasSymbolLayer && <p id={symbolReasonId} className="metaproject-filter-note">{NO_SYMBOL_LAYER}</p>}
++      {filtersChanged && (
++        <div className="menu-footer metaproject-filters-pop-footer">
++          <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>Reset filters</button>
++        </div>
++      )}
++    </FiltersPopover>
++  );
++  const freshnessOpen = Boolean(graphState?.graphReason) && freshnessReason === graphState?.graphReason;
++  const wikiEmptyTitle =searching ? `Searching the Wiki for “${searchQuery}”…`
++    : results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`;
+   return (
+     <section className="flows metaproject" ref={root} aria-label="Metaproject explorer">
+       <header className="flows-toolbar metaproject-header">
+         <div className="flows-heading"><h1>Metaproject</h1></div>
+         {canGoBack && <button className="btn btn-sm" onClick={back}><Icon name="arrowLeft" size={14} />Back</button>}
+         <label className="search-field">
+           <Icon name="search" size={14} />
+           <input
+             type="search"
+             aria-label="Search project knowledge"
+             placeholder={mode === "openspec" ? "Search OpenSpec" : mode === "wiki" ? "Search Wiki" : "Search names, paths and wiki text"}
+             value={query}
+             onChange={event => { const query = event.target.value; setRoute(current => ({ ...current, query })); }}
+           />
+         </label>
+         <div className="segmented" role="group" aria-label="View">
+-          <button
+-            aria-pressed={mode === "graph"}
+-            onClick={() => switchView("graph")}
+-          >
+-            <Icon name="branch" size={14} />
+-            Graph
+-          </button>
+-          <button
+-            aria-pressed={mode === "wiki"}
+-            onClick={() => switchView("wiki")}
+-          >
+-            <Icon name="file" size={14} />
+-            Wiki
+-          </button>
++          <button aria-pressed={mode === "graph"} onClick={() => switchView("graph")}><Icon name="branch" size={14} />Graph</button>
++          <button aria-pressed={mode === "wiki"} onClick={() => switchView("wiki")}><Icon name="file" size={14} />Wiki</button>
+           <button aria-pressed={mode === "openspec"} onClick={() => switchView("openspec")}><Icon name="file" size={14} />OpenSpec</button>
+         </div>
+       </header>
+-      {protocolError && <div className="inline-banner tone-warn" role="alert">{protocolError}</div>}
++      {protocolError && (
++        <div className="inline-banner tone-warn" role="alert">
++          <span>{protocolError}</span>
++          <button className="btn btn-sm" onClick={() => setNegotiation(value => value + 1)}>Retry</button>
++        </div>
++      )}
++      {error && (
++        <div className="inline-banner tone-warn" role="alert">
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 849,892 @@
++          <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
++        </div>
++      )}
++      {snapshotMismatch && (
++        <div className="inline-banner tone-warn" role="alert">
++          <span>Project knowledge changed while loading.</span>
++          <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Refresh catalog</button>
++        </div>
++      )}
+       {protocol === 2 && <OpenSpecView
+         cwd={cwd}
+         active={route.mode === "openspec"}
+         query={route.mode === "openspec" ? route.query : ""}
+         location={route.mode === "openspec" ? route.location : null}
+         collection={route.mode === "openspec" ? route.collection : "spec"}
+         snapshot={catalog?.snapshotId}
+-        onLocation={location => setRoute(current => current.mode === "openspec" ? { ...current, location } : current)}
+-        onCollection={collection => setRoute(current => current.mode === "openspec" ? { ...current, collection, location: null, query: "" } : current)}
++        onLocation={location => navigate(current => current.mode === "openspec" && !sameLocation(current.location, location)
++          ? { ...current, location } : null, { resetContent: true })}
++        onCollection={collection => setRoute(current => current.mode === "openspec" ? { ...current, collection, location: null } : current)}
+         onOpen={openSpec}
+         {...(requestV2 && { request: requestV2 })}
+         nodes={nodes}
+         onNavigate={openDocument}
+         onGraph={(id, node) => viewInGraph(id, node)}
+       />}
+-      {mode === "openspec" && protocol !== 2 && <p role="status">{protocol === 1
++      {mode === "openspec" && protocol !== 2 && !protocolError && <p role="status">{protocol === 1
+         ? "This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings."
+         : "Checking OpenSpec support…"}</p>}
+-      {mode !== "openspec" && loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
+-      {error && (
+-        <div className="inline-banner tone-warn" role="alert">
+-          <span>{error}</span>
+-          <button
+-            className="btn btn-sm"
+-            onClick={() => setRevision((value) => value + 1)}
+-          >
+-            Retry
+-          </button>
+-        </div>
+-      )}
+-      {snapshotMismatch && (
+-        <div className="inline-banner tone-warn" role="alert">
+-          <span>Project knowledge changed while loading.</span>
+-          <button
+-            className="btn btn-sm"
+-            onClick={() => setRevision((value) => value + 1)}
+-          >
+-            Refresh catalog
+-          </button>
+-        </div>
+-      )}
+-      {mode !== "openspec" && catalog && (
++      {mode !== "openspec" && loading && !protocolError && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
++      {mode !== "openspec" && catalog && graphState && (
+         <>
+-          {catalog.graph !== "ready" && (
+-            <div className="inline-banner tone-warn" role="status">
+-              <span>Graph {catalog.graph}. {catalog.graphReason}</span>
+-              <button
+-                className="btn metaproject-rebuild"
+-                disabled={rebuilding}
+-                onClick={() => void rebuild()}
+-              >
++          {graphState.graph !== "ready" && (
++            <div className="inline-banner tone-warn metaproject-freshness" role="status">
++              <span className="metaproject-freshness-state">Graph is {graphState.graph}.</span>
++              {graphState.graphReason && (
++                <button type="button" className="btn btn-ghost btn-sm metaproject-freshness-toggle" aria-expanded={freshnessOpen}
++                  aria-controls={freshnessReasonId} onClick={() => setFreshnessReason(freshnessOpen ? null : graphState.graphReason ?? null)}>
++                  Details<Icon name={freshnessOpen ? "chevronUp" : "chevronDown"} size={12} />
++                </button>
++              )}
++              {freshnessOpen && <p id={freshnessReasonId} className="metaproject-freshness-reason">{graphState.graphReason}</p>}
++              <button className="btn metaproject-rebuild" disabled={rebuilding} onClick={() => void rebuild()}>
+                 {rebuilding ? "Rebuilding…" : "Rebuild graph"}
+               </button>
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 896,974 @@
+-            <nav className="metaproject-list" aria-label="Search results">
+-              <h2>{searchQuery ? "Results" : "Catalog"}</h2>
++            <nav className="metaproject-list" aria-label="Search results" ref={list}>
++              <h2>{listHeading}</h2>
+               {searchFailure && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>Search failed. {searchFailure}</span>
+-                  <button className="btn btn-sm" onClick={() => setSearchAttempt(value => value + 1)}>
+-                    Retry search
+-                  </button>
++                  <button className="btn btn-sm" onClick={() => setSearchAttempt(value => value + 1)}>Retry search</button>
+                 </div>
+               )}
+               <ul>
+-                {results.map((hit) => (
++                {results.map(hit => (
+                   <li key={`${hit.node.id}-${hit.section ?? ""}`}>
+-                    <button
+-                      className="metaproject-row"
+-                      aria-current={
+-                        selection === hit.node.id ? "true" : undefined
+-                      }
+-                      onClick={() => openHit(hit)}
+-                    >
++                    <button className="metaproject-row" aria-current={selection === hit.node.id ? "true" : undefined} onClick={() => openHit(hit)}>
+                       <strong>{hit.node.title}</strong>
+-                      <span className="metaproject-meta">
+-                        {hit.node.kind} · {hit.node.path}
+-                      </span>
++                      <span className="metaproject-meta">{hit.node.kind} · {hit.node.path}</span>
+                       {hit.snippet && (
+-                        <small className="metaproject-snippet">
+-                          {hit.section ? `${hit.section}: ` : ""}
+-                          {hit.snippet}
+-                        </small>
++                        <small className="metaproject-snippet">{hit.section ? `${hit.section}: ` : ""}{hit.snippet}</small>
+                       )}
+                     </button>
+                   </li>
+                 ))}
+               </ul>
+               {resolvedSearch?.nextCursor && <button className="btn" onClick={() => void loadMoreSearch()}>Load more results</button>}
+               {!results.length && (
+                 searching
+                   ? <p role="status">Searching project knowledge…</p>
+                   : !searchFailure && !snapshotMismatch && <p>{searchQuery ? "No results." : "No indexed project knowledge."}</p>
+               )}
+             </nav>
+             <section className="metaproject-content" ref={content} aria-label={mode === "wiki" ? "Wiki article" : "Relationship graph"}>
+-              {(detailError || relationshipError) && (
++              {(detailError || (mode === "wiki" && relationshipError)) && (
+                 <div className="inline-banner tone-warn" role="alert">
+-                  <span>{[detailError, relationshipError].filter(Boolean).join(" · ")}</span>
+-                  <button
+-                    className="btn btn-sm"
+-                    onClick={() => setRevision((value) => value + 1)}
+-                  >
+-                    Retry
+-                  </button>
++                  <span>{[detailError, mode === "wiki" ? relationshipError : ""].filter(Boolean).join(" · ")}</span>
++                  <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+                 </div>
+               )}
+               {mode === "wiki" && detailPanel}
+               {mode === "wiki" && loadingDetail && <p role="status">Loading item…</p>}
+-              {mode === "graph" && (
+-                <>
+-                  <div className="metaproject-controls">
+-                    <label>
+-                      Direction{" "}
+-                      <select
+-                        className="select-compact"
+-                        value={direction}
+-                        onChange={(event) =>
+-                          setDirection(
+-                            event.target.value as MetaprojectDirection,
+-                          )
+-                        }
+-                      >
+-                        <option value="both">Both</option>
+-                        <option value="incoming">Incoming</option>
+-                        <option value="outgoing">Outgoing</option>
+-                      </select>
+-                    </label>
+-                    <label>
+-                      Depth{" "}
+-                      <select
+-                        className="select-compact"
+-                        value={depth}
+-                        onChange={(event) =>
+-                          setDepth(event.target.value === "2" ? 2 : 1)
+-                        }
+-                      >
+-                        <option value="1">1 step</option>
+-                        <option value="2">2 steps</option>
+-                      </select>
+-                    </label>
+-                    <fieldset>
+-                      <legend>Relationship types</legend>
+-                      {(protocol === 2 ? METAPROJECT_EDGE_KINDS_V2 : METAPROJECT_EDGE_KINDS).map((kind) => (
+-                        <label key={kind}>
+-                          <input
+-                            type="checkbox"
+-                            checked={kinds.includes(kind)}
+-                            onChange={(event) =>
+-                              setKinds((current) =>
+-                                event.target.checked
+-                                  ? [...current, kind]
+-                                  : current.filter((value) => value !== kind),
+-                              )
+-                            }
+-                          />
+-                          {kind}
+-                        </label>
+-                      ))}
+-                    </fieldset>
+-                  </div>
+-                  {loadingRelationships && <p role="status">Loading relationships…</p>}
+-                  {currentProjection && (catalog.graph !== "missing" || protocol === 2) && (
+-                    <Graph
+-                      projection={currentProjection}
+-                      selected={selection}
+-                      select={select}
+-                    />
+-                  )}
+-                </>
++              {mode === "graph" && !(graphProjection && showGraph) && <div className="metaproject-filter-strip">{filtersButton}</div>}
++              {mode === "graph" && filters}
++              {mode === "graph" && relationshipError && !panelOpen && (
++                <div className="inline-banner tone-warn" role="alert">
++                  <span>{relationshipError}</span>
++                  <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
++                </div>
+               )}
+-              {currentProjection && mode === "graph" && currentProjection.edges.length === 0 && (
+-                <p className="metaproject-meta">No relationships for these filters.</p>
++              {mode === "graph" && relationshipsLoading && !graphProjection && <p role="status">Loading relationships…</p>}
++              {graphProjection && showGraph && (
++                <RelationshipGraph projection={graphProjection} busy={graphBusy} onSelect={select} onShowHidden={showHidden}
++                  actions={filtersButton} {...(createCytoscape && { createCytoscape })} />
+               )}
+-              {currentProjection && mode === "graph" && currentProjection.edges.length > 0 && (
+-                <section className="metaproject-relationship-section">
+-                  <h2>Relationships</h2>
+-                  <RelationshipList projection={currentProjection} select={select} />
+-                </section>
++              {mode === "graph" && currentProjection && !showGraph && (
++                <p className="metaproject-meta">The graph is not built yet. Open the panel's Relationships tab to see this node's links.</p>
+               )}
+-              {currentProjection && mode === "wiki" && currentProjection.edges.length > 0 && (
++              {currentProjection && mode === "wiki" && wikiRelationshipRows > 0 && (
+                 <details className="metaproject-relationship-section" key={selection}>
+-                  <summary>Relationships <span className="count-label">{currentProjection.edges.length}</span></summary>
++                  <summary>Relationships <span className="count-label">{wikiRelationshipRows}</span></summary>
+                   <RelationshipList projection={currentProjection} select={id => {
+-                    const node = nodes.find(item => item.id === id); if (node) openDocument(node);
++                    const node = nodes.find(item => item.id === id) ?? seenNodes.current.get(id); if (node) openDocument(node);
+                   }} />
+                 </details>
+               )}
+               {mode === "wiki" && loadingRelationships && <p role="status">Loading relationships…</p>}
+-              {!selection && <p>{mode === "wiki" ? "Select a Wiki page to read it." : "Select an item to explore it."}</p>}
++              {!selection && mode === "wiki" && searchQuery ? (
++                <EmptyState icon="search" title={wikiEmptyTitle}
++                  actions={<button className="btn btn-sm" onClick={() => setRoute(current => ({ ...current, query: "" }))}>Clear search</button>}>
++                  {results.length ? "Pick a page from the results to read it." : searching ? "Results appear here as soon as the search finishes." : "Clear the search to read the first Wiki page."}
++                </EmptyState>
++              ) : !selection && <p>{mode === "wiki" ? "Select a Wiki page to read it." : "Select an item to explore it."}</p>}
+             </section>
+-            {panelOpen && activeNode && <GraphNodePanel
++            {panelOpen && activeNode && <NodeDetailsPanel
+               node={activeNode}
+-              projection={documents?.root === selection ? documents : null}
+-              pending={documents?.root !== selection && !snapshotMismatch && !documentProblem}
++              relationships={currentProjection}
++              relationshipsPending={relationshipsLoading}
++              relationshipsProblem={relationshipError}
++              revealRelationships={revealRelationships}
++              documents={documents?.root === selection ? documents : null}
++              documentsPending={documents?.root !== selection && !snapshotMismatch && !documentProblem}
++              documentsProblem={documentProblem || (snapshotMismatch ? "The project index changed. Refresh to look up linked documents." : "")}
+               suggestedWiki={suggestedWiki?.root === selection ? suggestedWiki.node : undefined}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 978,981 @@
+               onResize={setPanelWidth}
+               onClose={() => setRoute(current => current.mode === "graph" ? { ...current, panelOpen: false } : current)}
++              onSelect={select}
+               onOpen={openDocument}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 984,993 @@
+                 : visit({ mode: "openspec", query: activeNode.title, collection: "spec", location: null })}
++              onDraft={graphState.graph === "ready" && !documents?.truncated ? onDraft : undefined}
+               onRetry={() => setRevision(value => value + 1)}
+             />}
+           </div>
+         </>
+       )}
+     </section>
+   );
+ }
+
+--- apps/desktop/src/metaproject/NodeDetailsPanel.tsx
+@@ 1,391 @@
++import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
++import type { MetaprojectDetail, MetaprojectDetailV2, MetaprojectNeighbors, MetaprojectNode } from "../../../../src/integrations/metaproject-explorer-contract";
++import { Icon } from "../components/Icon";
++import { EmptyState, Spinner } from "../components/ui";
++import { copyText } from "../lib/format";
++import { NodeKindBadge, RelationshipList, summarizeRelationships } from "./RelationshipList";
++import "./nodePanel.css";
++
++const MIN_WIDTH = 300;
++const DEFAULT_WIDTH = 380;
++const COMPACT_BELOW = 820;
++const RESIZE_STEP = 32;
++const PREVIEW_LIMIT = 360;
++const COPY_FEEDBACK_MS = 2000;
++
++export const isOpenSpecNode = (node: MetaprojectNode): boolean =>
++  node.kind === "spec" || node.kind === "change" || node.kind === "archive";
++
++type Tab = "relationships" | "wiki" | "openspec";
++type DocumentTab = Exclude<Tab, "relationships">;
++const TABS: readonly Tab[] = ["relationships", "wiki", "openspec"];
++const TAB_LABELS: Record<Tab, string> = { relationships: "Relationships", wiki: "Wiki", openspec: "OpenSpec" };
++type LinkedDocument = MetaprojectNode & { suggested?: boolean };
++
++// ---- preview text -------------------------------------------------------------------------
++
++/** Lines that describe the page rather than say what it is about. */
++const METADATA_LINE = /^(?:covers|version|type|page type|status|updated|last updated|created|date|owner|owners|author|authors|tags|scope|audience|source|sources|related)\s*:/i;
++const LIST_MARKER = /^\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+/;
++
++function stripInline(text: string): string {
++  return text
++    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
++    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
++    .replace(/<[^>]+>/g, "")
++    .replace(/`+/g, "")
++    .replace(/(\*\*|__)(.+?)\1/g, "$2")
++    .replace(/~~(.+?)~~/g, "$1")
++    .replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)\*(?![\w*])/g, "$1$2")
++    .replace(/(^|[^\w])_(?!\s)([^_\n]+?)_(?!\w)/g, "$1$2")
++    .replace(/\*\*|__/g, "");
++}
++
++function cleanLine(line: string): string {
++  return stripInline(line.replace(/^\s*(?:>\s?)+/, "").replace(LIST_MARKER, "")).trim();
++}
++
++/**
++ * The first prose paragraph of a Markdown page as plain text: front matter, headings, rules,
++ * tables, code blocks and metadata lines ("Covers:", "Version:", …) are skipped, and blockquote,
++ * list, emphasis and code markers are removed. A list is used only when the page has no prose.
++ */
++export function markdownPreview(markdown: string): string {
++  const body = markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
++  const blocks: { text: string; list: boolean }[] = [];
++  let lines: string[] = [];
++  let list = false;
++  let fenced = false;
++  const flush = () => {
++    const text = lines.join(" ").replace(/\s+/g, " ").trim();
++    if (text) blocks.push({ text, list });
++    lines = [];
++    list = false;
++  };
++  for (const raw of body.split(/\r?\n/)) {
++    if (/^\s*(?:```|~~~)/.test(raw)) { fenced = !fenced; flush(); continue; }
++    if (fenced) continue;
++    if (/^\s*(?:>\s*)*$/.test(raw) || /^\s*#{1,6}\s/.test(raw) || /^\s*([-*_])(?:\s*\1){2,}\s*$/.test(raw) || /^\s*\|/.test(raw)) {
++      flush();
++      continue;
++    }
++    const text = cleanLine(raw);
++    if (!text || METADATA_LINE.test(text)) continue;
++    if (!lines.length) list = LIST_MARKER.test(raw);
++    lines.push(text);
++  }
++  flush();
++  const text = (blocks.find(block => !block.list) ?? blocks[0])?.text ?? "";
++  return text.length > PREVIEW_LIMIT ? `${text.slice(0, PREVIEW_LIMIT - 1).trimEnd()}…` : text;
++}
++
++// ---- linked documents ---------------------------------------------------------------------
++
++function linkedDocuments(node: MetaprojectNode, documents: MetaprojectNeighbors | null, tab: DocumentTab, suggestedWiki?: MetaprojectNode): LinkedDocument[] {
++  const neighbors = new Set(documents?.edges.map(edge => edge.from === node.id ? edge.to : edge.from));
++  const linked: LinkedDocument[] = [node, ...(documents?.nodes.filter(item => item.id !== node.id && neighbors.has(item.id)) ?? [])]
++    .filter(item => tab === "wiki" ? item.kind === "wiki" : isOpenSpecNode(item));
++  if (tab === "wiki" && suggestedWiki && !linked.some(item => item.id === suggestedWiki.id)) {
++    return [...linked, { ...suggestedWiki, suggested: true }];
++  }
++  return linked;
++}
++
++function Fact({ label, children }: { label: string; children: ReactNode }) {
++  return <div className="info-row">
++    <span className="info-key">{label}</span>
++    <span className="info-val">{children}</span>
++  </div>;
++}
++
++function Problem({ message, onRetry }: { message: string; onRetry: () => void }) {
++  return <div className="inline-banner tone-danger metaproject-details-problem" role="alert">
++    <span>{message}</span>
++    <button type="button" className="btn btn-sm" onClick={onRetry}>Retry</button>
++  </div>;
++}
++
++function Loading({ children }: { children: string }) {
++  return <p className="loading-row metaproject-details-loading" role="status"><Spinner />{children}</p>;
++}
++
++// ---- the panel ----------------------------------------------------------------------------
++
++export function NodeDetailsPanel({
++  node, relationships, relationshipsPending, relationshipsProblem, revealRelationships,
++  documents, documentsPending, documentsProblem, suggestedWiki, openSpec, readPreview,
++  width = DEFAULT_WIDTH, onResize, onClose, onSelect, onOpen, onFind, onDraft, onRetry,
++}: {
++  node: MetaprojectNode;
++  relationships: MetaprojectNeighbors | null;
++  relationshipsPending: boolean;
++  relationshipsProblem: string;
++  revealRelationships?: number;
++  documents: MetaprojectNeighbors | null;
++  documentsPending: boolean;
++  documentsProblem: string;
++  suggestedWiki?: MetaprojectNode;
++  openSpec: boolean;
++  readPreview: (id: string) => Promise<MetaprojectDetail>;
++  width?: number;
++  onResize: (width: number) => void;
++  onClose: () => void;
++  onSelect: (id: string) => void;
++  onOpen: (node: MetaprojectNode) => void;
++  onFind: (tab: "wiki" | "openspec") => void;
++  onDraft?: (task: string) => Promise<void>;
++  onRetry: () => void;
++}) {
++  const panelId = useId();
++  const panel = useRef<HTMLElement>(null);
++  const close = useRef<HTMLButtonElement>(null);
++  const tabList = useRef<HTMLDivElement>(null);
++  const body = useRef<HTMLDivElement>(null);
++  const drag = useRef<{ pointer: number; x: number; width: number } | null>(null);
++  const [tabChoice, setTab] = useState<{ node: string; value: Tab } | null>(null);
++  const tab: Tab = tabChoice?.node === node.id ? tabChoice.value : "relationships";
++  const [preview, setPreview] = useState<{ id: string; text: string } | null>(null);
++  const [copied, setCopied] = useState<{ node: string; ok: boolean } | null>(null);
++  const [drafting, setDrafting] = useState(false);
++  const [draftError, setDraftError] = useState("");
++  const [availableWidth, setAvailableWidth] = useState(0);
++  const lastReveal = useRef(revealRelationships);
++  const [revealTick, setRevealTick] = useState(0);
++  const compact = availableWidth > 0 && availableWidth < COMPACT_BELOW;
++  const maxWidth = Math.max(MIN_WIDTH, Math.min(640, (availableWidth || 1180) - 440));
++  const currentWidth = Math.min(width, maxWidth);
++  const resize = (value: number) => onResize(Math.max(MIN_WIDTH, Math.min(maxWidth, value)));
++
++  // Docked, the panel leaves focus where it is; as a drawer it takes focus and gives it back.
++  useLayoutEffect(() => {
++    if (!compact) return;
++    const before = document.activeElement;
++    const aside = panel.current;
++    close.current?.focus();
++    return () => {
++      if (aside?.contains(document.activeElement) && before instanceof HTMLElement && before.isConnected) {
++        before.focus({ preventScroll: true });
++      }
++    };
++  }, [compact]);
++  useLayoutEffect(() => {
++    const host = panel.current?.parentElement;
++    if (!host) return;
++    const measure = () => setAvailableWidth(host.clientWidth);
++    measure();
++    const observer = new ResizeObserver(measure);
++    observer.observe(host);
++    return () => observer.disconnect();
++  }, []);
++
++  useEffect(() => {
++    if (lastReveal.current === revealRelationships) return;
++    lastReveal.current = revealRelationships;
++    setTab({ node: node.id, value: "relationships" });
++    setRevealTick(value => value + 1);
++  }, [revealRelationships, node.id]);
++  useEffect(() => {
++    if (!revealTick || !body.current) return;
++    body.current.scrollTop = 0;
++    body.current.scrollIntoView?.({ block: "nearest" });
++  }, [revealTick]);
++
++  useEffect(() => {
++    if (!copied) return;
++    const timer = window.setTimeout(() => setCopied(null), COPY_FEEDBACK_MS);
++    return () => window.clearTimeout(timer);
++  }, [copied]);
++
++  const summary = useMemo(() => relationships ? summarizeRelationships(relationships) : null, [relationships]);
++  const wikiDocuments = useMemo(() => linkedDocuments(node, documents, "wiki", suggestedWiki), [node, documents, suggestedWiki]);
++  const openSpecDocuments = useMemo(() => linkedDocuments(node, documents, "openspec"), [node, documents]);
++  const shown = tab === "wiki" ? wikiDocuments : tab === "openspec" && openSpec ? openSpecDocuments : [];
++  const firstId = shown[0]?.id;
++  useEffect(() => {
++    if (!firstId) return;
++    let active = true;
++    void readPreview(firstId).then(detail => {
++      if (!active || detail.node.id !== firstId) return;
++      const artifact = (detail as unknown as MetaprojectDetailV2).openSpec?.artifact;
++      setPreview({ id: firstId, text: markdownPreview(detail.markdown ?? artifact?.markdown ?? "") });
++    }).catch(() => {}); // Links remain usable when the optional preview cannot be read.
++    return () => { active = false; };
++  }, [firstId, readPreview]);
++
++  async function copyPath() {
++    const path = node.path;
++    const ok = await copyText(path);
++    setCopied({ node: node.id, ok });
++  }
++
++  async function draft(kind: DocumentTab) {
++    if (!onDraft || drafting) return;
++    setDrafting(true);
++    setDraftError("");
++    try {
++      const material = kind === "wiki" ? "Wiki page explaining how this node works" : "OpenSpec change documenting expected behavior";
++      await onDraft(`Prepare a draft ${material} for ${JSON.stringify(node.path)} in this checkout. Check existing documents and links first. Show the proposed changes before writing any files.`);
++    } catch (cause) {
++      setDraftError(cause instanceof Error ? cause.message : String(cause));
++    } finally {
++      setDrafting(false);
++    }
++  }
++
++  function choose(next: Tab, focus = false) {
++    setTab({ node: node.id, value: next });
++    setDraftError("");
++    if (focus) tabList.current?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
++  }
++
++  const counts: Record<Tab, number | undefined> = {
++    relationships: summary ? summary.incoming + summary.outgoing + summary.secondStep : undefined,
++    wiki: documents ? wikiDocuments.filter(item => !item.suggested).length : undefined,
++    openspec: documents && openSpec ? openSpecDocuments.length : undefined,
++  };
++  const relationFact = summary
++    ? [
++      `${summary.incoming} incoming`,
++      `${summary.outgoing} outgoing`,
++      ...(summary.secondStep > 0 ? [`${summary.secondStep} second-step`] : []),
++      ...(summary.truncated ? ["limited"] : []),
++    ].join(" · ")
++    : relationshipsProblem ? "Unavailable" : relationshipsPending ? "Loading…" : "—";
++  const copyState = copied?.node === node.id ? copied.ok ? "Copied" : "Could not copy" : "";
++
++  function moduleControl(module: string) {
++    const path = module.replace(/^module:/, "");
++    return <button type="button" className="link-btn metaproject-details-module" onClick={() => onSelect(module)} title={`Select module ${path}`}>{path}</button>;
++  }
++
++  function relationshipBody() {
++    return <>
++      {relationshipsProblem && <Problem message={relationshipsProblem} onRetry={onRetry} />}
++      {!relationships && relationshipsPending && !relationshipsProblem && <Loading>Loading relationships…</Loading>}
++      {relationships && <RelationshipList projection={relationships} select={onSelect} />}
++      {!relationships && !relationshipsPending && !relationshipsProblem && <p className="metaproject-rel-note">Relationships are not loaded yet.</p>}
++    </>;
++  }
++
++  function documentBody(kind: DocumentTab) {
++    if (kind === "openspec" && !openSpec) {
++      return <p className="metaproject-rel-note">This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings.</p>;
++    }
++    const wiki = kind === "wiki";
++    const list = wiki ? wikiDocuments : openSpecDocuments;
++    const where = wiki ? "Wiki" : "OpenSpec";
++    return <>
++      {list.map((document, index) => <section className="metaproject-details-doc" key={document.id}>
++        {document.id !== node.id && <h3>{document.title}</h3>}
++        {(document.id !== node.id || document.status) && <p className="metaproject-details-meta">
++          {document.status && <span className="badge badge-neutral">{document.status}</span>}
++          {document.id !== node.id && <span className="mono">{document.path}</span>}
++        </p>}
++        {document.suggested && <p className="metaproject-details-meta">Matching component page</p>}
++        {preview?.id === document.id && preview.text && <p className="metaproject-details-preview">{preview.text}</p>}
++        <div className="metaproject-details-actions">
++          <button
++            type="button" className={`btn btn-sm ${index === 0 ? "btn-primary" : "btn-ghost"}`}
++            onClick={() => onOpen(document)} aria-label={`Open ${document.title} in ${where}`} title={document.path}
++          ><Icon name="file" size={14} />Open in {where}</button>
++        </div>
++      </section>)}
++      {documentsPending && <Loading>Looking for linked documents…</Loading>}
++      {documentsProblem && <Problem message={documentsProblem} onRetry={onRetry} />}
++      {!list.length && !documentsPending && !documentsProblem && <EmptyState
++        icon={wiki ? "list" : "checklist"}
++        title={wiki ? "No Wiki page is linked to this node." : "No OpenSpec document is linked to this node."}
++        actions={<>
++          <button type="button" className="btn btn-sm btn-primary" onClick={() => onFind(kind)}>
++            <Icon name="search" size={14} />{wiki ? "Find a Wiki page" : "Find an OpenSpec document"}
++          </button>
++          {onDraft && <button type="button" className="btn btn-sm btn-ghost" disabled={drafting} onClick={() => void draft(kind)}>
++            <Icon name="pencil" size={14} />{drafting ? "Opening session…" : wiki ? "Draft Wiki page" : "Draft OpenSpec change"}
++          </button>}
++        </>}
++      >
++        <p>{wiki ? "Search the Wiki for a page that covers this path." : "Search OpenSpec for a spec or change that covers this path."}</p>
++        {draftError && <p role="alert" className="tone-danger">{draftError}</p>}
++      </EmptyState>}
++    </>;
++  }
++
++  return <aside
++    id={panelId} ref={panel} aria-label="Graph node details"
++    className={`metaproject-details${compact ? " compact" : ""}`}
++    style={compact ? undefined : { width: currentWidth }}
++    onKeyDown={event => {
++      if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
++      event.preventDefault();
++      onClose();
++    }}
++  >
++    {!compact && <div
++      className="side-resize metaproject-details-resize" role="separator" tabIndex={0}
++      aria-orientation="vertical" aria-label="Resize graph node details" aria-controls={panelId}
++      aria-valuenow={currentWidth} aria-valuemin={MIN_WIDTH} aria-valuemax={maxWidth}
++      onPointerDown={event => {
++        if (event.button !== 0) return;
++        event.currentTarget.setPointerCapture(event.pointerId);
++        drag.current = { pointer: event.pointerId, x: event.clientX, width: currentWidth };
++      }}
++      onPointerMove={event => {
++        const start = drag.current;
++        if (start?.pointer === event.pointerId) resize(start.width + start.x - event.clientX);
++      }}
++      onLostPointerCapture={() => { drag.current = null; }}
++      onKeyDown={event => {
++        const widths: Record<string, number> = { ArrowLeft: currentWidth + RESIZE_STEP, ArrowRight: currentWidth - RESIZE_STEP, Home: MIN_WIDTH, End: maxWidth };
++        const next = Object.hasOwn(widths, event.key) ? widths[event.key] : undefined;
++        if (next === undefined) return;
++        event.preventDefault();
++        resize(next);
++      }}
++    />}
++    <header className="metaproject-details-head">
++      <div className="metaproject-details-toprow">
++        <NodeKindBadge kind={node.kind} icon />
++        <span className="grow" />
++        <button ref={close} type="button" className="icon-btn" onClick={onClose} aria-label="Close graph node details" title="Close (Esc)"><Icon name="x" /></button>
++      </div>
++      <h2>{node.title}</h2>
++      <div className="metaproject-details-path">
++        <code>{node.path}</code>
++        <button type="button" className="icon-btn" onClick={() => void copyPath()} aria-label="Copy path" title="Copy path">
++          <Icon name={copyState === "Copied" ? "check" : "copy"} size={14} />
++        </button>
++        <span className="metaproject-details-copied" role="status">{copyState}</span>
++      </div>
++    </header>
++    <div className="info-section metaproject-details-facts">
++      {node.module && <Fact label="Module">{moduleControl(node.module)}</Fact>}
++      {node.pageType && <Fact label="Page type">{node.pageType}</Fact>}
++      {node.status && <Fact label="Status"><span className="badge badge-neutral">{node.status}</span></Fact>}
++      {node.line !== undefined && <Fact label="Line">{node.line}</Fact>}
++      <Fact label="Relationships">{relationFact}</Fact>
++    </div>
++    <div className="tabs metaproject-details-tabs" role="tablist" aria-label="Node details" ref={tabList}
++      onKeyDown={event => {
++        const index = TABS.indexOf(tab);
++        const targets: Record<string, Tab | undefined> = {
++          ArrowLeft: TABS[(index + TABS.length - 1) % TABS.length],
++          ArrowRight: TABS[(index + 1) % TABS.length],
++          Home: TABS[0],
++          End: TABS[TABS.length - 1],
++        };
++        const target = Object.hasOwn(targets, event.key) ? targets[event.key] : undefined;
++        if (!target) return;
++        event.preventDefault();
++        choose(target, true);
++      }}>
++      {TABS.map(kind => <button
++        key={kind} type="button" role="tab" className="tab" data-tab={kind} id={`${panelId}-${kind}`}
++        aria-selected={tab === kind} tabIndex={tab === kind ? 0 : -1} aria-controls={`${panelId}-body`}
++        onClick={() => choose(kind)}
++      >{TAB_LABELS[kind]}{counts[kind] !== undefined && <span className="tab-count">{counts[kind]}</span>}</button>)}
++    </div>
++    <div className="metaproject-details-body" role="tabpanel" id={`${panelId}-body`} aria-labelledby={`${panelId}-${tab}`} ref={body}>
++      {tab === "relationships" ? relationshipBody() : documentBody(tab)}
++    </div>
++  </aside>;
++}
+
+--- apps/desktop/src/metaproject/OpenSpecView.tsx
+@@ 81,103 @@
++    // The owner records the document being left, its scroll included, before the new one opens at the top.
+     onLocation?.(next);
++    if (content.current) content.current.scrollTop = 0;
+   };
+   const select = (entry: Entry, source?: Source, section?: string) =>
+     choose({ id: entry.id, collection, ...(source && { artifact: source.path, digest: source.digest }), ...(section && { section }) });
+   const openEntry = (next: OpenSpecLocation) => {
+     if (onOpen) onOpen(next);
+     else { setCollection(next.collection); choose(next); }
+   };
+   function changeCollection(kind: Collection) {
+     if (kind === collection) return;
+     if (onCollection) onCollection(kind);
+     else { setCollection(kind); choose(null); }
+   }
+ 
+   useEffect(() => {
+     if (!active) return;
+     const current = ++generation.current;
+     setError(""); setSearchProblem(null);
+     const cached = listCache.current.get(listKey);
+     if (cached) { setList({ key: listKey, result: cached }); setLoading(false); return; }
+     setLoading(true);
+
+--- apps/desktop/src/metaproject/RelationshipGraph.tsx
+@@ 1,363 @@
++import cytoscape from "cytoscape";
++import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
++import type { MetaprojectNeighbors } from "../../../../src/integrations/metaproject-explorer-contract";
++import { Icon } from "../components/Icon";
++import {
++  GRAPH_GEOMETRY,
++  NODE_KINDS_IN_ORDER,
++  computeViewport,
++  edgeKindStyle,
++  layoutNeighborhood,
++  legendFor,
++  nodeKindStyle,
++  toOpaqueColor,
++  type GraphColorToken,
++  type GraphSide,
++  type NeighborhoodLayout,
++} from "./graphLayout";
++import "./graph.css";
++
++/** Builds the cytoscape instance. Only tests pass one: happy-dom has no 2D canvas. */
++export type CytoscapeFactory = (options: cytoscape.CytoscapeOptions) => cytoscape.Core;
++
++export interface RelationshipGraphProps {
++  /** root = the selected node */
++  projection: MetaprojectNeighbors;
++  /** A newer projection is loading: keep rendering, mark aria-busy, dim. */
++  busy?: boolean;
++  /** A node was tapped. */
++  onSelect: (id: string) => void;
++  /** A "+N more" entry was tapped. */
++  onShowHidden?: (side: "incoming" | "outgoing") => void;
++  /** Test seam; the app always uses core cytoscape. */
++  createCytoscape?: CytoscapeFactory;
++  /** Host controls shown in the header row, left of the zoom controls (the explorer's Filters button). */
++  actions?: ReactNode;
++}
++
++const USER_ZOOM = { min: 0.3, max: 2.5, step: 1.25 } as const;
++
++type ThemeToken = GraphColorToken | "--fg" | "--accent" | "--bg-selected" | "--bg-surface" | "--bg-sunken";
++const THEME_TOKENS: readonly ThemeToken[] = ["--fg", "--fg-muted", "--fg-subtle", "--border-strong", "--info", "--ok", "--warn", "--accent", "--bg-selected", "--bg-surface", "--bg-sunken"];
++
++interface GraphTheme {
++  colors: Partial<Record<ThemeToken, string>>;
++  font: string;
++  textScale: number;
++}
++
++function readTextScale(): number {
++  if (typeof document === "undefined") return 1;
++  const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--text-scale"));
++  return Number.isFinite(value) && value > 0 ? value : 1;
++}
++
++/**
++ * Resolves each token to an opaque colour cytoscape can read. A probe element turns any CSS
++ * colour syntax into `rgb()`/`rgba()`; translucent values are blended over the canvas background.
++ */
++function readTheme(host: HTMLElement): GraphTheme {
++  const probe = document.createElement("span");
++  probe.hidden = true;
++  host.append(probe);
++  const hostStyle = getComputedStyle(host);
++  const rootStyle = getComputedStyle(document.documentElement);
++  const raw = (token: string) => hostStyle.getPropertyValue(token).trim() || rootStyle.getPropertyValue(token).trim();
++  const resolve = (token: ThemeToken): string => {
++    const authored = raw(token);
++    if (!authored) return "";
++    probe.style.color = "";
++    probe.style.color = `var(${token})`;
++    const computed = getComputedStyle(probe).color.trim();
++    return computed && !computed.includes("var(") ? computed : authored;
++  };
++  const resolved = new Map(THEME_TOKENS.map((token) => [token, resolve(token)]));
++  probe.remove();
++  const background = resolved.get("--bg-sunken") ?? "";
++  const colors: Partial<Record<ThemeToken, string>> = {};
++  for (const [token, value] of resolved) if (value) colors[token] = toOpaqueColor(value, background);
++  const font = raw("--font");
++  return { colors, font, textScale: readTextScale() };
++}
++
++/** Drops properties whose token did not resolve, so cytoscape keeps its default instead of an invalid value. */
++function defined(style: Record<string, string | number | undefined>): Record<string, string | number> {
++  const result: Record<string, string | number> = {};
++  for (const [key, value] of Object.entries(style)) if (value !== undefined && value !== "") result[key] = value;
++  return result;
++}
++
++function graphStyle(theme: GraphTheme): cytoscape.StylesheetJson {
++  const c = theme.colors;
++  const scale = theme.textScale;
++  const sheet: { selector: string; style: Record<string, string | number> }[] = [
++    {
++      selector: "node.graph-node",
++      style: defined({
++        shape: "data(shape)",
++        width: "data(width)",
++        height: "data(height)",
++        label: "data(label)",
++        "font-size": GRAPH_GEOMETRY.labelFontSize * scale,
++        "font-family": theme.font || undefined,
++        "text-valign": "center",
++        "text-halign": "center",
++        "text-wrap": "none",
++        color: c["--fg"],
++        "background-color": c["--bg-surface"],
++        "border-width": "data(borderWidth)",
++        "border-style": "data(borderStyle)",
++        "border-color": c["--border-strong"],
++      }),
++    },
++    ...NODE_KINDS_IN_ORDER.map((kind) => ({
++      selector: `node.kind-${kind}`,
++      style: defined({ "border-color": c[nodeKindStyle(kind).borderToken] }),
++    })),
++    {
++      selector: "node.root",
++      style: defined({ "border-color": c["--accent"], "background-color": c["--bg-selected"], "font-weight": 600 }),
++    },
++    {
++      selector: "node.caption",
++      style: defined({
++        shape: "rectangle",
++        width: "data(width)",
++        height: "data(height)",
++        label: "data(label)",
++        "font-size": GRAPH_GEOMETRY.captionFontSize * scale,
++        "font-family": theme.font || undefined,
++        "font-weight": 600,
++        "text-valign": "center",
++        "text-halign": "center",
++        color: c["--fg-muted"],
++        "background-opacity": 0,
++        "border-width": 0,
++        events: "no",
++      }),
++    },
++    {
++      selector: "node.overflow",
++      style: defined({
++        shape: "round-rectangle",
++        width: "data(width)",
++        height: "data(height)",
++        label: "data(label)",
++        "font-size": GRAPH_GEOMETRY.captionFontSize * scale,
++        "font-family": theme.font || undefined,
++        "text-valign": "center",
++        "text-halign": "center",
++        color: c["--fg-muted"],
++        "background-color": c["--bg-surface"],
++        "border-width": 1,
++        "border-style": "dashed",
++        "border-color": c["--fg-muted"],
++      }),
++    },
++    {
++      selector: "edge",
++      style: defined({
++        width: "data(width)",
++        "line-style": "data(lineStyle)",
++        "line-color": c["--fg-subtle"],
++        "target-arrow-color": c["--fg-subtle"],
++        "target-arrow-shape": "triangle",
++        "arrow-scale": 0.8,
++        "curve-style": "bezier",
++      }),
++    },
++    { selector: "edge.second-step", style: { opacity: 0.45 } },
++    { selector: ".faded", style: { opacity: 0.18 } },
++    {
++      selector: "edge.highlight",
++      style: defined({ opacity: 1, "line-color": c["--accent"], "target-arrow-color": c["--accent"] }),
++    },
++    { selector: "node.graph-node.highlight", style: defined({ "border-color": c["--accent"] }) },
++  ];
++  // The stylesheet is assembled from typed constants above; cytoscape's per-property unions
++  // cannot express `data(...)` mappers on every key, so the record is widened here once.
++  return sheet as unknown as cytoscape.StylesheetJson;
++}
++
++function graphElements(layout: NeighborhoodLayout): cytoscape.ElementDefinition[] {
++  if (!layout.root) return [];
++  const nodes = [layout.root, ...layout.nodes].map((item) => {
++    const style = nodeKindStyle(item.node.kind);
++    return {
++      group: "nodes" as const,
++      data: { id: item.id, label: item.label, shape: style.shape, borderStyle: style.borderStyle, borderWidth: item.role === "root" ? Math.max(2, style.borderWidth) : style.borderWidth, width: item.width, height: item.height },
++      position: { x: item.x, y: item.y },
++      classes: `graph-node kind-${item.node.kind}${item.role === "root" ? " root" : ""}`,
++    };
++  });
++  const captions = layout.captions.map((item) => ({
++    group: "nodes" as const,
++    data: { id: `__${item.id}`, label: item.text, width: item.width, height: item.height },
++    position: { x: item.x, y: item.y },
++    classes: "caption",
++  }));
++  const overflow = layout.overflow.map((item) => ({
++    group: "nodes" as const,
++    data: { id: `__${item.id}`, label: item.text, side: item.side, width: item.width, height: item.height },
++    position: { x: item.x, y: item.y },
++    classes: "overflow",
++  }));
++  const edges = layout.edges.map((item) => ({
++    group: "edges" as const,
++    data: { id: item.id, source: item.from, target: item.to, width: item.width, lineStyle: edgeKindStyle(item.kind).lineStyle },
++    classes: item.secondStep ? "second-step" : "",
++  }));
++  return [...nodes, ...captions, ...overflow, ...edges];
++}
++
++function isSide(value: unknown): value is GraphSide {
++  return value === "incoming" || value === "outgoing";
++}
++
++export function RelationshipGraph({ projection, busy = false, onSelect, onShowHidden, createCytoscape, actions }: RelationshipGraphProps): JSX.Element {
++  const host = useRef<HTMLDivElement>(null);
++  const container = useRef<HTMLDivElement>(null);
++  const graph = useRef<cytoscape.Core | null>(null);
++  const factory = useRef<CytoscapeFactory>(createCytoscape ?? cytoscape);
++  const selectRef = useRef(onSelect);
++  const showHiddenRef = useRef(onShowHidden);
++  selectRef.current = onSelect;
++  showHiddenRef.current = onShowHidden;
++  const [textScale, setTextScale] = useState(readTextScale);
++  const layout = useMemo(() => layoutNeighborhood(projection, { textScale }), [projection, textScale]);
++  const layoutRef = useRef(layout);
++  layoutRef.current = layout;
++  const legend = useMemo(() => legendFor(projection), [projection]);
++
++  /** Fits the current layout; a zero-sized (hidden) container is left alone. */
++  const fit = useCallback(() => {
++    const cy = graph.current;
++    const viewport = container.current;
++    if (!cy || !viewport) return;
++    const target = computeViewport(layoutRef.current, viewport.clientWidth, viewport.clientHeight);
++    if (!target.usable) return;
++    cy.resize();
++    cy.viewport({ zoom: target.zoom, pan: target.pan });
++  }, []);
++
++  const zoomBy = useCallback((factor: number) => {
++    const cy = graph.current;
++    const viewport = container.current;
++    if (!cy || !viewport || !viewport.clientWidth || !viewport.clientHeight) return;
++    const level = Math.min(USER_ZOOM.max, Math.max(USER_ZOOM.min, cy.zoom() * factor));
++    cy.zoom({ level, renderedPosition: { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 } });
++  }, []);
++
++  useEffect(() => {
++    const viewport = container.current;
++    const themeHost = host.current;
++    if (!viewport || !themeHost) return;
++    const cy = factory.current({
++      container: viewport,
++      elements: [],
++      style: graphStyle(readTheme(themeHost)),
++      layout: { name: "preset" },
++      minZoom: USER_ZOOM.min,
++      maxZoom: USER_ZOOM.max,
++      boxSelectionEnabled: false,
++      autoungrabify: true,
++      autounselectify: true,
++    });
++    graph.current = cy;
++    cy.on("tap", "node.graph-node", (event) => selectRef.current(event.target.id()));
++    cy.on("tap", "node.overflow", (event) => {
++      const side: unknown = event.target.data("side");
++      if (isSide(side)) showHiddenRef.current?.(side);
++    });
++    cy.on("mouseover", "node.graph-node, node.overflow", (event) => {
++      viewport.style.cursor = "pointer";
++      if (!event.target.hasClass("graph-node")) return;
++      const near = event.target.closedNeighborhood();
++      cy.elements().not(near).not("node.caption").addClass("faded");
++      near.addClass("highlight");
++    });
++    cy.on("mouseout", "node.graph-node, node.overflow", () => {
++      viewport.style.cursor = "";
++      cy.elements().removeClass("faded highlight");
++    });
++
++    const refreshTheme = () => {
++      cy.style(graphStyle(readTheme(themeHost)));
++      setTextScale(readTextScale());
++    };
++    const themeObserver = new MutationObserver(refreshTheme);
++    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "style"] });
++    const scheme = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
++    scheme?.addEventListener("change", refreshTheme);
++    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
++    resizeObserver?.observe(viewport);
++    return () => {
++      resizeObserver?.disconnect();
++      scheme?.removeEventListener("change", refreshTheme);
++      themeObserver.disconnect();
++      graph.current = null;
++      cy.destroy();
++    };
++  }, [fit]);
++
++  useEffect(() => {
++    const cy = graph.current;
++    if (!cy) return;
++    cy.batch(() => {
++      cy.elements().remove();
++      cy.add(graphElements(layout));
++    });
++    fit();
++  }, [layout, fit]);
++
++  const root = layout.root?.node;
++  return (
++    <div className={`metaproject-rgraph${busy ? " is-busy" : ""}`} ref={host} aria-busy={busy || undefined}>
++      <div className="metaproject-rgraph-header">
++        <p className="metaproject-rgraph-caption">
++          <strong className="metaproject-rgraph-title" title={root?.path}>{root?.title ?? "No node selected"}</strong>
++          <span> · {layout.incoming} incoming · {layout.outgoing} outgoing</span>
++          {layout.truncated && (
++            <>
++              <span> · </span>
++              <span className="badge badge-warn">limited</span>
++            </>
++          )}
++        </p>
++        {actions && <div className="metaproject-rgraph-actions">{actions}</div>}
++        <div className="metaproject-rgraph-zoom" role="group" aria-label="Graph zoom">
++          <button type="button" className="icon-btn" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(USER_ZOOM.step)}>
++            <Icon name="plus" size={14} />
++          </button>
++          <button type="button" className="icon-btn" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / USER_ZOOM.step)}>
++            <span aria-hidden="true">−</span>
++          </button>
++          <button type="button" className="icon-btn" aria-label="Fit graph" title="Fit graph" onClick={fit}>
++            <Icon name="target" size={14} />
++          </button>
++        </div>
++      </div>
++      <div className="metaproject-rgraph-stage">
++        <div className="metaproject-rgraph-canvas" aria-hidden="true">
++          <div className="metaproject-rgraph-viewport" ref={container} />
++        </div>
++      </div>
++      {(legend.nodeKinds.length > 0 || legend.lines.length > 0) && (
++        <ul className="metaproject-rgraph-legend" aria-label="Graph legend">
++          {legend.nodeKinds.map((item) => (
++            <li key={item.kind}>
++              <span className={`metaproject-rgraph-swatch is-${item.kind}`} aria-hidden="true" />
++              {item.label}
++            </li>
++          ))}
++          {legend.lines.map((item) => (
++            <li key={item.style}>
++              <span className={`metaproject-rgraph-line is-${item.style}`} aria-hidden="true" />
++              {item.label}: {item.kinds.join(", ")}
++            </li>
++          ))}
++        </ul>
++      )}
++    </div>
++  );
++}
+
+--- apps/desktop/src/metaproject/RelationshipList.tsx
+@@ 1,225 @@
++import {
++  METAPROJECT_EDGE_KINDS_V2,
++  type MetaprojectEdge,
++  type MetaprojectEdgeKind,
++  type MetaprojectNeighbors,
++  type MetaprojectNode,
++  type MetaprojectNodeKind,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { useId, useState } from "react";
++import { Icon, type IconName } from "../components/Icon";
++import { NODE_KIND_LABELS, RELATIONSHIP_KIND_LABELS } from "./labels";
++import "./nodePanel.css";
++
++const EVIDENCE_EXAMPLES = 2;
++
++const KIND_BADGES: Record<MetaprojectNodeKind, { icon: IconName; tone: string }> = {
++  module: { icon: "folder", tone: "badge-neutral" },
++  file: { icon: "file", tone: "badge-neutral" },
++  symbol: { icon: "circleDot", tone: "badge-neutral" },
++  wiki: { icon: "list", tone: "badge-info" },
++  spec: { icon: "checklist", tone: "badge-ok" },
++  change: { icon: "branch", tone: "badge-warn" },
++  archive: { icon: "archive", tone: "badge-neutral" },
++};
++
++/** A node kind as a text badge; the icon is decorative and the tint never carries meaning alone. */
++export function NodeKindBadge({ kind, icon = false }: { kind: MetaprojectNodeKind; icon?: boolean }) {
++  const badge = KIND_BADGES[kind];
++  return <span className={`badge ${badge.tone} metaproject-kind-badge`}>
++    {icon && <Icon name={badge.icon} size={12} />}{NODE_KIND_LABELS[kind]}
++  </span>;
++}
++
++export type RelationshipDirection = "incoming" | "outgoing";
++export interface AdjacentRelationship { edge: MetaprojectEdge; node: MetaprojectNode }
++export interface RelationshipKindGroup { kind: MetaprojectEdgeKind; rows: AdjacentRelationship[] }
++export interface SecondStepRelationship { edge: MetaprojectEdge; from: MetaprojectNode; to: MetaprojectNode }
++export interface RelationshipGroups {
++  incoming: RelationshipKindGroup[];
++  outgoing: RelationshipKindGroup[];
++  secondStep: SecondStepRelationship[];
++}
++
++/**
++ * Direction is relative to the projection's root: `edge.to === root` is incoming and
++ * `edge.from === root` is outgoing. A self-loop is left out at every step, as the graph layout
++ * (`layoutNeighborhood`) leaves it out, so the panel and the graph caption count the same edges.
++ * Edges whose ends are not in the projection are left out, as the old list did.
++ */
++export function groupRelationships(projection: MetaprojectNeighbors): RelationshipGroups {
++  const nodes = new Map(projection.nodes.map(node => [node.id, node]));
++  const adjacent: Record<RelationshipDirection, AdjacentRelationship[]> = { incoming: [], outgoing: [] };
++  const secondStep: SecondStepRelationship[] = [];
++  for (const edge of projection.edges) {
++    if (edge.from === edge.to) continue;
++    const from = nodes.get(edge.from);
++    const to = nodes.get(edge.to);
++    if (!from || !to) continue;
++    if (edge.from === projection.root) adjacent.outgoing.push({ edge, node: to });
++    else if (edge.to === projection.root) adjacent.incoming.push({ edge, node: from });
++    else secondStep.push({ edge, from, to });
++  }
++  return { incoming: byKind(adjacent.incoming), outgoing: byKind(adjacent.outgoing), secondStep };
++}
++
++function byKind(rows: AdjacentRelationship[]): RelationshipKindGroup[] {
++  return METAPROJECT_EDGE_KINDS_V2
++    .map(kind => ({ kind, rows: rows.filter(row => row.edge.kind === kind).sort((a, b) => a.node.title.localeCompare(b.node.title)) }))
++    .filter(group => group.rows.length > 0);
++}
++
++export interface RelationshipSummary { incoming: number; outgoing: number; secondStep: number; truncated: boolean }
++
++/** "N incoming · M outgoing" counts the root-adjacent edges of a projection. */
++export function summarizeRelationships(projection: MetaprojectNeighbors): RelationshipSummary {
++  const groups = groupRelationships(projection);
++  const count = (list: RelationshipKindGroup[]) => list.reduce((sum, group) => sum + group.rows.length, 0);
++  return { incoming: count(groups.incoming), outgoing: count(groups.outgoing), secondStep: groups.secondStep.length, truncated: projection.truncated };
++}
++
++/** A single lowercase word or hyphenated words with no path or position: "related-code", "key-files", "frontmatter". */
++const ORIGIN_WORD = /^[a-z]+(?:-[a-z]+)*$/;
++
++export interface RowEvidence { lines: string[]; origins: string[] }
++
++/**
++ * Splits an edge's evidence into example lines and origin tags. An item equal to the path of either
++ * end only repeats what the row already shows; when the evidence carries such an item, the origin
++ * words beside it ("related-code") become tags instead of lines.
++ */
++export function rowEvidence(edge: MetaprojectEdge, ends: readonly string[]): RowEvidence {
++  const items = edge.evidence ?? [];
++  const repeats = items.some(item => ends.includes(item));
++  const rest = items.filter(item => !ends.includes(item));
++  if (!repeats) return { lines: [...rest], origins: [] };
++  return { lines: rest.filter(item => !ORIGIN_WORD.test(item)), origins: rest.filter(item => ORIGIN_WORD.test(item)) };
++}
++
++function examplesLabel(count: number): string {
++  return `${count} ${count === 1 ? "example" : "examples"}`;
++}
++
++function kindWord(kind: MetaprojectEdgeKind): string {
++  return RELATIONSHIP_KIND_LABELS[kind].toLowerCase();
++}
++
++function EvidenceLines({ id, lines }: { id: string; lines: string[] }) {
++  const hidden = lines.length - EVIDENCE_EXAMPLES;
++  return <ul className="metaproject-rel-evidence" id={id} aria-label="Evidence">
++    {lines.slice(0, EVIDENCE_EXAMPLES).map((line, index) => <li key={index} className="mono">{line}</li>)}
++    {hidden > 0 && <li>and {hidden} more</li>}
++  </ul>;
++}
++
++/** A toggle (closed by default) that shows the example lines below the row it belongs to. */
++function EvidenceDisclosure({ lines, label }: { lines: string[]; label: string }) {
++  const id = useId();
++  const [open, setOpen] = useState(false);
++  if (!lines.length) return null;
++  return <>
++    <button
++      type="button" className="btn btn-ghost btn-sm metaproject-rel-toggle"
++      aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}
++      title={open ? "Hide evidence" : "Show evidence"}
++    ><Icon name={open ? "chevronDown" : "chevronRight"} size={12} />{label}</button>
++    {open && <EvidenceLines id={id} lines={lines} />}
++  </>;
++}
++
++function AdjacentRow({ edge, node, rootPath, select }: {
++  edge: MetaprojectEdge;
++  node: MetaprojectNode;
++  rootPath: string;
++  select: (id: string) => void;
++}) {
++  const { lines, origins } = rowEvidence(edge, [node.path, rootPath]);
++  const countLabel = edge.count !== undefined ? `${edge.count} ${kindWord(edge.kind)}` : "";
++  const toggleLabel = countLabel || examplesLabel(lines.length);
++  return <li className="metaproject-rel-item">
++    <button type="button" className="activity-row metaproject-rel-row" onClick={() => select(node.id)} title={node.path}>
++      <span className="metaproject-rel-title truncate">{node.title}</span>
++      <NodeKindBadge kind={node.kind} />
++      <span className="metaproject-rel-path truncate">{node.path}</span>
++      {origins.map(origin => <span key={origin} className="tag metaproject-rel-origin">{origin}</span>)}
++    </button>
++    {lines.length === 0 && countLabel && <span className="metaproject-rel-count">{countLabel}</span>}
++    <EvidenceDisclosure lines={lines} label={toggleLabel} />
++  </li>;
++}
++
++function Heading({ level, label, count }: { level: 3 | 4; label: string; count: number }) {
++  const Tag = level === 3 ? "h3" : "h4";
++  return <Tag className={level === 3 ? "metaproject-rel-heading" : "metaproject-rel-kind"}>
++    {label} <span className="count-label">{count}</span>
++  </Tag>;
++}
++
++function DirectionGroup({ direction, groups, rootPath, select }: {
++  direction: RelationshipDirection;
++  groups: RelationshipKindGroup[];
++  rootPath: string;
++  select: (id: string) => void;
++}) {
++  if (!groups.length) return null;
++  const total = groups.reduce((sum, group) => sum + group.rows.length, 0);
++  return <section className="metaproject-rel-group" data-direction={direction}>
++    <Heading level={3} label={direction === "incoming" ? "Incoming" : "Outgoing"} count={total} />
++    {groups.map(group => <div className="metaproject-rel-kind-group" key={group.kind}>
++      <Heading level={4} label={RELATIONSHIP_KIND_LABELS[group.kind]} count={group.rows.length} />
++      <ul className="metaproject-rel-list">
++        {group.rows.map(({ edge, node }, index) => <AdjacentRow key={`${node.id}-${index}`} edge={edge} node={node} rootPath={rootPath} select={select} />)}
++      </ul>
++    </div>)}
++  </section>;
++}
++
++function SecondStepGroup({ rows, select }: { rows: SecondStepRelationship[]; select: (id: string) => void }) {
++  if (!rows.length) return null;
++  return <details className="metaproject-rel-group metaproject-rel-disclosure" data-direction="second-step">
++    <summary><Heading level={3} label="Second step" count={rows.length} /></summary>
++    <ul className="metaproject-rel-list">
++      {rows.map(({ edge, from, to }, index) => {
++        const { lines, origins } = rowEvidence(edge, [from.path, to.path]);
++        return <li key={`${from.id}-${to.id}-${edge.kind}-${index}`} className="metaproject-rel-second">
++          <p className="metaproject-rel-ends-label">
++            <span className="metaproject-rel-title">{from.title}</span>
++            <span className="metaproject-rel-edge-kind"> {kindWord(edge.kind)} </span>
++            <span className="metaproject-rel-title">{to.title}</span>
++            {origins.map(origin => <span key={origin} className="tag metaproject-rel-origin">{origin}</span>)}
++          </p>
++          <div className="metaproject-rel-ends">
++            <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(from.id)} title={from.path}>Open {from.title}</button>
++            <button type="button" className="btn btn-ghost btn-sm" onClick={() => select(to.id)} title={to.path}>Open {to.title}</button>
++            <EvidenceDisclosure lines={lines} label={examplesLabel(lines.length)} />
++          </div>
++        </li>;
++      })}
++    </ul>
++  </details>;
++}
++
++/** The accessible relationship list: root-adjacent relationships by direction and kind, then second-step ones. */
++export function RelationshipList({
++  projection,
++  select,
++}: {
++  projection: MetaprojectNeighbors;
++  select: (id: string) => void;
++}) {
++  const groups = groupRelationships(projection);
++  const rootPath = projection.nodes.find(node => node.id === projection.root)?.path ?? "";
++  // Empty by the grouping rule, not by the raw edges: a self-loop or an edge with a missing end lists no row.
++  const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;
++  return (
++    <div className="metaproject-rel">
++      {projection.truncated && <p className="metaproject-rel-note" role="status">
++        This projection is limited: some relationships are hidden. Narrow the filters to see them.
++      </p>}
++      {empty && <p className="metaproject-rel-note">No relationships for these filters.</p>}
++      <DirectionGroup direction="incoming" groups={groups.incoming} rootPath={rootPath} select={select} />
++      <DirectionGroup direction="outgoing" groups={groups.outgoing} rootPath={rootPath} select={select} />
++      <SecondStepGroup rows={groups.secondStep} select={select} />
++    </div>
++  );
++}
+
+--- apps/desktop/src/metaproject/graph.css
+@@ 1,94 @@
++/* Relationship graph: HTML caption and legend around a cytoscape canvas. Tokens only. */
++.metaproject-rgraph {
++  display: flex;
++  flex-direction: column;
++  flex: 1 1 auto;
++  min-block-size: 200px;
++  min-inline-size: 0;
++  overflow: hidden;
++  border: 1px solid var(--border);
++  border-radius: var(--r-md);
++  background: var(--bg-sunken);
++}
++
++.metaproject-rgraph-header {
++  display: flex;
++  flex: none;
++  align-items: center;
++  gap: var(--sp-2);
++  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
++}
++.metaproject-rgraph-caption {
++  flex: 1 1 auto;
++  min-inline-size: 0;
++  margin: 0;
++  color: var(--fg-muted);
++  font-size: var(--fs-sm);
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++.metaproject-rgraph-title { color: var(--fg); font-weight: 650; }
++.metaproject-rgraph-caption .badge { vertical-align: baseline; }
++
++.metaproject-rgraph-stage { position: relative; flex: 1 1 auto; min-block-size: 0; }
++.metaproject-rgraph-canvas { position: absolute; inset: 0; transition: opacity var(--dur) var(--ease-out); }
++.metaproject-rgraph.is-busy .metaproject-rgraph-canvas { opacity: 0.55; }
++.metaproject-rgraph-viewport { position: absolute; inset: 0; }
++
++.metaproject-rgraph-zoom {
++  display: flex;
++  flex: none;
++  gap: var(--sp-1);
++  margin-inline-start: auto;
++}
++/* Host controls (the explorer's Filters button) sit just left of the zoom controls. */
++.metaproject-rgraph-actions { display: flex; flex: none; align-items: center; gap: var(--sp-1); margin-inline-start: auto; }
++.metaproject-rgraph-actions + .metaproject-rgraph-zoom { margin-inline-start: 0; }
++.metaproject-rgraph-zoom .icon-btn {
++  inline-size: 24px;
++  block-size: 24px;
++  min-inline-size: 24px;
++  border: 1px solid var(--border);
++  border-radius: var(--r-sm);
++  background: var(--bg-surface);
++  color: var(--fg-muted);
++  font-size: var(--fs-md);
++  line-height: 1;
++}
++
++.metaproject-rgraph-legend {
++  display: flex;
++  flex: none;
++  flex-wrap: wrap;
++  gap: var(--sp-1) var(--sp-3);
++  margin: 0;
++  padding: var(--sp-1) var(--sp-2);
++  list-style: none;
++  border-block-start: 1px solid var(--border);
++  color: var(--fg-muted);
++  font-size: var(--fs-xs);
++}
++.metaproject-rgraph-legend li { display: inline-flex; align-items: center; gap: var(--sp-1); }
++
++.metaproject-rgraph-swatch {
++  display: inline-block;
++  inline-size: 14px;
++  block-size: 10px;
++  border: 1px solid var(--border-strong);
++  border-radius: 3px;
++  background: var(--bg-surface);
++}
++.metaproject-rgraph-swatch.is-module { border: 2px solid var(--fg-muted); }
++.metaproject-rgraph-swatch.is-symbol { border-radius: 40%; }
++.metaproject-rgraph-swatch.is-wiki { border-color: var(--info); border-radius: 0; clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px); }
++.metaproject-rgraph-swatch.is-spec,
++.metaproject-rgraph-swatch.is-change,
++.metaproject-rgraph-swatch.is-archive { border-radius: 0; clip-path: polygon(0 0, 72% 0, 100% 50%, 72% 100%, 0 100%); }
++.metaproject-rgraph-swatch.is-spec { border-color: var(--ok); }
++.metaproject-rgraph-swatch.is-change { border: 3px double var(--warn); }
++.metaproject-rgraph-swatch.is-archive { border-style: dashed; border-color: var(--fg-muted); }
++
++.metaproject-rgraph-line { display: inline-block; inline-size: 18px; border-block-start: 2px solid var(--fg-muted); }
++.metaproject-rgraph-line.is-dashed { border-block-start-style: dashed; }
++.metaproject-rgraph-line.is-dotted { border-block-start-style: dotted; }

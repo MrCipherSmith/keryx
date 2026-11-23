@@ -1,0 +1,85 @@
+{
+  "task_id": "fix-24",
+  "task_name": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "F-001: the explorer's error state now records whether a catalog read or a rebuild failed; a quiet re-read that succeeds removes a failed catalog read's banner and leaves a rebuild's. F-002 to F-005: tests that pin a partly empty relationship list, a second-step row in the Wiki disclosure count, the retirement of a pending wiki-link lookup and page of results by a rebuild's reload, and MetaprojectWork's hidden wrapper, callbacks and lazy default explorer.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/App.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: ESLint does not cover apps/desktop",
+  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit, exit 0)",
+  "test_result": "MetaprojectView.dom.test.tsx 87 pass 0 fail; RelationshipList.dom.test.tsx 14 pass 0 fail; App.dom.test.tsx 5 pass 0 fail; NodeDetailsPanel.dom.test.tsx 24 pass 0 fail; each in its own process",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all of the task's finish lines; AC19's whole-suite run (bun test src) was not run here, only the four named files",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/activity/implement.mdc",
+      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
+      "how": "read"
+    },
+    {
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
+      "how": "read"
+    }
+  ],
+  "noticed_not_touched": [
+    {
+      "what": "The two `project.current++` bumps (catalog effect body when not quiet, and its cleanup when the next run is not quiet) fire together on every non-quiet re-run, so each alone is redundant (R3-19 and R3-20 cannot be killed one at a time). A follow-up could keep one bump and state which event it stands for.",
+      "where": "apps/desktop/src/metaproject/MetaprojectView.tsx:379 and :418"
+    },
+    {
+      "what": "If a change of the read function (protocol or request prop) lands in the same commit as a return to the view, the visible effect sets quietRead before the catalog effect body runs, so that read runs quiet (no error clear, no start bump); the setRevision it queued then runs a second, loud read. Two catalog reads for one return; only reachable when props change during the return.",
+      "where": "apps/desktop/src/metaproject/MetaprojectView.tsx visible effect (:341-352) and catalog effect (:373-420)"
+    }
+  ],
+  "assumptions": [
+    "A rebuild that the user starts still clears whatever banner stands (catalog or rebuild), as before this task; the new test pins that rather than changing it."
+  ],
+  "behavior_changes": [
+    {
+      "description": "After a catalog read the user started fails (Retry, Refresh catalog, or the reload after a rebuild) and the user leaves the Metaproject view and returns once the catalog can be read, the failure banner with Retry is gone, whether the snapshot changed or not. A failed rebuild's banner still stays after such a return, and a quiet re-read that fails still shows and removes nothing.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "Keep every standing banner across a quiet re-read (round 2's behaviour, the defect F-001 names).",
+        "Clear every banner, the rebuild's included, on a successful quiet re-read (contradicts the existing rebuild test and the finish line)."
+      ]
+    }
+  ],
+  "not_touched": [
+    {
+      "path": "apps/desktop/src/App.tsx",
+      "reason": "F-005 is a test gap; MetaprojectWork already passes visible, onRebuild, onDraft and the lazy default, and the new App.dom tests pin them. R3-13 (the ProjectWindow call site) rests on the live check."
+    }
+  ],
+  "notes": "F-001 banner table (one `error` state, now {source: \"catalog\" | \"rebuild\", message} | null; MetaprojectView.tsx:318).\nWriters at head after this change: catalog effect start, not quiet -> null (:380); catalog effect catch, latest read and not quiet -> {catalog} (:407); quiet success -> clear only a {catalog} error (:392, new); rebuild() start -> null (:677); rebuild() catch -> {rebuild} (:681). Reader: the banner render only (:846-851, `error.message`, Retry = loud read). No other reader in the repo (searched `setError`, `error` in apps/desktop/src/metaproject).\nStanding banner x following event -> banner after (test that pins it):\n- failed first read x return: no quiet read starts (loaded is false), banner stays (existing 'a return after a failed first catalog read starts no read...').\n- failed Retry/Refresh/post-rebuild reload x quiet re-read succeeds, same snapshot: banner GOES (new, was: stays) ('a quiet re-read that succeeds after a failed catalog reload removes its banner...').\n- same x quiet re-read succeeds, changed snapshot: banner GOES, new catalog shown (same new test, Retry path).\n- same x quiet re-read fails: banner stays with its own message, the quiet failure is not shown (same new test).\n- same x loud read succeeds: cleared at the read's start, as before (existing 'a return after a failed first catalog read...' Retry step).\n- same x successful rebuild: cleared at the rebuild's start, as before; a rebuild that reloads nothing leaves it gone (new 'a rebuild the user starts removes a failed catalog read's banner...').\n- failed rebuild x quiet re-read succeeds (either snapshot): stays (existing 'a standing error, such as a failed rebuild's, survives a quiet re-read on return'; the clear sits before the snapshot branch, so both branches share it).\n- failed rebuild x quiet re-read fails: stays (same code path as the catalog row above).\n- failed rebuild x loud read that was already in flight then succeeds: stays, as before (new 'a failed rebuild's message outlives a catalog read that was already in flight and then succeeds').\n- failed rebuild x loud read started after it, or a new rebuild: cleared at start, as before (pinned since fix round 4 by T26's 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds' and 'a second rebuild removes the first one's failure banner while it runs'; the test this cell named when T24 was accepted, 'after a quiet re-read on return, a rebuild's failed catalog reload is still shown', does not fail a rebuild. Reworded after acceptance, for review round 4's F-003).\nWhy this form: the reviewer's suggested_fix (record the source) was followed, as a field on the state rather than a separate ref, so the source cannot drift from the message; the clear is a functional update so it reads the error standing when the read lands, and it runs before the unchanged/changed-snapshot branch so both success branches share one site. Only quiet reads get it, so a loud read behaves exactly as before (mutant T24-10 shows a loud success that cleared everything would be caught).\nWho else reads what changed: `error` is read only by the banner; `setError` is called only by the catalog effect and rebuild(). The comment on quietRead and the one on `error` were updated. App.tsx was not changed. No guide sentence changes: docs/docs/guides/desktop-metaproject.md lines 10-11 ('It also re-reads the catalog quietly, so the graph freshness banner is current.') says nothing about the error banner; the change makes the page agree better with 'current'.\nRed run of F-001's test against HEAD's MetaprojectView.tsx (scratch_check3.py red --restore src/metaproject/MetaprojectView.tsx --tests src/metaproject/MetaprojectView.dom.test.tsx): 'restored to HEAD in the copy: src/metaproject/MetaprojectView.tsx / == src/metaproject/MetaprojectView.dom.test.tsx: exit 1; 85 pass | 1 fail / (fail) a quiet re-read that succeeds after a failed catalog reload removes its banner, whether the snapshot changed or not'. Green with the change: 87 pass, 0 fail.\nRound-3 mutants (scratch_check3.py mutants, run after all changes): R3-4 killed by 'a Wiki page's Relationships disclosure counts a second-step row with the adjacent ones'; R3-17 killed by 'a rebuild's catalog reload retires a wiki-link lookup in flight...'; R3-18 killed by 'a rebuild's catalog reload retires a page of results in flight...'; R3-7 and R3-9 killed by 'a projection with rows in some groups only lists them and does not say it is empty' (RelationshipList.dom.test.tsx); R3-10 killed by 'the Metaproject explorer is told it is hidden while another view or Settings is shown...' (new hidden-wrapper assertion in its Settings step); R3-14 and R3-16 killed by 'without a stand-in, the app's explorer is loaded lazily behind a visible loading status'; R3-15 killed by 'the Metaproject explorer is given the app's rebuild and draft callbacks'.\nR3-19: invalid after this change (its anchor held `setError(\"\")`, now `setError(null)`); re-run moved in MetaprojectView.tsx anchor '      project.current++;\\n      setError(null);' -> '      setError(null);' (line 379): SURVIVED. R3-20 (line 418, 'if (!quietRead.current) project.current++;' -> ''): SURVIVED. Not killable on their own: every non-quiet re-run of the catalog effect runs both bumps in the same commit (the cleanup bumps because quietRead is false, then the body bumps because the read is not quiet), so either alone still retires pending work before any lookup or page can settle; the only run with one bump is unmount (cleanup only), where the late setState calls are no-ops, and the first run after protocol is known (body only), when no lookup or page can exist. Removing both (T24-7) is killed by the new lookup test, so the retirement itself is now pinned. R3-13 (App.tsx:618 call site in ProjectWindow) survived: no test renders ProjectWindow; it rests on the live check recorded in journal.md line 159 after fix round 2 (explorer hidden and mounted once on leaving, one catalog read on return).\nOwn mutants (MetaprojectView.tsx, scratch copy made as make_copy() does, tests MetaprojectView.dom.test.tsx, runner scratchpad own_mutants.py):\nT24-1 anchor '        if (quiet) setError(current => current?.source === \"catalog\" ? null : current);\\n' -> '' : killed by 'a quiet re-read that succeeds after a failed catalog reload removes its banner...'.\nT24-2 'current?.source === \"catalog\" ? null : current' -> 'null' : killed by 'a standing error, such as a failed rebuild's, survives a quiet re-read on return'.\nT24-3 'if (quiet) setError(current =>' -> 'setError(current =>' : survived, equivalent: a loud read already cleared the error at its start, and a catalog error can only be set by the latest read's own failure, so at a loud success the only error that can stand is a rebuild's, which the condition keeps.\nT24-4 'setError({ source: \"catalog\", message' -> 'setError({ source: \"rebuild\", message' : killed by the F-001 test.\nT24-5 'setError({ source: \"rebuild\", message' -> 'setError({ source: \"catalog\", message' : killed by 'a standing error, such as a failed rebuild's, survives...'.\nT24-6 'if (generation === catalogRead.current && !quiet) setError(' -> 'if (generation === catalogRead.current) setError(' : killed by 'a failed quiet re-read on return shows no error and leaves the explorer as it was'.\nT24-7 (R3-19 moved and R3-20 together) : killed by 'a rebuild's catalog reload retires a wiki-link lookup in flight...'.\nT24-8 '      project.current++;\\n      setError(null);\\n    }' -> '      project.current++;\\n    }' : killed by 'a return after a failed first catalog read starts no read, and its failure and Retry stay'.\nT24-9 '    setRebuilding(true);\\n    setError(null);' -> '    setRebuilding(true);' : first survived; killed after adding 'a rebuild the user starts removes a failed catalog read's banner, and one that reloads nothing leaves it gone'.\nT24-10 'if (quiet) setError(current => current?.source === \"catalog\" ? null : current);' -> same + ' else setError(null);' : killed by 'a failed rebuild's message outlives a catalog read that was already in flight and then succeeds'.\nsuggested_fix diverged: F-004 — used Rebuild graph (onRebuild resolving true) as the loud read for both the lookup and the page, not Refresh catalog; Refresh needs a snapshot mismatch, which would also trip the lookup's own snapshot guard and so not isolate project.current. F-003 — added a new test rather than editing the existing disclosure test's second readWith, so its self-link assertions stay as they were. F-005 — R3-14 and R3-16 killed by a synchronous render of MetaprojectWork without a stand-in, removed in the same test before the lazy module resolves, so the real explorer never reads the CLI.\nNot verified: the whole suite (bun test src), vite build, and the browser dev build; the four named DOM files and tsc were run. keryx health/test commands of Phase 5 were not run; the dispatch's own check commands were used instead. ESLint does not cover apps/desktop."
+}

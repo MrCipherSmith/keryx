@@ -1,0 +1,89 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T23",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
+    "description": "Four minor findings of review round 2 about the tests of round 1's fixes: 14 mutants of the fix code survive, so the behaviour they stand for is pinned by no assertion. Each finding is in `fix_context.review_feedback`; the full text is in findings.json and every mutant (file:line, anchor, replacement) in research-evidence/mutation-2.md. Task T22 has just changed the same production file (results/T22.result.json says what, and which lines of the quiet catalog re-read moved), so some anchors have moved. The task is done when every finish line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-006. The bounds of `placeFiltersPopover` and the removal of its resize listener are unpinned: R2-2 (opens above although there is less room above), R2-4, R2-5, R2-6, R2-7 (the floors and the 420 px cap), R2-9 (the resize listener is never removed). F-007. The quiet catalog re-read is pinned by one same-snapshot fixture: R2-14 (a return while the first read is loading), R2-16 (a return after the snapshot changed), R2-17 and R2-19 (a later full read after a quiet one), R2-18 (the snapshot match in `graphState`), R2-26 (the freshness reason). F-008. The node-memory test asserts only that nothing is written, so deleting the effect that fills the memory (R2-23) stays green; nothing reaches, through Back, a node that exists only in that memory. F-009. Removing `visible={view === \"metaproject\"}` from App.tsx (R2-28) stays green, so the line the fixes of round 1's F-003 and F-004 hang on is pinned by no test.\n\nFinish line: `scratch_check2.py mutants --ids R2-2,R2-4,R2-5,R2-6,R2-7,R2-9,R2-14,R2-16,R2-17,R2-18,R2-19,R2-23,R2-26 --tests src/metaproject/MetaprojectView.dom.test.tsx` and `--ids R2-28 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant the tool reports as invalid because T22 moved its anchor, your result names the line that now carries that behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost, it says why, and for R2-28 specifically the reviewer accepts as an alternative a statement that the wiring rests on the live check only; prefer a test if the composition can be rendered with the explorer stubbed. The F-008 test shows the memory working (Back to a node known only from a lookup shows its panel at once), not only that it is left alone. A test added here asserts what a user or a caller can observe — rendered text, roles, the requests the explorer sends, the style the popover gets, a callback's arguments — not the wording of the source. The production files are owned so that a test can be given a seam it needs; a change of behaviour in them is a `behavior_changes` entry, and a real defect a new test exposes is reported, with the test, before it is fixed. R2-12 and R2-30 also survive and are not in this task: the reviewer judged both redundant code with no input a test can drive.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
+    "intent": "fix"
+  },
+  "acceptance_criteria": [
+    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+    "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/report.md",
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json",
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/research-evidence/mutation-2.md",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/App.dom.test.tsx",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/App.dom.test.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/App.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, docs/**, package.json or any lockfile. No new dependencies.",
+    "If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
+    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "The fix context (each finding's id, file, the reviewer's message and suggested fix, and the premise judge's verdict) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T23.request.json under fix_context.review_feedback.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T10:53:39Z",
+    "created_by": "flow-orchestrator"
+  }
+}

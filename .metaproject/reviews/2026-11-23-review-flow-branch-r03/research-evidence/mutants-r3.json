@@ -1,0 +1,124 @@
+{
+ "mutants": [
+  {
+   "id": "R3-1",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "  }, [nodes, remember]);",
+   "replacement": "  });"
+  },
+  {
+   "id": "R3-2",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "currentProjection && mode === \"wiki\" && wikiRelationshipRows > 0 && (",
+   "replacement": "currentProjection && mode === \"wiki\" && currentProjection.edges.length > 0 && ("
+  },
+  {
+   "id": "R3-3",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "{wikiRelationshipRows}</span>",
+   "replacement": "{currentProjection.edges.length}</span>"
+  },
+  {
+   "id": "R3-4",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep",
+   "replacement": "wikiRelationships.incoming + wikiRelationships.outgoing"
+  },
+  {
+   "id": "R3-5",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "wikiRelationshipRows > 0 &&",
+   "replacement": "wikiRelationshipRows >= 0 &&"
+  },
+  {
+   "id": "R3-6",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "() => mode === \"wiki\" && currentProjection ? summarizeRelationships(currentProjection) : null",
+   "replacement": "() => currentProjection ? summarizeRelationships(currentProjection) : null"
+  },
+  {
+   "id": "R3-7",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;",
+   "replacement": "const empty = !groups.incoming.length && !groups.outgoing.length;"
+  },
+  {
+   "id": "R3-8",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "{empty && <p",
+   "replacement": "{projection.edges.length === 0 && <p"
+  },
+  {
+   "id": "R3-9",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;",
+   "replacement": "const empty = !groups.incoming.length || !groups.outgoing.length || !groups.secondStep.length;"
+  },
+  {
+   "id": "R3-10",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>",
+   "replacement": "<RetainedView active={workView === \"metaproject\"} visible={workView === \"metaproject\"}>"
+  },
+  {
+   "id": "R3-11",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "<RetainedView active={workView === \"metaproject\"} visible={view === \"metaproject\"}>",
+   "replacement": "<RetainedView active={view === \"metaproject\"} visible={view === \"metaproject\"}>"
+  },
+  {
+   "id": "R3-12",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "<MetaprojectView cwd={cwd} visible={view === \"metaproject\"} onRebuild={onRebuild} onDraft={onDraft} />",
+   "replacement": "<MetaprojectView cwd={cwd} visible={workView === \"metaproject\"} onRebuild={onRebuild} onDraft={onDraft} />"
+  },
+  {
+   "id": "R3-13",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "<MetaprojectWork cwd={cwd} view={view} workView={workView}",
+   "replacement": "<MetaprojectWork cwd={cwd} view={workView} workView={workView}"
+  },
+  {
+   "id": "R3-14",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "explorer: MetaprojectView = LazyMetaprojectView }",
+   "replacement": "explorer: MetaprojectView = (() => null) as ComponentType<ExplorerProps> }"
+  },
+  {
+   "id": "R3-15",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "onRebuild={onRebuild} onDraft={onDraft} />",
+   "replacement": "onRebuild={async () => false} onDraft={onDraft} />"
+  },
+  {
+   "id": "R3-16",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "<Suspense fallback={<p role=\"status\">Loading Metaproject…</p>}>\n        <MetaprojectView cwd",
+   "replacement": "<Suspense fallback={null}>\n        <MetaprojectView cwd"
+  },
+  {
+   "id": "R3-17",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "generation === project.current && shownSelection.current === from",
+   "replacement": "shownSelection.current === from"
+  },
+  {
+   "id": "R3-18",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "projectGeneration !== project.current",
+   "replacement": "false"
+  },
+  {
+   "id": "R3-19",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "      project.current++;\n      setError(\"\");",
+   "replacement": "      setError(\"\");"
+  },
+  {
+   "id": "R3-20",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!quietRead.current) project.current++;",
+   "replacement": ""
+  }
+ ]
+}

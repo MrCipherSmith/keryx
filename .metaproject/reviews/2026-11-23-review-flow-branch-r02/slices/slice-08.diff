@@ -1,0 +1,1889 @@
+--- .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json
+@@ 1,56 @@
++{
++  "task_id": "task-8",
++  "task_name": "Integrate graph and panel into the explorer; filters, counts, cleanup",
++  "task_type": "mixed",
++  "status": "success",
++  "description": "1 Swap: MetaprojectView.tsx uses RelationshipGraph, NodeDetailsPanel and RelationshipList from ./RelationshipList; the inline Graph and RelationshipList functions and the cytoscape import are deleted; GraphNodePanel.tsx is deleted (nothing else imported isOpenSpecNode from it; OpenSpecView.tsx needed no change). 2 Layout: Graph mode content is the filter bar then the graph (flex: 1 1 auto) filling the column; no relationship list under the canvas; Wiki keeps its Relationships disclosure with the new RelationshipList. 3 Panel wiring: relationships = current projection of the selection (null while loading/after failure), relationshipsPending/relationshipsProblem, documents/documentsPending/documentsProblem carry the old projection/pending/problem, onSelect = select, graph onShowHidden opens the panel and bumps revealRelationships. 4 Busy graph: the last graph stays rendered with busy while the next selection's read runs (including the render before the read starts); dropped on a failed read or when leaving Graph. 5 Filters: one compact wrapping row with labelled Direction and Depth selects and .chip-btn kind toggles (aria-pressed, check icon when on) labelled from RELATIONSHIP_KIND_LABELS; Defines and Calls are disabled with aria-describedby/title pointing at the visible note 'Not available: this project's graph has no symbol layer.' when catalog.hasSymbolLayer is false; 'Reset filters' appears when direction, depth or kinds differ from the defaults. 6 List header 'Catalog · <shown> of <total>' (total = files+wiki+modules from catalog.counts, wiki count in Wiki mode) and 'Results · <n>' while searching; the 'Catalog is limited' banner is removed. 7 The aria-current list row is scrolled into view (block nearest) when the selection or mode changes. 8 Protocol-error, read-error and snapshot-mismatch banners render before the OpenSpec view; the freshness banner reads 'Graph is <state>: <reason>' (or 'Graph is <state>.'). 9 Wiki empty state title is 'Searching the Wiki for “<q>”…' while the search runs; useExplorerNavigation restores .metaproject-details-body instead of .metaproject-node-body; a map of every node seen replaces the single knownSelection so Back to a lookup-reached node shows its panel at once. New optional MetaprojectView prop createCytoscape (test seam, forwarded to RelationshipGraph). CSS: dead rules removed, @media (max-width: 700px) removed, container query on the explorer added.",
++  "files_modified": [
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts"
++  ],
++  "files_created": [],
++  "files_deleted": [
++    "apps/desktop/src/metaproject/GraphNodePanel.tsx"
++  ],
++  "commits": [],
++  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
++  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0",
++  "test_result": "pass: cd apps/desktop && bun test src -> 833 passed, 0 failed across 89 files (baseline 827; +6 new tests). bun test src/metaproject/MetaprojectView.dom.test.tsx -> 32 passed, 0 failed, AC11-AC16 tests included. Red before the change: 10 failing (the 4 updated existing tests and the new tests for panel list + labelled filters + symbol-layer reason, header counts, Back-to-lookup panel, Wiki searching title, banners/freshness sentence; scroll-into-view and busy graph failed then only because the old inline Graph could not mount under happy-dom, so after the change each of those two behaviours was disabled temporarily and its test was seen failing on its own assertion, then restored).",
++  "story_result": "not applicable",
++  "acceptance_criteria_met": "partial: AC17, AC18 and AC19 met and verified by command; AC5, AC6 and AC20 are judged by the orchestrator in a browser and were not verified here",
++  "skill_drift": "none",
++  "project_context_applied": [
++    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
++    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
++    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
++    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
++    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
++    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
++    { "path": ".metaproject/rules/core/api-contracts.mdc", "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145", "how": "n/a" },
++    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
++  ],
++  "noticed_not_touched": [
++    { "what": "The test file's ambient bun:test typings lack toBeTruthy (tsc rejects it), so tests must use other matchers; the declaration covers only some matchers.", "where": "apps/desktop/src/test/bun-test.d.ts" }
++  ],
++  "assumptions": [
++    "The list header total is catalog.counts.files + wiki + modules in Graph mode and catalog.counts.wiki in Wiki mode (the Wiki list shows only wiki pages); it is shown as at least the number of rows so fixtures or a stale count never read '4 of 2'.",
++    "Graph mode keeps the old rule that the canvas is drawn only when the graph is not missing (or protocol 2); with a missing graph the relationship list stays reachable in the panel.",
++    "When the panel is closed, a Graph relationships read failure shows as a banner in the content column; when it is open, only the panel's Relationships tab shows it with Retry."
++  ],
++  "behavior_changes": [
++    { "description": "With a missing graph (protocol 1) the content column shows the note 'The graph is not built yet. Open the panel's Relationships tab to see this node's links.' under the filters, where the old relationship list used to be.", "user_visible": true, "needs_operator": true, "alternatives": ["Draw the canvas from the local catalog projection even when the graph is missing", "Show nothing below the filters and rely on the freshness banner"] },
++    { "description": "Symbol-layer reason is a visible one-line note under the filter row ('Not available: this project's graph has no symbol layer.'), referenced by the disabled Defines and Calls chips through aria-describedby and repeated as their tooltip.", "user_visible": true, "needs_operator": true, "alternatives": ["Tooltip only, no visible note", "Hide Defines and Calls entirely when there is no symbol layer"] },
++    { "description": "Kind chips that are on carry a check icon and the selected tint; the Reset control is labelled 'Reset filters' and sits at the end of the filter row, shown only when the filters differ from the defaults.", "user_visible": true, "needs_operator": true, "alternatives": ["Checkbox-style chips without an icon", "Always show Reset, disabled at the defaults"] },
++    { "description": "Wiki empty-state wording while a search runs: title 'Searching the Wiki for “<q>”…', body 'Results appear here as soon as the search finishes.'", "user_visible": true, "needs_operator": true, "alternatives": ["Show a spinner status line instead of the empty state while searching"] },
++    { "description": "Narrow layout (explorer container ≤ 760 px): tighter gutters, list column 150-190 px, and the graph's minimum height lowered from 200 px to 160 px so the filter row plus graph fit at the 720×480 window.", "user_visible": true, "needs_operator": true, "alternatives": ["Keep the 200 px minimum and let the content column scroll", "Stack the list above the graph on narrow hosts"] }
++  ],
++  "not_touched": [
++    { "path": "apps/desktop/src/metaproject/OpenSpecView.tsx", "reason": "It never imported isOpenSpecNode or GraphNodePanel, so no import change was needed." }
++  ],
++  "notes": "api-contracts.mdc is n/a: this change touches no HTTP API, request or response shape. CSS removed from metaproject.css: .metaproject-graph (fixed clamp height), .metaproject-graph-viewport, .metaproject-graph-panes .metaproject-graph, .metaproject-graph-panes .metaproject-relationship-section, all .metaproject-node-* rules (panel, compact, sheet-head, h2, resize, tabs, body, document, preview), .metaproject-relations, .metaproject-relation-actions (+ .btn), the h2 rule for .metaproject-relationship-section, and the @media (max-width: 700px) block. Added: container 'metaproject' on .metaproject with an @container (max-width: 760px) block, filter-row/chip rules, and the three-column grid keyed on .metaproject-details:not(.compact). The .metaproject-artifacts [aria-pressed] rule that shared a selector with the old node tabs was kept on its own. No graph or panel file (RelationshipGraph.tsx, graph.css, graphLayout.ts, NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css, labels.ts) was edited: the integration exposed no defect in them. Existing tests changed: 'wiki stays readable…' (freshness text now 'Graph is missing'); 'direction, depth and type controls…' (old row texts gone; it now opens the panel and reads its Relationships tab via labelled selects); 'relationship list shows OpenSpec edge provenance' renamed and pointed at ./RelationshipList — the new list deliberately shows the kind label and no digest (plan: digests are not shown); 'a graph node opens its linked Wiki…' and the AC12 test activate the panel's Wiki tab first; the AC13 test clicks the 'Imports' chip. Not verified without a browser: the graph filling the column height, the 140 px minimum at 720×480 (AC20), label size and overlap (AC5), theme re-colouring (AC6), chip wrapping and the drawer at narrow widths. The running preview server on port 1423 is the orchestrator's isolated-component harness from another session; it was not used or changed. tests_written: 6 new (+5 updated); tests_passing: 833; tests_failing: 0."
++}
+
+--- apps/desktop/src/App.dom.test.tsx
+@@ 1,44 @@
++import { afterAll, beforeAll, expect, test } from "bun:test";
++import type { Root } from "react-dom/client";
++import { registerDom, unregisterDom } from "./test/dom";
++
++let React: typeof import("react");
++let RetainedView: typeof import("./App").RetainedView;
++let root: Root;
++let host: HTMLElement;
++
++beforeAll(async () => {
++  registerDom();
++  React = await import("react");
++  RetainedView = (await import("./App")).RetainedView;
++  host = document.createElement("div");
++  document.body.append(host);
++  root = (await import("react-dom/client")).createRoot(host);
++});
++afterAll(async () => { await React.act(() => root.unmount()); await unregisterDom(); });
++
++function Draft() {
++  const [value, setValue] = React.useState("");
++  return React.createElement("input", { "aria-label": "Draft", value, onChange: (event: { target: { value: string } }) => setValue(event.target.value) });
++}
++
++test("a retained view mounts on its first visit and keeps its state while hidden", async () => {
++  const show = (active: boolean) => React.act(async () => {
++    root.render(React.createElement(RetainedView, { active, visible: active, children: React.createElement(Draft) }));
++  });
++  await show(false);
++  expect(host.querySelector("input")).toBeNull();
++  await show(true);
++  const input = host.querySelector<HTMLInputElement>("input");
++  if (!input) throw new Error("Missing retained input");
++  await React.act(async () => {
++    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "kept query");
++    input.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++  await show(false);
++  expect(host.querySelector("input")).toBe(input);
++  expect(input.closest("[hidden]")).not.toBeNull();
++  await show(true);
++  expect(host.querySelector<HTMLInputElement>("input")?.value).toBe("kept query");
++  expect(input.closest("[hidden]")).toBeNull();
++});
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 28,131 @@
+ function button(label: string) {
+   const found = [...host.querySelectorAll("button")].find(item => item.textContent?.trim() === label);
+   if (!found) throw new Error(`Missing button ${label}`);
+   return found;
+ }
++function listRow(title: string) {
++  const found = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.querySelector("strong")?.textContent === title);
++  if (!found) throw new Error(`Missing list row ${title}`);
++  return found;
++}
++async function openPanelTab(tab: "relationships" | "wiki" | "openspec") {
++  const found = host.querySelector<HTMLButtonElement>(`[aria-label="Graph node details"] [role="tab"][data-tab="${tab}"]`);
++  if (!found) throw new Error(`Missing panel tab ${tab}`);
++  await act(async () => { found.click(); });
++}
++/** happy-dom has no 2D canvas: the explorer's graph gets a headless cytoscape through its test seam. */
++async function headlessCytoscape() {
++  const cytoscape = (await import("cytoscape")).default;
++  return (options: import("cytoscape").CytoscapeOptions) => {
++    const { container: _container, ...rest } = options;
++    return cytoscape({ ...rest, headless: true });
++  };
++}
+ function request(_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> {
+   if (input.action === "catalog") return Promise.resolve(catalog);
+   if (input.action === "detail") return Promise.resolve({ ...snapshot, node: input.id === page.id ? page : file, markdown: input.id === page.id ? "# Readable guide" : undefined });
+   if (input.action === "search") return Promise.resolve({ ...snapshot, hits: [] });
+   return Promise.resolve({ ...snapshot, root: input.id, nodes: [page, file], edges: [], truncated: false });
+ }
+ 
+ test("wiki stays readable without a graph and rebuild is explicit", async () => {
+   let rebuilds = 0;
+   await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => { rebuilds++; return false; } })); });
+-  expect(host.textContent).toContain("Graph missing");
++  expect(host.textContent).toContain("Graph is missing");
+   await act(async () => { button("Wiki").click(); });
+   expect(host.textContent).toContain("Readable guide");
+   expect(rebuilds).toBe(0);
+   await act(async () => { button("Rebuild graph").click(); });
+   expect(rebuilds).toBe(1);
+ });
+ 
+ test("manual Wiki switching uses its own selection and Back restores the graph query", async () => {
+   await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => false })); });
+   const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]');
+   if (!search) throw new Error("Missing search");
+   await act(async () => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(search, "client"); search.dispatchEvent(new Event("input", { bubbles: true })); });
+   const client = [...host.querySelectorAll("button")].find(item => item.textContent?.includes("Client"));
+   if (!client) throw new Error("Missing client result");
+   await act(async () => { client.click(); });
+   await act(async () => { button("Wiki").click(); });
+   expect(host.querySelector('[aria-label="Wiki article"]')?.textContent).toContain("Readable guide");
+   expect(search.value).toBe("");
+   await act(async () => { button("Back").click(); });
+   expect(host.querySelector('[aria-label="Graph node details"]')?.textContent).toContain("src/client.ts");
+   expect(search.value).toBe("client");
+ });
+ 
+ test("a previous project's late catalog is discarded", async () => {
+   let release: (value: MetaprojectResponse) => void = () => {};
+   const read = (cwd: string, input: MetaprojectRequest) => cwd === "/old" && input.action === "catalog" ? new Promise<MetaprojectResponse>(resolve => { release = resolve; }) : request(cwd, input);
+   await act(async () => { root.render(createElement(View, { cwd: "/old", request: read, onRebuild: async () => false })); });
+   await act(async () => { root.render(createElement(View, { cwd: "/new", request: read, onRebuild: async () => false })); });
+   await act(async () => { release({ ...catalog, nodes: [{ ...page, title: "Old private page" }] }); });
+   expect(host.textContent).not.toContain("Old private page");
+   expect(host.textContent).toContain("Guide");
+ });
+ 
+ 
+ test("direction, depth and type controls filter the accessible relationship list", async () => {
+   const third = { id: "third", kind: "file" as const, title: "Server", path: "src/server.ts" };
+   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve({ ...catalog, nodes: [page, file, third], edges: [{ from: "page", to: "file", kind: "describes", evidence: ["guide:3"] }, { from: "file", to: "third", kind: "imports" }] }) : request(cwd, input);
+   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+-  expect(host.textContent).toContain("Guide → describes → Client");
+-  const selects = host.querySelectorAll("select");
+-  await act(async () => { selects[1]!.value = "2"; selects[1]!.dispatchEvent(new Event("change", { bubbles: true })); });
+-  expect(host.textContent).toContain("Client → imports → Server");
+-  await act(async () => { selects[0]!.value = "incoming"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
+-  expect(host.textContent).not.toContain("Guide → describes → Client");
+-  await act(async () => { selects[0]!.value = "outgoing"; selects[0]!.dispatchEvent(new Event("change", { bubbles: true })); });
++  // Re-selecting the shown node opens its panel, whose Relationships tab holds the list.
++  await act(async () => { listRow("Guide").click(); });
++  const relations = () => host.querySelector('[aria-label="Graph node details"] .metaproject-rel')?.textContent ?? "";
++  expect(host.querySelector('[aria-label="Graph node details"] [data-direction="outgoing"]')?.textContent).toContain("Client");
++  await openFilters();
++  const direction = host.querySelector<HTMLSelectElement>('select[aria-label="Direction"]')!;
++  const depth = host.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
++  await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
++  expect(host.querySelector('[aria-label="Graph node details"] [data-direction="second-step"]')?.textContent).toContain("Server");
++  await act(async () => { direction.value = "incoming"; direction.dispatchEvent(new Event("change", { bubbles: true })); });
++  expect(relations()).not.toContain("Client");
++  await act(async () => { direction.value = "outgoing"; direction.dispatchEvent(new Event("change", { bubbles: true })); });
+   await act(async () => { button("Open Server").click(); });
+   expect(host.querySelector('[aria-label="Graph node details"] h2')?.textContent).toBe("Server");
+ });
+ 
+ test("full-text hits stay visible when local matches fill the result limit", async () => {
+   const originalTimeout = window.setTimeout;
+   let runTimer: () => void = () => {};
+   window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") runTimer = () => callback(); return 1; }) as typeof window.setTimeout;
+   const localMatches = Array.from({ length: 210 }, (_, index) => ({ ...file, id: `local-${index}`, title: "distinct", path: `src/${index}/distinct` }));
+   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+     if (input.action === "catalog") return Promise.resolve({ ...catalog, nodes: [page, ...localMatches] });
+     if (input.action === "search") return Promise.resolve({ ...snapshot, hits: [{ node: page, section: "Setup", snippet: "distinct phrase" }] });
+     return request(cwd, input);
+   };
+   try {
+     await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+     const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
+     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "distinct"); search.dispatchEvent(new Event("input", { bubbles: true })); });
+     await act(async () => { runTimer(); });
+     expect(host.textContent).toContain("Setup: distinct phrase");
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 261,314 @@
+ });
+ 
+ test("opening an OpenSpec search location requests and focuses the exact scenario", async () => {
+   const { OpenSpecView } = await import("./OpenSpecView");
+   const entry = { id: "spec-one", kind: "spec" as const, title: "Review", path: "openspec/specs/review/spec.md" };
+   const source = { path: entry.path, digest: "d".repeat(64), startLine: 6, endLine: 8 };
+   const seen: Record<string, unknown>[] = [];
+   const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+     seen.push(input);
+     if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [entry], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+     if (input.action === "openspec-history") return { schemaVersion: 2, snapshotId: "s", entries: [] };
+     if (input.action === "search") return { schemaVersion: 2, snapshotId: "s", hits: [], partial: false };
+     return { schemaVersion: 2, snapshotId: "s", node: entry, openSpec: { entry, artifacts: [source], artifact: { source, markdown: "### Requirement: Review\n#### Scenario: Accepted", requirements: [{ title: "Review", section: "req", source, scenarios: [{ title: "Accepted", section: "scenario", source }] }] }, diagnostics: [], partial: false } };
+   };
+   await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "Accepted", location: { id: entry.id, collection: "spec", artifact: source.path, digest: source.digest, section: "scenario" }, request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+   expect(seen.some(input => input.action === "detail" && input.artifact === source.path && input.digest === source.digest && input.section === "scenario")).toBe(true);
+   expect(document.activeElement?.textContent).toContain("Accepted");
+   expect(host.textContent).toContain("openspec/specs/review/spec.md:6–8");
+ });
+ 
+-test("relationship list shows OpenSpec edge provenance", async () => {
+-  const { RelationshipList } = await import("./MetaprojectView");
++test("relationship list names an OpenSpec edge by its label and keeps its digest out of the row", async () => {
++  const { RelationshipList } = await import("./RelationshipList");
+   const digest = "a".repeat(64);
+   const projection = {
+     ...snapshot,
+     root: page.id,
+     nodes: [page, file],
+     edges: [{ from: page.id, to: file.id, kind: "spec-context" as const, provenance: [{ path: ".metaproject/openspec/links.json", index: 2, digest }] }],
+     truncated: false,
+   };
+   await act(async () => { root.render(createElement(RelationshipList, { projection, select: () => {} })); });
+-  expect(host.textContent).toContain(".metaproject/openspec/links.json (link 2)");
+-  expect(host.textContent).toContain(digest);
++  expect(host.querySelector(".metaproject-rel-kind")?.textContent).toContain("Spec context");
++  expect(host.textContent).toContain("Client");
++  expect(host.textContent).not.toContain(digest);
+ });
+ 
+ test("OpenSpec Markdown follows fragments and only known project links", async () => {
+   const { OpenSpecView } = await import("./OpenSpecView");
+   const entry = { id: "spec", kind: "spec" as const, title: "Review", path: "openspec/specs/review/spec.md" };
+   const source = { path: entry.path, digest: "a".repeat(64) };
+   const linked = { id: "guide", kind: "wiki" as const, title: "Guide", path: "openspec/specs/guide.md" };
+   const visited: string[] = [];
+   const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+     if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [entry], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+     if (input.action === "openspec-history") return { schemaVersion: 2, snapshotId: "s", entries: [] };
+     // Happy DOM with DOMPurify strips the first element wrapper. The heading comes after the introduction.
+     return { schemaVersion: 2, snapshotId: "s", node: entry, openSpec: { entry, artifacts: [source], artifact: { source, markdown: "Review guide.\n\n## Target\n[Jump](#target) [Guide](../guide.md#intro) [Unknown](../private.md)", requirements: [] }, diagnostics: [], partial: false } };
+   };
+   await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "", location: { id: entry.id, collection: "spec" }, nodes: [linked], onNavigate: (node: { id: string }, fragment?: string) => visited.push(`${node.id}#${fragment}`), request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+   const links = [...host.querySelectorAll(".md a")];
+   await act(async () => { (links.find(link => link.textContent === "Jump") as HTMLElement).click(); });
+   expect(document.activeElement?.textContent).toBe("Target");
+   await act(async () => { (links.find(link => link.textContent === "Guide") as HTMLElement).click(); });
+   await act(async () => { (links.find(link => link.textContent === "Unknown") as HTMLElement).click(); });
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 355,399 @@
+     seen.push(input);
+     if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [current], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+     if (input.action === "search") return { schemaVersion: 2, snapshotId: "s", hits: [{ node: other, scope: "change" }], partial: false };
+     const entry = input.id === other.id ? other : current;
+     return { schemaVersion: 2, snapshotId: "s", node: entry, openSpec: { entry, artifacts: [input.id === other.id ? target : source], artifact: { source: input.id === other.id ? target : source, markdown: input.id === other.id ? "Change proposal.\n\n## Details" : "[Other](../other/proposal.md#details)", requirements: [] }, diagnostics: [], partial: false } };
+   };
+   await act(async () => { root.render(createElement(OpenSpecView, { cwd: "/project", query: "", location: { id: current.id, collection: "change" }, request: read as unknown as NonNullable<import("react").ComponentProps<typeof OpenSpecView>["request"]>, onGraph: () => {} })); });
+   const link = [...host.querySelectorAll<HTMLElement>(".md a")].find(item => item.textContent === "Other");
+   if (!link) throw new Error("Missing cross-change link");
+   await act(async () => { link.click(); });
+   expect(seen.some(input => input.action === "search" && input.query === other.path && input.expectedSnapshotId === "s")).toBe(true);
+   expect(seen.some(input => input.action === "detail" && input.id === other.id && input.artifact === target.path)).toBe(true);
+   expect(document.activeElement?.textContent).toBe("Details");
+ });
+ 
+ test("a graph node opens its linked Wiki in place and Back restores the graph selection", async () => {
+   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+     ? Promise.resolve({ ...catalog, edges: [{ from: page.id, to: file.id, kind: "describes" }] })
+     : request(cwd, input);
+   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+-  const client = host.querySelector<HTMLButtonElement>('button[title="src/client.ts"]')
+-    ?? [...host.querySelectorAll("button")].find(item => item.textContent?.startsWith("Client"));
+-  if (!client) throw new Error("Missing Client graph result");
+-  await act(async () => { client!.click(); });
++  await act(async () => { listRow("Client").click(); });
+   const panel = host.querySelector('aside[aria-label="Graph node details"]');
+   expect(panel?.textContent).toContain("Client");
+   expect(host.querySelector('.metaproject-content article')).toBeNull();
++  await openPanelTab("wiki");
+   await act(async () => { button("Open in Wiki").click(); });
+   expect(host.querySelector('[aria-label="Wiki article"]')?.textContent).toContain("Readable guide");
+   await act(async () => { button("Back").click(); });
+   expect(host.querySelector('aside[aria-label="Graph node details"]')?.textContent).toContain("Client");
+ });
+ 
+ test("an archive result opens its current spec directly and Back restores the archive search", async () => {
+   const old = { id: "old", kind: "archive" as const, title: "Archived picker change", path: "openspec/changes/archive/2025-01-01-picker" };
+   const current = { id: "current", kind: "spec" as const, title: "Current picker", path: "openspec/specs/picker/spec.md" };
+   const openSpec = { availability: "ready", diagnostics: [], truncated: false };
+   const seen: Record<string, unknown>[] = [];
+   const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+     seen.push(input);
+     const base = { schemaVersion: 2, snapshotId: "one" };
+     if (input.action === "catalog") return { ...catalog, ...base, nodes: [] };
+     if (input.action === "openspec-list") return { ...base, entries: input.collection === "archive" ? [old] : [current], openSpec };
+     if (input.action === "openspec-history") return { ...base, entries: [] };
+     if (input.action === "search") return { ...base, hits: [{ node: old, scope: "archive" }] };
+     const entry = input.id === old.id ? old : current;
+     const source = { path: entry.kind === "archive" ? `${entry.path}/proposal.md` : entry.path, digest: "a".repeat(64) };
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 407,614 @@
+   await act(async () => { button("OpenSpec").click(); });
+   await act(async () => { button("Archive").click(); });
+   const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
+   await act(async () => {
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "picker change");
+     search.dispatchEvent(new Event("input", { bubbles: true }));
+   });
+   const result = host.querySelector<HTMLButtonElement>('[aria-label="OpenSpec results"] li button')!;
+   await act(async () => { result.click(); });
+   await act(async () => { button("Open current spec: Current picker").click(); });
+   expect(button("OpenSpec").getAttribute("aria-pressed")).toBe("true");
+   expect(button("Specs").getAttribute("aria-pressed")).toBe("true");
+   expect(search.value).toBe("");
+   expect(host.querySelector('[aria-label="OpenSpec detail"] h2')?.textContent).toBe(current.title);
+   await act(async () => { button("Back").click(); });
+   expect(button("Archive").getAttribute("aria-pressed")).toBe("true");
+   expect(search.value).toBe("picker change");
+   expect(host.querySelector('[aria-label="OpenSpec detail"] h2')?.textContent).toBe(old.title);
+   expect(seen.filter(input => input.action === "search").map(input => input.scopes)).toEqual([["archive"]]);
+ });
++
++function typeQuery(value: string) {
++  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]');
++  if (!search) throw new Error("Missing search");
++  return act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value); search.dispatchEvent(new Event("input", { bubbles: true })); });
++}
++const panelTitle = () => host.querySelector('[aria-label="Graph node details"] h2')?.textContent;
++
++test("Back steps through graph selections and typing in the search field adds no history entry", async () => {
++  const [alpha, beta, gamma] = ["Alpha", "Beta", "Gamma"].map(title => ({ id: title.toLowerCase(), kind: "file" as const, title, path: `src/${title.toLowerCase()}.ts` }));
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
++    ? Promise.resolve({ ...catalog, nodes: [page, alpha!, beta!, gamma!] }) : request(cwd, input);
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
++  const pick = async (title: string) => {
++    const row = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.querySelector("strong")?.textContent === title);
++    if (!row) throw new Error(`Missing result ${title}`);
++    await act(async () => { row.click(); });
++  };
++  await pick("Alpha");
++  await pick("Beta");
++  await pick("Gamma");
++  await pick("Gamma");
++  expect(panelTitle()).toBe("Gamma");
++  await typeQuery("Gam");
++  await act(async () => { button("Back").click(); });
++  expect(panelTitle()).toBe("Beta");
++  await act(async () => { button("Back").click(); });
++  expect(panelTitle()).toBe("Alpha");
++});
++
++test("Find a Wiki page with no selected page shows an empty state naming the search instead of an article", async () => {
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => false })); });
++  const client = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.textContent?.includes("Client"));
++  if (!client) throw new Error("Missing Client result");
++  await act(async () => { client.click(); });
++  await openPanelTab("wiki");
++  await act(async () => { button("Find a Wiki page").click(); });
++  const content = host.querySelector('[aria-label="Wiki article"]');
++  expect(content?.querySelector("article")).toBeNull();
++  expect(content?.querySelector(".empty-state")?.textContent).toContain("src/client.ts");
++  expect(content?.textContent).not.toContain("Readable guide");
++  // The search is still in flight (its debounce has not run), so the title must not claim "no match".
++  expect(content?.querySelector(".empty-state h3")?.textContent).not.toContain("No Wiki page matches");
++});
++
++test("the Wiki relationships read uses fixed defaults whatever the Graph filters are", async () => {
++  const reads: Extract<MetaprojectRequest, { action: "neighbors" }>[] = [];
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") return Promise.resolve({ ...catalog, graph: "ready", truncated: true });
++    // A root that is never selected keeps the cytoscape canvas, which happy-dom cannot draw, unmounted.
++    if (input.action === "neighbors") { reads.push(input); return Promise.resolve({ ...snapshot, root: "unselected", nodes: [], edges: [], truncated: false }); }
++    return request(cwd, input);
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
++  await openFilters();
++  const depth = host.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
++  await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
++  await act(async () => { button("Imports").click(); });
++  expect(reads.at(-1)).toMatchObject({ depth: 2 });
++  await act(async () => { button("Wiki").click(); });
++  expect(reads.at(-1)).toEqual({ action: "neighbors", id: page.id, depth: 1, direction: "both", kinds: ["imports", "asset", "describes", "links", "contains"] });
++});
++
++test("a rebuild re-enables its control and re-reads the catalog when the catalog reloaded meanwhile", async () => {
++  let catalogReads = 0;
++  let finish: (value: boolean) => void = () => {};
++  const onRebuild = () => new Promise<boolean>(resolve => { finish = resolve; });
++  const reader = () => (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") catalogReads++;
++    return request(cwd, input);
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(), onRebuild })); });
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(button("Rebuilding…").disabled).toBe(true);
++  // A new reader identity reloads the catalog while the rebuild is still running.
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(), onRebuild })); });
++  const reads = catalogReads;
++  await act(async () => { finish(true); });
++  expect(button("Rebuild graph").disabled).toBe(false);
++  expect(catalogReads).toBe(reads + 1);
++});
++
++test("a failed protocol negotiation offers Retry and loads the catalog once it succeeds", async () => {
++  let attempts = 0;
++  const negotiate = async () => { attempts++; if (attempts === 1) throw new Error("Negotiation refused by the CLI"); return 1 as const; };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request, negotiate, onRebuild: async () => false })); });
++  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Negotiation refused by the CLI");
++  expect(host.textContent).not.toContain("Loading project knowledge");
++  await act(async () => { button("OpenSpec").click(); });
++  expect(host.textContent).not.toContain("Checking OpenSpec support");
++  await act(async () => { button("Graph").click(); });
++  await act(async () => { button("Retry").click(); });
++  expect(attempts).toBe(2);
++  expect(host.textContent).not.toContain("Negotiation refused by the CLI");
++  expect(host.querySelector(".metaproject-list")?.textContent).toContain("Client");
++});
++
++test("a wiki link outside the loaded nodes is looked up once and an unknown path is named", async () => {
++  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far away.ts" };
++  const searches: string[] = [];
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Far](../src/far%20away.ts) [Root](/src/client.ts) [Missing](missing%20page.md)" });
++    if (input.action === "search") { searches.push(input.query); return Promise.resolve({ ...snapshot, hits: input.query === far.path ? [{ node: far }] : [] }); }
++    return request(cwd, input);
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
++  await act(async () => { button("Wiki").click(); });
++  const link = (text: string) => {
++    const found = [...host.querySelectorAll<HTMLElement>("article .md a")].find(item => item.textContent === text);
++    if (!found) throw new Error(`Missing link ${text}`);
++    return found;
++  };
++  await act(async () => { link("Missing").click(); });
++  expect(searches).toEqual(["wiki/missing page.md"]);
++  expect(host.querySelector('[aria-label="Wiki article"] article')?.textContent).toContain("wiki/missing page.md");
++  await act(async () => { link("Far").click(); });
++  expect(searches).toEqual(["wiki/missing page.md", "src/far away.ts"]);
++  expect(panelTitle()).toBe("Far module");
++  await act(async () => { button("Back").click(); });
++  await act(async () => { link("Root").click(); });
++  expect(searches).toHaveLength(2);
++  expect(panelTitle()).toBe("Client");
++});
++
++test("Back to a node reached through a lookup shows its panel at once", async () => {
++  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far.ts" };
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Far](../src/far.ts)" });
++    if (input.action === "search") return Promise.resolve({ ...snapshot, hits: input.query === far.path ? [{ node: far }] : [] });
++    return request(cwd, input);
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
++  await act(async () => { button("Wiki").click(); });
++  const farLink = [...host.querySelectorAll<HTMLElement>("article .md a")].find(item => item.textContent === "Far");
++  await act(async () => { farLink?.click(); });
++  expect(panelTitle()).toBe("Far module");
++  await act(async () => { listRow("Client").click(); });
++  expect(panelTitle()).toBe("Client");
++  await act(async () => { button("Back").click(); });
++  expect(panelTitle()).toBe("Far module");
++});
++
++const third = { id: "third", kind: "file" as const, title: "Server", path: "src/server.ts" };
++const linkedCatalog: MetaprojectCatalog = {
++  ...catalog, graph: "ready", nodes: [page, file, third],
++  edges: [{ from: page.id, to: file.id, kind: "describes" }, { from: file.id, to: third.id, kind: "imports" }],
++};
++
++test("Graph mode shows the relationship list in the panel, not under the canvas, with labelled filters", async () => {
++  const createCytoscape = await headlessCytoscape();
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
++  await act(async () => { listRow("Client").click(); });
++  const content = host.querySelector(".metaproject-content");
++  expect(content?.querySelector(".metaproject-rgraph")).not.toBeNull();
++  expect(content?.querySelector(".metaproject-rel")).toBeNull();
++  const panelList = host.querySelector('[aria-label="Graph node details"] .metaproject-rel');
++  expect(panelList?.textContent).toContain("Guide");
++  expect(panelList?.textContent).toContain("Server");
++  await openFilters();
++  expect(host.querySelector('select[aria-label="Direction"]')).not.toBeNull();
++  expect(host.querySelector('select[aria-label="Depth"]')).not.toBeNull();
++  const kinds = host.querySelector('[aria-label="Relationship types"]');
++  expect([...kinds?.querySelectorAll("button") ?? []].map(item => item.textContent?.trim())).toContain("Wiki links");
++  for (const label of ["Defines", "Calls"]) {
++    const chip = button(label);
++    expect(chip.disabled).toBe(true);
++    const reason = document.getElementById(chip.getAttribute("aria-describedby") ?? "")?.textContent ?? chip.title;
++    expect(reason).toContain("symbol layer");
++  }
++  // A changed filter offers Reset, which brings the defaults back.
++  expect([...host.querySelectorAll("button")].some(item => item.textContent?.trim() === "Reset filters")).toBe(false);
++  await act(async () => { button("Imports").click(); });
++  expect(button("Imports").getAttribute("aria-pressed")).toBe("false");
++  await act(async () => { button("Reset filters").click(); });
++  expect(button("Imports").getAttribute("aria-pressed")).toBe("true");
++});
++
++/** The Filters button: in the graph header, or in a slim row of its own when no graph is drawn. */
++function filtersButton() {
++  const found = host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
++  if (!found) throw new Error("Missing Filters button");
++  return found;
++}
++const filtersDialog = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Graph filters"]');
++async function openFilters() {
++  if (!filtersDialog()) await act(async () => { filtersButton().click(); });
++}
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 627,805 @@
++}
++
++test("graph filters sit behind a closed Filters button in the graph's header", async () => {
++  await renderFilters();
++  const toggle = filtersButton();
++  expect(toggle.closest(".metaproject-rgraph-header")).not.toBeNull();
++  expect(toggle.textContent?.trim()).toBe("Filters");
++  expect(toggle.getAttribute("aria-expanded")).toBe("false");
++  expect(toggle.title).toBe("Both · 1 step · 5 of 7 types");
++  expect(filtersDialog()).toBeNull();
++  expect(host.querySelector('select[aria-label="Direction"]')).toBeNull();
++});
++
++test("the Filters popover opens with focus inside and closes on the button, Escape and a press outside, focus back on the button", async () => {
++  await renderFilters();
++  await act(async () => { filtersButton().click(); });
++  expect(filtersButton().getAttribute("aria-expanded")).toBe("true");
++  expect(filtersDialog()?.contains(document.activeElement)).toBe(true);
++  expect(filtersDialog()?.querySelector('select[aria-label="Direction"]')).not.toBeNull();
++  expect(filtersDialog()?.querySelector('[aria-label="Relationship types"]')?.textContent).toContain("Wiki links");
++  expect(filtersDialog()?.textContent).toContain("symbol layer");
++  expect(filtersDialog()?.textContent).not.toContain("Reset filters");
++  await act(async () => { filtersButton().click(); });
++  expect(filtersDialog()).toBeNull();
++  await openFilters();
++  await act(async () => { document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
++  expect(filtersDialog()).toBeNull();
++  expect(document.activeElement).toBe(filtersButton());
++  await openFilters();
++  await act(async () => { host.querySelector(".metaproject-list")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
++  expect(filtersDialog()).toBeNull();
++  expect(document.activeElement).toBe(filtersButton());
++});
++
++test("changed filters show their count and the pressed look on the button, and Reset brings the defaults back", async () => {
++  await renderFilters();
++  expect(filtersButton().dataset.changed).toBeUndefined();
++  await openFilters();
++  const depth = filtersDialog()!.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')!;
++  await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
++  await act(async () => { button("Imports").click(); });
++  expect(filtersButton().textContent?.trim()).toBe("Filters · 2");
++  expect(filtersButton().dataset.changed).toBe("true");
++  expect(filtersButton().title).toBe("Both · 2 steps · 4 of 7 types");
++  await act(async () => { button("Reset filters").click(); });
++  expect(filtersButton().textContent?.trim()).toBe("Filters");
++  expect(filtersButton().dataset.changed).toBeUndefined();
++  expect(filtersDialog()?.querySelector<HTMLSelectElement>('select[aria-label="Depth"]')?.value).toBe("1");
++  expect(filtersDialog()?.textContent).not.toContain("Reset filters");
++});
++
++test("without a drawn graph the Filters button sits in a slim row of its own", async () => {
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => false })); });
++  const toggle = filtersButton();
++  expect(toggle.closest(".metaproject-filter-strip")).not.toBeNull();
++  expect(host.querySelector(".metaproject-rgraph")).toBeNull();
++});
++
++test("the list header counts shown of total and the limited-catalog banner is gone", async () => {
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
++    ? Promise.resolve({ ...catalog, truncated: true, counts: { files: 40, wiki: 9, modules: 3 } }) : request(cwd, input);
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
++  expect(host.querySelector(".metaproject-list h2")?.textContent).toBe("Catalog · 2 of 52");
++  expect(host.textContent).not.toContain("Catalog is limited");
++  await typeQuery("client");
++  expect(host.querySelector(".metaproject-list h2")?.textContent).toBe("Results · 1");
++});
++
++test("the selected list row is scrolled into view when the selection changes from the panel", async () => {
++  const scrolled: Element[] = [];
++  const original = HTMLElement.prototype.scrollIntoView;
++  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
++  try {
++    const createCytoscape = await headlessCytoscape();
++    const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
++    await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
++    await act(async () => { listRow("Client").click(); });
++    scrolled.length = 0;
++    const serverRow = host.querySelector<HTMLButtonElement>('[aria-label="Graph node details"] .metaproject-rel-row[title="src/server.ts"]');
++    if (!serverRow) throw new Error("Missing Server relationship row");
++    await act(async () => { serverRow.click(); });
++    expect(panelTitle()).toBe("Server");
++    expect(scrolled).toContain(listRow("Server"));
++  } finally { HTMLElement.prototype.scrollIntoView = original; }
++});
++
++test("the previous graph stays rendered and busy while the next selection's relationships load", async () => {
++  const createCytoscape = await headlessCytoscape();
++  // The relationships read and the panel's linked-documents read of the new selection both wait.
++  const waiting: (() => void)[] = [];
++  const release = () => { for (const resolve of waiting.splice(0)) resolve(); };
++  const read = (_cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
++    if (input.action === "catalog") return Promise.resolve({ ...linkedCatalog, truncated: true });
++    if (input.action === "neighbors") {
++      const projection = { ...snapshot, root: input.id, nodes: [page, file], edges: [{ from: page.id, to: file.id, kind: "describes" as const }], truncated: false };
++      return input.id === page.id ? Promise.resolve(projection) : new Promise(resolve => { waiting.push(() => resolve(projection)); });
++    }
++    return request(_cwd, input);
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
++  const graph = () => host.querySelector(".metaproject-content .metaproject-rgraph");
++  expect(graph()?.querySelector(".metaproject-rgraph-title")?.textContent).toBe("Guide");
++  expect(graph()?.getAttribute("aria-busy")).toBeNull();
++  await act(async () => { listRow("Client").click(); });
++  expect(graph()?.querySelector(".metaproject-rgraph-title")?.textContent).toBe("Guide");
++  expect(graph()?.getAttribute("aria-busy")).toBe("true");
++  await act(async () => { release(); });
++  expect(graph()?.querySelector(".metaproject-rgraph-title")?.textContent).toBe("Client");
++  expect(graph()?.getAttribute("aria-busy")).toBeNull();
++});
++
++test("explorer banners sit above the OpenSpec view and the freshness banner reads as one sentence", async () => {
++  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
++    if (input.action === "catalog") throw new Error("Catalog read failed");
++    if (input.action === "openspec-list") return { schemaVersion: 2, snapshotId: "s", entries: [], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
++    return { schemaVersion: 2, snapshotId: "s", hits: [] };
++  };
++  await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<import("react").ComponentProps<typeof View>["requestV2"]>, onRebuild: async () => false })); });
++  await act(async () => { button("OpenSpec").click(); });
++  const alert = [...host.querySelectorAll('[role="alert"]')].find(item => item.textContent?.includes("Catalog read failed"));
++  const view = host.querySelector(".openspec-view");
++  if (!alert || !view) throw new Error("Missing banner or OpenSpec view");
++  expect(alert.compareDocumentPosition(view) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
++  await act(async () => { root.render(null); });
++  const createCytoscape = await headlessCytoscape();
++  const stale = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
++    ? Promise.resolve({ ...catalog, graph: "stale", graphReason: "an untracked file changed" }) : request(cwd, input);
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: stale, createCytoscape, onRebuild: async () => false })); });
++  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
++});
++
++const freshnessBanner = () => [...host.querySelectorAll<HTMLElement>(".inline-banner")].find(item => item.textContent?.includes("Rebuild graph"));
++function detailsButton() {
++  return [...(freshnessBanner()?.querySelectorAll<HTMLButtonElement>("button[aria-expanded]") ?? [])].find(item => item.textContent?.trim() === "Details");
++}
++const longReason = "HEAD moved since the graph was built (built at abc, now def); a tracked file was modified since the graph was built: src/a.ts, src/b.ts (+1 more)";
++async function renderFreshness(reason: string | undefined, onRebuild: () => Promise<boolean> = async () => false) {
++  const createCytoscape = await headlessCytoscape();
++  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
++    ? Promise.resolve({ ...catalog, graph: "stale", ...(reason === undefined ? {} : { graphReason: reason }) }) : request(cwd, input);
++  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild })); });
++}
++
++test("the freshness banner is one sentence with the reason hidden until Details opens it", async () => {
++  await renderFreshness(longReason);
++  const banner = freshnessBanner();
++  expect(banner?.textContent).toContain("Graph is stale.");
++  expect(banner?.textContent).not.toContain("HEAD moved");
++  const details = detailsButton();
++  if (!details) throw new Error("Missing Details button");
++  expect(details.getAttribute("aria-expanded")).toBe("false");
++  await act(async () => { details.click(); });
++  expect(details.getAttribute("aria-expanded")).toBe("true");
++  const reason = document.getElementById(details.getAttribute("aria-controls") ?? "");
++  expect(reason?.textContent).toContain("HEAD moved since the graph was built");
++  expect(banner?.contains(reason ?? null)).toBe(true);
++  await act(async () => { details.click(); });
++  expect(details.getAttribute("aria-expanded")).toBe("false");
++  expect(freshnessBanner()?.textContent).not.toContain("HEAD moved");
++});
++
++test("open freshness details close again when the reason text changes", async () => {
++  await renderFreshness(longReason);
++  await act(async () => { detailsButton()?.click(); });
++  expect(detailsButton()?.getAttribute("aria-expanded")).toBe("true");
++  // A new reader identity for the same project reloads the catalog, now with another reason.
++  await renderFreshness("an untracked file changed");
++  expect(detailsButton()?.getAttribute("aria-expanded")).toBe("false");
++  expect(freshnessBanner()?.textContent).not.toContain("an untracked file changed");
++});
++
++test("the freshness banner has no Details button without a reason, and Rebuild still runs", async () => {
++  let rebuilds = 0;
++  await renderFreshness(undefined, async () => { rebuilds++; return false; });
++  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
++  expect(detailsButton()).toBeUndefined();
++  await act(async () => { button("Rebuild graph").click(); });
++  expect(rebuilds).toBe(1);
++});
+
+--- apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx
+@@ 1,118 @@
++import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
++import type { ComponentProps } from "react";
++import type { Root } from "react-dom/client";
++import type { MetaprojectDetail, MetaprojectNeighbors } from "../../../../src/integrations/metaproject-explorer-contract";
++import { registerDom, unregisterDom } from "../test/dom";
++
++let createElement: typeof import("react").createElement;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let Panel: typeof import("./NodeDetailsPanel").NodeDetailsPanel;
++let preview: typeof import("./NodeDetailsPanel").markdownPreview;
++let root: Root;
++let host: HTMLElement;
++let frame: HTMLElement;
++
++const client = { id: "client", kind: "file" as const, title: "Client", path: "src/client.ts", module: "module:src" };
++const guide = { id: "guide", kind: "wiki" as const, title: "Guide", path: "wiki/guide.md", status: "current" };
++const app = { id: "app", kind: "file" as const, title: "App", path: "src/app.ts" };
++const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
++const api = { id: "api", kind: "file" as const, title: "Api", path: "src/api.ts" };
++const snapshot = { schemaVersion: 1 as const, snapshotId: "one" };
++const COVERS_PAGE = [
++  "---",
++  "title: Guide",
++  "---",
++  "# Guide",
++  "",
++  "> **Covers:** `src/client.ts`, _the client_",
++  "",
++  "The **client** sends `requests` to the _server_ and retries __twice__ on *failure*.",
++  "",
++  "- a list item",
++].join("\n");
++
++const relationships: MetaprojectNeighbors = {
++  ...snapshot,
++  root: client.id,
++  nodes: [client, guide, app, server, api],
++  edges: [
++    { from: guide.id, to: client.id, kind: "describes" },
++    { from: app.id, to: client.id, kind: "imports" },
++    { from: client.id, to: server.id, kind: "imports" },
++    { from: client.id, to: api.id, kind: "imports" },
++    { from: server.id, to: api.id, kind: "calls" },
++  ],
++  truncated: false,
++};
++const documents: MetaprojectNeighbors = {
++  ...snapshot, root: client.id, nodes: [client, guide], edges: [{ from: guide.id, to: client.id, kind: "describes" }], truncated: false,
++};
++
++type Props = ComponentProps<typeof import("./NodeDetailsPanel").NodeDetailsPanel>;
++function props(overrides: Partial<Props> = {}): Props {
++  return {
++    node: client,
++    relationships,
++    relationshipsPending: false,
++    relationshipsProblem: "",
++    documents,
++    documentsPending: false,
++    documentsProblem: "",
++    openSpec: true,
++    readPreview: (id: string): Promise<MetaprojectDetail> => Promise.resolve({ ...snapshot, node: id === guide.id ? guide : client, markdown: COVERS_PAGE }),
++    onResize: () => {},
++    onClose: () => {},
++    onSelect: () => {},
++    onOpen: () => {},
++    onFind: () => {},
++    onRetry: () => {},
++    ...overrides,
++  };
++}
++
++beforeAll(async () => {
++  registerDom();
++  const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
++  const module = await import("./NodeDetailsPanel");
++  Panel = module.NodeDetailsPanel; preview = module.markdownPreview;
++  frame = document.createElement("div"); document.body.append(frame);
++  host = document.createElement("div"); frame.append(host);
++  root = (await import("react-dom/client")).createRoot(host);
++});
++beforeEach(async () => { await act(() => root.render(null)); });
++afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
++
++function button(label: string) {
++  const found = [...host.querySelectorAll("button")].find(item => item.textContent?.trim() === label || item.getAttribute("aria-label") === label);
++  if (!found) throw new Error(`Missing button ${label}`);
++  return found;
++}
++function tab(name: string) {
++  const found = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(item => item.dataset.tab === name);
++  if (!found) throw new Error(`Missing tab ${name}`);
++  return found;
++}
++function render(overrides: Partial<Props> = {}) {
++  return act(async () => { root.render(createElement(Panel, props(overrides))); });
++}
++
++test("the header shows a kind badge, the title and the path, and Copy path writes the path", async () => {
++  const copied: string[] = [];
++  const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
++  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { copied.push(text); } } });
++  try {
++    await render();
++    const panel = host.querySelector('aside[aria-label="Graph node details"]');
++    expect(panel?.querySelector("header .badge")?.textContent).toBe("File");
++    expect(panel?.querySelector("h2")?.textContent).toBe("Client");
++    expect(panel?.querySelector("header code")?.textContent).toBe("src/client.ts");
++    await act(async () => { button("Copy path").click(); });
++    expect(copied).toEqual(["src/client.ts"]);
++    expect(host.textContent).toContain("Copied");
++  } finally {
++    if (original) Object.defineProperty(navigator, "clipboard", original);
++    else Reflect.deleteProperty(navigator, "clipboard");
++  }
++});
++
++test("relationship counts come from the root-adjacent edges and say when they are limited", async () => {
+
+--- apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx
+@@ 122,124 @@
++  const facts = host.querySelector(".metaproject-details-facts");
++  expect(facts?.textContent).toContain("2 incoming · 2 outgoing");
++  expect(facts?.textContent).not.toContain("limited");
+
+--- apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx
+@@ 126,247 @@
++  expect(host.querySelector(".metaproject-details-facts")?.textContent).toContain("2 incoming · 2 outgoing · limited");
++});
++
++test("the Module fact shows the module path as a control that selects the module", async () => {
++  const selected: string[] = [];
++  await render({ onSelect: id => selected.push(id) });
++  const facts = host.querySelector(".metaproject-details-facts")!;
++  expect(facts.textContent).not.toContain("module:src");
++  const control = [...facts.querySelectorAll("button")].find(item => item.textContent === "src");
++  if (!control) throw new Error("Missing module control");
++  await act(async () => { control.click(); });
++  expect(selected).toEqual(["module:src"]);
++});
++
++test("the counts fact is labelled Relationships, like the tab", async () => {
++  await render();
++  const keys = [...host.querySelectorAll(".metaproject-details-facts .info-key")].map(item => item.textContent);
++  expect(keys).toContain("Relationships");
++  expect(keys).not.toContain("Relations");
++});
++
++test("Relationships is the default tab, grouped by direction, and a row selects the neighbour", async () => {
++  const selected: string[] = [];
++  await render({ onSelect: id => selected.push(id) });
++  expect(tab("relationships").getAttribute("aria-selected")).toBe("true");
++  const body = host.querySelector('[role="tabpanel"]');
++  expect([...body!.querySelectorAll("h3")].map(item => item.textContent?.replace(/\s+/g, " ").trim()))
++    .toEqual(["Incoming 2", "Outgoing 2", "Second step 1"]);
++  await act(async () => { body!.querySelector<HTMLButtonElement>('button[title="src/server.ts"]')!.click(); });
++  await act(async () => { button("Open Api").click(); });
++  expect(selected).toEqual(["server", "api"]);
++});
++
++test("an OpenSpec node still opens on the Relationships tab", async () => {
++  await render({ node: { id: "spec", kind: "spec", title: "Picker", path: "openspec/specs/picker/spec.md" }, relationships: null, relationshipsPending: true });
++  expect(tab("relationships").getAttribute("aria-selected")).toBe("true");
++  expect(host.querySelector('[role="tabpanel"] [role="status"]')?.textContent).toContain("Loading relationships");
++});
++
++test("a relationships failure shows the message and Retry", async () => {
++  let retries = 0;
++  await render({ relationships: null, relationshipsProblem: "Graph read failed", onRetry: () => { retries++; } });
++  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Graph read failed");
++  await act(async () => { button("Retry").click(); });
++  expect(retries).toBe(1);
++});
++
++test("a new revealRelationships value switches back to the Relationships tab", async () => {
++  await render({ revealRelationships: 1 });
++  await act(async () => { tab("wiki").click(); });
++  expect(tab("wiki").getAttribute("aria-selected")).toBe("true");
++  await render({ revealRelationships: 1 });
++  expect(tab("wiki").getAttribute("aria-selected")).toBe("true");
++  await render({ revealRelationships: 2 });
++  expect(tab("relationships").getAttribute("aria-selected")).toBe("true");
++});
++
++test("the Wiki tab lists linked pages with a clean preview and one primary action", async () => {
++  const opened: string[] = [];
++  await render({ onOpen: node => opened.push(node.id) });
++  await act(async () => { tab("wiki").click(); });
++  const body = host.querySelector('[role="tabpanel"]');
++  const text = body?.querySelector(".metaproject-details-preview")?.textContent ?? "";
++  expect(text).toBe("The client sends requests to the server and retries twice on failure.");
++  expect(text).not.toMatch(/[>*`_]/);
++  expect(text).not.toContain("Covers");
++  expect(body?.querySelectorAll(".btn-primary")).toHaveLength(1);
++  await act(async () => { button("Open in Wiki").click(); });
++  expect(opened).toEqual(["guide"]);
++});
++
++test("an unlinked node offers Find and Draft, and OpenSpec without support explains why", async () => {
++  const found: string[] = [];
++  await render({ documents: { ...documents, nodes: [client], edges: [] }, onFind: kind => found.push(kind), onDraft: async () => {} });
++  await act(async () => { tab("wiki").click(); });
++  expect(host.textContent).toContain("No Wiki page is linked to this node.");
++  expect(host.querySelectorAll('[role="tabpanel"] .btn-primary')).toHaveLength(1);
++  await act(async () => { button("Find a Wiki page").click(); });
++  expect(found).toEqual(["wiki"]);
++  expect(button("Draft Wiki page").classList.contains("btn-primary")).toBe(false);
++  await render({ openSpec: false });
++  await act(async () => { tab("openspec").click(); });
++  expect(host.textContent).toContain("This CLI does not support OpenSpec");
++});
++
++test("Escape closes, the resize handle answers the keyboard, and the docked panel leaves focus alone", async () => {
++  let closed = 0;
++  const widths: number[] = [];
++  const outside = document.createElement("button"); document.body.append(outside); outside.focus();
++  try {
++    await render({ width: 380, onClose: () => { closed++; }, onResize: width => widths.push(width) });
++    expect(document.activeElement).toBe(outside);
++    const separator = host.querySelector<HTMLElement>('[role="separator"]')!;
++    await act(async () => { separator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })); });
++    expect(widths).toEqual([412]);
++    await act(async () => { button("Close graph node details").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
++    expect(closed).toBe(1);
++  } finally { outside.remove(); }
++});
++
++test("in a narrow host the panel is a drawer that takes focus and gives it back on close", async () => {
++  const outside = document.createElement("button"); document.body.append(outside); outside.focus();
++  Object.defineProperty(host, "clientWidth", { configurable: true, get: () => 700 });
++  try {
++    await render();
++    const panel = host.querySelector("aside");
++    expect(panel?.classList.contains("compact")).toBe(true);
++    expect(host.querySelector('[role="separator"]')).toBeNull();
++    expect(panel?.contains(document.activeElement)).toBe(true);
++    await act(async () => { root.render(null); });
++    expect(document.activeElement).toBe(outside);
++  } finally {
++    Reflect.deleteProperty(host, "clientWidth");
++    outside.remove();
++  }
++});
++
++test("markdownPreview drops metadata and Markdown markers", () => {
++  expect(preview(COVERS_PAGE)).toBe("The client sends requests to the server and retries twice on failure.");
++  expect(preview("Version: 2\nStatus: draft\n\n1. Use [the guide](wiki/guide.md) for ~~old~~ setup")).toBe("Use the guide for old setup");
++  expect(preview("snake_case names stay intact")).toBe("snake_case names stay intact");
++});
+
+--- apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx
+@@ 1,277 @@
++import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import type cytoscapeModule from "cytoscape";
++import type { Root } from "react-dom/client";
++import type {
++  MetaprojectEdge,
++  MetaprojectEdgeKind,
++  MetaprojectNeighbors,
++  MetaprojectNode,
++  MetaprojectNodeKind,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { registerDom, unregisterDom } from "../test/dom";
++
++type Cytoscape = typeof cytoscapeModule;
++let createElement: typeof import("react").createElement;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let Graph: typeof import("./RelationshipGraph").RelationshipGraph;
++let layout: typeof import("./graphLayout");
++let cytoscape: Cytoscape;
++let root: Root;
++let host: HTMLElement;
++
++/** happy-dom has no 2D canvas, so the component gets a headless cytoscape through its factory seam. */
++const instances: cytoscapeModule.Core[] = [];
++function headless(options: cytoscapeModule.CytoscapeOptions): cytoscapeModule.Core {
++  const { container: _container, ...rest } = options;
++  const instance = cytoscape({ ...rest, headless: true });
++  instances.push(instance);
++  return instance;
++}
++
++beforeAll(async () => {
++  registerDom();
++  const react = await import("react");
++  createElement = react.createElement;
++  act = react.act as typeof act;
++  cytoscape = (await import("cytoscape")).default;
++  Graph = (await import("./RelationshipGraph")).RelationshipGraph;
++  layout = await import("./graphLayout");
++  host = document.createElement("div");
++  document.body.append(host);
++  root = (await import("react-dom/client")).createRoot(host);
++});
++beforeEach(async () => {
++  await act(() => root.render(null));
++  instances.length = 0;
++});
++afterAll(async () => {
++  await act(() => root.unmount());
++  await unregisterDom();
++});
++
++const snapshot = { schemaVersion: 1 as const, snapshotId: "snap" };
++const node = (id: string, kind: MetaprojectNodeKind = "file", title = id): MetaprojectNode => ({ id, kind, title, path: `src/${id}` });
++const edge = (from: string, to: string, kind: MetaprojectEdgeKind): MetaprojectEdge => ({ from, to, kind });
++
++function moduleProjection(truncated = false): MetaprojectNeighbors {
++  const rootNode = node("module:root", "module", "apps/desktop/src");
++  const files = Array.from({ length: 18 }, (_, index) => node(`file:${index}`, "file", `file-${String(index).padStart(2, "0")}.ts`));
++  const importers = Array.from({ length: 12 }, (_, index) => node(`module:${index}`, "module", `importer-${index}`));
++  return {
++    ...snapshot,
++    root: rootNode.id,
++    nodes: [rootNode, ...files, ...importers],
++    edges: [
++      ...files.map((file) => edge(rootNode.id, file.id, "contains")),
++      ...files.slice(0, 3).map((file) => edge(file.id, rootNode.id, "imports")),
++      ...importers.map((importer) => edge(importer.id, rootNode.id, "imports")),
++    ],
++    truncated,
++  };
++}
++
++async function render(props: Partial<Parameters<typeof Graph>[0]> & { projection: MetaprojectNeighbors }) {
++  await act(async () => {
++    root.render(createElement(Graph, { onSelect: () => {}, createCytoscape: headless, ...props }));
++  });
++}
++
++function legendItems(): string[] {
++  return [...host.querySelectorAll('[aria-label="Graph legend"] li')].map((item) => item.textContent?.trim() ?? "");
++}
++
++describe("RelationshipGraph overlay (AC4)", () => {
++  test("host actions render in the header row, left of the zoom controls", async () => {
++    await render({ projection: moduleProjection(), actions: createElement("button", { type: "button" }, "Filters") });
++    const header = host.querySelector(".metaproject-rgraph-header");
++    const action = [...header?.querySelectorAll("button") ?? []].find((item) => item.textContent === "Filters");
++    const zoom = header?.querySelector('[aria-label="Graph zoom"]');
++    if (!action || !zoom) throw new Error("Missing action or zoom controls in the header");
++    expect(action.compareDocumentPosition(zoom) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
++    await render({ projection: moduleProjection() });
++    expect(host.querySelector(".metaproject-rgraph-actions")).toBeNull();
++  });
++
++  test("the caption names the root and the incoming and outgoing counts", async () => {
++    await render({ projection: moduleProjection() });
++    const caption = host.querySelector(".metaproject-rgraph-caption")?.textContent ?? "";
++    expect(caption).toContain("apps/desktop/src");
++    expect(caption).toContain("15 incoming");
++    expect(caption).toContain("18 outgoing");
++    expect(caption).not.toContain("limited");
++  });
++
++  test("a truncated projection says limited", async () => {
++    await render({ projection: moduleProjection(true) });
++    expect(host.querySelector(".metaproject-rgraph-caption")?.textContent).toContain("limited");
++  });
++
++  test("the legend names exactly the node kinds and line styles present", async () => {
++    await render({ projection: moduleProjection() });
++    expect(legendItems()).toEqual(["Module", "File", "Solid line: Imports", "Dotted line: Contains"]);
++  });
++
++  test("the legend follows the projection: wiki pages, specs and dashed links", async () => {
++    const projection: MetaprojectNeighbors = {
++      ...snapshot,
++      root: "page",
++      nodes: [node("page", "wiki", "Guide"), node("spec", "spec", "auth"), node("change", "change", "add-login")],
++      edges: [edge("page", "spec", "links"), edge("change", "spec", "changes-spec")],
++      truncated: false,
++    };
++    await render({ projection });
++    expect(legendItems()).toEqual(["Wiki page", "Spec", "Change", "Dashed line: Wiki links, Changes spec"]);
++  });
++
++  test("G1: the zoom controls sit in the caption row, right of the caption, not over the canvas", async () => {
++    await render({ projection: moduleProjection() });
++    const zoom = host.querySelector('[aria-label="Graph zoom"]');
++    const header = host.querySelector(".metaproject-rgraph-header");
++    expect(zoom?.parentElement).toBe(header);
++    expect(header?.firstElementChild?.classList.contains("metaproject-rgraph-caption")).toBeTrue();
++    expect(header?.lastElementChild).toBe(zoom);
++    expect(zoom?.closest(".metaproject-rgraph-stage")).toBeNull();
++  });
++
++  test("G8: the component fills its host instead of clamping its own height", () => {
++    const css = readFileSync(new URL("./graph.css", import.meta.url), "utf8");
++    const block = /\.metaproject-rgraph\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
++    expect(block).not.toContain("clamp(");
++    expect(block).not.toContain("block-size: clamp");
++    expect(block).toContain("flex: 1 1 auto;");
++    expect(block).toContain("min-block-size: 200px;");
++  });
++
++  test("the canvas is hidden from assistive technology; caption and legend are text", async () => {
++    await render({ projection: moduleProjection(), busy: true });
++    expect(host.querySelector(".metaproject-rgraph-canvas")?.getAttribute("aria-hidden")).toBe("true");
++    expect(host.querySelector(".metaproject-rgraph-caption")?.closest('[aria-hidden="true"]')).toBeNull();
++    expect(host.querySelector(".metaproject-rgraph")?.getAttribute("aria-busy")).toBe("true");
++    const zoom = [...host.querySelectorAll('[aria-label="Graph zoom"] button')].map((button) => button.getAttribute("aria-label"));
++    expect(zoom).toEqual(["Zoom in", "Zoom out", "Fit graph"]);
++  });
++});
++
++describe("style mapping (AC4)", () => {
++  test("each of the seven node kinds has a distinct shape-or-border treatment", () => {
++    const kinds: MetaprojectNodeKind[] = ["module", "file", "symbol", "wiki", "spec", "change", "archive"];
++    const treatments = new Set(kinds.map((kind) => {
++      const style = layout.nodeKindStyle(kind);
++      return `${style.shape}|${style.borderStyle}|${style.borderWidth}`;
++    }));
++    expect(treatments.size).toBe(7);
++    for (const kind of kinds) expect(layout.nodeKindStyle(kind).label.length).toBeGreaterThan(0);
++  });
++
++  test("the nine relationship kinds map onto solid, dashed and dotted lines", () => {
++    const expected: Record<MetaprojectEdgeKind, string> = {
++      imports: "solid", calls: "solid", asset: "solid",
++      describes: "dashed", links: "dashed", "changes-spec": "dashed", "spec-context": "dashed",
++      contains: "dotted", defines: "dotted",
++    };
++    const kinds = Object.keys(expected) as MetaprojectEdgeKind[];
++    expect(kinds.length).toBe(9);
++    for (const kind of kinds) expect(layout.edgeKindStyle(kind).lineStyle).toBe(expected[kind]);
++  });
++});
++
++describe("RelationshipGraph lifecycle", () => {
++  test("draws the laid-out nodes, captions and overflow entry at preset positions", async () => {
++    await render({ projection: moduleProjection() });
++    const [cy] = instances;
++    expect(cy).not.toBeUndefined();
++    expect(cy!.nodes(".graph-node").length).toBe(1 + 12 + 12);
++    expect(cy!.nodes(".caption").length).toBe(2);
++    expect(cy!.nodes(".overflow").length).toBe(1);
++    expect(cy!.$id("module:root").position()).toEqual({ x: 0, y: 0 });
++    expect(0).toBeGreaterThan(cy!.$id("module:0").position().x);
++  });
++
++  test("tapping a node selects it; tapping '+N more' asks for the hidden side", async () => {
++    const selected: string[] = [];
++    const sides: string[] = [];
++    await render({ projection: moduleProjection(), onSelect: (id) => selected.push(id), onShowHidden: (side) => sides.push(side) });
++    const [cy] = instances;
++    cy!.$id("file:1").emit("tap");
++    cy!.nodes(".overflow").emit("tap");
++    expect(selected).toEqual(["file:1"]);
++    expect(sides).toEqual(["outgoing"]);
++  });
++
++  test("a new callback identity reuses the instance and the newest callback is called", async () => {
++    const calls: string[] = [];
++    await render({ projection: moduleProjection(), onSelect: () => calls.push("old") });
++    const projection = moduleProjection();
++    await render({ projection, onSelect: () => calls.push("new") });
++    expect(instances.length).toBe(1);
++    instances[0]!.$id("file:2").emit("tap");
++    expect(calls).toEqual(["new"]);
++  });
++
++  test("a new projection replaces the elements in the same instance", async () => {
++    await render({ projection: moduleProjection() });
++    const next: MetaprojectNeighbors = { ...snapshot, root: "a", nodes: [node("a"), node("b")], edges: [edge("a", "b", "imports")], truncated: false };
++    await render({ projection: next });
++    expect(instances.length).toBe(1);
++    expect(instances[0]!.nodes(".graph-node").map((item) => item.id()).sort()).toEqual(["a", "b"]);
++    expect(instances[0]!.edges().length).toBe(1);
++    expect(host.querySelector(".metaproject-rgraph-caption")?.textContent).toContain("0 incoming · 1 outgoing");
++  });
++
++  test("a zero-sized container is never fitted", async () => {
++    await render({ projection: moduleProjection() });
++    const before = instances[0]!.zoom();
++    await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Fit graph"]')?.click(); });
++    await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')?.click(); });
++    expect(instances[0]!.zoom()).toBe(before);
++  });
++
++  test("tokens resolve to opaque colours and a theme change re-colours labels in place", async () => {
++    const tokens: Record<string, string> = { "--fg": "#1c2b23", "--bg-sunken": "#ffffff", "--bg-selected": "rgba(0, 0, 0, 0.5)", "--text-scale": "1.25" };
++    const style = document.documentElement.style;
++    for (const [key, value] of Object.entries(tokens)) style.setProperty(key, value);
++    try {
++      const warnings: string[] = [];
++      const original = console.warn;
++      console.warn = (...args: unknown[]) => { warnings.push(args.join(" ")); };
++      try {
++        await render({
++          projection: moduleProjection(),
++          createCytoscape: (options) => {
++            const { container: _container, ...rest } = options;
++            const instance = cytoscape({ ...rest, headless: true, styleEnabled: true });
++            instances.push(instance);
++            return instance;
++          },
++        });
++      } finally {
++        console.warn = original;
++      }
++      expect(warnings).toEqual([]);
++      const cy = instances[0]!;
++      expect(cy.$id("file:1").style("color")).toBe("rgb(28,43,35)");
++      expect(cy.$id("module:root").style("background-color")).toBe("rgb(128,128,128)");
++      expect(cy.$id("file:1").style("font-size")).toBe("15px");
++      await act(async () => {
++        style.setProperty("--fg", "#e1ece5");
++        document.documentElement.setAttribute("data-theme", "dark");
++        await Promise.resolve();
++      });
++      expect(instances.length).toBe(1);
++      expect(cy.$id("file:1").style("color")).toBe("rgb(225,236,229)");
++    } finally {
++      await act(async () => {
++        for (const key of Object.keys(tokens)) style.removeProperty(key);
++        document.documentElement.removeAttribute("data-theme");
++        await Promise.resolve();
++      });
++    }
++  });
++
++  test("unmounting destroys the instance", async () => {
++    await render({ projection: moduleProjection() });
++    await act(() => root.render(null));
++    expect(instances[0]!.destroyed()).toBe(true);
++  });
++});
+
+--- apps/desktop/src/metaproject/RelationshipList.dom.test.tsx
+@@ 1,131 @@
++import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
++import type { Root } from "react-dom/client";
++import type { MetaprojectNeighbors } from "../../../../src/integrations/metaproject-explorer-contract";
++import { registerDom, unregisterDom } from "../test/dom";
++
++let createElement: typeof import("react").createElement;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let List: typeof import("./RelationshipList").RelationshipList;
++let summarize: typeof import("./RelationshipList").summarizeRelationships;
++let root: Root;
++let host: HTMLElement;
++
++const client = { id: "client", kind: "file" as const, title: "Client", path: "src/client.ts" };
++const guide = { id: "guide", kind: "wiki" as const, title: "Guide", path: "wiki/guide.md" };
++const app = { id: "app", kind: "file" as const, title: "App", path: "src/app.ts" };
++const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
++const api = { id: "api", kind: "file" as const, title: "Api", path: "src/api.ts" };
++const pkg = { id: "pkg", kind: "module" as const, title: "src", path: "src" };
++
++function projection(overrides: Partial<MetaprojectNeighbors> = {}): MetaprojectNeighbors {
++  return {
++    schemaVersion: 1,
++    snapshotId: "one",
++    root: client.id,
++    nodes: [client, guide, app, server, api, pkg],
++    edges: [
++      { from: guide.id, to: client.id, kind: "describes", evidence: ["guide:3", "guide:9", "guide:20"], provenance: [{ path: "wiki/guide.md", digest: "d".repeat(64) }] },
++      { from: app.id, to: client.id, kind: "imports", evidence: ["key-files", "src/app.ts"] },
++      { from: pkg.id, to: client.id, kind: "contains" },
++      { from: client.id, to: server.id, kind: "imports", count: 7, evidence: ["src/client.ts:4"] },
++      { from: client.id, to: api.id, kind: "imports" },
++      { from: server.id, to: api.id, kind: "calls" },
++    ],
++    truncated: false,
++    ...overrides,
++  };
++}
++
++beforeAll(async () => {
++  registerDom();
++  const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
++  const module = await import("./RelationshipList");
++  List = module.RelationshipList; summarize = module.summarizeRelationships;
++  host = document.createElement("div"); document.body.append(host); root = (await import("react-dom/client")).createRoot(host);
++});
++beforeEach(async () => { await act(() => root.render(null)); });
++afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
++
++function groupHeadings(selector: string) {
++  return [...host.querySelectorAll(selector)].map(item => item.textContent?.replace(/\s+/g, " ").trim());
++}
++
++test("groups root-adjacent relationships by direction, then kind, with counts and readable kind names", async () => {
++  await act(async () => { root.render(createElement(List, { projection: projection(), select: () => {} })); });
++  expect(groupHeadings("h3")).toEqual(["Incoming 3", "Outgoing 2", "Second step 1"]);
++  const incoming = host.querySelector('[data-direction="incoming"]');
++  expect([...incoming!.querySelectorAll("h4")].map(item => item.textContent?.replace(/\s+/g, " ").trim()))
++    .toEqual(["Imports 1", "Describes 1", "Contains 1"]);
++  const outgoing = host.querySelector('[data-direction="outgoing"]');
++  expect([...outgoing!.querySelectorAll("h4")].map(item => item.textContent?.replace(/\s+/g, " ").trim())).toEqual(["Imports 2"]);
++  // Rows inside a kind group are sorted by title.
++  expect([...outgoing!.querySelectorAll(".metaproject-rel-title")].map(item => item.textContent)).toEqual(["Api", "Server"]);
++});
++
++test("a row is one line: title, readable kind badge and a truncated path with the full path in its title", async () => {
++  const selected: string[] = [];
++  await act(async () => { root.render(createElement(List, { projection: projection(), select: id => selected.push(id) })); });
++  const row = host.querySelector<HTMLButtonElement>('[data-direction="incoming"] button[title="wiki/guide.md"]');
++  expect(row?.querySelector(".metaproject-rel-title")?.textContent).toBe("Guide");
++  expect(row?.querySelector(".badge")?.textContent).toBe("Wiki page");
++  const path = row?.querySelector(".metaproject-rel-path");
++  expect(path?.textContent).toBe("wiki/guide.md");
++  expect(path?.classList.contains("truncate")).toBe(true);
++  expect(row?.querySelector(".metaproject-rel-title")?.classList.contains("truncate")).toBe(true);
++  await act(async () => { row!.click(); });
++  expect(selected).toEqual(["guide"]);
++});
++
++test("evidence is a closed disclosure with at most two example lines and never a provenance digest", async () => {
++  await act(async () => { root.render(createElement(List, { projection: projection(), select: () => {} })); });
++  const toggle = host.querySelector<HTMLButtonElement>('[data-direction="incoming"] .metaproject-rel-toggle');
++  expect(toggle?.getAttribute("aria-expanded")).toBe("false");
++  expect(host.querySelector(".metaproject-rel-evidence")).toBeNull();
++  await act(async () => { toggle!.click(); });
++  expect(toggle?.getAttribute("aria-expanded")).toBe("true");
++  const evidence = [...host.querySelectorAll(".metaproject-rel-evidence li")].map(item => item.textContent);
++  expect(evidence).toEqual(["guide:3", "guide:9", "and 1 more"]);
++  expect(host.textContent).not.toContain("d".repeat(64));
++});
++
++test("a module import's disclosure is labelled with its count", async () => {
++  await act(async () => { root.render(createElement(List, { projection: projection(), select: () => {} })); });
++  const toggle = host.querySelector<HTMLButtonElement>('[data-direction="outgoing"] .metaproject-rel-toggle');
++  expect(toggle?.textContent?.trim()).toBe("7 imports");
++});
++
++test("evidence that only repeats the neighbour's path becomes an origin tag, not lines", async () => {
++  await act(async () => { root.render(createElement(List, { projection: projection(), select: () => {} })); });
++  const item = host.querySelector('[data-direction="incoming"] button[title="src/app.ts"]')!.closest("li")!;
++  expect(item.querySelector(".metaproject-rel-origin")?.textContent).toBe("key-files");
++  expect(item.querySelector(".metaproject-rel-toggle")).toBeNull();
++});
++
++test("second-step relationships sit in a closed disclosure with their count and can open either end", async () => {
++  const selected: string[] = [];
++  await act(async () => { root.render(createElement(List, { projection: projection(), select: id => selected.push(id) })); });
++  const second = host.querySelector<HTMLDetailsElement>('details[data-direction="second-step"]');
++  expect(second?.open).toBe(false);
++  expect(second?.querySelector("summary")?.textContent?.replace(/\s+/g, " ").trim()).toBe("Second step 1");
++  second!.open = true;
++  expect(second?.textContent).toContain("Server");
++  expect(second?.textContent).toContain("calls");
++  expect(second?.textContent).toContain("Api");
++  const buttons = [...second!.querySelectorAll("button")];
++  expect(buttons.map(item => item.textContent?.trim())).toEqual(["Open Server", "Open Api"]);
++  await act(async () => { buttons[0]!.click(); });
++  await act(async () => { buttons[1]!.click(); });
++  expect(selected).toEqual(["server", "api"]);
++});
++
++test("limited and empty projections say so", async () => {
++  await act(async () => { root.render(createElement(List, { projection: projection({ truncated: true }), select: () => {} })); });
++  expect(host.querySelector('[role="status"]')?.textContent).toContain("limited");
++  await act(async () => { root.render(createElement(List, { projection: projection({ edges: [] }), select: () => {} })); });
++  expect(host.textContent).toContain("No relationships for these filters.");
++  expect(host.querySelector("h3")).toBeNull();
++});
++
++test("summary counts incoming and outgoing root-adjacent edges only", () => {
++  expect(summarize(projection())).toMatchObject({ incoming: 3, outgoing: 2, secondStep: 1, truncated: false });
++});
+
+--- apps/desktop/src/metaproject/graphLayout.test.ts
+@@ 1,490 @@
++import { describe, expect, test } from "bun:test";
++import type {
++  MetaprojectEdge,
++  MetaprojectEdgeKind,
++  MetaprojectNeighbors,
++  MetaprojectNode,
++  MetaprojectNodeKind,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import {
++  COLUMN_CAP,
++  computeViewport,
++  edgeKindStyle,
++  layoutNeighborhood,
++  legendFor,
++  nodeKindStyle,
++  shortenMiddle,
++  toOpaqueColor,
++  type LayoutBox,
++  type NeighborhoodLayout,
++} from "./graphLayout";
++
++const snapshot = { schemaVersion: 1 as const, snapshotId: "snap" };
++
++function node(id: string, kind: MetaprojectNodeKind = "file", title = id): MetaprojectNode {
++  return { id, kind, title, path: `src/${id}` };
++}
++
++function edge(from: string, to: string, kind: MetaprojectEdgeKind): MetaprojectEdge {
++  return { from, to, kind };
++}
++
++function projection(
++  root: string,
++  nodes: MetaprojectNode[],
++  edges: MetaprojectEdge[],
++  truncated = false,
++): MetaprojectNeighbors {
++  return { ...snapshot, root, nodes, edges, truncated };
++}
++
++/** A module with 30 neighbours: 18 contained files (3 of them also import the module) and 12 importing modules. */
++function depthOneModule(): MetaprojectNeighbors {
++  const root = node("module:root", "module", "apps/desktop/src");
++  const files = Array.from({ length: 18 }, (_, index) => node(`file:${index}`, "file", `component-${String(index).padStart(2, "0")}.tsx`));
++  const importers = Array.from({ length: 12 }, (_, index) => node(`module:in-${index}`, "module", `module-${index}`));
++  const edges = [
++    ...files.map((file) => edge(root.id, file.id, "contains")),
++    ...files.slice(0, 3).map((file) => edge(file.id, root.id, "imports")),
++    ...importers.map((module) => edge(module.id, root.id, "imports")),
++  ];
++  return projection(root.id, [root, ...files, ...importers], edges);
++}
++
++/** Deterministic pseudo-random sequence so the large fixture is the same on every run. */
++function sequence(seed: number): () => number {
++  let state = seed;
++  return () => {
++    state = (state * 1103515245 + 12345) % 2147483648;
++    return state / 2147483648;
++  };
++}
++
++/** 200 nodes, 269 edges, depth 2, truncated: the size measured on this repository. */
++function depthTwoProjection(): MetaprojectNeighbors {
++  const random = sequence(7);
++  const root = node("module:apps/desktop/src", "module", "apps/desktop/src");
++  const kinds: MetaprojectNodeKind[] = ["file", "symbol", "wiki", "module", "spec", "change", "archive"];
++  const outgoing = Array.from({ length: 25 }, (_, index) => node(`out-${index}`, "file", `outgoing-file-${index}.ts`));
++  const incoming = Array.from({ length: 15 }, (_, index) => node(`in-${index}`, "module", `incoming-module-${index}`));
++  const first = [...outgoing, ...incoming];
++  const second = Array.from({ length: 159 }, (_, index) => node(`second-${index}`, kinds[index % kinds.length], `second-step-node-with-a-long-name-${index}.tsx`));
++  const edges: MetaprojectEdge[] = [
++    ...outgoing.map((target) => edge(root.id, target.id, "contains")),
++    ...incoming.map((source) => edge(source.id, root.id, "imports")),
++  ];
++  const seen = new Set(edges.map((item) => `${item.from}>${item.to}`));
++  const secondKinds: MetaprojectEdgeKind[] = ["imports", "contains", "describes", "defines", "links"];
++  second.forEach((item, index) => {
++    const anchor = first[Math.floor(random() * first.length)] ?? outgoing[0]!;
++    const kind = secondKinds[index % secondKinds.length]!;
++    const forward = random() < 0.5;
++    const added = forward ? edge(anchor.id, item.id, kind) : edge(item.id, anchor.id, kind);
++    edges.push(added);
++    seen.add(`${added.from}>${added.to}`);
++  });
++  const nonRoot = [...first, ...second];
++  while (edges.length < 269) {
++    const from = nonRoot[Math.floor(random() * nonRoot.length)]!;
++    const to = nonRoot[Math.floor(random() * nonRoot.length)]!;
++    if (from.id === to.id || seen.has(`${from.id}>${to.id}`)) continue;
++    seen.add(`${from.id}>${to.id}`);
++    edges.push(edge(from.id, to.id, "imports"));
++  }
++  return projection(root.id, [root, ...first, ...second], edges, true);
++}
++
++function boxes(layout: NeighborhoodLayout): (LayoutBox & { id: string })[] {
++  return [
++    ...(layout.root ? [layout.root] : []),
++    ...layout.nodes,
++    ...layout.captions,
++    ...layout.overflow,
++  ];
++}
++
++function overlapping(layout: NeighborhoodLayout): string[] {
++  const all = boxes(layout);
++  const found: string[] = [];
++  for (let i = 0; i < all.length; i++) {
++    for (let j = i + 1; j < all.length; j++) {
++      const a = all[i]!;
++      const b = all[j]!;
++      const apart =
++        Math.abs(a.x - b.x) >= (a.width + b.width) / 2 ||
++        Math.abs(a.y - b.y) >= (a.height + b.height) / 2;
++      if (!apart) found.push(`${a.id} × ${b.id}`);
++    }
++  }
++  return found;
++}
++
++function nodesPerColumn(layout: NeighborhoodLayout): Map<number, number> {
++  const counts = new Map<number, number>();
++  for (const item of layout.nodes) counts.set(item.column, (counts.get(item.column) ?? 0) + 1);
++  return counts;
++}
++
++describe("layoutNeighborhood — depth 1 (AC1, AC2)", () => {
++  const input = depthOneModule();
++  const layout = layoutNeighborhood(input);
++
++  test("incoming-only neighbours sit left of the root and outgoing ones right of it", () => {
++    expect(layout.root?.id).toBe("module:root");
++    const rootX = layout.root?.x ?? 0;
++    const placed = new Map(layout.nodes.map((item) => [item.id, item]));
++    for (let index = 0; index < 12; index++) {
++      const item = placed.get(`module:in-${index}`);
++      expect(item?.side).toBe("incoming");
++      expect(rootX).toBeGreaterThan(item!.x);
++    }
++    const right = layout.nodes.filter((item) => item.id.startsWith("file:"));
++    expect(right.length).toBe(COLUMN_CAP);
++    for (const item of right) {
++      expect(item.side).toBe("outgoing");
++      expect(item.x).toBeGreaterThan(rootX);
++    }
++  });
++
++  test("a neighbour with edges in both directions is placed with outgoing", () => {
++    const both = layout.nodes.find((item) => item.id === "file:0");
++    expect(both?.side).toBe("outgoing");
++  });
++
++  test("no two boxes overlap: nodes, group captions and overflow entries", () => {
++    expect(layout.captions.length).toBeGreaterThan(0);
++    expect(layout.overflow.length).toBe(1);
++    expect(overlapping(layout)).toEqual([]);
++  });
++
++  test("an over-full column shows 12 nodes and one '+N more' entry with the hidden count", () => {
++    const outgoingColumn = layout.nodes.filter((item) => item.column === 1);
++    expect(outgoingColumn.length).toBe(12);
++    const [overflow] = layout.overflow;
++    expect(overflow?.side).toBe("outgoing");
++    expect(overflow?.hidden).toBe(18 - 12);
++    expect(overflow?.text).toBe("+6 more");
++    expect(overflow!.y).toBeGreaterThan(Math.max(...outgoingColumn.map((item) => item.y)));
++  });
++
++  test("a column at exactly the cap has no overflow entry", () => {
++    expect(layout.nodes.filter((item) => item.column === -1).length).toBe(12);
++    expect(layout.overflow.some((item) => item.side === "incoming")).toBe(false);
++  });
++
++  test("groups follow the relationship-kind order with a caption per group, sorted by title", () => {
++    const right = layout.captions.filter((item) => item.column === 1).map((item) => item.text);
++    expect(right).toEqual(["Contains · 18"]);
++    expect(layout.captions.filter((item) => item.column === -1).map((item) => item.text)).toEqual(["Imports · 12"]);
++    const titles = layout.nodes.filter((item) => item.column === -1).sort((a, b) => a.y - b.y).map((item) => item.node.title);
++    expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
++  });
++
++  test("counts are the root-adjacent relationships per direction", () => {
++    expect(layout.incoming).toBe(15);
++    expect(layout.outgoing).toBe(18);
++  });
++
++  test("edges to hidden neighbours are not drawn; drawn edges name both ends", () => {
++    const drawn = new Set([layout.root!.id, ...layout.nodes.map((item) => item.id)]);
++    for (const item of layout.edges) {
++      expect(drawn.has(item.from)).toBe(true);
++      expect(drawn.has(item.to)).toBe(true);
++    }
++    expect(layout.edges.length).toBe(12 + 12 + 3);
++  });
++
++  test("a depth-1 layout fits a 440 px wide canvas at zoom 0.8 or more", () => {
++    const viewport = computeViewport(layout, 440, 194);
++    expect(layout.bounds.width * 0.8 <= 440 - 2 * viewport.padding).toBeTrue();
++    expect(viewport.zoom >= 0.8).toBeTrue();
++  });
++});
++
++describe("layoutNeighborhood — depth 2 (AC2, AC3)", () => {
++  const input = depthTwoProjection();
++  const layout = layoutNeighborhood(input);
++
++  test("the fixture is the measured size", () => {
++    expect(input.nodes.length).toBe(200);
++    expect(input.edges.length).toBe(269);
++  });
++
++  test("no two boxes overlap and no column holds more than 12 nodes", () => {
++    expect(overlapping(layout)).toEqual([]);
++    for (const count of nodesPerColumn(layout).values()) expect(count <= COLUMN_CAP).toBeTrue();
++  });
++
++  test("every over-full column has exactly one overflow entry with the hidden count", () => {
++    for (const overflow of layout.overflow) {
++      const shown = layout.nodes.filter((item) => item.column === overflow.column).length;
++      expect(shown).toBe(COLUMN_CAP);
++      expect(overflow.hidden).toBe(overflow.total - COLUMN_CAP);
++    }
++    expect(new Set(layout.overflow.map((item) => item.column)).size).toBe(layout.overflow.length);
++    const outgoing = layout.overflow.find((item) => item.column === 1);
++    expect(outgoing?.hidden).toBe(25 - 12);
++    expect(outgoing?.side).toBe("outgoing");
++  });
++
++  test("every second-step node is in the outer column on its first-step node's side, beyond every first-step node", () => {
++    const first = new Map(layout.nodes.filter((item) => item.role === "first").map((item) => [item.id, item]));
++    const second = layout.nodes.filter((item) => item.role === "second");
++    expect(second.length).toBeGreaterThan(0);
++    const firstIds = new Set(input.nodes.filter((item) => item.id.startsWith("out-") || item.id.startsWith("in-")).map((item) => item.id));
++    for (const item of second) {
++      expect(item.via).not.toBeUndefined();
++      expect(firstIds.has(item.via!)).toBe(true);
++      expect(input.edges.some((link) => (link.from === item.id && link.to === item.via) || (link.to === item.id && link.from === item.via))).toBe(true);
++      const expectedSide = item.via!.startsWith("in-") ? "incoming" : "outgoing";
++      expect(item.side).toBe(expectedSide);
++      expect(item.column).toBe(expectedSide === "incoming" ? -2 : 2);
++      const sameSide = [...first.values()].filter((other) => other.side === item.side);
++      for (const other of sameSide) {
++        expect(Math.abs(item.x) - item.width / 2).toBeGreaterThan(Math.abs(other.x) + other.width / 2);
++      }
++    }
++  });
++
++  test("second-step edges are marked so they can be drawn fainter", () => {
++    const rootId = layout.root!.id;
++    for (const item of layout.edges) expect(item.secondStep).toBe(item.from !== rootId && item.to !== rootId);
++    expect(layout.edges.some((item) => item.secondStep)).toBe(true);
++  });
++
++  test("the projection's truncation is carried to the layout", () => {
++    expect(layout.truncated).toBe(true);
++  });
++});
++
++describe("layoutNeighborhood — small and degenerate inputs", () => {
++  test("a second-step node attached to an incoming neighbour goes to the outer left column", () => {
++    const input = projection(
++      "root",
++      [node("root"), node("a"), node("b"), node("c"), node("d")],
++      [edge("a", "root", "imports"), edge("root", "b", "imports"), edge("c", "a", "imports"), edge("b", "d", "calls")],
++    );
++    const layout = layoutNeighborhood(input);
++    const placed = new Map(layout.nodes.map((item) => [item.id, item]));
++    expect(placed.get("c")).toMatchObject({ role: "second", side: "incoming", column: -2, via: "a" });
++    expect(placed.get("d")).toMatchObject({ role: "second", side: "outgoing", column: 2, via: "b" });
++    expect(placed.get("a")!.x).toBeGreaterThan(placed.get("c")!.x);
++    expect(placed.get("d")!.x).toBeGreaterThan(placed.get("b")!.x);
++    expect(overlapping(layout)).toEqual([]);
++  });
++
++  test("a projection without its root node lays out nothing", () => {
++    const layout = layoutNeighborhood(projection("missing", [node("a")], []));
++    expect(layout.root).toBeNull();
++    expect(layout.nodes).toEqual([]);
++    expect(layout.edges).toEqual([]);
++  });
++
++  test("a lone root is centred at the origin", () => {
++    const layout = layoutNeighborhood(projection("root", [node("root")], []));
++    expect(layout.root).toMatchObject({ x: 0, y: 0, role: "root", column: 0 });
++    expect(layout.incoming).toBe(0);
++    expect(layout.outgoing).toBe(0);
++  });
++
++  test("a larger text scale widens nodes without overlaps", () => {
++    const normal = layoutNeighborhood(depthOneModule());
++    const large = layoutNeighborhood(depthOneModule(), { textScale: 1.3 });
++    expect(large.root!.width).toBeGreaterThan(normal.root!.width);
++    expect(overlapping(large)).toEqual([]);
++  });
++
++  test("a column cap below one is refused", () => {
++    expect(() => layoutNeighborhood(depthOneModule(), { columnCap: 0 })).toThrow("columnCap must be a positive integer, got 0");
++  });
++});
++
++describe("layoutNeighborhood — live-preview polish (G2, G3, G4, G6)", () => {
++  function column(layout: NeighborhoodLayout, index: number) {
++    return layout.nodes.filter((item) => item.column === index).sort((a, b) => a.y - b.y);
++  }
++
++  test("G2: a kind group is never hidden behind another: the containing module and the describing page stay drawn", () => {
++    const rootNode = node("src/bus/leases.ts", "file", "leases.ts");
++    const importers = Array.from({ length: 14 }, (_, index) => node(`importer-${index}`, "file", `importer-${String(index).padStart(2, "0")}.ts`));
++    const module = node("module:src/bus", "module", "src/bus");
++    const page = node("wiki:agent-bus", "wiki", "Agent Bus");
++    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, ...importers, module, page], [
++      ...importers.map((item) => edge(item.id, rootNode.id, "imports")),
++      edge(module.id, rootNode.id, "contains"),
++      edge(page.id, rootNode.id, "describes"),
++    ]));
++    const left = column(layout, -1);
++    expect(left.length).toBe(12);
++    expect(left.map((item) => item.id)).toContain(module.id);
++    expect(left.map((item) => item.id)).toContain(page.id);
++    expect(left.filter((item) => item.group === "imports").length).toBe(10);
++    expect(layout.overflow).toHaveLength(1);
++    expect(layout.overflow[0]?.hidden).toBe(16 - 12);
++    expect(layout.captions.filter((item) => item.column === -1).map((item) => item.text)).toEqual(["Imports · 14", "Describes · 1", "Contains · 1"]);
++    expect(overlapping(layout)).toEqual([]);
++  });
++
++  test("G2: every group gets two slots first, then the leftover slots go in kind order", () => {
++    const rootNode = node("root", "module");
++    const group = (kind: MetaprojectEdgeKind) => Array.from({ length: 10 }, (_, index) => node(`${kind}-${index}`));
++    const imports = group("imports");
++    const links = group("links");
++    const contains = group("contains");
++    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, ...imports, ...links, ...contains], [
++      ...imports.map((item) => edge(rootNode.id, item.id, "imports")),
++      ...links.map((item) => edge(rootNode.id, item.id, "links")),
++      ...contains.map((item) => edge(rootNode.id, item.id, "contains")),
++    ]));
++    const right = column(layout, 1);
++    const count = (kind: MetaprojectEdgeKind) => right.filter((item) => item.group === kind).length;
++    expect(right.length).toBe(12);
++    expect([count("imports"), count("links"), count("contains")]).toEqual([8, 2, 2]);
++    expect(layout.overflow[0]?.hidden).toBe(30 - 12);
++  });
++
++  test("G3: inside a group, nodes are ordered by edge count descending, then title", () => {
++    const rootNode = node("root", "module", "root");
++    const modules = Array.from({ length: 15 }, (_, index) => node(`m-${index}`, "module", `module-${String.fromCharCode(97 + index)}`));
++    const counts = [1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 88];
++    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, ...modules], modules.map((item, index) => ({ ...edge(rootNode.id, item.id, "imports"), count: counts[index] }))));
++    const titles = column(layout, 1).map((item) => item.node.title);
++    expect(titles.slice(0, 4)).toEqual(["module-o", "module-c", "module-a", "module-b"]);
++    expect(titles).toHaveLength(12);
++    expect(titles).not.toContain("module-n");
++  });
++
++  test("G4: drawn nodes that share a title get the shortest path suffix that tells them apart", () => {
++    const rootNode = node("root", "module", "root");
++    const a = { ...node("module:src/commands", "module", "commands"), path: "src/commands" };
++    const b = { ...node("module:packages/hub/commands", "module", "commands"), path: "packages/hub/commands" };
++    const c = { ...node("module:src/agents", "module", "agents"), path: "src/agents" };
++    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, a, b, c], [edge(rootNode.id, a.id, "imports"), edge(b.id, rootNode.id, "imports"), edge(rootNode.id, c.id, "imports")]));
++    const labels = new Map(layout.nodes.map((item) => [item.id, item.label]));
++    expect(labels.get(a.id)).toBe("src/commands");
++    expect(labels.get(b.id)).toBe("hub/commands");
++    expect(labels.get(c.id)).toBe("agents");
++  });
++
++  test("G4: shared titles whose paths do not end in the title keep the title in front", () => {
++    const rootNode = node("root", "file", "root");
++    const first = { ...node("symbol:a#run", "symbol", "run"), path: "src/a.ts" };
++    const second = { ...node("symbol:b#run", "symbol", "run"), path: "src/b.ts" };
++    const layout = layoutNeighborhood(projection(rootNode.id, [rootNode, first, second], [edge(rootNode.id, first.id, "defines"), edge(rootNode.id, second.id, "defines")]));
++    expect(layout.nodes.map((item) => item.label).sort()).toEqual(["run · a.ts", "run · b.ts"]);
++  });
++
++  test("G6: incoming columns are flush right and outgoing columns flush left, captions and overflow included", () => {
++    const layout = layoutNeighborhood(depthOneModule());
++    const right = (box: LayoutBox) => box.x + box.width / 2;
++    const left = (box: LayoutBox) => box.x - box.width / 2;
++    const incoming = [...layout.nodes.filter((item) => item.column === -1), ...layout.captions.filter((item) => item.column === -1)];
++    const outgoing = [...layout.nodes.filter((item) => item.column === 1), ...layout.captions.filter((item) => item.column === 1), ...layout.overflow.filter((item) => item.column === 1)];
++    expect(new Set(incoming.map((box) => left(box).toFixed(3))).size).toBeGreaterThan(1);
++    expect(new Set(incoming.map((box) => right(box).toFixed(3))).size).toBe(1);
++    expect(new Set(outgoing.map((box) => left(box).toFixed(3))).size).toBe(1);
++    const second = layoutNeighborhood(depthTwoProjection());
++    for (const index of [-2, 2]) {
++      const boxes = [...second.nodes, ...second.captions, ...second.overflow].filter((item) => item.column === index);
++      expect(new Set(boxes.map((box) => (index < 0 ? right(box) : left(box)).toFixed(3))).size).toBe(1);
++    }
++  });
++});
++
++describe("shortenMiddle", () => {
++  test("G5: cuts at a dot boundary and keeps the longest dotted tail that fits in half the budget", () => {
++    expect(shortenMiddle("imagePreview.dom.test.ts", 17)).toBe("imagePre….test.ts");
++  });
++
++  test("G5: a dotted tail longer than half the budget falls back to the plain middle cut", () => {
++    const short = shortenMiddle("a.verylongextension", 8);
++    expect(short).toHaveLength(8);
++    expect(short).toContain("…");
++  });
++
++  test("keeps a short label unchanged", () => {
++    expect(shortenMiddle("index.ts", 20)).toBe("index.ts");
++  });
++
++  test("shortens in the middle and keeps the file extension", () => {
++    const short = shortenMiddle("useExplorerNavigation.test.tsx", 16);
++    expect(short.length).toBe(16);
++    expect(short).toContain("…");
++    expect(short.endsWith(".tsx")).toBe(true);
++    expect(short.startsWith("useEx")).toBe(true);
++  });
++
++  test("a one-character budget is the ellipsis", () => {
++    expect(shortenMiddle("abcdef", 1)).toBe("…");
++  });
++
++  test("a budget below one is refused", () => {
++    expect(() => shortenMiddle("abc", 0)).toThrow("maxChars must be a positive integer, got 0");
++  });
++});
++
++describe("computeViewport", () => {
++  test("zoom is clamped to 1.15 for a tiny layout", () => {
++    const layout = layoutNeighborhood(projection("root", [node("root")], []));
++    expect(computeViewport(layout, 800, 600).zoom).toBe(1.15);
++  });
++
++  test("zoom never drops below 0.8 and centres the root when the layout does not fit", () => {
++    const layout = layoutNeighborhood(depthTwoProjection());
++    const viewport = computeViewport(layout, 440, 194);
++    expect(viewport.zoom).toBe(0.8);
++    expect(Math.abs(viewport.pan.x - 220) < 1e-6).toBeTrue();
++    expect(Math.abs(viewport.pan.y - 97) < 1e-6).toBeTrue();
++  });
++
++  test("a zero-sized box gives no viewport", () => {
++    const layout = layoutNeighborhood(depthOneModule());
++    expect(computeViewport(layout, 0, 0).usable).toBe(false);
++  });
++});
++
++describe("human-readable labels (G7)", () => {
++  test("captions and legend use the shared labels", () => {
++    const input = projection("root", [node("root", "module"), node("a"), node("b", "wiki")], [edge("root", "a", "asset"), edge("root", "b", "links"), edge("a", "root", "imports")]);
++    const captions = layoutNeighborhood(input).captions.map((item) => item.text).sort();
++    expect(captions).toEqual(["Assets · 1", "Wiki links · 1"]);
++    expect(legendFor(input).lines.map((line) => `${line.label}: ${line.kinds.join(", ")}`)).toEqual(["Solid line: Imports, Assets", "Dashed line: Wiki links"]);
++  });
++});
++
++describe("style mapping", () => {
++  const kinds: MetaprojectNodeKind[] = ["module", "file", "symbol", "wiki", "spec", "change", "archive"];
++
++  test("each of the seven node kinds has a distinct shape-or-border treatment", () => {
++    const treatments = kinds.map((kind) => {
++      const style = nodeKindStyle(kind);
++      return `${style.shape}|${style.borderStyle}|${style.borderWidth}`;
++    });
++    expect(new Set(treatments).size).toBe(7);
++  });
++
++  test("the nine relationship kinds map onto solid, dashed and dotted lines", () => {
++    const styles = {
++      imports: "solid", calls: "solid", asset: "solid",
++      describes: "dashed", links: "dashed", "changes-spec": "dashed", "spec-context": "dashed",
++      contains: "dotted", defines: "dotted",
++    } as const;
++    for (const [kind, line] of Object.entries(styles)) {
++      expect(edgeKindStyle(kind as MetaprojectEdgeKind).lineStyle).toBe(line);
++    }
++  });
++});
++
++describe("toOpaqueColor", () => {
++  test("an opaque colour is returned as rgb", () => {
++    expect(toOpaqueColor("#265f50", "#ffffff")).toBe("rgb(38, 95, 80)");
++  });
++
++  test("a translucent colour is blended over the background", () => {
++    expect(toOpaqueColor("rgba(0, 0, 0, 0.5)", "#ffffff")).toBe("rgb(128, 128, 128)");
++    expect(toOpaqueColor("#00000080", "rgb(255 255 255)")).toBe("rgb(127, 127, 127)");
++  });
++
++  test("an unparsable colour is passed through unchanged", () => {
++    expect(toOpaqueColor("color(display-p3 1 0 0)", "#ffffff")).toBe("color(display-p3 1 0 0)");
++  });
+
+--- apps/desktop/src/metaproject/graphLayout.test.ts
+@@ 575,575 @@
++});

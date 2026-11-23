@@ -1,0 +1,25 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Read all of slice-05 (App.tsx RetainedView, MetaprojectView.tsx, NodeDetailsPanel.tsx, RelationshipGraph.tsx, RelationshipList.tsx, graph.css, removed GraphNodePanel.tsx). No blocker or major defect: effects have cleanup, cytoscape is created once and destroyed, theme changes re-style the live instance, stale async results are guarded, and tab/disclosure ARIA is consistent. One info observation about the Filters popover staying registered while the retained view is hidden.",
+  "findings": [
+    {
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "title": "An open Filters popover stays registered on the Esc stack while the retained Metaproject view is hidden",
+      "evidence": "FiltersPopover calls `useEscape(() => close.current());` and a window-level capture `mousedown` listener. RetainedView (App.tsx) keeps the Explorer mounted with `hidden`, and `filtersOpen` is deliberately kept across view switches. useEscape (components/ui.tsx) pushes onto a global stack, so `overlayOpen()` stays true and the next Escape anywhere is consumed (preventDefault) by closing an invisible popover.",
+      "problem": "While another view is active and the popover was left open, App's `overlayOpen()` check (App.tsx:360) makes global shortcuts back off, and the first Escape press in that view is swallowed.",
+      "impact": "Narrow: the view switch normally comes from a mouse press, and the window mousedown listener closes the popover first. Reachable only when the view changes without a mouse press while the popover is open.",
+      "suggested_fix": "Close the popover when the explorer is hidden (pass `visible` down), or hold the escape layer only while the view is visible."
+    }
+  ],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+
+## Frontend Review
+
+Clean areas checked: observer/MobX (none used in slice), effect cleanup (RelationshipGraph, NodeDetailsPanel, FiltersPopover), API calls stay in MetaprojectView (not in presentational components), keys, tab/disclosure/aria-expanded wiring, theme repaint (MutationObserver plus matchMedia), hidden-container fit guard (`target.usable`), removed GraphNodePanel has no leftover import in the slice. Not verified: runtime behaviour (read-only run, no tests executed); CSS outside graph.css (metaproject.css, nodePanel.css) belongs to other slices.

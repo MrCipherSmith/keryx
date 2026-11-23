@@ -1,0 +1,57 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "The split of the old shared counter into `catalogRead` (the catalog effect's own results) and `project.current` (pending lookups and pages) holds under every interleaving I enumerated against MetaprojectView.tsx at head. A quiet read never moves `project.current`, never supersedes a non-quiet read (`catalogPending` blocks it), is itself superseded by any Retry, Refresh, Rebuild reload or dependency change, and `catalogPending` is cleared or re-set on every path that retires a read. Both readers of `project.current` (openPath, loadMoreSearch) and the one reader of `catalogPending` (the visible effect) were traced; none is retired too early or never. No findings.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+
+## High-Load Review (round 3, slice-02)
+
+Scope: range b1538097e636..8e0f656fb2aa, diff mode. Read in full: slice-02.diff (App.tsx, MetaprojectView.tsx, RelationshipList.tsx and their three test files). Read at head for what surrounds the hunks: MetaprojectView.tsx 250-420 and 625-715, platform/metaproject.ts, and metaproject.rs (the CLI read is bounded at 150 s, `run_bounded(..., Duration::from_secs(150), ...)` at line 195). Load profile: not provided; the concrete trigger is one explorer instance whose view is hidden and shown repeatedly while CLI reads are in flight. Nothing was run (read-only, exec budget 0).
+
+### Who reads which ref (enumerated with `keryx ctx rg --all` over MetaprojectView.tsx)
+
+- `project.current`: written by the catalog effect body (`project.current++`, only when `!quiet`, line 377) and its cleanup (`if (!quietRead.current) project.current++`, line 414). Read by `openPath` (generation captured at 694, checked in `current()` at 695) and `loadMoreSearch` (captured at 646, checked at 654 and 660). No other reader. The neighbors, detail, documents, preview, suggested-wiki and search effects use effect-local `active` flags and `latestSearch.generation`; they never read it.
+- `catalogRead.current`: written and read only by the catalog effect (373, 387, 403, 405, 412).
+- `catalogPending.current`: set in the effect body (381), cleared in `finally` only for the current generation (405-406), read only by the visible effect (346).
+- `quietRead.current`: set by the visible effect (347), consumed and reset at the top of the next catalog effect body (374-375), and read by the cleanup (414).
+- `loaded.current`: set on the first applied result (388), read by the visible effect.
+
+### Interleavings, from the code at head
+
+Notation: P = `project.current`, R = `catalogRead.current`, Pend = `catalogPending.current`, Q = `quietRead.current`.
+
+1. Return while the first read is loading. `loaded.current` is false, so the visible effect returns before touching Q or the revision. No second read. The first read keeps its generation, its result is applied, then Pend false. P unchanged by the return, R unchanged, Q false. If the first read fails, `loaded.current` stays false and a later return starts nothing (pinned by "a return after a failed first catalog read"); the user's Retry is the only way to read again.
+2. Return, hide, second return before the quiet read ends. Return 1: Pend false and `loaded` true, so Q := true and the revision bumps. Cleanup of the previous run: R++, P untouched (Q is true). Body: gen = ++R, quiet = true, Q := false, P untouched, Pend := true, read starts. The hide does nothing but close the popover. Return 2 finds Pend true and starts no read. The one quiet read ends, its result is applied (unchanged snapshot: freshness only; changed snapshot: catalog replaced), Pend := false. Afterwards P unchanged since before return 1, R = that read's generation, Pend false, Q false. Return 2 gets the result of the read started at return 1, not a fresh one; the staleness is one read's duration at most.
+3. Return while a rebuild runs, rebuild ending during the quiet read. The rebuild starts no catalog read until `onRebuild()` resolves, so Pend is false at the return and the quiet read starts as in 2 (P untouched). When the rebuild resolves true, `setRevision` runs the effect: cleanup R++ (the quiet read's result is dropped; its `finally` skips because the generation moved), Q is false so P++ (pending lookups and pages are retired, correctly: the project was rebuilt), body is non-quiet: `setError("")`, Pend := true, a full read. That read's result is applied whole. Final: P +1, R = the reload's generation, Pend false after it ends, Q false. The reverse order (rebuild ends, reload pending, then return) finds Pend true and starts no quiet read; the reload applies or fails loudly. If the rebuild throws during the quiet read, `setError` from `rebuild()` stands; the quiet read neither clears nor replaces it (pinned by "a standing error ... survives a quiet re-read").
+4. Retry or Refresh pressed during a quiet read. Both call `setRevision`. Cleanup: R++ (the quiet read is dropped, its `finally` skipped), Q false so P++. Body: non-quiet, `setError("")`, Pend := true. The user's read applies fully, failures included. Pending lookups and pages are retired, as for any Refresh. A same-tick return and Retry would merge into one revision bump and make the Retry quiet (Q is true when the body runs); the window is the gap between a passive effect's `setRevision` and the next render, and I could not construct it from user events, so I do not file it.
+5. Quiet read finds a changed snapshot while a lookup or a "load more" page is in flight. P is not moved, so openPath's `current()` still passes on token, project, selection and mode. Load-more: the changed catalog moves `latestSearch.current.generation` at render (snapshot differs), so the page's check at 654 fails and it returns; `pageInFlight` is cleared in `finally`, the catch path (660) also fails its generation test, so no error is shown; the search effect re-runs for the new snapshot (its cache key holds the snapshot id). Correct. Lookup: if its answer carries the new snapshot, `result.snapshotId !== snapshotId` (the id captured at click, 693) sets `snapshotMismatch`, and the existing "Project knowledge changed while loading" banner shows with Refresh. When the quiet read has already replaced the catalog by then, the banner is shown over a catalog that is already current, and Refresh only re-reads the same snapshot (it also clears the flag). Cost: one extra click and the link is not opened; the trigger needs the index rewritten while the view is hidden and a lookup spanning the leave and return. I judge choice 1 acceptable as code. Opposite order (lookup answered from the old snapshot after the new catalog is applied): the check passes and the old-snapshot node is opened; a later detail read reports through the existing detail error path. Same narrow trigger; not a defect of this change (any lookup answered late behaves so).
+6. Quiet read fails. `generation === R` and `quiet` true: no `setError`; `finally` sets Pend false and `setLoading(false)` (already false). `loaded.current` stays true, the catalog and freshness are untouched, a standing error is untouched, P and R unchanged, Q false. The next return reads again. Because it is silent, a persistent CLI failure on return shows nothing until the user acts; the CLI call is bounded at 150 s, so a hung quiet read ends and clears Pend (until then returns start no further quiet read).
+7. Unmount during any read. Cleanup: R++ (the result is dropped), Q is false so P++ (lookups and pages retire), `mounted` false stops a rebuild's state writes. Pend stays true, but the ref dies with the component and a remount starts from fresh refs. A project change remounts the explorer, same path. During a non-quiet read the same cleanup applies. The only case where the cleanup skips `P++` is Q true, which exists only between the visible effect and the next render of the same instance.
+
+### Every in-flight request that reads a counter or the flag
+
+- Catalog read (any kind): reads R only. Retired exactly when a later read starts, on dependency change, or on unmount. Never left applying after something newer.
+- Wiki-link lookup (`openPath`): reads P (plus token, selection, mode). Retired by Refresh, Retry, a rebuild reload, a dependency change, unmount; not retired by a quiet read. Too early: no. Never: no, since a non-quiet read always bumps P.
+- Page of results (`loadMoreSearch`): reads P and `latestSearch.generation`. Same as above; additionally retired when a quiet read replaces the catalog snapshot. Pagination is `pageInFlight`-guarded and cleared in `finally` on every path.
+- Visible effect: reads Pend and `loaded`. Pend is cleared on completion of the current generation and re-set by every body, so it cannot be left true after the last read of an instance (a superseded read never clears it, but its superseder always sets and later clears it). The one way it stays true is a read that never settles; the Rust side bounds that at 150 s.
+
+### Other notes (not findings)
+
+- Rebuild and the revision effect: `rebuild()` calls `setError("")` itself, so the quiet path's skip of `setError("")` loses nothing there.
+- A catalog-reload failure shown as `error` (for example after a rebuild) is the same state as a rebuild failure, so a later successful quiet read leaves that banner until Retry. The test pins this for a rebuild's own error; it costs a redundant Retry at most and was not rated as a finding.
+- The empty note and Wiki disclosure count (F-001): `empty` is derived from the three groups, and the disclosure's count is `incoming + outgoing + secondStep` from `summarizeRelationships`, the same grouping the list uses; closed. `remember` as a stable `useCallback` with `[]` (F-004) is called by the node-memory effect with `[nodes, remember]`; no one else reads a changed identity; closed. `MetaprojectWork` passes `visible={view === "metaproject"}` and the test pins `visible` through leave, return and Settings (F-009); closed.
+
+Clean areas: Part 0 (multi-session), A (shared mutable refs: examined above), B (timers and listeners: the resize listener test is in the slice, not changed in production code), F (no retry loops added). Parts C, D, E, G not applicable to this slice.

@@ -1,0 +1,8 @@
+baseline exit 0
+R2-14 (moved): killed — (fail) a return after a failed first catalog read starts no read, and its failure and Retry stay [1.08ms]
+R2-23 (moved): killed — (fail) a node known only from a search hit keeps its panel once the search is cleared, and Back returns to it at once [2.10ms]
+T23-1: killed — (fail) a wiki-link lookup in flight when the explorer is hidden and shown again still settles [2.73ms]
+T23-2: killed — (fail) a failed quiet re-read on return shows no error and leaves the explorer as it was [2.34ms]
+T23-3: killed — (fail) a return while a catalog reload is in flight starts no quiet read, and the reload's failure is still shown [1.72ms]
+T23-4: killed — (fail) shown again after being hidden, the explorer re-reads the catalog once and quietly, keeping its state [4.45ms]
+T23-5: killed — (fail) a wiki-link lookup in flight when the explorer is hidden and shown again still settles [3.55ms]

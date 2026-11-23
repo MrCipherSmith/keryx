@@ -2,10 +2,14 @@
 
 Open **Metaproject** in a project window, or press **⌘5**. Use **Graph** to
 trace relationships between project objects and **Wiki** to read articles.
-Each view remembers its own search and selection. **Back** restores the
-previous view, including the search and scroll position. The explorer
-reads the open checkout locally and works without a GitHub account or a model
-provider.
+Each view remembers its own search and selection. **Back** steps back through
+the items you selected, not only through view switches, and restores the
+search and scroll position of each step, including the place you were reading
+in an earlier OpenSpec document. If you leave the Metaproject tab and return,
+the explorer is as you left it, with its view, search, selection and filters.
+It also re-reads the catalog quietly, so the graph freshness banner is
+current. The explorer reads the open checkout locally and works without a
+GitHub account or a model provider.
 
 ## Browse OpenSpec
 
@@ -36,9 +40,10 @@ keryx openspec show openspec/specs/review/spec.md --json
    keryx init --yes
    ```
 
-3. Open **Metaproject** and select **Rebuild graph** when the view reports
-   **Graph missing** or **Graph stale**. The terminal panel shows the build
-   progress. You can also build it from the same checkout in a terminal.
+3. Open **Metaproject** and select **Rebuild graph** when the banner reads
+   **Graph is missing.** or **Graph is stale.** The banner is one line. Select
+   **Details** beside it to read the reason. The terminal panel shows the
+   build progress. You can also build it from the same checkout in a terminal.
 
    ```bash
    keryx gdgraph build
@@ -64,8 +69,9 @@ keryx openspec show openspec/specs/review/spec.md --json
 ### Enable symbol and call relationships
 
 Files, modules, wiki pages and import relationships work with the file
-graph. For symbol search and the **defines** and **calls** filters, enable the
-optional symbol layer per checkout and rebuild it.
+graph. For symbol search and the **Defines** and **Calls** relationship types,
+which stay disabled in the Graph **Filters** popover until the symbol layer is
+on, enable the optional symbol layer per checkout and rebuild it.
 
 ```bash
 keryx gdgraph symbols enable
@@ -84,57 +90,127 @@ when several files share a name. Wiki body matches show a snippet so you can
 see why a page matched. For example, searching for `inode-aware cursor` in
 the Keryx repository finds the **Agent Bus** page.
 
-Select a result to inspect it. The graph highlights the selected item and
-shows the nodes related to it by the current filters. In **Wiki**, a page opens as a readable
+The list header shows how many catalog items are shown out of the total, as
+**Catalog · shown of total**. While you search it reads **Results** with
+the number of matches instead.
+
+Select a result to inspect it. In **Graph**, the selected item becomes the
+center of the graph, with the nodes related to it by the current graph
+filters around it. In **Wiki**, a page opens as a readable
 article with its repository path. File and symbol results display their
 identity and path. To inspect or edit their
 source, open that path in your editor.
 
+If the check of the selected CLI fails, the explorer shows the error with a
+**Retry** button.
+
 ## Trace relationships in Graph
 
-![Graph view with Agent Bus selected, its related code highlighted, and the relationship controls and list visible](../images/desktop-metaproject/graph.jpg)
+![Graph view with the file src/bus/leases.ts selected: twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left, the four files it imports on the right, group captions, a legend under the graph, and the details panel open on its Relationships tab](../images/desktop-metaproject/graph.jpg)
 
-1. Select a starting item. Use **Direction → Outgoing** to follow its
-   dependencies or links, and **Incoming** to see what points to it.
-   **Both** includes each direction.
-2. Start at **1 step** for direct neighbors. Use **2 steps** to follow those
-   neighbors one level further. Turn off unrelated relationship types to
-   narrow a busy graph.
-3. Click a node to select it and open the details pane. Use its **Wiki** or
-   **OpenSpec** tab to preview linked documents, then open the full document
-   with the named action. Drag the divider, or focus it and use the arrow
-   keys, to change the pane width. Press **Escape** to close it. You can also
-   select a neighboring node with **Tab** and **Enter** in the relationship list.
-   A relationship between two second-step items offers an **Open** button for
-   each endpoint.
-4. Read the relationship row for the exact path or source evidence when
-   available. Check the arrow direction before following a dependency.
+The graph shows a local neighborhood of the selected item in columns. What
+points at the selected item is on its left, and what it points at is on its
+right. In the picture, `src/bus/leases.ts` is selected: the files that import
+it, the Agent Bus page that describes it and its module are on the left, and
+the four files it imports are on the right. With **2 steps**, items one step
+further out sit in additional columns beyond those, drawn fainter. The
+header row above the graph shows its caption, the zoom controls and the
+**Filters** button.
 
-| Type | Direction |
-| --- | --- |
-| `imports` | A source file or module points to an imported file or module. |
-| `asset` | A source file points to an asset it references. |
-| `describes` | A wiki page points to code it covers. |
-| `links` | A wiki page points to another page in the wiki. |
-| `contains` | A module points to a file it contains. |
-| `defines` | A file or symbol points to a symbol it defines. |
-| `calls` | An indexed caller points to a resolved callee. |
+1. Select a starting item, such as `src/bus/leases.ts`. The graph shows
+   what points to it and what it points at. Use **Filters** to follow only one
+   direction.
+2. Select **Filters** in the header row of the graph, next to the zoom
+   controls. A popover opens below the button, or above it when there is no
+   room below, with the graph visible behind it, and every change applies at
+   once. Press **Escape** or click outside to close it. It also closes when you
+   leave the Metaproject tab. Your filter choices are kept.
+   - **Direction**: **Outgoing** follows dependencies or links, **Incoming**
+     shows what points to the item, and **Both** includes each direction.
+   - **Depth**: start at **1 step** for direct neighbors. Use **2 steps** to
+     follow those neighbors one level further.
+   - **Relationship types**: turn off unrelated types to narrow a busy graph.
+     They are named **Imports**, **Assets**, **Describes**, **Wiki links**,
+     **Contains**, **Defines**, **Calls**, **Changes spec** and **Spec
+     context**. **Defines** and **Calls** are disabled, with the reason
+     shown, until the symbol layer is enabled.
+   - **Reset filters** restores the defaults. While the filters differ from
+     their defaults, the button reads **Filters · n** and is highlighted.
+3. Read the groups. Each group of items has a caption with its relationship
+   type and a count, for example **Imports · 7**. A column shows at most 12
+   items. When a column has more, it keeps a few items from each
+   relationship type and collapses the rest into a **+N more** entry. Click it
+   to open the full list in the **Relationships** tab of the details panel.
+4. Use the legend under the graph to read the shapes and lines. The shape and
+   border of an item show its kind, such as module, file, symbol, Wiki page,
+   spec or change. The line style shows the relationship family: solid,
+   dashed or dotted, with the relationship types that use it. The legend lists
+   only what the current graph contains. Meaning never depends on color alone.
+5. Use the zoom in, zoom out and fit controls in the graph's header row to
+   move around a large neighborhood. Click an item to select it. The graph
+   re-centers on it, and while its relationships load the previous graph stays
+   on screen, dimmed. **Back** returns to the item you selected before.
+6. Read the details panel for the selected item. It shows the kind, the title
+   and the path, with a **Copy path** control. Below are the facts: the
+   module, the page type, the status and the relationships, as in
+   `14 incoming · 4 outgoing`. When the neighborhood also has second-step
+   relationships, their count follows, as in `2 incoming · 2 outgoing · 1
+   second-step`. A relationship from an item to itself is neither listed nor
+   counted. Drag the
+   divider, or focus it and use the arrow keys, to change the panel width.
+   Press **Escape** to close it. Three tabs, each with a count, follow the
+   facts:
+
+   - **Relationships** is the default tab. It groups the relationships into
+     **Incoming** and **Outgoing**, then by type. Click a row to select that
+     item, or focus it with **Tab** and press **Enter**. The control at the end
+     of a row opens the source evidence for that relationship, when there is
+     any. For module imports it reads the count, such as **7 imports**;
+     otherwise it reads **N examples**. Relationships between two second-step
+     items sit in a **Second step** disclosure, closed until you open it. Each
+     relationship offers an **Open** button for each endpoint. Check the
+     direction before following a dependency.
+   - **Wiki** previews the linked Wiki page. **Open in Wiki** opens the full
+     page. When no page is linked, **Find a Wiki page** searches for one and
+     **Draft Wiki page** starts a session that prepares a draft.
+   - **OpenSpec** works the same way for specs and changes, with **Open in
+     OpenSpec**, **Find an OpenSpec document** and **Draft OpenSpec change**.
+
+| Type | Name in the app | Direction |
+| --- | --- | --- |
+| `imports` | Imports | A source file or module points to an imported file or module. |
+| `asset` | Assets | A source file points to an asset it references. |
+| `describes` | Describes | A wiki page points to code it covers. |
+| `links` | Wiki links | A wiki page points to another page in the wiki. |
+| `contains` | Contains | A module points to a file it contains. |
+| `defines` | Defines | A file or symbol points to a symbol it defines. |
+| `calls` | Calls | An indexed caller points to a resolved callee. |
+| `changes-spec` | Changes spec | An OpenSpec change points to a spec it changes. |
+| `spec-context` | Spec context | An OpenSpec document points to a spec or change that gives it context. |
 
 For a dependency investigation, select the affected file, choose **Incoming**
-and leave **imports** enabled. Start at one step and add the second step
+and leave **Imports** enabled. Start at one step and add the second step
 when you need to see which modules use its direct consumers.
 
 ## Read and follow links in Wiki
 
-![Wiki view showing the Agent Bus article with the same search and selection as Graph](../images/desktop-metaproject/wiki.jpg)
+![Wiki view showing the Agent Bus article with its repository path and a View in Graph button, and the catalog list on the left headed Catalog · 100 of 125](../images/desktop-metaproject/wiki.jpg)
 
-Select **Wiki** in the view switcher to read the current page. Expand
-**Relationships** below the article to follow related pages or files. The
-article also supports links to headings and indexed items in the project.
-HTTP and HTTPS links open in your browser.
+Select **Wiki** in the view switcher to read a page. Wiki keeps its own
+search and selection, separate from Graph. Expand **Relationships** below the
+article to follow related pages or files. This block always shows the direct
+relationships of every type except **Defines** and **Calls**, and does not
+follow the Graph filters. The article also supports links to headings and
+indexed items in the project. A
+link to a page or file that is not loaded yet is looked up and opened. If a
+link cannot be resolved, the article says which path it could not find. HTTP
+and HTTPS links open in your browser.
 
-Use **Graph** again to trace the same selection. To give an agent the same
-context, use the path shown under the title in a session prompt. For example,
+When a search from **Find a Wiki page** in the details panel has no match, the
+Wiki says that no page matches and offers **Clear search**.
+
+To trace a page in **Graph**, select it there or use **View in Graph**. To
+give an agent the same context, use the path shown under the title in a session prompt. For example,
 “Read `.metaproject/wiki/architecture/agent-bus.md` and trace the incoming
 imports of `src/bus/leases.ts`.” The [agent context guide](give-an-agent-context.md)
 covers how agents use the same wiki and graph data.

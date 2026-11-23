@@ -1,0 +1,41 @@
+{
+  "task_id": "fix-18",
+  "task_name": "Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "F-007 (upheld by the operator: the fact row also shows the second-step count, the tab count stays): the Relationships fact is built from parts joined by ' · ': '<n> incoming', '<m> outgoing', '<k> second-step' only when k > 0, then 'limited' when truncated. With no second-step edges it reads exactly as before. F-022: groupRelationships skips any edge with from === to before anything else (RelationshipList.tsx:55), which is the graph layout's rule (graphLayout.ts:216 firstStep and :248 secondStep skip self-loops), so a self-loop is neither listed nor counted at the root or at the second step and the panel's counts match the graph caption's. The second-step row's `to.id !== from.id &&` guard was unreachable after that and was removed. F-019: 14 of the 15 surviving NodeDetailsPanel mutants are now killed by new DOM tests; P3 survives and cannot be killed through the DOM (see notes). F-020: L1, L2 and L8 are killed by new RelationshipList tests; L3 is reported invalid because its anchor was removed by the F-022 change, and the self-loop skip at RelationshipList.tsx:55 now carries that behaviour, pinned by the test 'a self-loop is neither listed nor counted, at the root or at the second step, as in the graph'.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+    "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop; automation.verify_lint is false",
+  "type_check_result": "pass: `cd apps/desktop && bunx tsc --noEmit` reported no error in the whole desktop project at the time of the run",
+  "test_result": "pass: `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx` 24 passed, 0 failed; `bun test src/metaproject/RelationshipList.dom.test.tsx` 12 passed, 0 failed. Scratch red check (`scratch_check.py red --restore src/metaproject/NodeDetailsPanel.tsx,src/metaproject/RelationshipList.tsx --tests src/metaproject/NodeDetailsPanel.dom.test.tsx,src/metaproject/RelationshipList.dom.test.tsx`): with both production files at HEAD, exactly the F-007 test fails (23 pass, 1 fail) and exactly the F-022 test fails (11 pass, 1 fail). Mutants (`scratch_check.py mutants`): P1, P4, P5, P6, P7, P8, P9, P11, P13, P14, P17, P18, P20, P21 killed; P3 survived; L1, L2, L8 killed; L3 invalid.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "missing: apps/desktop/src/metaproject has no project-skill",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" },
+    { "path": ".metaproject/rules/core/cli-interface-design.mdc", "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043", "how": "n/a" }
+  ],
+  "noticed_not_touched": [
+    {
+      "what": "The `drafting` guard in draft() reads the render-time state, so two calls within one React batch both see `false` and both call onDraft (a test that clicked twice inside one act() saw two calls). Between real separate clicks, the `disabled` attribute on the Draft button is what prevents a second call. A ref-based in-flight guard would make the guard itself effective.",
+      "where": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx draft()"
+    }
+  ],
+  "assumptions": [
+    "The fact row's second-step part is written '<k> second-step' and sits before 'limited' (e.g. '2 incoming · 2 outgoing · 1 second-step · limited'), following the finish line's example."
+  ],
+  "notes": "Fix divergences from suggested_fix. F-007: followed the operator's upheld choice (add second-step to the fact row, keep the tab count). F-022: followed the suggestion (skip self-loops in groupRelationships), and also removed the second-step `to.id !== from.id` guard that this makes unreachable. That removal is why L3 reports invalid. F-019/F-020: tests added as suggested, plus a fixture per surviving mutant. P3 ('if (!onDraft || drafting)' -> 'if (!onDraft)') survives and cannot be killed by a DOM test. While a draft runs, the Draft button is rendered `disabled`, so a second user click dispatches no event and never reaches draft(). The only way to reach draft() twice without a re-render is two calls in one React batch, and there the guard reads the stale `false` and does not stop the second call either. In every DOM-reachable path the mutant behaves the same, so it is equivalent. The test 'Draft runs once while a session is opening…' pins the user-visible rule: the button reads 'Opening session…' and a second click makes no second call. An existing test was adapted, not weakened. 'relationship counts come from the root-adjacent edges and say when they are limited' asserted '2 incoming · 2 outgoing · limited' on a fixture that has a second-step edge, and under the upheld F-007 rule that text now carries '1 second-step'. The same assertions now run on that fixture's root-adjacent edges (the 'none' form the finish line says reads exactly as before), and the new F-007 test asserts the second-step form on the full fixture. cli-interface-design.mdc is marked n/a: it was promoted by the task text '--ids' (the scratch tool's flag), and this task changes no keryx CLI command, flag, exit code or --json shape. nodePanel.css was not changed. Not verified: the live render of the longer fact row at 380 px (it may wrap within the value column); no browser was used. Only the four files listed were changed; the other modified paths in git status belong to other lanes or to the orchestrator."
+}

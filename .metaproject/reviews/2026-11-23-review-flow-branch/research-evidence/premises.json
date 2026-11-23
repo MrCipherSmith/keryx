@@ -1,0 +1,203 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "reasoning": "No signal of intent. The operator chose a popover (journal.md:73) and a one-line banner with Details on demand (journal.md:82, :93), but nobody chose to let the popover run past the window. AC20 scopes its 720x480 check to 'no warning banner'; that limits what was measured and does not accept clipping in the banner state. Siblings point the other way: the shared Menu component bounds its vertical position by window.innerHeight and can place a menu above its anchor (apps/desktop/src/components/Menu.tsx:49-53), and .menu caps its height by the viewport (apps/desktop/src/styles.css:143). FiltersPopover (MetaprojectView.tsx:177-182) computes only top = anchor.bottom + 4. The suggested fix (bound by the room below the anchor, or flip above) makes the popover more consistent with Menu.tsx, and is the usual practice for anchored popovers. Measured in two engines; the premise stands."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/styles.css:416",
+          "says": "the composer has been an inline-size container (container-type: inline-size) since before this branch: the pattern is already in use in the app"
+        },
+        {
+          "ref": "d24ca140b",
+          "says": "added container-type: inline-size on .review-workspace (apps/desktop/src/review/ReviewDetail.css:1) before this branch, another earlier inline-size container in the same app"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "CSS Containment Module Level 3 (W3C), section 'Creating Query Containers: the container-type property'",
+          "says": "the size and inline-size values apply style containment plus size or inline-size containment. Layout containment is not among them"
+        },
+        {
+          "name": "CSS Containment Module Level 2 (W3C), section 3.2 'Layout Containment'",
+          "says": "layout containment is what makes an element the containing block for its absolute and fixed descendants. Without it the reviewer's chain (container -> layout containment -> containing block for position: fixed) does not hold"
+        }
+      ],
+      "reasoning": "The finding takes a spec reading as its premise: inline-size containers apply layout containment and so trap position: fixed descendants. The current container-type definition applies no layout containment, and the round measured exactly that. In Chromium 156 and in the system WKWebView (macOS 26.7.3), the popover sits at its viewport coordinates, displacement (0, 0), while the section's origin is (60, 77) (research-evidence/live-filters-popover-containing-block.txt, research-evidence/verify-F-002-2.txt). The app already used inline-size containers before this branch. Fix soundness: a portal or moving the container would answer a containment that does not happen. Residual, not measured: tauri.conf.json:42 sets minimumSystemVersion 12.0, so an older WebKit that implemented an earlier draft could behave differently. That is the only way the finding could still be true.",
+      "question": "The containing-block shift does not happen in current Chromium or current WKWebView, and the CSS spec gives inline-size containers no layout containment. Dismiss it, or keep it open until older macOS WebKit is checked?",
+      "options": [
+        "dismiss — the container does not trap the fixed popover; no change",
+        "uphold — keep it open and check on the oldest supported macOS WebKit (or portal the popover as a precaution)"
+      ]
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "reasoning": "The comment that keeps filtersOpen across a view switch (MetaprojectView.tsx:259) comes from this branch, so it cannot ratify itself. The choice the operator was shown, 'the popover stays open across setting changes and view switches' (journal.md:76, kept as implemented at :83), is about switching between Graph, Wiki and OpenSpec inside the explorer. The plan's matrix keeps 'switch view' and 'leave the work view and return' as separate columns (plan.md:169). Nobody chose to leave a hidden dialog registered on the app-wide Escape stack, which swallows the first Escape and turns on overlayOpen() in other views. No intent signal or practice source stands against the premise."
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md:30-31",
+          "says": "lifting state into a store was rejected for 'keeping the view mounted after its first visit, which is how the session view already behaves'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md:173",
+          "says": "state x event matrix, 'leave the work view and return': mode, query, selection, filters, panel state and history are as they were (AC10)"
+        },
+        {
+          "ref": "1358d962f:apps/desktop/src/App.tsx:568",
+          "says": "at base, the session view (and the review view at :594) stays mounted and hidden instead of remounting on return: retained hidden views are an existing pattern"
+        }
+      ],
+      "reasoning": "The explorer was kept mounted on purpose, so its state stays as it was when the user returns (the plan and AC10). That it shows the catalog snapshot it last read is a consequence of that design, not an oversight in it. On the other side, base re-read the catalog on every return, and neither the plan nor the matrix says whether data freshness should survive a return the way UI state does. Both readings are consistent. Which to choose is a product call between 'as you left it' and 'fresh on return', and the code cannot settle it.",
+      "question": "The retained explorer shows the catalog it last read when you come back. Keep that (and say so in the guide), or re-read the catalog when the view becomes visible again?",
+      "options": [
+        "dismiss — keep the retained snapshot; the snapshot-mismatch banner and Refresh catch up; note it in the guide",
+        "uphold — re-read the catalog silently when the explorer becomes visible, keeping the selection"
+      ]
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "upheld",
+      "reasoning": "No signal of intent. The suggested fix follows a sibling guard in the same file (latestSearch.current.generation), so it makes the explorer more consistent. 'Last request wins' is the accepted rule for async lookups that race."
+    },
+    {
+      "finding_id": "F-006",
+      "verdict": "upheld",
+      "reasoning": "The comment at MetaprojectView.tsx:508-509 gives the reason for seenNodes (Back to a lookup result) but not for filling it during render. It comes from this branch in any case. React's own guidance (react.dev, useRef: 'Do not write or read ref.current during rendering') supports the premise rather than the code. The fix (fill it where nodes is memoized, or in an effect) is sound. No signal or source shrinks it."
+    },
+    {
+      "finding_id": "F-007",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx:241-245",
+          "says": "every tab count counts the rows that tab lists (Wiki: listed documents; OpenSpec: documents; Relationships: incoming + outgoing + second-step rows)"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:82",
+          "says": "operator answer (3): the graph caption counts relationships, adjacent ones ('10 incoming · 23 outgoing'). The tab count was not asked"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:33",
+          "says": "the fact label was changed from 'Relations' to 'Relationships' to match the tab, which puts the two numbers under the same word"
+        }
+      ],
+      "reasoning": "Both numbers follow a coherent rule. The tab badge counts what the tab lists, the usual meaning of a tab count, and it matches the panel's other two tabs. The fact row counts root-adjacent edges, as AC7 requires. They differ only when second-step rows exist. Which rule the word 'Relationships' should carry is a presentation choice the operator has not made. Nothing in the code settles it either way.",
+      "question": "The Relationships tab counts every row it lists (second-step included); the fact row counts only incoming and outgoing. Keep the tab count as is, or align the two?",
+      "options": [
+        "dismiss — the tab counts its rows, like the Wiki and OpenSpec tabs",
+        "uphold — count only incoming + outgoing on the tab",
+        "uphold — add the second-step count to the fact row"
+      ]
+    },
+    {
+      "finding_id": "F-008",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:43",
+          "says": "T7 concern (3): the OpenSpecView choose() scroll reset is noticed, not fixed, 'out of scope of this flow unless the operator asks'"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/journal.md:96",
+          "says": "at the first-green gate the operator was offered the hardening option 'fix Back to an earlier OpenSpec document landing at its top' and chose 'Стандартное ревью' instead"
+        },
+        {
+          "ref": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md:112",
+          "says": "T8 may edit OpenSpecView.tsx for imports only"
+        },
+        {
+          "ref": "git log 1358d962f..60cbe1c56 -- apps/desktop/src/metaproject/OpenSpecView.tsx",
+          "says": "empty: this branch does not touch the file. The line at OpenSpecView.tsx:80 predates the change"
+        }
+      ],
+      "reasoning": "The behaviour is real and the finding says it is still there, but whether to fix it in this flow was already decided. The worker recorded it as out of scope, the plan limited OpenSpecView to import changes, and the operator was offered the fix by name before the review and did not take it. The finding itself offers 'record the item as accepted' as a fix. That record exists in journal.md:96.",
+      "question": "You declined fixing OpenSpec Back-to-top at the first-green gate. Keep it out of this flow, or fix it now?",
+      "options": [
+        "dismiss — stays out of scope as decided at the first-green gate",
+        "uphold — fix choose() in this flow"
+      ]
+    },
+    {
+      "finding_id": "F-009",
+      "verdict": "upheld",
+      "reasoning": "tasks.md says of itself that 'Task definitions live here; task statuses live in flow.json' (tasks.md:3-4), and its T2 and T3 rows were edited to say they were superseded. So it is maintained, and it is not an untouched initial plan. Rows T12-T16 and the changed dependencies are missing from the file that claims to hold the task definitions. No signal or source says it may drift."
+    },
+    {
+      "finding_id": "F-010",
+      "verdict": "upheld",
+      "reasoning": "The journal says no result JSON was requested for T9 (journal.md:58). That explains why the file is missing but not why the dispatch states '\"exists\": true' and an output contract it did not mean. A gate input that asserts a missing file exists is a defect by the project's own contract checks. No signal of intent for the false flag."
+    },
+    {
+      "finding_id": "F-011",
+      "verdict": "upheld",
+      "reasoning": "Test gap confirmed by mutation (A1 survived). App.tsx:594 passes different values for active and visible on purpose (the Settings case), so the test missing that case is a real gap. No intent or practice source shrinks it."
+    },
+    {
+      "finding_id": "F-012",
+      "verdict": "upheld",
+      "reasoning": "The plan's happy-dom risk (plan.md:202-205) explains why cytoscape is stubbed, not why the container is never given a size. Stubbing clientWidth/clientHeight is the usual happy-dom technique, so the fix is sound. G5 and G9 survived."
+    },
+    {
+      "finding_id": "F-013",
+      "verdict": "upheld",
+      "reasoning": "AC6 names data-theme or data-palette. The palette path was confirmed live once (journal.md:66) but has no test, and the hover and second-step mutants survived. No signal makes the gap smaller."
+    },
+    {
+      "finding_id": "F-014",
+      "verdict": "upheld",
+      "reasoning": "The T8 selector change to the panel body (journal.md:43, item 5) was a deliberate fix, and reverting it survives every test. That argues for the finding."
+    },
+    {
+      "finding_id": "F-015",
+      "verdict": "upheld",
+      "reasoning": "AC13 names three properties (depth 1, direction both, every non-symbol kind), and the test pins two. V1 and V30 survived. No intent signal against."
+    },
+    {
+      "finding_id": "F-016",
+      "verdict": "upheld",
+      "reasoning": "The plan's interface makes revealRelationships the route to hidden neighbours (plan.md:129, :145; AC8). V8 and V8b survived, so that route is unprotected end to end. No signal against."
+    },
+    {
+      "finding_id": "F-017",
+      "verdict": "upheld",
+      "reasoning": "Every named gate was added by this change, and its mutant survived. No intent or practice source shrinks it."
+    },
+    {
+      "finding_id": "F-018",
+      "verdict": "upheld",
+      "reasoning": "AC12 and AC16 name these behaviours. The settled empty-state wording and the lookup guards have surviving mutants. No signal against."
+    },
+    {
+      "finding_id": "F-019",
+      "verdict": "upheld",
+      "reasoning": "Among the gaps, the per-node tab reset is a choice the operator confirmed (journal.md:82, answer 2), which makes protecting it more important, not less. The other mutants survived too. No signal against."
+    },
+    {
+      "finding_id": "F-020",
+      "verdict": "upheld",
+      "reasoning": "The dangling-edge guard exists to stop a render crash on truncated projections. L1, L2, L3 and L8 survived. No signal against."
+    },
+    {
+      "finding_id": "F-021",
+      "verdict": "upheld",
+      "reasoning": "AC3 and the layout rules in plan.md:57-69 are stated intent, and the named mutants survive. No signal shrinks the gap."
+    },
+    {
+      "finding_id": "F-022",
+      "verdict": "upheld",
+      "reasoning": "Both rules (count the self-loop in groupRelationships, skip it in layoutNeighborhood) come from this branch, and no operator answer or plan line addresses self-loops. AC7 governs the panel and the operator's caption answer (journal.md:82) governs the caption, but neither says the two may disagree. The finding already scopes itself to producers that emit self-edges. No signal against."
+    }
+  ]
+}

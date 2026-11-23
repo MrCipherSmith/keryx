@@ -1,0 +1,208 @@
+{
+ "mutants": [
+  {
+   "id": "R2-1",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (needed > below && above > below) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "R2-2",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (needed > below && above > below) {",
+   "replacement": "if (needed > below) {"
+  },
+  {
+   "id": "R2-3",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (needed > below && above > below) {",
+   "replacement": "if (above > below) {"
+  },
+  {
+   "id": "R2-4",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "bottom: Math.max(POPOVER_MARGIN, height - rect.top + POPOVER_GAP)",
+   "replacement": "bottom: height - rect.top + POPOVER_GAP"
+  },
+  {
+   "id": "R2-5",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "maxHeight: Math.min(MENU_MAX_HEIGHT, above) }",
+   "replacement": "maxHeight: above }"
+  },
+  {
+   "id": "R2-6",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "maxHeight: Math.max(0, Math.min(MENU_MAX_HEIGHT, below)) }",
+   "replacement": "maxHeight: Math.max(0, below) }"
+  },
+  {
+   "id": "R2-7",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "maxHeight: Math.max(0, Math.min(MENU_MAX_HEIGHT, below)) }",
+   "replacement": "maxHeight: Math.min(MENU_MAX_HEIGHT, below) }"
+  },
+  {
+   "id": "R2-8",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "window.addEventListener(\"resize\", place);",
+   "replacement": ""
+  },
+  {
+   "id": "R2-9",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "return () => window.removeEventListener(\"resize\", place);",
+   "replacement": "return () => {};"
+  },
+  {
+   "id": "R2-10",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "panel.current?.scrollHeight ?? 0",
+   "replacement": "0"
+  },
+  {
+   "id": "R2-11",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const above = rect.top - POPOVER_GAP - POPOVER_MARGIN;",
+   "replacement": "const above = rect.top - POPOVER_MARGIN;"
+  },
+  {
+   "id": "R2-12",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const filters = visible && filtersOpen && filtersAnchor && (",
+   "replacement": "const filters = filtersOpen && filtersAnchor && ("
+  },
+  {
+   "id": "R2-13",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!visible) setFiltersOpen(false);",
+   "replacement": ""
+  },
+  {
+   "id": "R2-14",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (!returned || !loaded.current) return;",
+   "replacement": "if (!returned) return;"
+  },
+  {
+   "id": "R2-15",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "    quietRead.current = true;\n",
+   "replacement": ""
+  },
+  {
+   "id": "R2-16",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "if (quiet && result.snapshotId === loadedSnapshot.current) {",
+   "replacement": "if (quiet) {"
+  },
+  {
+   "id": "R2-17",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "        setFreshness(null);\n",
+   "replacement": ""
+  },
+  {
+   "id": "R2-18",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog",
+   "replacement": "freshness ?? catalog"
+  },
+  {
+   "id": "R2-19",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const quiet = quietRead.current;\n    quietRead.current = false;",
+   "replacement": "const quiet = quietRead.current;"
+  },
+  {
+   "id": "R2-20",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "(graphState.graph !== \"missing\" || protocol === 2)",
+   "replacement": "(graphState.graph !== \"missing\")"
+  },
+  {
+   "id": "R2-21",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "onDraft={graphState.graph === \"ready\" && !documents?.truncated ? onDraft : undefined}",
+   "replacement": "onDraft={onDraft}"
+  },
+  {
+   "id": "R2-22",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "token === lookup.current && generation",
+   "replacement": "generation"
+  },
+  {
+   "id": "R2-23",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "for (const node of nodes) seenNodes.current.set(node.id, node);",
+   "replacement": ""
+  },
+  {
+   "id": "R2-24",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "  }, [nodes]);\n  const activeNode",
+   "replacement": "  });\n  const activeNode"
+  },
+  {
+   "id": "R2-25",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "graphState.graph !== \"ready\" && (",
+   "replacement": "catalog.graph !== \"ready\" && ("
+  },
+  {
+   "id": "R2-26",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "const freshnessOpen = Boolean(graphState?.graphReason) && freshnessReason === graphState?.graphReason;",
+   "replacement": "const freshnessOpen = Boolean(catalog?.graphReason) && freshnessReason === catalog?.graphReason;"
+  },
+  {
+   "id": "R2-27",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+   "anchor": "  visible = true,\n",
+   "replacement": "  visible = false,\n"
+  },
+  {
+   "id": "R2-28",
+   "file": "apps/desktop/src/App.tsx",
+   "anchor": "<MetaprojectView cwd={cwd} visible={view === \"metaproject\"} onRebuild",
+   "replacement": "<MetaprojectView cwd={cwd} onRebuild"
+  },
+  {
+   "id": "R2-29",
+   "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+   "anchor": "    onLocation?.(next);\n    if (content.current) content.current.scrollTop = 0;",
+   "replacement": "    if (content.current) content.current.scrollTop = 0;\n    onLocation?.(next);"
+  },
+  {
+   "id": "R2-30",
+   "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+   "anchor": "    if (content.current) content.current.scrollTop = 0;\n",
+   "replacement": ""
+  },
+  {
+   "id": "R2-31",
+   "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+   "anchor": "    if (edge.from === edge.to) continue;\n",
+   "replacement": ""
+  },
+  {
+   "id": "R2-32",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "...(summary.secondStep > 0 ? [`${summary.secondStep} second-step`] : []),",
+   "replacement": "`${summary.secondStep} second-step`,"
+  },
+  {
+   "id": "R2-33",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "...(summary.truncated ? [\"limited\"] : []),",
+   "replacement": ""
+  },
+  {
+   "id": "R2-34",
+   "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+   "anchor": "      `${summary.incoming} incoming`,\n      `${summary.outgoing} outgoing`,",
+   "replacement": "      `${summary.outgoing} outgoing`,\n      `${summary.incoming} incoming`,"
+  }
+ ]
+}

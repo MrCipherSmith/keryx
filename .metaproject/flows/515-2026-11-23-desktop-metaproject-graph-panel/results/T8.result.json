@@ -1,0 +1,56 @@
+{
+  "task_id": "task-8",
+  "task_name": "Integrate graph and panel into the explorer; filters, counts, cleanup",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "1 Swap: MetaprojectView.tsx uses RelationshipGraph, NodeDetailsPanel and RelationshipList from ./RelationshipList; the inline Graph and RelationshipList functions and the cytoscape import are deleted; GraphNodePanel.tsx is deleted (nothing else imported isOpenSpecNode from it; OpenSpecView.tsx needed no change). 2 Layout: Graph mode content is the filter bar then the graph (flex: 1 1 auto) filling the column; no relationship list under the canvas; Wiki keeps its Relationships disclosure with the new RelationshipList. 3 Panel wiring: relationships = current projection of the selection (null while loading/after failure), relationshipsPending/relationshipsProblem, documents/documentsPending/documentsProblem carry the old projection/pending/problem, onSelect = select, graph onShowHidden opens the panel and bumps revealRelationships. 4 Busy graph: the last graph stays rendered with busy while the next selection's read runs (including the render before the read starts); dropped on a failed read or when leaving Graph. 5 Filters: one compact wrapping row with labelled Direction and Depth selects and .chip-btn kind toggles (aria-pressed, check icon when on) labelled from RELATIONSHIP_KIND_LABELS; Defines and Calls are disabled with aria-describedby/title pointing at the visible note 'Not available: this project's graph has no symbol layer.' when catalog.hasSymbolLayer is false; 'Reset filters' appears when direction, depth or kinds differ from the defaults. 6 List header 'Catalog · <shown> of <total>' (total = files+wiki+modules from catalog.counts, wiki count in Wiki mode) and 'Results · <n>' while searching; the 'Catalog is limited' banner is removed. 7 The aria-current list row is scrolled into view (block nearest) when the selection or mode changes. 8 Protocol-error, read-error and snapshot-mismatch banners render before the OpenSpec view; the freshness banner reads 'Graph is <state>: <reason>' (or 'Graph is <state>.'). 9 Wiki empty state title is 'Searching the Wiki for “<q>”…' while the search runs; useExplorerNavigation restores .metaproject-details-body instead of .metaproject-node-body; a map of every node seen replaces the single knownSelection so Back to a lookup-reached node shows its panel at once. New optional MetaprojectView prop createCytoscape (test seam, forwarded to RelationshipGraph). CSS: dead rules removed, @media (max-width: 700px) removed, container query on the explorer added.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/useExplorerNavigation.ts"
+  ],
+  "files_created": [],
+  "files_deleted": [
+    "apps/desktop/src/metaproject/GraphNodePanel.tsx"
+  ],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
+  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0",
+  "test_result": "pass: cd apps/desktop && bun test src -> 833 passed, 0 failed across 89 files (baseline 827; +6 new tests). bun test src/metaproject/MetaprojectView.dom.test.tsx -> 32 passed, 0 failed, AC11-AC16 tests included. Red before the change: 10 failing (the 4 updated existing tests and the new tests for panel list + labelled filters + symbol-layer reason, header counts, Back-to-lookup panel, Wiki searching title, banners/freshness sentence; scroll-into-view and busy graph failed then only because the old inline Graph could not mount under happy-dom, so after the change each of those two behaviours was disabled temporarily and its test was seen failing on its own assertion, then restored).",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "partial: AC17, AC18 and AC19 met and verified by command; AC5, AC6 and AC20 are judged by the orchestrator in a browser and were not verified here",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
+    { "path": ".metaproject/rules/core/api-contracts.mdc", "sha256": "c91f5f7754344619a124ea58b921b28053b3632abafb902c134ee104c770f145", "how": "n/a" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "The test file's ambient bun:test typings lack toBeTruthy (tsc rejects it), so tests must use other matchers; the declaration covers only some matchers.", "where": "apps/desktop/src/test/bun-test.d.ts" }
+  ],
+  "assumptions": [
+    "The list header total is catalog.counts.files + wiki + modules in Graph mode and catalog.counts.wiki in Wiki mode (the Wiki list shows only wiki pages); it is shown as at least the number of rows so fixtures or a stale count never read '4 of 2'.",
+    "Graph mode keeps the old rule that the canvas is drawn only when the graph is not missing (or protocol 2); with a missing graph the relationship list stays reachable in the panel.",
+    "When the panel is closed, a Graph relationships read failure shows as a banner in the content column; when it is open, only the panel's Relationships tab shows it with Retry."
+  ],
+  "behavior_changes": [
+    { "description": "With a missing graph (protocol 1) the content column shows the note 'The graph is not built yet. Open the panel's Relationships tab to see this node's links.' under the filters, where the old relationship list used to be.", "user_visible": true, "needs_operator": true, "alternatives": ["Draw the canvas from the local catalog projection even when the graph is missing", "Show nothing below the filters and rely on the freshness banner"] },
+    { "description": "Symbol-layer reason is a visible one-line note under the filter row ('Not available: this project's graph has no symbol layer.'), referenced by the disabled Defines and Calls chips through aria-describedby and repeated as their tooltip.", "user_visible": true, "needs_operator": true, "alternatives": ["Tooltip only, no visible note", "Hide Defines and Calls entirely when there is no symbol layer"] },
+    { "description": "Kind chips that are on carry a check icon and the selected tint; the Reset control is labelled 'Reset filters' and sits at the end of the filter row, shown only when the filters differ from the defaults.", "user_visible": true, "needs_operator": true, "alternatives": ["Checkbox-style chips without an icon", "Always show Reset, disabled at the defaults"] },
+    { "description": "Wiki empty-state wording while a search runs: title 'Searching the Wiki for “<q>”…', body 'Results appear here as soon as the search finishes.'", "user_visible": true, "needs_operator": true, "alternatives": ["Show a spinner status line instead of the empty state while searching"] },
+    { "description": "Narrow layout (explorer container ≤ 760 px): tighter gutters, list column 150-190 px, and the graph's minimum height lowered from 200 px to 160 px so the filter row plus graph fit at the 720×480 window.", "user_visible": true, "needs_operator": true, "alternatives": ["Keep the 200 px minimum and let the content column scroll", "Stack the list above the graph on narrow hosts"] }
+  ],
+  "not_touched": [
+    { "path": "apps/desktop/src/metaproject/OpenSpecView.tsx", "reason": "It never imported isOpenSpecNode or GraphNodePanel, so no import change was needed." }
+  ],
+  "notes": "api-contracts.mdc is n/a: this change touches no HTTP API, request or response shape. CSS removed from metaproject.css: .metaproject-graph (fixed clamp height), .metaproject-graph-viewport, .metaproject-graph-panes .metaproject-graph, .metaproject-graph-panes .metaproject-relationship-section, all .metaproject-node-* rules (panel, compact, sheet-head, h2, resize, tabs, body, document, preview), .metaproject-relations, .metaproject-relation-actions (+ .btn), the h2 rule for .metaproject-relationship-section, and the @media (max-width: 700px) block. Added: container 'metaproject' on .metaproject with an @container (max-width: 760px) block, filter-row/chip rules, and the three-column grid keyed on .metaproject-details:not(.compact). The .metaproject-artifacts [aria-pressed] rule that shared a selector with the old node tabs was kept on its own. No graph or panel file (RelationshipGraph.tsx, graph.css, graphLayout.ts, NodeDetailsPanel.tsx, RelationshipList.tsx, nodePanel.css, labels.ts) was edited: the integration exposed no defect in them. Existing tests changed: 'wiki stays readable…' (freshness text now 'Graph is missing'); 'direction, depth and type controls…' (old row texts gone; it now opens the panel and reads its Relationships tab via labelled selects); 'relationship list shows OpenSpec edge provenance' renamed and pointed at ./RelationshipList — the new list deliberately shows the kind label and no digest (plan: digests are not shown); 'a graph node opens its linked Wiki…' and the AC12 test activate the panel's Wiki tab first; the AC13 test clicks the 'Imports' chip. Not verified without a browser: the graph filling the column height, the 140 px minimum at 720×480 (AC20), label size and overlap (AC5), theme re-colouring (AC6), chip wrapping and the drawer at narrow widths. The running preview server on port 1423 is the orchestrator's isolated-component harness from another session; it was not used or changed. tests_written: 6 new (+5 updated); tests_passing: 833; tests_failing: 0."
+}
