@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T08:52:03.567Z",
+  "updatedAt": "2026-11-23T10:19:07.733Z",
   "source": {
     "type": "description",
     "ref": null
@@ -270,6 +270,69 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:00:27.843Z",
+            "outcome": "started",
+            "detail": "516-T13 PR review fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "PR review round fixes, backend: F-006 outdated lookup cost and measurement",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:00:28.189Z",
+            "outcome": "started",
+            "detail": "516-T14 PR review fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "PR review round fixes, docs: F-004 stage 0 status and team-request deviation",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:00:28.521Z",
+            "outcome": "started",
+            "detail": "516-T15 PR review fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -420,6 +483,51 @@
       "at": "2026-11-23T08:52:03.567Z",
       "event": "task-done",
       "detail": "T10: review-orchestrator on the branch"
+    },
+    {
+      "at": "2026-11-23T10:00:26.789Z",
+      "event": "task-added",
+      "detail": "T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set"
+    },
+    {
+      "at": "2026-11-23T10:00:27.101Z",
+      "event": "task-added",
+      "detail": "T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement"
+    },
+    {
+      "at": "2026-11-23T10:00:27.456Z",
+      "event": "task-added",
+      "detail": "T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation"
+    },
+    {
+      "at": "2026-11-23T10:00:27.843Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 516-T13 PR review fix round"
+    },
+    {
+      "at": "2026-11-23T10:00:28.189Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 516-T14 PR review fix round"
+    },
+    {
+      "at": "2026-11-23T10:00:28.521Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 516-T15 PR review fix round"
+    },
+    {
+      "at": "2026-11-23T10:02:42.757Z",
+      "event": "task-done",
+      "detail": "T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation"
+    },
+    {
+      "at": "2026-11-23T10:06:34.136Z",
+      "event": "task-done",
+      "detail": "T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set"
+    },
+    {
+      "at": "2026-11-23T10:19:07.733Z",
+      "event": "task-done",
+      "detail": "T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement"
     }
   ],
   "acKinds": {

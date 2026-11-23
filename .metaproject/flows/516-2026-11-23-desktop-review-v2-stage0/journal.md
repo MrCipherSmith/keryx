@@ -73,3 +73,30 @@
 - Operator chose A (create a PR, review, merge on a separate ask) through AskUserQuestion.
 - `git push -u origin feat/desktop-review-v2-stage0` was refused with HTTP 403: the active gh account has no write access to the repository; a second signed-in account exists. The orchestrator did not switch the active account (it is shared with other sessions). No PR exists yet; the flow stays in-progress.
 - Review round 1 package committed to the branch as an incomplete managed round.
+- 2026-11-23T09:57:40.626Z - decision d-mwt3e3jx-4cb786 [review decide-premise, ordinary]: chose uphold; no recommendation
+- 2026-11-23T10:00:26.789Z - task-added: T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set
+- 2026-11-23T10:00:27.101Z - task-added: T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement
+- 2026-11-23T10:00:27.456Z - task-added: T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation
+- 2026-11-23T10:00:27.843Z - task-attempt: T13: started (attempt 1) — 516-T13 PR review fix round
+- 2026-11-23T10:00:28.189Z - task-attempt: T14: started (attempt 1) — 516-T14 PR review fix round
+- 2026-11-23T10:00:28.521Z - task-attempt: T15: started (attempt 1) — 516-T15 PR review fix round
+- 2026-11-23T10:02:42.757Z - task-done: T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation
+
+## 2026-11-23 — PR review round (review-orchestrator on PR 1294) and its fixes
+
+- Operator asked for a review with review-orchestrator on the pull request. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294`, round 1 at head 53c96b8af, full roster by operator choice: 17 reviewer dispatches (11 planned reviewers plus review-pr-contract) and review-premise. 55 raw findings, 14 canonical: 1 major, 7 minor, 6 info. Verdict: changes requested.
+- F-001 (major) was raised by the orchestrator after measuring the toolbar in a browser: overflow at a 560px board. It follows from the orchestrator's own T8 brief (nowrap). F-002 follows from the T12 portal fix.
+- Premise judge upheld F-001, F-002, F-004..F-008 and held F-003; operator answered "uphold" (recorded with `keryx review decide-premise`).
+- Readiness of that package: 10 of 12 pass; failing: blast-radius (cut files unreviewed) and pr-files (58 files of the earlier review package are outside the scope). review-verifier and the mutation pass did not run.
+- Fix tasks: T13 (sonnet, UI: F-001, F-002, F-003, F-005, F-007, F-008), T14 (opus, SQL: F-006 with measurement, plus F-010), T15 (haiku, docs: F-004).
+- T15 STATUS: DONE; orchestrator read the diff; commit 626bf776d.
+- T13 STATUS: DONE_WITH_CONCERNS; orchestrator re-ran `bun test src/review/ReviewBoard.dom.test.tsx` (43 pass) and `model.test.ts` (10 pass) alone, `bun test src` (755 pass), `bunx tsc --noEmit` (exit 0), read the diff, and measured the toolbar: one row without overflow at 560, 700, 820, 1101 and 1380px, wrapped without clipping at 340px (research-evidence/layout-measurements.md in the review package; stand-ins for the Review rules button and the count label).
+- T13 behavior_changes, needs_operator: the secondary "Outdated review" line is shown on every card with an outdated badge, merged and closed ones included. Operator answer (AskUserQuestion, 2026-11-23): "На всех карточках" — the implemented choice stands.
+- T13 choices: Review rules uses the existing `shieldCheck` icon; focus restore detects the two portaled dialogs by their content class; `attentionPrs` is now derived with useMemo, with only the cross-scope retention kept as state.
+- 2026-11-23T10:06:34.136Z - task-done: T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set
+- T14 STATUS: DONE_WITH_CONCERNS. Worker's measurement on a synthetic store (200 pull requests x 30 finished runs, 200 KB report each, 200-card batch, median of 5, bun 1.4.4, SQLite 3.51.0): base 1b994df18 about 405 ms, head 53c96b8af about 770 ms, after the change about 395 ms; badge output identical between head and after. Query plans and numbers: research-evidence/outdated-lookup-measurement.md in the PR review package. So the statement added in T6 roughly doubled the badge read; T14 brings it back to the base cost. The orchestrator did not re-run the measurement.
+- T14 change: one materialized CTE parses each run once; window functions pick the newest finished run per card only when no run of that card supersedes it; an outdated candidate needs both reviewed SHAs (F-010). No schema, index or boundary change.
+- T14 verification by the orchestrator: read the SQL diff; each of the 8 `src/review/board*.test.ts` and `desk-run*.test.ts` files passes when run alone (116 tests), as do `src/commands/review-desk-run.test.ts`, `review-watch.test.ts`, `review-accounts.test.ts`; root typecheck exit 0; eslint on the two files exit 0; `cd apps/desktop && bun test src/review` 98 pass. Running all eleven files in one `bun test` invocation failed several tests of `desk-run-executor.test.ts` with 6-8 s durations in two runs; that file does not call attachBadges and passes alone (38 pass). Treated as load-related; not investigated further.
+- T14 concerns: the new test is a characterization test (passes before and after, behaviour unchanged); no F-010 fixture, because a run with a reviewed head and no base makes the live-history path of `localBadge` report it while the SQL path now ignores it — whether `localBadge` should also require both SHAs is left open.
+- Not done after the fixes: no second review round on the fix commits; review-verifier and the mutation pass did not run; nothing pushed.
+- 2026-11-23T10:19:07.733Z - task-done: T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement
