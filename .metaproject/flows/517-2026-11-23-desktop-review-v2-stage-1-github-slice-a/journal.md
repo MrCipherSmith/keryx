@@ -68,3 +68,12 @@ Attention-set lines: the diff of `ReviewBoard.tsx` since `b147408a8` touches no 
 Root `bunx tsc --noEmit -p .` (after `bun install --frozen-lockfile` at the root) found 8 errors from T5 (server.ts cast target, issue-session.test.ts narrowing); fixed in T15, root tsc exit 0. Desktop: `bunx tsc --noEmit` exit 0, `bun test src` 1016 pass / 0 fail. Root focused: desk-run-store, board-badges, organize, shell-session-organize, session/issues, issues-board — 67 pass / 0 fail.
 
 First-green gate (Phase 3 step 4): answered by the dispatching session's brief, whose finish line is "Draft PR открыт", not a merge; no hardening question asked. The review-orchestrator round on the PR and the completion choice (Phase 4) are left to the operator: the flow stays in-progress with a draft PR, nothing merged.
+- 2026-11-23T20:47:03.788Z - task-done: T11: Verify focused suites, typecheck, attachBadges/localBadge agreement
+- 2026-11-23T20:51:42.451Z - task-added: T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork
+- 2026-11-23T20:51:42.809Z - task-attempt: T16: started (attempt 1) — 517-T16
+- 2026-11-23T20:56:23.744Z - task-done: T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork
+
+## T16 (2026-11-24)
+
+CI "Lint and typecheck" on #1300 failed: root tsc pulled `apps/desktop/src/platform/*` (Tauri modules) through `issues/model.ts` → `review/prWork.ts`. `boundSessions` moved to `acp/types.ts`. Worker reproduced CI by hiding `@tauri-apps`: HEAD fails, fix passes. Root tsc 0, Desktop tsc 0, Desktop tests 1016/0.
+Broad local root run (src/acp src/session src/integrations src/review): 6976 pass, 5 fail — all ~5s timeouts in rewind/replay/byte-cap tests, outside the change; CI Core tests decide.

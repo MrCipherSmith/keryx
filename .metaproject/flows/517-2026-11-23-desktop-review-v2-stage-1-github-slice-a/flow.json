@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
   "status": "in-progress",
   "createdAt": "2026-11-23T19:41:25.622Z",
-  "updatedAt": "2026-11-23T20:36:20.165Z",
+  "updatedAt": "2026-11-23T20:56:23.744Z",
   "source": {
     "type": "description",
     "ref": null
@@ -228,7 +228,7 @@
       "id": "T11",
       "title": "Verify focused suites, typecheck, attachBadges/localBadge agreement",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T9"
@@ -239,7 +239,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -307,6 +308,27 @@
             "at": "2026-11-23T20:33:53.559Z",
             "outcome": "started",
             "detail": "517-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix CI root typecheck: issues/model.ts must not import platform via review/prWork",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:51:42.809Z",
+            "outcome": "started",
+            "detail": "517-T16"
           }
         ]
       },
@@ -484,6 +506,26 @@
       "at": "2026-11-23T20:36:20.165Z",
       "event": "task-done",
       "detail": "T15: Fix root tsc errors in server.ts and issue-session.test.ts (exactOptionalPropertyTypes)"
+    },
+    {
+      "at": "2026-11-23T20:47:03.788Z",
+      "event": "task-done",
+      "detail": "T11: Verify focused suites, typecheck, attachBadges/localBadge agreement"
+    },
+    {
+      "at": "2026-11-23T20:51:42.451Z",
+      "event": "task-added",
+      "detail": "T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork"
+    },
+    {
+      "at": "2026-11-23T20:51:42.809Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 517-T16"
+    },
+    {
+      "at": "2026-11-23T20:56:23.744Z",
+      "event": "task-done",
+      "detail": "T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork"
     }
   ],
   "acKinds": {
