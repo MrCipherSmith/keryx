@@ -1,0 +1,36 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-034",
+      "verdict": "upheld",
+      "reasoning": "The trace holds at 8e6ecf1aa: `seeded` is written only by a replacing load (ReviewBoard.tsx:241), an applied seed (:281) and accessLost (:193), while a non-replacing load on an identity change empties the carried set (:245) and asks for a seed only when `seeded.current !== nextIdentity` (:246). On A (seeded) -> B on a saved Merged filter with B's seed failed or in flight (a late B seed is dropped by `identity.current !== key` at :280) -> back to A on Merged, the set is emptied and no seed is requested, so A's open requests do not light the tab. The marker and the guard are new in this branch (91c37c81b) and carry no prior intent; the comment at :238-239 says a new identity seen on such a view 'starts from nothing and gets one open load', which this path breaks, so the finding is a defect in T22's own stated contract, not a choice."
+    },
+    {
+      "finding_id": "F-035",
+      "verdict": "upheld",
+      "reasoning": "The hint counts every number in attentionPrs absent from `visible` (ReviewBoard.tsx:426-427) with no regard to `read.stale`; the carried set can hold numbers a later replacing load saw (an All load caches under 'all/', not 'open/', at :132) while the `unavailable:` fallback on Open shows the older cached 'open/' snapshot (:262-266). With the filters already at EMPTY_FILTERS (scope 'open') the button claims a filter hides them and its reset (:425) changes neither scope nor result. The operator decided the hint counts requests hidden by filters (implementation-plan.md (d)); counting ones hidden by a stale cache is a miscount in carrying that decision out, not the decision. The path is narrow (it needs a replacing non-Open load after the cached Open one) but reachable, and nothing in the code marks the stale case as intended for the hint."
+    },
+    {
+      "finding_id": "F-036",
+      "verdict": "upheld",
+      "reasoning": "ReviewBoard.tsx:441 names a role-less span with aria-label and review.css:94 hides `.count-word` with display:none under the 760px container query, so the visible unit leaves the accessibility tree and the name rests on aria-label on a generic element, which ARIA 1.2 prohibits naming (support varies by screen reader). Several other spans in the app carry aria-label without a role (AppShell.tsx:229, SessionSidebar.tsx:46, ReviewLaunchDialog.tsx:284-285), but that is a repeated pattern, not a reasoned exemption, and accepted practice (WAI-ARIA 1.2 / ARIA in HTML: aria-label prohibited on generic) runs against it. The operator's decision (deviation (c)) is a bare visible number, which the suggested fix keeps; hiding the word with the existing `.sr-only` (components.css:6) is consistent with the project's own utility."
+    },
+    {
+      "finding_id": "F-037",
+      "verdict": "upheld",
+      "reasoning": "The operator decided what the control does — a hint with the hidden count and a button that resets the filters and the search (implementation-plan.md (d); journal 'show a hint for attention hidden by filters') — and named no label text; the finding leaves that behaviour intact and asks the label to state it and the focus to survive it, which is execution. The focus part is a plain defect: after reset the button (ReviewBoard.tsx:444) unmounts once the count reaches zero or the snapshot is null during the scope load, and nothing moves focus (contrast the explicit search refocus at :291-294 used for other resets), against WCAG 2.4.3 Focus Order. The narrow-width part is the weakest: labels collapsing to icon plus accessible name under 1100px is the documented toolbar pattern (review.css:91, deviation (c)), so the fixer should weigh that sibling pattern rather than add a word only here; that does not undo the label and focus premise."
+    },
+    {
+      "finding_id": "F-038",
+      "verdict": "upheld",
+      "reasoning": "`setSeedFor({ identity: nextIdentity })` (ReviewBoard.tsx:246) makes a new object on every non-replacing load of an unseeded identity and the seed effect depends on it (:289), so each such load aborts and reissues the seed; on an identity change on a historical view whose new saved filters (or defaults) resolve to the open scope (:248-252 after clearPrivateView(true) at :218) the main open load and the seed run together, and the seed is aborted only after the open load lands (:243). No comment or sibling signals that the extra request is intended (the catch comment at :285 is about not retrying), and the suggested functional update keeps behaviour identical while cutting requests. Impact is rate-limit budget only, which the finding states."
+    },
+    {
+      "finding_id": "F-039",
+      "verdict": "upheld",
+      "reasoning": "Taken as given: the orchestrator's executed run left ReviewBoard.dom.test.tsx green under 8 of 8 mutations of the T22/T23 lines (seed reset on open load and after apply, each seed-guard clause, catch cleanup, `setQuery(\"\")` in reset, stale marking). These are new lines in a code path that regressed in earlier rounds; no intent signal or practice source argues that the races and the hint triggers need no test, and the fix (held promises) is the standard way to pin async ordering. A surviving mutant stays as reported."
+    }
+  ]
+}

@@ -1,0 +1,750 @@
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "516",
+   "slug": "desktop-review-v2-stage0",
+   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
+   "status": "in-progress",
+   "createdAt": "2026-11-23T08:07:29.420Z",
+-  "updatedAt": "2026-11-23T10:19:07.733Z",
++  "updatedAt": "2026-11-23T12:07:08.461Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "owner": {
+     "value": "Aleksandr Tsaitler",
+     "basis": "stated",
+     "source": "`--owner` flag on `flow init`"
+   },
+   "origin": {
+     "kind": "human-request",
+     "quote": "Создавай фло оформляй все и начинай имлементацию",
+     "source": "claude-code session 2026-11-23, operator message"
+   },
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json
+@@ 316,523 @@
+     {
+       "id": "T15",
+       "title": "PR review round fixes, docs: F-004 stage 0 status and team-request deviation",
+       "kind": "docs",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-23T10:00:28.521Z",
+             "outcome": "started",
+             "detail": "516-T15 PR review fix round"
+           }
+         ]
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed"
++    },
++    {
++      "id": "T16",
++      "title": "PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T10:46:16.554Z",
++            "outcome": "started",
++            "detail": "516-T16 PR review round 2 fixes"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T17",
++      "title": "PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T10:46:16.741Z",
++            "outcome": "started",
++            "detail": "516-T17 PR review round 2 fixes"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T18",
++      "title": "PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:26:25.010Z",
++            "outcome": "started",
++            "detail": "516-T18 PR review round 3 fix"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T19",
++      "title": "Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:33:24.478Z",
++            "outcome": "started",
++            "detail": "516-T19 review info notes"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T20",
++      "title": "Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:33:24.700Z",
++            "outcome": "started",
++            "detail": "516-T20 review info notes"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T21",
++      "title": "Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:33:24.978Z",
++            "outcome": "started",
++            "detail": "516-T21 review info notes"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T22",
++      "title": "PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T11:53:18.015Z",
++            "outcome": "started",
++            "detail": "516-T22 PR review round 4 fixes"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T23",
++      "title": "Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T12:01:37.881Z",
++            "outcome": "started",
++            "detail": "516-T23 operator answers"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-23T08:07:29.420Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-23T08:09:15.318Z",
+       "event": "task-done",
+       "detail": "T1: Collect remaining context"
+     },
+     {
+       "at": "2026-11-23T08:09:15.519Z",
+       "event": "task-done",
+       "detail": "T2: Implement per plan"
+     },
+     {
+       "at": "2026-11-23T08:09:15.715Z",
+       "event": "task-done",
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/flow.json
+@@ 679,838 @@
+     },
+     {
+       "at": "2026-11-23T10:00:28.521Z",
+       "event": "task-attempt",
+       "detail": "T15: started (attempt 1) — 516-T15 PR review fix round"
+     },
+     {
+       "at": "2026-11-23T10:02:42.757Z",
+       "event": "task-done",
+       "detail": "T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation"
+     },
+     {
+       "at": "2026-11-23T10:06:34.136Z",
+       "event": "task-done",
+       "detail": "T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set"
+     },
+     {
+       "at": "2026-11-23T10:19:07.733Z",
+       "event": "task-done",
+       "detail": "T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement"
++    },
++    {
++      "at": "2026-11-23T10:45:45.400Z",
++      "event": "task-added",
++      "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
++    },
++    {
++      "at": "2026-11-23T10:45:45.653Z",
++      "event": "task-added",
++      "detail": "T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL"
++    },
++    {
++      "at": "2026-11-23T10:46:16.554Z",
++      "event": "task-attempt",
++      "detail": "T16: started (attempt 1) — 516-T16 PR review round 2 fixes"
++    },
++    {
++      "at": "2026-11-23T10:46:16.741Z",
++      "event": "task-attempt",
++      "detail": "T17: started (attempt 1) — 516-T17 PR review round 2 fixes"
++    },
++    {
++      "at": "2026-11-23T10:47:45.247Z",
++      "event": "task-done",
++      "detail": "T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL"
++    },
++    {
++      "at": "2026-11-23T10:48:26.557Z",
++      "event": "task-done",
++      "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
++    },
++    {
++      "at": "2026-11-23T11:26:24.820Z",
++      "event": "task-added",
++      "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
++    },
++    {
++      "at": "2026-11-23T11:26:25.010Z",
++      "event": "task-attempt",
++      "detail": "T18: started (attempt 1) — 516-T18 PR review round 3 fix"
++    },
++    {
++      "at": "2026-11-23T11:28:05.413Z",
++      "event": "task-done",
++      "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
++    },
++    {
++      "at": "2026-11-23T11:33:23.779Z",
++      "event": "task-added",
++      "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
++    },
++    {
++      "at": "2026-11-23T11:33:23.979Z",
++      "event": "task-added",
++      "detail": "T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card"
++    },
++    {
++      "at": "2026-11-23T11:33:24.199Z",
++      "event": "task-added",
++      "detail": "T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording"
++    },
++    {
++      "at": "2026-11-23T11:33:24.478Z",
++      "event": "task-attempt",
++      "detail": "T19: started (attempt 1) — 516-T19 review info notes"
++    },
++    {
++      "at": "2026-11-23T11:33:24.700Z",
++      "event": "task-attempt",
++      "detail": "T20: started (attempt 1) — 516-T20 review info notes"
++    },
++    {
++      "at": "2026-11-23T11:33:24.978Z",
++      "event": "task-attempt",
++      "detail": "T21: started (attempt 1) — 516-T21 review info notes"
++    },
++    {
++      "at": "2026-11-23T11:34:51.493Z",
++      "event": "task-done",
++      "detail": "T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording"
++    },
++    {
++      "at": "2026-11-23T11:35:49.611Z",
++      "event": "task-done",
++      "detail": "T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card"
++    },
++    {
++      "at": "2026-11-23T11:36:52.340Z",
++      "event": "task-done",
++      "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
++    },
++    {
++      "at": "2026-11-23T11:53:17.826Z",
++      "event": "task-added",
++      "detail": "T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot"
++    },
++    {
++      "at": "2026-11-23T11:53:18.015Z",
++      "event": "task-attempt",
++      "detail": "T22: started (attempt 1) — 516-T22 PR review round 4 fixes"
++    },
++    {
++      "at": "2026-11-23T12:00:59.703Z",
++      "event": "task-done",
++      "detail": "T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot"
++    },
++    {
++      "at": "2026-11-23T12:01:37.298Z",
++      "event": "task-added",
++      "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
++    },
++    {
++      "at": "2026-11-23T12:01:37.881Z",
++      "event": "task-attempt",
++      "detail": "T23: started (attempt 1) — 516-T23 operator answers"
++    },
++    {
++      "at": "2026-11-23T12:07:08.461Z",
++      "event": "task-done",
++      "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
+     }
+   ],
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "sh -c 'cd apps/desktop && bun test src/review/model.test.ts'"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+     },
+     "AC4": {
+       "kind": "exec",
+       "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx'"
+     },
+     "AC5": {
+
+--- .metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md
+@@ 83,164 @@
+ - 2026-11-23T10:02:42.757Z - task-done: T15: PR review round fixes, docs: F-004 stage 0 status and team-request deviation
+ 
+ ## 2026-11-23 — PR review round (review-orchestrator on PR 1294) and its fixes
+ 
+ - Operator asked for a review with review-orchestrator on the pull request. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294`, round 1 at head 53c96b8af, full roster by operator choice: 17 reviewer dispatches (11 planned reviewers plus review-pr-contract) and review-premise. 55 raw findings, 14 canonical: 1 major, 7 minor, 6 info. Verdict: changes requested.
+ - F-001 (major) was raised by the orchestrator after measuring the toolbar in a browser: overflow at a 560px board. It follows from the orchestrator's own T8 brief (nowrap). F-002 follows from the T12 portal fix.
+ - Premise judge upheld F-001, F-002, F-004..F-008 and held F-003; operator answered "uphold" (recorded with `keryx review decide-premise`).
+ - Readiness of that package: 10 of 12 pass; failing: blast-radius (cut files unreviewed) and pr-files (58 files of the earlier review package are outside the scope). review-verifier and the mutation pass did not run.
+ - Fix tasks: T13 (sonnet, UI: F-001, F-002, F-003, F-005, F-007, F-008), T14 (opus, SQL: F-006 with measurement, plus F-010), T15 (haiku, docs: F-004).
+ - T15 STATUS: DONE; orchestrator read the diff; commit 626bf776d.
+ - T13 STATUS: DONE_WITH_CONCERNS; orchestrator re-ran `bun test src/review/ReviewBoard.dom.test.tsx` (43 pass) and `model.test.ts` (10 pass) alone, `bun test src` (755 pass), `bunx tsc --noEmit` (exit 0), read the diff, and measured the toolbar: one row without overflow at 560, 700, 820, 1101 and 1380px, wrapped without clipping at 340px (research-evidence/layout-measurements.md in the review package; stand-ins for the Review rules button and the count label).
+ - T13 behavior_changes, needs_operator: the secondary "Outdated review" line is shown on every card with an outdated badge, merged and closed ones included. Operator answer (AskUserQuestion, 2026-11-23): "На всех карточках" — the implemented choice stands.
+ - T13 choices: Review rules uses the existing `shieldCheck` icon; focus restore detects the two portaled dialogs by their content class; `attentionPrs` is now derived with useMemo, with only the cross-scope retention kept as state.
+ - 2026-11-23T10:06:34.136Z - task-done: T13: PR review round fixes, Desktop UI: F-001 toolbar overflow, F-002 focus restore, F-003 lane reason, F-005 collapsed toolbar, F-007 test, F-008 attention set
+ - T14 STATUS: DONE_WITH_CONCERNS. Worker's measurement on a synthetic store (200 pull requests x 30 finished runs, 200 KB report each, 200-card batch, median of 5, bun 1.4.4, SQLite 3.51.0): base 1b994df18 about 405 ms, head 53c96b8af about 770 ms, after the change about 395 ms; badge output identical between head and after. Query plans and numbers: research-evidence/outdated-lookup-measurement.md in the PR review package. So the statement added in T6 roughly doubled the badge read; T14 brings it back to the base cost. The orchestrator did not re-run the measurement.
+ - T14 change: one materialized CTE parses each run once; window functions pick the newest finished run per card only when no run of that card supersedes it; an outdated candidate needs both reviewed SHAs (F-010). No schema, index or boundary change.
+ - T14 verification by the orchestrator: read the SQL diff; each of the 8 `src/review/board*.test.ts` and `desk-run*.test.ts` files passes when run alone (116 tests), as do `src/commands/review-desk-run.test.ts`, `review-watch.test.ts`, `review-accounts.test.ts`; root typecheck exit 0; eslint on the two files exit 0; `cd apps/desktop && bun test src/review` 98 pass. Running all eleven files in one `bun test` invocation failed several tests of `desk-run-executor.test.ts` with 6-8 s durations in two runs; that file does not call attachBadges and passes alone (38 pass). Treated as load-related; not investigated further.
+ - T14 concerns: the new test is a characterization test (passes before and after, behaviour unchanged); no F-010 fixture, because a run with a reviewed head and no base makes the live-history path of `localBadge` report it while the SQL path now ignores it — whether `localBadge` should also require both SHAs is left open.
+ - Not done after the fixes: no second review round on the fix commits; review-verifier and the mutation pass did not run; nothing pushed.
+ - 2026-11-23T10:19:07.733Z - task-done: T14: PR review round fixes, backend: F-006 outdated lookup cost and measurement
++- 2026-11-23T10:45:45.400Z - task-added: T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name
++- 2026-11-23T10:45:45.653Z - task-added: T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL
++- 2026-11-23T10:46:16.554Z - task-attempt: T16: started (attempt 1) — 516-T16 PR review round 2 fixes
++- 2026-11-23T10:46:16.741Z - task-attempt: T17: started (attempt 1) — 516-T17 PR review round 2 fixes
++- 2026-11-23T10:47:45.247Z - task-done: T17: PR review round 2 fixes, backend: F-018 run-state lists and alias in the badge SQL
++- 2026-11-23T10:48:26.557Z - task-done: T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name
++
++## 2026-11-23 — PR review round 2 (delta) and fixes (orchestrator)
++
++- Round 2 of the managed review of PR #1294 on head `33fd9647a` (delta `53c96b8af..33fd9647a`), full roster by operator choice: 19 reviewer dispatches and a premise judge. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02`. Result: no blocker or major, 5 minor (F-015 to F-018, F-025), 7 info. Prior findings: F-001 to F-004, F-006, F-007, F-010 closed; F-005 and F-009 partial; F-008 regressed (F-015); F-011 to F-014 open, unchanged. Readiness 11 of 12: `pr-files` fails because a delta round covers 18 of the PR's 89 files.
++- Operator: fix the five minor findings.
++- T16 (worker, standard tier): F-015, F-016, F-017 in `apps/desktop/src/review/`. New DOM test seen failing on the old component by the worker. Orchestrator check: diff read, `bun test src` in `apps/desktop` 756 pass, `bunx tsc --noEmit` exit 0.
++- T17 (worker, standard tier): F-018 in `src/review/desk-run-store.ts`. Orchestrator check: SQL read and compared term by term with the previous statement, `desk-run-store.test.ts` 36 pass, `board-badges.test.ts` 5 pass, root typecheck clean. Timing not re-measured.
++- F-025 (PR description): new text drafted by the orchestrator; applying it to GitHub needs the write account.
++- Not done: F-015 not reproduced in a running app; info findings F-019 to F-024 and F-026 not addressed; the failed CI check `client matrix (cancel-resume)` not re-run; nothing pushed.
++
++- 2026-11-23T11:18:26.081Z - decision d-mwt69ybv-511abb [review override-reviewers, ordinary]: chose override; no recommendation
++- 2026-11-23T11:26:24.820Z - task-added: T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load
++- 2026-11-23T11:26:25.010Z - task-attempt: T18: started (attempt 1) — 516-T18 PR review round 3 fix
++- 2026-11-23T11:28:05.413Z - task-done: T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load
++
++## 2026-11-23 — PR review round 3 (delta) and fix (orchestrator)
++
++- Round 3 of the managed review of PR #1294 on head `086335a01` (delta `33fd9647a..086335a01`). Operator chose six reviewers of fourteen (logic, regression, frontend, backend, security-code, testing-practices); 7 dispatches and a premise judge. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03`. Result: no blocker or major, 1 minor (F-027), 2 info (F-028, F-029). Prior: F-016, F-017, F-018, F-025 closed; F-015 regressed (F-027); F-019 to F-024 and F-026 open. The package does not pass the completion gate: the eight reviewers left out count as not run, and a delta round covers 7 of the PR's 89 files.
++- F-027 came from the shape of the F-015 fix that the orchestrator's own T16 brief suggested (the load callback only resets the carried set).
++- Operator: fix F-027.
++- T18 (worker, standard tier): a replacing load seeds the carried set; new DOM test for saved historical filters; the handled-request test keeps a second request. Orchestrator check: `bun test src` in `apps/desktop` 757 pass, `bunx tsc --noEmit` exit 0, and three mutation runs of `ReviewBoard.dom.test.tsx`, each restored afterwards — write-back effect removed: 1 fail (the handled-request test); seeding removed: 1 fail (the saved-filter test); seeding on every load: 3 fail.
++- Not done: F-027 and F-015 scenarios not reproduced in a running app; no review round on the T18 commit; info findings not addressed; nothing pushed.
++
++- 2026-11-23T11:33:23.779Z - task-added: T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures
++- 2026-11-23T11:33:23.979Z - task-added: T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card
++- 2026-11-23T11:33:24.199Z - task-added: T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording
++- 2026-11-23T11:33:24.478Z - task-attempt: T19: started (attempt 1) — 516-T19 review info notes
++- 2026-11-23T11:33:24.700Z - task-attempt: T20: started (attempt 1) — 516-T20 review info notes
++- 2026-11-23T11:33:24.978Z - task-attempt: T21: started (attempt 1) — 516-T21 review info notes
++- 2026-11-23T11:34:51.493Z - task-done: T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording
++- 2026-11-23T11:35:49.611Z - task-done: T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card
++- 2026-11-23T11:36:52.340Z - task-done: T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures
++- 2026-11-23T11:38:01.418Z - decision d-mwt6z581-5d85c4 [review override-reviewers, ordinary]: chose override; no recommendation
++
++## 2026-11-23 — Review info notes and PR review round 4 (orchestrator)
++
++- Operator: continue with what remained. Done: T19 (backend: F-021 publication read only for the card's range; one store test with a fixture per term of the outdated lookup), T20 (UI: F-023 `data-review-board-dialog` marker; DOM tests for the outdated-review note on a merged card and for the note-as-reason case), T21 (docs: F-019 third stage 0 deviation, F-026 wording). Orchestrator checks: `bun test src` in `apps/desktop` 759 pass, `bunx tsc --noEmit` exit 0, root typecheck exit 0, `desk-run-store.test.ts` 37 pass, `board-badges.test.ts` 5 pass, `desk-publication.test.ts` 10 pass, `review-desk-run.test.ts` 2 pass, `desk-run-legacy.test.ts` 3 pass; mutation: marker removed from the PR watcher dialog fails the focus test.
++- Left out on purpose: F-024 (note de-duplication by string equality; a refactor in code just stabilised). Operator questions still open: F-012, F-013, F-020. Pre-existing and untouched: F-011, F-014.
++- Round 4 of the managed review on head `be26765ae`, six reviewers of fifteen by operator decision, 7 dispatches and a premise judge. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04`. Result: no blocker or major; no defect in the new commits; 1 minor that predates the pull request (F-030: after an access error or an identity change on a historical view the tab indicator misses open requests), 3 info (F-031 write-back from a cached snapshot on an unavailable error; F-032 threshold wording of deviation (c); F-033 what the suites leave unpinned). The package does not pass the completion gate (reviewers left out, delta scope, head not pushed).
++- F-032 was the orchestrator's own wording in the T21 brief; corrected in `200f2b395`, which no reviewer read.
++- Not done: F-030 and F-031 not fixed (the operator's call); no scenario reproduced in a running app; the commits after `622c914b7` are not pushed and have no CI; PR description not updated for them.
++
++- 2026-11-23T11:53:17.826Z - task-added: T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot
++- 2026-11-23T11:53:18.015Z - task-attempt: T22: started (attempt 1) — 516-T22 PR review round 4 fixes
++- 2026-11-23T12:00:59.703Z - task-done: T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot
++- 2026-11-23T12:01:37.298Z - task-added: T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar
++- 2026-11-23T12:01:37.881Z - task-attempt: T23: started (attempt 1) — 516-T23 operator answers
++- 2026-11-23T12:07:08.461Z - task-done: T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar
++
++## 2026-11-23 — F-030, F-031 and the operator's answers (orchestrator)
++
++- Operator: fix F-030 and F-031; answer the three open questions here. Answers: F-012 — keep the indicator and show a hint for attention hidden by filters; F-013 — label "Review again"; F-020 — bare number on a narrow toolbar.
++- T22 (worker, flagship tier): only an open or all load without a period replaces the carried set; any other load for an unseeded identity empties it and asks for one open seed load, applied only for the current, still unseeded identity; a cached snapshot shown after an `unavailable:` error does not write back. Orchestrator checks: diff read; `bun test src` 763 pass; `bunx tsc --noEmit` exit 0; five mutations each fail at least one test (seed request removed, stale guard removed, old replace rule, seed identity guard removed — killed only after the orchestrator sent the worker back for a test of a seed answered for another account, write-back removed).
++- T23 (worker, standard tier): the three answers, docs deviation (c) and new item (d). The orchestrator measured the toolbar with the real stylesheets and rebuilt markup: the bare count made the 560px toolbar wrap (573px needed); the orchestrator added a narrow-toolbar search-field rule (80px), after which the toolbar is one row from 560 to 1380px without the hint, and wraps without clipping at about 560, 820 and 1180px while the hint is shown. Measurements: `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/research-evidence/layout-measurements-t23.md`. `bun test src` 766 pass, `bunx tsc --noEmit` exit 0.
++- Not done: no review round on T22 and T23; no scenario reproduced in the app with real data; nothing pushed.
++
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 35,61 @@
+   flows: FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   currentRepairModel?: ReviewLaunchModel | undefined;
+   onOpenFlow: (dir: string) => void;
+   onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   onOpenSession?: ((card: ReviewCard) => void) | undefined;
+   load?: typeof fetchReviewBoard;
+   loadBadges?: typeof fetchReviewBadges;
+   listRepositories?: typeof fetchReviewRepositories;
+   loadDetail?: typeof fetchReviewDetail;
+   runCommand?: typeof reviewRun;
+   watcherCommand?: typeof reviewWatcher;
+   rulesCommand?: typeof reviewRules;
+ }
+ 
+ interface ReadState {
+   scope: string;
+   snapshot: ReviewBoardSnapshot | null;
+   error: string;
+   loading: boolean;
++  /** The snapshot is a cached fallback from an earlier visit to this scope, not the result of the latest request. */
++  stale?: boolean;
+ }
+ 
+ export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+     && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending && a?.lastActivityAt === b?.lastActivityAt
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 74,139 @@
+ function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
+   if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
+   const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
+   return card.addressedReplyIds.filter(id => !readIds.has(id));
+ }
+ const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
++const attentionNumbers = (board: ReviewBoardSnapshot) =>
++  new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+ 
+ export function ReviewBoard(props: Props) {
+   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
+ }
+ 
+ function ProjectBoard(props: Props) {
+   const [repo, setRepo] = useState<string>();
+   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+ }
+ 
+ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+   repo?: string;
+   selectRepo: (repo?: string) => void;
+ }) {
+   // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+   const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
+   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
+   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
+   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
+   const [filters, setFilters] = useState(EMPTY_FILTERS);
+   const snapshots = useRef(new Map<string, ReviewBoardSnapshot>());
+   const [query, setQuery] = useState("");
+   const [filtering, setFiltering] = useState(false);
+   const [dismissedWarning, setDismissedWarning] = useState("");
+   const warningId = useId();
+   const warningToggle = useRef<HTMLButtonElement>(null);
+   const [view, setView] = useState<"board" | "list">("board");
+   const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
+   const [attempt, setAttempt] = useState(0);
+   const refresh = useCallback(() => setAttempt(n => n + 1), []);
+   const [alternatives, setAlternatives] = useState<string[]>([]);
+   const search = useRef<HTMLInputElement>(null);
+   const identity = useRef("");
+   const filterKey = useRef<string>();
+   const sequence = useRef(0);
++  // The identity whose carried set was last replaced from a load that holds every open PR (open or all, no period).
++  const seeded = useRef("");
++  const [seedFor, setSeedFor] = useState<{ identity: string } | null>(null);
+   // A delayed GitHub refresh can carry older local run badges than a just-finished launch.
+   const pendingBadges = useRef<Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">> | null>(null);
+   const restoreFocus = useRef(false);
+   const state = stateQuery(filters.state);
+   const period = filters.updatedWithin;
+   const scope = `${state}/${period ?? ""}`;
+   const [read, setRead] = useState<ReadState>({ scope, snapshot: null, error: "", loading: true });
+   const latest = useRef(read);
+   latest.current = read;
+   const q = useDeferredValue(query);
+ 
+   useEffect(() => {
+     if (read.snapshot) snapshots.current.set(read.scope, read.snapshot);
+   }, [read]);
+ 
+   const clearPrivateView = useCallback((resetState = false) => {
+     setSubscriptions(new Set());
+     setSubscriptionNumber(null);
+     restoreFocus.current = inBoardOverlay(document.activeElement);
+     setQuery("");
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 173,217 @@
+       const ownThread = thread.messages[0]?.own;
+       for (const message of thread.messages) {
+         if (!message.own && (ownThread || mentionsViewer(message.body, detail.viewer))) ids.add(message.id);
+       }
+     }
+     setRead(old => {
+       const board = old.snapshot;
+       if (!board || board.viewer !== detail.viewer || board.repositoryId !== detail.repositoryId) return old;
+       const card = board.cards.find(c => c.number === detail.number);
+       if (!card || card.headSha !== detail.headSha) return old;
+       const addressedReplyIds = [...new Set([...(detail.warnings.length ? card.addressedReplyIds ?? [] : []), ...ids])];
+       if (JSON.stringify(card.addressedReplyIds ?? []) === JSON.stringify(addressedReplyIds)) return old;
+       return { ...old, snapshot: { ...board, cards: board.cards.map(c => c === card ? { ...c, addressedReplyIds } : c) } };
+     });
+   }, []);
+ 
+   const accessLost = useCallback((message: string) => {
+     // A list request started before a denied detail request cannot restore its private snapshot.
+     sequence.current++;
+     identity.current = "";
++    seeded.current = "";
+     filterKey.current = undefined;
+     snapshots.current.clear();
+     setCarriedAttention(new Set());
++    setSeedFor(null);
+     setWatchingTarget(null);
+     pendingBadges.current = null;
+     clearPrivateView();
+     setRead((old) => ({ ...old, error: message, snapshot: null, loading: false }));
+   }, [clearPrivateView]);
+ 
+   useEffect(() => {
+     const request = ++sequence.current;
+     const badges = new Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">>();
+     pendingBadges.current = badges;
+     setRead(old => scope === old.scope && old.snapshot
+       ? { ...old, loading: true }
+       : { scope, snapshot: null, error: "", loading: true });
+     const controller = new AbortController();
+     const updatedSince = period && new Date(Date.now() - period * 86_400_000).toISOString();
+     void load(cwd, state, repo, controller.signal, expectedViewer, updatedSince).then((snapshot) => {
+       if (request !== sequence.current) return;
+       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
+       if (identity.current && identity.current !== nextIdentity) {
+         snapshots.current.clear();
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 218,310 @@
+         clearPrivateView(true);
+       } else if (badges.size) {
+         snapshot = { ...snapshot, cards: snapshot.cards.map(card => {
+           const update = badges.get(card.number);
+           return update && sameRange(card, update) ? { ...card, localReview: update.localReview } : card;
+         }) };
+       }
+       // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+       const previous = latest.current.snapshot;
+       if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+         const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+         if (replies.size) {
+           snapshot = { ...snapshot, cards: snapshot.cards.map(c => {
+             const prior = replies.get(c.number);
+             return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
+               ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
+           }) };
+         }
+       }
+       const loaded = snapshot;
+-      // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
+-      const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
+-      setCarriedAttention(previousSet => {
+-        const next = new Set(replaceAttention ? [] : previousSet);
+-        for (const card of loaded.cards) {
+-          if (needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))) next.add(card.number);
+-          else next.delete(card.number);
+-        }
+-        return next;
+-      });
++      // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
++      // a new identity seen there starts from nothing and gets one open load that only seeds the set.
++      if (!period && (state === "open" || state === "all")) {
++        seeded.current = nextIdentity;
++        setCarriedAttention(attentionNumbers(loaded));
++        setSeedFor(null);
++      } else {
++        if (identity.current !== nextIdentity) setCarriedAttention(new Set());
++        if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });
++      }
+       const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
+       if (filterKey.current !== nextFilterKey) {
+         filterKey.current = nextFilterKey;
+         setFilters(readReviewFilters(nextFilterKey));
+       }
+       pendingBadges.current = null;
+       setSelected(current => current && loaded.cards.some(c => c.number === current.number) ? current : null);
+       if (!loaded.warnings.length) setDismissedWarning("");
+       identity.current = nextIdentity;
+       setRead({ scope, snapshot: loaded, error: "", loading: false });
+     }).catch((cause: unknown) => {
+       if (request !== sequence.current) return;
+       pendingBadges.current = null;
+       const message = errMessage(cause);
+       if (/^unavailable:/i.test(message)) {
+-        setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? snapshots.current.get(scope) ?? null, error: message, loading: false }));
++        setRead((old) => {
++          const kept = old.scope === scope ? old.snapshot : null;
++          return { scope, snapshot: kept ?? snapshots.current.get(scope) ?? null, stale: kept ? old.stale : true, error: message, loading: false };
++        });
+       } else {
+         accessLost(message);
+       }
+     });
+     return () => { sequence.current++; controller.abort(); };
+   }, [cwd, expectedViewer, state, period, scope, repo, attempt, load, clearPrivateView, accessLost]);
+ 
++  useEffect(() => {
++    if (!seedFor) return;
++    let current = true;
++    const controller = new AbortController();
++    void load(cwd, "open", repo, controller.signal, expectedViewer).then((seed) => {
++      const key = JSON.stringify([seed.repositoryId, seed.viewer]);
++      if (!current || key !== seedFor.identity || identity.current !== key || seeded.current === key) return;
++      seeded.current = key;
++      setCarriedAttention(attentionNumbers(seed));
++      setSeedFor(null);
++    }).catch(() => {
++      // The next successful load of an unseeded identity asks again; no retry from here.
++      if (current) setSeedFor(old => old === seedFor ? null : old);
++    });
++    return () => { current = false; controller.abort(); };
++  }, [seedFor, cwd, repo, expectedViewer, load]);
++
+   useEffect(() => {
+     if (restoreFocus.current && !overlayOpen()) search.current?.focus();
+     restoreFocus.current = false;
+   }, [read]);
+ 
+   useEffect(() => {
+     if (!tabActive) {
+       setSelected(null);
+       setFiltering(false);
+       return;
+     }
+     const focusSearch = (e: KeyboardEvent) => {
+       if (!overlayOpen() && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+         e.preventDefault();
+         search.current?.select();
+       }
+     };
+     window.addEventListener("keydown", focusSearch);
+     return () => window.removeEventListener("keydown", focusSearch);
+   }, [tabActive]);

@@ -1,0 +1,36 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "No security defect found in the new seed path or the hint reset. Numbers of one identity cannot reach another's carried set: a seed result is applied only if its own [repositoryId, viewer] key equals seedFor.identity, equals identity.current and the identity is still unseeded; accessLost clears identity, seeded and seedFor and the effect cleanup flips `current`. Request count is bounded: one seed per non-open main load of an unseeded identity, no retry from the catch. The hint calls reset, which removes only the saved filter entry under reviewFilterKey(cwd, repositoryId, viewer), plus the search text. Slices 04-06 grep clean for secrets and personal data. Concern: slices 01-03 were covered through the two new commits and the live ReviewBoard.tsx, not line by line.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-030", "disposition": "closed", "note": "Only open or all without a period replaces the set; any other load for an unseeded identity empties it on identity change and asks for one open seed. Access-loss and account-change paths both reset seeded and seedFor." },
+    { "id": "F-031", "disposition": "closed", "note": "The cached fallback after an unavailable: error is marked stale and the write-back effect skips it; stale is dropped by every successful setRead and by a scope change, and kept across loading and run-badge updates, which is correct." },
+    { "id": "F-012", "disposition": "closed", "note": "The hint's reset (applyFilters(EMPTY_FILTERS) and setQuery) removes only the saved filters of the current cwd, repository and viewer key and the search text. It clears nothing else." },
+    { "id": "F-032", "disposition": "withdrawn", "note": "Site not read by this reviewer; no security aspect." },
+    { "id": "F-033", "disposition": "withdrawn", "note": "Site not read by this reviewer; no security aspect." },
+    { "id": "F-013", "disposition": "withdrawn", "note": "Label change only; no security aspect." },
+    { "id": "F-020", "disposition": "withdrawn", "note": "CSS only; no security aspect." }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03", "slice-04", "slice-05", "slice-06"]
+}
+```
+
+Checked scenarios in ReviewBoard.tsx (seed effect, lines 274-289; main load, 204-272):
+- Late seed after account change: the board is remounted on a changed cwd or expectedViewer (key on ProjectBoard); inside one mount a changed identity is caught by `key !== seedFor.identity || identity.current !== key`.
+- Late seed after access loss: accessLost sets identity.current to "" and seedFor to null; the seed's guard fails and the cleanup sets `current` false.
+- Seed answered for another identity: dropped by the key comparison. seedFor then stays set until the next main load, which replaces or clears it.
+- Race with a full open load: seeded.current === key makes a later seed a no-op; an earlier seed is overwritten by the full load.
+- Request count: a failed seed clears seedFor and is not retried. A new seed request is sent only after a main load of an unseeded identity, so seed requests are at most one per main load (user actions, Refresh, watcher poll every 15 or 60 s). Every main load starts a new seedFor object, which aborts and restarts a pending seed (at most doubles GitHub requests on non-open views while the open load keeps failing). This is bounded, not a flood.
+- Seeded set holds only numbers from a snapshot whose key was checked; no number crosses identities.
+
+What I did not verify:
+- Slices 01, 02 and 03 were not read line by line; I read commits 91c37c81b (ReviewBoard.tsx) and 85bd13a03 (ReviewBoard.tsx part) and the current ReviewBoard.tsx lines 95-335, reviewFilterStorage.ts and the refresh call sites. The DOM tests and the ReviewResults.tsx, ReviewRuns.tsx and review.css parts of 85bd13a03 were not read.
+- Slices 04-06 were only scanned with one pattern search (tokens, key blocks, password/secret assignments, home paths, e-mail forms): 0 matches. I did not re-read them for statements wrong about the code.
+- Backend (fetchReviewBoard) behaviour under rate limits, and whether the seed's card-only snapshot misses reply-based attention (a logic question, not a security one), were not checked.
+- No tests or code were run (read-only budget).

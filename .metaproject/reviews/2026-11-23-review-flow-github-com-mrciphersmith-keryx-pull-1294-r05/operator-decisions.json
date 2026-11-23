@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "reviewer-override",
+      "quote": "yes",
+      "reason": "Round 5 delta is two commits (attention-set fix and toolbar answers); operator chose seven reviewers",
+      "confirmedVia": "host-question",
+      "at": "2026-11-23T12:10:55.589Z",
+      "subject": {
+        "head": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+        "items": [
+          "review-architecture",
+          "review-degradation",
+          "review-highload",
+          "review-performance"
+        ]
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "ask-r05-roster",
+        "questionText": "Раунд 5 — два новых коммита (логика набора внимания F-030/F-031 и тулбар/кнопка по вашим ответам). Запустить семь ревьюеров: review-logic, review-regression, review-frontend, review-security-code, review-testing-practices, review-ui-ux, review-layout — и НЕ запускать review-architecture, review-backend, review-clean-code, review-degradation, review-highload, review-performance, review-pr-contract, review-style?",
+        "answerText": "yes",
+        "time": "2026-11-23T12:10:55.589Z"
+      }
+    }
+  ]
+}

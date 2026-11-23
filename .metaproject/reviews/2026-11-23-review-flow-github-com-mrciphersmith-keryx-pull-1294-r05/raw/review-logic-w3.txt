@@ -1,0 +1,29 @@
+STATUS: DONE
+
+## Logic Review (round 5, second-look waves w2-w4)
+
+Deviations (c) and (d) in implementation-plan.md match review.css (container query 1100px hides .toolbar-label, 760px hides .count-word and .watcher-indicator and shrinks the search field to 80px, .filter-count stays visible; the toolbar has 20px side padding, so inner 1100/760 is a panel of about 1140/800px), ReviewBoard.tsx (hint is `attentionPrs` numbers not among `visible`; its click calls `reset`, which saves EMPTY_FILTERS and clears the query) and layout-measurements-t23.md (every width and row count quoted in (c), with and without the hint, agrees with the table). EMPTY_FILTERS is the default Open + Draft and needsViewerAttention only accepts open PRs, so the reset always reveals a hidden attention PR; the hint cannot get stuck. "Review again" is in ReviewResults.tsx and ReviewRuns.tsx. No document in the requirements package contradicts the label or the hint: specification O9 quotes "Review changes", but the Основания table is declared to describe commit 1b994df18, where that label existed. The SQL `attachBadges` and `localBadge` agree on the outdated rule (active, requested range or reviewed range suppresses it; newest finished run with a recorded reviewed range wins; source existing, archive and delete excluded).
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-04", "slice-05", "slice-06"],
+  "summary": "No defect found. Deviations (c) and (d) are true to the stylesheet, the hint code and the measurements; the badge SQL and localBadge agree; the attention-set code at head has no case I could make fail.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-012", "disposition": "closed" },
+    { "id": "F-013", "disposition": "closed" },
+    { "id": "F-020", "disposition": "closed" },
+    { "id": "F-030", "disposition": "closed" },
+    { "id": "F-031", "disposition": "closed" }
+  ]
+}
+```
+
+## Not verified
+- F-032 and F-033: no site read; no disposition returned.
+- Slices 04 and 05 (flow, journal, resolved JSON, tests) were checked by their file lists and by reading the code they describe, not line by line; slice 06 and the store/badge code were read in full.
+- No test, build or browser run; the toolbar widths come from the measurement file (stand-in markup), not the app with real data.
+- The seed's card-only snapshot not carrying reply-based attention equals the behaviour of any fresh open load; I did not treat it as a defect.

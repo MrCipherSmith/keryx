@@ -1,0 +1,275 @@
+[
+ {
+  "id": "review-logic-w1:F-034",
+  "status": "finding",
+  "finding": "F-034",
+  "evidence": "canonical-findings.json F-034",
+  "reason": "Same defect as canonical F-034 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w1:F-035",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "canonical-findings.json F-035",
+  "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w5:F-034",
+  "status": "finding",
+  "finding": "F-034",
+  "evidence": "canonical-findings.json F-034",
+  "reason": "Same defect as canonical F-034 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-logic-w5:F-035",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "canonical-findings.json F-035",
+  "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-501",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-502",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "canonical-findings.json F-037",
+  "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-503",
+  "status": "finding",
+  "finding": "F-038",
+  "evidence": "canonical-findings.json F-038",
+  "reason": "Same defect as canonical F-038 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w1:F-504",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "canonical-findings.json F-035",
+  "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-001",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "canonical-findings.json F-037",
+  "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-002",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-003",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "canonical-findings.json F-037",
+  "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-004",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-005",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-006",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "canonical-findings.json F-035",
+  "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-001",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-002",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-003",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w1:LY-004",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-regression-w1:RG-1",
+  "status": "finding",
+  "finding": "F-038",
+  "evidence": "canonical-findings.json F-038",
+  "reason": "Same defect as canonical F-038 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w2:F-501",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w2:F-502",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "canonical-findings.json F-037",
+  "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w2:F-503",
+  "status": "finding",
+  "finding": "F-038",
+  "evidence": "canonical-findings.json F-038",
+  "reason": "Same defect as canonical F-038 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-frontend-w2:F-504",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "canonical-findings.json F-035",
+  "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w2:UX-001",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "canonical-findings.json F-037",
+  "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w2:UX-002",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w2:UX-003",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "canonical-findings.json F-037",
+  "reason": "Same defect as canonical F-037 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w2:UX-004",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w2:UX-005",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-ui-ux-w2:UX-006",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "canonical-findings.json F-035",
+  "reason": "Same defect as canonical F-035 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w2:LY-001",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w2:LY-002",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w2:LY-003",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-layout-w2:LY-004",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "canonical-findings.json F-040",
+  "reason": "Same defect as canonical F-040 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-regression-w2:RG-1",
+  "status": "finding",
+  "finding": "F-038",
+  "evidence": "canonical-findings.json F-038",
+  "reason": "Same defect as canonical F-038 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-T01",
+  "status": "finding",
+  "finding": "F-039",
+  "evidence": "canonical-findings.json F-039",
+  "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-T02",
+  "status": "finding",
+  "finding": "F-039",
+  "evidence": "canonical-findings.json F-039",
+  "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-T03",
+  "status": "finding",
+  "finding": "F-039",
+  "evidence": "canonical-findings.json F-039",
+  "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-T04",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "canonical-findings.json F-036",
+  "reason": "Same defect as canonical F-036 (merged by the orchestrator at consolidation)."
+ },
+ {
+  "id": "review-testing-practices-w1:F-T05",
+  "status": "finding",
+  "finding": "F-039",
+  "evidence": "canonical-findings.json F-039",
+  "reason": "Same defect as canonical F-039 (merged by the orchestrator at consolidation)."
+ }
+]

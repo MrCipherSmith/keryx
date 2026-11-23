@@ -1,0 +1,224 @@
+STATUS: DONE_WITH_CONCERNS
+
+Scope: slice-01. I read the diffs of 91c37c81b and 85bd13a03 (tests and production) and the test helpers `render`, `click`, `button`, `snapshot`. Tools: git show, keryx ctx rg/read. No test, mutation or server was run (allowed_tools read-only, exec_budget_s 0).
+
+Mutation table. Run by the orchestrator (taken from the brief): seed request removed, 2 fail; `stale` guard removed, 1 fail; old replace rule, 2 fail; seed guard reduced to `if (!current) return;`, 1 fail; write-back removed, 2 fail. Run by me: none. I propose 12 mutants in `mutant_candidates`; 0 run, 12 not reached. The notes beside them are my reading, not results. I expect M3-M7, M9, M10 and M11 to survive.
+
+Dispositions. F-030 and F-031 closed at the test level: each named scenario has a test the brief's mutations fail. F-013 closed: the label is pinned in the board test and `Review changes` no longer occurs under apps/desktop/src/review. F-012 partial: only the saved-filter trigger is pinned. F-020 partial: the CSS part cannot fail in the DOM suite; its evidence is the measurement file.
+
+Not verified: that the new tests are green at head (I rely on the brief's 766 pass); whether any proposed mutant survives; browser behaviour; whether aria-label on the count span is announced; correctness of the seed path itself (review-logic's subject).
+
+REVIEW_RESULT
+```json
+{
+ "status": "DONE_WITH_CONCERNS",
+ "reviewer": "review-testing-practices",
+ "slices": [
+  "slice-01"
+ ],
+ "summary": "The seven new DOM tests pin the reported scenarios (access-loss recovery, account change on a historical view, seed answered for another account, cached fallback, hidden-attention hint, Review again label, count title) and use no timers or real network. They never build the races the seed code guards, so several of its defensive lines can be deleted singly with the suite green (by reading; nothing was run). The hint tests cover one trigger, a saved author filter, and not search, saved-filter clearing or the singular count.",
+ "findings": [
+  {
+   "id": "F-T01",
+   "severity": "minor",
+   "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+   "line": 1066,
+   "quote": "const load: typeof fetchReviewBoard = async (_cwd, scope) => {",
+   "problem": "Every test double for the seed path is an immediately resolving async function, so the order between the main load and the seed load is never varied. The seed effect starts only after the main load's state commit, so the seed always resolves after the main load. The races the seed code guards are never built: (a) the seed in flight when the user switches to an open or all view; (b) the seed in flight when a second historical load or an identity change arrives; (c) the seed resolving after a later open load already replaced the set. The clauses `identity.current !== key` and `seeded.current === key` in the seed `.then`, the `setSeedFor(null)` in the open branch of the main load, the one in the seed `.then`, and the `.catch` cleanup each have no test that separates them from the clause beside them.",
+   "impact": "These are the lines added in answer to F-030 on a path that earlier rounds regressed twice. A later edit that drops any one of them leaves the suite green (by reading, not run; see mutant_candidates M3-M7). The tests added for T22 cover sequential refreshes only.",
+   "suggested_fix": "Add a test with a deferred seed: a historical load with the open request held on a promise, then switch the state filter to Open (the open load resolves with a new set), then resolve the held seed with an older snapshot holding a request that is now gone; assert the indicator follows the open load. Add a second where the account changes while the seed is held. Resolve the promises by hand inside act.",
+   "evidence": "Read of the diff of 91c37c81b and of the test bodies: every `load` double is `async (_cwd, scope) => ...` with no held promise. The mutation runs in the brief cover the seed request, the stale guard, the old replace rule, `if (!current) return` and the write-back, not these clauses. No mutation run by me.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "publication": "finding",
+   "degradation_class": "blind-test"
+  },
+  {
+   "id": "F-T02",
+   "severity": "minor",
+   "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+   "line": 1162,
+   "quote": "expect(document.body.textContent).toContain(\"Signed in as ann\");\n  expect(indicators.at(-1)).toBeNull();",
+   "problem": "The test 'an open seed answered for another account does not enter the tab signal' ends on a falsy assertion (indicator null) with no positive artifact that the open seed request was made. Its only evidence that a load ran is the historical one ('Signed in as ann'). With the seed request removed the same assertions pass; the brief's guard mutation is what the test kills, and nothing here records that an open request was issued after the historical one.",
+   "impact": "A later change that stops issuing the seed in this flow leaves this test green while it reads as coverage of the identity guard.",
+   "suggested_fix": "Record the scopes the double receives and assert that an `open` request followed the historical one before asserting the indicator is null.",
+   "evidence": "Read of the test at 91c37c81b: the double returns for `open` a snapshot with viewer bob and nothing counts calls.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "publication": "finding",
+   "degradation_class": "blind-test"
+  },
+  {
+   "id": "F-T03",
+   "severity": "minor",
+   "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+   "line": 1100,
+   "quote": "const HIDDEN_HINT = \"1 waiting on you hidden by filters\";",
+   "problem": "The hidden-attention tests pin one trigger: a saved author filter. Not pinned: (1) a request hidden by the search box (`shownNumbers` comes from `visible`, which includes the query, and the operator's answer says filters and search); (2) that the click clears the typed search (`reset` = applyFilters + setQuery(\"\"), the click test types no query) and the saved filters, not only the visible list; (3) the hint on a Merged or Closed view, where `attentionPrs` still holds carried open numbers absent from the shown snapshot; (4) the singular branch of the count word and of `countText` (the count test renders 2). The check `hint()?.textContent?.trim()).toContain(\"1\")` is also loose.",
+   "impact": "A mutant that drops `setQuery(\"\")` from `reset`, or flips `visible.length === 1`, can survive (by reading; mutant_candidates M8-M10).",
+   "suggested_fix": "Add a card hidden only by a typed query that the hint counts and the click clears (assert the input value is empty); assert the saved filters after the click with `readReviewFilters`; render one card and assert `1 pull request`; use an exact match on the count span.",
+   "evidence": "Read of the tests, of ReviewBoard.tsx 366-390 and of the `hiddenAttention` block in 85bd13a03. No mutation run.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "publication": "finding",
+   "degradation_class": "blind-test"
+  },
+  {
+   "id": "F-T04",
+   "severity": "info",
+   "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+   "line": 1132,
+   "quote": "expect(count.getAttribute(\"aria-label\")).toBe(\"2 pull requests\");",
+   "problem": "The test is named 'accessible name' but asserts an attribute on a plain `span` with no role; aria-label on a generic element is not reliably exposed as a name, and the DOM test can see only the attribute. The 760px behaviour (`.count-word` hidden, search shrinking to 80px) is CSS and no test in the suite fails on it; its evidence is the measurement file named in the brief.",
+   "impact": "The test claims more than it pins; the layout claim rests on a one-off measurement.",
+   "suggested_fix": "Say in the test name that it pins the attribute, or give the span a role that supports a name; leave the layout to the measurement file or a browser test.",
+   "evidence": "Read of the test and of the markup in the diff of 85bd13a03.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "publication": "finding",
+   "degradation_class": "blind-test"
+  },
+  {
+   "id": "F-T05",
+   "severity": "info",
+   "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+   "line": 1089,
+   "quote": "scopes.length = 0;",
+   "problem": "Determinism, read only: no timers, sleeps or real network in the seven new tests; waits are `act(async)` around a click. The seed result lands several promise hops after the commit that creates the effect, so the tests rely on how many hops `act` drains, not on a visible state; the suite passes. `localStorage.clear()` in beforeEach, a distinct cwd per test and an incrementing `renderKey` isolate the tests. The recovery test asserts the request order `[\"merged\", \"open\"]`, which holds because the seed is issued from an effect after the main load.",
+   "impact": "No flake seen by reading; the order assertion would break on a harmless change of when the seed is requested.",
+   "suggested_fix": "None required; assert the count per scope instead of the order if the seed trigger changes.",
+   "evidence": "Read only; this reviewer did not run the suites.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "blocking_merge": false,
+   "location_class": "in-diff",
+   "publication": "finding",
+   "degradation_class": "blind-test"
+  }
+ ],
+ "stats": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 3,
+  "info": 2
+ },
+ "prior_dispositions": [
+  {
+   "id": "F-030",
+   "disposition": "closed"
+  },
+  {
+   "id": "F-031",
+   "disposition": "closed"
+  },
+  {
+   "id": "F-013",
+   "disposition": "closed"
+  },
+  {
+   "id": "F-012",
+   "disposition": "partial"
+  },
+  {
+   "id": "F-020",
+   "disposition": "partial"
+  }
+ ],
+ "mutant_candidates": [
+  {
+   "id": "M1",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "if (identity.current !== nextIdentity) setCarriedAttention(new Set());",
+   "replacement": "",
+   "note": "expected killed by the account-change test"
+  },
+  {
+   "id": "M2",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });",
+   "replacement": "setSeedFor({ identity: nextIdentity });",
+   "note": "expected killed by the 'no extra open request' step"
+  },
+  {
+   "id": "M3",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "setCarriedAttention(attentionNumbers(loaded));\n        setSeedFor(null);",
+   "replacement": "setCarriedAttention(attentionNumbers(loaded));",
+   "note": "expected to survive"
+  },
+  {
+   "id": "M4",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "setCarriedAttention(attentionNumbers(seed));\n      setSeedFor(null);",
+   "replacement": "setCarriedAttention(attentionNumbers(seed));",
+   "note": "expected to survive"
+  },
+  {
+   "id": "M5",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "|| identity.current !== key || seeded.current === key) return;",
+   "replacement": "|| seeded.current === key) return;",
+   "note": "expected to survive"
+  },
+  {
+   "id": "M6",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "|| key !== seedFor.identity || identity.current !== key",
+   "replacement": "|| identity.current !== key",
+   "note": "expected to survive (redundant with the identity.current clause)"
+  },
+  {
+   "id": "M7",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "if (current) setSeedFor(old => old === seedFor ? null : old);",
+   "replacement": "",
+   "note": "expected to survive"
+  },
+  {
+   "id": "M8",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(\"\"); };",
+   "replacement": "const reset = () => { applyFilters(EMPTY_FILTERS); };",
+   "note": "the hint click test types no query; an older Clear-filters test may kill it"
+  },
+  {
+   "id": "M9",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "<span className=\"count-word\"> {visible.length === 1 ?",
+   "replacement": "<span className=\"count-word\"> {visible.length === 0 ?",
+   "note": "expected to survive; one card never rendered",
+   "kind": "presentation"
+  },
+  {
+   "id": "M10",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "const countText = visible.length + (visible.length === 1 ?",
+   "replacement": "const countText = visible.length + (visible.length === 0 ?",
+   "note": "expected to survive",
+   "kind": "presentation"
+  },
+  {
+   "id": "M11",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "stale: kept ? old.stale : true,",
+   "replacement": "stale: true,",
+   "note": "a second unavailable error over a fresh shown snapshot marks it stale; no test builds that"
+  },
+  {
+   "id": "M12",
+   "file": "apps/desktop/src/review/ReviewBoard.tsx",
+   "anchor": "stale: kept ? old.stale : true,",
+   "replacement": "stale: kept ? old.stale : false,",
+   "note": "variant of the brief's stale run, not run"
+  }
+ ]
+}
+```

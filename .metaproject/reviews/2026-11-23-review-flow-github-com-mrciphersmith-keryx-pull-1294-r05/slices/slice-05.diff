@@ -1,0 +1,1800 @@
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 1,750 @@
+ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+ import type { ReviewRule, ReviewRuleAction, ReviewRuleSnapshot } from "../../../../src/review/review-rule-types";
+ import type { reviewRules } from "../platform/reviewRules";
+ import type { reviewWatcher, ReviewWatcherAction, ReviewWatcherSnapshot } from "../platform/reviewWatcher";
+ import type { reviewRun } from "../platform/reviewRuns";
+ import type { Root } from "react-dom/client";
+ import type { fetchReviewBoard, fetchReviewDetail, fetchReviewRepositories } from "../platform/review";
+ import { registerDom, unregisterDom } from "../test/dom";
+ import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
++import { markRepliesRead } from "./reviewReadState";
+ import { EMPTY_FILTERS } from "./model";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ let root: Root;
+ let host: HTMLElement;
+ let act: (fn: () => void | Promise<void>) => Promise<void>;
+ let createElement: typeof import("react").createElement;
+ let ReviewBoard: typeof import("./ReviewBoard").ReviewBoard;
++let badgesEqual: typeof import("./ReviewBoard").badgesEqual;
+ let renderKey = 0;
+ 
+ beforeAll(async () => {
+   registerDom();
+   const React = await import("react");
+   act = React.act as unknown as typeof act;
+   createElement = React.createElement;
+-  ReviewBoard = (await import("./ReviewBoard")).ReviewBoard;
++  // Imported after registerDom: DOMPurify reads the DOM globals at load time.
++  ({ ReviewBoard, badgesEqual } = await import("./ReviewBoard"));
+   host = document.createElement("div");
+   document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ 
+ beforeEach(() => { localStorage.clear(); });
+ 
+ afterAll(async () => {
+   await act(() => root.unmount());
+   await unregisterDom();
+ });
+ 
+ const pr: ReviewCard = {
+   number: 101, title: "Update from colleague", state: "open", draft: false, url: "https://github.com/org/repo/pull/101",
+   author: "lee", assignees: [], reviewers: ["org/team"], ci: "passed", decision: "REVIEW_REQUIRED",
+   updatedAt: "2026-11-10T01:00:00Z", headSha: "b", baseSha: "a",
+ };
+ 
+ function snapshot(cards: ReviewCard[], warnings: string[] = []): ReviewBoardSnapshot {
+   return { version: 1, repo: "org/repo", repositories: ["org/repo"], repositoryId: "repo1", viewer: "ann", fetchedAt: pr.updatedAt, cards, warnings };
+ }
+ 
+ const watcherOff: ReviewWatcherSnapshot = { version: 1, state: "disabled", installed: false, intervalMinutes: 5,
+   lastAttemptAt: null, lastSuccessAt: null, lastError: null, events: [] };
+ const watcherDisabled = async () => watcherOff;
+ 
+ function render(load: typeof fetchReviewBoard, cwd = "/project", key = ++renderKey, listRepositories: typeof fetchReviewRepositories = async () => [], loadDetail?: typeof fetchReviewDetail, runCommand?: typeof reviewRun, watcherCommand: typeof reviewWatcher = watcherDisabled, rulesCommand?: typeof reviewRules) {
+   return act(async () => { root.render(createElement(ReviewBoard, { key, cwd, flows: [], onOpenFlow: () => {}, load, listRepositories, loadDetail, runCommand, watcherCommand, rulesCommand })); });
+ }
+ 
+ const click = (el: HTMLElement) => act(async () => { el.click(); });
+ function button(label: string) {
+-  const el = Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
++  const el = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
+   if (!el) throw new Error("Missing button " + label);
+   return el;
+ }
+ function option(group: string, name: string) {
+-  const fieldset = Array.from(host.querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent === group);
++  const fieldset = Array.from(document.body.querySelectorAll("fieldset")).find((f) => f.querySelector("legend")?.textContent === group);
+   const label = Array.from(fieldset?.querySelectorAll("label") ?? []).find((l) => l.textContent === name);
+   if (!label) throw new Error("Missing filter " + group + "/" + name);
+   return label.querySelector("input")!;
+ }
+ 
+ test("shows unassigned colleagues and drafts; board and list share author, team, decision and CI filters", async () => {
+   const cards: ReviewCard[] = [
+     pr,
+     { ...pr, number: 102, author: "bob" },
+     { ...pr, number: 103, reviewers: ["org/other"] },
+     { ...pr, number: 104, decision: "APPROVED" },
+     { ...pr, number: 105, ci: "failed" },
+     { ...pr, number: 106, title: "Draft from author", draft: true, author: "bob", reviewers: [], decision: null, ci: "none" },
+   ];
+   await render(async () => snapshot(cards));
+-  expect(host.querySelectorAll(".review-card")).toHaveLength(cards.length);
++  expect(document.body.querySelectorAll(".review-card")).toHaveLength(cards.length);
+   await click(button("Filters"));
+   await click(option("Author", "lee"));
+   await click(option("Review requested from", "org/team"));
+   await click(option("GitHub review decision", "Review required"));
+   await click(option("Checks on head commit", "CI passed"));
+   await click(button("Apply filters"));
+-  expect(Array.from(host.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#101"]);
++  expect(Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#101"]);
+   await click(button("List"));
+-  expect(Array.from(host.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101"]);
++  expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101"]);
+   await click(button("Clear filters"));
+-  expect(host.querySelectorAll("tbody tr")).toHaveLength(cards.length);
++  expect(document.body.querySelectorAll("tbody tr")).toHaveLength(cards.length);
+ });
+ 
+ test("refresh failure preserves last available snapshot, access loss hides its cards and identity", async () => {
+   let reason = "";
+   await render(async () => {
+     if (reason) throw new Error(reason);
+     return snapshot([pr], ["Some checks unavailable"]);
+   });
+-  expect(host.textContent).toContain("Partial sync");
++  expect(document.body.textContent).toContain("Partial sync");
+   reason = "unavailable: GitHub timed out";
+   await click(button("Refresh pull requests"));
+-  expect(host.textContent).toContain("Last available snapshot");
+-  expect(host.textContent).toContain(pr.title);
++  expect(document.body.textContent).toContain("Last available snapshot");
++  expect(document.body.textContent).toContain(pr.title);
+   reason = "access: Sign in with gh";
+   await click(button("Try again"));
+-  expect(host.textContent).not.toContain(pr.title);
+-  expect(host.textContent).not.toContain("Signed in as ann");
+-  expect(host.textContent).toContain("Sign in with gh");
+-  expect(host.textContent).not.toContain("No open pull requests");
++  expect(document.body.textContent).not.toContain(pr.title);
++  expect(document.body.textContent).not.toContain("Signed in as ann");
++  expect(document.body.textContent).toContain("Sign in with gh");
++  expect(document.body.textContent).not.toContain("No open pull requests");
+ });
+ 
+ test("partial sync can be dismissed, reopened, and shown again for a new issue", async () => {
+   let warnings = ["Some replies unavailable"];
+   await render(async () => snapshot([pr], warnings));
+   await click(button("Hide sync details"));
+   expect(document.activeElement).toBe(button("Sync details"));
+   expect(button("Sync details").getAttribute("aria-expanded")).toBe("false");
+   await click(button("Refresh pull requests"));
+-  expect(host.textContent).not.toContain(warnings[0]!);
++  expect(document.body.textContent).not.toContain(warnings[0]!);
+   await click(button("Sync details"));
+-  expect(host.textContent).toContain(warnings[0]!);
++  expect(document.body.textContent).toContain(warnings[0]!);
+   await click(button("Hide sync details"));
+   warnings = ["Some checks unavailable"];
+   await click(button("Refresh pull requests"));
+-  expect(host.textContent).toContain(warnings[0]!);
++  expect(document.body.textContent).toContain(warnings[0]!);
+   await click(button("Hide sync details"));
+   warnings = [];
+   await click(button("Refresh pull requests"));
+-  expect(host.textContent).toContain("Synced");
++  expect(document.body.textContent).toContain("Synced");
+   warnings = ["Some checks unavailable"];
+   await click(button("Refresh pull requests"));
+-  expect(host.textContent).toContain(warnings[0]!);
++  expect(document.body.textContent).toContain(warnings[0]!);
+ });
+ 
+ test("a pending retry keeps the previously failed snapshot labeled stale until success", async () => {
+   let calls = 0;
+   let complete!: (value: ReviewBoardSnapshot) => void;
+   await render(async () => {
+     if (++calls === 1) return snapshot([pr]);
+     if (calls === 2) throw new Error("unavailable: GitHub timed out");
+     return new Promise(resolve => { complete = resolve; });
+   });
+   await click(button("Refresh pull requests"));
+   await click(button("Try again"));
+-  expect(host.textContent).toContain("Last available snapshot");
+-  expect(host.textContent).toContain(pr.title);
++  expect(document.body.textContent).toContain("Last available snapshot");
++  expect(document.body.textContent).toContain(pr.title);
+   await act(async () => complete(snapshot([pr])));
+-  expect(host.textContent).toContain("Synced");
+-  expect(host.textContent).not.toContain("Last available snapshot");
++  expect(document.body.textContent).toContain("Synced");
++  expect(document.body.textContent).not.toContain("Last available snapshot");
+ });
+ 
+ test("a late response for the previous project cannot replace the current one", async () => {
+   let finish!: (snapshot: ReviewBoardSnapshot) => void;
+   const old = new Promise<ReviewBoardSnapshot>((resolve) => { finish = resolve; });
+   const load: typeof fetchReviewBoard = (cwd) => cwd === "/old" ? old : Promise.resolve(snapshot([{ ...pr, title: "Current project PR" }]));
+   const key = ++renderKey;
+   await render(load, "/old", key);
+   await render(load, "/new", key);
+   await act(async () => { finish(snapshot([pr])); });
+-  expect(host.textContent).toContain("Current project PR");
+-  expect(host.textContent).not.toContain(pr.title);
++  expect(document.body.textContent).toContain("Current project PR");
++  expect(document.body.textContent).not.toContain(pr.title);
+ });
+ 
+ test("can select the connected upstream when the default repository is inaccessible", async () => {
+   const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
+     if (!repo) throw new Error("access: No access to default origin");
+     return { ...snapshot([pr]), repo, repositories: ["mine/fork", "org/repo"] };
+   };
+   await render(load, "/fork", ++renderKey, async () => ["mine/fork", "org/repo"]);
+-  const selector = host.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
++  const selector = document.body.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
+   await act(async () => {
+     selector.value = "org/repo";
+     selector.dispatchEvent(new Event("change", { bubbles: true }));
+   });
+-  expect(host.textContent).toContain(pr.title);
+-  expect(host.textContent).not.toContain("No access to default origin");
++  expect(document.body.textContent).toContain(pr.title);
++  expect(document.body.textContent).not.toContain("No access to default origin");
+ });
+ 
+ test("a denied detail read evicts the private board and invalidates an in-flight list refresh", async () => {
+   let finish!: (value: ReviewBoardSnapshot) => void;
+   let calls = 0;
+   const load: typeof fetchReviewBoard = async () => {
+     if (++calls === 1) return snapshot([pr]);
+     return new Promise((resolve) => { finish = resolve; });
+   };
+   await render(load, "/private", ++renderKey, async () => [], async () => { throw new Error("access: Permission revoked"); });
+   await click(button("Refresh pull requests"));
+-  await click(host.querySelector<HTMLButtonElement>(".review-card")!);
+-  expect(host.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+-  expect(host.textContent).toContain("Permission revoked");
+-  expect(host.textContent).not.toContain("Signed in as ann");
+-  expect(host.textContent).not.toContain(pr.title);
++  await click(document.body.querySelector<HTMLButtonElement>(".review-card")!);
++  expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
++  expect(document.body.textContent).toContain("Permission revoked");
++  expect(document.body.textContent).not.toContain("Signed in as ann");
++  expect(document.body.textContent).not.toContain(pr.title);
+   await act(async () => { finish(snapshot([pr])); });
+-  expect(host.textContent).not.toContain(pr.title);
+-  expect(host.textContent).toContain("Permission revoked");
++  expect(document.body.textContent).not.toContain(pr.title);
++  expect(document.body.textContent).toContain("Permission revoked");
+ });
+ 
+ test("a changed GitHub account closes a filter dialog and removes the previous account's PR data", async () => {
+   let finish!: (value: ReviewBoardSnapshot) => void;
+   let calls = 0;
+   await render(async () => {
+     if (++calls === 1) return snapshot([pr]);
+     return new Promise((resolve) => { finish = resolve; });
+   });
+   await click(button("Refresh pull requests"));
+   await click(button("Filters"));
+-  expect(host.textContent).toContain("Filter pull requests");
++  expect(document.body.textContent).toContain("Filter pull requests");
+   await act(async () => { finish({ ...snapshot([]), viewer: "new-account" }); });
+-  expect(host.textContent).not.toContain("Filter pull requests");
+-  expect(host.textContent).not.toContain(pr.title);
+-  expect(host.textContent).toContain("Signed in as new-account");
++  expect(document.body.textContent).not.toContain("Filter pull requests");
++  expect(document.body.textContent).not.toContain(pr.title);
++  expect(document.body.textContent).toContain("Signed in as new-account");
+   expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+ });
+ 
++test("a changed GitHub account returns focus to search from the portaled PR watcher and Review rules dialogs", async () => {
++  for (const opener of ["PR watcher · Off", "Review rules"]) {
++    let finish!: (value: ReviewBoardSnapshot) => void;
++    let calls = 0;
++    await render(async () => {
++      if (++calls === 1) return snapshot([pr]);
++      return new Promise((resolve) => { finish = resolve; });
++    }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
++    async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
++    await click(button("Refresh pull requests"));
++    await click(button(opener));
++    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
++    expect(dialog.parentElement?.parentElement).toBe(document.body);
++    await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
++    expect(dialog.contains(document.activeElement)).toBe(true);
++    await act(async () => { finish({ ...snapshot([]), viewer: "new-account-" + opener.length }); });
++    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
++    expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
++  }
++});
++
+ test("historical states are requested lazily and a merged pull request appears in Done", async () => {
+   const scopes: string[] = [];
+   const merged: ReviewCard = { ...pr, number: 301, state: "merged", title: "Merged colleague PR" };
+   await render(async (_cwd, state) => {
+     scopes.push(state);
+     return snapshot(state === "open" ? [pr] : [pr, merged]);
+   });
+   await click(button("Filters"));
+   await click(option("PR state", "Open"));
+   await click(option("PR state", "Draft"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(scopes).toEqual(["open", "merged"]);
+-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
+-  expect(host.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
+-  expect(host.textContent).not.toContain(pr.title);
++  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
++  expect(document.body.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
++  expect(document.body.textContent).not.toContain(pr.title);
+ });
+ 
+ test("the period filters the GitHub request and is saved for the repository", async () => {
+   const cutoffs: (string | undefined)[] = [];
+   await render(async (_cwd, _state, _repo, _signal, _viewer, since) => {
+     cutoffs.push(since);
+     return snapshot([pr]);
+   });
+   await click(button("Filters"));
+-  const period = host.querySelector<HTMLSelectElement>('[aria-label="PR updated within"]')!;
++  const period = document.body.querySelector<HTMLSelectElement>('[aria-label="PR updated within"]')!;
+   await act(async () => {
+     period.value = "7";
+     period.dispatchEvent(new Event("change", { bubbles: true }));
+   });
+   const expected = Date.now() - 7 * 86_400_000;
+   await click(button("Apply filters"));
+   expect(cutoffs[0]).toBeUndefined();
+   expect(Math.abs(Date.parse(cutoffs.at(-1)!) - expected) < 5_000).toBe(true);
+   expect(readReviewFilters(reviewFilterKey("/project", "repo1", "ann")).updatedWithin).toBe(7);
+-  expect(host.textContent).toContain("Updated · Last 7 days");
++  expect(document.body.textContent).toContain("Updated · Last 7 days");
+ });
+ 
+ test("a board refresh started before a local launch preserves the live lane after the drawer closes", async () => {
+   let finish!: (s: ReviewBoardSnapshot) => void;
+   let calls = 0;
+   const load: typeof fetchReviewBoard = async () => ++calls === 1 ? snapshot([pr]) : new Promise(resolve => { finish = resolve; });
+   const loadDetail: typeof fetchReviewDetail = async () => ({ version: 1, repositoryId: "repo1", viewer: "ann",
+     number: pr.number, headSha: pr.headSha, fetchedAt: pr.updatedAt, threads: [], reviews: [], comments: [], checks: [], warnings: [] });
+   let finishLaunch!: () => void;
+   const runCommand: typeof reviewRun = async (_cwd, _key, action) => {
+     if (action.kind !== "status") await new Promise<void>(resolve => { finishLaunch = resolve; });
+     return { version: 1, runs: action.kind === "status" ? [] : [{
+     id: "1", state: "running", phase: "Reading", reviewerProgress: { wave: 3, planned: 4, finished: 2, completed: 2, sessions: [] }, baseSha: pr.baseSha, headSha: pr.headSha, source: "manual", reason: "",
+     createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, result: null,
+   }] }; };
+   await render(load, "/project", ++renderKey, undefined, loadDetail, runCommand);
+   await click(button("Refresh pull requests"));
+-  await click(host.querySelector<HTMLButtonElement>(".review-card")!);
++  await click(document.body.querySelector<HTMLButtonElement>(".review-card")!);
+   await click(button("Start review"));
+   await click(button("Close details"));
+   await act(async () => finishLaunch());
+   await act(async () => finish(snapshot([pr])));
+-  const tile = host.querySelector('section[aria-label="In review"] .review-card')!;
++  const tile = document.body.querySelector('section[aria-label="In review"] .review-card')!;
+   expect(tile.textContent).toContain(pr.title);
+   expect(tile.textContent).toContain("Wave 3");
+   expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
+   await click(button("List"));
+-  expect(host.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
++  expect(document.body.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
+ });
+ 
+ test("Review controls the schedule for the base repository and displays persisted PR activity", async () => {
+   let state = watcherOff;
+   const actions: ReviewWatcherAction[] = [];
+   const watcher: typeof reviewWatcher = async (cwd, target, action) => {
+     expect(cwd).toBe("/project");
+     if (!target) return watcherOff;
+     expect(target).toEqual({ repo: "org/repo", repositoryId: "repo1", viewer: "ann" });
+     actions.push(action);
+     if (action.kind === "enable") state = { ...state, state: "enabled", installed: true, intervalMinutes: action.intervalMinutes };
+     if (action.kind === "pause") return { ...state, state: "paused", installed: false, events: [], historyAvailable: false };
+     if (action.kind === "resume") state = { ...state, state: "enabled", installed: true, lastSuccessAt: null, lastError: null };
+     return state;
+   };
+   let reads = 0;
+   await render(async () => {
+     reads++;
+     return snapshot([{ ...pr, title: `Snapshot ${reads}` }]);
+   }, "/project", ++renderKey, undefined, undefined, undefined, watcher);
+   const refresh = button("Refresh pull requests");
+   expect(refresh.textContent).toContain("Refresh");
+   await click(refresh);
+   expect(reads).toBe(2);
+-  expect(host.textContent).toContain("Snapshot 2");
++  expect(document.body.textContent).toContain("Snapshot 2");
+   expect(actions.every(action => action.kind === "status")).toBe(true);
+   await click(button("PR watcher · Off"));
+   const changeMinutes = (n: string) => act(async () => {
+-    const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
++    const input = document.body.querySelector<HTMLInputElement>('input[type="number"]')!;
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, n);
+     input.dispatchEvent(new Event("input", { bubbles: true }));
+   });
+   await changeMinutes("0");
+   expect(button("Enable watcher").disabled).toBe(true);
+   await changeMinutes("7");
+   await click(button("Enable watcher"));
+   expect(actions.at(-1)).toEqual({ kind: "enable", intervalMinutes: 7 });
+-  expect(host.textContent).toContain("Every 7 minutes");
+-  expect(host.textContent).toContain("first complete poll");
++  expect(document.body.textContent).toContain("Every 7 minutes");
++  expect(document.body.textContent).toContain("first complete poll");
+   const at = "2026-11-19T02:15:00Z";
+   state = { ...state, lastSuccessAt: at, lastAttemptAt: at, lastError: "Connection timed out",
+     events: [{ kind: "push", at, number: 101, description: "New commits", headSha: "e" }] };
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+-  expect(host.querySelector('[role="dialog"]')?.textContent).toContain("#101 New commits");
+-  expect(host.querySelectorAll('time[datetime="' + at + '"]')).toHaveLength(3);
+-  expect(host.textContent).toContain("Connection timed out");
++  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("#101 New commits");
++  expect(document.body.querySelectorAll('time[datetime="' + at + '"]')).toHaveLength(3);
++  expect(document.body.textContent).toContain("Connection timed out");
+   state = { ...state, lastError: null, recoveryWarning: "One earlier review could not be recovered." };
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+   expect(button("PR watcher · Watching").disabled).toBe(false);
+-  expect(host.textContent).toContain("One earlier review could not be recovered.");
++  expect(document.body.textContent).toContain("One earlier review could not be recovered.");
+   await click(button("Pause watcher"));
+-  expect(host.textContent).toContain("fresh baseline");
+-  expect(host.textContent).toContain("Reconnect to GitHub to view PR activity.");
+-  expect(host.textContent).not.toContain("No changes recorded yet.");
++  expect(document.body.textContent).toContain("fresh baseline");
++  expect(document.body.textContent).toContain("Reconnect to GitHub to view PR activity.");
++  expect(document.body.textContent).not.toContain("No changes recorded yet.");
+   await click(button("Resume watcher"));
+   expect(actions.at(-1)).toEqual({ kind: "resume" });
+   await click(button("Close"));
+   expect(button("PR watcher · Watching").disabled).toBe(false);
+ });
+ 
+ test("an access refusal while enabling the watcher evicts the private board", async () => {
+   const watcher: typeof reviewWatcher = async (_cwd, _target, action) => {
+     if (action.kind === "enable") throw new Error("access: GitHub access was revoked.");
+     return watcherOff;
+   };
+   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcher);
+-  expect(host.textContent).toContain(pr.title);
++  expect(document.body.textContent).toContain(pr.title);
+   await click(button("PR watcher · Off"));
+   await click(button("Enable watcher"));
+-  expect(host.textContent).toContain("GitHub access was revoked");
+-  expect(host.textContent).not.toContain(pr.title);
++  expect(document.body.textContent).toContain("GitHub access was revoked");
++  expect(document.body.textContent).not.toContain(pr.title);
+ });
+ 
+ test("an offline board exposes the unique local pause control without revealing cached events or enabling schedules", async () => {
+   const calls: string[] = [];
+   await render(async () => { throw new Error("unavailable: No network"); }, "/project", ++renderKey, undefined, undefined, undefined,
+     async (_cwd, target, action) => {
+       expect(target).toBeNull();
+       calls.push(action.kind);
+       return { ...watcherOff, state: action.kind === "pause" ? "paused" : "enabled", installed: action.kind !== "pause",
+         lastError: "Private repo name", events: [{ kind: "push", at: pr.updatedAt, number: 123, description: "Private commit", headSha: "f" }] };
+     });
+-  await click(host.querySelector<HTMLButtonElement>('button[aria-label^="PR watcher"]')!);
+-  expect(host.textContent).not.toContain("Private");
+-  expect(host.textContent).not.toContain("Enable watcher");
++  await click(document.body.querySelector<HTMLButtonElement>('button[aria-label^="PR watcher"]')!);
++  expect(document.body.textContent).not.toContain("Private");
++  expect(document.body.textContent).not.toContain("Enable watcher");
+   await click(button("Pause watcher"));
+   expect(calls.at(-1)).toBe("pause");
+-  expect(host.textContent).not.toContain("Resume watcher");
++  expect(document.body.textContent).not.toContain("Resume watcher");
+ });
+ 
+ test("a stale watcher read cannot undo a pause and changing account clears private watcher history", async () => {
+   let account = "ann";
+   let delay = false;
+   let finish!: (s: ReviewWatcherSnapshot) => void;
+   const enabled: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true,
+     events: [{ kind: "push", at: pr.updatedAt, number: 101, description: "Ann's private event", headSha: "f" }] };
+   await render(async () => ({ ...snapshot([pr]), viewer: account }), "/project", ++renderKey, undefined, undefined, undefined,
+     async (_cwd, target, action) => {
+       if (target?.viewer === "new-viewer") return watcherOff;
+       if (action.kind === "pause") return { ...enabled, state: "paused", installed: false };
+       if (delay) return new Promise(resolve => { finish = resolve; });
+       return enabled;
+     });
+   await click(button("PR watcher · Watching"));
+   delay = true;
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+   await click(button("Pause watcher"));
+   await act(async () => finish(enabled));
+   expect(button("Resume watcher").disabled).toBe(false);
+-  expect(host.textContent).toContain("Ann's private event");
++  expect(document.body.textContent).toContain("Ann's private event");
+   account = "new-viewer";
+   await click(button("Close"));
+   await click(button("Refresh pull requests"));
+   await click(button("PR watcher · Off"));
+-  expect(host.textContent).not.toContain("Ann's private event");
++  expect(document.body.textContent).not.toContain("Ann's private event");
+ });
+ 
+ const automationRule: ReviewRule = { id: "rule-1", name: "Team changes", enabled: true, event: "review_requested", author: "",
+   assignee: "", reviewer: "org/team", requireGreen: true, budgetMinutes: 15, budgetTokens: 50000 };
+ 
+ function rulesBackend(rules: ReviewRule[]) {
+   let state: ReviewRuleSnapshot = { version: 1, choice: { mode: "project" }, rules, activity: [] };
+   const actions: ReviewRuleAction[] = [];
+   const command: typeof reviewRules = async (_cwd, key, action) => {
+     expect(key).toEqual({ repo: "org/repo", repositoryId: "repo1", viewer: "ann" });
+     actions.push(action);
+     if (action.kind === "save") state = { ...state, rules: [...state.rules.filter(r => r.id !== action.rule.id), action.rule] };
+     if (action.kind === "delete") state = { ...state, rules: state.rules.filter(r => r.id !== action.id) };
+     if (action.kind === "mode") state = { ...state, choice: action.choice };
+     return state;
+   };
+   return { actions, command };
+ }
+ 
++test("toolbar dialogs render under document.body so the board's containment cannot trap their scrim", async () => {
++  const backend = rulesBackend([]);
++  await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
++  const trapped = (dialog: Element | null) => !dialog || dialog.closest(".review-board") !== null || dialog.closest(".overlay")?.parentElement !== document.body;
++  await click(button("Review rules"));
++  expect(trapped(document.body.querySelector('[role="dialog"]'))).toBe(false);
++  expect(document.body.querySelector('.review-board [role="dialog"]')).toBeNull();
++  await click(button("Close"));
++  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
++  await click(button("PR watcher · Off"));
++  expect(trapped(document.body.querySelector('[role="dialog"]'))).toBe(false);
++  expect(document.body.querySelector('.review-board [role="dialog"]')).toBeNull();
++  expect(button("PR watcher · Off").getAttribute("title")).toBe("PR watcher · Off");
++});
++
+ test("project rule previews its scope and budgets, can be disabled, edited and deleted", async () => {
+   const backend = rulesBackend([]);
+   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
+   await click(button("Review rules"));
+-  const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
++  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+   expect(document.activeElement).toBe(dialog);
+   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+   expect(document.activeElement).toBe(button("Close"));
+   await click(button("New rule"));
+-  const field = (text: string) => Array.from(host.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
++  const field = (text: string) => Array.from(document.body.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
+   const fill = (text: string, value: string) => act(async () => {
+     const input = field(text);
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+     input.dispatchEvent(new Event("input", { bubbles: true }));
+   });
+   expect(field("Token limit (optional)").value).toBe("");
+   expect(field("Token limit (optional)").required).toBe(false);
+   await fill("Rule name", "   ");
+   await click(button("Save rule"));
+   const name = field("Rule name");
+   expect(document.activeElement).toBe(name);
+   expect(name.getAttribute("aria-invalid")).toBe("true");
+   expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a rule name.");
+   expect(backend.actions.some(action => action.kind === "save")).toBe(false);
+   await fill("Rule name", automationRule.name);
+   expect(name.hasAttribute("aria-invalid")).toBe(false);
+   await click(button("Save rule"));
+   expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { budgetTokens: null } });
+   await click(button("Edit"));
+   await fill("Requested reviewer", "org/team");
+   await fill("Time limit (minutes)", "15");
+   await fill("Token limit (optional)", "300000");
+   expect(field("Token limit (optional)").checkValidity()).toBe(true);
+   await fill("Token limit (optional)", "50000");
+-  expect(host.querySelector('[aria-label="Rule preview"]')?.textContent).toContain("org/team once CI passes for that commit");
++  expect(document.body.querySelector('[aria-label="Rule preview"]')?.textContent).toContain("org/team once CI passes for that commit");
+   await click(button("Save rule"));
+   const creation = backend.actions.at(-1);
+   expect(creation?.kind).toBe("save");
+   if (creation?.kind !== "save") throw new Error("rule save missing");
+   expect(creation.rule.id.length).toBeGreaterThan(0);
+   expect(creation.rule).toEqual({ ...automationRule, id: creation.rule.id });
+   await click(button("Disable"));
+   expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { enabled: false } });
+   await click(button("Edit"));
+   expect(field("Token limit (optional)").value).toBe("50000");
+   await fill("Token limit (optional)", "");
+   await fill("PR author", "jo");
+   await click(button("Save rule"));
+   expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { author: "jo", enabled: false, budgetTokens: null } });
+-  expect(host.textContent).toContain("No token limit");
++  expect(document.body.textContent).toContain("No token limit");
+   await click(button("Delete")); await click(button("Confirm delete"));
+   expect(backend.actions.at(-1)?.kind).toBe("delete");
+-  expect(host.textContent).toContain("No automatic review rules");
++  expect(document.body.textContent).toContain("No automatic review rules");
+ });
+ 
+ test("PR mode pins an enabled rule, preserves manual launch and scopes its history to the open card", async () => {
+   const backend = rulesBackend([automationRule]);
+   const command: typeof reviewRules = async (...args) => ({ ...await backend.command(...args), activity: [
+     { number: 101, at: pr.updatedAt, headSha: pr.headSha, reason: "Team changes is waiting for green CI", state: "waiting" },
+     { number: 102, at: pr.updatedAt, headSha: pr.headSha, reason: "Unrelated PR reason", state: "ready" },
+     { number: 101, at: pr.updatedAt, headSha: pr.headSha, reason: "Team changes linked to an earlier manual attempt", state: "linked", runId: "manual-run-id" },
+   ]});
+   const detail: typeof fetchReviewDetail = async () => ({ version: 1, number: pr.number, repo: "org/repo", viewer: "ann",
+     repositoryId: "repo1", headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], threads: [], reviews: [], checks: [], warnings: [] });
+   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, detail, async () => ({ version: 1, runs: [] }), watcherDisabled, command);
+-  await click(host.querySelector<HTMLElement>(".review-card")!); await click(button("Automation"));
+-  const select = host.querySelector<HTMLSelectElement>(".pr-automation select")!;
++  await click(document.body.querySelector<HTMLElement>(".review-card")!); await click(button("Automation"));
++  const select = document.body.querySelector<HTMLSelectElement>(".pr-automation select")!;
+   expect(select.value).toBe("project");
+-  expect(host.textContent).toContain("Team changes is waiting for green CI");
+-  expect(host.textContent).not.toContain("Unrelated PR reason");
+-  const linked = Array.from(host.querySelectorAll(".automation-history li")).find(row => row.textContent?.includes("earlier manual attempt"));
++  expect(document.body.textContent).toContain("Team changes is waiting for green CI");
++  expect(document.body.textContent).not.toContain("Unrelated PR reason");
++  const linked = Array.from(document.body.querySelectorAll(".automation-history li")).find(row => row.textContent?.includes("earlier manual attempt"));
+   expect(linked?.querySelector("strong")?.textContent).toBe("Linked");
+   expect(linked?.textContent).toContain("Run manual-r");
+   for (const value of ["auto/rule-1", "manual", "project"]) {
+     await act(async () => { select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); });
+     await click(button("Save mode"));
+     expect(backend.actions.at(-1)).toEqual({ kind: "mode", number: 101, choice: value === "auto/rule-1" ? { mode: "auto", ruleId: "rule-1" } : { mode: value } });
+     expect(button("Start review").disabled).toBe(false);
+   }
+ });
+ 
+ test("a rules dialog pending for a previous account cannot expose that account's rules or change repository state", async () => {
+   let resolveRules!: (s: ReviewRuleSnapshot) => void;
+   const old = () => new Promise<ReviewRuleSnapshot>(resolve => { resolveRules = resolve; });
+   const board = snapshot([pr]);
+   const load: typeof fetchReviewBoard = async () => ({ ...board });
+   await render(load, "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, old);
+   await click(button("Review rules"));
+-  expect(host.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
++  expect(document.body.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
+   board.viewer = "other";
+   await click(button("Refresh pull requests"));
+   await act(async () => resolveRules({ version: 1, rules: [{ ...automationRule, name: "Previous account secret rule" }], choice: { mode: "project" }, activity: [] }));
+-  expect(host.querySelector('[role="dialog"]')).toBeNull();
+-  expect(host.textContent).not.toContain("Previous account secret rule");
++  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
++  expect(document.body.textContent).not.toContain("Previous account secret rule");
+ });
+ 
+ test("project tabs reuse prefetched cards until refresh and evict them on denied access", async () => {
+   const key = ++renderKey;
+   let problem = "";
+   let reads = 0;
+   const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
+     reads++;
+     if (problem) throw new Error(problem);
+     return { ...snapshot([{ ...pr, title: repo === "org/upstream" ? "Upstream card" : "Fork card" }]), repo: repo ?? "org/fork", repositories: ["org/fork","org/upstream"] };
+   };
+   const show = (active: boolean) => act(async () => root.render(createElement(ReviewBoard, {
+     key, cwd: "/project", flows: [], onOpenFlow: () => {}, active, load, watcherCommand: watcherDisabled, listRepositories: async () => [],
+   })));
+   await show(false);
+   expect(reads).toBe(1);
+   await show(true);
+   expect(reads).toBe(1);
+-  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
++  const select = document.body.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
+   await act(async () => { select.value = "org/upstream"; select.dispatchEvent(new Event("change", {bubbles: true})); });
+-  expect(host.textContent).toContain("Upstream card");
++  expect(document.body.textContent).toContain("Upstream card");
+   await show(false);
+-  expect(host.textContent).not.toContain("Upstream card");
++  expect(document.body.textContent).not.toContain("Upstream card");
+   problem = "unavailable: The dev bridge connection closed.";
+   await show(true);
+-  expect(host.textContent).toContain("Upstream card");
++  expect(document.body.textContent).toContain("Upstream card");
+   expect(reads).toBe(2);
+   await click(button("Refresh pull requests"));
+   expect(reads).toBe(3);
+-  expect(host.textContent).toContain("Last available snapshot");
+-  expect(host.textContent).not.toContain("Fork card");
++  expect(document.body.textContent).toContain("Last available snapshot");
++  expect(document.body.textContent).not.toContain("Fork card");
+   problem = "access: Grant revoked";
+   await click(button("Refresh pull requests"));
+   await show(false);
+   problem = "unavailable: offline";
+   await show(true);
+-  expect(host.textContent).not.toContain("Upstream card");
++  expect(document.body.textContent).not.toContain("Upstream card");
+ });
+ 
+ test("successful watcher ticks refresh cached cards in the background once per tick", async () => {
+   const key = ++renderKey;
+   let reads = 0;
+   let state: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
+   const watch = async () => state;
+   const load = async () => snapshot([{ ...pr, title: "Card revision " + ++reads }]);
+   const show = (active: boolean) => act(async () => root.render(createElement(ReviewBoard, {
+     key, cwd: "/project", flows: [], onOpenFlow() {}, active, load, watcherCommand: watch,
+   })));
+   const readStatus = () => act(async () => { window.dispatchEvent(new Event("focus")); });
+   await show(false);
+   expect(reads).toBe(1);
+   state = { ...state, lastSuccessAt: "2026-11-20T12:00:00Z" };
+   await readStatus();
+   await readStatus();
+   expect(reads).toBe(2);
+   await show(true);
+-  expect(host.textContent).toContain("Card revision 2");
++  expect(document.body.textContent).toContain("Card revision 2");
+   state = { ...state, state: "paused", lastSuccessAt: "2026-11-20T12:05:00Z" };
+   await readStatus();
+   expect(reads).toBe(2);
+   await click(button("Refresh pull requests"));
+-  expect(host.textContent).toContain("Card revision 3");
++  expect(document.body.textContent).toContain("Card revision 3");
+ });
+ 
+ test("a missing author has a named filter and consistent reason in board and list", async () => {
+   await render(async () => snapshot([pr, {...pr, author:"", number:1002, title:"From a deleted account"}]));
+   await click(button("Filters"));
+   await click(option("Author","Unknown author"));
+   await click(button("Apply filters"));
+-  expect(host.textContent).toContain("Author · Unknown author");
+-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
+-  expect(host.querySelector(".review-card")!.textContent).toContain("Unknown author");
++  expect(document.body.textContent).toContain("Author · Unknown author");
++  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
++  expect(document.body.querySelector(".review-card")!.textContent).toContain("Unknown author");
+   await click(button("List"));
+-  expect(host.querySelector("tbody")!.textContent).toContain("Unknown author");
++  expect(document.body.querySelector("tbody")!.textContent).toContain("Unknown author");
+ });
+ 
+ test("marking a new addressed reply locally clears its board and list reason", async () => {
+   const card = { ...pr, reviewers: [], decision: null, addressedReplyIds: ["reply-addr-test"] };
+   const data = { version: 1 as const, viewer:"ann", repositoryId:"repo1", number:card.number,
+     fetchedAt:pr.updatedAt, headSha:pr.headSha, comments:[{id:"reply-addr-test",author:"bob",own:false,body:"@ann ready",url:"",createdAt:pr.updatedAt}], reviews:[],threads:[],checks:[],warnings:[] };
+   await render(async () => snapshot([card]), "/project", ++renderKey, undefined, async () => data, async () => ({version:1,runs:[]}));
+-  expect(host.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
+-  await click(host.querySelector<HTMLElement>(".review-card")!);
++  expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
++  await click(document.body.querySelector<HTMLElement>(".review-card")!);
+   await click(button("Mark 1 as read"));
+   await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
+   await click(button("Close details"));
+-  expect(host.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
++  expect(document.body.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
+   await click(button("List"));
+-  expect(host.querySelector("tbody")!.textContent).not.toContain("New reply to you");
++  expect(document.body.querySelector("tbody")!.textContent).not.toContain("New reply to you");
+ });
+ 
+ test("an offline return from merged history restores only the earlier open query for this viewer", async () => {
+   let offline = false;
+   await render(async (_cwd, scope) => {
+     if (offline) throw new Error("unavailable: network");
+     return snapshot(scope === "open" ? [pr] : [{ ...pr, number: 203, state:"merged", title:"Old merged history" }]);
+   });
+   await click(button("Filters"));
+   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state","Merged"));
+   await click(button("Apply filters"));
+-  expect(host.textContent).toContain("Old merged history");
++  expect(document.body.textContent).toContain("Old merged history");
+   offline = true;
+   await click(button("Clear filters"));
+-  expect(host.textContent).toContain("Last available snapshot");
+-  expect(host.textContent).toContain(pr.title);
+-  expect(host.textContent).not.toContain("Old merged history");
++  expect(document.body.textContent).toContain("Last available snapshot");
++  expect(document.body.textContent).toContain(pr.title);
++  expect(document.body.textContent).not.toContain("Old merged history");
+ });
+ 
+ test("details can be resized and stay closed if a removed PR later returns", async () => {
+   let cards = [pr];
+   await render(async () => snapshot(cards), "/project", ++renderKey, undefined, async () => ({
+     version: 1, viewer:"ann", repositoryId:"repo1", number: pr.number, headSha:pr.headSha, fetchedAt:pr.updatedAt,
+     comments:[],reviews:[],threads:[],checks:[],warnings:[],
+   }), async () => ({ version:1, runs:[] }));
+-  await click(host.querySelector<HTMLElement>(".review-card")!);
+-  const panel = host.querySelector<HTMLElement>(".review-detail-panel")!;
++  await click(document.body.querySelector<HTMLElement>(".review-card")!);
++  const panel = document.body.querySelector<HTMLElement>(".review-detail-panel")!;
+   expect(panel.tagName).toBe("ASIDE");
+-  const divider = host.querySelector<HTMLElement>('[aria-label="Resize pull request details"]')!;
++  const divider = document.body.querySelector<HTMLElement>('[aria-label="Resize pull request details"]')!;
+   await act(async () => { divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+   expect(panel.style.width).toBe("528px");
+   cards = [];
+   await click(button("Refresh pull requests"));
+-  expect(host.querySelector(".review-detail-panel")).toBeNull();
++  expect(document.body.querySelector(".review-detail-panel")).toBeNull();
+   cards = [pr];
+   await click(button("Refresh pull requests"));
+-  expect(host.querySelector(".review-detail-panel")).toBeNull();
++  expect(document.body.querySelector(".review-detail-panel")).toBeNull();
+ });
+ 
+ test("clearing filters preserves the independently entered search", async () => {
+   await render(async () => snapshot([pr, { ...pr, number:102, title:"Another change" }]));
+-  const input = host.querySelector<HTMLInputElement>('[aria-label="Search pull requests"]')!;
++  const input = document.body.querySelector<HTMLInputElement>('[aria-label="Search pull requests"]')!;
+   await act(async () => {
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "colleague");
+     input.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await click(button("Filters"));
+   await click(option("Author","lee"));
+   await click(button("Apply filters"));
+   await click(button("Clear filters"));
+   expect(input.value).toBe("colleague");
+-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
++  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+ });
+ 
+ test("one board tick updates every active PR from scoped badges and access denial clears the board", async () => {
+   const clock: Window = window;
+   const schedule = clock.setTimeout;
+   let tick: (() => unknown) | undefined;
+   clock.setTimeout = (fn, ms, ...args) => {
+     if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
+     tick = () => fn(...args); return -77;
+   };
+   const live = (number: number) => ({ ...pr, number, localReview: {active:true, ready:false} });
+   const cards = [live(101), live(102), { ...pr, number: 103 }];
+   let polls = 0;
+   try {
+     await act(async () => { root.render(createElement(ReviewBoard, {
+       key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
+       watcherCommand: watcherDisabled,
+       loadBadges: async (_cwd, key, subjects) => {
+         polls++;
+         expect(key).toEqual({ repo:"org/repo", viewer:"ann", repositoryId:"repo1" });
+         if (polls > 1) throw Error("access: Repository access revoked.");
+         expect(subjects.map(c => c.number)).toEqual([101,102]);
+         return {version:1, ...key, cards:[
+           {...subjects[0]!,localReview:{active:false,ready:true}},
+           {...subjects[1]!,localReview:{active:true,ready:false,progress:{wave:2,planned:5,finished:3,completed:3}}},
+         ]};
+       },
+     })); });
+     expect(typeof tick).toBe("function");
+     await act(async () => { await tick!(); });
+     expect(polls).toBe(1);
+-    expect(host.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
+-    expect(host.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
+-    expect(host.textContent).toContain("3 of 5");
++    expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
++    expect(document.body.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
++    expect(document.body.textContent).toContain("3 of 5");
+     await act(async () => { await tick!(); });
+-    expect(host.textContent).toContain("Repository access revoked");
+-    expect(host.textContent).not.toContain(pr.title);
++    expect(document.body.textContent).toContain("Repository access revoked");
++    expect(document.body.textContent).not.toContain(pr.title);
+   } finally { clock.setTimeout = schedule; }
+ });
+ 
+ test("board and list expose GitHub state and pending requests separately and run the clicked revision", async () => {
+   const other = { ...pr, number: 105, decision: "CHANGES_REQUESTED" as const, headSha: "other-head" };
+   const starts: number[] = [];
+   const run: typeof reviewRun = async (_cwd, target, action) => {
+     if (action.kind === "start") {
+       expect(target.viewer).toBe("ann");
+       expect(target.repositoryId).toBe("repo1");
+       expect(action.headSha).toBe(other.headSha);
+       starts.push(target.number);
+     }
+     return { version: 1, runs: [] };
+   };
+   await render(async () => snapshot([pr, other]), "/project", ++renderKey, undefined, async (_cwd, _repo, number) => ({
+     version: 1, viewer: "ann", repositoryId: "repo1", number, headSha: other.headSha,
+     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+   }), run);
+   for (const mode of ["Board", "List"]) {
+     await click(button(mode));
+-    const tags = [...host.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
++    const tags = [...document.body.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
+     expect(Array.from(tags!.children, child => child.textContent)).toEqual(["Open", "Changes requested", "Review requested"]);
+     await click(button("Run review for #105"));
+     expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+     expect(starts).toHaveLength(mode === "Board" ? 1 : 2);
+     await click(button("Close details"));
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 756,764 @@
++  const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
++  for (const mode of ["Board", "List"]) {
++    const calls: string[] = [];
++    await render(async () => snapshot([outdated]), "/project", ++renderKey,
++      undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
++        headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
++      async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
++    await click(button(mode));
++    expect(document.body.textContent).toContain("Outdated review · abcdef0");
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 766,779 @@
++    expect(calls).toContain("start");
++  }
++});
++
++test("an outdated review shows as a secondary line under the attention reason in board and list", async () => {
++  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
++  await render(async () => snapshot([stale]));
++  for (const mode of ["Board", "List"]) {
++    await click(button(mode));
++    expect(document.body.textContent).toContain("Review requested");
++    expect(document.body.querySelector(".review-note")?.textContent).toBe("Outdated review · abcdef0");
++  }
++});
++
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 808,1033 @@
++test("a badge whose only change is the outdated review counts as changed", () => {
++  const base = { active: false, ready: false };
++  const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };
++  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
++  expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
++  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
++  expect(badgesEqual(a, base)).toBe(false);
++  expect(badgesEqual(base, a)).toBe(false);
++});
++
+ test("opening a running review from its badge action only reads the run", async () => {
+   const calls: string[] = [];
+   await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey,
+     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+   await click(button("View review for #101"));
+   expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+   expect(calls).toEqual(["status"]);
+ });
+ 
+ test("applied filters survive cold board mounts within the verified project, repository and account", async () => {
+   let viewer = "ann", repositoryId = "repo1";
+   const scopes: string[] = [];
+   const load: typeof fetchReviewBoard = async (_cwd, state) => {
+     scopes.push(state);
+     return { ...snapshot([pr, { ...pr, state: "merged", number: 303 }, { ...pr, number: 304, state: "merged", author: "bob" }]), viewer, repositoryId };
+   };
+   await render(load);
+   await click(button("Filters"));
+   await click(option("Author", "lee"));
+   await click(option("PR state", "Open"));
+   await click(option("PR state", "Draft"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(scopes).toEqual(["open", "merged"]);
+ 
+   scopes.length = 0;
+   viewer = "ANN";
+   await render(load);
+   expect(scopes).toEqual(["open", "merged"]);
+-  expect([...host.querySelectorAll(".review-card .flow-id")].map(el => el.textContent)).toEqual(["#303"]);
++  expect([...document.body.querySelectorAll(".review-card .flow-id")].map(el => el.textContent)).toEqual(["#303"]);
+   await click(button("Filters (2)"));
+   await click(option("Author", "bob"));
+   await click(button("Cancel"));
+ 
+   viewer = "colleague";
+   await render(load);
+-  expect(host.querySelector(".review-active-filters")).toBeNull();
+-  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
++  expect(document.body.querySelector(".review-active-filters")).toBeNull();
++  expect(document.body.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
+   viewer = "ann";
+   repositoryId = "repo2";
+   await render(load);
+-  expect(host.querySelector(".review-active-filters")).toBeNull();
++  expect(document.body.querySelector(".review-active-filters")).toBeNull();
+   repositoryId = "repo1";
+   await render(load, "/second-project");
+-  expect(host.querySelector(".review-active-filters")).toBeNull();
++  expect(document.body.querySelector(".review-active-filters")).toBeNull();
+ 
+   await render(load);
+-  expect(host.querySelector(".review-active-filters")?.textContent).toContain("Author · lee");
+-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
++  expect(document.body.querySelector(".review-active-filters")?.textContent).toContain("Author · lee");
++  expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+   await click(button("Clear filters"));
+   await render(load);
+-  expect(host.querySelector(".review-active-filters")).toBeNull();
+-  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
++  expect(document.body.querySelector(".review-active-filters")).toBeNull();
++  expect(document.body.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
+ });
+ 
+ test("saved filters reject malformed data and unsupported versions and tolerate unavailable browser storage", () => {
+   const key = reviewFilterKey("/project", "R", "ann");
+   for (const value of ["broken", "null", '{"version":1,"filters":[]}', '{"version":2,"filters":{"author":["lee"]}}',
+     '{"version":1,"filters":{"state":["future"]}}', '{"version":1,"filters":{"assignee":"lee"}}']) {
+     localStorage.setItem(key, value);
+     expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
+   }
+   localStorage.setItem(key, JSON.stringify({ version: 1, filters: { author: ["lee", "lee"], ci: ["failed"] } }));
+   expect(readReviewFilters(key)).toEqual({ ...EMPTY_FILTERS, author: ["lee"], ci: ["failed"] });
+   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage")!;
+   try {
+     Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("Storage unavailable"); } });
+     expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
+     expect(() => saveReviewFilters(key, { ...EMPTY_FILTERS, author: ["lee"] })).not.toThrow();
+   } finally { Object.defineProperty(globalThis, "localStorage", descriptor); }
+ });
+ 
+ test("filter editing waits for the first verified snapshot before restoring saved settings", async () => {
+   const key = reviewFilterKey("/waiting", "repo1", "ann");
+   saveReviewFilters(key, { ...EMPTY_FILTERS, author: ["lee"] });
+   let resolve!: (value: ReviewBoardSnapshot) => void;
+   await render(() => new Promise(r => { resolve = r; }), "/waiting");
+   const filters = button("Filters");
+   expect(filters.disabled).toBe(true);
+   await click(filters);
+-  expect(host.querySelector('[role="dialog"]')).toBeNull();
+-  expect(host.textContent).not.toContain("Author · lee");
++  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
++  expect(document.body.textContent).not.toContain("Author · lee");
+ 
+   await act(async () => resolve(snapshot([pr])));
+-  expect(host.textContent).toContain("Author · lee");
++  expect(document.body.textContent).toContain("Author · lee");
+   const restored = button("Filters (1)");
+   expect(restored.disabled).toBe(false);
+   await click(restored);
+   expect(option("Author", "lee").checked).toBe(true);
+   await click(button("Cancel"));
+ });
+ 
+-test("a merged PR awaiting a Keryx answer stays actionable in the Open filter from either view", async () => {
++test("a merged PR awaiting a Keryx answer stays actionable when the merged state is selected, from either view", async () => {
+   const pending = { ...pr, state: "merged" as const,
+     localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
+   const actions: string[] = [];
+   const command: typeof reviewRun = async (_cwd, _key, action) => {
+     actions.push(action.kind);
+     return { version: 1, runs: [{
+       id: "test-run", headSha: pr.headSha, baseSha: pr.baseSha, source: "manual", state: "running", phase: "Review",
+       createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, reason: "", result: null,
+       pendingQuestion: { id: "scope", question: "Which scope?", options: [], allowFreeform: true },
+     }] };
+   };
+   const detail: typeof fetchReviewDetail = async () => ({
+     version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number, headSha: pr.headSha,
+     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+   });
++  saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+   for (const mode of ["Board", "List"]) {
+     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
+     await click(button(mode));
+-    if (mode === "Board") expect(host.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
+-    else expect(host.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
++    if (mode === "Board") expect(document.body.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
++    else expect(document.body.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
+     await click(button("Answer question for #" + pr.number));
+     expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+   }
+   expect(actions).not.toContain("start");
+ });
+ 
+-test("Review tab signal follows unfiltered open requests and background watcher refreshes without extra reads", async () => {
++test("Review tab signal follows unfiltered open requests to the viewer and background watcher refreshes without extra reads", async () => {
+   const key = ++renderKey;
+   const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   const notify = (value: import("./ReviewBoard").ReviewTabIndicator) => seen.push(value);
+   const neutral: ReviewCard = { ...pr, reviewers: [], decision: "REVIEW_REQUIRED" };
++  const mine: ReviewCard = { ...pr, reviewers: ["Ann"] };
+   let cards = [neutral];
+   let reads = 0;
+   let failure = "";
+   const load: typeof fetchReviewBoard = async () => {
+     reads++;
+     if (failure) throw Error(failure);
+     return snapshot(cards);
+   };
+   let status: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
+   const watch = async () => status;
+   const show = (active: boolean, cwd = "/project", expectedViewer = "ann") => act(async () => root.render(createElement(ReviewBoard, {
+     key, active, cwd, expectedViewer, flows: [], onOpenFlow() {}, load, watcherCommand: watch, onIndicatorChange: notify,
+     listRepositories: async () => [],
+   })));
+   await show(false);
+   expect(seen.at(-1)).toBe("watching");
+   expect(reads).toBe(1);
+-  cards = [pr, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
++  cards = [mine, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
+   status = { ...status, lastSuccessAt: "2026-11-20T12:03:00Z" };
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+   expect(seen.at(-1)).toBe("attention");
+   expect(reads).toBe(2);
+   await show(true);
+   await click(button("Filters"));
+   await click(option("Author", "bob"));
+   await click(button("Apply filters"));
+-  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
++  expect(document.body.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
+   expect(seen.at(-1)).toBe("attention");
+-  cards = [{ ...neutral, decision: "CHANGES_REQUESTED" }];
++  cards = [{ ...neutral, author: "ann", decision: "CHANGES_REQUESTED" }];
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBe("attention");
+-  cards = [{ ...pr, state: "merged" }, { ...neutral, state: "closed", decision: "CHANGES_REQUESTED" }];
++  cards = [{ ...mine, state: "merged" }, { ...neutral, state: "closed", author: "ann", decision: "CHANGES_REQUESTED" }];
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBe("watching");
+   status = { ...status, state: "paused" };
+   await act(async () => { window.dispatchEvent(new Event("focus")); });
+   expect(seen.at(-1)).toBeNull();
+-  cards = [pr];
++  cards = [mine];
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBe("attention");
+   failure = "access: Account is unavailable";
+   await click(button("Refresh pull requests"));
+   expect(seen.at(-1)).toBeNull();
+   await show(false, "/other-project", "colleague");
+   expect(seen.at(-1)).toBeNull();
+ });
+ 
++test("the tab signal is attention only for requests, owned changes, unread replies or Keryx decisions concerning the viewer", async () => {
++  const base: ReviewCard = { ...pr, reviewers: [], decision: null };
++  async function signal(cards: ReviewCard[]) {
++    const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
++    await act(async () => root.render(createElement(ReviewBoard, {
++      key: ++renderKey, cwd: "/signal", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
++      watcherCommand: watcherDisabled, onIndicatorChange: value => seen.push(value),
++    })));
++    return seen.at(-1);
++  }
++  expect(await signal([{ ...base, reviewers: ["bob"] }])).toBeNull();
++  expect(await signal([{ ...base, reviewers: ["org/team"] }])).toBeNull();
++  expect(await signal([{ ...base, decision: "CHANGES_REQUESTED" }])).toBeNull();
++  expect(await signal([{ ...base, localReview: { active: true, ready: false } }])).toBeNull();
++  expect(await signal([{ ...base, reviewers: ["bob", "ANN"] }])).toBe("attention");
++  expect(await signal([{ ...base, author: "Ann", decision: "CHANGES_REQUESTED" }])).toBe("attention");
++  expect(await signal([{ ...base, author: "ann", decision: "REVIEW_REQUIRED" }])).toBeNull();
++  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBe("attention");
++  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBe("attention");
++  expect(await signal([{ ...base, state: "merged", reviewers: ["ann"] }])).toBeNull();
++  expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBe("attention");
++  markRepliesRead("ann", "repo1", base.number, ["unread-1"]);
++  expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBeNull();
++});
++
++test("a card-only refresh does not drop the tab signal of a PR whose only reason is a carried unread reply", async () => {
++  const base: ReviewCard = { ...pr, reviewers: [], decision: null };
++  let cards: ReviewCard[] = [{ ...base, addressedReplyIds: ["carried-1"] }];
++  const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
++  await act(async () => root.render(createElement(ReviewBoard, {
++    key: ++renderKey, cwd: "/carry", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
++    watcherCommand: watcherDisabled, onIndicatorChange: value => seen.push(value),
++  })));
++  expect(seen.at(-1)).toBe("attention");
++  const before = seen.length;
++  cards = [base];
++  await click(button("Refresh pull requests"));
++  expect(seen.slice(before).filter(value => value !== "attention")).toEqual([]);
++  expect(seen.at(-1)).toBe("attention");
++});
++
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 1227,1270 @@
++test("visible cards keep snapshot order when a later card has an active review", async () => {
++  const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
++  await render(async () => snapshot(cards));
++  await click(button("List"));
++  expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
++});
++
++test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
++  const lanes = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
++  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
++  const key = reviewFilterKey("/project", "repo1", "ann");
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Needs attention", "In review", "Open"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["closed"] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, state: [] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["merged", "draft"] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toContain("Done");
++});
++
+ test("a historical filter retains known open requests and removes them when their PR is observed as merged", async () => {
+   let merged = 102;
++  const mine: ReviewCard = { ...pr, reviewers: ["ann"] };
+   const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged"
+-    ? [{ ...pr, number: merged, state: "merged" }]
+-    : [pr]);
++    ? [{ ...mine, number: merged, state: "merged" }]
++    : [mine]);
+   await act(async () => root.render(createElement(ReviewBoard, {
+     key: ++renderKey, cwd: "/history-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+     onIndicatorChange: indicator => indicators.push(indicator),
+   })));
+   expect(indicators.at(-1)).toBe("attention");
+   await click(button("Filters"));
+   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(indicators.at(-1)).toBe("attention");
+-  merged = pr.number;
++  merged = mine.number;
+   await click(button("Refresh pull requests"));
+   expect(indicators.at(-1)).toBeNull();
+ });
+
+--- apps/desktop/src/review/model.test.ts
+@@ 1,25 @@
+ import { expect, test } from "bun:test";
+ import type { ReviewCard } from "./types";
+-import { EMPTY_FILTERS, filterReviews, reviewLane, stateQuery } from "./model";
++import { EMPTY_FILTERS, filterReviews, laneReason, reviewLane, reviewNote, stateQuery } from "./model";
+ 
++const quiet = (c: ReviewCard): ReviewCard => ({ ...c, decision: null, reviewers: [] });
+ const pr: ReviewCard = {
+   number: 42, title: "Use project settings", url: "https://github.com/example/project/pull/42", state: "open", draft: false,
+   author: "ann", assignees: ["lee"], reviewers: ["example/team"], decision: "CHANGES_REQUESTED", ci: "passed",
+   updatedAt: "2026-10-01T00:00:00Z", headSha: "head", baseSha: "base",
+ };
+ 
+ test("combines independent roles with AND, selected values with OR and searches titles and numbers", () => {
+   const filters = { ...EMPTY_FILTERS, author: ["me", "ann"], assignee: ["lee"], reviewer: ["example/team"], decision: ["CHANGES_REQUESTED"], ci: ["passed"] };
+   expect(filterReviews([pr], filters, "#42")).toEqual([pr]);
+   expect(filterReviews([pr], filters, "PROJECT")).toEqual([pr]);
+   expect(filterReviews([pr], { ...filters, assignee: ["ann"] }, "")).toEqual([]);
+   expect(filterReviews([pr], { ...filters, reviewer: ["lee"] }, "")).toEqual([]);
+ });
+ 
+ test("empty role filters match genuinely empty assignments/requests, unknown CI is separate from no checks", () => {
+   const missing: ReviewCard = { ...pr, assignees: [], reviewers: [], decision: null, ci: "unknown" };
+   const empty = { ...EMPTY_FILTERS, assignee: [":none"], reviewer: [":none"] };
+   expect(filterReviews([pr, missing], empty, "")).toEqual([missing]);
+   expect(filterReviews([missing], { ...empty, ci: ["none"] }, "")).toEqual([]);
+   expect(filterReviews([{ ...missing, assigneesComplete: false }], empty, "")).toEqual([]);
+
+--- apps/desktop/src/review/model.test.ts
+@@ 36,101 @@
+ });
+ 
+ test("closed wins over requests, and a failing check requests attention independently of GitHub review decision", () => {
+   expect(reviewLane({ ...pr, state: "merged" })).toBe("done");
+   expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "failed" })).toBe("attention");
+   expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "none" })).toBe("open");
+ });
+ 
+ test("a branch rule requiring approval does not imply a request to a reviewer", () => {
+   const required = { ...pr, decision: "REVIEW_REQUIRED" as const, reviewers: [] };
+   expect(reviewLane(required)).toBe("open");
+   expect(reviewLane({ ...required, reviewers: ["org/team"] })).toBe("attention");
+ });
+ 
+ test("active Keryx runs precede GitHub attention and available results bring an open PR back to attention", () => {
+   const card = { ...pr, decision: null, reviewers: [], ci: "passed" as const };
+   expect(reviewLane({ ...card, localReview: { active: true, ready: true } })).toBe("review");
+   expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
+   const merged = { ...card, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
+   expect(reviewLane(merged)).toBe("attention");
+-  expect(filterReviews([merged], { ...EMPTY_FILTERS, author: ["someone else"], updatedWithin: 7 }, "")).toEqual([merged]);
++  expect(filterReviews([merged], { ...EMPTY_FILTERS, state: [] }, "")).toEqual([merged]);
+   expect(filterReviews([merged], EMPTY_FILTERS, "#999")).toEqual([]);
+ });
++
++test("an active local review does not bypass any selected filter", () => {
++  const active = { ...pr, localReview: { active: true, ready: false } };
++  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["someone else"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, state: ["merged"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, ci: ["failed"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["ann"] }, "")).toEqual([active]);
++});
++
++test("an outdated review names the reviewed commit and ranks below live Keryx states, closed PRs and attention reasons", () => {
++  const outdated = (state: "completed" | "partial" | "budget") =>
++    ({ ...quiet(pr), localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
++  expect(laneReason(outdated("completed"))).toBe("Outdated review · abcdef0");
++  expect(laneReason(outdated("partial"))).toBe("Outdated partial review · abcdef0");
++  expect(laneReason(outdated("budget"))).toBe("Outdated partial review · abcdef0");
++  expect(laneReason({ ...outdated("completed"), state: "merged" })).toBe("Merged");
++  const awaiting = { ...outdated("completed"), localReview: { ...outdated("completed").localReview, awaitingAnswer: true as const } };
++  expect(laneReason(awaiting)).toBe("Awaiting your answer");
++  expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
++  // A neutral open card: no decision, no reviewers, CI passed.
++  const neutral = quiet(pr);
++  expect(reviewLane(neutral)).toBe("open");
++  expect(reviewLane({ ...neutral, localReview: outdated("completed").localReview })).toBe("open");
++  expect(laneReason({ ...neutral, localReview: outdated("completed").localReview })).toBe("Outdated review · abcdef0");
++});
++
++test("an outdated review stays visible as a note when another reason leads the lane", () => {
++  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
++  expect(reviewLane(stale)).toBe("attention");
++  expect(laneReason(stale)).toBe("Changes requested");
++  expect(reviewNote(stale)).toBe("Outdated review · abcdef0");
++  expect(reviewNote({ ...stale, headSha: "abcdef0123456" })).toBe("Review predates base update · abcdef0");
++  expect(reviewNote(pr)).toBeNull();
++});
++
++test("a review of the current head under an older base says the base moved, not that the head is outdated", () => {
++  const baseMoved = (state: "completed" | "partial" | "budget") =>
++    ({ ...quiet(pr), headSha: "abcdef0123456", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
++  expect(laneReason(baseMoved("completed"))).toBe("Review predates base update · abcdef0");
++  expect(laneReason(baseMoved("partial"))).toBe("Partial review predates base update · abcdef0");
++  expect(laneReason(baseMoved("budget"))).toBe("Partial review predates base update · abcdef0");
++  expect(laneReason({ ...baseMoved("completed"), headSha: "fedcba9876543" })).toBe("Outdated review · abcdef0");
++});
+
+--- docs/requirements/keryx-desktop-review-v2/README.md
+@@ 1,3 @@
++# Keryx Desktop Review v2 · разделение Pull Requests и Reviews
++Version: 0.1.2
++
+
+--- docs/requirements/keryx-desktop-review-v2/README.md
+@@ 5,37 @@
++
++## Назначение
++
++Review v1 поместил на одну карточку две сущности с разными жизненными циклами: pull request из GitHub и ревью Keryx. Из-за этого карточки меняют колонку и порядок от событий, не связанных с PR, фильтры дают неожиданный результат, а ревью теряет связь с собой, когда автор PR добавляет коммит. v2 разделяет их:
++
++- **Pull requests** и **Issues** — срез работы в GitHub. Колонки, сортировка и фильтры зависят только от GitHub.
++- **Reviews** — сущность Keryx рядом с Flows: одно ревью на PR и ревьюера, с раундами, сквозными находками и историей публикаций.
++- Карточки PR и Issue несут только ссылки на работу Keryx — ревью, Flow и сессию — и кнопки её начать.
++
++## Документы
++
++| Документ | Для кого и зачем |
++|---|---|
++| [PRD](prd.md) | Продукт и разработка. Проблема, пользователи, требования R1–R12, критерии выпуска и пользы |
++| [Спецификация](specification.md) | Разработка и QA. Сущности, состояния, хранение, поведение при смене head, экраны, CLI |
++| [План реализации](implementation-plan.md) | Команда поставки. Пять этапов, зависимости, принятые решения владельца |
++
++## Область
++
++Входит: вкладки Pull requests, Issues и новая Reviews в Desktop; модель Review поверх существующих запусков; поведение ревью при новом коммите в PR; привязка сессий к PR и Issue; единый реестр ревью для Desktop и сессии агента.
++
++Не входит: новый движок ревью, изменение состава ревьюеров и содержания волн review-orchestrator (добавляются только сверка head между волнами и процедура «head сдвинулся»), изменение формата пакета раунда, серверная очередь, провайдеры кроме GitHub, редактирование PR и Issue из Desktop (создание, merge, смена меток).
++
++## Связанные модули
++
++- [Desktop Review v1](../keryx-desktop-review/README.md) — исходная доска, запуски, вотчер и правила. v2 заменяет часть его требования R3, относящуюся к колонкам, и уточняет R5 (результат после push).
++- [Пакеты управляемого ревью](../managed-review-feedback-loop/README.md) — пакет раунда, который v2 использует без изменений формата.
++- [Процесс review-orchestrator](../../../.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md) — получает явную процедуру «head сдвинулся».
++- [Доска Flows](../keryx-desktop-client/flows-board.md) — образец для вкладки Reviews и получатель действия «Исправить замечания».
++
++## Расхождение, замеченное при подготовке
++
++README v1 говорит, что публикацию выполняет человек через GitHub, PRD v1 — что она выполняется через ссылки в GitHub. В коде публикация из Desktop уже есть (`ReviewPublishDialog`, `keryx review desk-publish`). v2 описывает публикацию как существующую возможность; документы v1 этот пакет не правит.
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 1,3 @@
++# План реализации · Review v2
++Version: 0.1.2
++
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 5,17 @@
++
++## Этапы
++
++| Этап | Что делается | Требования | Что показать на выходе |
++|---|---|---|---|
++| 0. Исправления текущей доски | Убрать обход фильтров для активного ревью. Убрать подъём активных наверх. Скрывать пустую колонку «Done». Показывать на карточке доски результат прошлого head с пометкой «устарел» (R5 v1 это обещает; сегодня он виден только в истории внутри панели PR). Сузить индикатор вкладки до событий, адресованных пользователю. Убрать перенос панели инструментов (наблюдение при осмотре приложения) | часть R1, R2, R12 | На PR с активным ревью фильтр по другому автору скрывает карточку; после нового коммита карточка на доске показывает прошлый результат как устаревший |
++| 1. GitHub-срез и ссылки | Колонки Pull requests и Issues только по GitHub. Строка работы Keryx на карточке. «Открыть в сессии» с привязкой Subject и заголовком сессии. Создание ревью и Flow из привязанной сессии. Подписанные действия, кроме «Исправить замечания» | R1–R3, R5, R6, часть R4 (ссылка ревью без номера раунда и отставания), часть R7 | Сценарий «PR без Flow и ревью → сессия → `/review` → ссылка на карточке» |
++| 2. Сущность Review | Таблица `reviews`, миграция запусков в раунды и попытки. Вкладка Reviews: доска, список, панель. Перенос интерфейса ревью, истории, публикации и правил из панели PR. Ссылка ревью на карточке PR с раундом и отставанием. Индикатор Reviews | R8, остаток R4, R12 | Один PR с тремя историческими запусками виден как один Review с раундами |
++| 3. Смена head | Проверка head на границе волны. `on_head_move`. Команда раунда обновления и новые правила выбора прошлого раунда. Варианты в диалоге публикации. Перенос ответов по находкам. События `push` вотчера обновляют Review | R9, R10 | Сценарии «коммит после завершения» и «коммит во время раунда» из критериев выпуска |
++| 4. Единый реестр | Регистрация пакетов сессии как попыток. Общий код публикации. Процедура «Head сдвинулся» в review-orchestrator. Действие «Исправить замечания» как Flow | остаток R7, R11 | Ревью из сессии агента опубликовано из Desktop |
++
++## Состояние этапа 0
++
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 19,19 @@
++
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 21,23 @@
++
++- (a) R12 говорит, что индикатор вкладки Pull requests загорается для запроса ревью на пользователя «или его команду». На этапе 0 сопоставляется только логин пользователя; запросы на команды не сопоставляются, пока не появится членство в командах (планируется вместе с этапом 1).
++- (b) До появления вкладки Reviews (этап 2) индикатор вкладки Pull requests загорается также от локального ревью, которое ждёт пользователя (вопрос ревьюера или решение о публикации).
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 26,61 @@
++
++Решение оператора от 2026-11-23: закрытый или слитый pull request с идущим ревью скрывается при фильтре по умолчанию «Open + Draft».
++
++## Зависимости
++
++- Этап 0 независим и не меняет модель данных.
++- Этап 1 не требует этапа 2: ссылка ревью на карточке на этом этапе строится из существующего `localReview` и открывает текущую панель ревью.
++- Этап 3 требует этапа 2: раунд обновления принадлежит Review.
++- Этап 4 требует этапов 2 и 3: сессия использует ту же команду обновления.
++
++## Проверка
++
++- Этапы 0–1: модульные тесты функций колонки и фильтра (`apps/desktop/src/review/model.test.ts`, `apps/desktop/src/issues`), DOM-тесты доски.
++- Этап 2: тест миграции на копии рабочей базы; DOM-тесты вкладки Reviews.
++- Этап 3: тесты `prior-round` на частичный прошлый раунд и на смену настроек; сценарий на реальном PR с коммитом во время раунда. Rust-часть Desktop проверяется только в CI.
++- Этап 4: сценарий на реальном PR — ревью в сессии, публикация из Desktop.
++
++## Решения владельца
++
++| № | Вопрос | Решение |
++|---|---|---|
++| D1 | Разрешать ли публикацию «как есть» для прошлого коммита, когда head сдвинулся | Да, только вердикт «Комментарий» и с первой строкой о проверенном коммите |
++| D2 | Значение `on_head_move` по умолчанию для ручного ревью | `ask` |
++| D3 | Входит ли аккаунт ревьюера в ключ Review | Да: публикация выполняется от аккаунта, два аккаунта — два Review |
++| D4 | Порядок вкладок и горячие клавиши после добавления Reviews | Sessions, Flows, Reviews, Pull requests, Issues, Metaproject |
++| D5 | Показывать ли во вкладке Issues по умолчанию только репозиторий проекта | Да, источник «Assigned to me» по всем репозиториям оставить выбором |
++| D6 | Оставить ли в Pull requests колонку внимания | Нет: её заменяют группировка «Моя роль» и быстрые фильтры |
++
++Все шесть решений приняты владельцем 2026-11-23. PRD и спецификация им соответствуют.
++
++## Что не проверено при подготовке
++
++- Ревью вживую не запускалось; поведение при смене head и работа дельта-раунда описаны по коду.
++- Хранение связи Issue с сессией и Flow подробно не читалось; этап 1 начинается с этой проверки.
++- `apps/desktop/src-tauri/src/review.rs`, `src/review/autonomous-run.ts`, `watcher-repair.ts`, `watcher-rebase.ts` подробно не читались.
++- Как перенесённые находки попадают в подсчёт вердикта нового раунда, до конца не прослежено.
+
+--- docs/requirements/keryx-desktop-review-v2/prd.md
+@@ 1,91 @@
++# PRD · Review v2
++Version: 0.1.2
++
++## Проблема
++
++Наблюдения сделаны на коммите `1b994df18`. Ссылки на код — в [спецификации](specification.md#основания).
++
++1. **Одна карточка — две сущности.** Колонка карточки PR вычисляется из состояния GitHub и состояния локального ревью одновременно. «На проверке» означает «Keryx сейчас выполняет ревью», а не статус PR. «Требует внимания» объединяет готовый результат Keryx, запрос ревью, запрошенные изменения и упавший CI.
++2. **Карточки меняют место без изменений в PR.** Запуск, завершение и публикация ревью переносят карточку между колонками, активные ревью поднимаются наверх списка.
++3. **Фильтры ненадёжны.** PR с активным ревью показывается вопреки всем фильтрам, кроме поиска. По состоянию ревью отфильтровать нельзя. Колонка «Завершено» при фильтре по умолчанию всегда пуста.
++4. **Новый коммит обрывает ревью.** Запуск привязан к одной паре base..head. Если автор добавил коммит, результат нельзя опубликовать, а действия «перепроверить находки на новом коммите» нет. Кнопка «Проверить изменения» запускает обычное ревью; Desktop передаёт ему прошлый пакет, только когда прошлый запуск завершён с полным покрытием и теми же настройками. После нового коммита прошлый результат пропадает с карточки на доске и остаётся только в истории внутри панели PR.
++5. **Ревью из сессии и из Desktop — разные объекты.** У них разные хранилища и разные пути публикации. Ревью, проведённое агентом в сессии, в Desktop нельзя ни продолжить, ни опубликовать.
++6. **Нет простого входа «поработать с агентом».** «Открыть в сессии» для PR каждый раз создаёт новую сессию и не запоминает связь с PR. Из такой сессии созданное ревью или Flow не возвращается на карточку.
++7. **Issues повторяют проблему.** Колонки вкладки Issues — стадии Flow, поэтому задачи без Flow лежат в одной колонке независимо от их состояния в GitHub.
++
++## Цель
++
++Во вкладках Pull requests и Issues пользователь видит прозрачный срез работы в GitHub и из любой карточки начинает работу Keryx: сессию, ревью или Flow. Ревью живёт во вкладке Reviews как одна сущность на PR, переживает новые коммиты и одинаково ведёт себя в Desktop и в сессии агента.
++
++## Кто пользуется
++
++| Пользователь | Сценарий |
++|---|---|
++| Ревьюер | Видит запросы ревью на себя в GitHub-срезе, запускает ревью, после нового коммита автора обновляет то же ревью и публикует результат на актуальный head |
++| Автор PR | Видит свои PR с запрошенными изменениями, запускает исправление замечаний как Flow или открывает сессию по PR |
++| Разработчик с задачей | Открывает Issue или PR в сессии, разбирается с агентом и уже из сессии создаёт Flow или ревью |
++| Ответственный за проект | Во вкладке Reviews видит все ревью проекта: какие идут, какие устарели, какие ждут публикации |
++
++## Требования
++
++**R1. Pull requests — только GitHub.** Колонка, порядок и набор карточек во вкладке Pull requests определяются только данными GitHub: состояние, черновик, решение по ревью, CI, запросы ревью, автор, исполнитель, время обновления. Событие локального ревью, Flow или сессии не меняет колонку, порядок или видимость карточки.
++Verification: judged
++
++**R2. Фильтры без исключений.** Каждая показанная карточка удовлетворяет всем выбранным фильтрам и поиску. Фильтры Pull requests и Issues содержат только измерения GitHub. Колонки, которые при текущем фильтре не могут содержать карточек, не показываются.
++Verification: judged
++
++**R3. Issues — только GitHub.** Группировка во вкладке Issues по умолчанию отражает состояние задачи в GitHub или статус GitHub Project, если выбран проект. Стадия Flow показывается ссылкой на карточке, а не колонкой.
++Verification: judged
++
++**R4. Ссылки на работу Keryx.** Карточка и панель PR и Issue показывают в отдельной строке фиксированной высоты ссылки: ревью (состояние и номер раунда), Flow (номер и стадия), сессии (число связанных). Нажатие открывает соответствующий объект. Появление или изменение ссылки не меняет высоту и положение карточки.
++Verification: judged
++
++**R5. Открыть в сессии.** На каждой карточке PR и Issue есть действие «Открыть в сессии», независимо от наличия Flow или ревью. Если связанных сессий нет, создаётся новая сессия, привязанная к этому PR или Issue, с его контекстом. Если есть — открывается последняя, с выбором другой или новой. Привязка сохраняется и видна в заголовке сессии со ссылкой обратно.
++Verification: judged
++
++**R6. Создание работы из сессии.** Из сессии, привязанной к PR или Issue, пользователь или агент создаёт ревью или Flow без повторного указания цели. Созданный объект наследует привязку и сразу появляется ссылкой на карточке PR или Issue и в заголовке сессии.
++Verification: judged
++
++**R7. Действия на карточке.** На PR доступны «Запустить ревью» (или «Открыть ревью», если оно есть), «Создать Flow», «Открыть в сессии», а на собственном PR с запрошенными изменениями — «Исправить замечания». На Issue доступны «Создать Flow» и «Открыть в сессии». Каждое действие подписано текстом.
++Verification: judged
++
++**R8. Review — одна сущность на PR и ревьюера.** Все запуски ревью одного PR от одного аккаунта принадлежат одному Review. Review состоит из раундов, каждый раунд привязан к своей паре base..head. Находки имеют постоянные идентификаторы и статус, прослеживаемый между раундами. Вкладка Reviews показывает доску и список Review с собственными колонками и фильтрами.
++Verification: judged
++
++**R9. Новый коммит не обрывает ревью.** Когда head PR сдвинулся, Review получает признак «отстаёт на N коммитов» и действие «Обновить до нового head». Обновление — новый раунд того же Review: изменённый код проверяется, находки по затронутым местам перепроверяются, остальные переносятся со своим статусом, отчёт обновляется. Это работает и когда прошлый раунд завершён частично, и когда изменились настройки запуска.
++Verification: judged
++
++**R10. Смена head во время и перед публикацией.** Если head сдвинулся, пока раунд выполняется, пользователь узнаёт об этом в ревью и выбирает: дождаться конца и обновить, либо остановить и начать на новом head. Автоматические ревью обновляются сами. Если head сдвинулся перед публикацией, диалог публикации предлагает обновить ревью, а не только сохранить черновик локально. Решения по находкам, принятые в диалоге, сохраняются при обновлении.
++Verification: judged
++
++**R11. Одно ревью в Desktop и в сессии.** Ревью, начатое агентом в сессии через review-orchestrator, появляется во вкладке Reviews как раунд того же Review, и его можно продолжить, обновить и опубликовать из Desktop. Процедура при смене head одна и та же в сессии и в Desktop и опирается на одну команду CLI.
++Verification: judged
++
++**R12. Раздельные индикаторы.** Индикатор вкладки Pull requests загорается только от событий GitHub, адресованных пользователю: запрос ревью на него или его команду, запрошенные изменения в его PR, новый ответ ему. На этапе 0 сопоставляется только логин самого пользователя; см. [план реализации](implementation-plan.md), «Состояние этапа 0». Индикатор вкладки Reviews загорается от событий Keryx: вопрос ревьюера, ожидание решения о публикации, остановленный раунд.
++Verification: judged
++
++## Критерии выпуска
++
++- На PR с активным ревью фильтр по другому автору скрывает карточку; запуск, завершение и публикация ревью не меняют колонку и позицию карточки во вкладке Pull requests.
++- На одном PR: ревью завершено, автор добавил коммит, пользователь нажал «Обновить до нового head». Во вкладке Reviews остаётся одна карточка с двумя раундами; находка в неизменённом коде перенесена, находка в изменённом коде перепроверена; публикация проходит на новый head.
++- На одном PR: коммит добавлен во время выполнения раунда. Ревью показывает отставание, после завершения предлагает обновление, опубликовать можно без запуска ревью с нуля.
++- PR без Flow и ревью: «Открыть в сессии» создаёт привязанную сессию; повторное нажатие открывает её же; `/review` в этой сессии открывает запуск с уже выбранным PR; созданное ревью видно ссылкой на карточке PR.
++- Ревью того же PR, проведённое агентом в сессии, видно во вкладке Reviews и публикуется из Desktop.
++- Во вкладке Issues задачи без Flow распределены по колонкам GitHub, а не лежат в одной.
++
++## Критерии пользы
++
++- **Устойчивость доски.** Через две недели использования владелец на своём репозитории проверяет по записи экрана одного рабочего дня: сколько раз карточка PR сменила колонку без события в GitHub. Ожидается ноль.
++- **Ревью переживает коммит.** За первый месяц владелец считает во вкладке Reviews долю ревью с двумя и более раундами, опубликованных без запуска с нуля. Источник — история раундов и публикаций Review.
++- **Вход через сессию.** not measured — в Desktop нет телеметрии действий; оценивается на словах владельца после месяца использования.
++
++## Риски
++
++- **Миграция истории.** Существующие запуски нужно сгруппировать в Review без потери отчётов. Проверяется на копии рабочей базы до включения.
++- **Перенос находок на изменённый код.** Перенос может ошибочно пометить находку закрытой или оставить устаревшую. Статус закрытия подтверждается перепроверкой кода, а не текстом коммита; находки без подтверждения остаются открытыми.
++- **Стоимость обновлений.** Частые коммиты порождают частые раунды. Обновление проверяет только дельту и затронутые находки; автоматическое обновление подчиняется лимитам правила.
++- **Привычка к старой доске.** По решению D6 колонка «Требует внимания» исчезает из Pull requests. Её заменяют быстрые фильтры по роли и индикаторы вкладок.
++
++## Рекомендация
++
++Выпускать пятью этапами из [плана](implementation-plan.md). Этап 0 исправляет самые заметные дефекты текущей доски без смены модели и может выйти отдельно. Решения владельца D1–D6 приняты и записаны в плане.
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 1,150 @@
++# Спецификация · Review v2
++Version: 0.1.2
++
++Статус: этап 0 реализован (Flow 516, PR #1294), остальное — draft. Раздел «Основания» описывает код на коммите `1b994df18`. Все остальные разделы — планируемое поведение, кроме этапа 0 (см. [план реализации](implementation-plan.md), «Состояние этапа 0»); имена новых команд, полей и таблиц предварительные.
++
++## Идентичность модуля
++
++Изменение затрагивает Desktop (`apps/desktop/src/review`, `apps/desktop/src/issues`, оболочку вкладок), бэкенд ревью (`src/review/desk-run-*`, `src/review/board*`, `src/review/desk-publication.ts`, `src/review/prior-round.ts`) и скилл `review-orchestrator`. Состав ревьюеров и устройство волн не меняются; исполнитель получает только сверку head между волнами. Формат пакета раунда не меняется: идентификаторы находок и запись раунда (`round.json`) уже существуют. Машинных схем в черновике нет; они добавляются на этапе 2 вместе с повышением версии протокола.
++
++Смежные спецификации: [Review v1](../keryx-desktop-review/specification.md), [пакеты управляемого ревью](../managed-review-feedback-loop/specification.md).
++
++## Основания
++
++| № | Наблюдение | Где в коде |
++|---|---|---|
++| O1 | Колонка карточки считается из состояния GitHub и локального ревью вместе | `apps/desktop/src/review/model.ts:50-65` |
++| O2 | PR с активным ревью проходит все фильтры, кроме поиска | `apps/desktop/src/review/model.ts:40` |
++| O3 | Активные ревью поднимаются в начало списка | `apps/desktop/src/review/ReviewBoard.tsx:323` |
++| O4 | Фильтр по умолчанию — open и draft; в «Done» попадают только не открытые PR, а все четыре колонки рисуются всегда, поэтому «Done» по умолчанию пуста | `apps/desktop/src/review/model.ts:18-20`, `:63`, `apps/desktop/src/review/ReviewResults.tsx:95-98` |
++| O5 | Индикатор вкладки загорается от любого открытого PR, у которого есть запрос ревью на кого угодно или решение `CHANGES_REQUESTED`, независимо от того, чей это PR | `apps/desktop/src/review/ReviewBoard.tsx:203`, `:354` |
++| O6 | Завершённый запуск попадает в бейдж карточки, только если его диапазон равен base..head карточки; завершённый запуск на прошлом head на карточку не попадает. Активный запуск на другом диапазоне виден как `other-revision` без прогресса | `src/review/desk-run-store.ts:416-423`, `src/review/board-badges.ts:28-50` |
++| O7 | Запуск привязан к одной паре base..head; промпт Desktop: «New commits belong to a separate request» | `src/review/desk-run-executor.ts:547`, `src/review/autonomous-profile.ts:199` |
++| O8 | Публикация при сдвинутом head запрещена, доступно только локальное сохранение | `src/review/desk-publication.ts:242`, `:307`, `:341` |
++| O9 | «Review changes» — подпись кнопки, действие — обычный старт на новом диапазоне | `apps/desktop/src/review/ReviewRuns.tsx:26-38` |
++| O10 | Desktop передаёт новому запуску прошлый пакет, только если прошлый запуск не импортирован, имеет текущий scope, состояние `completed`, покрытие `complete` и тот же ключ настроек. Черновой или частичный пакет прошлым раундом не считается | `src/review/desk-run-service.ts:369-377`, `src/review/round-record.ts:207` |
++| O11 | Дельта-раунд существует: правки по находкам, новый код, повторный взгляд на неизменённый код, перенос остальных находок с их прежним статусом | `src/review/prior-round.ts`, `src/review/round-cut.ts:43-62` |
++| O12 | У запуска нет поля связи с запуском прошлого раунда: `continuation.previousId` связывает только продолжения на том же диапазоне. Связь раундов есть только в `round.json` пакета | `src/review/desk-run-types.ts:109-141` |
++| O13 | В скилле нет процедуры перепроверки при сдвиге head: перед публикацией сказано «re-check findings» без команды; остальное — правила раскрытия в отчёте и отказ `review complete`, пока первая строка отчёта не называет проверенный коммит | `review-orchestrator/SKILL.md:913-914`, `:235`, `templates/review-report.md:37` |
++| O14 | Desktop хранит запуски в `<keryxDataDir>/desktop-review/`, сессия — в `.metaproject/reviews/`; пакеты сессии импортируются как `existing` без публикации | `src/review/desk-run-store.ts:16`, `src/review/desk-run-legacy.ts:41-80`, `apps/desktop/src/review/ReviewRuns.tsx:103-104` |
++| O15 | Два пути публикации: `review publish` и `review desk-publish`, защита от дублей только во втором | `src/review/publish.ts:147-181`, `src/review/desk-publication.ts:233-235` |
++| O16 | «Open in Sessions» для PR всегда создаёт новую сессию и вставляет URL в поле ввода; связь сессии с PR не хранится (если с PR связан Flow, сессия привязывается к этому Flow) | `apps/desktop/src/App.tsx:341-345`, `:600` |
++| O17 | Сессии уже несут привязку к Flow в метаданных | `apps/desktop/src/App.tsx:323-329` |
++| O18 | Колонки Issues — стадии Flow | `apps/desktop/src/issues/model.ts:3-5`, `:47-49` |
++| O19 | Исправление своего PR по замечаниям настраивается в диалоге подписки | `apps/desktop/src/review/PrSubscriptionDialog.tsx:74-102` |
++
++Наблюдения O6–O8, O10–O15 получены чтением кода; ревью вживую для их проверки не запускалось.
++
++## Сущности
++
++```text
++PullRequest (GitHub)        Issue (GitHub)
++      │ subject                   │ subject
++      ├── Review ── Round ── Attempt
++      ├── Flow
++      └── Session
++```
++
++- **PullRequest, Issue** — отражение GitHub. Локальных полей состояния нет.
++- **Subject** — ссылка на PR или Issue: `{kind: "pr" | "issue", repositoryId, repo, number, url}`.
++- **Review** — ревью одного PR одним аккаунтом. Ключ: `{repositoryId, number, viewer}`; `repo` (имя) хранится рядом для отображения. Аккаунт входит в ключ по решению D3 плана.
++- **Round** — проверка одной пары base..head внутри Review. Режим: `first`, `delta`, `fallback-first` (значения из существующего `round.json`).
++- **Attempt** — один запуск раунда. Сегодняшний `DeskRun` становится Attempt без изменения формата; повтор и `continue` — новые Attempt того же Round.
++- **Finding** — находка с постоянным идентификатором в пределах Review и статусом по раундам: `open`, `closed`, `partial`, `regressed`, `withdrawn` (существующие dispositions). Находка, которую раунд не перепроверял, помечается перенесённой и сохраняет прежний статус (существующий список `carried` в записи раунда).
++
++### Состояние Review
++
++Состояние выводится из последнего раунда и публикаций; отдельного ручного поля нет.
++
++| Состояние | Условие |
++|---|---|
++| `queued` | последний Attempt в очереди |
++| `running` | последний Attempt выполняется |
++| `needs_answer` | выполняющийся Attempt ждёт ответа пользователя |
++| `running` | также `cancelling` — до фактической остановки |
++| `stopped` | последний Attempt закончился как `failed` (включая прерванный, `recoverable`), `cancelled`, `blocked`, `budget`, `skipped` и у раунда нет принятых находок |
++| `ready` | последний раунд дал принятые находки (`completed` или `partial`), решение о публикации не принято; частичное покрытие показывается пометкой |
++| `published` | последний раунд опубликован |
++| `closed` | PR слит или закрыт, либо пользователь закрыл Review |
++
++Отдельный признак **freshness**: `current`, если head последнего проверенного раунда равен head PR, иначе `behind` с числом коммитов и признаком `rewritten` при force-push. Freshness не зависит от состояния: Review может быть `running` и `behind` одновременно.
++
++## Хранение
++
++- `runs.sqlite`: к таблице `runs` добавляются `review_id`, `round` (порядковый номер), `previous_run_id`. Новая таблица `reviews` (`id`, `repo`, `pr`, `viewer`, `closed_at`, `on_head_move`).
++- Миграция: существующие строки группируются по `(repo, pr, viewer)` в один Review; раунды нумеруются по первой встрече пары base..head в порядке `createdAt`; запуски с `continuation.previousId` попадают в раунд предшественника.
++- Публикации остаются файлами в каталоге Attempt; Review читает их как историю.
++- Привязка сессии к Subject хранится вместе с сессией. Предпочтительный вариант — метаданные сессии рядом с существующей привязкой к Flow (O17), поле `_meta.keryx.subject`; окончательный выбор делается в начале этапа 1 (см. ниже).
++- Реестр сессионных ревью: при `keryx review start` для PR пакет в `.metaproject/reviews/<id>` регистрируется как Attempt соответствующего Review (см. «Единый реестр»).
++
++Как хранится связь Issue с сессией и Flow сегодня (`issues-contract`, операция `workspace`), при подготовке пакета подробно не читалось; этап 1 начинается с её проверки и выбора: расширить её на PR или ввести `_meta.keryx.subject` для обоих.
++
++## Конфигурация
++
++- Параметр Review `on_head_move`: `ask` (по умолчанию для ручных), `follow` (по умолчанию для запусков по правилу), `ignore`.
++- Параметры запуска раунда — существующие `DeskReviewOptions`. Смена параметров между раундами не разрывает связь с прошлым раундом.
++
++## Поведение при смене head
++
++### Обнаружение
++
++- Исполнитель сверяет head PR на границе волны (перед каждым `keryx review next`) и перед завершением раунда. Сегодня между волнами проверки нет (O7): head сверяется до запуска ревьюеров и затем только на `review complete`, где срабатывает `complete-head-gate`.
++- Доска PR и вотчер уже видят новый head; при обновлении доски freshness Review пересчитывается.
++
++### Во время выполнения раунда
++
++Идущий раунд не прерывается сам: его результат остаётся верным для закреплённого head.
++
++| `on_head_move` | Действие |
++|---|---|
++| `ask` | Review показывает «head сдвинулся на N коммитов» и два действия: «Обновить после завершения» и «Остановить и начать на новом head» |
++| `follow` | После завершения раунда автоматически ставится раунд обновления |
++| `ignore` | Раунд завершается, Review остаётся `behind` |
++
++### Раунд обновления
++
++Команда `keryx review advance` (имя предварительное) открывает новый раунд того же Review на текущем head:
++
++1. Прошлым раундом считается последний раунд с принятыми находками, включая частичный. Для этого меняются три существующих правила: условие Desktop «completed + complete + тот же ключ настроек» (O10), правило «частичный пакет не является прошлым раундом» (`round-record.ts:207`) и требование свидетельства завершения у кандидата в `prior-round.ts`.
++2. Если прошлый head — предок нового, режим `delta`: изменённые участки, пересекающиеся с открытыми находками, идут на перепроверку; остальной изменённый код проверяется как новый; неизменённый код получает повторный взгляд; находки, которых раунд не касался, переносятся с прежним статусом. Это существующий механизм (O11).
++3. Если история переписана, режим `fallback-first`: полная проверка с прошлыми находками в контексте.
++4. Область, не покрытая частичным прошлым раундом, добавляется в план нового раунда как непроверенная.
++5. Статус `closed` ставится только после перепроверки кода; находка без подтверждения остаётся `open`.
++6. Отчёт раунда содержит таблицу прошлых находок со статусами (шаблон скилла уже её предусматривает).
++
++### Перед публикацией
++
++Если head сдвинулся после завершения раунда, диалог публикации показывает:
++
++- **«Обновить ревью до `<sha>`»** — основное действие, запускает раунд обновления; ответы «оставить/отклонить» по находкам сохраняются по идентификатору находки.
++- **«Опубликовать как есть для `<sha>`»** — только вердикт «Комментарий», первая строка тела называет проверенный коммит и говорит, что PR ушёл вперёд (то же правило, что уже требует `complete-head-gate`). Действие разрешено решением D1 плана.
++- «Сохранить локально» и «Пропустить» — как сегодня.
++
++### В сессии агента
++
++В `review-orchestrator` добавляется процедура «Head сдвинулся»: агент сообщает пользователю число новых коммитов и вызывает ту же `keryx review advance`. Фраза из O13 заменяется ссылкой на процедуру. Правило «новые коммиты — отдельный запрос» в промпте Desktop (O7) заменяется описанным поведением.
++
++## Единый реестр
++
++- Пакет, созданный в сессии для PR, регистрируется как Attempt с источником `session`. Источник `existing` остаётся только для пакетов, созданных до миграции.
++- Attempt с источником `session` имеет те же действия, что ручной: открыть отчёт, продолжить, обновить, опубликовать.
++- Публикация — один код: `review publish` использует приёмку, квитанцию и маркер дублей из `desk-publication` (O15). Подтверждение пользователя остаётся в обоих интерфейсах.
++
++## Экраны
++
++### Навигация
++
++Вкладки проекта: Sessions, Flows, Reviews, Pull requests, Issues, Metaproject. Flows и Reviews — работа Keryx, Pull requests и Issues — срез GitHub. Порядок принят решением D4 плана; горячие клавиши следуют порядку вкладок.
++
++### Pull requests
++
++- **Группировка.** По умолчанию «Статус»: Draft · Ждёт ревью (нет решения или `REVIEW_REQUIRED`) · Запрошены изменения · Одобрено. Колонки Merged и Closed появляются, только когда их включает фильтр состояния. Переключатель «Моя роль»: Ревью запрошено у меня · Мои PR · Остальные.
++- **Порядок.** По времени обновления, по убыванию. Локальные события порядок не меняют.
++- **Фильтры.** Существующие измерения GitHub и период. Быстрые фильтры в строке: «Запрошено у меня», «Мои», «CI упал». Обход фильтров для активного ревью (O2) удаляется.
++- **Карточка.** Номер, заголовок, метки состояния GitHub, автор, CI, запросы ревью. Ниже — строка работы Keryx фиксированной высоты с тремя местами: ревью, Flow, сессия. Пустое место показывает приглушённое действие («Ревью», «Flow», «Сессия»), заполненное — ссылку.
++- **Ссылка ревью.** Состояние и раунд: «Ревью · раунд 2 · готово», при `behind` — «отстаёт на 3». Открывает Review во вкладке Reviews.
++- **Ссылка Flow.** «Flow #488 · стадия». Открывает Flow.
++- **Ссылка сессии.** Число связанных сессий. Нажатие открывает последнюю; меню — список сессий и «Новая сессия».
++- **Действия.** Подписаны текстом в панели и в меню карточки: «Запустить ревью» / «Открыть ревью», «Создать Flow», «Открыть в сессии», «Открыть в GitHub», подписка. На своём PR с `CHANGES_REQUESTED` или неразрешёнными тредами — «Исправить замечания».
++- **Панель PR.** Вкладки «Обсуждение» и «Проверки» — данные GitHub. Блок «Работа» со ссылками на Review, Flows и сессии и строкой режима автоматизации. Полный интерфейс ревью, история запусков и публикация из панели PR убираются во вкладку Reviews.
++- **Индикатор вкладки.** Запрос ревью у пользователя или его команды, `CHANGES_REQUESTED` в его PR, непрочитанный ответ ему. На этапе 0 сопоставляется только логин пользователя.
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 152,253 @@
++- **Вотчер.** Переключатель вотчера остаётся здесь: он синхронизирует данные GitHub.
++
++### Issues
++
++- **Группировка.** По умолчанию Open · Closed (Closed — по фильтру). При источнике «GitHub Project» — по статусу проекта, как сегодня. Группировка по стадии Flow убирается из умолчаний (O18).
++- **Карточка.** Строка работы Keryx с двумя местами: Flow и сессия.
++- **Действия.** «Создать Flow» (существующее `prepare-flow`), «Открыть Flow», «Открыть в сессии» (существующее `open-session`).
++- **Область.** По умолчанию показываются задачи репозитория проекта (решение D5 плана). Источник «Assigned to me» по всем репозиториям остаётся выбором; сегодня он показывает задачи из любых репозиториев.
++
++### Открыть в сессии
++
++- Действие есть на каждой карточке и в панели PR и Issue, при любом сочетании Flow и ревью.
++- **Нет связанных сессий.** Создаётся сессия с привязкой к Subject. В контекст сессии передаётся ссылка на материалы: для PR — результат `keryx review pr-context` (описание, обсуждение, head, CI, связанные Flow), для Issue — текст и обсуждение задачи. Поле ввода получает ссылку на PR или Issue; сообщение не отправляется автоматически.
++- **Есть связанные сессии.** Открывается последняя неархивная. Меню ссылки показывает все и «Новая сессия».
++- **Заголовок сессии.** Показывает Subject со ссылкой обратно на карточку и ссылки на Review и Flow этого Subject, если они есть.
++- **Создание из сессии.** `/review` и инструмент `prepare_review` открывают диалог запуска с уже выбранным PR Subject. Создание Flow из сессии подставляет Subject как источник. Созданные Review и Flow записывают Subject и идентификатор сессии; ссылки появляются на карточке без обновления вручную.
++- **Сессия по Issue и ревью.** Ревью создаётся только для PR. В сессии по Issue `/review` предлагает выбрать PR, как сегодня.
++- Привязка не меняет поведение сессии и не ограничивает агента этим Subject.
++
++### Reviews
++
++- **Колонки.** Выполняется (`queued`, `running`) · Ждёт вас (`needs_answer`, `ready`, `stopped`) · Отстаёт · Опубликовано · Закрыто (по фильтру). Порядок выбора колонки: `closed` → выполняется → `needs_answer` → отстаёт (любой Review с freshness `behind`) → остальные по состоянию. `ready` и `published` с отставанием попадают в «Отстаёт».
++- **Карточка.** PR (номер, заголовок, автор), раунд, проверенный коммит и отставание, число находок по тяжести, состояние публикации, источник (вручную, по правилу, сессия), связанный Flow, расход токенов.
++- **Фильтры.** Состояние, freshness, публикация, источник, автор PR, Flow, период.
++- **Панель Review.** Раунды (лента с диапазоном, режимом, покрытием, попытками) · Находки (сквозной список со статусом по раундам) · Отчёт последнего раунда · Публикации · Сессии ревьюеров · Автоматизация.
++- **Основное действие** зависит от состояния: «Ответить», «Опубликовать», «Обновить до нового head», «Повторить раунд», «Открыть в сессии».
++- **Правила ревью** (сегодня кнопка «Review rules» на доске PR) переезжают сюда.
++- **Индикатор вкладки.** `needs_answer`, `ready` без решения о публикации, `stopped`.
++
++### Исправить замечания
++
++Действие на своём PR создаёт Flow исправления с привязкой к PR: источник — запрошенные изменения и неразрешённые треды. Существующие настройки автоматического исправления из подписки (O19) остаются как автоматический вариант того же действия; их перенос в правила — вне этого пакета.
++
++## CLI и скилл
++
++| Поверхность | Изменение |
++|---|---|
++| `keryx review board --json` | Карточка PR несёт `links` (review, flows, sessions) вместо `localReview`; `localReview` остаётся на время перехода |
++| `keryx review reviews --json` (новая) | Список Review с состоянием, freshness, раундами |
++| `keryx review advance` (новая) | Раунд обновления на текущем head |
++| `keryx review desk-run start` | Создаёт Attempt в существующем или новом Review; принимает прошлый раунд по новым правилам |
++| `keryx review desk-publish` | Возвращает варианты при сдвинутом head вместо одного запрета |
++| `keryx review publish` | Использует общий код публикации |
++| `review-orchestrator` | Процедура «Head сдвинулся»; регистрация пакета сессии в реестре |
++
++## Контракты данных
++
++```ts
++interface WorkLinks {
++  review?: { id: string; state: Review["state"]; round: number; behind?: number | null };  // null — отстаёт, число коммитов неизвестно
++  flows: { id: string; dir: string; stage: string }[];
++  sessions: { id: string; title: string; updatedAt: string | null }[];
++}
++
++interface Review {
++  id: string;
++  key: { repositoryId: string; repo: string; number: number; viewer: string };
++  state: "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
++  freshness: { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean };
++  onHeadMove: "ask" | "follow" | "ignore";
++  rounds: Round[];
++}
++
++interface Round {
++  number: number;
++  baseSha: string;
++  headSha: string;
++  mode: "first" | "delta" | "fallback-first";
++  previousRound?: number;
++  attempts: DeskRun[];           // существующий тип
++  publication?: "pending" | "published" | "skipped";
++}
++```
++
++Версия протокола ответов CLI повышается; Desktop проверяет её, как сегодня (`assertProtocol`).
++
++## Интеграции
++
++- **GitHub** — без новых прав: чтение PR, Issue, обсуждений; публикация ревью как сегодня.
++- **Flows** — Flow хранит Subject; действие «Исправить замечания» создаёт Flow.
++- **Сессии (ACP)** — метаданные сессии несут Subject; `prepare_review` получает Subject из сессии.
++- **Вотчер и правила** — события `push` для PR с Review ставят раунд обновления, а не независимый запуск.
++
++## Критерии приёмки
++
++1. Функция колонки PR не читает ни одного поля локального ревью; тест перебирает состояния локального ревью и получает одну и ту же колонку.
++2. Фильтрация PR не имеет ветки для активного ревью; тест с активным ревью и несовпадающим автором даёт пустой результат.
++3. После нового коммита карточка PR показывает ссылку «Ревью · отстаёт на N», а не теряет её.
++4. Раунд обновления после частичного прошлого раунда получает режим `delta` и непустой список прошлых находок.
++5. Раунд обновления при изменённых настройках запуска получает прошлые находки.
++6. Смена head на границе волны фиксируется в Review до завершения раунда.
++7. Диалог публикации при сдвинутом head содержит действие обновления; ответы по находкам сохраняются после обновления.
++8. Повторное «Открыть в сессии» для того же PR открывает существующую сессию; привязка к Subject переживает перезапуск приложения.
++9. Ревью, запущенное из привязанной сессии, появляется ссылкой на карточке PR.
++10. Пакет ревью, созданный в сессии, виден в `keryx review reviews --json` с источником `session` и публикуется через `desk-publish`.
++11. Миграция на копии рабочей базы: число Attempt до и после совпадает, каждый принадлежит ровно одному Review.
++12. Колонки Issues по умолчанию не зависят от стадии Flow.
++13. Колонка PR или Issue, которая при текущем фильтре не может содержать карточек, не рисуется.
++14. Строка работы Keryx имеет одну высоту при нуле и при трёх ссылках; появление ссылки не сдвигает соседние карточки.
++15. Каждое действие карточки и панели имеет видимую текстовую подпись; «Исправить замечания» показано только на своём PR с запрошенными изменениями или неразрешёнными тредами.
++16. Индикатор Pull requests не загорается от PR, где ревью запрошено у другого человека; индикатор Reviews загорается от `needs_answer`.
++17. При `on_head_move: follow` после завершения раунда на устаревшем head раунд обновления ставится без действий пользователя.
+
+--- docs/requirements/roadmap.md
+@@ 1,37 @@
+ # Requirements Roadmap
+-Version: 0.29.37
++Version: 0.29.38
+ 
+ ## Status
+ 
+ This roadmap tracks Metaproject requirements packages and their implementation
+ state. Runtime claims must be backed by source, tests, or a verification report.
+ 
+ Loose findings that have no package yet live in `backlog.md` beside this file —
+ work found while doing something else and deliberately left undone, each entry
+ carrying the measurement that found it and the reason it was not done then.
+ 
+ <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
+ > **Changelog**
+ >
++> - **0.29.38** — [Keryx Desktop Review v2](keryx-desktop-review-v2/README.md). Draft requirements; stage 0 (board fixes without a model change) is implemented in Flow 516, stages 1-4 are not. Splits the Pull requests board into a GitHub-only view of pull requests and issues and a separate Reviews entity (one review per pull request and reviewer, with rounds), defines what a review does when the pull request head moves, adds "Open in session" binding for pull requests and issues, and plans one review registry for Desktop and agent sessions.
++>
+ > - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
+ >
+ > - **0.29.37** — [Keryx Desktop Telegram](keryx-desktop-telegram/README.md). Spec ready for local service setup and management from Integrations, QR or manual bot pairing, token replacement and explicit sharing of a live Desktop ACP session with Telegram. Scope includes revision-checked bot changes, poller readiness and recovery, turn arbitration, delegated approvals, and live-bot acceptance. Desktop runtime implementation is planned.
+ >
+ > - **0.29.36** — [OpenSpec in Keryx Metaproject](keryx-metaproject-openspec/README.md). Spec ready for owner review. Plans a local source alongside Graph and Wiki, with specs, active changes, archive, search and evidence-backed links. Draft Flow intake is a later increment. Runtime planned.
+ >
+ > - **0.29.35** — [Keryx Desktop: рабочие панели и внимание](keryx-desktop-workspace-panels/README.md) и [Готовность worktree](keryx-worktree-readiness/README.md). Draft requirements: attention tracked in Rust across all project views and windows (notifications, Dock badge, a Needs attention group), Changes and Files side tabs with path-and-line comments and `@path`, a context meter with compact, native image input once keryx accepts images (built on open PRs #1254 and #1256 and flow 493); worktree preparation (env files, copy-on-write dependencies, ports, local index rebuild), the worktree root and index for agents, `promote` of worktree findings to the user scope, a merge-conflict preview, and a report-only test baseline and flaky retry. Nothing implemented.
+ >
+ > - **0.29.34** — [Keryx Desktop Review v1](keryx-desktop-review/README.md). Draft requirements and delivery plan for the project PR board, manual review runs, a local watcher, and rule-based dispatch through review-orchestrator. Implementation planned.
+ >
+ > - **0.29.33**: [Keryx Desktop Client](keryx-desktop-client/README.md) — **M1 implemented on `feat/desktop-client`, owner acceptance pending**. macOS Tauri v2 client over `keryx acp --profile shell` (shell roster, ask/trust/auto modes, plan/usage updates, `_keryx/*` extensions), bundled keryx sidecar, local `.dmg`; shell parity in three milestones. Shares one Tauri app with Keryx Desktop App (D-08, awaiting owner confirmation).
+ >
+ > - **0.29.32**: [Keryx Desktop App](keryx-desktop-app/README.md) — **draft, nothing implemented; no Flow, no frozen criteria**. A thin desktop shell over the Hub web and a local Hub child process: solo login without token or SSO, quick task start, stage timeline with agent logs, working-copy diff with reviewer findings and visual QA, each with a TUI counterpart. Decisions taken 2026-11-14: Tauri shell, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form. Acceptance criteria wait for operator review before freeze.
+ >
+ > - **0.29.31**: [Keryx Review V3](keryx-revview-v3/README.md) — **spec ready, D1–D7 accepted; runtime not implemented**. Schema v2/v1 compatibility, shared Keryx controller, native plus Keryx external general in first release, review-only authority, behavior-based coverage and initial large-review limits accepted. Implementation explicitly not started.
+ >
+ > - **0.29.30**: [Keryx Review V3](keryx-revview-v3/README.md) — **draft, runtime not implemented**. Preparation and coverage planning, catalog-backed generals/soldiers, shared tree limits and authority, native/external execution across harnesses.
+ >
+ > - **0.29.29**: [Unified model routing](keryx-unified-model-routing/README.md) — **spec ready, runtime v2 not implemented**. Four absolute model classes, cross-provider pools, one resolver, explicit fallback and reversible migration from category/tier mechanisms.
+ >

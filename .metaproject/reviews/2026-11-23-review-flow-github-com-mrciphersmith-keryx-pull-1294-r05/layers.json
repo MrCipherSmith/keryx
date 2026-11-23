@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "refreshedAt": "2026-11-23T12:08:55.581Z",
+  "prHead": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+  "headSource": "input",
+  "base": "1358d962f4dfc07a9e086a533f51e75aa757dfcd",
+  "baseSource": "manifest",
+  "graphCommit": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+  "graph": {
+    "status": "ok",
+    "commit": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+    "builtAt": "2026-11-23T12:08:31.262Z",
+    "nodes": 4604,
+    "edges": 17739
+  },
+  "wiki": {
+    "status": "ok",
+    "commit": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+    "builtAt": "2026-11-23T12:08:55.517Z",
+    "pagesRefreshed": 28,
+    "pagesStaleProse": 35,
+    "written": false,
+    "divergence": {
+      "state": "none",
+      "workingCopyCommit": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+      "prHead": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+      "commitsBetween": 0,
+      "changedPaths": []
+    }
+  },
+  "memory": {
+    "status": "ok",
+    "commit": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+    "builtAt": "2026-11-23T12:08:55.581Z",
+    "entries": 61,
+    "divergence": {
+      "state": "none",
+      "workingCopyCommit": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+      "prHead": "8e6ecf1aa3dae3dc1ce6ed9c1512cec88da590ec",
+      "commitsBetween": 0,
+      "changedPaths": []
+    }
+  }
+}

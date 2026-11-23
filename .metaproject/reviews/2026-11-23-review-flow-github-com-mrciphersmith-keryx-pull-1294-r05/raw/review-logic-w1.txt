@@ -1,0 +1,88 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 5 delta (91c37c81b, 85bd13a03) read against the full RepositoryBoard at head 8e6ecf1aa. I traced the attention set's state machine with both request paths (main load and seed) and the stale flag. Most paths are correct. Seeds and main loads are ordered correctly: a later open/all load clears seedFor and the seed's cleanup aborts it, and a seed that lands first is overwritten by the replacing load. accessLost resets identity, seeded and seedFor. A seed answered for another identity is dropped. A stale fallback never writes back, and the flag clears on every successful load because setRead replaces the whole object. One case is still wrong. The `seeded` ref is not invalidated when a non-replacing load sees an identity change. So a return to an identity seeded earlier (A -> B -> A on a saved historical filter, while B's seed failed or is still in flight) empties the carried set and requests no seed. That leaves the F-030 false negative in place for the returning account. The F-012 hint is right for state filters, period, search and historical scopes, because reset returns to the open, no-period scope where every carried number is loaded. It is wrong in one case: a stale cached open snapshot shown after an `unavailable:` error. There the hint counts carried numbers missing from the old snapshot, and its reset changes nothing. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-034",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (identity.current !== nextIdentity) setCarriedAttention(new Set());\n        if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });",
+      "problem": "On a non-replacing load (closed, merged, or any period scope), an identity change empties the carried set, but `seeded.current` keeps the identity seeded earlier. A seed is then requested only when `seeded.current !== nextIdentity`. When the board comes back to an identity that was seeded before the switch, the set is emptied and no seed follows. Only an open/all load without a period (line 240) or accessLost (line 193) resets `seeded`. Neither runs on this path: on the identity change, clearPrivateView(true) resets the filters to open, but setFilters(readReviewFilters(nextFilterKey)) in the same batch puts the returning account's saved historical filter back. That is the F-030 premise.",
+      "impact": "Accounts A and B both have the saved filter State = Merged. A is seeded by the mount's open load. The gh account is switched to B, and a Refresh or watcher poll loads Merged for B: the set is emptied and a seed for B is requested. That seed fails (open listing `unavailable:`, as in the test 'an account change seen on a historical view…'), or it is still in flight. The account is switched back to A and the next merged load answers for A. `identity.current` (B) differs from A, so the set is emptied. `seeded.current` is still A, so no seed is requested, and a late B seed is dropped by `identity.current !== key`. A's open pull request that requests A's review is not in the tab signal until A opens the Open or All view. This is the same false negative F-030 described, for the account the viewer returns to.",
+      "suggested_fix": "Invalidate the seed marker wherever the carried set is emptied for a new identity: `if (identity.current !== nextIdentity) { setCarriedAttention(new Set()); seeded.current = \"\"; }` before the `seeded.current !== nextIdentity` check. Then the returning identity is unseeded and gets one open seed. DOM test: extend 'an account change seen on a historical view…' with viewer = 'ann' and openOffline = false, Refresh, and assert indicators.at(-1) === 'attention' and that an open request was issued.",
+      "evidence": "ReviewBoard.tsx at 8e6ecf1aa: :118 `seeded` ref; :193 the only reset besides :241; :216-218 identity change with clearPrivateView(true); :240-247 the replace branch and the non-replacing branch; :248-252 setFilters(readReviewFilters(nextFilterKey)) in the same batch; :280 the seed guard `identity.current !== key` drops a B seed after the return to A. Traced by reading only; no test run, not reproduced in the app. Before 91c37c81b the same return replaced the set from the merged snapshot, which is also empty (F-030), so this is an incomplete fix, not a regression against the base.",
+      "confidence": "high",
+      "dedupe_key": "seeded-marker-not-invalidated-on-identity-change",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace"
+    },
+    {
+      "id": "F-035",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n)).length : 0;",
+      "problem": "hiddenAttention counts every number in attentionPrs that is not among `visible`. attentionPrs is the carried set plus the shown snapshot, so it also counts carried numbers whose card is absent from the snapshot. For historical and period scopes that is intended: reset (EMPTY_FILTERS, state open+draft, no period) moves to the open scope, where those cards load. It is wrong when the shown snapshot is the open scope itself but a stale cached fallback (`read.stale`, set by 91c37c81b). The carried set holds numbers from later loads that the old snapshot lacks, so the hint says they are 'hidden by filters'. They are not, and reset keeps the same `open/` scope, so no reload happens and nothing new appears.",
+      "impact": "The Open view loads (t0, cached). The viewer switches to Open + Closed, an `all` load replaces the carried set, and it now includes a new request #9. The viewer switches back to Open + Draft. The open load fails with `unavailable:`, and the t0 cache is shown as 'Last available snapshot' with stale = true. The toolbar shows '1 waiting on you hidden by filters'. Clicking it does not show #9 and the button stays. It also clears the viewer's saved author, reviewer, decision or CI filters, which hid nothing.",
+      "suggested_fix": "Do not show the hint, or count only numbers present in snapshot.cards, while the snapshot is a fallback (`stale` or `error` set). Alternatively count `snapshot.cards` numbers that are in attentionPrs and filtered out of `visible`, plus carried numbers only when the scope is not open/no-period. DOM test: the scenario above, asserting no hint.",
+      "evidence": "ReviewBoard.tsx at 8e6ecf1aa: :262-266 stale fallback; :375-384 attentionPrs from carriedAttention plus the snapshot; :425 reset; :426-427 hint arithmetic; :444 render gated only on `snapshot && hiddenAttention > 0`. model.ts:18-26 EMPTY_FILTERS state ['open','draft'] maps to scope 'open'. Traced by reading; not run.",
+      "confidence": "medium",
+      "dedupe_key": "hidden-attention-hint-on-stale-open-snapshot",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-030", "disposition": "partial" },
+    { "id": "F-031", "disposition": "closed" },
+    { "id": "F-032", "disposition": "closed" },
+    { "id": "F-033", "disposition": "partial" },
+    { "id": "F-012", "disposition": "closed" },
+    { "id": "F-013", "disposition": "closed" },
+    { "id": "F-020", "disposition": "closed" }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+## Notes
+
+### Prior dispositions
+- **F-030, partial.** The reported paths are closed: access loss on a historical view, and an account change on a historical view with the seed succeeding later. The return to an already-seeded identity is still open (F-034).
+- **F-031, closed.** The `stale` guard on the write-back is in place, and `stale` clears on every successful main load because setRead replaces the whole object.
+- **F-032, closed.** Deviation (c) now gives the content-box widths with the matching panel widths.
+- **F-033, partial.** T22 added tests for the identity term. The `all` term and the period term of the replace rule are still not tested on their own. The other F-033 items I did not re-check.
+- **F-012, F-013, F-020, closed** as implemented per the operator's answers. F-035 is a defect in the F-012 hint.
+- **Where F-012 and F-013 are recorded.** The brief places them in `-r02/canonical-findings.json`, but only F-020 is there. I took the descriptions of F-012 and F-013 from the brief and the commit message.
+
+### Other paths checked, no finding
+- **Seed vs main load.**
+  - Open/all load landing before the seed: it clears seedFor, and the cleanup aborts the seed.
+  - Seed landing first: the replacing load overwrites it.
+  - Refresh on a historical scope while unseeded: a new seedFor object aborts and restarts the seed. That is at most two requests per poll.
+  - Seed failure: the catch clears seedFor, and the next main load asks again.
+  - accessLost: resets everything, and `identity.current = ""` makes an in-flight seed ignore itself.
+- **Card-only seed.** The seed has no addressedReplyIds, so reply-based attention is missing from it. This only matters for a card that is not in the shown snapshot, and noteDiscussion can only mark shown cards.
+- **Errors in the seed.** The seed swallows `access:` errors; the next main load surfaces them.
+
+### Not verified
+- No test, typecheck or mutation run (read-only brief).
+- Nothing reproduced in the app.
+- I did not check how often the watcher's `onPollCompleted` fires, which bounds the extra seed requests.
+- I did not check whether the app shell remounts the board on an account change.
+- Routing audit:
+  - graph_used: no (not-relevant: a single-file state trace)
+  - wiki_used: no (not-relevant)
+  - ctx_used: yes (`keryx ctx rg`, `keryx ctx read`; `git show` with an escape marker for exact diff lines)
+  - raw_rg_used: no

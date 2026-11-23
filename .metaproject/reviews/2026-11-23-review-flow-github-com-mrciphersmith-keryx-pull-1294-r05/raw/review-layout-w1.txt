@@ -1,0 +1,85 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "T23 toolbar (85bd13a03): no clipping, no sideways scroll, no zero-width element and no collapse found. Everything below is info, because I could not run a layout engine (read-only, exec budget 0) and the only pixel numbers are the orchestrator's Chromium measurements of rebuilt markup. From those numbers: with the hint present the toolbar wraps to 2 rows at 560, 820 and 1180px (3 rows at 340px); without it, one row at 560. From reading only: the hint is inside the flex:none heading, so it widens the heading and cannot wrap itself; the hidden .count-word leaves no stray space; the hover rule differs from the .btn hover convention; focus-visible and both themes are covered by existing tokens; the 80px search field cuts its placeholder.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "quote": ".review-board .flows-toolbar > * { flex: none; }",
+      "problem": "The hint button sits inside .flows-heading, which is a direct toolbar child and so is flex:none (content-sized, no wrapping of its own). The hint adds its full width (43px with words hidden, 214px with words, per the orchestrator) to the heading and to the row, and the toolbar absorbs it only by wrapping the OTHER controls onto a second row. The T23 comment in review.css says the 80px search field 'keeps one row at the 560px board', which holds only while the hint is absent.",
+      "impact": "Orchestrator's measurement (Chromium, real stylesheets, rebuilt markup, toolbar width set): with the hint the toolbar is 91px high (two rows) at 560, 820 and 1180, and 127px (three rows) at 340; without it 55px (one row) at 560, 820 and 1180. When filters hide a waiting PR the toolbar grows by 36px and the board below shifts down; clearing the filters shifts it back. Nothing clips and scrollWidth never exceeded clientWidth, so under the layout-rendering severity table this stays info. The default window with the PR panel open (560px) is exactly the case where hint present means two rows. Widths between the samples were not swept, so the real wrap windows are unknown.",
+      "suggested_fix": "Either record in deviation (d) that two rows with the hint is accepted, or put the hint where it does not widen the flex:none heading. Sweep 340-1400px in steps to find the wrap windows before choosing.",
+      "evidence": "review.css line 86 and the new hint rule; ReviewBoard.tsx renders the hint inside <div className=\"flows-heading\">; layout-measurements-t23.md table (orchestrator, not reproduced by me). The wrapping conclusion comes from the measurements; the cause (flex:none heading) comes from reading the CSS.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "toolbar-wraps-with-hidden-attention-hint",
+      "blocking_merge": false,
+      "degradation_class": "behaviour-delta"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "quote": ".review-board .flows-toolbar > .search-field { flex-basis: 80px; min-width: 80px; }",
+      "problem": "UNVERIFIED. At 80px border-box the search field (1px borders, 8px and 6px padding, a 14px icon, 6px gap) leaves roughly 43px for the input, so the placeholder 'Search by title or #number' is cut after a few characters without an ellipsis. The measurement file reports toolbar heights only, not the input's visible width or whether the field stays usable.",
+      "impact": "Under the 760px container the field shows a magnifier and the first letters of the placeholder. The input keeps aria-label 'Search pull requests' and the :focus-within ring is unaffected, but a sighted user cannot read the hint. The base rule's flex-grow:1 still lets the field expand when the row has spare room, so 80px is its width only when the row is full.",
+      "suggested_fix": "Measure the input's clientWidth at 560px with and without the hint; if unreadable, keep 96px or accept an icon-only look with the title as the hint.",
+      "evidence": "Reading only, no probe. The 43px figure is my arithmetic from components.css .search-field, not a measurement.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "dedupe_key": "search-field-80px-placeholder",
+      "blocking_merge": false
+    },
+    {
+      "id": "LY-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "quote": "<span className=\"count-label\" aria-label={countText} title={countText}>",
+      "problem": "UNVERIFIED and outside this lens (for review-ui-ux). aria-label on a plain span has no role that names it, so assistive technology tends to read the content, not the label. Under 760px .count-word is display:none (removed from the accessibility tree), so what is read is the bare number.",
+      "impact": "A screen reader may announce '18' next to the heading below 760px. The layout itself is fine: the leading space lives inside the hidden .count-word span, so no stray space remains when it is hidden, and the hint's own spaces sit between flex items of an inline-flex button (dropped) or inside the hidden .toolbar-label (from reading; the measurement file does not cover whitespace).",
+      "suggested_fix": "Keep the word as visually hidden text (.sr-only exists in components.css) at narrow widths instead of display:none.",
+      "evidence": "Reading ReviewBoard.tsx and review.css; not checked with a screen reader.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "count-label-aria-on-span",
+      "blocking_merge": false
+    },
+    {
+      "id": "LY-004",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "quote": ".review-board .flows-toolbar .review-hidden-attention:hover { background: transparent; }",
+      "problem": "UNVERIFIED (reading only). The resting state fills with --warn-soft; hover removes the fill. Other controls in components.css move hover towards a visible fill (.btn to --bg-sunken, .btn-ghost and .icon-btn to --bg-hover) and carry a 150ms colour transition and an :active state; this button has none of these.",
+      "impact": "On hover the button looks less prominent than at rest, the reverse of its siblings; border and text stay --warn so it stays readable. Themes: --warn and --warn-soft are defined in every theme block of themes.css and tokens.css (light --warn #80510d on #f9eedb; dark #eec27a on #413e38 or #261f14), so light and dark both resolve; I computed no contrast ratios and saw no render. Focus: the global ':focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm) }' in components.css covers the button, and .flows-toolbar sets no overflow, so the ring is not clipped (reading).",
+      "suggested_fix": "Use an existing hover token (--bg-hover, or a color-mix of --warn into --warn-soft) and the shared transition, or accept as is.",
+      "evidence": "components.css lines 11-41 for the hover and focus conventions; token lists in themes.css and tokens.css.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "hidden-attention-hover-transparent",
+      "blocking_merge": false
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 4},
+  "prior_dispositions": [
+    {"id": "F-020", "disposition": "partial"},
+    {"id": "F-012", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"}
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Dispositions. F-020 (count hidden under 760px): the bare number now stays, and per the orchestrator's measurement the 560px toolbar is one row without the hint but two rows with it (LY-001), so partial from the layout side. F-012 and F-013 are behaviour and copy decisions; from the layout side the button renders and wraps without clipping, so closed here (logic and tests belong to other reviewers). F-030 to F-033 are state code in ReviewBoard.tsx, not read by this lens, no disposition given.
+
+What I did not verify:
+- No layout engine run (read-only, exec budget 0). Every pixel number is the orchestrator's, taken on rebuilt markup with stand-in labels, not the app with real data; I did not reproduce any of it.
+- Widths between the sampled ones, 320px, RTL and translated text (the hint and count are English literals).
+- Placeholder visibility at 80px, contrast ratios of --warn on --warn-soft per theme, a screen reader.
+- Slices: I read the T23 hunks (toolbar markup, review.css, count and hint tests) and located the toolbar in slice-03; I located the toolbar hunks in the slice files by search rather than reading all 130KB, and the attention-set, seed and outdated-action code in them was not reviewed by this lens.
+- Routing audit: graph_used no (not-relevant), wiki_used no (not-relevant), ctx_used yes, raw_rg_used no; one raw `git show` of commit 85bd13a03 (hook escape, exact two-file diff needed).

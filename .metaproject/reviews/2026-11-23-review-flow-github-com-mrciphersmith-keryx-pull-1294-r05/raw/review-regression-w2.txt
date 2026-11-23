@@ -1,0 +1,54 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Commits 91c37c81b and 85bd13a03 were checked against 1d3d65420 for unintended behaviour changes. Seeded identities behave as before: open/all loads, non-replacing loads, scope switches, receipts and badge polls issue the same requests and write the same state. The `stale` flag is dropped by every successful load, which builds a fresh read object. One minor request-count regression found: an identity change seen on a historical view starts a seed request that is redundant when the filter reset also triggers an open load, and every later historical load for an unseeded identity restarts the seed. Toolbar/label changes do not alter boards without hidden attention; the 80px rule and bare count apply only at 760px and below, which is the intended F-020 change. The Review changes label is renamed consistently in source and tests; only the Russian-language spec table O9 still names it. Nothing reached major, so scope B would screen the minor finding out; it is reported for the orchestrator's record. The slice .diff files were not read in full (see not verified).",
+  "findings": [
+    {
+      "id": "RG-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });",
+      "problem": "A historical-view load for an unseeded identity always creates a new seedFor object. (a) On an identity change seen on Closed/Merged/period, clearPrivateView(true) in the same load resets filters to the empty set (open), so the main effect starts an open load in the same commit as the seed effect starts a seed load. Both are open loads of the same repository; the seed is redundant and is aborted when the open load succeeds. Requests for this user action: 3, before 91c37c81b: 2. (b) While unseeded, each further historical load (switching Closed to Merged, refresh) produces a new seedFor object, so the seed effect aborts and re-issues the seed request each time.",
+      "impact": "Extra GitHub list requests (rate-limit budget) on an identity change or account switch on a historical view and on repeated scope switches before the first open load. No wrong state results: the seed identity guards and setSeedFor(null) on the open load keep the set correct.",
+      "suggested_fix": "Skip setSeedFor when the same commit will request an open load (filters reset by clearPrivateView(true)), or keep seedFor referentially stable per identity (setSeedFor(old => old?.identity === nextIdentity ? old : { identity: nextIdentity })).",
+      "evidence": "ReviewBoard.tsx main load .then (clearPrivateView(true) on identity change, then the else branch calling setSeedFor) and the seed effect with deps [seedFor, cwd, repo, expectedViewer, load]. Read statically; request counts derived by reading, not run.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "degradation_class": "behaviour-delta",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": [
+    { "id": "F-030", "disposition": "closed" },
+    { "id": "F-031", "disposition": "closed" },
+    { "id": "F-012", "disposition": "closed" },
+    { "id": "F-013", "disposition": "closed" },
+    { "id": "F-020", "disposition": "closed" }
+  ],
+  "slices": ["slice-01", "slice-02", "slice-03"]
+}
+```
+
+Question 1 (91c37c81b), by user action:
+- Mount: first load uses the empty filters (state open, no period), so it seeds and sets seedFor null; no seed request. Saved filters are applied only after this load, so later switching to Closed or Merged does not seed again (seeded.current is set).
+- Open/all load without a period for a seeded identity: same write as before (attentionNumbers(loaded) is the old inline expression). Closed/Merged/period load for a seeded, unchanged identity: neither replaces nor seeds, as before (old rule: identity unchanged and not open/all, so no replace). Scope switches, refresh (attempt), receipts (receiptVersion only changes attentionPrs), badge polls (they use setRead with ...old, no load call): unchanged.
+- What changed on purpose: an unseeded identity on a historical view starts from an empty set and requests one open seed; the seed result is applied only if the load was not superseded and key, seedFor.identity, identity.current all match and seeded.current differs. accessLost clears identity, seeded and seedFor, so a seed in flight is dropped. A seed result that arrives after an open load already seeded is ignored.
+- Seed failure: no retry from the effect; a later historical load for the same unseeded identity asks again. The seed is built from card-only data and lacks reply-based attention, as an open load before replies are carried; derived attentionPrs for the shown snapshot fix this up for cards that are shown.
+- stale: set only in the unavailable catch when no same-scope snapshot was kept. Cleared by every successful main load (setRead builds a fresh object without stale) and by a scope change. It survives loading:true on the same scope, updateRunSummary, noteDiscussion and accessLost (...old), which is correct because no new snapshot has arrived; after accessLost the snapshot is null so write-back has nothing to write. Not a defect.
+- Mutation list in the brief covers seed removed, stale guard, old replace rule, seed identity guard, write-back removed.
+
+Question 2 (85bd13a03):
+- No hidden attention: hiddenAttention is 0 and the button is not rendered; the .count-label span gains aria-label/title and an inner .count-word with the same text, so the text above 760px is unchanged. aria-label on a span without a role is weakly supported by assistive technology; at 760px and below only the bare number remains visible (intended F-020). Not filed (below the scope B bar, accessibility judgement for scope A).
+- 760px and below: .count-word hidden instead of the whole .count-label (intended); .search-field basis/min-width 80px instead of 96px for every narrow board, with or without hidden attention (stated by the commit as the orchestrator's addition). Wider boards: unaffected by that rule. The new button sits inside .flows-heading (flex: none), so it adds width between 760 and 1100px with the full label; whether the toolbar still fits one row there was not measured.
+- The hint counts attentionPrs not in visible, so it also appears on Closed/Merged or period views for carried open attention; reset returns to the empty filters (state open, period none), which also clears the saved filters and the search, as the operator answered.
+- Review changes: renamed to Review again in ReviewResults.tsx and ReviewRuns.tsx (launchAction), the dom tests (ReviewBoard.dom.test.tsx 755-765, ReviewRuns.dom.test.tsx 153, 186, 187) updated; repo-wide search outside .metaproject finds the old text only in docs/requirements/keryx-desktop-review-v2/specification.md line 24 (row O9, written in Russian), which the plan's deviation (d) records. Accessible name pattern "Review again for #N" is derived from the label, so it follows.
+
+Not verified: I did not read the three slice .diff files in full; I read both commits with git show, the whole current ReviewBoard.tsx load, seed, attention and toolbar code, review.css and the repository-wide references. The ids in `slices` are listed as the dispatch required. No tests, builds or browser were run (read-only round), so request counts and layout are reasoned from the code, not measured. The one-row layout between 760 and 1100px with the hint button visible, and the real-app behaviour with live GitHub data, were not checked. F-032 and F-033 were not read.
+
+Routing audit: graph_used: no (not-relevant, changed files read directly); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.
