@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "515",
+  "slug": "desktop-metaproject-graph-panel",
+  "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T07:14:05.302Z",
+  "updatedAt": "2026-11-23T07:22:41.733Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:378e5aa3a0d8e7673b25173adb996ed60d6682d550cdb40d3b682c37c8feee33",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected by the preceding review and folded into context.md (Agent Findings)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by T5-T8, which split the implementation by file ownership"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests are written inside each implement task (T5-T8); the full suite is verify task T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T8",
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Graph layout module and RelationshipGraph component (new files)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "NodeDetailsPanel and RelationshipList components (new files)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Explorer navigation and state fixes D1-D7",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Integrate graph and panel into the explorer; filters, counts, cleanup",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Update the Desktop Metaproject guide",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Desktop typecheck and full desktop test suite pass",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Live browser verification at three window sizes, dark and light",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T07:14:05.302Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T07:21:57.079Z",
+      "event": "task-added",
+      "detail": "T5: Graph layout module and RelationshipGraph component (new files)"
+    },
+    {
+      "at": "2026-11-23T07:21:57.264Z",
+      "event": "task-added",
+      "detail": "T6: NodeDetailsPanel and RelationshipList components (new files)"
+    },
+    {
+      "at": "2026-11-23T07:21:57.446Z",
+      "event": "task-added",
+      "detail": "T7: Explorer navigation and state fixes D1-D7"
+    },
+    {
+      "at": "2026-11-23T07:22:04.623Z",
+      "event": "task-added",
+      "detail": "T8: Integrate graph and panel into the explorer; filters, counts, cleanup"
+    },
+    {
+      "at": "2026-11-23T07:22:04.803Z",
+      "event": "task-added",
+      "detail": "T9: Update the Desktop Metaproject guide"
+    },
+    {
+      "at": "2026-11-23T07:22:04.986Z",
+      "event": "task-added",
+      "detail": "T10: Desktop typecheck and full desktop test suite pass"
+    },
+    {
+      "at": "2026-11-23T07:22:05.167Z",
+      "event": "task-added",
+      "detail": "T11: Live browser verification at three window sizes, dark and light"
+    },
+    {
+      "at": "2026-11-23T07:22:05.351Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T07:22:05.545Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T07:22:05.725Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11 (was empty) — The review round runs on the integrated and verified change"
+    },
+    {
+      "at": "2026-11-23T07:22:40.995Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"в графе тоже не понятно что, в деталях ноды визуально все сливается\"; source: operator session, 2026-11-23 (The owner asked for the review and then to start with the graph and the details panel)"
+    },
+    {
+      "at": "2026-11-23T07:22:41.181Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T07:22:41.545Z",
+      "event": "frozen",
+      "detail": "21 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T07:22:41.733Z",
+      "event": "started"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "в графе тоже не понятно что, в деталях ноды визуально все сливается",
+    "source": "operator session, 2026-11-23"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/graphLayout.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/RelationshipGraph.dom.test.tsx"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx src/metaproject/RelationshipList.dom.test.tsx"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "AC18": {
+      "kind": "invariant",
+      "check": "test ! -e apps/desktop/src/metaproject/GraphNodePanel.tsx"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
+    },
+    "AC20": {
+      "kind": "judged"
+    },
+    "AC21": {
+      "kind": "judged"
+    }
+  }
+}
