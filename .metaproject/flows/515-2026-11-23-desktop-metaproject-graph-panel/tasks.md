@@ -3,14 +3,14 @@
 Task definitions live here; task **statuses** live in flow.json and are managed
 only via `keryx flow task done <id> <taskId>`. The table follows `flow.json`: T12–T16 were added
 while the screen was tuned on a live preview, T17–T21 after review round 1, T22–T23 after review
-round 2, T24–T25 after review round 3; the journal records why.
+round 2, T24–T25 after review round 3, T26–T27 after review round 4; the journal records why.
 
 | ID | Kind | Title | Depends on | Criteria |
 |----|------|-------|------------|----------|
 | T1 | context | Collect remaining context | — | — |
 | T2 | implement | Implement per plan (scaffold; superseded by T5–T8) | — | — |
 | T3 | test | Add/adjust tests and make them pass (scaffold; tests live in T5–T8, suite in T10) | — | — |
-| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 | — |
+| T4 | review | Review round on the integrated change | T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27 | — |
 | T5 | implement | Graph layout module and RelationshipGraph component (new files) | — | AC1, AC2, AC3, AC4 |
 | T6 | implement | NodeDetailsPanel and RelationshipList components (new files) | — | AC7, AC8, AC9 |
 | T7 | implement | Explorer navigation and state fixes D1–D7 | — | AC11, AC12, AC13, AC14, AC15, AC16 (and the code for AC10) |
@@ -32,6 +32,8 @@ round 2, T24–T25 after review round 3; the journal records why.
 | T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
 | T24 | implement | Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005) | — | AC10, AC14, AC16, AC19 |
 | T25 | docs | Fix round 3: flow record (F-006, F-007, F-008) | — | — |
+| T26 | implement | Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002) | — | AC10, AC14, AC16, AC19 |
+| T27 | docs | Fix round 4: flow record (F-003, F-004, F-005) | — | — |
 
 ## Context
 
@@ -95,6 +97,9 @@ round 2, T24–T25 after review round 3; the journal records why.
   dismissed by the operator).
   Round 3 (the commits of fix round 2): package
   `.metaproject/reviews/2026-11-23-review-flow-branch-r03` (15 findings: 8 minor, 7 info).
+  Round 4 (the commits of fix round 3): package
+  `.metaproject/reviews/2026-11-23-review-flow-branch-r04` (10 findings: 5 minor, 5 info; one minor
+  dismissed by the operator).
 
 ## Fix round 1 (findings of review round 1)
 
@@ -144,3 +149,18 @@ are not fixed.
   dependencies it had before T22 and T23), F-007 (the journal's entries on T22 and T23 named no script
   for the runs they report; `verification/fix-round-2.md` now holds the commands and the mutants),
   F-008 (T22's result file named "F-005" without its round).
+
+## Fix round 4 (findings of review round 4)
+
+The finding ids below are round 4's. The finish line of T26 is in its dispatch file; the findings are in
+`.metaproject/reviews/2026-11-23-review-flow-branch-r04/findings.json`. F-004 (T24's result file writes its
+own round's finding ids bare) was dismissed by the operator; the info findings F-006 to F-010 are not fixed.
+
+- **T26 — tests of the error state.** F-001 (a standing rebuild error is unpinned against the clears a read
+  or a rebuild the user starts makes at its start: R4-10, R4-11) and F-002 (the order of the quiet clear
+  against the superseded-read check, and the latest-read guard of the failure write: R4-7, R4-8). Tests
+  only; the production code is correct.
+- **T27 — flow record.** Done by the orchestrator, with no dispatch file: F-003 (a cell of T24's banner
+  table cites a test that does not exercise it; the cell now names T26's test) and F-005 (the red run
+  counted 85 in T24's result file and 86 in `verification/fix-round-3.md`; that file now says which run it
+  counts and why the two differ).

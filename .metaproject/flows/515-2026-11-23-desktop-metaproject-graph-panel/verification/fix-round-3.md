@@ -12,6 +12,12 @@ Production file put back to the previous commit: `apps/desktop/src/metaproject/M
 `MetaprojectView.dom.test.tsx`: 86 pass, 1 fail: “a quiet re-read that succeeds after a failed catalog reload removes its
 banner, whether the snapshot changed or not”.
 
+This is the orchestrator's run, on the test file as committed in `46c472162`, which holds 87 tests; 86 + 1 is that file.
+T24's result file gives 85 pass, 1 fail for its own red run of the same check. That is one test fewer than the committed
+file holds, which fits a run made before the worker's last test in that file was added; the result file does not say
+when the run was made. The count for the committed file is the one above. (Added in fix round 4, for review round 4's
+F-005.)
+
 ## Review round 3's surviving mutants
 
 Ids are review round 3's (`R3-n`). R3-6 and R3-11 were judged equivalent and near-equivalent by the reviewer and were not
