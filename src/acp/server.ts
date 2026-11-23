@@ -2958,7 +2958,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         refuse(invalidParams(`${method}: subject must be an object, null or omitted`, { received: subject }));
       }
       // Its fields are checked by the store, which refuses a subject that is not a GitHub PR or issue.
-      change.subject = subject as SessionFlagsChange["subject"];
+      change.subject = subject as Exclude<SessionFlagsChange["subject"], undefined>;
     }
     try {
       return setSessionFlags(cwd, sessionId, change, options.dataDir);
