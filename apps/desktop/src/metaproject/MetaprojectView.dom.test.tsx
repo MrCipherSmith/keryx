@@ -1846,7 +1846,7 @@ test("a second rebuild removes the first one's failure banner while it runs", as
   expect(catalogErrorBanner()?.textContent).toBeUndefined();
 });
 
-test("a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands", async () => {
+test("a quiet re-read that a rebuild's failed catalog reload superseded leaves that reload's banner when it lands", async () => {
   let catalogReads = 0;
   let releaseQuiet: () => void = () => {};
   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {

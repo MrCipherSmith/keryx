@@ -179,7 +179,7 @@ Replacement:
         // The catalog can be read again: a failed catalog read's banner goes, a failed rebuild's stays.
 ```
 
-Result: **killed** by “a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands”.
+Result: **killed** by “a quiet re-read that a rebuild's failed catalog reload superseded leaves that reload's banner when it lands”. When the run was made the test was titled “a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands”; it was renamed for review round 5's F-001.
 
 ### R4-9
 
