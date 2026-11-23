@@ -18,6 +18,9 @@ export interface IssueViewer {
 
 export type IssueScope = "assigned" | "created" | "mentioned" | "subscribed";
 
+/** What `keryx issues list` reads: a viewer scope, or the GitHub repository of the project's cwd. */
+export type IssueListSource = IssueScope | "repository";
+
 export interface IssueLocalStage {
   stage: "none" | "preparing" | "active" | "needs_answer" | "done";
   reason?: string;

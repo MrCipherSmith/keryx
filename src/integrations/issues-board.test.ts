@@ -157,6 +157,105 @@ test("AC5 GitHub state, Project Status and Keryx stage stay independent on refre
   expect(shown.issue.state).toBe("closed");
 });
 
+async function withProject<T>(remote: string | null, use: (cwd: string) => Promise<T>): Promise<T> {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { execFileSync } = await import("node:child_process");
+  const { fixtureGitEnv, isolateGitDiscovery } = await import("../review/test-git-fixture");
+  const cwd = await mkdtemp(join(tmpdir(), "issues-repository-"));
+  const restore = isolateGitDiscovery();
+  try {
+    const env = fixtureGitEnv();
+    execFileSync("git", ["init", "--quiet"], { cwd, env });
+    if (remote) execFileSync("git", ["remote", "add", "origin", remote], { cwd, env });
+    return await use(cwd);
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+}
+function repoRow(repo: string, node: string, number: number) {
+  const { repository: _omitted, ...rest } = row(repo, node);
+  return { ...rest, number, html_url: `https://github.com/org/${repo}/issues/${number}` };
+}
+
+test("AC13 the repository source lists the project's GitHub repository and excludes pull requests", async () => {
+  const requests: URL[] = [];
+  const auth = await account(async (url, options) => {
+    if (url.pathname === "/graphql") {
+      const ids: string[] = JSON.parse(String(options.body)).variables.ids;
+      return json({ data: { nodes: ids.map((id) => ({ id, repository: { id: "R_base", name: "base", owner: { login: "org" } } })) } });
+    }
+    requests.push(url);
+    return json([repoRow("base", "I_1", 1), { ...repoRow("base", "P_2", 2), pull_request: {} }, repoRow("base", "I_3", 3)]);
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const page = await listIssuePage(auth, { source: "repository", state: "all", sort: "asc", labels: ["bug"], updatedSince: "2026-01-01" }, cwd);
+    expect(page.items.map((i) => [i.ref.owner, i.ref.repo, i.ref.number, i.ref.repositoryId])).toEqual([
+      ["org", "base", 1, "R_base"],
+      ["org", "base", 3, "R_base"],
+    ]);
+    expect(page.nextCursor).toBeNull();
+  });
+  expect(requests).toHaveLength(1);
+  const url = requests[0]!;
+  expect(url.pathname).toBe("/repos/org/base/issues");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    state: "all",
+    direction: "asc",
+    sort: "updated",
+    per_page: "40",
+    since: "2026-01-01T00:00:00.000Z",
+    labels: "bug",
+  });
+});
+
+test("AC13 a repository cursor follows GitHub's repository links and cannot be replayed for another repository", async () => {
+  const paths: string[] = [];
+  const auth = await account(async (url) => {
+    paths.push(url.pathname + url.search);
+    const n = Number(url.searchParams.get("page") ?? 1);
+    return json(
+      [row("base", "I_" + n)],
+      n < 2 ? { headers: { link: `<https://api.github.com/repositories/42/issues?state=open&page=2>; rel="next"` } } : {},
+    );
+  });
+  const cursor = await withProject("git@github.com:org/base.git", async (cwd) => {
+    const first = await listIssuePage(auth, { source: "repository" }, cwd);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
+    expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+    expect(second.nextCursor).toBeNull();
+    return first.nextCursor;
+  });
+  expect(paths[1]).toStartWith("/repos/org/base/issues?");
+  expect(new URLSearchParams(paths[1]!.split("?")[1]).get("page")).toBe("2");
+  await withProject("https://github.com/org/other.git", async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository", cursor }, cwd)).rejects.toThrow("Refresh");
+  });
+  await expect(listIssuePage(auth, { source: "assigned", cursor })).rejects.toThrow("Refresh");
+  expect(paths).toHaveLength(2);
+});
+
+test("AC13 the repository source needs a project with a GitHub remote", async () => {
+  let requested = 0;
+  const auth = await account(async () => {
+    requested++;
+    return json([]);
+  });
+  await withProject(null, async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
+      "configuration: This project has no GitHub.com fetch remote.",
+    );
+  });
+  await withProject("https://gitlab.com/org/base.git", async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
+  });
+  await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration:");
+  expect(requested).toBe(0);
+});
+
 test("AC3 source links reopen a private session or legacy Flow only after the selected account can read the ticket", async () => {
   const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
