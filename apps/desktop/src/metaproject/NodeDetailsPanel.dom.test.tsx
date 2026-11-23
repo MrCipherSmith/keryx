@@ -103,7 +103,7 @@ test("the header shows a kind badge, the title and the path, and Copy path write
   try {
     await render();
     const panel = host.querySelector('aside[aria-label="Graph node details"]');
-    expect(panel?.querySelector("header .badge")?.textContent).toBe("file");
+    expect(panel?.querySelector("header .badge")?.textContent).toBe("File");
     expect(panel?.querySelector("h2")?.textContent).toBe("Client");
     expect(panel?.querySelector("header code")?.textContent).toBe("src/client.ts");
     await act(async () => { button("Copy path").click(); });
@@ -122,6 +122,24 @@ test("relationship counts come from the root-adjacent edges and say when they ar
   expect(facts?.textContent).not.toContain("limited");
   await render({ relationships: { ...relationships, truncated: true } });
   expect(host.querySelector(".metaproject-details-facts")?.textContent).toContain("2 incoming · 2 outgoing · limited");
+});
+
+test("the Module fact shows the module path as a control that selects the module", async () => {
+  const selected: string[] = [];
+  await render({ onSelect: id => selected.push(id) });
+  const facts = host.querySelector(".metaproject-details-facts")!;
+  expect(facts.textContent).not.toContain("module:src");
+  const control = [...facts.querySelectorAll("button")].find(item => item.textContent === "src");
+  if (!control) throw new Error("Missing module control");
+  await act(async () => { control.click(); });
+  expect(selected).toEqual(["module:src"]);
+});
+
+test("the counts fact is labelled Relationships, like the tab", async () => {
+  await render();
+  const keys = [...host.querySelectorAll(".metaproject-details-facts .info-key")].map(item => item.textContent);
+  expect(keys).toContain("Relationships");
+  expect(keys).not.toContain("Relations");
 });
 
 test("Relationships is the default tab, grouped by direction, and a row selects the neighbour", async () => {

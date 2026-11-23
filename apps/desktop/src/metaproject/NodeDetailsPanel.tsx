@@ -248,6 +248,11 @@ export function NodeDetailsPanel({
     : relationshipsProblem ? "Unavailable" : relationshipsPending ? "Loading…" : "—";
   const copyState = copied?.node === node.id ? copied.ok ? "Copied" : "Could not copy" : "";
 
+  function moduleControl(module: string) {
+    const path = module.replace(/^module:/, "");
+    return <button type="button" className="link-btn metaproject-details-module" onClick={() => onSelect(module)} title={`Select module ${path}`}>{path}</button>;
+  }
+
   function relationshipBody() {
     return <>
       {relationshipsProblem && <Problem message={relationshipsProblem} onRetry={onRetry} />}
@@ -348,11 +353,11 @@ export function NodeDetailsPanel({
       </div>
     </header>
     <div className="info-section metaproject-details-facts">
-      {node.module && <Fact label="Module"><span className="mono">{node.module}</span></Fact>}
+      {node.module && <Fact label="Module">{moduleControl(node.module)}</Fact>}
       {node.pageType && <Fact label="Page type">{node.pageType}</Fact>}
       {node.status && <Fact label="Status"><span className="badge badge-neutral">{node.status}</span></Fact>}
       {node.line !== undefined && <Fact label="Line">{node.line}</Fact>}
-      <Fact label="Relations">{relationFact}</Fact>
+      <Fact label="Relationships">{relationFact}</Fact>
     </div>
     <div className="tabs metaproject-details-tabs" role="tablist" aria-label="Node details" ref={tabList}
       onKeyDown={event => {
