@@ -148,6 +148,11 @@ export function MetaprojectView(props: {
   negotiate?: Negotiate;
   /** Test seam for the graph canvas (happy-dom has none); the app passes nothing. */
   createCytoscape?: CytoscapeFactory;
+  /**
+   * Whether the explorer's view is shown (the app keeps it mounted, hidden, after its first visit).
+   * Hidden, it holds no overlay; shown again, it re-reads the catalog quietly. Defaults to true.
+   */
+  visible?: boolean;
 }) {
   return <Explorer key={props.cwd} {...props} />;
 }
@@ -163,22 +168,48 @@ const sameKinds = (left: readonly MetaprojectEdgeKind[], right: readonly Metapro
 
 const DIRECTION_LABELS: Record<MetaprojectDirection, string> = { both: "Both", incoming: "Incoming", outgoing: "Outgoing" };
 const POPOVER_WIDTH = 320;
+/** Room kept between the popover and the window edge, and between the popover and its button. */
+const POPOVER_MARGIN = 8;
+const POPOVER_GAP = 4;
+/** The shared `.menu` surface's own height cap (styles.css), kept when the popover is bounded inline. */
+const MENU_MAX_HEIGHT = 420;
+
+type PopoverPosition = { left: number; top?: number; bottom?: number; maxHeight?: number };
 
 /**
- * A non-modal dialog anchored under its button, built on the app's menu surface (`.menu`): focus
+ * Where the popover goes for its button: under it, or above it when its content does not fit below
+ * and there is more room above (the shared menu's "auto" placement). Its height is bounded by the
+ * room on that side, so its edge stays `POPOVER_MARGIN` inside the window and it scrolls inside.
+ */
+function placeFiltersPopover(rect: DOMRect, needed: number): PopoverPosition {
+  // Right-aligned with the button (it sits at the end of the graph header), kept inside the window.
+  const left = Math.max(POPOVER_MARGIN, Math.min(rect.right - POPOVER_WIDTH, window.innerWidth - POPOVER_WIDTH - POPOVER_MARGIN));
+  const height = window.innerHeight;
+  const below = height - POPOVER_MARGIN - (rect.bottom + POPOVER_GAP);
+  const above = rect.top - POPOVER_GAP - POPOVER_MARGIN;
+  if (needed > below && above > below) {
+    return { left, bottom: Math.max(POPOVER_MARGIN, height - rect.top + POPOVER_GAP), maxHeight: Math.min(MENU_MAX_HEIGHT, above) };
+  }
+  return { left, top: rect.bottom + POPOVER_GAP, maxHeight: Math.max(0, Math.min(MENU_MAX_HEIGHT, below)) };
+}
+
+/**
+ * A non-modal dialog anchored to its button, built on the app's menu surface (`.menu`): focus
  * moves in on open; Escape or a press outside calls `onClose`, which gives focus back to the button.
+ * It is placed again when the window is resized.
  */
 function FiltersPopover({ id, anchor, onClose, children }: { id: string; anchor: HTMLElement; onClose: () => void; children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ left: -9999, top: -9999 });
+  const [position, setPosition] = useState<PopoverPosition>({ left: -9999, top: -9999 });
   const close = useRef(onClose);
   close.current = onClose;
   useEscape(() => close.current());
   useLayoutEffect(() => {
-    const rect = anchor.getBoundingClientRect();
-    // Right-aligned with the button (it sits at the end of the graph header), kept inside the window.
-    const left = Math.max(8, Math.min(rect.right - POPOVER_WIDTH, window.innerWidth - POPOVER_WIDTH - 8));
-    setPosition({ left, top: rect.bottom + 4 });
+    // scrollHeight is the content's full height, whatever max-height the last placement gave it.
+    const place = () => setPosition(placeFiltersPopover(anchor.getBoundingClientRect(), panel.current?.scrollHeight ?? 0));
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
   }, [anchor]);
   useLayoutEffect(() => {
     panel.current?.querySelector<HTMLElement>("select, button:not([disabled])")?.focus();
@@ -208,6 +239,7 @@ function Explorer({
   requestV2,
   negotiate,
   createCytoscape,
+  visible = true,
 }: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
@@ -216,6 +248,7 @@ function Explorer({
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
   negotiate?: Negotiate;
   createCytoscape?: CytoscapeFactory;
+  visible?: boolean;
 }) {
   const symbolReasonId = useId();
   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
@@ -256,7 +289,8 @@ function Explorer({
   const filtersChanged = direction !== "both" || depth !== 1 || !sameKinds(kinds, defaultKinds);
   const resetFilters = () => { setDirection("both"); setDepth(1); setKinds(defaultKinds); };
   const [revealRelationships, setRevealRelationships] = useState(0);
-  // Open or closed is explorer state like the filters: it survives a view or tab switch and is not a history entry.
+  // Open or closed survives a switch between Graph, Wiki and OpenSpec and is not a history entry. Leaving the
+  // explorer's view closes it, and while hidden it is never mounted (no Escape layer, no window listener).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filtersAnchor, setFiltersAnchor] = useState<HTMLButtonElement | null>(null);
   const filtersDialogId = useId();
@@ -292,6 +326,21 @@ function Explorer({
   const project = useRef(0);
   const loaded = useRef(false);
   const loadedSnapshot = useRef<string>();
+  // Shown again after being hidden, the explorer re-reads the catalog once, quietly: an unchanged
+  // snapshot updates only the graph's freshness, so nothing that hangs on the catalog reloads.
+  const quietRead = useRef(false);
+  const [freshness, setFreshness] = useState<Pick<MetaprojectCatalog, "snapshotId" | "graph" | "graphReason"> | null>(null);
+  const wasVisible = useRef(visible);
+  useEffect(() => {
+    const returned = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    // Leaving the explorer's view closes the Filters popover; focus stays where the user went.
+    if (!visible) setFiltersOpen(false);
+    // A catalog still loading is left to finish; its result is applied on arrival.
+    if (!returned || !loaded.current) return;
+    quietRead.current = true;
+    setRevision(value => value + 1);
+  }, [visible]);
   const searchInFlight = useRef<Promise<MetaprojectResponse> | null>(null);
   const pageInFlight = useRef(false);
   const latestSearch = useRef({ query: "", snapshot: "", generation: 0 });
@@ -302,6 +351,8 @@ function Explorer({
   const [documents, setDocuments] = useState<MetaprojectNeighbors | null>(null);
   const [documentProblem, setDocumentProblem] = useState("");
   const panelOpen = route.mode === "graph" && route.panelOpen;
+  // The graph's freshness as last read: a quiet re-read's, while it is for the loaded snapshot.
+  const graphState = catalog && freshness?.snapshotId === catalog.snapshotId ? freshness : catalog;
   const graphIndex = useMemo(
     () => catalog && indexMetaprojectGraph(catalog.nodes, catalog.edges),
     [catalog],
@@ -314,6 +365,8 @@ function Explorer({
   useEffect(() => {
     if (protocol === null) return;
     const generation = ++project.current;
+    const quiet = quietRead.current;
+    quietRead.current = false;
     setError("");
     if (!loaded.current) setLoading(true);
     void (async () => {
@@ -323,7 +376,12 @@ function Explorer({
         })) as MetaprojectCatalog;
         if (generation !== project.current) return;
         loaded.current = true;
+        if (quiet && result.snapshotId === loadedSnapshot.current) {
+          setFreshness({ snapshotId: result.snapshotId, graph: result.graph, graphReason: result.graphReason });
+          return;
+        }
         setCatalog(result);
+        setFreshness(null);
         setSnapshotMismatch(false);
         if (loadedSnapshot.current && loadedSnapshot.current !== result.snapshotId && !result.truncated) {
           setRoute(current => current.mode !== "openspec" && !result.nodes.some(node => node.id === current.selection)
@@ -509,7 +567,10 @@ function Explorer({
   // when it is not among the catalog, hits or current projection (for example a lookup result).
   const seenNodes = useRef(new Map<string, MetaprojectNode>());
   const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };
-  for (const node of nodes) remember(node);
+  // Filled when the node list changes, not on every render; the current render reads `nodes` itself.
+  useEffect(() => {
+    for (const node of nodes) seenNodes.current.set(node.id, node);
+  }, [nodes]);
   const activeNode = nodes.find(node => node.id === selection) ?? seenNodes.current.get(selection);
   const [suggestedWiki, setSuggestedWiki] = useState<{ root: string; node: MetaprojectNode } | null>(null);
   const modulePath = activeNode?.kind === "module" ? activeNode.path : undefined;
@@ -603,7 +664,10 @@ function Explorer({
     }
   };
   const [unresolvedLink, setUnresolvedLink] = useState<{ selection: string; path: string; message: string } | null>(null);
+  // Every link click takes a new token; only the lookup holding the latest one may settle.
+  const lookup = useRef(0);
   const openPath = (path: string, fragment: string | undefined, resolved: boolean) => {
+    const token = ++lookup.current;
     const from = selection;
     const unresolved = (message: string) => setUnresolvedLink({ selection: from, path, message });
     setUnresolvedLink(null);
@@ -612,7 +676,7 @@ function Explorer({
     if (loaded) { openDocument(loaded, fragment); return; }
     const snapshotId = catalog?.snapshotId;
     const generation = project.current;
-    const current = () => generation === project.current && shownSelection.current === from && activeMode.current === "wiki";
+    const current = () => token === lookup.current && generation === project.current && shownSelection.current === from && activeMode.current === "wiki";
     void (async () => {
       try {
         const result = await read(cwd, { action: "search", query: path });
@@ -637,7 +701,7 @@ function Explorer({
   const relationshipsLoading = loadingRelationships || (projection !== null && projection.root !== selection);
   const graphProjection = mode !== "graph" ? null : currentProjection ?? (relationshipsLoading ? lastGraph.current : null);
   const graphBusy = graphProjection !== null && graphProjection !== currentProjection;
-  const showGraph = catalog !== null && (catalog.graph !== "missing" || protocol === 2);
+  const showGraph = graphState !== null && (graphState.graph !== "missing" || protocol === 2);
   const list = useRef<HTMLElement>(null);
   useEffect(() => {
     list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
@@ -680,7 +744,7 @@ function Explorer({
       {changedSettings ? `Filters · ${changedSettings}` : "Filters"}<Icon name="chevronDown" size={12} />
     </button>
   );
-  const filters = filtersOpen && filtersAnchor && (
+  const filters = visible && filtersOpen && filtersAnchor && (
     <FiltersPopover id={filtersDialogId} anchor={filtersAnchor} onClose={closeFilters}>
       <div className="metaproject-filters-pop-row">
         <label className="metaproject-filter">
@@ -723,7 +787,7 @@ function Explorer({
       )}
     </FiltersPopover>
   );
-  const freshnessOpen = Boolean(catalog?.graphReason) && freshnessReason === catalog?.graphReason;
+  const freshnessOpen = Boolean(graphState?.graphReason) && freshnessReason === graphState?.graphReason;
   const wikiEmptyTitle =searching ? `Searching the Wiki for “${searchQuery}”…`
     : results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`;
   return (
@@ -785,18 +849,18 @@ function Explorer({
         ? "This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings."
         : "Checking OpenSpec support…"}</p>}
       {mode !== "openspec" && loading && !protocolError && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
-      {mode !== "openspec" && catalog && (
+      {mode !== "openspec" && catalog && graphState && (
         <>
-          {catalog.graph !== "ready" && (
+          {graphState.graph !== "ready" && (
             <div className="inline-banner tone-warn metaproject-freshness" role="status">
-              <span className="metaproject-freshness-state">Graph is {catalog.graph}.</span>
-              {catalog.graphReason && (
+              <span className="metaproject-freshness-state">Graph is {graphState.graph}.</span>
+              {graphState.graphReason && (
                 <button type="button" className="btn btn-ghost btn-sm metaproject-freshness-toggle" aria-expanded={freshnessOpen}
-                  aria-controls={freshnessReasonId} onClick={() => setFreshnessReason(freshnessOpen ? null : catalog.graphReason ?? null)}>
+                  aria-controls={freshnessReasonId} onClick={() => setFreshnessReason(freshnessOpen ? null : graphState.graphReason ?? null)}>
                   Details<Icon name={freshnessOpen ? "chevronUp" : "chevronDown"} size={12} />
                 </button>
               )}
-              {freshnessOpen && <p id={freshnessReasonId} className="metaproject-freshness-reason">{catalog.graphReason}</p>}
+              {freshnessOpen && <p id={freshnessReasonId} className="metaproject-freshness-reason">{graphState.graphReason}</p>}
               <button className="btn metaproject-rebuild" disabled={rebuilding} onClick={() => void rebuild()}>
                 {rebuilding ? "Rebuilding…" : "Rebuild graph"}
               </button>
@@ -892,7 +956,7 @@ function Explorer({
               onFind={kind => kind === "wiki"
                 ? visit({ mode: "wiki", query: activeNode.path, selection: "" })
                 : visit({ mode: "openspec", query: activeNode.title, collection: "spec", location: null })}
-              onDraft={catalog.graph === "ready" && !documents?.truncated ? onDraft : undefined}
+              onDraft={graphState.graph === "ready" && !documents?.truncated ? onDraft : undefined}
               onRetry={() => setRevision(value => value + 1)}
             />}
           </div>

@@ -6,6 +6,8 @@ import { registerDom, unregisterDom } from "../test/dom";
 let createElement: typeof import("react").createElement;
 let act: (fn: () => void | Promise<void>) => Promise<void>;
 let View: typeof import("./MetaprojectView").MetaprojectView;
+type ViewProps = import("react").ComponentProps<typeof View>;
+let overlayOpen: typeof import("../components/ui").overlayOpen;
 let root: Root;
 let host: HTMLElement;
 const page = { id: "page", kind: "wiki" as const, title: "Guide", path: "wiki/guide.md" };
@@ -17,6 +19,7 @@ beforeAll(async () => {
   registerDom();
   const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
   View = (await import("./MetaprojectView")).MetaprojectView;
+  overlayOpen = (await import("../components/ui")).overlayOpen;
   host = document.createElement("div"); document.body.append(host); root = (await import("react-dom/client")).createRoot(host);
 });
 beforeEach(async () => { await act(() => root.render(null)); });
@@ -609,10 +612,18 @@ const filtersDialog = () => document.querySelector<HTMLElement>('[role="dialog"]
 async function openFilters() {
   if (!filtersDialog()) await act(async () => { filtersButton().click(); });
 }
-async function renderFilters() {
-  const createCytoscape = await headlessCytoscape();
-  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
-  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: async () => false })); });
+const linkedRead = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
+let linkedCytoscape: Awaited<ReturnType<typeof headlessCytoscape>> | undefined;
+const noRebuild = async () => false;
+/**
+ * Renders the explorer over `linkedCatalog` with a drawn graph. The reader, graph factory and rebuild
+ * keep their identity across calls, so calling it again with other `props` (`visible`, …) re-renders
+ * the same explorer without reloading its catalog.
+ */
+async function renderFilters(props: Partial<ViewProps> = {}) {
+  linkedCytoscape ??= await headlessCytoscape();
+  const createCytoscape = linkedCytoscape;
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: linkedRead, createCytoscape, onRebuild: noRebuild, ...props })); });
 }
 
 test("graph filters sit behind a closed Filters button in the graph's header", async () => {
@@ -791,4 +802,216 @@ test("the freshness banner has no Details button without a reason, and Rebuild s
   expect(detailsButton()).toBeUndefined();
   await act(async () => { button("Rebuild graph").click(); });
   expect(rebuilds).toBe(1);
+});
+
+/** happy-dom has no layout: give the window a height and an element a box. Each returns its undo. */
+function stubWindowHeight(height: number) {
+  const own = Object.getOwnPropertyDescriptor(window, "innerHeight");
+  Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: height });
+  return () => { if (own) Object.defineProperty(window, "innerHeight", own); else Reflect.deleteProperty(window, "innerHeight"); };
+}
+function stubBox(element: HTMLElement, box: { top: number; bottom: number; left: number; right: number }) {
+  const rect = { ...box, x: box.left, y: box.top, width: box.right - box.left, height: box.bottom - box.top, toJSON: () => box };
+  element.getBoundingClientRect = () => rect as DOMRect;
+}
+/** The Filters popover's content height as a browser would measure it (happy-dom reports 0). */
+function stubPopoverContentHeight(height: number) {
+  const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+  const inherited = Object.getOwnPropertyDescriptor(Element.prototype, "scrollHeight");
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+    configurable: true,
+    get(this: HTMLElement) { return this.classList.contains("metaproject-filters-pop") ? height : inherited?.get?.call(this) ?? 0; },
+  });
+  return () => { if (own) Object.defineProperty(HTMLElement.prototype, "scrollHeight", own); else Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight"); };
+}
+const px = (value: string | undefined) => Number.parseFloat(value ?? "");
+
+test("the Filters popover stays 8 px inside a short window, scrolls inside and is placed again on resize", async () => {
+  const restoreHeight = stubWindowHeight(480);
+  try {
+    await renderFilters();
+    // The button where the live 720x480 check found it, with the freshness Details open above it.
+    stubBox(filtersButton(), { left: 544, top: 277, right: 615, bottom: 301 });
+    await openFilters();
+    const style = filtersDialog()!.style;
+    expect(px(style.top)).toBe(305);
+    expect(px(style.left)).toBe(295);
+    // The bottom edge is bounded at the window height minus 8 px; the rest scrolls inside (.menu).
+    expect(px(style.top) + px(style.maxHeight)).toBe(480 - 8);
+    await act(async () => { window.innerHeight = 400; window.dispatchEvent(new Event("resize")); });
+    expect(px(filtersDialog()!.style.top)).toBe(305);
+    expect(px(filtersDialog()!.style.top) + px(filtersDialog()!.style.maxHeight)).toBe(400 - 8);
+  } finally { restoreHeight(); }
+});
+
+test("the Filters popover opens above a button low in the window when its content does not fit below", async () => {
+  const restoreHeight = stubWindowHeight(480);
+  const restoreContent = stubPopoverContentHeight(229);
+  try {
+    await renderFilters();
+    stubBox(filtersButton(), { left: 544, top: 430, right: 615, bottom: 454 });
+    await openFilters();
+    const style = filtersDialog()!.style;
+    expect(style.top).toBe("");
+    // Its bottom edge sits 4 px above the button, and its height is bounded by the room above.
+    expect(480 - px(style.bottom)).toBe(426);
+    expect(px(style.maxHeight)).toBe(430 - 4 - 8);
+  } finally { restoreContent(); restoreHeight(); }
+});
+
+test("leaving the explorer's view closes its Filters popover, leaving no Escape layer, and the return moves no focus", async () => {
+  await renderFilters();
+  await openFilters();
+  expect(overlayOpen()).toBe(true);
+  // A switch inside the explorer leaves the popover open.
+  await act(async () => { button("Wiki").click(); });
+  await act(async () => { button("Graph").click(); });
+  expect(filtersDialog()).not.toBeNull();
+  await renderFilters({ visible: false });
+  expect(filtersDialog()).toBeNull();
+  expect(overlayOpen()).toBe(false);
+  // Another view's first Escape is its own.
+  const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  window.dispatchEvent(escape);
+  expect(escape.defaultPrevented).toBe(false);
+  const elsewhere = document.createElement("button");
+  document.body.append(elsewhere);
+  try {
+    elsewhere.focus();
+    await renderFilters({ visible: true });
+    expect(filtersDialog()).toBeNull();
+    expect(filtersButton().getAttribute("aria-expanded")).toBe("false");
+    expect(overlayOpen()).toBe(false);
+    expect(document.activeElement).toBe(elsewhere);
+  } finally { elsewhere.remove(); }
+});
+
+test("shown again after being hidden, the explorer re-reads the catalog once and quietly, keeping its state", async () => {
+  let catalogReads = 0;
+  let detailReads = 0;
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") {
+      catalogReads++;
+      // Same snapshot, but the graph went stale while the explorer was hidden.
+      return Promise.resolve(catalogReads === 1 ? { ...catalog, graph: "ready" } : { ...catalog, graph: "stale", graphReason: "an untracked file changed" });
+    }
+    if (input.action === "detail") detailReads++;
+    return request(cwd, input);
+  };
+  const createCytoscape = await headlessCytoscape();
+  const show = (visible: boolean) => act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild: noRebuild, visible })); });
+  await show(true);
+  expect(catalogReads).toBe(1);
+  expect(freshnessBanner()).toBeUndefined();
+  await act(async () => { listRow("Client").click(); });
+  await act(async () => { button("Wiki").click(); });
+  const article = () => host.querySelector('[aria-label="Wiki article"] article')?.textContent ?? "";
+  expect(article()).toContain("Readable guide");
+  const details = detailReads;
+  await show(true);
+  await show(false);
+  expect(catalogReads).toBe(1);
+  await show(true);
+  expect(catalogReads).toBe(2);
+  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
+  // Nothing that hangs on the catalog reloaded: no loading state, the article is the one left.
+  expect(detailReads).toBe(details);
+  expect(article()).toContain("Readable guide");
+  expect(host.textContent).not.toContain("Loading");
+  await act(async () => { button("Back").click(); });
+  expect(panelTitle()).toBe("Client");
+});
+
+test("a return during a rebuild leaves the rebuild running, and its end still re-reads the catalog", async () => {
+  let catalogReads = 0;
+  let finish: (value: boolean) => void = () => {};
+  const onRebuild = () => new Promise<boolean>(resolve => { finish = resolve; });
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") catalogReads++;
+    return request(cwd, input);
+  };
+  const show = (visible: boolean) => act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild, visible })); });
+  await show(true);
+  await act(async () => { button("Rebuild graph").click(); });
+  await show(false);
+  await show(true);
+  expect(catalogReads).toBe(2);
+  expect(button("Rebuilding…").disabled).toBe(true);
+  await act(async () => { finish(true); });
+  expect(button("Rebuild graph").disabled).toBe(false);
+  expect(catalogReads).toBe(3);
+});
+
+test("of several pending wiki-link lookups only the one started last opens its target or names a path", async () => {
+  const first = { id: "first", kind: "file" as const, title: "First far", path: "src/first.ts" };
+  const second = { id: "second", kind: "file" as const, title: "Second far", path: "src/second.ts" };
+  const pending = new Map<string, () => void>();
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Missing](missing.md) [First](../src/first.ts) [Second](../src/second.ts)" });
+    if (input.action === "search") {
+      const query = input.query;
+      const hits = query === first.path ? [{ node: first }] : query === second.path ? [{ node: second }] : [];
+      return new Promise(resolve => { pending.set(query, () => resolve({ ...snapshot, hits })); });
+    }
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: noRebuild })); });
+  await act(async () => { button("Wiki").click(); });
+  const link = (text: string) => [...host.querySelectorAll<HTMLElement>("article .md a")].find(item => item.textContent === text)!;
+  await act(async () => { link("Missing").click(); });
+  await act(async () => { link("First").click(); });
+  await act(async () => { link("Second").click(); });
+  const article = () => host.querySelector('[aria-label="Wiki article"] article');
+  await act(async () => { pending.get("wiki/missing.md")?.(); });
+  expect(article()?.textContent).not.toContain("wiki/missing.md");
+  await act(async () => { pending.get(first.path)?.(); });
+  expect(article()).not.toBeNull();
+  expect(panelTitle()).toBeUndefined();
+  await act(async () => { pending.get(second.path)?.(); });
+  expect(panelTitle()).toBe("Second far");
+});
+
+test("a render that changes no node list leaves the explorer's node memory alone", async () => {
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: noRebuild })); });
+  const original = Map.prototype.set;
+  let writes = 0;
+  Map.prototype.set = function <K, V>(this: Map<K, V>, key: K, value: V) {
+    if (value === (page as unknown) || value === (file as unknown)) writes++;
+    return original.call(this, key, value) as Map<K, V>;
+  };
+  try {
+    // Opening and closing the Filters popover re-renders the explorer over the same nodes.
+    await act(async () => { filtersButton().click(); });
+    await act(async () => { filtersButton().click(); });
+  } finally { Map.prototype.set = original; }
+  expect(writes).toBe(0);
+});
+
+test("Back to an OpenSpec document restores the scroll it was left at, and the next one opens at its top", async () => {
+  const alpha = { id: "spec-alpha", kind: "spec" as const, title: "Alpha spec", path: "openspec/specs/alpha/spec.md" };
+  const beta = { id: "spec-beta", kind: "spec" as const, title: "Beta spec", path: "openspec/specs/beta/spec.md" };
+  const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+    const base = { schemaVersion: 2, snapshotId: "one" };
+    if (input.action === "catalog") return { ...catalog, ...base, nodes: [] };
+    if (input.action === "openspec-list") return { ...base, entries: [alpha, beta], openSpec: { availability: "ready", diagnostics: [], truncated: false } };
+    if (input.action === "openspec-history") return { ...base, entries: [] };
+    if (input.action === "search") return { ...base, hits: [] };
+    const entry = input.id === alpha.id ? alpha : beta;
+    const source = { path: entry.path, digest: "a".repeat(64) };
+    return { ...base, node: entry, openSpec: { entry, artifacts: [source], artifact: { source, markdown: "Reader document", requirements: [] } } };
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: noRebuild })); });
+  await act(async () => { button("OpenSpec").click(); });
+  const entry = (title: string) => [...host.querySelectorAll<HTMLButtonElement>('[aria-label="OpenSpec results"] button')].find(item => item.querySelector("strong")?.textContent === title)!;
+  const pane = () => host.querySelector<HTMLElement>('[aria-label="OpenSpec detail"]')!;
+  const title = () => pane().querySelector("h2")?.textContent;
+  await act(async () => { entry("Alpha spec").click(); });
+  expect(title()).toBe("Alpha spec");
+  pane().scrollTop = 120;
+  await act(async () => { entry("Beta spec").click(); });
+  expect(title()).toBe("Beta spec");
+  expect(pane().scrollTop).toBe(0);
+  await act(async () => { button("Back").click(); });
+  expect(title()).toBe("Alpha spec");
+  expect(pane().scrollTop).toBe(120);
 });

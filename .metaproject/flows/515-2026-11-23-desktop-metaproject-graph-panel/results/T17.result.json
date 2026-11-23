@@ -1,0 +1,65 @@
+{
+  "task_id": "task-17",
+  "task_name": "Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "F-001: FiltersPopover is placed by placeFiltersPopover(): under its button with max-height = window height - 8 - top (capped at the .menu 420 px), or above the button (bottom-anchored) when its measured content does not fit below and there is more room above; it scrolls inside (.menu overflow-y: auto), keeps the right-aligned horizontal clamp, and is placed again on window resize. F-003: new optional `visible` prop (default true, passed from App.tsx); when the explorer's view becomes hidden the Filters popover is closed (filtersOpen false, focus not moved), and it is never mounted while hidden, so a hidden explorer holds no Escape layer, mousedown or resize listener; on return the Filters button reads aria-expanded=false; a switch between Graph, Wiki and OpenSpec still leaves an open popover open. F-004: on a hidden-to-visible transition after the catalog has loaded, the explorer re-reads the catalog once without a loading state; an unchanged snapshot updates only the graph freshness (graph, graphReason) through a `freshness` override, so selection, filters, panel, history, the Wiki article and relationships do not reload; a changed snapshot replaces the catalog as any reload does. F-005: openPath takes a lookup token per link click; only the latest lookup may open a target or show the unresolved-path message. F-006: seenNodes is filled in an effect keyed on `nodes`, not in the render body. F-008: OpenSpecView choose() calls onLocation before zeroing the content scroll, so the entry being left records its offset; B still opens at its top.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/OpenSpecView.tsx",
+    "apps/desktop/src/App.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: ESLint does not cover apps/desktop",
+  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit, exit 0)",
+  "test_result": "pass: MetaprojectView.dom.test.tsx 47 passed, 0 failed (8 new); App.dom.test.tsx 1 passed, 0 failed. Red (scratch_check.py red): HEAD MetaprojectView.tsx -> 40 pass | 7 fail, exactly the 7 new explorer tests; HEAD OpenSpecView.tsx -> 46 pass | 1 fail, the new OpenSpec scroll test",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all exec-verified criteria hold for the two scoped test files and the type check (AC11, AC14, AC16, AC17 tests pass; AC19 type check passes, whole suite not run per the parallel-lanes constraint); AC10 and AC20 are judged in the browser and were not re-checked live",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "Effects in Explorer (detail, relationships, documents, suggested Wiki) depend on the catalog object identity, so any catalog reload with an unchanged snapshot (Retry, Refresh, a new reader identity) blanks the Wiki article and re-reads relationships; F-004 avoids this only for the return re-read via a freshness override", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx effects keyed on `catalog`" },
+    { "what": "The relationships effect still tests `catalog.graph === \"missing\"` for protocol 1, not the freshness override; with an unchanged snapshot the graph state can only move between ready and stale, so the branch is unaffected today", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx relationships effect" },
+    { "what": "The Filters popover is positioned once per open and on resize, not when its anchor moves because the content pane scrolls under it", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx FiltersPopover" }
+  ],
+  "assumptions": [
+    "A quiet re-read that returns the same snapshotId means nodes, edges and counts are unchanged, so only graph and graphReason are applied; a changed snapshotId replaces the catalog as any reload does (selection dropped only when the node is gone, the existing rule)."
+  ],
+  "behavior_changes": [
+    {
+      "description": "F-003: leaving the explorer's view (Sessions, Flows, …) closes an open Filters popover without moving focus; on return the Filters button is shown closed; the filters and the rest of the explorer state are kept; a switch between Graph, Wiki and OpenSpec inside the explorer still leaves it open. Operator's answer: «Закрывать при уходе (Recommended)». The implemented choice changed after the answer: the first implementation kept the popover open state across the view switch (unmounted while hidden, shown again on return).",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "Keep the open state across the view switch: unmount the popover while hidden and show it again, focus moving into it, on return (the first implementation, not chosen)."
+      ]
+    },
+    {
+      "description": "F-001: when the popover's content does not fit below its button and there is more room above, it opens upward, bottom edge 4 px above the button, following the shared Menu's auto placement; otherwise it opens below, height bounded by the room to the window bottom minus 8 px. Operator's answer: «Над кнопкой (Recommended)»; kept as implemented.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "Always open below and only bound its height (it may become a very short scrolling box when the button is low in the window)."
+      ]
+    }
+  ],
+  "not_touched": [
+    { "path": "apps/desktop/src/metaproject/metaproject.css", "reason": "The shared .menu rule already scrolls (overflow-y: auto); the height bound must follow the measured anchor, so it is set inline by FiltersPopover." },
+    { "path": "apps/desktop/src/metaproject/useExplorerNavigation.ts", "reason": "F-008 reproduced in OpenSpecView.choose(); the hook's navigate(..., { resetContent: true }) already seeds the new entry at 0 and needed no change." },
+    { "path": "apps/desktop/src/App.dom.test.tsx", "reason": "App.tsx only gains `visible={view === \"metaproject\"}` on MetaprojectView; rendering the whole App is outside this test's seam. The test still passes." }
+  ],
+  "notes": "Every finding reproduced (red against HEAD in the scratch copy). suggested_fix diverged: F-001 — besides bounding max-height by the room below, the popover flips above its button when that has more room (Menu.tsx auto placement) and re-places on resize; the bound is inline, not in metaproject.css. F-003 now follows the suggestion after the operator's answer: setFiltersOpen(false) when the view becomes hidden (no focus return), plus the popover is not mounted while hidden; the first implementation kept it open across the switch (see behavior_changes). suggested_fix diverged: F-004 — no load-age threshold; every hidden-to-visible return after the first load re-reads once, and an unchanged snapshot applies only graph/graphReason so the content does not reload (a plain revision bump would have blanked the Wiki article and re-read relationships). F-005 and F-006 follow the suggestions; F-005's token is taken on every link click, so a later click that opens a loaded node or names an invalid path also retires an earlier pending lookup. F-008 follows the 'record the offsets before zeroing' variant: onLocation first, then scrollTop = 0. Not covered by a red test: the one-line App.tsx wiring of `visible` (verified by tsc only). Live F-001 measurement at 720x480 (Chromium and WKWebView, both banner states) was done by the orchestrator, not by this worker; AC10/AC20 were not re-checked by this worker. Whole desktop suite (AC19 `bun test src`) not run per the parallel-lanes constraint. Test helpers for T20: renderFilters(props) now keeps reader, graph factory and rebuild identities stable and accepts view props such as `visible`; stubWindowHeight, stubBox and stubPopoverContentHeight drive layout in happy-dom."
+}

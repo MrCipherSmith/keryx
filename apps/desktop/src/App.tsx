@@ -593,7 +593,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
       <RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
         <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
-          <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} onDraft={async task => {
+          <MetaprojectView cwd={cwd} visible={view === "metaproject"} onRebuild={rebuildGraph} onDraft={async task => {
             if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
             setView("session");
           }} />
