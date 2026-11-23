@@ -85,6 +85,11 @@ test("App preserves tab state and starts a background review from the originatin
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });
 
+test("AC9 Create Flow in the App: the bound session gets the flow prompt, the one new package is linked and shown on the card, two link none; AC12 an Issue card counts its bound session", () => {
+  const fixture = fileURLToPath(new URL("../test/app-work-row.fixture.tsx", import.meta.url));
+  execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+});
+
 test("AC10 a cold-loaded issue session admits every restored question on one coordinator turn", () => {
   const fixture = fileURLToPath(new URL("../test/issue-question-resume.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });

@@ -1,4 +1,4 @@
-import { boundSessions, sessionFlags, type SessionInfo, type SessionSubject } from "../acp/types";
+import { boundSessionIndex, boundSessions, sessionFlags, subjectKey, type SessionInfo, type SessionSubject } from "../acp/types";
 import { byUpdatedDesc, STATUS_LABEL } from "../flows/model";
 import type { FlowCard } from "../platform/commands";
 import type { ReviewCard } from "./types";
@@ -32,12 +32,53 @@ export function withPendingSubjects(sessions: readonly SessionInfo[], pending: R
   return [...fresh, ...merged];
 }
 
-const samePrUrl = (a: string | null | undefined, b: string) => !!a && a.replace(/\/$/, "").toLowerCase() === b.replace(/\/$/, "").toLowerCase();
+/** A PR URL as compared: no trailing slash, no case. */
+const prUrlKey = (url: string) => url.replace(/\/$/, "").toLowerCase();
+
+/** The Flows of a PR found through a prebuilt index of the project's Flows; see `prFlows`. */
+export type PrFlowLookup = (card: Pick<ReviewCard, "url">, bound: readonly SessionInfo[]) => FlowCard[];
+
+/**
+ * The one rule for "which Flows belong to this PR", indexed once per Flow list: a Flow whose `prUrl` is the
+ * PR (no trailing slash, no case), or the Flow of a session bound to it. Newest first.
+ */
+export function prFlowIndex(flows: readonly FlowCard[]): PrFlowLookup {
+  const byUrl = new Map<string, FlowCard[]>();
+  const byDir = new Map<string, FlowCard>();
+  for (const flow of flows) {
+    if (!byDir.has(flow.dir)) byDir.set(flow.dir, flow);
+    if (!flow.prUrl) continue;
+    const key = prUrlKey(flow.prUrl);
+    const named = byUrl.get(key);
+    if (named) named.push(flow);
+    else byUrl.set(key, [flow]);
+  }
+  return (card, bound) => {
+    const found = new Set(byUrl.get(prUrlKey(card.url)));
+    for (const session of bound) {
+      const dir = sessionFlags(session).flow;
+      const flow = dir === undefined ? undefined : byDir.get(dir);
+      if (flow) found.add(flow);
+    }
+    return [...found].sort(byUpdatedDesc);
+  };
+}
 
 /** The Flows of a PR: a Flow whose `prUrl` is the PR, or the Flow of a session bound to it. Newest first. */
 export function prFlows(card: Pick<ReviewCard, "url">, flows: readonly FlowCard[], bound: readonly SessionInfo[]): FlowCard[] {
-  const dirs = new Set(bound.map(s => sessionFlags(s).flow).filter((dir): dir is string => !!dir));
-  return flows.filter(flow => samePrUrl(flow.prUrl, card.url) || dirs.has(flow.dir)).sort(byUpdatedDesc);
+  return prFlowIndex(flows)(card, bound);
+}
+
+/** What the PR work rows look up, built once per sessions and Flows change instead of once per card. */
+export interface PrWorkIndex {
+  /** `boundSessions(sessions, subject)`. */
+  sessions: (subject: SessionSubject) => readonly SessionInfo[];
+  /** `prFlows(card, flows, bound)`. */
+  flows: PrFlowLookup;
+}
+
+export function prWorkIndex(flows: readonly FlowCard[], sessions: readonly SessionInfo[]): PrWorkIndex {
+  return { sessions: boundSessionIndex(sessions), flows: prFlowIndex(flows) };
 }
 
 /** The Flow's stage as the Flows board names it. */
@@ -81,23 +122,43 @@ export function reviewLaunchTarget(typed: string | undefined, subject: SessionSu
   return subject?.kind === "pr" ? subject.url : typed;
 }
 
-/** "Create Flow" waiting for its package: the session that was asked, and the packages that existed then. */
+/**
+ * How long a "Create Flow" request waits for its package: 15 minutes from the press. The prompt is only
+ * prefilled, so the window covers sending it and the orchestrator creating the package early in its turn;
+ * a package that appears later (another window, the CLI, the Issues board) is not linked.
+ */
+export const FLOW_LINK_WINDOW_MS = 15 * 60_000;
+
+/** "Create Flow" waiting for its package: the session that was asked, the packages that existed then, and when it expires. */
 export interface PendingFlowLink {
   sessionId: string;
   knownDirs: ReadonlySet<string>;
+  /** Epoch ms; at or after it the request is dropped unlinked. */
+  expiresAt: number;
 }
 
-export type FlowLinkStep = { action: "wait" } | { action: "link"; dir: string } | { action: "clear" };
+/** One pass over the pending requests: those still waiting, and the links to write. */
+export interface FlowLinkPass {
+  pending: PendingFlowLink[];
+  links: Array<{ sessionId: string; dir: string }>;
+}
 
 /**
- * What to do with a pending "Create Flow" once the flow list changes: link the one new package; link
- * none when several appeared (which one is the session's cannot be told) or when the session already has a Flow.
+ * What to do with the pending "Create Flow" requests once the flow list changes. A package is linked only
+ * when exactly one request is pending and exactly one package appeared since it was recorded: which package
+ * belongs to which request cannot be told otherwise, so several new packages or several pending requests
+ * link none and end every request. An expired request, or one whose session already has a Flow, ends
+ * unlinked. A package in `claimed` (already linked to a request) is never a candidate again.
  */
-export function resolveFlowLink(pending: PendingFlowLink, dirs: readonly string[], sessionFlow: string | undefined): FlowLinkStep {
-  if (sessionFlow) return { action: "clear" };
-  const fresh = [...new Set(dirs)].filter(dir => !pending.knownDirs.has(dir));
-  if (!fresh.length) return { action: "wait" };
-  return fresh.length === 1 && fresh[0] ? { action: "link", dir: fresh[0] } : { action: "clear" };
+export function resolveFlowLinks(pending: readonly PendingFlowLink[], dirs: readonly string[],
+  sessionFlow: (sessionId: string) => string | undefined, claimed: ReadonlySet<string>, now: number): FlowLinkPass {
+  const live = pending.filter(entry => entry.expiresAt > now && !sessionFlow(entry.sessionId));
+  const candidates = [...new Set(dirs)].filter(dir => !claimed.has(dir));
+  const freshFor = (entry: PendingFlowLink) => candidates.filter(dir => !entry.knownDirs.has(dir));
+  if (!live.some(entry => freshFor(entry).length)) return { pending: live, links: [] };
+  const only = live.length === 1 ? live[0] : undefined;
+  const fresh = only ? freshFor(only) : [];
+  return { pending: [], links: only && fresh.length === 1 && fresh[0] ? [{ sessionId: only.sessionId, dir: fresh[0] }] : [] };
 }
 
 /** What "Open in session" needs from the app; injected so it can be tested without keryx. */
@@ -132,4 +193,21 @@ export async function openSubjectSession(deps: SubjectSessionDeps, subject: Sess
   deps.bind(id, subject);
   deps.fill(prompt);
   return id;
+}
+
+/**
+ * `openSubjectSession` with one open per Subject at a time: a repeat call for the same Subject while an
+ * open is in flight (a second press before `session/new` answers) gets that open's promise, whatever its
+ * target or prompt, so it cannot start a second bound session.
+ */
+export function subjectOpener(): typeof openSubjectSession {
+  const inFlight = new Map<string, Promise<string | null>>();
+  return (deps, subject, target, prompt, prefillExisting = false) => {
+    const key = subjectKey(subject);
+    const running = inFlight.get(key);
+    if (running) return running;
+    const open = openSubjectSession(deps, subject, target, prompt, prefillExisting).finally(() => inFlight.delete(key));
+    inFlight.set(key, open);
+    return open;
+  };
 }

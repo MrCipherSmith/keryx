@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import type { SessionInfo, SessionSubject } from "../acp/types";
 import type { FlowCard } from "../platform/commands";
 import {
-  boundSessions, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, resolveFlowLink, reviewLaunchTarget,
-  reviewSlotState, withPendingSubjects, type SubjectSessionDeps,
+  boundSessions, FLOW_LINK_WINDOW_MS, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, prWorkIndex, resolveFlowLinks,
+  reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects, type PendingFlowLink, type SubjectSessionDeps,
 } from "./prWork";
 import { PendingSubjects, SUBJECT_NOT_SAVED } from "../session/subjectBinding";
 
@@ -43,11 +43,21 @@ test("pending subjects show as bound sessions until keryx stores them", () => {
   expect(withPendingSubjects([session("plain")], new Map())).toHaveLength(1);
 });
 
+test("a subject keryx already stored wins over a pending binding for the same session", () => {
+  const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
+  const merged = withPendingSubjects([session("stored", { subject: other })], new Map([["stored", subject]]));
+  expect(merged[0]?._meta?.keryx?.subject).toEqual(other);
+  expect(boundSessions(merged, subject)).toEqual([]);
+  expect(boundSessions(merged, other).map(s => s.sessionId)).toEqual(["stored"]);
+});
+
 test("the PR's Flows are those naming its URL and those linked to a session bound to it", () => {
   const flows = [flow("1", { prUrl: url + "/" }), flow("2"), flow("3"), flow("4", { prUrl: "https://github.com/org/repo/pull/7" })];
   const bound = [session("a", { subject, flow: "2-work" })];
   expect(prFlows({ url }, flows, bound).map(f => f.id).sort()).toEqual(["1", "2"]);
   expect(prFlows({ url }, flows, []).map(f => f.id)).toEqual(["1"]);
+  // Both sides are compared without a trailing slash and without case.
+  expect(prFlows({ url: url.toUpperCase() + "/" }, flows, []).map(f => f.id)).toEqual(["1"]);
   expect(flowStage(flow("1"))).toBe("In progress");
   expect(flowStage(flow("1", { blocked: true }))).toBe("Blocked");
   expect(flowStage(flow("1", { status: "custom" }))).toBe("custom");
@@ -83,13 +93,53 @@ test("/review without a target in a PR-bound session preselects that PR; a typed
   expect(reviewLaunchTarget(undefined, undefined)).toBeUndefined();
 });
 
-test("Create Flow links the one new package, none when several appear or the session already has a Flow", () => {
-  const pending = { sessionId: "s", knownDirs: new Set(["1-a", "2-b"]) };
-  expect(resolveFlowLink(pending, ["1-a", "2-b"], undefined)).toEqual({ action: "wait" });
-  expect(resolveFlowLink(pending, ["1-a", "2-b", "3-c"], undefined)).toEqual({ action: "link", dir: "3-c" });
-  expect(resolveFlowLink(pending, ["1-a", "3-c", "4-d"], undefined)).toEqual({ action: "clear" });
-  expect(resolveFlowLink(pending, ["1-a", "3-c"], "2-b")).toEqual({ action: "clear" });
+test("the board's index answers what boundSessions and prFlows answer", () => {
+  const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
+  const sessions = [
+    session("old", { subject, flow: "2-work" }, "2026-11-01T00:00:00Z"), session("archived", { subject, archivedAt: "2026-11-21T00:00:00Z" }),
+    session("other", { subject: other }), session("Case", { subject: { ...subject, repo: "Org/Repo" } }, "2026-11-19T00:00:00Z"),
+    session("unsaved", { subject }, null), session("plain"),
+  ];
+  const flows = [flow("1", { prUrl: url + "/" }), flow("2"), flow("3", { prUrl: other.url })];
+  const index = prWorkIndex(flows, sessions);
+  for (const value of [subject, other, { ...subject, number: 999 }]) {
+    expect(index.sessions(value)).toEqual(boundSessions(sessions, value));
+    const card = { url: value.url };
+    expect(index.flows(card, index.sessions(value))).toEqual(prFlows(card, flows, boundSessions(sessions, value)));
+  }
+});
+
+const entry = (sessionId: string, known: string[], expiresAt = FLOW_LINK_WINDOW_MS): PendingFlowLink =>
+  ({ sessionId, knownDirs: new Set(known), expiresAt });
+const noFlow = () => undefined;
+
+test("Create Flow links the one new package to the one pending request, none when several appear or the session already has a Flow", () => {
+  const pending = [entry("s", ["1-a", "2-b"])];
+  expect(resolveFlowLinks(pending, ["1-a", "2-b"], noFlow, new Set(), 0)).toEqual({ pending, links: [] });
+  expect(resolveFlowLinks(pending, ["1-a", "2-b", "3-c"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [{ sessionId: "s", dir: "3-c" }] });
+  expect(resolveFlowLinks(pending, ["1-a", "3-c", "4-d"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [] });
+  expect(resolveFlowLinks(pending, ["1-a", "3-c"], () => "2-b", new Set(), 0)).toEqual({ pending: [], links: [] });
   expect(flowPrompt(url)).toBe(`Create a Keryx flow for ${url} with flow-orchestrator.`);
+});
+
+test("two pending Create Flow requests and one new package: none is linked and both requests end", () => {
+  const pending = [entry("s1", ["1-a"]), entry("s2", ["1-a"])];
+  expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 0)).toEqual({ pending, links: [] });
+  expect(resolveFlowLinks(pending, ["1-a", "2-new"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [] });
+});
+
+test("a package that appears after the request's window is not linked: the request has expired", () => {
+  const pending = [entry("s1", ["1-a"], 1_000)];
+  expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 999)).toEqual({ pending, links: [] });
+  expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 1_000)).toEqual({ pending: [], links: [] });
+  expect(resolveFlowLinks(pending, ["1-a", "2-foreign"], noFlow, new Set(), 1_001)).toEqual({ pending: [], links: [] });
+});
+
+test("a package already linked to one request is never linked to another", () => {
+  const pending = [entry("s2", ["1-a"])];
+  expect(resolveFlowLinks(pending, ["1-a", "2-claimed"], noFlow, new Set(["2-claimed"]), 0)).toEqual({ pending, links: [] });
+  expect(resolveFlowLinks(pending, ["1-a", "2-claimed", "3-own"], noFlow, new Set(["2-claimed"]), 0))
+    .toEqual({ pending: [], links: [{ sessionId: "s2", dir: "3-own" }] });
 });
 
 /** An app stand-in: new sessions are shown, bound through PendingSubjects, and the composer is only filled. */
@@ -166,6 +216,49 @@ test("a keryx that answers without subject still opens the session and says the 
   expect(app.subjects.get("s1")).toBeUndefined();
   await app.subjects.apply("s1");
   expect(app.notices).toHaveLength(1);
+});
+
+test("a repeat Open in session for a Subject while one is opening gets the same pending open: one new session", async () => {
+  const app = fakeApp(() => "not-stored");
+  const release: Array<(id: string | null) => void> = [];
+  let created = 0;
+  const deps: SubjectSessionDeps = { ...app.deps, newSession: () => { created++; return new Promise(resolve => { release.push(resolve); }); } };
+  const open = subjectOpener();
+  const first = open(deps, subject, "latest", url);
+  const again = open(deps, { ...subject, repo: "Org/Repo" }, "latest", url);
+  const otherPr = open(deps, { ...subject, number: 102, url: url.replace("101", "102") }, "latest", url);
+  expect(again).toBe(first);
+  expect(otherPr).not.toBe(first);
+  expect(created).toBe(2);
+  release[0]!("s1");
+  expect(await first).toBe("s1");
+  release[1]!("s2");
+  await otherPr;
+  // Settled: the next press opens again (here the bound session, no new one).
+  expect(await open(deps, subject, "latest", url)).toBe("s1");
+  expect(created).toBe(2);
+});
+
+test("a newer bind for the same session decides: the answer to the superseded write is dropped", async () => {
+  const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
+  const writes: Array<(flags: { subject: SessionSubject }) => void> = [];
+  const answered: SessionSubject[] = [];
+  const subjects = new PendingSubjects({
+    write: () => new Promise(resolve => { writes.push(resolve); }),
+    onFlags: (_id, flags) => { if (flags.subject) answered.push(flags.subject); },
+    onNotice: () => {},
+    onChange: () => {},
+  });
+  const first = subjects.bind("s1", subject);
+  const second = subjects.bind("s1", other);
+  writes[0]!({ subject });
+  await first;
+  expect(answered).toEqual([]);
+  expect(subjects.get("s1")).toEqual(other);
+  writes[1]!({ subject: other });
+  await second;
+  expect(answered).toEqual([other]);
+  expect(subjects.get("s1")).toBeUndefined();
 });
 
 test("a keryx that stores the subject answers it and no notice is shown", async () => {

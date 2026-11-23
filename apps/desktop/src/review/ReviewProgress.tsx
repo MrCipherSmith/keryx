@@ -80,12 +80,20 @@ export function ReviewProgress({ progress, state, showState }: {
   </span>;
 }
 
-export function CardReviewProgress({ badge }: { badge: ReviewCard["localReview"] }) {
-  if (badge?.runState === "other-revision") return <span className="review-progress-caption">Reviewing an earlier revision</span>;
+/**
+ * A card's local review progress as one line ("Wave 2 · 27% · 1 of 4 assignments completed"), for the title
+ * of the work row's review slot: AC4 keeps Keryx review state out of the card body, and the row's fixed
+ * height leaves no room for a progress block. Null when the card has no run to report on.
+ */
+export function reviewProgressText(badge: ReviewCard["localReview"]): string | null {
+  if (badge?.runState === "other-revision") return "Reviewing an earlier revision";
   const state = badge?.runState ?? (badge?.active ? "running" : undefined);
-  if (!state) return null;
-  return <>
-    {(!badge?.awaitingAnswer || badge.progress) && <ReviewProgress state={state} progress={badge?.progress} showState />}
-    {state === "running" && !badge?.awaitingAnswer && <TranscriptUpdate at={badge?.lastActivityAt} />}
-  </>;
+  if (!state || (badge?.awaitingAnswer && !badge.progress)) return null;
+  const { percent, label } = runProgress(state, badge?.progress);
+  return [
+    badge?.progress?.wave != null ? `Wave ${badge.progress.wave}` : "",
+    percent != null ? `${percent}%` : "",
+    ["running", "queued", "completed"].includes(state) ? "" : RUN_STATE_LABEL[state],
+    label,
+  ].filter(Boolean).join(" · ");
 }

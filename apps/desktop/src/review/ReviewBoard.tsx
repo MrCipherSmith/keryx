@@ -21,7 +21,7 @@ import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import type { PrWork } from "./PrWorkRow";
-import { prSubject } from "./prWork";
+import { prSubject, prWorkIndex } from "./prWork";
 import type { SessionInfo } from "../acp/types";
 import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilters, saveReviewGrouping } from "./reviewFilterStorage";
 import {
@@ -42,14 +42,16 @@ interface Props {
   currentRepairModel?: ReviewLaunchModel | undefined;
   onOpenFlow: (dir: string) => void;
   onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
-  /** Kept for callers without Subject sessions; the work row and the PR panel prefer `onOpenSubjectSession`. */
-  onOpenSession?: ((card: ReviewCard) => void) | undefined;
   /** The project's sessions (pending Subject bindings included): the session slot lists those bound to each PR. */
   sessions?: readonly SessionInfo[];
   onOpenSubjectSession?: PrWork["onOpenSubjectSession"];
   onCreateFlow?: PrWork["onCreateFlow"];
-  /** Open this PR's panel; a new `nonce` opens it again. */
-  focus?: { number: number; nonce: number } | null;
+  /**
+   * Open this PR's panel on the board of `repo` (compared without case); a new `nonce` opens it again. Once
+   * opened, `onFocusHandled(nonce)` lets the owner clear the request, so a remounted board cannot replay it.
+   */
+  focus?: { repo: string; number: number; nonce: number } | null;
+  onFocusHandled?: (nonce: number) => void;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
@@ -105,7 +107,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, focus, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -478,19 +480,23 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
-  // A focus request waits for a snapshot that holds the PR, then opens its panel once per nonce.
+  // A focus request waits for a snapshot of its repository that holds the PR, then opens its panel once per nonce.
   const focused = useRef<number | null>(null);
   useEffect(() => {
-    if (!focus || focused.current === focus.nonce || !snapshot?.cards.some(c => c.number === focus.number)) return;
+    if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()
+      || !snapshot.cards.some(c => c.number === focus.number)) return;
     focused.current = focus.nonce;
     setSelected({ number: focus.number });
-  }, [focus, snapshot]);
+    onFocusHandled?.(focus.nonce);
+  }, [focus, snapshot, onFocusHandled]);
   const workRepo = snapshot?.repo ?? "";
-  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), flows, sessions, onOpenFlow, onCreateFlow, onOpenSubjectSession }),
-    [workRepo, repositoryId, flows, sessions, onOpenFlow, onCreateFlow, onOpenSubjectSession]);
+  // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
+  const index = useMemo(() => prWorkIndex(flows, sessions), [flows, sessions]);
+  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession }),
+    [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession]);
   const openPanelSession = (item: ReviewCard) => onOpenSubjectSession
-    ? () => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId))
-    : onOpenSession && (() => onOpenSession(item));
+    && (() => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId)));
+  const panelFlow = (item: ReviewCard) => index.flows(item, index.sessions(prSubject(item, workRepo, repositoryId)))[0];
 
   return <div className="review-workspace" hidden={!tabActive}>
     <section className="flows review-board" aria-label="Pull requests">
@@ -591,7 +597,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
       width={detailWidth} onResize={setDetailWidth}
       reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={openPanelSession(card)}
-      projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
+      projectFlows={flows} flow={panelFlow(card)}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </div>;
 }

@@ -191,6 +191,7 @@ export function sessionFlags(s: SessionInfo): SessionFlags {
 }
 
 const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 : Number.POSITIVE_INFINITY);
+const newestBoundFirst = (a: SessionInfo, b: SessionInfo) => unsaved(b) - unsaved(a);
 
 /**
  * The non-archived sessions bound to `subject`, newest first. A session keryx has not stored yet (no
@@ -200,7 +201,27 @@ const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 
 export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
   return sessions
     .filter(s => sessionFlags(s).archivedAt === undefined && sameSubject(sessionFlags(s).subject, subject))
-    .sort((a, b) => unsaved(b) - unsaved(a));
+    .sort(newestBoundFirst);
+}
+
+/** A key that is equal for two subjects exactly when `sameSubject` holds. */
+export function subjectKey(subject: SessionSubject): string {
+  return `${subject.kind}/${subject.repo.toLowerCase()}/${subject.number}`;
+}
+
+/** `boundSessions` for many subjects: the sessions grouped once, each group in the same order. */
+export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {
+  const groups = new Map<string, SessionInfo[]>();
+  for (const session of sessions) {
+    const flags = sessionFlags(session);
+    if (flags.archivedAt !== undefined || !flags.subject) continue;
+    const key = subjectKey(flags.subject);
+    const group = groups.get(key);
+    if (group) group.push(session);
+    else groups.set(key, [session]);
+  }
+  for (const group of groups.values()) group.sort(newestBoundFirst);
+  return subject => groups.get(subjectKey(subject)) ?? [];
 }
 
 /** Messages the stored session holds; null when this keryx does not report it. */

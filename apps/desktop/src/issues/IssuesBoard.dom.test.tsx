@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { Root } from "react-dom/client";
 import type { IssueSummary } from "../../../../src/integrations/issues-contract";
 import type { SessionInfo } from "../acp/types";
@@ -422,4 +423,11 @@ test("AC12 the work row has a Flow slot and a session slot counted from sessions
   expect(work).toEqual(["open-session", "prepare-flow", "open-flow", "open-session"]);
   await click(button("List"));
   expect(host.querySelectorAll(".issue-table tbody .issue-work-row")).toHaveLength(3);
+});
+
+test("the Issue work row's two columns beat the PR row's three whatever order the stylesheets load in", () => {
+  const css = readFileSync(new URL("./IssuesBoard.css", import.meta.url), "utf8");
+  // Same specificity as `.pr-work-row` (styles/review.css, loaded later) would lose; both classes win.
+  expect(css).toMatch(/(^|\n)\.pr-work-row\.issue-work-row \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  expect(css).not.toMatch(/(^|\n)\.issue-work-row \{/);
 });

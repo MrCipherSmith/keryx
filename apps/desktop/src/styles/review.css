@@ -32,7 +32,10 @@
 .pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
 .pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
 .pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
-.review-note { display: block; color: var(--warn); font-size: var(--fs-xs); font-weight: 500; overflow-wrap: anywhere; }
+/* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
+.pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
+/* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
+.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
 .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
 .review-request { font-size: var(--fs-xs); color: var(--fg-muted); overflow-wrap: anywhere; }
@@ -45,7 +48,6 @@
 .review-table th:last-child { width: 11rem; }
 .review-table th:nth-child(6) { width: 16rem; }
 .review-table th:nth-child(4) { width: 18%; }
-.review-table .review-progress-caption { min-width: 0; white-space: normal; }
 .review-table tbody tr:hover { background: transparent; }
 .review-list-link { border: 0; background: none; color: var(--accent-text); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 0.14em; cursor: pointer; }
 .review-list-link:hover { text-decoration-thickness: 2px; }

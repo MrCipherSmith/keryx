@@ -294,12 +294,14 @@ test("a board refresh started before a local launch keeps the live progress and 
   await click(button("Close details"));
   await act(async () => finishLaunch());
   await act(async () => finish(snapshot([pr])));
-  const tile = document.body.querySelector('section[aria-label="Waiting for review"] .review-card')!;
-  expect(tile.textContent).toContain(pr.title);
-  expect(tile.textContent).toContain("Wave 3");
-  expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
+  const tile = document.body.querySelector('section[aria-label="Waiting for review"] .flow-card')!;
+  expect(tile.querySelector(".review-card")?.textContent).toContain(pr.title);
+  // AC4: the live progress is the work row's review slot (its title), not the card body.
+  const reviewSlot = () => document.body.querySelector('[data-slot="review"] .pr-work-link');
+  expect(reviewSlot()?.getAttribute("title")).toContain("Wave 3");
+  expect(reviewSlot()?.getAttribute("title")).toContain("50%");
   await click(button("List"));
-  expect(document.body.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
+  expect(reviewSlot()?.getAttribute("title")).toContain("2 of 4 assignments completed");
 });
 
 test("Review controls the schedule for the base repository and displays persisted PR activity", async () => {
@@ -719,7 +721,8 @@ test("one board tick updates every active PR from scoped badges and access denia
     // Finishing (#101) and progressing (#102) local reviews leave both cards in their GitHub lane.
     expect(document.body.querySelector('[aria-label="Waiting for review"]')!.textContent).toContain("#101");
     expect(document.body.querySelector('[aria-label="Waiting for review"]')!.textContent).toContain("#102");
-    expect(document.body.textContent).toContain("3 of 5");
+    // AC4: #102's progress is its work row's review slot title, not card text.
+    expect(document.body.querySelector('[aria-label="Keryx work for #102"] [data-slot="review"] .pr-work-link')?.getAttribute("title")).toContain("3 of 5");
     await act(async () => { await tick!(); });
     expect(document.body.textContent).toContain("Repository access revoked");
     expect(document.body.textContent).not.toContain(pr.title);

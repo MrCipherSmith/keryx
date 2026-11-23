@@ -1,5 +1,4 @@
 import { memo, useMemo, useState } from "react";
-import { CardReviewProgress } from "./ReviewProgress";
 import { openPullRequest } from "../platform/commands";
 import { useToast } from "../components/Toasts";
 import { errMessage } from "../lib/format";
@@ -61,7 +60,6 @@ function ReviewTile({ card, onOpen, onReview, work, ...actions }: ReviewActions 
         <span className={'review-ci ci-' + card.ci}>{CI_LABEL[card.ci]}</span>
       </span>
       <span className="review-reason">{laneReason(card)}</span>
-      <CardReviewProgress badge={card.localReview} />
       {card.assignees.length > 0 && <span className="review-request">Assigned to {card.assignees.join(", ")}</span>}
       {card.reviewers.length > 0 && <span className="review-request">Requested from {card.reviewers.join(", ")}</span>}
     </button>
@@ -114,8 +112,8 @@ export const ReviewResults = memo(function ReviewResults({ cards, view, grouping
       const reason = laneReason(c);
       return <tr key={c.number}>
         <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
-        <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span>{reason}</span>
-          <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
+        <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span>{reason}</span></td>
+        <td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
         <td><PrWorkRow card={c} work={work} onReview={onReview} /></td>
         <td><ReviewAction card={c} {...actions} /></td>
       </tr>;

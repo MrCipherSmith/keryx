@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { Dialog, Spinner } from "../components/ui";
 import { errMessage } from "../lib/format";
 import type { FlowCard } from "../platform/commands";
+import { prFlows } from "./prWork";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 import "./ReviewLaunchDialog.css";
 
@@ -215,7 +216,8 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
   const cards = useMemo(() => snapshot?.cards.filter(card => card.state === "open") ?? [], [snapshot]);
   const card = fixedTarget?.card ?? cards.find(candidate => String(candidate.number) === number);
   const eligibleFlows = flows.filter(flow => flow.idValid);
-  const linked = card && eligibleFlows.find(flow => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.replace(/\/$/, "").toLowerCase());
+  // The dialog has no sessions: the PR's Flow by its URL only (the session's own Flow comes in as `defaultFlow`).
+  const linked = card && prFlows(card, eligibleFlows, [])[0];
   const flow = chosenFlow ?? defaultFlow ?? linked?.id ?? "";
   const flowValid = !flow || eligibleFlows.some(candidate => candidate.id === flow);
   const modelKeys = useMemo(() => new Set(models.map(modelKey)), [models]);
