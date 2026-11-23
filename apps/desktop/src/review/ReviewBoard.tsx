@@ -398,18 +398,20 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
           value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
-      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog">
-        <Icon name="checklist" size={14} /> Filters{active.length ? ' (' + active.length + ')' : ''}
+      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+        aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters{active.length ? ' (' + active.length + ')' : ''}</span>
       </button>
       <div className="grow" />
       {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
       <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
       <div className="segmented" role="group" aria-label="Review view">
         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
-          onClick={() => setView(mode)}><Icon name={mode} size={14} /> {mode === "board" ? "Board" : "List"}</button>)}
+          aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
+          onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
       </div>
       <button className="btn btn-sm" disabled={loading} onClick={refresh} aria-label="Refresh pull requests" title="Refresh pull requests">
-        {loading ? <Spinner /> : <Icon name="refresh" size={15} />} Refresh
+        {loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
       </button>
     </div>
     {(snapshot || repo || (needRepositories && alternatives.length > 0) || active.length > 0) && <div className="review-context">

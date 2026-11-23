@@ -96,7 +96,7 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, active = t
   return <>
     <button className="btn btn-sm" aria-haspopup="dialog" aria-label={'PR watcher · ' + label} onClick={() => {
       setOpen(true); void request({ kind: "status" });
-    }}><Icon name="clock" size={14} /> PR watcher <span className="watcher-indicator">{label}</span></button>
+    }}><Icon name="clock" size={14} /> <span className="toolbar-label">PR watcher</span> <span className="watcher-indicator">{label}</span></button>
     {active && open && <Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
       footer={<button className="btn" onClick={() => setOpen(false)}>Close</button>}>
       <div className="review-watcher">
