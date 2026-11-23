@@ -129,3 +129,22 @@
 - T18 (worker, standard tier): a replacing load seeds the carried set; new DOM test for saved historical filters; the handled-request test keeps a second request. Orchestrator check: `bun test src` in `apps/desktop` 757 pass, `bunx tsc --noEmit` exit 0, and three mutation runs of `ReviewBoard.dom.test.tsx`, each restored afterwards — write-back effect removed: 1 fail (the handled-request test); seeding removed: 1 fail (the saved-filter test); seeding on every load: 3 fail.
 - Not done: F-027 and F-015 scenarios not reproduced in a running app; no review round on the T18 commit; info findings not addressed; nothing pushed.
 
+- 2026-11-23T11:33:23.779Z - task-added: T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures
+- 2026-11-23T11:33:23.979Z - task-added: T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card
+- 2026-11-23T11:33:24.199Z - task-added: T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording
+- 2026-11-23T11:33:24.478Z - task-attempt: T19: started (attempt 1) — 516-T19 review info notes
+- 2026-11-23T11:33:24.700Z - task-attempt: T20: started (attempt 1) — 516-T20 review info notes
+- 2026-11-23T11:33:24.978Z - task-attempt: T21: started (attempt 1) — 516-T21 review info notes
+- 2026-11-23T11:34:51.493Z - task-done: T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording
+- 2026-11-23T11:35:49.611Z - task-done: T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card
+- 2026-11-23T11:36:52.340Z - task-done: T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures
+- 2026-11-23T11:38:01.418Z - decision d-mwt6z581-5d85c4 [review override-reviewers, ordinary]: chose override; no recommendation
+
+## 2026-11-23 — Review info notes and PR review round 4 (orchestrator)
+
+- Operator: continue with what remained. Done: T19 (backend: F-021 publication read only for the card's range; one store test with a fixture per term of the outdated lookup), T20 (UI: F-023 `data-review-board-dialog` marker; DOM tests for the outdated-review note on a merged card and for the note-as-reason case), T21 (docs: F-019 third stage 0 deviation, F-026 wording). Orchestrator checks: `bun test src` in `apps/desktop` 759 pass, `bunx tsc --noEmit` exit 0, root typecheck exit 0, `desk-run-store.test.ts` 37 pass, `board-badges.test.ts` 5 pass, `desk-publication.test.ts` 10 pass, `review-desk-run.test.ts` 2 pass, `desk-run-legacy.test.ts` 3 pass; mutation: marker removed from the PR watcher dialog fails the focus test.
+- Left out on purpose: F-024 (note de-duplication by string equality; a refactor in code just stabilised). Operator questions still open: F-012, F-013, F-020. Pre-existing and untouched: F-011, F-014.
+- Round 4 of the managed review on head `be26765ae`, six reviewers of fifteen by operator decision, 7 dispatches and a premise judge. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04`. Result: no blocker or major; no defect in the new commits; 1 minor that predates the pull request (F-030: after an access error or an identity change on a historical view the tab indicator misses open requests), 3 info (F-031 write-back from a cached snapshot on an unavailable error; F-032 threshold wording of deviation (c); F-033 what the suites leave unpinned). The package does not pass the completion gate (reviewers left out, delta scope, head not pushed).
+- F-032 was the orchestrator's own wording in the T21 brief; corrected in `200f2b395`, which no reviewer read.
+- Not done: F-030 and F-031 not fixed (the operator's call); no scenario reproduced in a running app; the commits after `622c914b7` are not pushed and have no CI; PR description not updated for them.
+

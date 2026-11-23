@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T11:28:05.413Z",
+  "updatedAt": "2026-11-23T11:36:52.340Z",
   "source": {
     "type": "description",
     "ref": null
@@ -396,6 +396,69 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:33:24.478Z",
+            "outcome": "started",
+            "detail": "516-T19 review info notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:33:24.700Z",
+            "outcome": "started",
+            "detail": "516-T20 review info notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:33:24.978Z",
+            "outcome": "started",
+            "detail": "516-T21 review info notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -636,6 +699,51 @@
       "at": "2026-11-23T11:28:05.413Z",
       "event": "task-done",
       "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
+    },
+    {
+      "at": "2026-11-23T11:33:23.779Z",
+      "event": "task-added",
+      "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
+    },
+    {
+      "at": "2026-11-23T11:33:23.979Z",
+      "event": "task-added",
+      "detail": "T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card"
+    },
+    {
+      "at": "2026-11-23T11:33:24.199Z",
+      "event": "task-added",
+      "detail": "T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording"
+    },
+    {
+      "at": "2026-11-23T11:33:24.478Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 516-T19 review info notes"
+    },
+    {
+      "at": "2026-11-23T11:33:24.700Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 516-T20 review info notes"
+    },
+    {
+      "at": "2026-11-23T11:33:24.978Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 516-T21 review info notes"
+    },
+    {
+      "at": "2026-11-23T11:34:51.493Z",
+      "event": "task-done",
+      "detail": "T21: Review info notes, docs: F-019 toolbar wrap deviation, F-026 awaiting-merge wording"
+    },
+    {
+      "at": "2026-11-23T11:35:49.611Z",
+      "event": "task-done",
+      "detail": "T20: Review info notes, Desktop UI: F-023 shared marker for portaled dialogs; F-022 DOM test for the note on a merged card"
+    },
+    {
+      "at": "2026-11-23T11:36:52.340Z",
+      "event": "task-done",
+      "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
     }
   ],
   "acKinds": {
