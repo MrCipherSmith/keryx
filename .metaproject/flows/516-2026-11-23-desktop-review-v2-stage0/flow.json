@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T10:48:26.557Z",
+  "updatedAt": "2026-11-23T11:28:05.413Z",
   "source": {
     "type": "description",
     "ref": null
@@ -375,6 +375,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:26:25.010Z",
+            "outcome": "started",
+            "detail": "516-T18 PR review round 3 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -600,6 +621,21 @@
       "at": "2026-11-23T10:48:26.557Z",
       "event": "task-done",
       "detail": "T16: PR review round 2 fixes, Desktop UI: F-015 attention set persists removals, F-016 list row locals, F-017 local name"
+    },
+    {
+      "at": "2026-11-23T11:26:24.820Z",
+      "event": "task-added",
+      "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
+    },
+    {
+      "at": "2026-11-23T11:26:25.010Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 516-T18 PR review round 3 fix"
+    },
+    {
+      "at": "2026-11-23T11:28:05.413Z",
+      "event": "task-done",
+      "detail": "T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load"
     }
   ],
   "acKinds": {

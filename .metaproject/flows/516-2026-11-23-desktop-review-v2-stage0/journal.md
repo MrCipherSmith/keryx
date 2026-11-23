@@ -116,3 +116,16 @@
 - F-025 (PR description): new text drafted by the orchestrator; applying it to GitHub needs the write account.
 - Not done: F-015 not reproduced in a running app; info findings F-019 to F-024 and F-026 not addressed; the failed CI check `client matrix (cancel-resume)` not re-run; nothing pushed.
 
+- 2026-11-23T11:18:26.081Z - decision d-mwt69ybv-511abb [review override-reviewers, ordinary]: chose override; no recommendation
+- 2026-11-23T11:26:24.820Z - task-added: T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load
+- 2026-11-23T11:26:25.010Z - task-attempt: T18: started (attempt 1) — 516-T18 PR review round 3 fix
+- 2026-11-23T11:28:05.413Z - task-done: T18: PR review round 3 fix, Desktop UI: F-027 seed the attention set on a replacing load
+
+## 2026-11-23 — PR review round 3 (delta) and fix (orchestrator)
+
+- Round 3 of the managed review of PR #1294 on head `086335a01` (delta `33fd9647a..086335a01`). Operator chose six reviewers of fourteen (logic, regression, frontend, backend, security-code, testing-practices); 7 dispatches and a premise judge. Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03`. Result: no blocker or major, 1 minor (F-027), 2 info (F-028, F-029). Prior: F-016, F-017, F-018, F-025 closed; F-015 regressed (F-027); F-019 to F-024 and F-026 open. The package does not pass the completion gate: the eight reviewers left out count as not run, and a delta round covers 7 of the PR's 89 files.
+- F-027 came from the shape of the F-015 fix that the orchestrator's own T16 brief suggested (the load callback only resets the carried set).
+- Operator: fix F-027.
+- T18 (worker, standard tier): a replacing load seeds the carried set; new DOM test for saved historical filters; the handled-request test keeps a second request. Orchestrator check: `bun test src` in `apps/desktop` 757 pass, `bunx tsc --noEmit` exit 0, and three mutation runs of `ReviewBoard.dom.test.tsx`, each restored afterwards — write-back effect removed: 1 fail (the handled-request test); seeding removed: 1 fail (the saved-filter test); seeding on every load: 3 fail.
+- Not done: F-027 and F-015 scenarios not reproduced in a running app; no review round on the T18 commit; info findings not addressed; nothing pushed.
+
