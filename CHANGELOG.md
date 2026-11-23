@@ -5,6 +5,33 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.53] - 2026-11-23
+
+**Keryx Desktop 0.2.16** bundles Keryx 0.4.53 and supports Keryx 0.4.50 or newer.
+
+### Added
+
+- Explore the Metaproject graph as a readable neighbourhood around the selected node, with node and relationship kinds drawn on the canvas and named in a legend, and a node panel that lists its relationships and linked Wiki and OpenSpec documents. (#1295)
+- See a finished review of an earlier commit on the Pull requests card as `Outdated review · <sha>` with a **Review again** action, instead of a card that looks unreviewed. (#1294)
+- See **Show N waiting on you** on the Pull requests toolbar when filters or the search hide requests that need you; it clears filters and search to show them. (#1294)
+
+### Changed
+
+- The Pull requests tab indicator lights only for what is addressed to you: a review requested from your login, changes requested on your pull request, unread replies to you, or a local review waiting on you. Team review requests are not matched yet. (#1294)
+- Pull requests with a running Keryx review follow the filters and keep their place in the list; the Done column appears only when the state filter can show merged or closed pull requests. A merged or closed pull request with a running review is hidden under the default Open + Draft filter. (#1294)
+- The Pull requests toolbar collapses its labels on narrow windows instead of overflowing. (#1294)
+
+### Fixed
+
+- Save the Desktop Telegram connection to an existing forum, keep membership events that arrive while the account is being confirmed, and show why an activation failed. (#1292)
+- Stop the Metaproject explorer from reloading when an untracked file appears, and accept a newer Keryx that offers more explorer actions than Desktop uses. (#1293)
+- Keep the Metaproject explorer's state when you switch views, step back through in-view navigation, and recover from a failed rebuild or protocol negotiation with Retry. (#1295)
+
+### Performance
+
+- Run the Metaproject graph freshness check only for the catalog, so detail, search and neighbour requests start no `git`. (#1293)
+- Read each review run once when attaching Pull requests badges. (#1294)
+
 ## [0.4.52] - 2026-11-23
 
 **Keryx Desktop 0.2.15** bundles Keryx 0.4.52 and supports Keryx 0.4.50 or newer.
