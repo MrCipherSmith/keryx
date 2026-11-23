@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
   "status": "in-progress",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T11:36:52.340Z",
+  "updatedAt": "2026-11-23T12:07:08.461Z",
   "source": {
     "type": "description",
     "ref": null
@@ -459,6 +459,48 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:53:18.015Z",
+            "outcome": "started",
+            "detail": "516-T22 PR review round 4 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:01:37.881Z",
+            "outcome": "started",
+            "detail": "516-T23 operator answers"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -744,6 +786,36 @@
       "at": "2026-11-23T11:36:52.340Z",
       "event": "task-done",
       "detail": "T19: Review info notes, backend: F-021 skip publication read for the outdated row; F-022/F-029 store test fixtures"
+    },
+    {
+      "at": "2026-11-23T11:53:17.826Z",
+      "event": "task-added",
+      "detail": "T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot"
+    },
+    {
+      "at": "2026-11-23T11:53:18.015Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 516-T22 PR review round 4 fixes"
+    },
+    {
+      "at": "2026-11-23T12:00:59.703Z",
+      "event": "task-done",
+      "detail": "T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot"
+    },
+    {
+      "at": "2026-11-23T12:01:37.298Z",
+      "event": "task-added",
+      "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
+    },
+    {
+      "at": "2026-11-23T12:01:37.881Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 516-T23 operator answers"
+    },
+    {
+      "at": "2026-11-23T12:07:08.461Z",
+      "event": "task-done",
+      "detail": "T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar"
     }
   ],
   "acKinds": {

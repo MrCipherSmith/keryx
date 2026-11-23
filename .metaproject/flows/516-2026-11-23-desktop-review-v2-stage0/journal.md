@@ -148,3 +148,17 @@
 - F-032 was the orchestrator's own wording in the T21 brief; corrected in `200f2b395`, which no reviewer read.
 - Not done: F-030 and F-031 not fixed (the operator's call); no scenario reproduced in a running app; the commits after `622c914b7` are not pushed and have no CI; PR description not updated for them.
 
+- 2026-11-23T11:53:17.826Z - task-added: T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot
+- 2026-11-23T11:53:18.015Z - task-attempt: T22: started (attempt 1) — 516-T22 PR review round 4 fixes
+- 2026-11-23T12:00:59.703Z - task-done: T22: PR review round 4 fixes, Desktop UI: F-030 seed the attention set after an identity reset on a historical view; F-031 no write-back from an error fallback snapshot
+- 2026-11-23T12:01:37.298Z - task-added: T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar
+- 2026-11-23T12:01:37.881Z - task-attempt: T23: started (attempt 1) — 516-T23 operator answers
+- 2026-11-23T12:07:08.461Z - task-done: T23: Operator answers: F-012 hint for attention hidden by filters, F-013 Review again label, F-020 bare count on a narrow toolbar
+
+## 2026-11-23 — F-030, F-031 and the operator's answers (orchestrator)
+
+- Operator: fix F-030 and F-031; answer the three open questions here. Answers: F-012 — keep the indicator and show a hint for attention hidden by filters; F-013 — label "Review again"; F-020 — bare number on a narrow toolbar.
+- T22 (worker, flagship tier): only an open or all load without a period replaces the carried set; any other load for an unseeded identity empties it and asks for one open seed load, applied only for the current, still unseeded identity; a cached snapshot shown after an `unavailable:` error does not write back. Orchestrator checks: diff read; `bun test src` 763 pass; `bunx tsc --noEmit` exit 0; five mutations each fail at least one test (seed request removed, stale guard removed, old replace rule, seed identity guard removed — killed only after the orchestrator sent the worker back for a test of a seed answered for another account, write-back removed).
+- T23 (worker, standard tier): the three answers, docs deviation (c) and new item (d). The orchestrator measured the toolbar with the real stylesheets and rebuilt markup: the bare count made the 560px toolbar wrap (573px needed); the orchestrator added a narrow-toolbar search-field rule (80px), after which the toolbar is one row from 560 to 1380px without the hint, and wraps without clipping at about 560, 820 and 1180px while the hint is shown. Measurements: `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/research-evidence/layout-measurements-t23.md`. `bun test src` 766 pass, `bunx tsc --noEmit` exit 0.
+- Not done: no review round on T22 and T23; no scenario reproduced in the app with real data; nothing pushed.
+
