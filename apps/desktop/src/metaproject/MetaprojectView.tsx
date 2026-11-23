@@ -22,6 +22,7 @@ import {
 import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
 import { Icon } from "../components/Icon";
 import { renderRepositoryMarkdown } from "../components/Markdown";
+import { EmptyState } from "../components/ui";
 import { errMessage } from "../lib/format";
 import { openExternal } from "../platform/commands";
 import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
@@ -37,6 +38,9 @@ type Request = (
 const EMPTY_HITS: readonly MetaprojectHit[] = [];
 const GRAPH_PADDING = 36;
 const DOCUMENT_EDGES = ["describes", "links"] as const;
+const sameLocation = (left: OpenSpecLocation | null, right: OpenSpecLocation | null) =>
+  left === right || (left !== null && right !== null && left.id === right.id && left.collection === right.collection &&
+    left.artifact === right.artifact && left.section === right.section && left.digest === right.digest && left.fragment === right.fragment);
 
 function Graph({
   projection,
@@ -139,17 +143,32 @@ function Graph({
   );
 }
 
+/**
+ * The repository path a Markdown link in `source` points at: percent-decoded, relative to the
+ * page's folder, or to the repository root when it starts with "/". Null when it cannot be decoded.
+ */
+function resolveRepositoryPath(source: string, href: string): string | null {
+  let path: string;
+  try { path = decodeURIComponent(href); } catch { return null; }
+  const base = path.startsWith("/") ? "" : source.slice(0, source.lastIndexOf("/") + 1);
+  const resolved: string[] = [];
+  for (const part of (base + path).split("/")) {
+    if (part === "..") resolved.pop();
+    else if (part && part !== ".") resolved.push(part);
+  }
+  return resolved.join("/");
+}
+
 function RepositoryMarkdown({
   text,
-  nodes,
   source,
-  select,
+  openPath,
   fragment,
 }: {
   text: string;
-  nodes: MetaprojectNode[];
   source: string;
-  select: (id: string, fragment?: string) => void;
+  /** `path` is the resolved repository path, or the raw href when it cannot be decoded. */
+  openPath: (path: string, fragment: string | undefined, resolved: boolean) => void;
   fragment?: string;
 }) {
   const html = useMemo(() => renderRepositoryMarkdown(text), [text]);
@@ -207,16 +226,8 @@ function RepositoryMarkdown({
           return;
         }
         if (!path) return;
-        const parts = (
-          source.slice(0, source.lastIndexOf("/") + 1) + path
-        ).split("/");
-        const resolved: string[] = [];
-        for (const part of parts) {
-          if (part === "..") resolved.pop();
-          else if (part && part !== ".") resolved.push(part);
-        }
-        const node = nodes.find((item) => item.path === resolved.join("/"));
-        if (node) select(node.id, targetFragment);
+        const resolved = resolveRepositoryPath(source, path);
+        openPath(resolved ?? path, targetFragment, resolved !== null);
       }}
       onAuxClick={(event) => {
         if ((event.target as Element).closest("a")) event.preventDefault();
@@ -275,15 +286,24 @@ export function RelationshipList({
   );
 }
 
+type Negotiate = (cwd: string) => Promise<1 | 2>;
+
 export function MetaprojectView(props: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
   onDraft?: (task: string) => Promise<void>;
   request?: Request;
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
+  /** Protocol negotiation; given, it runs even when `request`/`requestV2` are injected. */
+  negotiate?: Negotiate;
 }) {
   return <Explorer key={props.cwd} {...props} />;
 }
+
+/** Every relationship kind except the symbol layer (`defines`, `calls`). */
+const withoutSymbolKinds = (kinds: readonly MetaprojectEdgeKind[]) => kinds.filter(kind => kind !== "calls" && kind !== "defines");
+const WIKI_KINDS_V1 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS);
+const WIKI_KINDS_V2 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS_V2);
 
 function Explorer({
   cwd,
@@ -291,40 +311,53 @@ function Explorer({
   onDraft,
   request = requestMetaproject,
   requestV2,
+  negotiate,
 }: {
   cwd: string;
   onRebuild: () => Promise<boolean>;
   onDraft?: (task: string) => Promise<void>;
   request?: Request;
   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
+  negotiate?: Negotiate;
 }) {
   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
-  const { route, setRoute, visit, switchView, back, canGoBack, root } = useExplorerNavigation();
+  const { route, setRoute, visit, navigate, switchView, back, canGoBack, root } = useExplorerNavigation();
   const { mode, query } = route;
   const [panelWidth, setPanelWidth] = useState(380);
-  const [protocol, setProtocol] = useState<1 | 2 | null>(requestV2 ? 2 : request === requestMetaproject ? null : 1);
+  const negotiates = Boolean(negotiate) || (!requestV2 && request === requestMetaproject);
+  const [protocol, setProtocol] = useState<1 | 2 | null>(negotiates ? null : requestV2 ? 2 : 1);
   const archiveSelection = useRef(false);
   const [protocolError, setProtocolError] = useState("");
+  const [negotiation, setNegotiation] = useState(0);
   useEffect(() => {
-    if (requestV2 || request !== requestMetaproject) return;
+    if (!negotiates) return;
     let active = true;
-    void negotiateMetaproject(cwd).then(value => { if (active) setProtocol(value); }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
+    void (negotiate ?? negotiateMetaproject)(cwd).then(value => {
+      if (!active) return;
+      setProtocolError("");
+      setProtocol(value);
+    }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
     return () => { active = false; };
-  }, [cwd, request, requestV2]);
+  }, [cwd, negotiate, negotiates, negotiation]);
   const read: Request = useMemo(() => protocol === 2
     ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
     : request, [protocol, request, requestV2]);
+  // The first Wiki page stands in for a missing selection only while nothing is searched.
   const selection = route.mode === "graph" ? route.selection || catalog?.nodes[0]?.id || ""
-    : route.mode === "wiki" ? route.selection || catalog?.nodes.find(node => node.kind === "wiki")?.id || "" : "";
+    : route.mode === "wiki" ? route.selection || (route.query.trim() ? "" : catalog?.nodes.find(node => node.kind === "wiki")?.id || "") : "";
+  const shownSelection = useRef(selection);
+  shownSelection.current = selection;
   archiveSelection.current = route.mode === "graph" && Boolean(route.archive);
   const [direction, setDirection] = useState<MetaprojectDirection>("both");
   const [depth, setDepth] = useState<1 | 2>(1);
-  const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(
-    METAPROJECT_EDGE_KINDS.filter((kind) => kind !== "calls" && kind !== "defines"),
-  );
+  const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(WIKI_KINDS_V1);
   useEffect(() => {
     if (protocol === 2) setKinds(current => [...new Set<MetaprojectEdgeKind>([...current, "changes-spec", "spec-context"])]);
   }, [protocol]);
+  // Wiki reads a page's relationships with fixed defaults; only Graph applies its filters.
+  const relationDepth = mode === "wiki" ? 1 : depth;
+  const relationDirection = mode === "wiki" ? "both" : direction;
+  const relationKinds = mode === "wiki" ? protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1 : kinds;
   const [searchResult, setSearchResult] = useState<{
     mode: "graph" | "wiki";
     query: string;
@@ -482,13 +515,13 @@ function Explorer({
     setRelationshipError("");
     setLoadingRelationships(false);
     if (!catalog || !selection || mode === "openspec") return;
-    const neighborsRequest = { action: "neighbors", id: selection, depth, direction, kinds } as const;
+    const neighborsRequest = { action: "neighbors", id: selection, depth: relationDepth, direction: relationDirection, kinds: relationKinds } as const;
     if (
       protocol !== 2 && graphIndex && selectedNode &&
       !catalog.truncated &&
       selectedNode.kind !== "symbol" &&
-      !kinds.includes("calls") &&
-      !kinds.includes("defines")
+      !relationKinds.includes("calls") &&
+      !relationKinds.includes("defines")
     ) {
       setProjection(projectMetaprojectGraph(graphIndex, catalog, neighborsRequest));
       return;
@@ -513,7 +546,7 @@ function Explorer({
     return () => {
       active = false;
     };
-  }, [graphIndex, selectedNode, catalog, cwd, mode, read, selection, depth, direction, kinds, protocol]);
+  }, [graphIndex, selectedNode, catalog, cwd, mode, read, selection, relationDepth, relationDirection, relationKinds, protocol]);
   useEffect(() => {
     setDocuments(null);
     setDocumentProblem("");
@@ -582,10 +615,15 @@ function Explorer({
   const select = useCallback((id: string) => {
     const node = graphNodes.current.find(item => item.id === id);
     if (node) knownSelection.current = node;
-    setRoute(current => current.mode === "graph"
-      ? { ...current, selection: id, panelOpen: true, archive: node?.kind === "archive" }
-      : current);
-  }, [setRoute]);
+    const archive = node?.kind === "archive";
+    if (id === shownSelection.current) {
+      // Re-selecting the shown node only opens its panel; it is not a new history entry.
+      setRoute(current => current.mode === "graph" && !current.panelOpen
+        ? { ...current, selection: id, panelOpen: true, archive } : current);
+      return;
+    }
+    navigate(current => current.mode === "graph" ? { ...current, selection: id, panelOpen: true, archive } : null);
+  }, [navigate, setRoute]);
   const openSpec = (location: OpenSpecLocation) =>
     visit({ mode: "openspec", query: "", collection: location.collection, location });
   const viewInGraph = (id: string, node?: MetaprojectNode) => {
@@ -603,8 +641,8 @@ function Explorer({
   };
   const openHit = (hit: MetaprojectHit) => {
     if (mode === "wiki") {
-      if (content.current) content.current.scrollTop = 0;
-      setRoute(current => current.mode === "wiki" ? { ...current, selection: hit.node.id, fragment: undefined } : current);
+      if (hit.node.id === selection) return;
+      navigate(current => current.mode === "wiki" ? { ...current, selection: hit.node.id, fragment: undefined } : null, { resetContent: true });
       return;
     }
     const v2 = protocol === 2 ? hit as MetaprojectHitV2 : null;
@@ -634,18 +672,48 @@ function Explorer({
         setSearchError({ query: searchQuery, message: errMessage(cause) });
     } finally { pageInFlight.current = false; }
   };
+  // A rebuild outlives catalog reloads; only leaving the explorer (unmount, or a project
+  // change, which remounts it) stops it from writing state.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const rebuild = async () => {
-    const generation = project.current;
     setRebuilding(true);
     setError("");
     try {
-      if ((await onRebuild()) && generation === project.current)
-        setRevision((value) => value + 1);
+      if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);
     } catch (cause) {
-      if (generation === project.current) setError(errMessage(cause));
+      if (mounted.current) setError(errMessage(cause));
     } finally {
-      if (generation === project.current) setRebuilding(false);
+      if (mounted.current) setRebuilding(false);
     }
+  };
+  const [unresolvedLink, setUnresolvedLink] = useState<{ selection: string; path: string; message: string } | null>(null);
+  const openPath = (path: string, fragment: string | undefined, resolved: boolean) => {
+    const from = selection;
+    const unresolved = (message: string) => setUnresolvedLink({ selection: from, path, message });
+    setUnresolvedLink(null);
+    if (!resolved) { unresolved(`The link ${path} is not a valid repository path.`); return; }
+    const loaded = nodes.find(item => item.path === path);
+    if (loaded) { openDocument(loaded, fragment); return; }
+    const snapshotId = catalog?.snapshotId;
+    const generation = project.current;
+    const current = () => generation === project.current && shownSelection.current === from && activeMode.current === "wiki";
+    void (async () => {
+      try {
+        const result = await read(cwd, { action: "search", query: path });
+        if (!current()) return;
+        if (!("hits" in result)) throw new Error(`The lookup of ${path} returned no search results.`);
+        if (result.snapshotId !== snapshotId) { setSnapshotMismatch(true); return; }
+        const target = result.hits.find(hit => hit.node.path === path)?.node;
+        if (target) openDocument(target, fragment);
+        else unresolved(`No indexed project file at ${path}.`);
+      } catch (cause) {
+        if (current()) unresolved(`Could not look up ${path}: ${errMessage(cause)}`);
+      }
+    })();
   };
   const currentProjection = projection?.root === selection ? projection : null;
   const detailPanel = detail?.node.id === selection && detail.node.kind === "wiki" && (
@@ -657,9 +725,11 @@ function Explorer({
         </p>
         <button className="btn btn-sm" onClick={() => viewInGraph(detail.node.id, detail.node)}><Icon name="branch" size={14} />View in Graph</button>
       </header>
+      {unresolvedLink?.selection === selection && (
+        <p className="metaproject-meta" role="status">{unresolvedLink.message}</p>
+      )}
       {detail.markdown && (
-        <RepositoryMarkdown text={detail.markdown} nodes={nodes} source={detail.node.path}
-          select={(id, fragment) => { const node = nodes.find(item => item.id === id); if (node) openDocument(node, fragment); }}
+        <RepositoryMarkdown text={detail.markdown} source={detail.node.path} openPath={openPath}
           fragment={route.mode === "wiki" ? route.fragment : undefined} />
       )}
     </article>
@@ -697,7 +767,12 @@ function Explorer({
           <button aria-pressed={mode === "openspec"} onClick={() => switchView("openspec")}><Icon name="file" size={14} />OpenSpec</button>
         </div>
       </header>
-      {protocolError && <div className="inline-banner tone-warn" role="alert">{protocolError}</div>}
+      {protocolError && (
+        <div className="inline-banner tone-warn" role="alert">
+          <span>{protocolError}</span>
+          <button className="btn btn-sm" onClick={() => setNegotiation(value => value + 1)}>Retry</button>
+        </div>
+      )}
       {protocol === 2 && <OpenSpecView
         cwd={cwd}
         active={route.mode === "openspec"}
@@ -705,18 +780,19 @@ function Explorer({
         location={route.mode === "openspec" ? route.location : null}
         collection={route.mode === "openspec" ? route.collection : "spec"}
         snapshot={catalog?.snapshotId}
-        onLocation={location => setRoute(current => current.mode === "openspec" ? { ...current, location } : current)}
-        onCollection={collection => setRoute(current => current.mode === "openspec" ? { ...current, collection, location: null, query: "" } : current)}
+        onLocation={location => navigate(current => current.mode === "openspec" && !sameLocation(current.location, location)
+          ? { ...current, location } : null, { resetContent: true })}
+        onCollection={collection => setRoute(current => current.mode === "openspec" ? { ...current, collection, location: null } : current)}
         onOpen={openSpec}
         {...(requestV2 && { request: requestV2 })}
         nodes={nodes}
         onNavigate={openDocument}
         onGraph={(id, node) => viewInGraph(id, node)}
       />}
-      {mode === "openspec" && protocol !== 2 && <p role="status">{protocol === 1
+      {mode === "openspec" && protocol !== 2 && !protocolError && <p role="status">{protocol === 1
         ? "This CLI does not support OpenSpec. Choose a newer CLI in Desktop Settings."
         : "Checking OpenSpec support…"}</p>}
-      {mode !== "openspec" && loading && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
+      {mode !== "openspec" && loading && !protocolError && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
       {error && (
         <div className="inline-banner tone-warn" role="alert">
           <span>{error}</span>
@@ -892,7 +968,12 @@ function Explorer({
                 </details>
               )}
               {mode === "wiki" && loadingRelationships && <p role="status">Loading relationships…</p>}
-              {!selection && <p>{mode === "wiki" ? "Select a Wiki page to read it." : "Select an item to explore it."}</p>}
+              {!selection && mode === "wiki" && searchQuery ? (
+                <EmptyState icon="search" title={results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`}
+                  actions={<button className="btn btn-sm" onClick={() => setRoute(current => ({ ...current, query: "" }))}>Clear search</button>}>
+                  {results.length ? "Pick a page from the results to read it." : searching ? "Searching the Wiki…" : "Clear the search to read the first Wiki page."}
+                </EmptyState>
+              ) : !selection && <p>{mode === "wiki" ? "Select a Wiki page to read it." : "Select an item to explore it."}</p>}
             </section>
             {panelOpen && activeNode && <GraphNodePanel
               node={activeNode}

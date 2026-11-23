@@ -399,3 +399,124 @@ test("an archive result opens its current spec directly and Back restores the ar
   expect(host.querySelector('[aria-label="OpenSpec detail"] h2')?.textContent).toBe(old.title);
   expect(seen.filter(input => input.action === "search").map(input => input.scopes)).toEqual([["archive"]]);
 });
+
+function typeQuery(value: string) {
+  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]');
+  if (!search) throw new Error("Missing search");
+  return act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value); search.dispatchEvent(new Event("input", { bubbles: true })); });
+}
+const panelTitle = () => host.querySelector('[aria-label="Graph node details"] h2')?.textContent;
+
+test("Back steps through graph selections and typing in the search field adds no history entry", async () => {
+  const [alpha, beta, gamma] = ["Alpha", "Beta", "Gamma"].map(title => ({ id: title.toLowerCase(), kind: "file" as const, title, path: `src/${title.toLowerCase()}.ts` }));
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, nodes: [page, alpha!, beta!, gamma!] }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  const pick = async (title: string) => {
+    const row = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.querySelector("strong")?.textContent === title);
+    if (!row) throw new Error(`Missing result ${title}`);
+    await act(async () => { row.click(); });
+  };
+  await pick("Alpha");
+  await pick("Beta");
+  await pick("Gamma");
+  await pick("Gamma");
+  expect(panelTitle()).toBe("Gamma");
+  await typeQuery("Gam");
+  await act(async () => { button("Back").click(); });
+  expect(panelTitle()).toBe("Beta");
+  await act(async () => { button("Back").click(); });
+  expect(panelTitle()).toBe("Alpha");
+});
+
+test("Find a Wiki page with no selected page shows an empty state naming the search instead of an article", async () => {
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, onRebuild: async () => false })); });
+  const client = [...host.querySelectorAll<HTMLButtonElement>(".metaproject-list button")].find(item => item.textContent?.includes("Client"));
+  if (!client) throw new Error("Missing Client result");
+  await act(async () => { client.click(); });
+  await act(async () => { button("Find a Wiki page").click(); });
+  const content = host.querySelector('[aria-label="Wiki article"]');
+  expect(content?.querySelector("article")).toBeNull();
+  expect(content?.querySelector(".empty-state")?.textContent).toContain("src/client.ts");
+  expect(content?.textContent).not.toContain("Readable guide");
+});
+
+test("the Wiki relationships read uses fixed defaults whatever the Graph filters are", async () => {
+  const reads: Extract<MetaprojectRequest, { action: "neighbors" }>[] = [];
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") return Promise.resolve({ ...catalog, graph: "ready", truncated: true });
+    // A root that is never selected keeps the cytoscape canvas, which happy-dom cannot draw, unmounted.
+    if (input.action === "neighbors") { reads.push(input); return Promise.resolve({ ...snapshot, root: "unselected", nodes: [], edges: [], truncated: false }); }
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  const depth = host.querySelectorAll("select")[1]!;
+  await act(async () => { depth.value = "2"; depth.dispatchEvent(new Event("change", { bubbles: true })); });
+  const imports = [...host.querySelectorAll("fieldset label")].find(label => label.textContent === "imports")?.querySelector("input");
+  if (!imports) throw new Error("Missing imports filter");
+  await act(async () => { imports.click(); });
+  expect(reads.at(-1)).toMatchObject({ depth: 2 });
+  await act(async () => { button("Wiki").click(); });
+  expect(reads.at(-1)).toEqual({ action: "neighbors", id: page.id, depth: 1, direction: "both", kinds: ["imports", "asset", "describes", "links", "contains"] });
+});
+
+test("a rebuild re-enables its control and re-reads the catalog when the catalog reloaded meanwhile", async () => {
+  let catalogReads = 0;
+  let finish: (value: boolean) => void = () => {};
+  const onRebuild = () => new Promise<boolean>(resolve => { finish = resolve; });
+  const reader = () => (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "catalog") catalogReads++;
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(), onRebuild })); });
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(button("Rebuilding…").disabled).toBe(true);
+  // A new reader identity reloads the catalog while the rebuild is still running.
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: reader(), onRebuild })); });
+  const reads = catalogReads;
+  await act(async () => { finish(true); });
+  expect(button("Rebuild graph").disabled).toBe(false);
+  expect(catalogReads).toBe(reads + 1);
+});
+
+test("a failed protocol negotiation offers Retry and loads the catalog once it succeeds", async () => {
+  let attempts = 0;
+  const negotiate = async () => { attempts++; if (attempts === 1) throw new Error("Negotiation refused by the CLI"); return 1 as const; };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request, negotiate, onRebuild: async () => false })); });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Negotiation refused by the CLI");
+  expect(host.textContent).not.toContain("Loading project knowledge");
+  await act(async () => { button("OpenSpec").click(); });
+  expect(host.textContent).not.toContain("Checking OpenSpec support");
+  await act(async () => { button("Graph").click(); });
+  await act(async () => { button("Retry").click(); });
+  expect(attempts).toBe(2);
+  expect(host.textContent).not.toContain("Negotiation refused by the CLI");
+  expect(host.querySelector(".metaproject-list")?.textContent).toContain("Client");
+});
+
+test("a wiki link outside the loaded nodes is looked up once and an unknown path is named", async () => {
+  const far = { id: "far", kind: "file" as const, title: "Far module", path: "src/far away.ts" };
+  const searches: string[] = [];
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+    if (input.action === "detail" && input.id === page.id) return Promise.resolve({ ...snapshot, node: page, markdown: "Intro.\n\n[Far](../src/far%20away.ts) [Root](/src/client.ts) [Missing](missing%20page.md)" });
+    if (input.action === "search") { searches.push(input.query); return Promise.resolve({ ...snapshot, hits: input.query === far.path ? [{ node: far }] : [] }); }
+    return request(cwd, input);
+  };
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => false })); });
+  await act(async () => { button("Wiki").click(); });
+  const link = (text: string) => {
+    const found = [...host.querySelectorAll<HTMLElement>("article .md a")].find(item => item.textContent === text);
+    if (!found) throw new Error(`Missing link ${text}`);
+    return found;
+  };
+  await act(async () => { link("Missing").click(); });
+  expect(searches).toEqual(["wiki/missing page.md"]);
+  expect(host.querySelector('[aria-label="Wiki article"] article')?.textContent).toContain("wiki/missing page.md");
+  await act(async () => { link("Far").click(); });
+  expect(searches).toEqual(["wiki/missing page.md", "src/far away.ts"]);
+  expect(panelTitle()).toBe("Far module");
+  await act(async () => { button("Back").click(); });
+  await act(async () => { link("Root").click(); });
+  expect(searches).toHaveLength(2);
+  expect(panelTitle()).toBe("Client");
+});

@@ -1,0 +1,52 @@
+{
+  "task_id": "task-7",
+  "task_name": "Explorer navigation and state fixes D1-D7",
+  "task_type": "fix",
+  "status": "success",
+  "description": "D1: App.tsx mounts the Metaproject view on first visit through a new exported RetainedView and keeps it mounted and hidden afterwards (still inside the cwd-keyed ProjectWindow and the cwd-keyed Explorer). D2: useExplorerNavigation gains a stable navigate() (history entry that carries list/panel scroll, optionally resetting the content pane) and stable visit/back/switchView; Graph selections (list, canvas, relationship rows), Wiki result selections and OpenSpec location changes are history entries; re-selecting the shown node adds nothing (it only reopens a closed panel); query edits, filters and panel close/resize stay setRoute. D3: the first-Wiki-page default applies only while the Wiki query is empty; with a query and no selection the article area shows an EmptyState naming the query with a Clear search action; switching the OpenSpec collection keeps the query. D4: Wiki-mode neighbours read uses depth 1, direction both and all kinds except defines/calls (v1 or v2 list by protocol); Graph keeps its filters. D5: rebuild() writes state unless the explorer unmounted (mounted ref), so a catalog reload during a rebuild no longer leaves the button stuck and the catalog is re-read on success. D6: optional negotiate prop (defaults to negotiateMetaproject; when given, negotiation runs even with injected request fakes); the failure banner has Retry, which re-negotiates and keeps the banner until success; 'Loading project knowledge…' and 'Checking OpenSpec support…' are hidden while the error shows. D7: Wiki links are percent-decoded, a leading '/' resolves from the repository root, a path not among loaded nodes triggers one search read with an exact node.path match, and an unresolved or undecodable path shows an inline status naming it.",
+  "files_modified": [
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "files_created": [
+    "apps/desktop/src/App.dom.test.tsx"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
+  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0 with no errors in any file",
+  "test_result": "pass: cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx src/App.dom.test.tsx -> 27 passed, 0 failed (20 existing unchanged + 6 new in MetaprojectView.dom.test.tsx + 1 new in App.dom.test.tsx). All 6 new MetaprojectView tests were run before the fix and failed for the defect (no Back button; article rendered beside the Find search; depth 2/kinds without imports in Wiki; Rebuild control stuck; no Retry/negotiate seam; no lookup read). The App.dom test was seen failing with the old mount rule (active-only) restored temporarily, then passing with the fix. Full desktop suite not run (scoped by dispatch).",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "partial: AC11-AC16 pass with their named command; AC10 is judged live by the orchestrator (code for D1 and an automated mount test are in place, not verified in a browser)",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "noticed_not_touched": [
+    { "what": "OpenSpecView's choose() sets the content pane's scrollTop to 0 before calling onLocation, so the history entry being left records scroll 0 and Back to a previous OpenSpec entry returns to the top of its document instead of where the user was.", "where": "apps/desktop/src/metaproject/OpenSpecView.tsx choose()" },
+    { "what": "Back to a Graph node that was opened from a lookup result (not in catalog, hits or projection) can show no panel if knownSelection has since moved to another node, because activeNode is resolved only from loaded nodes or the last knownSelection.", "where": "apps/desktop/src/metaproject/MetaprojectView.tsx activeNode / knownSelection" }
+  ],
+  "assumptions": [
+    "Every distinct OpenSpec location reported through onLocation (entry, artifact, section or fragment change) is a history entry; equal locations add nothing.",
+    "For AC14 a catalog reload is any re-run of the catalog effect; the test triggers it by passing a new request function for the same project.",
+    "A Graph selection keeps the list and panel scroll of the entry being left; a Wiki or OpenSpec selection resets only the content pane, as the old code did for Wiki."
+  ],
+  "behavior_changes": [
+    { "description": "Wiki article area with a query and no selection: EmptyState titled 'Choose a result for “<query>”' when there are results, or 'No Wiki page matches “<query>”' otherwise; body text 'Pick a page from the results to read it.' / 'Searching the Wiki…' / 'Clear the search to read the first Wiki page.'; one 'Clear search' button that clears the Wiki query (not a history entry), after which the first Wiki page shows again.", "user_visible": true, "needs_operator": true, "alternatives": ["One fixed title such as 'No page selected for “<query>”' regardless of results", "Clear search also returns to the previous route instead of showing the first page", "No action button, text only"] },
+    { "description": "Switching the OpenSpec collection (Specs / Changes / Archive) now keeps the search query for every switch, not only after 'Find an OpenSpec document'.", "user_visible": true, "needs_operator": true, "alternatives": ["Keep the query only when the route came from 'Find an OpenSpec document' and clear it on manual switches as before"] },
+    { "description": "Unresolved Wiki link messages, shown as an inline status line above the article body: 'No indexed project file at <path>.', 'Could not look up <path>: <error>' and, for an href that cannot be percent-decoded, 'The link <href> is not a valid repository path.' The message clears on the next link click and is hidden when another page is selected.", "user_visible": true, "needs_operator": true, "alternatives": ["Show it as a warning banner with role=alert at the top of the content area", "Open the Wiki search with the path as query instead of a message"] },
+    { "description": "Clicking the already-shown Graph node while its panel is closed reopens the panel without a history entry; while the panel is open it does nothing. The negotiation Retry button stays enabled while a retry is in flight and shows no pending state; the error banner stays until a negotiation succeeds.", "user_visible": true, "needs_operator": true, "alternatives": ["Treat reopening the panel as a history entry", "Disable Retry and label it 'Retrying…' while negotiation is in flight"] }
+  ],
+  "not_touched": [],
+  "notes": "Graph, RelationshipList and the <GraphNodePanel> element and its props are unchanged for T8. RepositoryMarkdown now takes openPath(path, fragment, resolved) instead of nodes/select; T8 should keep that if it moves the article. New optional MetaprojectView prop negotiate?: (cwd) => Promise<1|2> is a test seam; production passes nothing and behaves as before (negotiation only when no request fakes are injected). useExplorerNavigation now exports its Route type and returns navigate in addition to the previous fields; visit/back/switchView are stable callbacks. No existing test was changed: all 20 previously passing tests in MetaprojectView.dom.test.tsx still pass. The test runner output under keryx ctx run hung in the background twice (piping through ctx), so tests were run directly into a scratchpad log and filtered; nothing was skipped. Type errors in files owned by other lanes: none seen (tsc clean). tests_written: 7; tests_passing: 27; tests_failing: 0; coverage: AC11-AC16 one test each in MetaprojectView.dom.test.tsx, D1 mount logic in App.dom.test.tsx."
+}

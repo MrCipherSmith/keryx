@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
 import { isTauri } from "./platform/backend";
 import {
@@ -142,6 +142,13 @@ function PathPrompt({ title, onDone }: { title: string; onDone: (v: string | nul
       </label>
     </Dialog>
   );
+}
+
+/** Mounts a view on its first visit and keeps it mounted, hidden, afterwards, so its state survives view switches. */
+export function RetainedView({ active, visible, children }: { active: boolean; visible: boolean; children: ReactNode }) {
+  const [visited, setVisited] = useState(active);
+  if (active && !visited) setVisited(true);
+  return visited || active ? <div className="view" hidden={!visible}>{children}</div> : null;
 }
 
 function useNarrow(px: number): boolean {
@@ -583,14 +590,15 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
       </div>}
-      {workView === "metaproject" && <div className="view" hidden={view !== "metaproject"}>
+      {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
+      <RetainedView active={workView === "metaproject"} visible={view === "metaproject"}>
         <Suspense fallback={<p role="status">Loading Metaproject…</p>}>
           <MetaprojectView cwd={cwd} onRebuild={rebuildGraph} onDraft={async task => {
             if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
             setView("session");
           }} />
         </Suspense>
-      </div>}
+      </RetainedView>
       <div className="view" hidden={view !== "review"}>
         {reviewDisconnected ? (
           <EmptyState title="GitHub is not connected" icon="pr">
