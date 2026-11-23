@@ -4,6 +4,8 @@
   "files": [
     "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
     "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+    "apps/desktop/src/metaproject/graph.css",
     "apps/desktop/src/metaproject/metaproject.css"
   ],
   "entries": [

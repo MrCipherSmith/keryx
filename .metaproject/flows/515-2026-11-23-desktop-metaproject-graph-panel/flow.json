@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T08:11:50.862Z",
+  "updatedAt": "2026-11-23T08:21:15.922Z",
   "source": {
     "type": "description",
     "ref": null
@@ -328,7 +328,7 @@
       "id": "T14",
       "title": "Compact filter bar and one-row header on narrow hosts",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -342,9 +342,14 @@
           }
         ]
       },
-      "acRefs": [],
+      "acRefs": [
+        "AC17",
+        "AC19",
+        "AC20"
+      ],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
@@ -556,6 +561,11 @@
       "at": "2026-11-23T08:11:50.862Z",
       "event": "task-attempt",
       "detail": "T14: started (attempt 1) — 515-T14"
+    },
+    {
+      "at": "2026-11-23T08:21:15.922Z",
+      "event": "task-done",
+      "detail": "T14: Compact filter bar and one-row header on narrow hosts"
     }
   ],
   "origin": {
