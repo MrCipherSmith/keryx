@@ -9,9 +9,9 @@
   "id": "512",
   "slug": "desktop-metaproject-explorer",
   "title": "Metaproject Graph and Wiki in Keryx Desktop",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-22T08:36:16.920Z",
-  "updatedAt": "2026-11-22T09:21:29.174Z",
+  "updatedAt": "2026-11-23T19:44:37.685Z",
   "source": {
     "type": "description",
     "ref": null
@@ -40,7 +40,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1283"
   },
   "baseBranch": "main",
   "outcomeAuthor": "agent",
@@ -448,6 +448,16 @@
       "at": "2026-11-22T09:21:29.174Z",
       "event": "task-done",
       "detail": "T9: Verify contracts and UI in GitHub Actions"
+    },
+    {
+      "at": "2026-11-23T19:44:32.876Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1283 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-23T19:44:37.685Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (Named by the operator in the session of 2026-11-23 when asked who is accountable for flow 512)"
     }
   ],
   "origin": {
@@ -538,5 +548,10 @@
       "criterion": "AC4",
       "acChecksum": "sha256:472967869493a2e7a21f2336c4ad808e53f236a06687227d074f2d22e53a6e37"
     }
-  ]
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  }
 }

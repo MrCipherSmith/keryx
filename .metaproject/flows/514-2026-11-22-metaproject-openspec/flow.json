@@ -9,17 +9,42 @@
   "id": "514",
   "slug": "metaproject-openspec",
   "title": "OpenSpec in Keryx Metaproject — local catalog, history and Explorer",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-22T16:21:10.206Z",
-  "updatedAt": "2026-11-22T16:51:08.217Z",
+  "updatedAt": "2026-11-23T19:44:41.288Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-23T19:44:38.586Z",
+      "note": "On origin/main b147408a8 (contains PR 1285 merge d5c6beea7): bun test src/openspec/catalog.test.ts src/integrations/metaproject-explorer.test.ts: 25 pass, 0 fail. PR 1285 CI: 29 checks success, 1 skipped."
+    },
+    "AC2": {
+      "at": "2026-11-23T19:44:39.015Z",
+      "note": "On origin/main b147408a8: bun test src/openspec/history.test.ts: 5 pass, 0 fail. PR 1285 CI green."
+    },
+    "AC3": {
+      "at": "2026-11-23T19:44:39.459Z",
+      "note": "On origin/main b147408a8: bun test src/openspec/search.test.ts src/integrations/metaproject-explorer.test.ts: 24 pass, 0 fail. PR 1285 CI green."
+    },
+    "AC4": {
+      "at": "2026-11-23T19:44:39.959Z",
+      "note": "On origin/main b147408a8: bun test src/integrations/metaproject-explorer.test.ts: 19 pass, 0 fail. PR 1285 CI green."
+    },
+    "AC5": {
+      "at": "2026-11-23T19:44:40.393Z",
+      "note": "On origin/main b147408a8: bun test src/commands/openspec.test.ts src/integrations/metaproject-explorer.test.ts: 22 pass, 0 fail. PR 1285 CI green."
+    },
+    "AC6": {
+      "at": "2026-11-23T19:44:40.875Z",
+      "note": "On origin/main b147408a8: cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts: 98 pass, 0 fail. PR 1285 CI green including Desktop check."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1285"
   },
   "baseBranch": "main",
   "origin": {
@@ -282,7 +307,7 @@
       "id": "T12",
       "title": "Verify focused core and Desktop checks in GitHub CI",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9",
         "T10",
@@ -298,7 +323,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 1285 CI: 29 checks success, 1 skipped, before merge d5c6beea7; the six exec criteria re-run locally on origin/main b147408a8, all pass"
     },
     {
       "id": "T13",
@@ -771,6 +798,51 @@
       "at": "2026-11-22T16:51:08.217Z",
       "event": "task-attempt",
       "detail": "T13: blocked (attempt 2) — Computer Use could not inspect the app because the Mac was locked. The user was asked to unlock it."
+    },
+    {
+      "at": "2026-11-23T19:44:37.192Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1285 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-23T19:44:38.106Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (Named by the operator in the session of 2026-11-23 when asked who is accountable for flow 514)"
+    },
+    {
+      "at": "2026-11-23T19:44:38.586Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: On origin/main b147408a8 (contains PR 1285 merge d5c6beea7): bun test src/openspec/catalog.test.ts src/integrations/metaproject-explorer.test.ts: 25 pass, 0 fail. PR 1285 CI: 29 checks success, 1 skipped. (signed: flow agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T19:44:39.015Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: On origin/main b147408a8: bun test src/openspec/history.test.ts: 5 pass, 0 fail. PR 1285 CI green. (signed: flow agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T19:44:39.459Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: On origin/main b147408a8: bun test src/openspec/search.test.ts src/integrations/metaproject-explorer.test.ts: 24 pass, 0 fail. PR 1285 CI green. (signed: flow agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T19:44:39.959Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: On origin/main b147408a8: bun test src/integrations/metaproject-explorer.test.ts: 19 pass, 0 fail. PR 1285 CI green. (signed: flow agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T19:44:40.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: On origin/main b147408a8: bun test src/commands/openspec.test.ts src/integrations/metaproject-explorer.test.ts: 22 pass, 0 fail. PR 1285 CI green. (signed: flow agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T19:44:40.875Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: On origin/main b147408a8: cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts: 98 pass, 0 fail. PR 1285 CI green including Desktop check. (signed: flow agent (Claude session of 2026-11-23), not a human signature [stated])"
+    },
+    {
+      "at": "2026-11-23T19:44:41.288Z",
+      "event": "task-done",
+      "detail": "T12: Verify focused core and Desktop checks in GitHub CI"
     }
   ],
   "acKinds": {
@@ -801,5 +873,78 @@
     "AC7": {
       "kind": "judged"
     }
-  }
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-11-23T19:44:38.586Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4"
+    },
+    {
+      "at": "2026-11-23T19:44:39.015Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4"
+    },
+    {
+      "at": "2026-11-23T19:44:39.459Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4"
+    },
+    {
+      "at": "2026-11-23T19:44:39.959Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4"
+    },
+    {
+      "at": "2026-11-23T19:44:40.393Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4"
+    },
+    {
+      "at": "2026-11-23T19:44:40.875Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "flow agent (Claude session of 2026-11-23), not a human signature",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:fe3df40311bd3ec747660b8acdcee3df31ca14590d49f3fcadc34df9a69ec5f4"
+    }
+  ]
 }
