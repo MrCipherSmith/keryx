@@ -1,0 +1,95 @@
+{
+  "task": {
+    "task_id": "fix-23",
+    "task_name": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Four minor findings of review round 2 about the tests of round 1's fixes: 14 mutants of the fix code survive, so the behaviour they stand for is pinned by no assertion. Each finding is in `fix_context.review_feedback`; the full text is in findings.json and every mutant (file:line, anchor, replacement) in research-evidence/mutation-2.md. Task T22 has just changed the same production file (results/T22.result.json says what, and which lines of the quiet catalog re-read moved), so some anchors have moved. The task is done when every finish line below holds, the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-006. The bounds of `placeFiltersPopover` and the removal of its resize listener are unpinned: R2-2 (opens above although there is less room above), R2-4, R2-5, R2-6, R2-7 (the floors and the 420 px cap), R2-9 (the resize listener is never removed). F-007. The quiet catalog re-read is pinned by one same-snapshot fixture: R2-14 (a return while the first read is loading), R2-16 (a return after the snapshot changed), R2-17 and R2-19 (a later full read after a quiet one), R2-18 (the snapshot match in `graphState`), R2-26 (the freshness reason). F-008. The node-memory test asserts only that nothing is written, so deleting the effect that fills the memory (R2-23) stays green; nothing reaches, through Back, a node that exists only in that memory. F-009. Removing `visible={view === \"metaproject\"}` from App.tsx (R2-28) stays green, so the line the fixes of round 1's F-003 and F-004 hang on is pinned by no test.\n\nFinish line: `scratch_check2.py mutants --ids R2-2,R2-4,R2-5,R2-6,R2-7,R2-9,R2-14,R2-16,R2-17,R2-18,R2-19,R2-23,R2-26 --tests src/metaproject/MetaprojectView.dom.test.tsx` and `--ids R2-28 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant the tool reports as invalid because T22 moved its anchor, your result names the line that now carries that behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost, it says why, and for R2-28 specifically the reviewer accepts as an alternative a statement that the wiring rests on the live check only; prefer a test if the composition can be rendered with the explorer stubbed. The F-008 test shows the memory working (Back to a node known only from a lookup shows its panel at once), not only that it is left alone. A test added here asserts what a user or a caller can observe — rendered text, roles, the requests the explorer sends, the style the popover gets, a callback's arguments — not the wording of the source. The production files are owned so that a test can be given a seam it needs; a change of behaviour in them is a `behavior_changes` entry, and a real defect a new test exposes is reported, with the test, before it is fixed. R2-12 and R2-30 also survive and are not in this task: the reviewer judged both redundant code with no input a test can drive.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx",
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/App.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+      "AC20: In the browser dev build, in a dark and a light theme, at 1180×780 and 1440×900: the graph shows incoming neighbours left and outgoing neighbours right of the selected node with group captions and a legend; the details panel shows a header, facts, a tab bar with counts and one primary action per tab; no text overlaps or is clipped. At 720×480 with the panel closed and no warning banner, at least 140 px of graph height is visible without scrolling, and the open panel leaves part of the content visible. [verify: judged]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 2. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. Review round 2 read the fixes of round 1 as new code; its package is .metaproject/reviews/2026-11-23-review-flow-branch-r02: report.md (the round's report), findings.json (every finding with its file, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-2.md (the 34 mutants of the fix code: file:line, anchor, replacement, killed or survived) and research-evidence/mutants-r2.json (the same mutants as data). Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies round 2's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T23.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-006",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "Five gates of placeFiltersPopover and its resize cleanup are unpinned. Mutants run in a scratch copy, suite green: R2-2 (`needed > below` only: flips above although there is less room above), R2-4 (`Math.max(POPOVER_MARGIN, ...)` on bottom), R2-5 (`Math.min(MENU_MAX_HEIGHT, above)` -> `above`), R2-6/R2-7 (the `Math.max(0, ...)` floor and the MENU_MAX_HEIGHT cap below), R2-9 (the resize listener is never removed). The two placement tests drive only the two clean cases: content 0 px with room below (305/167), content 229 px with 14 px below and 418 above; no fixture has content too tall for below while above is smaller, a button within 4 px of the window bottom, a window taller than 420 px, or an unmount followed by a resize.",
+        "suggested_fix": "Add: stubPopoverContentHeight(500) with the button at top 250 / bottom 274 in a 480 window (more room below than above) and assert style.top and no style.bottom (R2-2); a window of 900 with the popover below asserts maxHeight 420 (R2-7); a button at top 478 asserts bottom 8 (R2-4); content 229 with a button at top 600 in a 700 window asserts maxHeight 420 (R2-5); spy on window.removeEventListener, unmount the view and assert a \"resize\" removal (R2-9).",
+        "reviewer": "review-testing-practices",
+        "line": 190,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-007",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "The quiet catalog path added for round-1 F-004 is pinned by one fixture (same snapshot id, graph ready then stale) and one rebuild fixture. Surviving mutants: R2-16 (`if (quiet)`: a return after the project changed would drop the new catalog and only update freshness), R2-17 (no `setFreshness(null)` after a full load: a later full read of the same snapshot keeps showing the earlier quiet freshness), R2-18 (`freshness ?? catalog`: ignores the snapshot match in graphState), R2-19 (`quietRead.current` never reset: a later Retry or Rebuild read is treated as quiet), R2-14 (`!loaded.current` guard: a return while the first read is loading starts a second read), R2-26 (freshness reason read from the catalog, not graphState). No fixture returns to the view with a changed snapshot id, or follows a quiet read with a rebuild or Retry.",
+        "suggested_fix": "Extend the 'shown again' test: a third read returns snapshotId \"two\" with new nodes, assert the list shows them (R2-16, R2-18); after the stale quiet read click Rebuild graph with a read returning graph ready and assert no 'Graph is stale' banner (R2-17, R2-19); count catalog reads for a return while the first read is pending (R2-14); open Details on the quiet-stale banner and assert the reason text (R2-26).",
+        "reviewer": "review-testing-practices",
+        "line": 379,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-008",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "severity": "WARNING",
+        "message": "The test asserts only `expect(writes).toBe(0)` after patching Map.prototype.set, with no positive artifact that the effect still fills the memory. Deleting the effect body (`for (const node of nodes) seenNodes.current.set(node.id, node);`, R2-23) leaves the suite green: writes are 0 either way. Only R2-24 (effect without its dependency) is killed. No other test reaches a node that exists only in seenNodes (a lookup result) through Back.",
+        "suggested_fix": "Open a wiki link whose target comes from a `search` hit that is not in the catalog, open another page, press Back and assert the target's panel title shows; and in the same test assert writes > 0 when the node list changes (for example a search that adds a hit).",
+        "reviewer": "review-testing-practices",
+        "line": 974,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-009",
+        "file": "apps/desktop/src/App.tsx",
+        "severity": "WARNING",
+        "message": "The one line that makes the fixes for round-1 F-003 and F-004 work in the app is unpinned: removing `visible={view === \"metaproject\"}` (R2-28) leaves every suite green, because the explorer tests pass `visible` themselves and App.dom.test.tsx renders only RetainedView. With the prop missing the default `true` applies and the popover stays open and the catalog is never re-read on return.",
+        "suggested_fix": "Cheapest: export a small wrapper or render App's work-view block in a DOM test with a stub MetaprojectView and assert it receives visible=false while another view is shown; or state in the flow that the wiring is covered by the live check only.",
+        "reviewer": "review-testing-practices",
+        "line": 596,
+        "premise_verdict": "upheld"
+      }
+    ],
+    "original_task_ids": [
+      "task-17",
+      "task-20"
+    ],
+    "iteration": 2
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

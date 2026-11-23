@@ -1,0 +1,96 @@
+{
+  "task": {
+    "task_id": "fix-22",
+    "task_name": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Four minor findings of review round 2, each a defect that a fix of round 1 brought or left. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text, the quoted code and the evidence are in findings.json. The task is done when every finish line below holds, each fix has a test that fails without it (shown with `scratch_check2.py red`), the two test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 1's F-022). `groupRelationships` now leaves out every self-loop, as it already left out an edge whose end is missing from the projection, but two readers still count the raw `projection.edges.length`: the list's own empty note (RelationshipList.tsx) and the Wiki view's Relationships disclosure, its condition and its count (MetaprojectView.tsx). The producer does emit a self `links` edge for a wiki page that links to a heading of its own file. Finish line: whenever the list has no row to show, it says `No relationships for these filters.`; the Wiki disclosure is shown only when the list under it has at least one row, and its count is the number of rows that list shows. The counts a user sees for one projection (the panel's fact row, the Relationships tab count, the Wiki disclosure, the rows listed) all come from the one grouping rule.\nF-002 (brought by the fix of round 1's F-004). The quiet catalog re-read on return runs through the catalog effect, which bumps `project.current`; `openPath` and `loadMoreSearch` use that counter as their 'same project' guard, so a Wiki-link lookup or a 'load more' page still in flight when the user leaves the view and comes back is dropped without a message. Finish line: such a lookup or page settles exactly as it would have if the user had stayed (the target opens, the unresolved-path message shows, the page is appended); everything that retired pending work before round 1's fix still retires it (another project or protocol, Retry, Refresh, Rebuild); the quiet read still drops its own superseded result, and round 1's F-005 rule (only the lookup started last may settle) holds.\nF-003 (brought by the fix of round 1's F-004). The operator's answer to round 1's F-004 was to re-read the catalog silently on return; only the success path is silent. A quiet read clears `error` when it starts and sets it when it fails, so a failed re-read puts the catalog error banner with Retry over an explorer whose catalog, graph and selection are still valid, and a standing message (for example of a failed rebuild) disappears when the user returns. Finish line: a quiet re-read neither shows nor clears the error banner; when it fails, the explorer is exactly as it was before the return (catalog, selection, freshness, any standing error); every other read reports a failure as it does today.\nF-004 (left by the fix of round 1's F-006). The write to the explorer's node memory has two spellings in one component: the `remember` helper and an inlined copy of its body in the effect. Finish line: one spelling, no behaviour change. `remember` is recreated on every render, so calling it from the effect as it stands would make the effect depend on a value outside its dependency list; choose the form that keeps the effect's dependencies honest.\n\nAnother implementer adds tests to MetaprojectView.dom.test.tsx right after you (task T23: the test strength of round 1's fixes, which includes the quiet re-read you are changing), so leave the file's helpers and fixtures in a state others can build on, and say in `notes` which lines of the quiet path moved. If a fix changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC7: `NodeDetailsPanel` shows the selected node's kind as a text badge, its title, its repository path with a \"Copy path\" control that writes the path to the clipboard, and \"N incoming · M outgoing\" counts computed from the root-adjacent edges of the `relationships` projection, with \"limited\" when it is truncated. [verify: exec `cd apps/desktop && bun test src/metaproject/NodeDetailsPanel.dom.test.tsx`]",
+      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 2. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. Review round 2 read the fixes of round 1 as new code; its package is .metaproject/reviews/2026-11-23-review-flow-branch-r02: report.md (the round's report), findings.json (every finding with its file, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-2.md (the 34 mutants of the fix code: file:line, anchor, replacement, killed or survived) and research-evidence/mutants-r2.json (the same mutants as data). Finding ids in this task are round 2's; where a round-1 finding is meant, the text says `round 1's F-0NN`. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check2.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies round 2's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T22.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-001",
+        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "severity": "WARNING",
+        "message": "Answering F-022, groupRelationships() now drops every self-loop (`if (edge.from === edge.to) continue;`), but the empty state still tests `projection.edges.length === 0`, the raw edge count. A projection whose only edges are self-loops (or edges with an end absent from the projection, which groupRelationships already dropped) has edges.length > 0 and groups that are all empty: no note, no group, an empty `<div class=\"metaproject-rel\">`. The same raw count feeds the Wiki disclosure label at MetaprojectView.tsx:925, `<summary>Relationships <span className=\"count-label\">{currentProjection.edges.length}</span></summary>`, so that label counts edges the list now omits. This is the F-022 class (a count that disagrees with the list beside it) at two sites the fix did not reach.",
+        "suggested_fix": "Decide the empty note from the groups, not the raw edges: `const empty = !groups.incoming.length && !groups.outgoing.length && !groups.secondStep.length;` and render the note when `empty`. In MetaprojectView.tsx show the disclosure and its count from `summarizeRelationships(currentProjection)` (incoming + outgoing), or from the same groups, not from `edges.length`.",
+        "reviewer": "review-logic",
+        "line": 217,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-002",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "The quiet re-read added for F-004 goes through the catalog effect. On a hidden-to-visible change the visible effect (`if (!returned || !loaded.current) return; quietRead.current = true; setRevision(value => value + 1);`) bumps `revision`, a dependency of the catalog effect. React runs that effect's cleanup (`project.current++`) and then its body (`const generation = ++project.current;`), so project.current moves by two even when the re-read finds the same snapshotId and changes nothing. openPath captured `const generation = project.current;` and its `current()` requires `generation === project.current`; loadMoreSearch captured `const projectGeneration = project.current;` and checks `projectGeneration !== project.current` after its read (line 638) and in its catch (line 644). Both therefore see the guard fail and return. openPath has already cleared the unresolved message (`setUnresolvedLink(null)`), so no message is shown; loadMoreSearch appends nothing and sets no error. The unchanged-snapshot branch (`setFreshness(...); return;`) does not restore the counter. The other guards do not help: latestSearch.generation moves only when the query or catalog snapshotId changes (not here), and the token in openPath and shownSelection/activeMode all still match, so project.current is the only guard that fails.",
+        "suggested_fix": "Keep project.current for real project changes and give the quiet same-snapshot re-read its own counter: let the effect skip `++project.current` and the cleanup bump while `quiet` is set, guarding that read by a separate ref; or restore project.current in the unchanged-snapshot branch. Add a test that holds a wiki-link lookup, hides and shows the explorer, then releases it and checks the target opens.",
+        "reviewer": "review-logic",
+        "line": 367,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-003",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "A failed quiet re-read on return shows the loud catalog error over a working explorer. The fix round added a quiet catalog re-read when the explorer becomes visible again (`quietRead.current = true; setRevision(...)`, lines 335-343). The load effect it reuses clears and sets `error` unconditionally: `setError(\"\")` at line 370 and `setError(errMessage(cause))` in the catch at line 392. On base nothing was read on return, so nothing could fail there. Trigger: the user leaves the Metaproject tab and comes back while the CLI read fails (CLI busy or exiting, a rebuild writing the index, a transient spawn error). Outcome: the `{error && ...role=\"alert\"}` banner (line 820) appears with the CLI message and a Retry button above an explorer whose catalog, graph and selection are still valid; Retry runs a non-quiet read, which replaces the catalog and may drop the selection if the snapshot moved. The quiet read was meant to be invisible (its comment says 'quietly'); only its success path is. The test at MetaprojectView.dom.test.tsx:889 covers the unchanged-snapshot success path only.",
+        "suggested_fix": "In the catch, when `quiet` is true, keep the loaded catalog and skip `setError` (and do not clear a standing error at line 370 for a quiet read); the next real read or the user's Retry reports a persistent failure.",
+        "reviewer": "review-degradation",
+        "line": 392,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-004",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "The fix for round-1 F-006 moved the node-memory fill into an effect and wrote the map write inline, while the `remember` helper declared three lines above (`const remember = (node: MetaprojectNode) => { seenNodes.current.set(node.id, node); };`) does the same write and is still used at line 603 (`if (node) remember(node);`). The same operation now has two spellings in one component.",
+        "suggested_fix": "Call the helper in the effect: `for (const node of nodes) remember(node);`.",
+        "reviewer": "review-style",
+        "line": 572,
+        "premise_verdict": "upheld"
+      }
+    ],
+    "original_task_ids": [
+      "task-17",
+      "task-18"
+    ],
+    "iteration": 2
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

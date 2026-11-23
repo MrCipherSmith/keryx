@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T10:12:10.719Z",
+  "updatedAt": "2026-11-23T11:14:40.285Z",
   "source": {
     "type": "description",
     "ref": null
@@ -93,11 +93,24 @@
         "T18",
         "T19",
         "T20",
-        "T21"
+        "T21",
+        "T22",
+        "T23"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-11-23T10:12:37.125Z",
+            "outcome": "started",
+            "detail": "review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
+          },
+          {
+            "at": "2026-11-23T10:52:22.579Z",
+            "outcome": "failed",
+            "detail": "review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -519,6 +532,61 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:53:40.447Z",
+            "outcome": "started",
+            "detail": "515-T22 (fix round 2)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC7",
+        "AC10",
+        "AC14",
+        "AC16",
+        "AC19"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:04:34.114Z",
+            "outcome": "started",
+            "detail": "515-T23 (fix round 2)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC14",
+        "AC19",
+        "AC20"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -839,6 +907,51 @@
       "at": "2026-11-23T10:12:10.719Z",
       "event": "task-done",
       "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
+    },
+    {
+      "at": "2026-11-23T10:12:37.125Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1: 1 major, 20 minor, 6 info, 2 refuted; fix round 1 (T17-T21) done; round 2 follows"
+    },
+    {
+      "at": "2026-11-23T10:52:22.579Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
+    },
+    {
+      "at": "2026-11-23T10:52:22.786Z",
+      "event": "task-added",
+      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
+    },
+    {
+      "at": "2026-11-23T10:52:22.977Z",
+      "event": "task-added",
+      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
+    },
+    {
+      "at": "2026-11-23T10:52:23.173Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21) — review round 2 asked for changes; the review task closes after fix round 2 (T22, T23) and a clean round"
+    },
+    {
+      "at": "2026-11-23T10:53:40.447Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 515-T22 (fix round 2)"
+    },
+    {
+      "at": "2026-11-23T11:04:12.196Z",
+      "event": "task-done",
+      "detail": "T22: Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004)"
+    },
+    {
+      "at": "2026-11-23T11:04:34.114Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 515-T23 (fix round 2)"
+    },
+    {
+      "at": "2026-11-23T11:14:40.285Z",
+      "event": "task-done",
+      "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
     }
   ],
   "origin": {

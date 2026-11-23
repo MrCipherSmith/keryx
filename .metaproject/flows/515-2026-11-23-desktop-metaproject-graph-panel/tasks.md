@@ -27,6 +27,8 @@ while the screen was tuned on a live preview, T17–T21 after review round 1; th
 | T19 | test | Fix round 1: graph test strength (F-012, F-013, F-021) | — | AC1, AC2, AC3, AC4, AC6, AC19 |
 | T20 | test | Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018) | T17 | AC10, AC11, AC12, AC13, AC16, AC17, AC19 |
 | T21 | docs | Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes) | T17, T18 | AC21 |
+| T22 | implement | Fix round 2: explorer behaviour the first fixes left (F-001, F-002, F-003, F-004) | — | AC7, AC10, AC14, AC16, AC19 |
+| T23 | test | Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009) | T22 | AC10, AC14, AC19, AC20 |
 
 ## Context
 
@@ -85,6 +87,9 @@ while the screen was tuned on a live preview, T17–T21 after review round 1; th
 - **T4.** `review-orchestrator` on the flow's diff, with fix rounds through `task-implementer`.
   Round 1: package `.metaproject/reviews/2026-11-23-review-flow-branch` (29 findings: 2 major,
   20 minor, 7 info).
+  Round 2 (delta over the fixes of round 1): package
+  `.metaproject/reviews/2026-11-23-review-flow-branch-r02` (13 findings: 9 minor, 4 info; one minor
+  dismissed by the operator).
 
 ## Fix round 1 (findings of review round 1)
 
@@ -104,3 +109,18 @@ Each task's finish line is in its dispatch file; the findings are in the review 
   `MetaprojectView.tsx`, `useExplorerNavigation.ts` and `App.tsx`; after T17, which edits the same files.
 - **T21 — flow record and guide.** F-009 (this file), F-010 (the resolved-context and result files the
   T9 and T15 dispatches name), and the guide where T17 and T18 change what it describes.
+
+## Fix round 2 (findings of review round 2)
+
+The finding ids below are round 2's. Each task's finish line is in its dispatch file; the findings are
+in `.metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json`. F-005 (finding ids in test
+names) was dismissed by the operator; the info findings F-010 to F-013 are not fixed.
+
+- **T22 — explorer behaviour the first fixes left.** F-001 (a node whose only relationships are links
+  to itself gets a blank Relationships list, and the Wiki count still includes them), F-002 (a
+  Wiki-link lookup or a "load more" page in flight is dropped when the user leaves the view and
+  returns), F-003 (a failed quiet catalog re-read shows the error banner), F-004 (two spellings of the
+  node-memory write).
+- **T23 — test strength of the first fixes.** F-006 to F-009: 14 surviving mutants of the Filters
+  popover placement, the quiet catalog re-read, the node memory and the `visible` wiring in `App.tsx`;
+  after T22, which edits the same files.
