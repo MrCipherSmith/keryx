@@ -1,0 +1,107 @@
+{
+  "task": {
+    "task_id": "fix-24",
+    "task_name": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Five minor findings of review round 3: one behaviour defect that fix round 2 left, and four gaps in the tests fix round 2 added. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text and the evidence are in findings.json, and every mutant (file:line, anchor, replacement, killed or survived) in research-evidence/mutation-2.md. The task is done when every finish line below holds, the three test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 2's F-003). The explorer keeps one `error` state for two different failures: a catalog read that failed and a rebuild that failed. Task T22 was told that a quiet re-read neither shows nor clears the error banner, which is right for a rebuild's failure and wrong for a catalog read's: when a read the user started fails (Retry, Refresh catalog, the reload after a rebuild) and the banner with Retry shows, and the user then leaves the view and returns once the catalog can be read, the quiet re-read succeeds, the catalog or its freshness is current, and the failure banner still stands above it. Finish line: a quiet re-read that succeeds removes the banner of a failed catalog read, whether the snapshot changed or not; a rebuild's failure message is still left alone by a quiet re-read, as the existing test pins; a quiet re-read that fails still neither shows nor removes anything; every read that is not quiet behaves as today. A test shows the stale banner on the current production file (`scratch_check3.py red`) and its absence with the fix.\nF-002. The list's `empty` test is pinned for the all-empty case only: R3-7 (the second-step term dropped) and R3-9 (`&&` to `||`) survive. F-003. The Wiki disclosure's count has no fixture with a second-step row: R3-4 survives. F-004. T22 split the counter that retires pending work, and the tests pin only that a quiet read does not retire it; nothing pins that a read which is not quiet still does: R3-17 and R3-18 (the guards of openPath and loadMoreSearch dropped) and R3-19 and R3-20 (either `project.current++` removed) survive. F-005. The test of `MetaprojectWork` pins the `visible` the explorer is given and nothing else: R3-10 (the wrapper's own `visible`, so the explorer would stay on screen under Settings), R3-14 (the default explorer replaced by nothing), R3-16 (the Suspense fallback removed), R3-15 (`onRebuild` not passed on) and R3-13 (the call site in ProjectWindow) survive.\n\nFinish line for F-002 to F-005: `scratch_check3.py mutants --ids R3-4,R3-17,R3-18,R3-19,R3-20 --tests src/metaproject/MetaprojectView.dom.test.tsx`, `--ids R3-7,R3-9 --tests src/metaproject/RelationshipList.dom.test.tsx` and `--ids R3-10,R3-13,R3-14,R3-15,R3-16 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant whose anchor your own change moved, the result names the line that now carries the behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost it says why; for R3-13 the reviewer accepts a statement that the call site rests on the live check, and the flow journal already records that check after T23. R3-6 and R3-11 also survive and are not in this task: the reviewer judged them equivalent and near-equivalent. Then mutate what you added for F-001 yourself (the condition that tells the two failures apart, and each place that clears or keeps the banner), in a scratch copy made the way `scratch_check3.py`'s `make_copy()` does, and add a test for any that survives; report them as `T24-1` onward with file, anchor and replacement, so that the next reader can re-run them.\n\nA test added here asserts what a user or a caller can observe: rendered text, roles, the requests the explorer sends, a callback's arguments. If F-001 changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
+    "target_files": [
+      "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx",
+      "apps/desktop/src/App.tsx"
+    ],
+    "acceptance_criteria": [
+      "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+      "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+      "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+    ],
+    "context": "Flow 515 in the Keryx repository, fix round after review round 3. Worktree root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign (branch feat/desktop-metaproject-redesign). The desktop app is apps/desktop (Tauri v2, React 18, Vite, TypeScript, bun). The flow's plan.md holds the design, the file ownership, the interfaces between components and the state x event matrix; context.md holds measured facts and reusable tokens and patterns. Review round 3 read the commits of fix round 2 (tasks T22 and T23) as new code; its package is .metaproject/reviews/2026-11-23-review-flow-branch-r03: report.md (the round's report), findings.json (every finding with its file, quote, evidence and the verifier's and premise judge's verdicts), research-evidence/mutation-2.md (the 20 mutants of that code: file:line, anchor, replacement, killed or survived) and research-evidence/mutants-r3.json (the same mutants as data). Finding ids in this task are round 3's; where a finding of an earlier round is meant, the text says `round 1's F-0NN` or `round 2's F-0NN`. Checks: types with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bunx tsc --noEmit`; tests with `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign/apps/desktop && bun test <one test file>` (run each DOM test file in its own process). ESLint does not cover apps/desktop. DOM tests use bun:test with happy-dom through apps/desktop/src/test/dom.ts. Red checks run only in a scratch copy, with `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check3.py` (`red --restore <production files> --tests <test files>` puts the named production files back to HEAD in a copy and runs the tests there; `mutants --ids <ids> --tests <test files>` applies round 3's mutants one by one in a copy; paths relative to apps/desktop; `--help` prints the usage). A dev server is serving this worktree, so never swap, revert or temporarily edit a tracked file in the worktree to see a test fail.",
+    "existing_tests": [
+      "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "apps/desktop/src/App.dom.test.tsx"
+    ],
+    "existing_stories": [],
+    "module_patterns": "React 18 function components with hooks, no state library. A component's styles live in a sibling .css file it imports; classes are plain BEM-like names prefixed `metaproject-`; colours, spacing, type sizes and radii come only from the tokens in apps/desktop/src/styles/tokens.css. Shared types are imported from ../../../../src/integrations/metaproject-explorer-contract. Tests sit next to the code as *.test.ts (pure) or *.dom.test.tsx (happy-dom); they mock only the explorer's own request/negotiate boundary and the cytoscape factory seam."
+  },
+  "workspace": {
+    "codebase_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign",
+    "branch": "feat/desktop-metaproject-redesign",
+    "issue_title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
+    "context_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+    "resolved_context_file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json"
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "F-001",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "Answering round 2's F-003, a quiet re-read neither clears `error` at its start (`if (!quiet) { project.current++; setError(\"\"); }`) nor sets it on failure. The `error` state holds two unrelated things: a failed catalog read and a failed rebuild (rebuild() sets it at line 677). Keeping it across a quiet read is right for the rebuild failure, which the test 'a standing error, such as a failed rebuild's, survives a quiet re-read on return' pins. For a catalog-read failure it is wrong: a quiet read that succeeds has just shown that the catalog can be read, and neither of its success branches (the unchanged-snapshot branch above, or `setCatalog(result)` below it) touches `error`.",
+        "suggested_fix": "Record where the standing error came from (a `catalogFailed` ref or a field on the error state: 'catalog' or 'rebuild'). On a successful quiet read, clear the error only when it came from a catalog read; leave a rebuild error. Add a test: reload fails, hide and show with a working read, expect no catalog error banner.",
+        "reviewer": "review-logic",
+        "line": 390,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-002",
+        "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "severity": "WARNING",
+        "message": "The `empty` test T22 added (answering F-001 of round 2) is pinned on one side only. Mutants run in a scratch copy of apps/desktop at 8e0f656fb, tests RelationshipList.dom.test.tsx and MetaprojectView.dom.test.tsx (baseline exit 0): R3-9 (`&&` -> `||`, so the note shows whenever any one group is empty) SURVIVED; R3-7 (the `!groups.secondStep.length` term dropped, so a projection with only second-step rows says 'No relationships') SURVIVED; R3-8 (back to `projection.edges.length === 0`) killed by 'a projection whose every edge is left out says it has no relationships'. No fixture builds a projection that has rows in some groups but not in others and asserts the note is absent; the only 'not empty' fixtures have all three groups filled. R3-7 is not equivalent: groupRelationships (RelationshipList.tsx:54-62) puts an edge between two non-root nodes into secondStep, so a projection with no root-adjacent edge and one such edge lists a row.",
+        "suggested_fix": "In RelationshipList.dom.test.tsx add a projection with incoming rows only (outgoing empty) and one with a single second-step edge and no adjacent edge; assert the note is absent and the matching group heading present.",
+        "reviewer": "review-testing-practices",
+        "line": 213,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-003",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "The Wiki disclosure's count, which the comment above it says 'counts the rows its list shows', is pinned for incoming/outgoing rows only. R3-4 (`+ wikiRelationships.secondStep` dropped from the sum) SURVIVED the MetaprojectView and RelationshipList DOM tests. The fixtures in 'a Wiki page's Relationships disclosure counts the rows its list shows, and a self-link alone shows none' carry a self-link and one root-adjacent `describes` edge; none carries a second-step edge, so the list's 'Second step N' group and the label can disagree unseen. Killed for contrast: R3-2 (condition back to `currentProjection.edges.length > 0`), R3-3 (label back to `edges.length`), R3-5 (`> 0` -> `>= 0`). R3-6 (drop `mode === \"wiki\" &&` in the memo) survived and is equivalent: the value is read only inside the Wiki branch.",
+        "suggested_fix": "Add a second-step edge between two non-root nodes to the second `readWith` in that test and assert the label is '2' with 'Second step' group rows present.",
+        "reviewer": "review-testing-practices",
+        "line": 716,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-004",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "severity": "WARNING",
+        "message": "T22 split `project.current` so that only a non-quiet catalog read retires pending wiki-link lookups and pages of results. The tests added pin the new direction (a quiet read must not retire: T23-1 and T23-5 killed by 'a wiki-link lookup in flight ... still settles' and 'a page of results in flight ... is still appended') but nothing pins the old direction, that a real read still retires them. In the scratch copy: R3-20 (cleanup bump removed: `if (!quietRead.current) project.current++;` -> ``) SURVIVED all of MetaprojectView.dom.test.tsx (exit 0); R3-19 (the `project.current++;` inside `if (!quiet) {` removed) SURVIVED (exit 0); R3-17 (`generation === project.current &&` dropped from openPath's `current()`) and R3-18 (`projectGeneration !== project.current` replaced by `false` in loadMoreSearch) SURVIVED (exit 0). No test starts a lookup or a load-more, then runs Refresh, Retry or Rebuild, and asserts the late answer is dropped.",
+        "suggested_fix": "Hold a wiki-link lookup (as the T23 lookup test does), click Refresh catalog (or Rebuild with onRebuild returning true), release the lookup, and assert its target does not open and no 'No indexed project file' message shows; the same for a held load-more page.",
+        "reviewer": "review-testing-practices",
+        "line": 414,
+        "premise_verdict": "upheld"
+      },
+      {
+        "id": "F-005",
+        "file": "apps/desktop/src/App.dom.test.tsx",
+        "severity": "WARNING",
+        "message": "The stand-in explorer pins `visible` handed to the explorer, and nothing else of MetaprojectWork, so the test would pass if MetaprojectWork stopped rendering the real explorer in the app. Mutants in a scratch copy, App.dom.test.tsx (baseline exit 0): R3-14 (default `explorer = LazyMetaprojectView` -> a component returning null) SURVIVED; R3-13 (ProjectWindow's `<MetaprojectWork cwd={cwd} view={view} workView={workView}` -> `view={workView}`) SURVIVED, since no test renders ProjectWindow; R3-10 (RetainedView `visible={view === \"metaproject\"}` -> `visible={workView === \"metaproject\"}`) SURVIVED: the Settings step of the test asserts only `given.at(-1)` is false, not that the wrapper is hidden, so the explorer would stay on screen under Settings; R3-15 (`onRebuild={onRebuild}` -> `async () => false`) SURVIVED, and R3-16 (Suspense fallback removed) SURVIVED. R3-12 (explorer `visible` -> workView) and, from round 2, R2-28 are killed. R3-11 (RetainedView `active` -> `view === ...`) survived and is near-equivalent: it differs only for a first mount while Settings is shown.",
+        "suggested_fix": "In the Settings step add `expect(host.querySelector(\"p\")?.closest(\"[hidden]\")).not.toBeNull()` (kills R3-10). For the default explorer, render MetaprojectWork once without `explorer` and assert the Suspense fallback 'Loading Metaproject…' shows (kills R3-14 and R3-16 without a module mock). The call-site mutant R3-13 needs either a test of ProjectWindow or stating that it rests on the live check.",
+        "reviewer": "review-testing-practices",
+        "line": 68,
+        "premise_verdict": "upheld"
+      }
+    ],
+    "original_task_ids": [
+      "task-22",
+      "task-23"
+    ],
+    "iteration": 3
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": false,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

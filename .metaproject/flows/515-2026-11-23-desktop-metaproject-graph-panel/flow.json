@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T11:14:40.285Z",
+  "updatedAt": "2026-11-23T11:53:58.193Z",
   "source": {
     "type": "description",
     "ref": null
@@ -95,10 +95,12 @@
         "T20",
         "T21",
         "T22",
-        "T23"
+        "T23",
+        "T24",
+        "T25"
       ],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-11-23T10:12:37.125Z",
@@ -109,6 +111,16 @@
             "at": "2026-11-23T10:52:22.579Z",
             "outcome": "failed",
             "detail": "review round 2 on b1538097e: no blocker or major, 8 minor to address (1 more dismissed by the operator), 4 info; fix round 2 follows (T22, T23)"
+          },
+          {
+            "at": "2026-11-23T11:15:31.676Z",
+            "outcome": "started",
+            "detail": "review round 3 on the head that holds fix round 2 (T22, T23)"
+          },
+          {
+            "at": "2026-11-23T11:39:20.414Z",
+            "outcome": "failed",
+            "detail": "review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
           }
         ]
       },
@@ -587,6 +599,54 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:39:22.052Z",
+            "outcome": "started",
+            "detail": "515-T24 (fix round 3)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC14",
+        "AC16",
+        "AC19"
+      ],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Fix round 3: flow record (F-006, F-007, F-008)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T11:41:39.242Z",
+            "outcome": "started",
+            "detail": "515-T25 (fix round 3, the orchestrator's own record)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tasks.md follows flow.json again, verification/fix-round-2.md written, one sentence of results/T22.result.json reworded"
     }
   ],
   "history": [
@@ -952,6 +1012,51 @@
       "at": "2026-11-23T11:14:40.285Z",
       "event": "task-done",
       "detail": "T23: Fix round 2: test strength of the first fixes (F-006, F-007, F-008, F-009)"
+    },
+    {
+      "at": "2026-11-23T11:15:31.676Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 3 on the head that holds fix round 2 (T22, T23)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.414Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.600Z",
+      "event": "task-added",
+      "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.777Z",
+      "event": "task-added",
+      "detail": "T25: Fix round 3: flow record (F-006, F-007, F-008)"
+    },
+    {
+      "at": "2026-11-23T11:39:20.963Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23) — review round 3 asked for changes; the review task closes after fix round 3 (T24, T25) and a clean round"
+    },
+    {
+      "at": "2026-11-23T11:39:22.052Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 515-T24 (fix round 3)"
+    },
+    {
+      "at": "2026-11-23T11:41:39.242Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 515-T25 (fix round 3, the orchestrator's own record)"
+    },
+    {
+      "at": "2026-11-23T11:41:39.455Z",
+      "event": "task-done",
+      "detail": "T25: Fix round 3: flow record (F-006, F-007, F-008)"
+    },
+    {
+      "at": "2026-11-23T11:53:58.193Z",
+      "event": "task-done",
+      "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
     }
   ],
   "origin": {

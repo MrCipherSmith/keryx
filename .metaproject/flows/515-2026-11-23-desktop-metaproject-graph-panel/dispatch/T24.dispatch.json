@@ -1,0 +1,92 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "515",
+  "dispatch_id": "515-T24",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)",
+    "description": "Five minor findings of review round 3: one behaviour defect that fix round 2 left, and four gaps in the tests fix round 2 added. Each is in `fix_context.review_feedback` with its file and the reviewer's suggested fix; the full text and the evidence are in findings.json, and every mutant (file:line, anchor, replacement, killed or survived) in research-evidence/mutation-2.md. The task is done when every finish line below holds, the three test files and the type check pass, and nothing outside the owned files changed.\n\nF-001 (left by the fix of round 2's F-003). The explorer keeps one `error` state for two different failures: a catalog read that failed and a rebuild that failed. Task T22 was told that a quiet re-read neither shows nor clears the error banner, which is right for a rebuild's failure and wrong for a catalog read's: when a read the user started fails (Retry, Refresh catalog, the reload after a rebuild) and the banner with Retry shows, and the user then leaves the view and returns once the catalog can be read, the quiet re-read succeeds, the catalog or its freshness is current, and the failure banner still stands above it. Finish line: a quiet re-read that succeeds removes the banner of a failed catalog read, whether the snapshot changed or not; a rebuild's failure message is still left alone by a quiet re-read, as the existing test pins; a quiet re-read that fails still neither shows nor removes anything; every read that is not quiet behaves as today. A test shows the stale banner on the current production file (`scratch_check3.py red`) and its absence with the fix.\nF-002. The list's `empty` test is pinned for the all-empty case only: R3-7 (the second-step term dropped) and R3-9 (`&&` to `||`) survive. F-003. The Wiki disclosure's count has no fixture with a second-step row: R3-4 survives. F-004. T22 split the counter that retires pending work, and the tests pin only that a quiet read does not retire it; nothing pins that a read which is not quiet still does: R3-17 and R3-18 (the guards of openPath and loadMoreSearch dropped) and R3-19 and R3-20 (either `project.current++` removed) survive. F-005. The test of `MetaprojectWork` pins the `visible` the explorer is given and nothing else: R3-10 (the wrapper's own `visible`, so the explorer would stay on screen under Settings), R3-14 (the default explorer replaced by nothing), R3-16 (the Suspense fallback removed), R3-15 (`onRebuild` not passed on) and R3-13 (the call site in ProjectWindow) survive.\n\nFinish line for F-002 to F-005: `scratch_check3.py mutants --ids R3-4,R3-17,R3-18,R3-19,R3-20 --tests src/metaproject/MetaprojectView.dom.test.tsx`, `--ids R3-7,R3-9 --tests src/metaproject/RelationshipList.dom.test.tsx` and `--ids R3-10,R3-13,R3-14,R3-15,R3-16 --tests src/App.dom.test.tsx` report each mutant as killed. For a mutant whose anchor your own change moved, the result names the line that now carries the behaviour and the test that pins it. For a mutant no DOM test can kill at a reasonable cost it says why; for R3-13 the reviewer accepts a statement that the call site rests on the live check, and the flow journal already records that check after T23. R3-6 and R3-11 also survive and are not in this task: the reviewer judged them equivalent and near-equivalent. Then mutate what you added for F-001 yourself (the condition that tells the two failures apart, and each place that clears or keeps the banner), in a scratch copy made the way `scratch_check3.py`'s `make_copy()` does, and add a test for any that survives; report them as `T24-1` onward with file, anchor and replacement, so that the next reader can re-run them.\n\nA test added here asserts what a user or a caller can observe: rendered text, roles, the requests the explorer sends, a callback's arguments. If F-001 changes something a user sees that docs/docs/guides/desktop-metaproject.md describes, do not edit the guide: say so in `behavior_changes` with the sentence concerned.\n\nScope freeze: fix the findings named here and nothing else. Anything else you notice goes into `noticed_not_touched`; a choice the plan's state x event matrix does not decide goes into `behavior_changes` with `needs_operator: true` and its alternatives. A reviewer's `suggested_fix` is a hypothesis: reproduce the finding first, check the suggestion against the matrix, and say in `notes` where your fix diverged from it or where a finding did not reproduce. Existing tests are not weakened or deleted to make room for a fix. The fixes you are correcting were themselves reviewed as answers to findings, and the defects they brought were missed for that reason: for each change you make, name in `notes` who else reads the thing you changed (search for it) and what they now get.",
+    "intent": "fix"
+  },
+  "acceptance_criteria": [
+    "AC10: Explorer state survives leaving the work view: in the browser dev build, after selecting a node in Graph with a non-empty query and the panel open, switching to Flows and back shows the same view, query, selection, filters, open panel and an available Back button. [verify: judged]",
+    "AC14: A rebuild never leaves its control stuck: when the catalog is reloaded while a rebuild is in flight, then after the rebuild resolves successfully the \"Rebuild graph\" control is enabled again and the catalog is read again. · sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC16: A wiki link whose target is not among the loaded nodes is resolved with one lookup read and opens the target; when no node has that path, a visible message names the unresolved path; a percent-encoded href and an href with a leading \"/\" resolve to the right repository path. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "AC19: The desktop app type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r03/report.md",
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r03/findings.json",
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r03/research-evidence/mutation-2.md",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.tsx",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "apps/desktop/src/App.dom.test.tsx",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T22.result.json",
+    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T23.result.json"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/metaproject-redesign`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "File ownership: create or edit only apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/metaproject/RelationshipList.dom.test.tsx, apps/desktop/src/App.dom.test.tsx, apps/desktop/src/App.tsx. Never edit src/integrations/**, apps/desktop/src-tauri/**, apps/desktop/dev/**, apps/desktop/src/platform/metaproject.ts, docs/**, package.json or any lockfile. No new dependencies.",
+    "If the type checker reports errors only in files you do not own, list them in your report and do not touch them. Run tests scoped to your own test files, not the whole suite.",
+    "Red checks only in a scratch copy: `python3 /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-N3bT0D/43cc8369-40d3-4880-9f53-8691b8e29228/scratchpad/scratch_check3.py red|mutants …`. A dev server serves this worktree; never swap, revert or temporarily edit a tracked file in it to watch a test fail.",
+    "Shell: a hook refuses raw rg, grep, sed, head, tail, cat, find and raw git diff. Search with `keryx ctx rg \"<pattern>\" <path>`, read files with the Read tool, wrap long-output commands as `keryx ctx run -- <cmd>`.",
+    "The fix context (each finding's id, file, the reviewer's message and suggested fix, and the premise judge's verdict) is in .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T24.request.json under fix_context.review_feedback.",
+    "Write the task-implementer output JSON to .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json (it must pass `keryx skills contracts validate .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json --schema task-implementer-output --resolved .metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/resolved/T24.implement.json`).",
+    "Do not ask the user questions and do not spawn subagents."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T24.result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T11:39:21Z",
+    "created_by": "flow-orchestrator"
+  }
+}
