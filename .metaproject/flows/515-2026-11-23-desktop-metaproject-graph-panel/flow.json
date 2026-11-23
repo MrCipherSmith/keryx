@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T11:53:58.193Z",
+  "updatedAt": "2026-11-23T12:27:32.433Z",
   "source": {
     "type": "description",
     "ref": null
@@ -97,10 +97,12 @@
         "T22",
         "T23",
         "T24",
-        "T25"
+        "T25",
+        "T26",
+        "T27"
       ],
       "attempts": {
-        "count": 4,
+        "count": 6,
         "log": [
           {
             "at": "2026-11-23T10:12:37.125Z",
@@ -121,6 +123,16 @@
             "at": "2026-11-23T11:39:20.414Z",
             "outcome": "failed",
             "detail": "review round 3 on 8e0f656fb: no blocker or major, 8 minor to address, 7 info; fix round 3 follows (T24, T25)"
+          },
+          {
+            "at": "2026-11-23T12:08:34.514Z",
+            "outcome": "started",
+            "detail": "review round 4 on the head that holds fix round 3 (T24, T25)"
+          },
+          {
+            "at": "2026-11-23T12:19:08.921Z",
+            "outcome": "failed",
+            "detail": "review round 4 on 744d9ef75: no blocker or major, 4 minor to address and 1 held for the operator (F-004), 5 info; fix round 4 follows (T26, T27)"
           }
         ]
       },
@@ -647,6 +659,56 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "tasks.md follows flow.json again, verification/fix-round-2.md written, one sentence of results/T22.result.json reworded"
+    },
+    {
+      "id": "T26",
+      "title": "Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:19:46.144Z",
+            "outcome": "started",
+            "detail": "515-T26 (fix round 4, worker on opus)"
+          }
+        ]
+      },
+      "acRefs": [
+        "AC10",
+        "AC14",
+        "AC16",
+        "AC19"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "Fix round 4: flow record (F-003, F-004, F-005)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T12:27:32.122Z",
+            "outcome": "started",
+            "detail": "515-T27 (fix round 4, the orchestrator's own record)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "T24's banner-table cell cites T26's tests; fix-round-3.md explains the two red-run counts; tasks.md has fix round 4"
     }
   ],
   "history": [
@@ -1057,6 +1119,51 @@
       "at": "2026-11-23T11:53:58.193Z",
       "event": "task-done",
       "detail": "T24: Fix round 3: catalog error after a quiet re-read, and test strength of fix round 2 (F-001 to F-005)"
+    },
+    {
+      "at": "2026-11-23T12:08:34.514Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 4 on the head that holds fix round 3 (T24, T25)"
+    },
+    {
+      "at": "2026-11-23T12:19:08.921Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — review round 4 on 744d9ef75: no blocker or major, 4 minor to address and 1 held for the operator (F-004), 5 info; fix round 4 follows (T26, T27)"
+    },
+    {
+      "at": "2026-11-23T12:19:09.112Z",
+      "event": "task-added",
+      "detail": "T26: Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002)"
+    },
+    {
+      "at": "2026-11-23T12:19:09.297Z",
+      "event": "task-added",
+      "detail": "T27: Fix round 4: flow record (F-003, F-004, F-005)"
+    },
+    {
+      "at": "2026-11-23T12:19:09.479Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27 (was T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25) — review round 4 asked for changes; the review task closes after fix round 4 (T26, T27) and a clean round"
+    },
+    {
+      "at": "2026-11-23T12:19:46.144Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 515-T26 (fix round 4, worker on opus)"
+    },
+    {
+      "at": "2026-11-23T12:27:31.764Z",
+      "event": "task-done",
+      "detail": "T26: Fix round 4: tests that pin the clears and guards of the explorer's error state (F-001, F-002)"
+    },
+    {
+      "at": "2026-11-23T12:27:32.122Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 515-T27 (fix round 4, the orchestrator's own record)"
+    },
+    {
+      "at": "2026-11-23T12:27:32.433Z",
+      "event": "task-done",
+      "detail": "T27: Fix round 4: flow record (F-003, F-004, F-005)"
     }
   ],
   "origin": {

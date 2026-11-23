@@ -1,0 +1,52 @@
+{
+  "task_id": "fix-26",
+  "task_name": "Fix round 4: tests that pin the clears and guards of the explorer's error state (round 4's F-001, F-002)",
+  "task_type": "fix",
+  "status": "success",
+  "description": "Tests only, no production change. Round 4's F-001: two DOM tests pin that a failed rebuild's banner is cleared by a catalog read the user starts (Retry on the banner) and by a second Rebuild graph while it runs. Round 4's F-002: two DOM tests with a held catalog read pin that a superseded quiet re-read landing late leaves a newer reload's failure banner, and that a superseded reload failing late writes no banner over a newer catalog. Round 4's mutants R4-7, R4-8, R4-10 and R4-11 are now killed.",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable: ESLint does not cover apps/desktop",
+  "type_check_result": "pass (cd apps/desktop && bunx tsc --noEmit, exit 0)",
+  "test_result": "MetaprojectView.dom.test.tsx 91 pass 0 fail (87 before, 4 added), in its own process",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all of the task's finish lines (round 4's F-001 and F-002). AC14 and AC16: their exec command passes (bun test src/metaproject/MetaprojectView.dom.test.tsx, 91 pass). AC19: tsc passes; the whole-suite run (bun test src) was not run here, because the dispatch scopes tests to this file. AC10 is judged in the browser dev build and was not checked here; this task does not touch it.",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/activity/implement.mdc",
+      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
+      "how": "read"
+    },
+    {
+      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
+      "how": "read"
+    },
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
+      "how": "read"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
+      "how": "read"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
+      "how": "read"
+    },
+    {
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
+      "how": "read"
+    }
+  ],
+  "notes": "Tests added, at the end of apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, under the comment '---- Fix round 4 (T26) ... ----'. Each exact title, the mutant it kills, and the full output line of the mutant check for that id:\n- 'a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds' kills R4-10. Line: R4-10: killed — (fail) a failed rebuild's banner goes when Retry reads the catalog again and the read succeeds [1.32ms]\n- 'a second rebuild removes the first one's failure banner while it runs' kills R4-11. Line: R4-11: killed — (fail) a second rebuild removes the first one's failure banner while it runs [1.37ms]\n- 'a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands' kills R4-8. Line: R4-8: killed — (fail) a quiet re-read that a failed rebuild reload superseded leaves that reload's banner when it lands [1.52ms]\n- 'a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded' kills R4-7. Line: R4-7: killed — (fail) a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded [1.79ms]\nCommand: python3 <scratchpad>/scratch_check4.py mutants --ids R4-7,R4-8,R4-10,R4-11 --tests src/metaproject/MetaprojectView.dom.test.tsx, run from the worktree root after the edit (exit 0; its four lines are the ones quoted above).\n\nReproduction. The production file is unchanged against HEAD 744d9ef75, the head at which mutation-2.md recorded R4-7, R4-8, R4-10 and R4-11 as surviving. The mutant check runs bun test with --bail, in file order, and the four new tests are the last four in the file. Under each mutant the first failure it reports is that mutant's own new test, so the 87 earlier tests all passed under it: the findings reproduce at this head, and each new test is what kills its mutant. A separate 'red --restore MetaprojectView.tsx' run would be a no-op (the file equals HEAD), so it was not run. The baseline mutant run was not repeated before the edit, because the scratch script copies the worktree as it is on disk and the dispatch forbids reverting a tracked file.\n\nHow each test reaches its line (all through what a user or caller can do):\n- R4-10 (catalog effect body clear, MetaprojectView.tsx:380). onRebuild rejects, so the banner shows the rebuild's message. Retry on the banner (:849) bumps revision, a loud read runs, and the catalog read succeeds (catalogReads goes to 2). The test expects no banner and the catalog listed. Retry is the only user-started read that reaches :380 without rebuild()'s own clear at :677 running first. The reload after a successful rebuild passes through :677. Refresh catalog (:855) needs a snapshot mismatch.\n- R4-11 (rebuild() clear, :677). The first onRebuild rejects and the banner shows. The second is held: 'Rebuilding…' is disabled and the test expects no banner. finish(false): the control is enabled again and there is still no banner.\n- R4-8 (the quiet clear at :392, which sits after the superseded check at :389). Shown, hidden, shown again: the quiet re-read (read 2) is held. Rebuild graph is reachable while it is in flight: the control at :890 is disabled only by `rebuilding`, and the visible effect's guard at :348 stops only a new quiet read. onRebuild resolves true and its reload (read 3) fails, so the banner shows 'The index is being written.'. Then the quiet read is released as a success, and the banner still shows that message. The finish line was reachable, so nothing was substituted.\n- R4-7 (the latest-read guard at :407). Rebuild graph: onRebuild resolves true and its reload (read 2) is held. The control is enabled again at once (:683). A second Rebuild graph: its reload (read 3) succeeds. Read 2 then rejects, and the test expects no banner and the catalog listed.\n\nsuggested_fix: followed for both findings, with one divergence for F-001. F-001 is split into two tests rather than one, one per mutant, so the record can cite each kill by name. F-002 (b)'s 'held loud read' and 'later read' are both reloads after a successful Rebuild graph. That is the only way a user can start a second loud read while a first is in flight with no banner standing, because Retry needs a banner.\n\nWho else reads what changed. Only the test file changed. No module imports it: keryx ctx rg 'MetaprojectView\\.dom\\.test' over apps and src gives 0 matches. Its readers are bun test (the per-file run, and bun test src for AC19), the scratch mutant and red scripts, which copy it, and the flow's record, which cites test titles. The helpers the new tests use (button :28, listRow :33, request :51, showView :1314, catalogErrorBanner :1318, ViewProps :9) were not changed, so the earlier tests that use them get the same thing. The new tests add no shared state. Each renders into the shared root that beforeEach resets to null. None patches window.setTimeout or innerWidth, and their held promises are local to each test. Test order is unaffected: 91 pass in a full run of the file.\n\nimplement.mdc output: tests_written: 4, tests_passing: 91, tests_failing: 0, coverage_notes: round 4's F-001 (R4-10, R4-11) and F-002 (R4-7, R4-8). AC14 and AC16 are covered by the existing tests in the same file, which still pass.\nskill_drift: keryx skills route for the test file matches no project-skill for apps/desktop/src/metaproject. The top hit, metaproject/init-command, matched on tokens only, so no skill was applied.\nWorktree: during this run, flows/515.../tasks.md and verification/fix-round-3.md became modified. This task did not touch them, and they were not modified in the snapshot taken at its start. Presumably the orchestrator changed them.\nNot verified: the whole suite (bun test src), vite build and the browser dev build. Phase 5's keryx health and keryx test commands were not run; the dispatch's own commands (tsc and the one test file) were used instead. Mutants other than R4-7, R4-8, R4-10 and R4-11 were not re-run."
+}
