@@ -215,6 +215,27 @@ test("a changed GitHub account closes a filter dialog and removes the previous a
   expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
 });
 
+test("a changed GitHub account returns focus to search from the portaled PR watcher and Review rules dialogs", async () => {
+  for (const opener of ["PR watcher · Off", "Review rules"]) {
+    let finish!: (value: ReviewBoardSnapshot) => void;
+    let calls = 0;
+    await render(async () => {
+      if (++calls === 1) return snapshot([pr]);
+      return new Promise((resolve) => { finish = resolve; });
+    }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
+    async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
+    await click(button("Refresh pull requests"));
+    await click(button(opener));
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
+    await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await act(async () => { finish({ ...snapshot([]), viewer: "new-account-" + opener.length }); });
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+  }
+});
+
 test("historical states are requested lazily and a merged pull request appears in Done", async () => {
   const scopes: string[] = [];
   const merged: ReviewCard = { ...pr, number: 301, state: "merged", title: "Merged colleague PR" };
@@ -743,6 +764,16 @@ test("an outdated review shows its short SHA and a Review changes action that st
     expect(document.body.textContent).toContain("Outdated review · abcdef0");
     await click(button("Review changes for #101"));
     expect(calls).toContain("start");
+  }
+});
+
+test("an outdated review shows as a secondary line under the attention reason in board and list", async () => {
+  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+  await render(async () => snapshot([stale]));
+  for (const mode of ["Board", "List"]) {
+    await click(button(mode));
+    expect(document.body.textContent).toContain("Review requested");
+    expect(document.body.querySelector(".review-note")?.textContent).toBe("Outdated review · abcdef0");
   }
 });
 

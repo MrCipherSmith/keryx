@@ -61,6 +61,14 @@ export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
 
+const PORTALED_DIALOG_CONTENT = ".project-review-rules, .review-watcher";
+/** Focus inside the workspace dialogs, the detail panel, or the Review rules and PR watcher dialogs portaled to the body. */
+function inBoardOverlay(el: Element | null) {
+  if (!el) return false;
+  if (el.closest('.review-workspace [role="dialog"], .review-detail-panel')) return true;
+  return !!el.closest('[role="dialog"]')?.querySelector(PORTALED_DIALOG_CONTENT);
+}
+
 function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
   if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
   const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
@@ -81,7 +89,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
-  const [attentionPrs, setAttentionPrs] = useState<ReadonlySet<number>>(() => new Set());
+  // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+  const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
@@ -119,7 +128,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const clearPrivateView = useCallback((resetState = false) => {
     setSubscriptions(new Set());
     setSubscriptionNumber(null);
-    restoreFocus.current = !!document.activeElement?.closest('.review-workspace [role="dialog"], .review-detail-panel');
+    restoreFocus.current = inBoardOverlay(document.activeElement);
     setQuery("");
     setFilters((old) => resetState ? EMPTY_FILTERS : { ...EMPTY_FILTERS, state: old.state });
     setSelected(null);
@@ -176,7 +185,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     identity.current = "";
     filterKey.current = undefined;
     snapshots.current.clear();
-    setAttentionPrs(new Set());
+    setCarriedAttention(new Set());
     setWatchingTarget(null);
     pendingBadges.current = null;
     clearPrivateView();
@@ -219,7 +228,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       const loaded = snapshot;
       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
-      setAttentionPrs(previousSet => {
+      setCarriedAttention(previousSet => {
         const next = new Set(replaceAttention ? [] : previousSet);
         for (const card of loaded.cards) {
           if (needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))) next.add(card.number);
@@ -333,18 +342,17 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
     });
   }, [snapshot, filters, q, receiptVersion]);
-  // Receipts and discussion notes change after the load that seeded the set; keep it in step with the shown snapshot.
-  useEffect(() => {
-    if (!snapshot) return;
-    setAttentionPrs(previous => {
-      const next = new Set(previous);
+  // Receipts and discussion notes change after the load that seeded the carried set, so the shown snapshot is judged here.
+  const attentionPrs = useMemo(() => {
+    const next = new Set(carriedAttention);
+    if (snapshot) {
       for (const c of snapshot.cards) {
         if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
         else next.delete(c.number);
       }
-      return next.size === previous.size && [...next].every(n => previous.has(n)) ? previous : next;
-    });
-  }, [snapshot, receiptVersion]);
+    }
+    return next;
+  }, [carriedAttention, snapshot, receiptVersion]);
   const active = filterSummary(filters);
   const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
   const error = read.scope === scope ? read.error : "";
@@ -400,7 +408,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </label>
       <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
         aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
-        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters{active.length ? ' (' + active.length + ')' : ''}</span>
+        <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
       </button>
       <div className="grow" />
       {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}

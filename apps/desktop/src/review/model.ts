@@ -80,23 +80,28 @@ export function reviewLane(c: ReviewCard): Lane {
   return attentionReason(c) ? "attention" : "open";
 }
 
+/** The outdated-review text whenever the badge has one, independent of which reason ranks first. */
+export function reviewNote(c: ReviewCard): string | null {
+  const outdated = c.localReview?.outdated;
+  if (!outdated) return null;
+  const partial = outdated.state === "partial" || outdated.state === "budget";
+  const sha = outdated.headSha.slice(0, 7);
+  // Same head, different range: only the base moved, so the reviewed head is not "outdated".
+  if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
+  return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
+}
+
 export function laneReason(c: ReviewCard) {
   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
   if (c.localReview?.runState === "queued") return "Keryx review queued";
   if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
   if (c.localReview?.active) return "Keryx review in progress";
   if (c.state !== "open") return STATE_LABEL[c.state];
-  const outdated = c.localReview?.outdated;
-  if (outdated) {
-    const partial = outdated.state === "partial" || outdated.state === "budget";
-    const sha = outdated.headSha.slice(0, 7);
-    // Same head, different range: only the base moved, so the reviewed head is not "outdated".
-    if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
-    return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
-  }
   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);
   if (attention) return attention;
+  const outdated = reviewNote(c);
+  if (outdated) return outdated;
   if (c.decision) return DECISION_LABEL[c.decision];
   if (c.draft) return "Draft pull request";
   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";
