@@ -1005,19 +1005,37 @@ test("a card-only refresh does not drop the tab signal of a PR whose only reason
 
 test("a request handled after the load stays out of the tab signal when the scope switches to a historical view", async () => {
   const card: ReviewCard = { ...pr, number: 481, reviewers: [], decision: null, addressedReplyIds: ["handled-1"] };
+  const other: ReviewCard = { ...pr, number: 482, reviewers: ["ann"], decision: null };
+  let mergedCards: ReviewCard[] = [];
   const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
-  const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged" ? [] : [card]);
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged" ? mergedCards : [card, other]);
   await act(async () => root.render(createElement(ReviewBoard, {
     key: ++renderKey, cwd: "/handled-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
     onIndicatorChange: indicator => indicators.push(indicator),
   })));
   expect(indicators.at(-1)).toBe("attention");
   await act(async () => { markRepliesRead("ann", "repo1", card.number, ["handled-1"]); await new Promise(resolve => setTimeout(resolve, 5)); });
-  expect(indicators.at(-1)).toBeNull();
+  expect(indicators.at(-1)).toBe("attention");
   await click(button("Filters"));
   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
   await click(button("Apply filters"));
+  expect(indicators.at(-1)).toBe("attention");
+  // Only the still-pending request is left in the set: observing it as merged clears the tab signal.
+  mergedCards = [{ ...other, state: "merged" }];
+  await click(button("Refresh pull requests"));
   expect(indicators.at(-1)).toBeNull();
+});
+
+test("saved historical filters on the first load still seed the tab signal from the open pull requests", async () => {
+  saveReviewFilters(reviewFilterKey("/seed-test", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+  const mine: ReviewCard = { ...pr, reviewers: ["ann"], decision: null };
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged" ? [] : [mine]);
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/seed-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
 });
 
 test("visible cards keep snapshot order when a later card has an active review", async () => {

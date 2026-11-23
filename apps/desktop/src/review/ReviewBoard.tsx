@@ -228,7 +228,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       const loaded = snapshot;
       // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
       const replaceAttention = identity.current !== nextIdentity || (!period && (state === "open" || state === "all"));
-      if (replaceAttention) setCarriedAttention(new Set());
+      if (replaceAttention) setCarriedAttention(new Set(loaded.cards.filter(card => needsViewerAttention(card, loaded.viewer, unreadCount(loaded, card))).map(card => card.number)));
       const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
       if (filterKey.current !== nextFilterKey) {
         filterKey.current = nextFilterKey;
