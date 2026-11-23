@@ -448,10 +448,14 @@ export class DeskRunStore {
       const cards = snapshot.cards.slice(i, i + 200);
       const rows = query.all(JSON.stringify(cards.map(({number, baseSha, headSha}) => ({number,baseSha,headSha}))), snapshot.repositoryId, snapshot.viewer);
       const byPr = new Map<number, Parameters<typeof localBadge>[0][number][]>();
+      const cardByPr = new Map(cards.map(card => [card.number, card]));
       for (const row of rows) {
         const runs = byPr.get(row.pr) ?? [];
         if (!runs.length) byPr.set(row.pr, runs);
-        const publication = row.base && row.head && this.publication(row.id, row.state, row.coverage);
+        // localBadge reads a publication only for a run that reviewed the card's own range.
+        const card = cardByPr.get(row.pr);
+        const publication = row.base && row.head && card?.baseSha === row.base && card.headSha === row.head &&
+          this.publication(row.id, row.state, row.coverage);
         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
           ...(publication && { publication }),
           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,

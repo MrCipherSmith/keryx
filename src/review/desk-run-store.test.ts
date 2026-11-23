@@ -513,6 +513,42 @@ test("the outdated lookup ignores newer finished runs of another PR, another vie
   expect(store.byId(wanted.run.id)?.run.state).toBe("completed");
 });
 
+test("each term of the outdated lookup is pinned by its own fixture", async () => {
+  const { localBadge } = await import("./board-badges");
+  const run = (k: typeof key, requested: typeof revision, state: DeskFinish["state"], reviewed: typeof revision | null) => {
+    store.request("/project", k, requested);
+    store.end(store.queued(k)!, { ...finish, state, result: reviewed ? { ...finish.result!, reviewed } : null });
+  };
+  const badge = (k: typeof key, range: typeof revision) => {
+    const cards: import("./board-badges").BadgeCard[] = [{ number: k.number, ...range }];
+    store.attachBadges({ ...k, cards });
+    expect(cards[0]?.localReview).toEqual(localBadge(store.history(k).runs, range));
+    return cards[0]?.localReview;
+  };
+  const d = { ...revision, headSha: "d".repeat(40) };
+  // `requested`: a failed or cancelled run on the card's range wins over an older finished run of another range.
+  run(key, revision, "completed", revision);
+  run(key, next, "failed", null);
+  expect(badge(key, next)).toEqual({ active: false, ready: false, runState: "failed" });
+  run(key, next, "cancelled", null);
+  expect(badge(key, next)).toEqual({ active: false, ready: false, runState: "cancelled" });
+  // Finished-state filter: a newer failed run with a recorded result is not the outdated candidate.
+  const filtered = { ...key, number: key.number + 1 };
+  run(filtered, revision, "completed", revision);
+  run(filtered, d, "failed", d);
+  expect(badge(filtered, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
+  // `reviewed` without `requested`: requested on one range, reviewed the card's range; a newer finished run of a third range must not displace it.
+  const reviewed = { ...key, number: key.number + 2 };
+  run(reviewed, revision, "completed", next);
+  run(reviewed, d, "completed", d);
+  expect(badge(reviewed, next)).toEqual({ active: false, ready: true });
+  // Repository predicate: a newer finished run of the same number and viewer in another repository does not win.
+  const sameNumber = { ...key, number: key.number + 3 }, elsewhere = { ...sameNumber, repositoryId: "other-gid" };
+  run(sameNumber, revision, "completed", revision);
+  run(elsewhere, d, "completed", d);
+  expect(badge(sameNumber, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
+});
+
 test("in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card", async () => {
   const { localBadge } = await import("./board-badges");
   const ranOn = (k: typeof key, range: typeof revision) => {
