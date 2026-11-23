@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: readable neighbourhood graph, node summary panel and explorer navigation fixes",
   "status": "in-progress",
   "createdAt": "2026-11-23T07:14:05.302Z",
-  "updatedAt": "2026-11-23T08:40:21.193Z",
+  "updatedAt": "2026-11-23T10:12:10.719Z",
   "source": {
     "type": "description",
     "ref": null
@@ -88,7 +88,12 @@
         "T11",
         "T14",
         "T15",
-        "T16"
+        "T16",
+        "T17",
+        "T18",
+        "T19",
+        "T20",
+        "T21"
       ],
       "attempts": {
         "count": 0,
@@ -404,6 +409,116 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T09:45:33.930Z",
+            "outcome": "started",
+            "detail": "515-T17 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T09:45:34.640Z",
+            "outcome": "started",
+            "detail": "515-T18 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Fix round 1: graph test strength (F-012, F-013, F-021)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T09:45:35.567Z",
+            "outcome": "started",
+            "detail": "515-T19 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:03:49.241Z",
+            "outcome": "started",
+            "detail": "515-T20 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T17",
+        "T18"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T10:03:50.347Z",
+            "outcome": "started",
+            "detail": "515-T21 (fix round 1)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -644,6 +759,86 @@
       "at": "2026-11-23T08:40:21.193Z",
       "event": "task-done",
       "detail": "T16: One-line freshness banner with details on demand"
+    },
+    {
+      "at": "2026-11-23T09:42:00.923Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)"
+    },
+    {
+      "at": "2026-11-23T09:42:01.154Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)"
+    },
+    {
+      "at": "2026-11-23T09:42:01.468Z",
+      "event": "task-added",
+      "detail": "T19: Fix round 1: graph test strength (F-012, F-013, F-021)"
+    },
+    {
+      "at": "2026-11-23T09:42:11.497Z",
+      "event": "task-added",
+      "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
+    },
+    {
+      "at": "2026-11-23T09:42:11.714Z",
+      "event": "task-added",
+      "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
+    },
+    {
+      "at": "2026-11-23T09:42:12.006Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T8, T9, T10, T11, T14, T15, T16, T17, T18, T19, T20, T21 (was T8, T9, T10, T11, T14, T15, T16) — review round 1 found 1 major and 20 minor findings; the round closes after the fix tasks T17-T21"
+    },
+    {
+      "at": "2026-11-23T09:45:33.930Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 515-T17 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T09:45:34.640Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 515-T18 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T09:45:35.567Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 515-T19 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T09:51:36.890Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 1: details panel and relationship list (F-007, F-019, F-020, F-022)"
+    },
+    {
+      "at": "2026-11-23T09:51:37.087Z",
+      "event": "task-done",
+      "detail": "T19: Fix round 1: graph test strength (F-012, F-013, F-021)"
+    },
+    {
+      "at": "2026-11-23T10:03:47.846Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 1: explorer behaviour (F-001, F-003, F-004, F-005, F-006, F-008)"
+    },
+    {
+      "at": "2026-11-23T10:03:49.241Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 515-T20 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T10:03:50.347Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 515-T21 (fix round 1)"
+    },
+    {
+      "at": "2026-11-23T10:07:07.012Z",
+      "event": "task-done",
+      "detail": "T21: Fix round 1: flow record and guide (F-009, F-010, guide alignment with the fixes)"
+    },
+    {
+      "at": "2026-11-23T10:12:10.719Z",
+      "event": "task-done",
+      "detail": "T20: Fix round 1: explorer test strength (F-011, F-014, F-015, F-016, F-017, F-018)"
     }
   ],
   "origin": {
