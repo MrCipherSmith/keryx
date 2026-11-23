@@ -14,3 +14,5 @@
 - 2026-11-23T20:05:03.029Z - task-done: T4: Self-review and prepare draft PR
 - 2026-11-23T20:05:10.115Z - frozen: 9 criteria; checksum recorded
 - 2026-11-23T20:05:10.432Z - started
+- 2026-11-23T20:05:38.865Z - task-attempt: T5: started (attempt 1) — 518-T5
+- 2026-11-24 - orchestrator: T5 returned DONE_WITH_CONCERNS (29 pass in the AC1/AC2 suites, 443 in src/integrations, typecheck and eslint clean; re-run by the orchestrator: 29 pass, 0 fail). Concern carried to T6: apps/desktop/src/platform/metaproject.ts (~line 172) requires every action in METAPROJECT_CAPABILITIES, so adding `tree` there would make Desktop refuse an older CLI; T6 must switch it to a fixed required set and re-check metaproject.test.ts fixtures built from that list. Behaviour choices: wiki group names derived from the key ("domain-model" -> "Domain model", untyped -> "Other"), confirmed by the operator on the question card ("Из ключа"); graph not built -> entries [] and partial true for any parent; cursor decoded before parent; partial false when the graph exists; wiki parent validated as an id. Refactor: search and tree paging share offsetPage.

@@ -9,13 +9,15 @@ import {
   METAPROJECT_RESPONSE_BYTES_V2, METAPROJECT_SCHEMA_V2, METAPROJECT_SCOPES, MetaprojectRequestError,
   isMetaprojectRelativePath, isOpenSpecKind, type MetaprojectEdge, type MetaprojectEdgeEvidence,
   type MetaprojectHitV2, type MetaprojectNode, type MetaprojectOpenSpecState, type MetaprojectProjection,
-  type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectScope, type MetaprojectV2Response,
+  type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectScope, type MetaprojectTreeEntry,
+  type MetaprojectTreeV2, type MetaprojectV2Response,
 } from "./metaproject-explorer-contract";
 import type { ExplorerGraphFreshness, loadExplorerGraph } from "./metaproject-explorer";
 import { indexMetaprojectGraph, projectMetaprojectGraph } from "./metaproject-projection";
 
 type DataRequest = Exclude<MetaprojectRequestV2, { action: "capabilities" }>;
 type SearchRequest = Extract<DataRequest, { action: "search" }>;
+type TreeRequest = Extract<DataRequest, { action: "tree" }>;
 type GraphModel = Awaited<ReturnType<typeof loadExplorerGraph>>;
 type ReadFreshness = () => Promise<ExplorerGraphFreshness>;
 type LoadGraph = (root: string, request: MetaprojectRequest) => Promise<{ graph: GraphModel; freshness: ReadFreshness; confirm: () => Promise<void>; track: (relative: string) => Promise<void> }>;
@@ -26,6 +28,9 @@ const MAX_EDGE_EVIDENCE = 3;
 const MAX_DETAIL_RELATIONSHIPS = 40;
 const CATALOG_METADATA_BYTES = 128 * 1024;
 const SEARCH_ITEMS_BYTES = 900 * 1024;
+const TREE_ITEMS_BYTES = 900 * 1024;
+/** Wiki pages without a page type are grouped under this key. */
+const WIKI_UNTYPED_GROUP = "other";
 const MAX_LEGACY_HITS_PER_SCOPE = 12_000;
 
 const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value));
@@ -81,6 +86,73 @@ function cursorValue(
     if (error instanceof MetaprojectRequestError) throw error;
     throw new MetaprojectRequestError("invalid-input", "The Metaproject cursor does not match this request.");
   }
+}
+
+/** One bounded page of `items` from `offset`, with the cursor to the next page when items remain. */
+function offsetPage<T>(
+  items: readonly T[], offset: string | number,
+  { next, action, item, byteLimit }: { next: (offset: number) => string; action: string; item: string; byteLimit: number },
+): { page: T[]; nextCursor?: string } {
+  if (typeof offset !== "number" || (offset > 0 && offset >= items.length)) {
+    throw new MetaprojectRequestError("invalid-input", `The Metaproject ${action} cursor offset is out of range.`);
+  }
+  const page = boundedItems(items.slice(offset), METAPROJECT_PAGE_SIZE_V2, byteLimit);
+  if (!page.length && offset < items.length) throw new MetaprojectRequestError("response-limit", `Metaproject ${action} ${item} exceeds the response limit.`);
+  const end = offset + page.length;
+  return { page, ...(end < items.length && { nextCursor: next(end) }) };
+}
+
+function notFoundParent(): MetaprojectRequestError {
+  return new MetaprojectRequestError("not-found", "Unknown Metaproject tree parent.");
+}
+
+/** Folders directly under `parent` that hold indexed files, then its file nodes. */
+function graphTree(model: GraphModel, parent?: string): { entries: MetaprojectTreeEntry[]; partial: boolean } {
+  // Without a built graph no folder can be confirmed or refused.
+  if (!model.graphPresent) return { entries: [], partial: true };
+  const prefix = parent === undefined ? "" : `${parent}/`;
+  const folders = new Map<string, number>();
+  const files: MetaprojectNode[] = [];
+  const modules = new Map<string, MetaprojectNode>();
+  for (const node of model.nodes) {
+    if (node.kind === "module") modules.set(node.path, node);
+    if (node.kind !== "file" || !node.path.startsWith(prefix)) continue;
+    const rest = node.path.slice(prefix.length);
+    const slash = rest.indexOf("/");
+    if (slash < 0) files.push(node);
+    else folders.set(rest.slice(0, slash), (folders.get(rest.slice(0, slash)) ?? 0) + 1);
+  }
+  if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();
+  const folderEntries = [...folders].sort(([a], [b]) => compareText(a, b)).map(([name, count]): MetaprojectTreeEntry => {
+    const folderPath = `${prefix}${name}`;
+    const module = modules.get(folderPath);
+    return { type: "folder", path: folderPath, name, files: count, ...(module && { module }) };
+  });
+  const fileEntries = files.sort((a, b) => compareText(a.path, b.path)).map((node): MetaprojectTreeEntry => ({ type: "node", node }));
+  return { entries: [...folderEntries, ...fileEntries], partial: false };
+}
+
+function wikiGroupName(key: string): string {
+  const words = key.replaceAll("-", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Page-type groups at the root; a group's pages under it. */
+function wikiTree(nodes: readonly MetaprojectNode[], parent?: string): MetaprojectTreeEntry[] {
+  const groups = new Map<string, MetaprojectNode[]>();
+  for (const node of nodes) {
+    if (node.kind !== "wiki") continue;
+    const key = node.pageType ?? WIKI_UNTYPED_GROUP;
+    groups.set(key, [...groups.get(key) ?? [], node]);
+  }
+  if (parent === undefined) {
+    return [...groups].map(([key, pages]) => ({ type: "group" as const, key, name: wikiGroupName(key), pages: pages.length }))
+      .sort((a, b) => compareText(a.name, b.name) || compareText(a.key, b.key));
+  }
+  const pages = groups.get(parent);
+  if (!pages) throw notFoundParent();
+  return pages.sort((a, b) => compareText(a.title, b.title) || compareText(a.path, b.path))
+    .map((node) => ({ type: "node", node }));
 }
 
 function graphRequest(request: DataRequest): MetaprojectRequest {
@@ -257,6 +329,7 @@ class V2Read {
       case "search": return this.search(request);
       case "openspec-list": return this.list(request.collection, request.cursor);
       case "openspec-history": return this.history(request.id, request.cursor);
+      case "tree": return this.tree(request);
     }
   }
 
@@ -325,14 +398,22 @@ class V2Read {
           snippet, matchType, ...(section !== undefined && { section }) },
       })),
     ]);
-    if (typeof offset !== "number" || (offset > 0 && offset >= hits.length)) {
-      throw new MetaprojectRequestError("invalid-input", "The Metaproject search cursor offset is out of range.");
-    }
-    const page = boundedItems(hits.slice(offset), METAPROJECT_PAGE_SIZE_V2, SEARCH_ITEMS_BYTES);
-    if (!page.length && offset < hits.length) throw new MetaprojectRequestError("response-limit", "Metaproject search hit exceeds the response limit.");
-    const next = offset + page.length;
-    return { ...this.base, hits: page, partial: partial || legacy.partial,
-      ...(next < hits.length && { nextCursor: cursor(this.base.snapshotId, key, next) }) };
+    const { page, nextCursor } = offsetPage(hits, offset, {
+      next: (end) => cursor(this.base.snapshotId, key, end), action: "search", item: "hit", byteLimit: SEARCH_ITEMS_BYTES,
+    });
+    return { ...this.base, hits: page, partial: partial || legacy.partial, ...(nextCursor && { nextCursor }) };
+  }
+
+  private tree(request: TreeRequest): MetaprojectTreeV2 {
+    const { scope, parent } = request;
+    const key = hash(["tree", scope, parent ?? null]);
+    // The cursor is checked before the parent, so a foreign cursor is refused as such.
+    const offset = cursorValue(this.base.snapshotId, key, request.cursor) ?? 0;
+    const { entries, partial } = scope === "graph" ? graphTree(this.model, parent) : { entries: wikiTree(this.model.nodes, parent), partial: false };
+    const { page, nextCursor } = offsetPage(entries, offset, {
+      next: (end) => cursor(this.base.snapshotId, key, end), action: "tree", item: "entry", byteLimit: TREE_ITEMS_BYTES,
+    });
+    return { ...this.base, scope, parent: parent ?? null, entries: page, partial, ...(nextCursor && { nextCursor }) };
   }
 
   private openSpecSearch(needle: string, scope: OpenSpecKind[], scopes: readonly MetaprojectScope[]) {
