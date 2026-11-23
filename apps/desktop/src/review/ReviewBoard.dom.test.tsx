@@ -236,7 +236,7 @@ test("a changed GitHub account returns focus to search from the portaled PR watc
   }
 });
 
-test("historical states are requested lazily and a merged pull request appears in Done", async () => {
+test("historical states are requested lazily and a merged pull request appears in Merged", async () => {
   const scopes: string[] = [];
   const merged: ReviewCard = { ...pr, number: 301, state: "merged", title: "Merged colleague PR" };
   await render(async (_cwd, state) => {
@@ -250,7 +250,7 @@ test("historical states are requested lazily and a merged pull request appears i
   await click(button("Apply filters"));
   expect(scopes).toEqual(["open", "merged"]);
   expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
-  expect(document.body.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
+  expect(document.body.querySelector('section[aria-label="Merged"]')!.textContent).toContain("Merged colleague PR");
   expect(document.body.textContent).not.toContain(pr.title);
 });
 
@@ -274,7 +274,7 @@ test("the period filters the GitHub request and is saved for the repository", as
   expect(document.body.textContent).toContain("Updated · Last 7 days");
 });
 
-test("a board refresh started before a local launch preserves the live lane after the drawer closes", async () => {
+test("a board refresh started before a local launch keeps the live progress and the GitHub lane after the drawer closes", async () => {
   let finish!: (s: ReviewBoardSnapshot) => void;
   let calls = 0;
   const load: typeof fetchReviewBoard = async () => ++calls === 1 ? snapshot([pr]) : new Promise(resolve => { finish = resolve; });
@@ -294,7 +294,7 @@ test("a board refresh started before a local launch preserves the live lane afte
   await click(button("Close details"));
   await act(async () => finishLaunch());
   await act(async () => finish(snapshot([pr])));
-  const tile = document.body.querySelector('section[aria-label="In review"] .review-card')!;
+  const tile = document.body.querySelector('section[aria-label="Waiting for review"] .review-card')!;
   expect(tile.textContent).toContain(pr.title);
   expect(tile.textContent).toContain("Wave 3");
   expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
@@ -624,12 +624,13 @@ test("marking a new addressed reply locally clears its board and list reason", a
   const data = { version: 1 as const, viewer:"ann", repositoryId:"repo1", number:card.number,
     fetchedAt:pr.updatedAt, headSha:pr.headSha, comments:[{id:"reply-addr-test",author:"bob",own:false,body:"@ann ready",url:"",createdAt:pr.updatedAt}], reviews:[],threads:[],checks:[],warnings:[] };
   await render(async () => snapshot([card]), "/project", ++renderKey, undefined, async () => data, async () => ({version:1,runs:[]}));
-  expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
+  const reason = () => document.body.querySelector('section[aria-label="Waiting for review"] .review-reason')!.textContent;
+  expect(reason()).toBe("New reply to you");
   await click(document.body.querySelector<HTMLElement>(".review-card")!);
   await click(button("Mark 1 as read"));
   await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
   await click(button("Close details"));
-  expect(document.body.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
+  expect(reason()).toBe("No review requested");
   await click(button("List"));
   expect(document.body.querySelector("tbody")!.textContent).not.toContain("New reply to you");
 });
@@ -715,8 +716,9 @@ test("one board tick updates every active PR from scoped badges and access denia
     expect(typeof tick).toBe("function");
     await act(async () => { await tick!(); });
     expect(polls).toBe(1);
-    expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
-    expect(document.body.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
+    // Finishing (#101) and progressing (#102) local reviews leave both cards in their GitHub lane.
+    expect(document.body.querySelector('[aria-label="Waiting for review"]')!.textContent).toContain("#101");
+    expect(document.body.querySelector('[aria-label="Waiting for review"]')!.textContent).toContain("#102");
     expect(document.body.textContent).toContain("3 of 5");
     await act(async () => { await tick!(); });
     expect(document.body.textContent).toContain("Repository access revoked");
@@ -752,7 +754,7 @@ test("board and list expose GitHub state and pending requests separately and run
   expect(starts).toEqual([105, 105]);
 });
 
-test("an outdated review shows its short SHA and a Review again action that starts a review in board and list", async () => {
+test("an outdated review keeps its Review again action that starts a review in board and list", async () => {
   const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
   for (const mode of ["Board", "List"]) {
     const calls: string[] = [];
@@ -761,47 +763,35 @@ test("an outdated review shows its short SHA and a Review again action that star
         headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
     await click(button(mode));
-    expect(document.body.textContent).toContain("Outdated review · abcdef0");
     await click(button("Review again for #101"));
     expect(calls).toContain("start");
   }
 });
 
-test("an outdated review shows as a secondary line under the attention reason in board and list", async () => {
-  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
-  await render(async () => snapshot([stale]));
-  for (const mode of ["Board", "List"]) {
-    await click(button(mode));
-    expect(document.body.textContent).toContain("Review requested");
-    expect(document.body.querySelector(".review-note")?.textContent).toBe("Outdated review · abcdef0");
-  }
-});
-
-test("a merged card with an outdated review shows its state as the reason and the outdated text as the note, in board and list", async () => {
-  const merged: ReviewCard = { ...pr, number: 301, state: "merged", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" } } };
-  await render(async (_cwd, state) => snapshot(state === "open" ? [] : [merged]));
+test("the reason line shows GitHub data only, whatever the local review, in board and list", async () => {
+  const outdated = { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } };
+  const cards: ReviewCard[] = [
+    { ...pr, number: 101, localReview: outdated },
+    { ...pr, number: 102, reviewers: [], decision: null, localReview: outdated },
+    { ...pr, number: 103, localReview: { active: true, ready: false, runState: "queued" } },
+    { ...pr, number: 104, reviewers: [], decision: "APPROVED", localReview: { active: false, ready: true, runState: "completed", publicationPending: true } },
+    { ...pr, number: 105, state: "merged", localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } },
+  ];
+  await render(async () => snapshot(cards));
   await click(button("Filters"));
-  await click(option("PR state", "Open"));
-  await click(option("PR state", "Draft"));
   await click(option("PR state", "Merged"));
   await click(button("Apply filters"));
+  const expected = ["Review requested", "No review requested", "Review requested", "Approved", "Merged"];
   for (const mode of ["Board", "List"]) {
     await click(button(mode));
-    expect(document.body.querySelector(".review-reason, .review-table td[title] > span:first-child")?.textContent).toBe("Merged");
-    const notes = document.body.querySelectorAll(".review-note");
-    expect(notes).toHaveLength(1);
-    expect(notes[0]!.textContent).toBe("Outdated review · abcdef0");
-  }
-});
-
-test("an open card with no attention reason shows the outdated text once, as the reason, with no note, in board and list", async () => {
-  const quiet = { ...pr, reviewers: [], decision: null, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
-  await render(async () => snapshot([quiet]));
-  for (const mode of ["Board", "List"]) {
-    await click(button(mode));
-    expect(document.body.querySelector(".review-note")).toBeNull();
-    expect(document.body.textContent!.split("Outdated review · abcdef0")).toHaveLength(2);
-    expect(document.body.querySelector(mode === "Board" ? ".review-reason" : ".review-table td[title] > span:first-child")?.textContent).toBe("Outdated review · abcdef0");
+    const reasons = mode === "Board"
+      ? [...document.body.querySelectorAll(".review-card")].map(card => [card.querySelector(".flow-id")!.textContent, card.querySelector(".review-reason")!.textContent])
+      : [...document.body.querySelectorAll("tbody tr")].map(row => [row.querySelector(".flow-id")!.textContent, row.querySelector("td[title] > span")!.textContent]);
+    expect(Object.fromEntries(reasons)).toEqual(Object.fromEntries(cards.map((card, i) => ["#" + card.number, expected[i]])));
+    for (const text of ["Outdated review", "Keryx review", "Awaiting your answer", "Choose whether to publish", "Action required"]) {
+      expect(document.body.querySelector(".review-lanes, .review-table")!.textContent).not.toContain(text);
+    }
+    expect(document.body.querySelector(".review-note, .review-live-state")).toBeNull();
   }
 });
 
@@ -929,8 +919,8 @@ test("a merged PR awaiting a Keryx answer stays actionable when the merged state
   for (const mode of ["Board", "List"]) {
     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
     await click(button(mode));
-    if (mode === "Board") expect(document.body.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
-    else expect(document.body.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
+    if (mode === "Board") expect(document.body.querySelector('[aria-label="Merged"]')?.textContent).toContain("#" + pr.number);
+    else expect(document.body.querySelector("tbody")?.textContent).toContain("#" + pr.number);
     await click(button("Answer question for #" + pr.number));
     expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
   }
@@ -1495,21 +1485,24 @@ test("visible cards keep snapshot order when a later card has an active review",
   expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
 });
 
-test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
+test("the Merged and Closed lanes are drawn only when the state filter can yield them, and decision filters hide their lanes", async () => {
   const lanes = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
-  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
+  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }, { ...pr, number: 303, decision: "APPROVED" as const }];
   const key = reviewFilterKey("/project", "repo1", "ann");
   await render(async () => snapshot(cards));
-  expect(lanes()).toEqual(["Needs attention", "In review", "Open"]);
+  expect(lanes()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved"]);
   saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["closed"] });
   await render(async () => snapshot(cards));
-  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
+  expect(lanes()).toEqual(["Closed"]);
   saveReviewFilters(key, { ...EMPTY_FILTERS, state: [] });
   await render(async () => snapshot(cards));
-  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
+  expect(lanes()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved", "Merged", "Closed"]);
   saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["merged", "draft"] });
   await render(async () => snapshot(cards));
-  expect(lanes()).toContain("Done");
+  expect(lanes()).toEqual(["Draft", "Merged"]);
+  saveReviewFilters(key, { ...EMPTY_FILTERS, decision: ["APPROVED"] });
+  await render(async () => snapshot(cards));
+  expect(lanes()).toEqual(["Draft", "Approved"]);
 });
 
 test("a historical filter retains known open requests and removes them when their PR is observed as merged", async () => {
@@ -1531,4 +1524,130 @@ test("a historical filter retains known open requests and removes them when thei
   merged = mine.number;
   await click(button("Refresh pull requests"));
   expect(indicators.at(-1)).toBeNull();
+});
+
+async function chooseGrouping(label: string) {
+  const select = document.body.querySelector<HTMLSelectElement>(".review-context .review-grouping select")!;
+  const value = Array.from(select.options).find(option => option.textContent === label)!.value;
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+const laneNames = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
+const laneNumbers = (lane: string) =>
+  Array.from(document.body.querySelectorAll(`section[aria-label="${lane}"] .review-card .flow-id`), id => id.textContent);
+
+test("a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first", async () => {
+  const clock: Window = window;
+  const schedule = clock.setTimeout;
+  let tick: (() => unknown) | undefined;
+  clock.setTimeout = (fn, ms, ...args) => {
+    if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
+    tick = () => fn(...args); return -78;
+  };
+  const cards: ReviewCard[] = [
+    { ...pr, number: 201, updatedAt: "2026-11-01T00:00:00Z" },
+    { ...pr, number: 202, updatedAt: "2026-11-03T00:00:00Z", localReview: { active: true, ready: false, runState: "queued" } },
+    { ...pr, number: 203, updatedAt: "2026-11-05T00:00:00Z" },
+    { ...pr, number: 204, updatedAt: "2026-11-04T00:00:00Z", decision: "APPROVED" },
+  ];
+  const badges = [
+    { active: true, ready: false, runState: "running" as const, progress: { wave: 1, planned: 2, finished: 1, completed: 1 } },
+    { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const },
+    { active: false, ready: true, runState: "completed" as const, publicationPending: true as const },
+  ];
+  let polls = 0;
+  try {
+    await act(async () => { root.render(createElement(ReviewBoard, {
+      key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards), watcherCommand: watcherDisabled,
+      loadBadges: async (_cwd, key, subjects) => ({ version: 1, ...key, cards: subjects.map(card => ({ ...card, localReview: badges[polls++]! })) }),
+    })); });
+    const layout = () => ({ waiting: laneNumbers("Waiting for review"), approved: laneNumbers("Approved"),
+      shown: document.body.querySelectorAll(".review-card").length });
+    const before = layout();
+    expect(before).toEqual({ waiting: ["#203", "#202", "#201"], approved: ["#204"], shown: 4 });
+    for (let step = 0; step < badges.length; step++) {
+      await act(async () => { await tick!(); });
+      expect({ step, layout: layout() }).toEqual({ step, layout: before });
+    }
+    expect(polls).toBe(3);
+    await click(button("List"));
+    expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#203", "#204", "#202", "#201"]);
+  } finally { clock.setTimeout = schedule; }
+});
+
+test("grouping by my role, quick filters in the context row, and an active review never bypasses them", async () => {
+  const requested: ReviewCard = { ...pr, number: 401, author: "bob", reviewers: ["ann"], updatedAt: "2026-11-10T04:00:00Z" };
+  const mine: ReviewCard = { ...pr, number: 402, author: "ann", reviewers: [], updatedAt: "2026-11-10T03:00:00Z" };
+  const failing: ReviewCard = { ...pr, number: 403, author: "bob", ci: "failed", updatedAt: "2026-11-10T02:00:00Z" };
+  const reviewing: ReviewCard = { ...pr, number: 404, author: "zed", updatedAt: "2026-11-10T01:00:00Z",
+    localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } };
+  await render(async () => snapshot([requested, mine, failing, reviewing]));
+  const toolbar = document.body.querySelector(".flows-toolbar")!;
+  expect(toolbar.querySelector(".review-quick-filters, .review-grouping")).toBeNull();
+  expect(document.body.querySelector(".review-context .review-quick-filters")).not.toBeNull();
+  expect(laneNames()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved"]);
+
+  await chooseGrouping("My role");
+  expect(laneNames()).toEqual(["Requested from me", "Mine", "Others"]);
+  expect(laneNumbers("Requested from me")).toEqual(["#401"]);
+  expect(laneNumbers("Mine")).toEqual(["#402"]);
+  expect(laneNumbers("Others")).toEqual(["#403", "#404"]);
+
+  const shown = () => Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent);
+  await click(button("Requested from me"));
+  expect(button("Requested from me").getAttribute("aria-pressed")).toBe("true");
+  expect(shown()).toEqual(["#401"]);
+  expect(laneNames()).toEqual(["Requested from me"]);
+  expect(document.body.querySelector(".review-active-filters")?.textContent).toContain("Requested from me");
+  await click(button("Requested from me"));
+  await click(button("Mine"));
+  expect(shown()).toEqual(["#402"]);
+  expect(laneNames()).toEqual(["Mine"]);
+  await click(button("Mine"));
+  await click(button("CI failed"));
+  expect(shown()).toEqual(["#403"]);
+  expect(button("Filters (1)").disabled).toBe(false);
+  expect(readReviewFilters(reviewFilterKey("/project", "repo1", "ann")).ciFailed).toBe(true);
+  await click(button("Clear filters"));
+  expect(button("CI failed").getAttribute("aria-pressed")).toBe("false");
+  expect(shown()).toHaveLength(4);
+
+  // The awaiting review on #404 does not keep it on the board when the author filter excludes it.
+  await click(button("Filters"));
+  await click(option("Author", "bob"));
+  await click(button("Apply filters"));
+  expect(shown()).toEqual(["#401", "#403"]);
+  expect(laneNames()).toEqual(["Requested from me", "Others"]);
+
+  // The grouping is kept for this project, repository and account.
+  await render(async () => snapshot([requested, mine, failing, reviewing]));
+  expect(laneNames()).toEqual(["Requested from me", "Others"]);
+  expect(document.body.querySelector<HTMLSelectElement>(".review-grouping select")!.value).toBe("role");
+});
+
+test("a card with an active review and a non-matching author shows nothing", async () => {
+  const active: ReviewCard = { ...pr, author: "zed", localReview: { active: true, ready: false, runState: "running" } };
+  saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, author: ["lee"] });
+  await render(async () => snapshot([active]));
+  expect(document.body.querySelectorAll(".review-card")).toHaveLength(0);
+  expect(document.body.textContent).toContain("No matching pull requests");
+});
+
+test("saved quick filters are restored and malformed ones reset the saved filters", () => {
+  const key = reviewFilterKey("/project", "R", "ann");
+  localStorage.setItem(key, JSON.stringify({ version: 1, filters: { mine: true, ciFailed: false } }));
+  expect(readReviewFilters(key)).toEqual({ ...EMPTY_FILTERS, mine: true });
+  localStorage.setItem(key, JSON.stringify({ version: 1, filters: { requestedFromMe: "yes" } }));
+  expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
+});
+
+test("a shown card is never dropped because its lane was ruled out by the filters", async () => {
+  // GitHub does not request a review from the author, but a card that has both still stays on the board.
+  const both: ReviewCard = { ...pr, author: "ann", reviewers: ["ann"] };
+  await render(async () => snapshot([both]));
+  await chooseGrouping("My role");
+  await click(button("Mine"));
+  expect(laneNumbers("Requested from me")).toEqual(["#101"]);
 });

@@ -6,9 +6,13 @@
 .review-active-filters > span { background: var(--bg-sunken); border-radius: var(--r-sm); padding: 3px 6px; overflow-wrap: anywhere; }
 .review-loading { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-5); color: var(--fg-muted); }
 .review-lanes .lane { flex: 1 0 230px; }
-.review-lane-attention { background: var(--warn); }
-.review-lane-review { background: var(--accent); }
-.review-lane-done { background: var(--ok); }
+.review-lane-waiting, .review-lane-requested { background: var(--info); }
+.review-lane-changes { background: var(--warn); }
+.review-lane-approved, .review-lane-mine { background: var(--ok); }
+.review-lane-merged { background: var(--accent); }
+.review-quick-filters { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.review-context [aria-pressed="true"] { color: var(--accent-text); background: var(--bg-selected); border-color: var(--accent-text); }
+.review-grouping { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .review-card { display: grid; gap: 6px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: start; }
 .review-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .review-tags .badge { white-space: normal; color: var(--fg-muted); background: var(--bg-sunken); }

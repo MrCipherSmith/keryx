@@ -20,8 +20,10 @@ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
 import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
-import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
-import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
+import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilters, saveReviewGrouping } from "./reviewFilterStorage";
+import {
+  EMPTY_FILTERS, GROUPING_LABEL, QUICK_FILTERS, filterReviews, needsViewerAttention, stateQuery, type Filters, type Grouping, type QuickFilter,
+} from "./model";
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
@@ -109,6 +111,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const warningId = useId();
   const warningToggle = useRef<HTMLButtonElement>(null);
   const [view, setView] = useState<"board" | "list">("board");
+  const [grouping, setGrouping] = useState<Grouping>("status");
   const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const refresh = useCallback(() => setAttempt(n => n + 1), []);
@@ -246,6 +249,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         filterKey.current = nextFilterKey;
         nextFilters = readReviewFilters(nextFilterKey);
         setFilters(nextFilters);
+        setGrouping(readReviewGrouping(nextFilterKey));
       }
       // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
       // a new identity seen there starts from nothing and gets one open load that only seeds the set.
@@ -381,7 +385,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   }, [viewer, repositoryId]);
   const visible = useMemo(() => {
     if (!snapshot) return [];
-    return filterReviews(snapshot.cards, filters, q).map(card => {
+    return filterReviews(snapshot.cards, filters, q, snapshot.viewer).map(card => {
       if (!card.addressedReplyIds?.length) return card;
       const ids = unreadIds(snapshot, card);
       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
@@ -439,6 +443,16 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     if (filterKey.current) saveReviewFilters(filterKey.current, next);
   }
   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); search.current?.focus(); };
+  function toggleQuick(quick: QuickFilter) {
+    const next = { ...filters };
+    if (next[quick]) delete next[quick];
+    else next[quick] = true;
+    applyFilters(next);
+  }
+  function chooseGrouping(next: Grouping) {
+    setGrouping(next);
+    if (filterKey.current) saveReviewGrouping(filterKey.current, next);
+  }
   // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
   // the reset loads the open scope instead of this fresh one.
   const shownNumbers = new Set(visible.map(c => c.number));
@@ -491,6 +505,15 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
           onChange={(e) => selectRepo(e.target.value)}>{snapshot.repositories.map((name) => <option key={name}>{name}</option>)}</select>
           : <strong>{snapshot.repo}</strong>}
         <span>Signed in as {snapshot.viewer}</span>
+        <div className="review-quick-filters" role="group" aria-label="Quick filters">
+          {(Object.keys(QUICK_FILTERS) as QuickFilter[]).map(quick => <button key={quick} type="button" className="btn btn-sm"
+            aria-pressed={!!filters[quick]} disabled={!filterKey.current} onClick={() => toggleQuick(quick)}>{QUICK_FILTERS[quick]}</button>)}
+        </div>
+        {view === "board" && <label className="review-grouping">Group by
+          <select className="select-compact" value={grouping} onChange={(e) => chooseGrouping(e.target.value === "role" ? "role" : "status")}>
+            {(Object.keys(GROUPING_LABEL) as Grouping[]).map(value => <option key={value} value={value}>{GROUPING_LABEL[value]}</option>)}
+          </select>
+        </label>}
         <span className="grow" />
         <span>{error ? "Last available snapshot" : warningKey ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
         {warningKey && <button ref={warningToggle} className="icon-btn" aria-label="Sync details" title="Sync details"
@@ -523,7 +546,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} grouping={grouping} filters={filters} viewer={snapshot.viewer} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
         {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
