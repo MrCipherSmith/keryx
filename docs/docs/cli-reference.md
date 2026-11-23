@@ -8289,3 +8289,13 @@ Read a bounded catalog, node detail, search results, or a neighborhood from the 
 ```bash
 keryx metaproject-explorer --request '{"action":"catalog"}'
 ```
+
+The snapshot ID covers the graph, wiki and OpenSpec data a response is read from. Graph freshness is separate. Only a `catalog` response checks it and reports it as `graph` and `graphReason`; `detail`, `search` and `neighbors` skip the check. An untracked or edited file can therefore turn `graph` to `stale` while the snapshot ID, pinned requests and cursors stay valid.
+
+A version 2 client starts with the `capabilities` probe, which lists the actions this CLI serves without reading the checkout.
+
+```bash
+keryx metaproject-explorer --request '{"version":2,"action":"capabilities"}'
+```
+
+Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the ones it uses.

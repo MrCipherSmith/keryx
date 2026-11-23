@@ -162,16 +162,6 @@ export async function loadExplorerGraph(root: string, request: MetaprojectReques
       if (found) edges.push({ from: page.node.id, to: found.id, kind: "links" });
     }
   }
-  let freshness: Awaited<ReturnType<typeof checkGraphStaleness>> | null = null;
-  if (graphPresent) {
-    try {
-      const provenance = ".metaproject/data/gdgraph/.provenance.json";
-      if (await exists(root, provenance)) await safeRead(root, provenance, 1024 * 1024);
-      freshness = await checkGraphStaleness(root);
-    } catch {
-      freshness = { status: "unknown", reasons: ["Graph provenance could not be read within the project"] };
-    }
-  }
   // A cheap change detector, not an atomic snapshot across concurrent writes.
   const layerStats = await Promise.all(["symbols.jsonl", "calls.jsonl", "wiki-pages.jsonl"].map(async (name) => {
     try {
@@ -204,10 +194,32 @@ export async function loadExplorerGraph(root: string, request: MetaprojectReques
       if (requiresSymbols) throw new Error("Symbol layer could not be read; rebuild the graph");
     }
   }
-  const graph: MetaprojectCatalog["graph"] = graphError ? "unknown" : freshness ? freshness.status === "fresh" ? "ready" : freshness.status : "missing";
-  const graphReason = graphError ?? freshness?.reasons.join("; ");
-  return { base, nodes, edges, pages, hasSymbolLayer, hasWikiLayer, graph, graphReason,
+  return { base, nodes, edges, pages, hasSymbolLayer, hasWikiLayer, graphPresent, graphError,
     counts: { files: files.length, wiki: pages.length, modules: modules.size } };
+}
+
+export type ExplorerGraphFreshness = Pick<MetaprojectCatalog, "graph" | "graphReason">;
+
+/**
+ * Whether the built graph still matches the checkout. This runs `git status`, so only a
+ * response that reports freshness asks for it, and it never contributes to a snapshot ID:
+ * a new untracked file makes the graph stale without changing the data that was read.
+ */
+export async function explorerGraphFreshness(
+  root: string, model: Pick<Awaited<ReturnType<typeof loadExplorerGraph>>, "graphPresent" | "graphError">,
+): Promise<ExplorerGraphFreshness> {
+  if (model.graphError) return { graph: "unknown", graphReason: model.graphError };
+  if (!model.graphPresent) return { graph: "missing" };
+  let freshness: Awaited<ReturnType<typeof checkGraphStaleness>>;
+  try {
+    const provenance = ".metaproject/data/gdgraph/.provenance.json";
+    if (await exists(root, provenance)) await safeRead(root, provenance, 1024 * 1024);
+    freshness = await checkGraphStaleness(root);
+  } catch {
+    freshness = { status: "unknown", reasons: ["Graph provenance could not be read within the project"] };
+  }
+  const graphReason = freshness.reasons.join("; ");
+  return { graph: freshness.status === "fresh" ? "ready" : freshness.status, ...(graphReason && { graphReason }) };
 }
 
 export async function metaprojectExplorer(projectRoot: string, request: MetaprojectRequestV2): Promise<MetaprojectV2Response>;
@@ -218,16 +230,17 @@ export async function metaprojectExplorer(projectRoot: string, request: Metaproj
     return metaprojectExplorerV2(projectRoot, request, async (root, graphRequest) => {
       const observation = new ExplorerReadObservation(root);
       const graph = await loadExplorerGraph(root, graphRequest, observation);
-      return { graph, confirm: () => observation.confirm(), track: (target) => observation.track(target) };
+      return { graph, freshness: () => explorerGraphFreshness(root, graph), confirm: () => observation.confirm(), track: (target) => observation.track(target) };
     });
   }
-  const model = await loadExplorerGraph(await realpath(projectRoot), request);
-  const { base, nodes, edges, pages, graph, graphReason, hasSymbolLayer, hasWikiLayer, counts } = model;
+  const root = await realpath(projectRoot);
+  const model = await loadExplorerGraph(root, request);
+  const { base, nodes, edges, pages, hasSymbolLayer, hasWikiLayer, counts } = model;
   if (request.action === "catalog") {
     const boundedNodes = nodes.slice(0, CATALOG_NODES);
     const ids = new Set(boundedNodes.map((node) => node.id));
     const eligible = edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
-    const catalog: MetaprojectCatalog = { ...base, nodes: boundedNodes, edges: eligible.slice(0, CATALOG_EDGES), truncated: nodes.length > CATALOG_NODES || eligible.length > CATALOG_EDGES, graph, ...(graphReason ? { graphReason } : {}), hasWikiLayer, hasSymbolLayer, counts };
+    const catalog: MetaprojectCatalog = { ...base, nodes: boundedNodes, edges: eligible.slice(0, CATALOG_EDGES), truncated: nodes.length > CATALOG_NODES || eligible.length > CATALOG_EDGES, ...await explorerGraphFreshness(root, model), hasWikiLayer, hasSymbolLayer, counts };
     return catalog;
   }
   if (request.action === "search") {
