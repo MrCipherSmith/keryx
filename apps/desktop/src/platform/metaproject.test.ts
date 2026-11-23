@@ -61,6 +61,15 @@ describe("Metaproject capability negotiation", () => {
     expect(await negotiateMetaproject("/checkout", async () => capabilities)).toBe(2);
   });
 
+  test("negotiates protocol 2 with a CLI that lists more actions than Desktop uses", async () => {
+    const newer = { schemaVersion: 2, actions: ["openspec-diff", ...[...METAPROJECT_CAPABILITIES].reverse()] };
+    expect(await negotiateMetaproject("/checkout", async () => newer)).toBe(2);
+    for (const actions of [METAPROJECT_CAPABILITIES.slice(1), [...METAPROJECT_CAPABILITIES, 1], "catalog"]) {
+      const lacking = await readError(negotiateMetaproject("/checkout", async () => ({ schemaVersion: 2, actions })));
+      expect(String(lacking)).toContain("invalid Metaproject capabilities");
+    }
+  });
+
   test("does not downgrade transport errors, invalid responses or a later data error", async () => {
     for (const error of ["Could not run the selected CLI", "Timed out"]) {
       const calls: unknown[] = [];

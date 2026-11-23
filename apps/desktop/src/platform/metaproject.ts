@@ -164,10 +164,12 @@ function validV2Hit(value: unknown): boolean {
       : validSource(value.source));
 }
 
+/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop sends. */
 function validCapabilities(value: RecordValue): boolean {
-  return Object.keys(value).length === 2 && value.schemaVersion === 2 && Array.isArray(value.actions)
-    && value.actions.length === METAPROJECT_CAPABILITIES.length
-    && METAPROJECT_CAPABILITIES.every((action, index) => Array.isArray(value.actions) && value.actions[index] === action);
+  const { actions } = value;
+  return Object.keys(value).length === 2 && value.schemaVersion === 2
+    && Array.isArray(actions) && actions.every((action: unknown) => typeof action === "string")
+    && METAPROJECT_CAPABILITIES.every((action) => actions.includes(action));
 }
 
 export function isMetaprojectV2Response(value: unknown, action: MetaprojectRequestV2["action"]): value is MetaprojectV2Response {

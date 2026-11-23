@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { recordProvenance } from "../sync/provenance";
 import {
-  METAPROJECT_CAPABILITIES, parseExplorerRequestV1, type MetaprojectCatalog, type MetaprojectRequestV2,
+  METAPROJECT_CAPABILITIES, parseExplorerRequestV1, type MetaprojectAnyRequest, type MetaprojectCatalog,
+  type MetaprojectRequest, type MetaprojectRequestV2,
 } from "./metaproject-explorer-contract";
 import { metaprojectExplorer } from "./metaproject-explorer";
 import { parseExplorerRequest } from "./service";
@@ -327,4 +330,107 @@ describe("metaproject explorer v2", () => {
     if (!("hits" in result)) throw new Error("Expected search results");
     expect(result.hits.some(({ scope }) => scope === "wiki")).toBe(true);
   });
+});
+
+function git(cwd: string, ...args: string[]): void {
+  const identity = ["-c", "user.email=explorer@example.invalid", "-c", "user.name=Explorer", "-c", "commit.gpgsign=false"];
+  execFileSync("git", [...identity, ...args], { cwd, stdio: "ignore" });
+}
+
+/** A committed checkout whose graph was built at HEAD, so its freshness starts as `ready`. */
+async function builtCheckout(): Promise<string> {
+  const root = await fixture();
+  const storage = ".metaproject/data/gdgraph/storage";
+  await writeSource(root, "src/a.ts", "export const a = 1;\n");
+  await writeSource(root, `${storage}/nodes.jsonl`, JSON.stringify({ id: "a", kind: "file", path: "src/a.ts", language: "typescript" }));
+  await writeSource(root, `${storage}/edges.jsonl`, "");
+  git(root, "init", "-q");
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "fixture");
+  await recordProvenance(root, "gdgraph", new Date().toISOString());
+  return root;
+}
+
+/** Put a recording `git` first on PATH for one read and return the arguments of every call it made. */
+async function withRecordedGit<T>(read: () => Promise<T>): Promise<{ result: T; calls: string[] }> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "keryx-explorer-git-"));
+  roots.push(dir);
+  const realGit = Bun.which("git");
+  if (!realGit) throw new Error("Expected git on PATH");
+  const log = path.join(dir, "calls.log");
+  const wrapper = path.join(dir, "git");
+  await writeFile(wrapper, `#!/bin/sh\necho "$*" >> "${log}"\nexec "${realGit}" "$@"\n`);
+  await chmod(wrapper, 0o755);
+  const previous = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${previous ?? ""}`;
+  let result: T;
+  try {
+    result = await read();
+  } finally {
+    if (previous === undefined) delete process.env.PATH;
+    else process.env.PATH = previous;
+  }
+  const recorded = await readFile(log, "utf8").catch(() => "");
+  return { result, calls: recorded.split("\n").filter(Boolean) };
+}
+
+describe("metaproject explorer graph freshness", () => {
+  test("keeps the v2 snapshot when only graph freshness changes", async () => {
+    const root = await builtCheckout();
+    const request = { action: "catalog", version: 2 } as const;
+    const built = await metaprojectExplorer(root, request);
+    if (!("graph" in built)) throw new Error("Expected v2 catalog");
+    expect(built.graph).toBe("ready");
+    expect(built.graphReason).toBeUndefined();
+
+    await writeFile(path.join(root, "notes.txt"), "An untracked note.\n");
+    const stale = await metaprojectExplorer(root, request);
+    if (!("graph" in stale)) throw new Error("Expected v2 catalog");
+    expect(stale.graph).toBe("stale");
+    expect(stale.graphReason).toContain("notes.txt");
+    expect(stale.snapshotId).toBe(built.snapshotId);
+
+    // A read pinned to the earlier snapshot, as a paged search is, still answers.
+    const search = await metaprojectExplorer(root, {
+      action: "search", version: 2, query: "a.ts", expectedSnapshotId: built.snapshotId,
+    });
+    if (!("hits" in search)) throw new Error("Expected search results");
+    expect(search.snapshotId).toBe(built.snapshotId);
+    expect(search.hits.map(({ node }) => node.id)).toContain("file:src/a.ts");
+
+    // Data changes still retire the snapshot.
+    await writeFile(path.join(root, ".metaproject/wiki/components/second.md"), "# Second\n\nRevised.\n");
+    const changed = await metaprojectExplorer(root, request);
+    expect("snapshotId" in changed && changed.snapshotId).not.toBe(built.snapshotId);
+  }, 30_000);
+
+  test("checks graph freshness only for a catalog", async () => {
+    const root = await builtCheckout();
+    const id = "file:src/a.ts";
+    const neighbors: Extract<MetaprojectRequest, { action: "neighbors" }> = {
+      action: "neighbors", id, depth: 1, direction: "both", kinds: ["imports"],
+    };
+    const reads: MetaprojectAnyRequest[] = [
+      { action: "detail", id },
+      { action: "search", query: "a.ts" },
+      neighbors,
+      { version: 2, action: "detail", id },
+      { version: 2, action: "search", query: "a.ts" },
+      { version: 2, ...neighbors },
+      // These two load the graph with the request a catalog uses, yet report no freshness.
+      { version: 2, action: "search", query: "a.ts", scopes: ["spec"] },
+      { version: 2, action: "openspec-list", collection: "spec" },
+    ];
+    for (const request of reads) {
+      const { calls } = await withRecordedGit(() => metaprojectExplorer(root, request));
+      expect({ request, calls }).toEqual({ request, calls: [] });
+    }
+    // The wrapper does see a freshness check, and passes it through to the real git.
+    const catalogs: MetaprojectAnyRequest[] = [{ action: "catalog" }, { action: "catalog", version: 2 }];
+    for (const request of catalogs) {
+      const { result, calls } = await withRecordedGit(() => metaprojectExplorer(root, request));
+      expect(calls.some((call) => call.startsWith("status "))).toBe(true);
+      expect("graph" in result && result.graph).toBe("ready");
+    }
+  }, 30_000);
 });

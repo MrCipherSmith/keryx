@@ -278,7 +278,8 @@ export interface MetaprojectOpenSpecHistory extends SnapshotV2 {
 
 export interface MetaprojectCapabilities {
   schemaVersion: 2;
-  actions: typeof METAPROJECT_CAPABILITIES;
+  /** Every action the answering reader serves. A client requires the ones it sends and ignores the rest. */
+  actions: readonly string[];
 }
 
 export type MetaprojectV2Response =

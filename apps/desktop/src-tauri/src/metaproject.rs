@@ -209,9 +209,14 @@ fn cli_response(mut command: Command, payload: &str, limit: usize) -> Result<Val
         .map_err(|_| "unavailable: The selected CLI returned invalid Metaproject JSON.".into())
 }
 
+/// A CLI may list more actions than this Desktop uses; it has to cover every one in `ACTIONS`.
 fn capability_response(value: &Value) -> bool {
     value.as_object().is_some_and(|data| data.len() == 2)
-        && value["schemaVersion"] == 2 && value["actions"] == json!(ACTIONS)
+        && value["schemaVersion"] == 2
+        && value["actions"].as_array().is_some_and(|actions| {
+            actions.iter().all(Value::is_string)
+                && ACTIONS.iter().all(|needed| actions.iter().any(|action| action.as_str() == Some(*needed)))
+        })
 }
 
 fn rows(value: &Value, limit: usize, valid: impl Fn(&Value) -> bool) -> bool {
@@ -345,5 +350,27 @@ mod tests {
         assert!(metaproject_args(&json!({"version":2, "action":"search", "query":"x", "scopes":["wiki", "wiki"]})).is_err());
         assert!(metaproject_args(&json!({"version":2, "action":"detail", "id":"id", "digest":null})).is_err());
         assert!(metaproject_args(&json!({"action":"neighbors", "id":"x", "depth":1, "direction":"both", "kinds":["spec-context"]})).is_err());
+    }
+
+    #[test]
+    fn capabilities_accept_a_cli_that_lists_more_actions() {
+        let capabilities = |actions: Vec<Value>| json!({"schemaVersion": 2, "actions": actions});
+        let needed: Vec<Value> = ACTIONS.iter().map(|action| Value::from(*action)).collect();
+        assert!(capability_response(&capabilities(needed.clone())));
+
+        // A newer CLI adds an action and may list them in another order.
+        let mut newer = needed.clone();
+        newer.insert(0, Value::from("openspec-diff"));
+        newer.reverse();
+        assert!(capability_response(&capabilities(newer)));
+
+        // Every action Desktop sends must still be there, and every entry must be a name.
+        assert!(!capability_response(&capabilities(needed[1..].to_vec())));
+        assert!(!capability_response(&capabilities(Vec::new())));
+        let mut malformed = needed.clone();
+        malformed.push(Value::from(1));
+        assert!(!capability_response(&capabilities(malformed)));
+        assert!(!capability_response(&json!({"schemaVersion": 1, "actions": needed})));
+        assert!(!capability_response(&json!({"schemaVersion": 2, "actions": "catalog"})));
     }
 }
