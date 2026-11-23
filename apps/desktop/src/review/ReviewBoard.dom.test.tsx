@@ -752,7 +752,7 @@ test("board and list expose GitHub state and pending requests separately and run
   expect(starts).toEqual([105, 105]);
 });
 
-test("an outdated review shows its short SHA and a Review changes action that starts a review in board and list", async () => {
+test("an outdated review shows its short SHA and a Review again action that starts a review in board and list", async () => {
   const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
   for (const mode of ["Board", "List"]) {
     const calls: string[] = [];
@@ -762,7 +762,7 @@ test("an outdated review shows its short SHA and a Review changes action that st
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
     await click(button(mode));
     expect(document.body.textContent).toContain("Outdated review · abcdef0");
-    await click(button("Review changes for #101"));
+    await click(button("Review again for #101"));
     expect(calls).toContain("start");
   }
 });
@@ -1095,6 +1095,46 @@ test("recovery from access loss on a historical view seeds the tab signal from t
   await click(button("Refresh pull requests"));
   expect(scopes).toEqual(["merged"]);
   expect(indicators.at(-1)).toBe("attention");
+});
+
+const HIDDEN_HINT = "1 waiting on you hidden by filters";
+const hint = () => document.body.querySelector(".review-hidden-attention") as HTMLButtonElement | null;
+const mineLee: ReviewCard = { ...pr, number: 601, author: "lee", reviewers: ["ann"], decision: null };
+const otherBob: ReviewCard = { ...pr, number: 602, author: "bob", reviewers: [], decision: null };
+
+test("a pull request waiting on the viewer that the filters hide is announced in the toolbar and a click reveals it", async () => {
+  saveReviewFilters(reviewFilterKey("/hidden-test", "repo1", "ann"), { ...EMPTY_FILTERS, author: ["bob"] });
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/hidden-test", flows: [], onOpenFlow() {}, load: async () => snapshot([mineLee, otherBob]), watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  expect(Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#602"]);
+  expect(hint()?.textContent?.trim()).toContain("1");
+  expect(hint()?.getAttribute("aria-label")).toBe(HIDDEN_HINT);
+  expect(hint()?.getAttribute("title")).toBe(HIDDEN_HINT);
+  await click(button(HIDDEN_HINT));
+  expect(Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent).sort()).toEqual(["#601", "#602"]);
+  expect(hint()).toBeNull();
+  expect(indicators.at(-1)).toBe("attention");
+});
+
+test("no hidden-attention hint while every pull request waiting on the viewer is in the list", async () => {
+  await render(async () => snapshot([mineLee, otherBob]));
+  expect(hint()).toBeNull();
+  saveReviewFilters(reviewFilterKey("/visible-test", "repo1", "ann"), { ...EMPTY_FILTERS, author: ["lee"] });
+  await render(async () => snapshot([mineLee, otherBob]), "/visible-test");
+  expect(Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#601"]);
+  expect(hint()).toBeNull();
+});
+
+test("the count keeps its full text as a title and accessible name for the narrow toolbar", async () => {
+  await render(async () => snapshot([mineLee, otherBob]));
+  const count = document.body.querySelector(".count-label") as HTMLElement;
+  expect(count.getAttribute("title")).toBe("2 pull requests");
+  expect(count.getAttribute("aria-label")).toBe("2 pull requests");
+  expect(count.querySelector(".count-word")?.textContent?.trim()).toBe("pull requests");
 });
 
 test("an open seed answered for another account does not enter the tab signal", async () => {

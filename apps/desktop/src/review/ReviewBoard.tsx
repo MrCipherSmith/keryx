@@ -423,6 +423,10 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     if (filterKey.current) saveReviewFilters(filterKey.current, next);
   }
   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); };
+  const shownNumbers = new Set(visible.map(c => c.number));
+  const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n)).length : 0;
+  const hiddenText = hiddenAttention + " waiting on you hidden by filters";
+  const countText = visible.length + (visible.length === 1 ? " pull request" : " pull requests");
 
   const openDetails = useCallback((number: number) => setSelected({ number }), []);
   const [detailWidth, setDetailWidth] = useState(560);
@@ -434,9 +438,12 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   return <div className="review-workspace" hidden={!tabActive}>
     <section className="flows review-board" aria-label="Pull requests">
     <div className="flows-toolbar">
-      <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
-        {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
-      </span>}</div>
+      <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label" aria-label={countText} title={countText}>
+        {visible.length}<span className="count-word"> {visible.length === 1 ? "pull request" : "pull requests"}</span>
+      </span>}
+      {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset} aria-label={hiddenText} title={hiddenText}>
+        <Icon name="alert" size={13} /> <span>{hiddenAttention}</span><span className="toolbar-label"> waiting on you hidden by filters</span>
+      </button>}</div>
       <label className="search-field"><Icon name="search" size={14} />
         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
           value={query} onChange={(e) => setQuery(e.target.value)} />

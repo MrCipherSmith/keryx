@@ -91,6 +91,10 @@
   .review-board .flows-toolbar .toolbar-label { display: none; }
 }
 @container (max-width: 760px) {
-  .review-board .flows-toolbar .count-label, .review-board .flows-toolbar .watcher-indicator { display: none; }
+  .review-board .flows-toolbar .count-word, .review-board .flows-toolbar .watcher-indicator { display: none; }
+  /* Room for the bare count: keeps one row at the 560px board of the default window with the PR panel open. */
+  .review-board .flows-toolbar > .search-field { flex-basis: 80px; min-width: 80px; }
 }
+.review-board .flows-toolbar .review-hidden-attention { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn); font: inherit; font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
+.review-board .flows-toolbar .review-hidden-attention:hover { background: transparent; }
 .review-board .flows-toolbar .filter-count { font-variant-numeric: tabular-nums; }
