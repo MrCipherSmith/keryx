@@ -9,6 +9,12 @@
 .metaproject { container: metaproject / inline-size; }
 .metaproject .inline-banner { flex-wrap: wrap; overflow-wrap: anywhere; }
 .metaproject-rebuild { min-inline-size: 116px; }
+/* Freshness: one line (state, Details, Rebuild); the full reason opens below it inside the banner. */
+.metaproject .metaproject-freshness { align-items: center; gap: var(--sp-1) var(--sp-2); }
+.metaproject-freshness-state { flex: 1 1 auto; min-inline-size: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metaproject-freshness-toggle { flex: none; gap: 2px; }
+.metaproject-freshness .metaproject-rebuild { flex: none; }
+.metaproject-freshness-reason { order: 1; flex: 1 0 100%; margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .metaproject-panes {
   display: grid;
   grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);

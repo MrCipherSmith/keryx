@@ -260,6 +260,9 @@ function Explorer({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filtersAnchor, setFiltersAnchor] = useState<HTMLButtonElement | null>(null);
   const filtersDialogId = useId();
+  // The freshness reason is shown on demand; remembering which reason was opened closes it when the text changes.
+  const [freshnessReason, setFreshnessReason] = useState<string | null>(null);
+  const freshnessReasonId = useId();
   // Wiki reads a page's relationships with fixed defaults; only Graph applies its filters.
   const relationDepth = mode === "wiki" ? 1 : depth;
   const relationDirection = mode === "wiki" ? "both" : direction;
@@ -720,7 +723,8 @@ function Explorer({
       )}
     </FiltersPopover>
   );
-  const wikiEmptyTitle = searching ? `Searching the Wiki for “${searchQuery}”…`
+  const freshnessOpen = Boolean(catalog?.graphReason) && freshnessReason === catalog?.graphReason;
+  const wikiEmptyTitle =searching ? `Searching the Wiki for “${searchQuery}”…`
     : results.length ? `Choose a result for “${searchQuery}”` : `No Wiki page matches “${searchQuery}”`;
   return (
     <section className="flows metaproject" ref={root} aria-label="Metaproject explorer">
@@ -784,8 +788,15 @@ function Explorer({
       {mode !== "openspec" && catalog && (
         <>
           {catalog.graph !== "ready" && (
-            <div className="inline-banner tone-warn" role="status">
-              <span>{catalog.graphReason ? `Graph is ${catalog.graph}: ${catalog.graphReason}` : `Graph is ${catalog.graph}.`}</span>
+            <div className="inline-banner tone-warn metaproject-freshness" role="status">
+              <span className="metaproject-freshness-state">Graph is {catalog.graph}.</span>
+              {catalog.graphReason && (
+                <button type="button" className="btn btn-ghost btn-sm metaproject-freshness-toggle" aria-expanded={freshnessOpen}
+                  aria-controls={freshnessReasonId} onClick={() => setFreshnessReason(freshnessOpen ? null : catalog.graphReason ?? null)}>
+                  Details<Icon name={freshnessOpen ? "chevronUp" : "chevronDown"} size={12} />
+                </button>
+              )}
+              {freshnessOpen && <p id={freshnessReasonId} className="metaproject-freshness-reason">{catalog.graphReason}</p>}
               <button className="btn metaproject-rebuild" disabled={rebuilding} onClick={() => void rebuild()}>
                 {rebuilding ? "Rebuilding…" : "Rebuild graph"}
               </button>

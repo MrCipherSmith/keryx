@@ -1,0 +1,39 @@
+{
+  "task_id": "task-16",
+  "task_name": "One-line freshness banner with details on demand",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "The freshness banner (catalog.graph !== 'ready') is one line: the state as a short sentence ('Graph is stale.' / 'Graph is missing.' / 'Graph is unknown.'), a ghost 'Details' disclosure button with a chevron (aria-expanded, aria-controls) only when catalog.graphReason is set, and the unchanged 'Rebuild graph' control (same behaviour and 'Rebuilding…' label). Details opens the full reason as a paragraph below the line inside the same banner (flex-basis 100%, wraps with overflow-wrap anywhere); closed by default. Open state is stored as the reason text that was opened, so it is open only while catalog.graphReason equals it: a changed reason closes it. CSS keeps the first line on one row (state text ellipsizes, Details and Rebuild do not shrink).",
+  "files_modified": [
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run: ESLint does not cover apps/desktop (verify_lint false)",
+  "type_check_result": "pass: cd apps/desktop && bunx tsc --noEmit exits 0",
+  "test_result": "pass: cd apps/desktop && bun test src -> 841 passed, 0 failed across 89 files (baseline 838; +3 tests). Red: against the committed MetaprojectView.tsx (swapped in temporarily, then restored) the test file gave 36 pass, 3 fail: the updated freshness-sentence assertion, 'one sentence with the reason hidden until Details opens it' and 'open freshness details close again when the reason text changes'. The new test 'no Details button without a reason, and Rebuild still runs' passed on the old code too; it guards behaviour that already held.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "partial: AC19 passes by command and the AC11-AC17 tests pass; AC20 is judged by the orchestrator in a browser (the one-line banner down to a 660 px host was not measured here)",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "read" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "cf42583b76a6ee51efe1f863dbce64e5f5648fa503da06a2a17728e0a1ab36af", "how": "read" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" }
+  ],
+  "assumptions": [
+    "The state word is shown as the CLI reports it ('stale', 'missing', 'unknown') in 'Graph is <state>.', as before T16."
+  ],
+  "behavior_changes": [
+    { "description": "Details is a ghost small button labelled 'Details' with a chevron (down when closed, up when open) placed between the state sentence and 'Rebuild graph'; the opened reason is plain small text on its own line under them, inside the banner.", "user_visible": true, "needs_operator": true, "alternatives": ["A text link 'Details' instead of a button", "Show the reason as a tooltip on the state sentence"] },
+    { "description": "Open/closed is explorer state keyed by the reason text: it survives leaving the tab and a catalog reload with the same reason, and closes when the reason changes.", "user_visible": true, "needs_operator": true, "alternatives": ["Close on every catalog reload"] }
+  ],
+  "not_touched": [],
+  "notes": "Existing tests changed: 'explorer banners sit above the OpenSpec view and the freshness banner reads as one sentence' now expects 'Graph is stale.' in the banner instead of 'Graph is stale: an untracked file changed'. The test 'wiki stays readable without a graph…' still passes unchanged: it asserts 'Graph is missing', which the new sentence 'Graph is missing.' contains. Not verified without a browser: the banner staying one line at a 660 px host, the height of the closed and the open banner, and the reason wrapping. The dev server on 1420/1421 was not touched, but it served the committed MetaprojectView.tsx for the few seconds of the red check."
+}

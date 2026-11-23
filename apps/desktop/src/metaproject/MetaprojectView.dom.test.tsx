@@ -741,5 +741,54 @@ test("explorer banners sit above the OpenSpec view and the freshness banner read
   const stale = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
     ? Promise.resolve({ ...catalog, graph: "stale", graphReason: "an untracked file changed" }) : request(cwd, input);
   await act(async () => { root.render(createElement(View, { cwd: "/project", request: stale, createCytoscape, onRebuild: async () => false })); });
-  expect(host.textContent).toContain("Graph is stale: an untracked file changed");
+  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
+});
+
+const freshnessBanner = () => [...host.querySelectorAll<HTMLElement>(".inline-banner")].find(item => item.textContent?.includes("Rebuild graph"));
+function detailsButton() {
+  return [...(freshnessBanner()?.querySelectorAll<HTMLButtonElement>("button[aria-expanded]") ?? [])].find(item => item.textContent?.trim() === "Details");
+}
+const longReason = "HEAD moved since the graph was built (built at abc, now def); a tracked file was modified since the graph was built: src/a.ts, src/b.ts (+1 more)";
+async function renderFreshness(reason: string | undefined, onRebuild: () => Promise<boolean> = async () => false) {
+  const createCytoscape = await headlessCytoscape();
+  const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog"
+    ? Promise.resolve({ ...catalog, graph: "stale", ...(reason === undefined ? {} : { graphReason: reason }) }) : request(cwd, input);
+  await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, createCytoscape, onRebuild })); });
+}
+
+test("the freshness banner is one sentence with the reason hidden until Details opens it", async () => {
+  await renderFreshness(longReason);
+  const banner = freshnessBanner();
+  expect(banner?.textContent).toContain("Graph is stale.");
+  expect(banner?.textContent).not.toContain("HEAD moved");
+  const details = detailsButton();
+  if (!details) throw new Error("Missing Details button");
+  expect(details.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => { details.click(); });
+  expect(details.getAttribute("aria-expanded")).toBe("true");
+  const reason = document.getElementById(details.getAttribute("aria-controls") ?? "");
+  expect(reason?.textContent).toContain("HEAD moved since the graph was built");
+  expect(banner?.contains(reason ?? null)).toBe(true);
+  await act(async () => { details.click(); });
+  expect(details.getAttribute("aria-expanded")).toBe("false");
+  expect(freshnessBanner()?.textContent).not.toContain("HEAD moved");
+});
+
+test("open freshness details close again when the reason text changes", async () => {
+  await renderFreshness(longReason);
+  await act(async () => { detailsButton()?.click(); });
+  expect(detailsButton()?.getAttribute("aria-expanded")).toBe("true");
+  // A new reader identity for the same project reloads the catalog, now with another reason.
+  await renderFreshness("an untracked file changed");
+  expect(detailsButton()?.getAttribute("aria-expanded")).toBe("false");
+  expect(freshnessBanner()?.textContent).not.toContain("an untracked file changed");
+});
+
+test("the freshness banner has no Details button without a reason, and Rebuild still runs", async () => {
+  let rebuilds = 0;
+  await renderFreshness(undefined, async () => { rebuilds++; return false; });
+  expect(freshnessBanner()?.textContent).toContain("Graph is stale.");
+  expect(detailsButton()).toBeUndefined();
+  await act(async () => { button("Rebuild graph").click(); });
+  expect(rebuilds).toBe(1);
 });
