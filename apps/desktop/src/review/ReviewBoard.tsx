@@ -79,6 +79,9 @@ function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
 const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
 const attentionNumbers = (board: ReviewBoardSnapshot) =>
   new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+/** A load of this scope holds every open PR, so it replaces the carried attention set. */
+const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
+const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
 
 export function ReviewBoard(props: Props) {
   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
@@ -213,9 +216,12 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     void load(cwd, state, repo, controller.signal, expectedViewer, updatedSince).then((snapshot) => {
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
+      // The filters this load leaves in place: they decide whether a load of every open PR follows.
+      let nextFilters: Filters | undefined;
       if (identity.current && identity.current !== nextIdentity) {
         snapshots.current.clear();
         clearPrivateView(true);
+        nextFilters = EMPTY_FILTERS;
       } else if (badges.size) {
         snapshot = { ...snapshot, cards: snapshot.cards.map(card => {
           const update = badges.get(card.number);
@@ -235,20 +241,26 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         }
       }
       const loaded = snapshot;
+      const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
+      if (filterKey.current !== nextFilterKey) {
+        filterKey.current = nextFilterKey;
+        nextFilters = readReviewFilters(nextFilterKey);
+        setFilters(nextFilters);
+      }
       // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
       // a new identity seen there starts from nothing and gets one open load that only seeds the set.
-      if (!period && (state === "open" || state === "all")) {
+      if (holdsAllOpen(state, period)) {
         seeded.current = nextIdentity;
         setCarriedAttention(attentionNumbers(loaded));
         setSeedFor(null);
       } else {
-        if (identity.current !== nextIdentity) setCarriedAttention(new Set());
-        if (seeded.current !== nextIdentity) setSeedFor({ identity: nextIdentity });
-      }
-      const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
-      if (filterKey.current !== nextFilterKey) {
-        filterKey.current = nextFilterKey;
-        setFilters(readReviewFilters(nextFilterKey));
+        if (identity.current !== nextIdentity) {
+          setCarriedAttention(new Set());
+          seeded.current = "";
+        }
+        // Filters reset to an open scope start that load now; a seed would repeat it.
+        if (nextFilters && holdsAllOpen(stateQuery(nextFilters.state), nextFilters.updatedWithin)) setSeedFor(null);
+        else if (seeded.current !== nextIdentity) setSeedFor(old => old?.identity === nextIdentity ? old : { identity: nextIdentity });
       }
       pendingBadges.current = null;
       setSelected(current => current && loaded.cards.some(c => c.number === current.number) ? current : null);
@@ -276,11 +288,15 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     let current = true;
     const controller = new AbortController();
     void load(cwd, "open", repo, controller.signal, expectedViewer).then((seed) => {
+      if (!current) return;
+      // An answer for the current, unseeded identity holds all its open PRs, whichever identity asked for it.
       const key = JSON.stringify([seed.repositoryId, seed.viewer]);
-      if (!current || key !== seedFor.identity || identity.current !== key || seeded.current === key) return;
-      seeded.current = key;
-      setCarriedAttention(attentionNumbers(seed));
-      setSeedFor(null);
+      if (identity.current === key && seeded.current !== key) {
+        seeded.current = key;
+        setCarriedAttention(attentionNumbers(seed));
+      }
+      // Set only while a seed is in flight: an unseeded identity's next load must be able to ask again.
+      setSeedFor(old => old === seedFor ? null : old);
     }).catch(() => {
       // The next successful load of an unseeded identity asks again; no retry from here.
       if (current) setSeedFor(old => old === seedFor ? null : old);
@@ -422,11 +438,14 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     setFilters(next);
     if (filterKey.current) saveReviewFilters(filterKey.current, next);
   }
-  const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); };
+  const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); search.current?.focus(); };
+  // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
+  // the reset loads the open scope instead of this fresh one.
   const shownNumbers = new Set(visible.map(c => c.number));
-  const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n)).length : 0;
-  const hiddenText = hiddenAttention + " waiting on you hidden by filters";
-  const countText = visible.length + (visible.length === 1 ? " pull request" : " pull requests");
+  const cardNumbers = new Set(snapshot?.cards.map(c => c.number));
+  const resetLoads = scope !== DEFAULT_SCOPE && !error && !stale;
+  const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n) && (resetLoads || cardNumbers.has(n))).length : 0;
+  const hiddenText = `Show ${hiddenAttention} waiting on you`;
 
   const openDetails = useCallback((number: number) => setSelected({ number }), []);
   const [detailWidth, setDetailWidth] = useState(560);
@@ -438,11 +457,12 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   return <div className="review-workspace" hidden={!tabActive}>
     <section className="flows review-board" aria-label="Pull requests">
     <div className="flows-toolbar">
-      <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label" aria-label={countText} title={countText}>
+      <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
         {visible.length}<span className="count-word"> {visible.length === 1 ? "pull request" : "pull requests"}</span>
       </span>}
-      {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset} aria-label={hiddenText} title={hiddenText}>
-        <Icon name="alert" size={13} /> <span>{hiddenAttention}</span><span className="toolbar-label"> waiting on you hidden by filters</span>
+      {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset}
+        aria-label={hiddenText + " — clears filters and search"} title={hiddenText + " — clears filters and search"}>
+        <Icon name="alert" size={13} /> <span className="toolbar-label">{hiddenText}</span><span className="hint-short">{hiddenAttention} hidden</span>
       </button>}</div>
       <label className="search-field"><Icon name="search" size={14} />
         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"

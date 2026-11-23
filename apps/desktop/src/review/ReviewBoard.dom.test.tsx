@@ -8,7 +8,7 @@ import type { fetchReviewBoard, fetchReviewDetail, fetchReviewRepositories } fro
 import { registerDom, unregisterDom } from "../test/dom";
 import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
 import { markRepliesRead } from "./reviewReadState";
-import { EMPTY_FILTERS } from "./model";
+import { EMPTY_FILTERS, type Filters } from "./model";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
 let root: Root;
@@ -1097,7 +1097,7 @@ test("recovery from access loss on a historical view seeds the tab signal from t
   expect(indicators.at(-1)).toBe("attention");
 });
 
-const HIDDEN_HINT = "1 waiting on you hidden by filters";
+const HIDDEN_HINT = "Show 1 waiting on you — clears filters and search";
 const hint = () => document.body.querySelector(".review-hidden-attention") as HTMLButtonElement | null;
 const mineLee: ReviewCard = { ...pr, number: 601, author: "lee", reviewers: ["ann"], decision: null };
 const otherBob: ReviewCard = { ...pr, number: 602, author: "bob", reviewers: [], decision: null };
@@ -1129,12 +1129,276 @@ test("no hidden-attention hint while every pull request waiting on the viewer is
   expect(hint()).toBeNull();
 });
 
-test("the count keeps its full text as a title and accessible name for the narrow toolbar", async () => {
+test("the count carries its unit as text, not as a name on a role-less span", async () => {
   await render(async () => snapshot([mineLee, otherBob]));
   const count = document.body.querySelector(".count-label") as HTMLElement;
-  expect(count.getAttribute("title")).toBe("2 pull requests");
-  expect(count.getAttribute("aria-label")).toBe("2 pull requests");
-  expect(count.querySelector(".count-word")?.textContent?.trim()).toBe("pull requests");
+  expect(count.hasAttribute("title")).toBe(false);
+  expect(count.hasAttribute("aria-label")).toBe(false);
+  expect(count.textContent?.replace(/\s+/g, " ").trim()).toBe("2 pull requests");
+});
+
+const typeSearch = (value: string) => act(async () => {
+  const input = document.body.querySelector<HTMLInputElement>('input[aria-label="Search pull requests"]')!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+const shownNumbers = () => Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent).sort();
+
+test("a request hidden only by the search is counted; the hint clears the search, saves the default filters and keeps focus", async () => {
+  const key = reviewFilterKey("/hint-search-test", "repo1", "ann");
+  saveReviewFilters(key, { ...EMPTY_FILTERS, ci: ["passed"] });
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/hint-search-test", flows: [], onOpenFlow() {}, load: async () => snapshot([mineLee, otherBob]), watcherCommand: watcherDisabled,
+  })));
+  expect(hint()).toBeNull();
+  await typeSearch("602");
+  expect(shownNumbers()).toEqual(["#602"]);
+  expect(hint()?.getAttribute("aria-label")).toBe(HIDDEN_HINT);
+  expect(hint()?.getAttribute("aria-label")).toContain("clears filters and search");
+  expect(hint()?.querySelector(".toolbar-label")?.textContent).toBe("Show 1 waiting on you");
+  expect(hint()?.querySelector(".hint-short")?.textContent).toBe("1 hidden");
+  await click(hint()!);
+  expect(shownNumbers()).toEqual(["#601", "#602"]);
+  expect(document.body.querySelector<HTMLInputElement>('input[aria-label="Search pull requests"]')!.value).toBe("");
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+  expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
+  expect(hint()).toBeNull();
+});
+
+test("a carried request outside a fresh historical view is counted and the hint's reset loads it; not on a failed refresh", async () => {
+  saveReviewFilters(reviewFilterKey("/hint-history-test", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+  let offline = false;
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/hint-history-test", flows: [], onOpenFlow() {}, watcherCommand: watcherDisabled,
+    load: async (_cwd, scope) => {
+      if (offline) throw new Error("unavailable: offline");
+      return snapshot(scope === "merged" ? [] : [mineLee]);
+    },
+  })));
+  expect(shownNumbers()).toEqual([]);
+  expect(hint()?.getAttribute("aria-label")).toBe(HIDDEN_HINT);
+  // While offline the reset would most likely load nothing: only cards of the shown snapshot are counted.
+  offline = true;
+  await click(button("Refresh pull requests"));
+  expect(document.body.textContent).toContain("Last available snapshot");
+  expect(hint()).toBeNull();
+  offline = false;
+  await click(button("Try again"));
+  expect(hint()?.getAttribute("aria-label")).toBe(HIDDEN_HINT);
+  await click(hint()!);
+  expect(shownNumbers()).toEqual(["#601"]);
+  expect(hint()).toBeNull();
+});
+
+test("no hint on a stale Open fallback for a carried request that no filter hides", async () => {
+  saveReviewFilters(reviewFilterKey("/hint-stale-test", "repo1", "ann"), { ...EMPTY_FILTERS, updatedWithin: 7 });
+  let offline = false;
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, _scope, _repo, _signal, _viewer, updatedSince) => {
+    if (offline) throw new Error("unavailable: offline");
+    return snapshot(updatedSince ? [mineLee] : []);
+  };
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/hint-stale-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  // The period view carries #601; the cached Open snapshot from the first load predates it.
+  expect(shownNumbers()).toEqual(["#601"]);
+  offline = true;
+  await click(button("Clear filters"));
+  expect(document.body.textContent).toContain("Last available snapshot");
+  expect(shownNumbers()).toEqual([]);
+  expect(indicators.at(-1)).toBe("attention");
+  expect(hint()).toBeNull();
+});
+
+const ann601: ReviewCard = { ...pr, number: 601, reviewers: ["ann"], decision: null };
+const bob701: ReviewCard = { ...pr, number: 701, reviewers: ["bob"], decision: null };
+const as = (viewer: string, cards: ReviewCard[]): ReviewBoardSnapshot => ({ ...snapshot(cards), viewer });
+interface HeldLoad { scope: string; signal: AbortSignal; resolve: (value: ReviewBoardSnapshot) => void; reject: (cause: Error) => void }
+type Answer = "answer" | "hold" | "fail";
+/**
+ * The account gh answers for and how each scope answers: at once, held for the test to settle inside act, or failing.
+ * Every request's scope is recorded ("/period" marks a period view).
+ */
+async function scriptedBoard(cwd: string, saved: Record<string, Filters>) {
+  for (const [login, filters] of Object.entries(saved)) saveReviewFilters(reviewFilterKey(cwd, "repo1", login), filters);
+  const account = { viewer: "ann", merged: "answer" as Answer, open: "answer" as Answer };
+  const calls: HeldLoad[] = [];
+  const load: typeof fetchReviewBoard = (_cwd, scope, _repo, signal, _viewer, updatedSince) => new Promise((resolve, reject) => {
+    calls.push({ scope: updatedSince ? scope + "/period" : scope, signal: signal!, resolve, reject });
+    const mode = scope === "merged" ? account.merged : account.open;
+    if (mode === "fail") reject(new Error("unavailable: offline"));
+    else if (mode === "answer") resolve(as(account.viewer, scope === "merged" ? [] : account.viewer === "ann" ? [ann601] : [bob701]));
+  });
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd, flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  let seen = 0;
+  /** Scopes requested since the previous call. */
+  const requested = () => calls.slice(seen, seen = calls.length).map(call => call.scope);
+  const held = (scope: string) => calls.filter(call => call.scope === scope).at(-1)!;
+  return { account, indicators, requested, held };
+}
+const MERGED: Filters = { ...EMPTY_FILTERS, state: ["merged"] };
+
+test("an account switch on a historical view costs two requests whether the new account's saved view is historical or open", async () => {
+  const seeding = await scriptedBoard("/cost-seed-test", { ann: MERGED, bob: MERGED });
+  expect(seeding.requested()).toEqual(["open", "merged"]);
+  seeding.account.viewer = "bob";
+  await click(button("Refresh pull requests"));
+  expect(seeding.requested()).toEqual(["merged", "open"]);
+  expect(seeding.indicators.at(-1)).toBe("attention");
+
+  // Bob has no saved filters: the reset to the Open view loads every open PR, so no separate seed is asked for.
+  const opening = await scriptedBoard("/cost-open-test", { ann: MERGED });
+  expect(opening.requested()).toEqual(["open", "merged"]);
+  opening.account.viewer = "bob";
+  await click(button("Refresh pull requests"));
+  expect(opening.requested()).toEqual(["merged", "open"]);
+  expect(document.body.textContent).toContain("Signed in as bob");
+  expect(opening.indicators.at(-1)).toBe("attention");
+});
+
+test("a refresh of a historical view while the seed is in flight keeps that seed", async () => {
+  const board = await scriptedBoard("/stable-seed-test", { ann: MERGED, bob: MERGED });
+  board.requested();
+  board.account.viewer = "bob";
+  board.account.open = "hold";
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  const seed = board.held("open");
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged"]);
+  expect(seed.signal.aborted).toBe(false);
+  await act(async () => seed.resolve(as("bob", [bob701])));
+  expect(board.indicators.at(-1)).toBe("attention");
+});
+
+test("a seed in flight when the viewer opens the Open view is aborted, and its late answer changes nothing", async () => {
+  const board = await scriptedBoard("/race-open-test", { ann: MERGED, bob: MERGED });
+  board.requested();
+  board.account.viewer = "bob";
+  board.account.open = "hold";
+  await click(button("Refresh pull requests"));
+  const seed = board.held("open");
+  await click(button("Clear filters"));
+  expect(board.requested()).toEqual(["merged", "open", "open"]);
+  const main = board.held("open");
+  await act(async () => main.resolve(as("bob", [])));
+  expect(seed.signal.aborted).toBe(true);
+  expect(board.indicators.at(-1)).toBeNull();
+  // #701 was merged between the two requests: the seed's older answer must not bring it back.
+  await act(async () => seed.resolve(as("bob", [bob701])));
+  expect(board.indicators.at(-1)).toBeNull();
+  expect(board.requested()).toEqual([]);
+});
+
+test("a seed answered in the same tick as the open load that replaced the set is dropped", async () => {
+  const board = await scriptedBoard("/race-replace-test", { ann: MERGED, bob: MERGED });
+  board.account.viewer = "bob";
+  board.account.open = "hold";
+  await click(button("Refresh pull requests"));
+  const seed = board.held("open");
+  await click(button("Clear filters"));
+  const main = board.held("open");
+  await act(async () => { main.resolve(as("bob", [])); seed.resolve(as("bob", [bob701])); });
+  expect(board.indicators.at(-1)).toBeNull();
+});
+
+test("a seed in flight across an account change brings nothing of the earlier account", async () => {
+  const board = await scriptedBoard("/race-account-test", { ann: MERGED, bob: MERGED });
+  board.account.viewer = "bob";
+  board.account.open = "hold";
+  await click(button("Refresh pull requests"));
+  const bobSeed = board.held("open");
+  // Back to ann: her historical load and bob's seed land in the same tick.
+  board.account.viewer = "ann";
+  board.account.merged = "hold";
+  board.requested();
+  await click(button("Refresh pull requests"));
+  const merged = board.held("merged");
+  await act(async () => { merged.resolve(as("ann", [])); bobSeed.resolve(as("bob", [bob701])); });
+  expect(bobSeed.signal.aborted).toBe(true);
+  expect(document.body.textContent).toContain("Signed in as ann");
+  expect(board.requested()).toEqual(["merged", "open"]);
+  await act(async () => board.held("open").reject(new Error("unavailable: offline")));
+  expect(board.indicators.at(-1)).toBeNull();
+});
+
+test("returning to an account seeded before a switch seeds it again when the other account's seed failed", async () => {
+  const board = await scriptedBoard("/return-test", { ann: MERGED, bob: MERGED });
+  board.requested();
+  board.account.viewer = "bob";
+  board.account.open = "fail";
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  expect(board.indicators.at(-1)).toBeNull();
+  board.account.viewer = "ann";
+  board.account.open = "answer";
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  expect(document.body.textContent).toContain("Signed in as ann");
+  expect(board.indicators.at(-1)).toBe("attention");
+});
+
+test("a failed seed is asked for exactly once more by the next historical load", async () => {
+  const board = await scriptedBoard("/seed-retry-test", { ann: MERGED, bob: MERGED });
+  board.requested();
+  board.account.viewer = "bob";
+  board.account.open = "fail";
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  board.account.open = "answer";
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  expect(board.indicators.at(-1)).toBe("attention");
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged"]);
+});
+
+test("a seed answered for another account is dropped and the next historical load asks again", async () => {
+  const board = await scriptedBoard("/seed-other-test", { ann: MERGED, bob: MERGED });
+  board.account.viewer = "bob";
+  board.account.open = "hold";
+  await click(button("Refresh pull requests"));
+  const seed = board.held("open");
+  await act(async () => seed.resolve(as("ann", [ann601])));
+  expect(board.indicators.at(-1)).toBeNull();
+  board.account.open = "answer";
+  board.requested();
+  await click(button("Refresh pull requests"));
+  expect(board.requested()).toEqual(["merged", "open"]);
+  expect(board.indicators.at(-1)).toBe("attention");
+});
+
+test("a reply read after a failed refresh stays out of the tab signal on a historical view", async () => {
+  const card: ReviewCard = { ...pr, number: 801, reviewers: [], decision: null, addressedReplyIds: ["read-later"] };
+  let offline = false;
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => {
+    if (offline && scope === "open") throw new Error("unavailable: offline");
+    return snapshot(scope === "merged" ? [] : [card]);
+  };
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/read-offline-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  offline = true;
+  await click(button("Refresh pull requests"));
+  expect(document.body.textContent).toContain("Last available snapshot");
+  // The kept snapshot is this scope's own, not a cached fallback: what is seen in it still writes back.
+  await act(async () => { markRepliesRead("ann", "repo1", card.number, ["read-later"]); await new Promise(resolve => setTimeout(resolve, 5)); });
+  expect(indicators.at(-1)).toBeNull();
+  await click(button("Filters"));
+  await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+  await click(button("Apply filters"));
+  expect(indicators.at(-1)).toBeNull();
 });
 
 test("an open seed answered for another account does not enter the tab signal", async () => {

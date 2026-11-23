@@ -87,14 +87,19 @@
 .review-board .flows-toolbar > .grow { flex: 1 1 0; min-width: 0; }
 .review-board .flows-toolbar > .search-field { flex: 1 1 96px; min-width: 96px; width: auto; max-width: 260px; }
 .review-board .flows-toolbar .btn, .review-board .flows-toolbar .segmented button { white-space: nowrap; }
+.review-board .flows-toolbar .hint-short { display: none; }
 @container (max-width: 1100px) {
   .review-board .flows-toolbar .toolbar-label { display: none; }
+  .review-board .flows-toolbar .hint-short { display: inline; }
 }
 @container (max-width: 760px) {
-  .review-board .flows-toolbar .count-word, .review-board .flows-toolbar .watcher-indicator { display: none; }
-  /* Room for the bare count: keeps one row at the 560px board of the default window with the PR panel open. */
+  .review-board .flows-toolbar .watcher-indicator { display: none; }
+  /* The .sr-only pattern: the bare count keeps its unit for assistive technology. */
+  .review-board .flows-toolbar .count-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* Room for the bare count: keeps one row at the 560px board of the default window with the PR panel open,
+     unless the hidden-attention hint is shown, which may wrap the toolbar to a second row. */
   .review-board .flows-toolbar > .search-field { flex-basis: 80px; min-width: 80px; }
 }
 .review-board .flows-toolbar .review-hidden-attention { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn); font: inherit; font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
-.review-board .flows-toolbar .review-hidden-attention:hover { background: transparent; }
+.review-board .flows-toolbar .review-hidden-attention:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
 .review-board .flows-toolbar .filter-count { font-variant-numeric: tabular-nums; }
