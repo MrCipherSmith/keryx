@@ -736,7 +736,7 @@ export function useAcpSession(cwd: string) {
     async (id: string) => {
       const l = live.current;
       const client = l.client;
-      if (!client || !l.usable) return;
+      if (!client || !l.usable) return false;
       const plan = l.reg.planSwitch(id);
       if (plan === "load") {
         setFatal((f) => (f?.kind === "leased" ? null : f));
@@ -745,7 +745,7 @@ export function useAcpSession(cwd: string) {
         // A local switch sends no request; tell keryx so its idle cap counts this session as in use.
         client.notify(SESSION_SHOWN, { sessionId: id });
       }
-      await openLoad(client, l.gen, id);
+      return openLoad(client, l.gen, id);
     },
     [openLoad, dispatch],
   );

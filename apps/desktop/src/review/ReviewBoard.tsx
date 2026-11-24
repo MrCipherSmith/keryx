@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useToast } from "../components/Toasts";
 import { Icon } from "../components/Icon";
 import { EmptyState, overlayOpen, Spinner } from "../components/ui";
 import { absoluteTime, errMessage } from "../lib/format";
@@ -58,6 +59,7 @@ interface Props {
   onFocusHandled?: (nonce: number) => void;
   /** Shows the PR's Review in the Reviews tab: the card's view and answer actions, and the panel's "Open in Reviews".
    * The target names this board's repository: the Reviews tab chooses its own. */
+  onOpenReviewSession?: ((sessionId: string) => Promise<void>) | undefined;
   onOpenInReviews?: ((target: { repo: string; repositoryId: string; number: number }, intent?: ReviewIntent) => void) | undefined;
   /** A background PR watcher poll completed (the Reviews tab re-reads its list on it). */
   onWatcherPoll?: (() => void) | undefined;
@@ -83,6 +85,7 @@ interface ReadState {
 
 export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+    && a?.sessionId === b?.sessionId && a?.runId === b?.runId
     && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending
     && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.outdated?.round === b?.outdated?.round && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
@@ -119,11 +122,12 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenInReviews, onWatcherPoll, onIdentityChange, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenInReviews, onOpenReviewSession, onWatcherPoll, onIdentityChange, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
   // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+  const toast = useToast();
   const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
@@ -490,13 +494,19 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const [detailWidth, setDetailWidth] = useState(560);
   const boardRepo = snapshot?.repo, boardRepositoryId = snapshot?.repositoryId;
   const openReview = useCallback((card: ReviewCard) => {
+    if (card.localReview?.sessionId && !card.localReview.outdated && onOpenReviewSession) {
+      void onOpenReviewSession(card.localReview.sessionId).catch(() => {
+        toast({ level: "error", title: "Could not open the originating review session" });
+      });
+      return;
+    }
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
     const reviewIntent: ReviewIntent = { kind, baseSha: card.baseSha, headSha: card.headSha };
     // Only a start runs in the PR panel; viewing or answering happens in the Reviews tab.
     if (kind === "start") setSelected({ number: card.number, reviewIntent });
     else if (onOpenInReviews && boardRepo && boardRepositoryId) onOpenInReviews({ repo: boardRepo, repositoryId: boardRepositoryId, number: card.number }, reviewIntent);
     else setSelected({ number: card.number });
-  }, [onOpenInReviews, boardRepo, boardRepositoryId]);
+  }, [onOpenInReviews, onOpenReviewSession, toast, boardRepo, boardRepositoryId]);
   const watcherPolled = useCallback(() => { refresh(); onWatcherPoll?.(); }, [refresh, onWatcherPoll]);
   useEffect(() => { onIdentityChange?.(watcherTarget); }, [watcherTarget, onIdentityChange]);
   // A focus request waits for a snapshot of its repository, then opens the PR's panel once per nonce.

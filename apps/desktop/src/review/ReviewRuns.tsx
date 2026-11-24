@@ -115,11 +115,11 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         {publicationPending && <span className="badge review-publication-pending">Action required</span>}
       </div>
       <div className="review-action-row">
-        {onOpenSession && hasDeskWorker(run) && <button className="btn review-icon-action" type="button"
+        {onOpenSession && (run.sessionId || hasDeskWorker(run)) && <button className="btn review-icon-action" type="button"
           aria-label={sessionLabel} title={sessionLabel} aria-haspopup="dialog" onClick={() => onOpenSession(run.id)}>
           <Icon name={question ? "comment" : "chat"} />
         </button>}
-        {active && <button className="btn review-icon-action" type="button" aria-label={stopLabel} title={stopLabel}
+        {active && hasDeskWorker(run) && <button className="btn review-icon-action" type="button" aria-label={stopLabel} title={stopLabel}
           disabled={working || run.state === "cancelling"} onClick={() => onCancel(run.id)}><Icon name="stop" /></button>}
         {onLifecycle && <ReviewLifecycle run={run} working={working} command={onLifecycle} load={loadAttempt} />}
       </div>
@@ -148,6 +148,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         <dt>Review mode</dt><dd>{run.options.mode === "auto" ? "Auto" : "Manual"} · {run.options.orchestrator === false ? "Single reviewer" : run.options.adaptive ? "Adaptive" : "Fixed tiers"}</dd>
         {run.options.flowId && <><dt>Associated Flow</dt><dd>#{run.options.flowId}</dd></>}
         <dt>Limits</dt><dd>{[
+          run.options.maxMinutes && `Up to ${run.options.maxMinutes} minutes`,
           run.options.maxWaves && `Up to ${run.options.maxWaves} waves`,
           run.options.maxParallel && `Up to ${run.options.maxParallel} reviewers at a time`,
           run.options.maxTokens ? `${run.options.maxTokens.toLocaleString()} tokens` : "Unlimited tokens",

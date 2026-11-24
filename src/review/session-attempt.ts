@@ -65,6 +65,10 @@ export type RegisterSessionInput = {
   readiness?: ReadinessOptions | undefined;
   store?: DeskRunStore | undefined;
   now?: (() => Date) | undefined;
+  /** ACP session that opened the package; absent for ordinary publication registration. */
+  sessionId?: string | undefined;
+  sessionOwner?: import("../lib/hub-machine/process-identity").ProcessIdentity | undefined;
+  taskToken?: string | undefined;
 };
 
 /**
@@ -81,7 +85,8 @@ export async function registerSessionPackage(input: RegisterSessionInput): Promi
   const headSha = manifest.target.head ?? "";
   if (!FULL_SHA.test(headSha)) return { skipped: "the package does not record the full head commit it reviewed" };
   const report = await readFile(path.join(input.packageDir, "report.md"), "utf8").catch(() => "");
-  if (report.trim() === "") return { skipped: "the package has no report.md" };
+  if ((report.trim() === "" || report.includes("No reviewer findings recorded yet.")) && input.sessionId === undefined) return { skipped: "the package has no report.md" };
+  if (input.sessionId !== undefined && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.sessionId)) return { skipped: "invalid session id" };
 
   const store = input.store ?? new DeskRunStore();
   try {
@@ -98,6 +103,10 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
   const own = await realpath(input.packageDir);
   if (own === storeRoot || own.startsWith(`${storeRoot}${path.sep}`)) return { skipped: "the package belongs to a Desktop review attempt" };
   const { baseRefOid, ...key } = await input.resolveKey(pr.repo, pr.number);
+  const bound = await readSessionAttempt(input.packageDir);
+  if (bound && (bound.repositoryId !== key.repositoryId || bound.viewer.toLowerCase() !== key.viewer.toLowerCase())) {
+    return { skipped: "the package belongs to a different GitHub account or repository" };
+  }
   const round = readRoundNumber(input.packageDir) ?? 1;
   const id = sessionAttemptId(key, manifest.reviewId, round);
   // `review start --target <pr>` without --base records the base branch (`origin/main`): the PR's base commit at the first
@@ -114,25 +123,28 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
     return { record };
   }
   const readiness = await computeReadiness(input.packageDir, input.readiness ?? {});
-  const complete = failingItems(readiness).length === 0;
+  const hasReport = input.sessionId === undefined && report.trim() !== "" && !report.includes("No reviewer findings recorded yet.");
+  const complete = hasReport && failingItems(readiness).length === 0;
   const findingsFile: unknown = await readJsonFileOr<unknown>(path.join(input.packageDir, "findings.json"), undefined);
   const findingsKnown = knownFindingList(findingsFile);
   const at = (input.now?.() ?? new Date()).toISOString();
   const base = baseSha.toLowerCase();
   const head = headSha.toLowerCase();
+  const sessionId = input.sessionId ?? store.byId(id)?.run.sessionId;
   const run: DeskRun = {
     id,
     source: "session",
+    ...(sessionId === undefined ? {} : { sessionId }),
     scope: DESK_RUN_SCOPE,
     baseSha: base,
     headSha: head,
-    state: complete ? "completed" : "partial",
-    phase: "Session review",
-    reason: complete ? "Reviewed in an agent session." : "Reviewed in an agent session; its readiness checklist did not pass.",
+    state: hasReport ? (complete ? "completed" : "partial") : "running",
+    phase: hasReport ? "Session review" : "Session review in progress",
+    reason: hasReport ? (complete ? "Reviewed in an agent session." : "Reviewed in an agent session; its readiness checklist did not pass.") : "Review started in an agent session.",
     createdAt: typeof manifest.createdAt === "string" ? manifest.createdAt : at,
     startedAt: typeof manifest.createdAt === "string" ? manifest.createdAt : null,
-    finishedAt: at,
-    result: {
+    finishedAt: hasReport ? at : null,
+    result: hasReport ? {
       reviewed: { baseSha: base, headSha: head },
       // Desktop derives the publication verdict from the package itself; the session package carries none.
       verdict: null,
@@ -140,7 +152,7 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
       findingsKnown,
       findings: findingsKnown ? ingestedFindingCounts(findingsFile as Record<string, unknown>[]) : { blocker: 0, major: 0, minor: 0, info: 0 },
       report,
-    },
+    } : null,
   };
   await mkdir(directory, { recursive: true, mode: 0o700 });
   // Under the lock Desktop's save, skip and submit hold, so none of them reads a half-copied package (a preview reads
@@ -163,7 +175,7 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
     if (earlier !== undefined && await readPublicationReceipt(directory) === undefined) {
       await writeFileAtomic(receiptPath(directory), JSON.stringify(earlier), { mode: 0o600 });
     }
-    store.atomic(() => store.recordSession(input.cwd, key, run));
+    store.atomic(() => store.recordSession(input.cwd, key, run, input.sessionOwner ?? store.byId(id)?.workerIdentity, input.taskToken ?? store.byId(id)?.taskToken));
   });
   await writeFileAtomic(path.join(input.packageDir, SESSION_ATTEMPT_FILE), `${JSON.stringify(record, null, 2)}\n`);
   return { record };
@@ -173,9 +185,9 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
  * Registers a package against the project's selected GitHub account, as Desktop reads it. Throws with the reason when it
  * was not registered, so the caller can say so.
  */
-export async function registerSessionPackageForProject(cwd: string, packageDir: string, readiness?: ReadinessOptions): Promise<SessionAttemptRecord | undefined> {
+export async function registerSessionPackageForProject(cwd: string, packageDir: string, readiness?: ReadinessOptions, sessionId?: string, sessionOwner?: import("../lib/hub-machine/process-identity").ProcessIdentity, taskToken?: string): Promise<SessionAttemptRecord | undefined> {
   const result = await registerSessionPackage({
-    cwd, packageDir, readiness,
+    cwd, packageDir, readiness, sessionId, sessionOwner, taskToken,
     resolveKey: async (repo, number) => {
       const { projectGithubConnection } = await import("./board-github");
       const { resolveDeskSubject } = await import("./desk-run-service");

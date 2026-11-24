@@ -68,6 +68,28 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     return plans.reduce((newest, candidate) => (candidate.round.number > newest.round.number ? candidate : newest));
   };
 
+  test("a diverged target tip keeps its identity but scopes and slices from the merge base", async () => {
+    const head = git(repo, "rev-parse", "HEAD").trim();
+    git(repo, "checkout", "-q", "main");
+    commitFiles(repo, { "src/base-only.ts": "export const baseOnly = true;\n" }, "advance base");
+    const base = git(repo, "rev-parse", "HEAD").trim();
+    git(repo, "checkout", "-q", "feature");
+    await reviewCommand(["plan", "--target", "feature", "--ref", base, "--head", head, "--json"]);
+    expect(process.exitCode ?? 0).toBe(0);
+    const reviews = path.join(repo, ".metaproject", "reviews");
+    const name = (await readdir(reviews)).find(entry => existsSync(path.join(reviews, entry, PLAN_FILE)))!;
+    const dir = path.join(reviews, name);
+    expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")).target.base).toBe(base);
+    expect(JSON.parse(await readFile(path.join(dir, PLAN_FILE), "utf8")).target.base).toBe(base);
+    const scope = JSON.parse(await readFile(path.join(dir, "scope.json"), "utf8"));
+    expect(scope.files).toContain("src/a.ts");
+    expect(scope.files).not.toContain("src/base-only.ts");
+    const slices = await readdir(path.join(dir, "slices"));
+    const diffs = await Promise.all(slices.filter(file => file.endsWith(".diff")).map(file => readFile(path.join(dir, "slices", file), "utf8")));
+    expect(diffs.join("\n")).toContain("src/a.ts");
+    expect(diffs.join("\n")).not.toContain("src/base-only.ts");
+  }, E2E_TIMEOUT_MS);
+
   test("a light code-only change dispatches its testing reviewer on the actual diff", async () => {
     for (const role of ["review-logic", "review-testing-practices"]) {
       const installed = path.join(repo, ".metaproject/skills/gdskills/review", role);

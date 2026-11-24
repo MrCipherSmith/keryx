@@ -22,6 +22,7 @@ import {
   readPlanThresholds,
   renderEstimate,
   writePlanConfirmation,
+  autoConfirmPlan,
 } from "./estimate";
 import type { SliceManifest } from "./slice";
 
@@ -49,6 +50,15 @@ test("many roles queue behind the parallelism limit", () => {
   const e = estimateRound(roles, manifest(1, 10, 100));
   expect(e.dispatches).toBe(8);
   expect(e.sequentialBatches).toBe(Math.ceil(8 / ASSUMED_PARALLEL_DISPATCHES));
+});
+
+test("ETA uses the chosen dispatch concurrency", () => {
+  const roles = Array.from({ length: 10 }, (_, i) => `review-r${i}`);
+  const serial = estimateRound(roles, manifest(1, 10, 100), "full", undefined, 1);
+  const parallel = estimateRound(roles, manifest(1, 10, 100), "full", undefined, 10);
+  expect(serial.minutes.max).toBe(50);
+  expect(parallel.minutes.max).toBe(5);
+  expect(parallel.assumptions).toContain("10 dispatches in parallel");
 });
 
 test("an unsliced package has assignments = roles and one wave each", () => {
@@ -176,21 +186,22 @@ describe("over-threshold plans", () => {
     expect(small).toMatchObject({ dispatches: 10, overThreshold: false, overReasons: [] });
     const many = estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"], manifest(10, 100, 100));
     expect(many.dispatches).toBe(50);
-    expect(many.overThreshold).toBe(true);
-    expect(many.overReasons[0]).toBe(`50 dispatches > ${DEFAULT_MAX_DISPATCHES}`);
-    expect(renderEstimate(many)).toContain("over threshold: 50 dispatches > 40");
+    expect(many.overThreshold).toBe(false);
+    const huge = estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"], manifest(50, 100, 100));
+    expect(huge.overThreshold).toBe(true);
+    expect(huge.overReasons[0]).toBe(`250 dispatches > ${DEFAULT_MAX_DISPATCHES}`);
     // One role with 20 waves: 20 batches x 5 min = 100 min > 90, though 20 dispatches is under 40.
-    const long = estimateRound(["review-logic"], manifest(20, 100, 100));
-    expect(long.overReasons).toEqual([`up to 100 min > ${DEFAULT_MAX_MINUTES}`]);
+    const long = estimateRound(["review-logic"], manifest(90, 100, 100));
+    expect(long.overReasons).toEqual([`up to 450 min > ${DEFAULT_MAX_MINUTES}`]);
     expect(estimateRound(["review-logic"], manifest(20, 100, 100), "full", { maxDispatches: 40, maxMinutes: 120 }).overThreshold).toBe(false);
   });
 
   test("routing.config.json reviewPlan sets the thresholds; a bad field keeps its default", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "keryx-plan-thresholds-"));
     try {
-      expect(await readPlanThresholds(root)).toMatchObject({ maxDispatches: 40, maxMinutes: 90, source: "default" });
+      expect(await readPlanThresholds(root)).toMatchObject({ maxDispatches: 160, maxMinutes: 400, source: "default" });
       await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 12, maxMinutes: "x" } }));
-      expect(await readPlanThresholds(root)).toMatchObject({ maxDispatches: 12, maxMinutes: 90, source: "routing.config.json" });
+      expect(await readPlanThresholds(root)).toMatchObject({ maxDispatches: 12, maxMinutes: 400, source: "routing.config.json" });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -207,7 +218,7 @@ describe("over-threshold plans", () => {
 });
 
 describe("plan confirmation", () => {
-  const big = (): RoundEstimate => estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"], manifest(10, 100, 100));
+  const big = (): RoundEstimate => estimateRound(["review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"], manifest(50, 100, 100));
 
   test("an over-threshold plan is refused until a confirmation for exactly this plan is recorded; the refusal names the card and the terminal command", async () => {
     const pkg = await mkdtemp(path.join(tmpdir(), "keryx-plan-confirm-"));
@@ -219,7 +230,7 @@ describe("plan confirmation", () => {
       expect(refusal).toContain(`keryx review estimate --package ${pkg} --confirm --quote`);
 
       await writePlanConfirmation(pkg, planConfirmationFor(estimate, "go ahead, 50 is fine", "tui-card", new Date("2026-10-16T00:00:00Z")));
-      expect(readPlanConfirmation(pkg)).toEqual({ planKey: estimate.planKey, dispatches: 50, minutes: [estimate.minutes.min, estimate.minutes.max], quote: "go ahead, 50 is fine", confirmedVia: "tui-card", at: "2026-10-16T00:00:00.000Z" });
+      expect(readPlanConfirmation(pkg)).toEqual({ planKey: estimate.planKey, dispatches: 250, minutes: [estimate.minutes.min, estimate.minutes.max], quote: "go ahead, 50 is fine", confirmedVia: "tui-card", at: "2026-10-16T00:00:00.000Z" });
       expect(planConfirmed(pkg, estimate)).toBe(true);
       expect(planGateRefusal(estimate, true, pkg)).toBeUndefined();
 
@@ -290,6 +301,44 @@ test("the estimate parameters keep their values (flow 477: the plan is reported 
   expect(TYPICAL_DISPATCH_MINUTES).toBe(2);
   expect(CHILD_DEADLINE_MINUTES).toBe(5);
   expect(ASSUMED_PARALLEL_DISPATCHES).toBe(4);
-  expect(DEFAULT_MAX_DISPATCHES).toBe(40);
-  expect(DEFAULT_MAX_MINUTES).toBe(90);
+  expect(DEFAULT_MAX_DISPATCHES).toBe(160);
+  expect(DEFAULT_MAX_MINUTES).toBe(400);
+});
+
+
+test("automatic plan authorization is bounded, auditable and bound to revision and config", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "auto-review-plan-"));
+  const pkg = path.join(root, ".metaproject", "reviews", "r1");
+  await mkdir(pkg, { recursive: true });
+  try {
+    const target = { kind: "pr", ref: "https://github.com/a/b/pull/1", base: "a".repeat(40), head: "b".repeat(40) };
+    await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ target }));
+    await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { autoApprove: true } }));
+    const estimate = estimateRound(["review-logic", "review-style", "review-security-code", "review-regression"], manifest(80, 100, 100));
+    expect(estimate.overThreshold).toBe(true);
+    expect(await autoConfirmPlan(pkg, estimate, "project-auto")).toBe(true);
+    expect(readPlanConfirmation(pkg)?.confirmedVia).toBe("auto-policy");
+    expect(planConfirmed(pkg, estimate)).toBe(true);
+    const changed = estimateRound(["review-logic", "review-style", "review-security-code", "review-regression"], manifest(81, 100, 100));
+    expect(planConfirmed(pkg, changed)).toBe(false);
+    await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ target: { ...target, head: "c".repeat(40) } }));
+    expect(planConfirmed(pkg, estimate)).toBe(false);
+    await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ target }));
+    await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { autoApprove: true, maxDispatches: 100 } }));
+    expect(planConfirmed(pkg, estimate)).toBe(false);
+    expect(await autoConfirmPlan(pkg, estimate, "project-auto")).toBe(false);
+    await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { autoApprove: false } }));
+    expect(await autoConfirmPlan(pkg, estimate, "project-auto")).toBe(false);
+    expect(await autoConfirmPlan(pkg, estimate, "desktop-auto")).toBe(false);
+    await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: {} }));
+    expect(await autoConfirmPlan(pkg, estimate, "desktop-auto")).toBe(true);
+    const oversized = estimateRound(["review-logic", "review-style", "review-security-code", "review-regression", "review-testing"], manifest(200, 100, 100));
+    expect(oversized.dispatches).toBeGreaterThan(800);
+    expect(await autoConfirmPlan(pkg, oversized, "desktop-auto")).toBe(false);
+    await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ target: { ...target, base: "main" } }));
+    expect(await autoConfirmPlan(pkg, estimate, "desktop-auto")).toBe(false);
+    await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ target }));
+    expect(planConfirmed(pkg, estimate)).toBe(false); // manual/non-Desktop session cannot reuse Desktop auto consent
+    expect(planConfirmed(pkg, estimate, "desktop-auto")).toBe(true);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

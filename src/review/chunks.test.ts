@@ -426,7 +426,7 @@ describe("the cut blast radius leaves the waves one command away (flow 451 AC6)"
 });
 
 describe("an autonomous run runs every wave without a question (flow 451 AC6)", () => {
-  test("the default ceiling is 25 passes and a run under it proceeds in automatic mode, over it waits for one answer", async () => {
+  test("the default ceiling is 100 passes and a run under it proceeds in automatic mode, over it waits for one answer", async () => {
     const files = names(60);
     await sizedFiles(files, 10);
     await writeRadius(files.map((file) => drop(file)));
@@ -434,7 +434,7 @@ describe("an autonomous run runs every wave without a question (flow 451 AC6)", 
     expect(estimate?.chunks).toBe(2);
     const record = await recordChunkEstimate(packageDir, estimate!, "automatic");
     expect(record.decision).toBe("proceed");
-    const over = await recordChunkEstimate(packageDir, { ...estimate!, chunks: 26, overCeiling: true }, "automatic");
+    const over = await recordChunkEstimate(packageDir, { ...estimate!, chunks: 101, overCeiling: true }, "automatic");
     expect(over.decision).toBe("ask-once");
   });
 });

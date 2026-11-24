@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { DEFAULT_REVIEW_PARALLEL, DESK_MAX_PARALLEL, DESK_MAX_POOL_MODELS, DESK_REVIEW_POOLS, type DeskReviewModel, type DeskReviewOptions, type DeskReviewPool } from "../../../../src/review/desk-run-options";
+import { AUTO_MAX_MINUTES } from "../../../../src/review/plan-limits";
+import { defaultDeskReviewMinutes, DEFAULT_REVIEW_PARALLEL, DESK_MAX_PARALLEL, DESK_MAX_POOL_MODELS, DESK_REVIEW_POOLS, type DeskReviewModel, type DeskReviewOptions, type DeskReviewPool } from "../../../../src/review/desk-run-options";
 import type { DeskRevision, DeskRunKey } from "../../../../src/review/desk-run-types";
 import { Icon } from "../components/Icon";
 import { Dialog, Spinner } from "../components/ui";
@@ -34,22 +35,28 @@ const maxLimit = Number.MAX_SAFE_INTEGER;
 const limits = [
   { key: "maxWaves", label: "Max waves", initial: 0, min: 0, max: maxLimit },
   { key: "maxParallel", label: "Parallel reviewers", initial: DEFAULT_REVIEW_PARALLEL, min: 1, max: DESK_MAX_PARALLEL },
+  { key: "maxMinutes", label: "Time limit (minutes)", initial: 0, min: 0, max: AUTO_MAX_MINUTES },
   { key: "maxTokens", label: "Token limit", initial: 0, min: 0, max: maxLimit },
 ] as const;
 type LimitField = typeof limits[number];
 const modelKey = (model: DeskReviewModel) => JSON.stringify([model.provider, model.model]);
 
-function limitHelp(value: string, field: LimitField) {
+function limitHelp(value: string, field: LimitField, defaultMinutes: number) {
   const trimmed = value.trim();
   const number = trimmed === "" ? field.initial : Number(trimmed);
   const invalid = (trimmed !== "" && !/^\d+$/.test(trimmed)) || number < field.min || number > field.max;
-  const range = "1–" + field.max.toLocaleString();
-  return {
-    number,
-    invalid,
-    message: invalid ? `Enter ${field.min === 0 ? "0 or " : ""}${range}.`
-      : field.min === 0 ? `0 = no cap · ${range}` : `${range} · default ${field.initial}`,
-  };
+  const range = `1–${field.max.toLocaleString()}`;
+  let message: string;
+  if (field.max === maxLimit) {
+    message = invalid ? "Enter a non-negative whole number." : "0 = no additional limit";
+  } else if (invalid) {
+    message = `Enter ${field.min === 0 ? "0 or " : ""}${range}.`;
+  } else if (field.key === "maxMinutes") {
+    message = `0 = default (${defaultMinutes.toLocaleString()} min) · ${range}`;
+  } else {
+    message = `${range} · default ${field.initial}`;
+  }
+  return { number, invalid, message };
 }
 
 export function ModelPicker({ tier, choices, onSelect, onClose }: {
@@ -186,7 +193,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
   const [orchestrator, setOrchestrator] = useState(true);
   const [adaptive, setAdaptive] = useState(true);
   const [autoPublish, setAutoPublish] = useState(false);
-  const [draftLimits, setDraftLimits] = useState({ maxWaves: "0", maxParallel: String(DEFAULT_REVIEW_PARALLEL), maxTokens: "0" });
+  const [draftLimits, setDraftLimits] = useState({ maxWaves: "0", maxMinutes: "0", maxParallel: String(DEFAULT_REVIEW_PARALLEL), maxTokens: "0" });
   const [chosenFlow, setChosenFlow] = useState<string>();
   const [pools, setPools] = useState<DeskReviewOptions["modelPools"]>({ strong: [], middle: [], light: [] });
   const [applying, setApplying] = useState(false);
@@ -222,8 +229,8 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
   const flowValid = !flow || eligibleFlows.some(candidate => candidate.id === flow);
   const modelKeys = useMemo(() => new Set(models.map(modelKey)), [models]);
   const modelsValid = !orchestrator || DESK_REVIEW_POOLS.every(tier => pools[tier].every(model => modelKeys.has(modelKey(model))));
-  const limitFields = limits.filter(field => orchestrator || field.key === "maxTokens")
-    .map(field => ({ ...field, ...limitHelp(draftLimits[field.key], field) }));
+  const limitFields = limits.filter(field => orchestrator || field.key === "maxTokens" || field.key === "maxMinutes")
+    .map(field => ({ ...field, ...limitHelp(draftLimits[field.key], field, defaultDeskReviewMinutes(mode, orchestrator)) }));
   const valid = flowValid && modelsValid && !limitFields.some(field => field.invalid);
   async function apply() {
     if (applyingRef.current || !card || !subject || !valid || card.state !== "open" || !card.headSha || !card.baseSha) return;
@@ -297,11 +304,14 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
       <section className="review-launch-section">
         <div className="review-launch-mode">
           <span id={id + "-mode"}>Review mode</span>
-          <div className="segmented" role="group" aria-labelledby={id + "-mode"}>
+          <div className="segmented" role="group" aria-labelledby={id + "-mode"} aria-describedby={orchestrator ? id + "-approval" : undefined}>
             {(["auto", "manual"] as const).map(value => <button type="button" key={value} aria-pressed={mode === value}
               onClick={() => setMode(value)}>{value === "auto" ? "Auto" : "Manual"}</button>)}
           </div>
         </div>
+        {orchestrator && <small className="field-hint" id={id + "-approval"}>{mode === "auto"
+          ? "Automatically approves plan expansions within the review budget and project policy."
+          : "Asks for approval when the plan exceeds the project threshold."}</small>}
         <label className="review-launch-adaptive"><input type="checkbox" checked={orchestrator}
           aria-describedby={id + "-workflow"} onChange={e => setOrchestrator(e.currentTarget.checked)} /> Review orchestrator</label>
         <small className="field-hint" id={id + "-workflow"}>Turn off to run one reviewer without reviewer waves.</small>

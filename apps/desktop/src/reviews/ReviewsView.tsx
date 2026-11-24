@@ -43,6 +43,7 @@ interface Props {
   onIndicatorChange?: ((indicator: ReviewsTabIndicator) => void) | undefined;
   flows?: readonly FlowCard[] | undefined;
   reviewModels?: readonly ReviewLaunchModel[] | undefined;
+  onOpenOriginSession?: ((sessionId: string) => Promise<void>) | undefined;
   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
   onOpenFlow?: ((dir: string) => void) | undefined;
   /** "Fix findings" in a Review panel: the PR card, the list's repository (to bind the PR's session) and the prompt to prefill. */
@@ -115,7 +116,7 @@ export function ReviewsView(props: Props) {
     selectRepo={selectRepo} focusRepo={setRepo} pending={pending} settlePending={settlePending} />;
 }
 
-function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, reloadSignal, rulesTarget: boardRules, flows, reviewModels, onOpenReviewSession, onOpenFlow, onFixFindings,
+function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, reloadSignal, rulesTarget: boardRules, flows, reviewModels, onOpenOriginSession, onOpenReviewSession, onOpenFlow, onFixFindings,
   load = fetchReviews, runCommand, publishCommand, rulesCommand = reviewRules, repo, selectRepo, focusRepo, pending, settlePending }: Props & RepositoryProps) {
   const [read, setRead] = useState<ReadState>({ snapshot: null, error: "", loading: true, request: 0 });
   const [attempt, setAttempt] = useState(0);
@@ -282,7 +283,15 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
   const rulesTarget = target ?? (!snapshot && read.error && !accessProblem(read.error) && boardRules &&
     (!expectedViewer || boardRules.viewer.toLowerCase() === expectedViewer.toLowerCase()) &&
     (!repo || boardRules.repo.toLowerCase() === repo.toLowerCase()) ? boardRules : null);
-  const openReview = useCallback((id: string) => { setNotice(""); setSelected({ id }); }, []);
+  const openDetails = useCallback((id: string) => { setNotice(""); setSelected({ id }); }, []);
+  const openReview = useCallback((review: ReviewSummary) => {
+    if (!review.sessionId || !onOpenOriginSession) {
+      openDetails(review.id);
+      return;
+    }
+    setNotice("");
+    void onOpenOriginSession(review.sessionId).catch(error => setNotice(errMessage(error)));
+  }, [onOpenOriginSession, openDetails]);
   const resetFilters = () => { setFilters(EMPTY_REVIEW_FILTERS); setQuery(""); search.current?.focus(); };
   const setFilter = <K extends keyof ReviewFilters>(key: K, value: ReviewFilters[K]) => setFilters(old => ({ ...old, [key]: value }));
 
@@ -346,7 +355,7 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
       </div>}
       {notice && <p className="inline-banner" role="status">{notice}</p>}
       {!snapshot && read.loading && <div className="review-loading" role="status"><Spinner /> Loading reviews…</div>}
-      {active && snapshot && (visible.length ? <ReviewList view={view} reviews={visible} showClosed={showClosed} selectedId={review?.id} onOpen={openReview} />
+      {active && snapshot && (visible.length ? <ReviewList view={view} reviews={visible} showClosed={showClosed} selectedId={review?.id} onOpen={openReview} onDetails={onOpenOriginSession ? openDetails : undefined} />
         : <EmptyState icon={narrowed ? "search" : "checklist"}
           title={narrowed ? "No matching reviews" : snapshot.reviews.length ? "No open reviews" : "No Keryx reviews yet"}
           actions={narrowed ? <button className="btn" onClick={resetFilters}>Reset search and filters</button>
@@ -376,9 +385,19 @@ function ReviewFacts({ review }: { review: ReviewSummary }) {
   </>;
 }
 
-function ReviewTile({ review, selected, onOpen }: { review: ReviewSummary; selected: boolean; onOpen: (id: string) => void }) {
+interface ReviewListActions {
+  onOpen: (review: ReviewSummary) => void;
+  onDetails?: ((id: string) => void) | undefined;
+}
+
+function ReviewDetailsAction({ review, onDetails }: Pick<ReviewListActions, "onDetails"> & { review: ReviewSummary }) {
+  return review.sessionId && onDetails ? <button type="button" className="btn btn-sm"
+    aria-label={`Review details for #${review.number}`} onClick={() => onDetails(review.id)}>Details</button> : null;
+}
+
+function ReviewTile({ review, selected, onOpen, onDetails }: ReviewListActions & { review: ReviewSummary; selected: boolean }) {
   return <article className="flow-card review-summary-card" aria-current={selected || undefined}>
-    <button className="review-card" onClick={() => onOpen(review.id)}>
+    <button className="review-card" onClick={() => onOpen(review)}>
       <span className="flow-card-top"><span className="flow-id">#{review.number}</span><span className="grow" />
         <span className="badge">{reviewStateLabel(review)}</span></span>
       <span className="flow-title">{reviewTitle(review)}</span>
@@ -386,31 +405,32 @@ function ReviewTile({ review, selected, onOpen }: { review: ReviewSummary; selec
       {review.card && <span className="flow-meta"><span className="meta-item"><Icon name="user" size={12} />{review.card.author || "Unknown author"}</span></span>}
       <span className="flow-meta review-summary-facts"><ReviewFacts review={review} /></span>
     </button>
+    <ReviewDetailsAction review={review} onDetails={onDetails} />
   </article>;
 }
 
-function ReviewLane({ column, reviews, selectedId, onOpen }: { column: ReviewColumn; reviews: ReviewSummary[]; selectedId?: string | undefined; onOpen: (id: string) => void }) {
+function ReviewLane({ column, reviews, selectedId, onOpen, onDetails }: ReviewListActions & { column: ReviewColumn; reviews: ReviewSummary[]; selectedId?: string | undefined }) {
   return <section className="lane" aria-label={COLUMNS[column]}>
     <header className="lane-head"><span className={"lane-dot reviews-lane-" + column} /><h2>{COLUMNS[column]}</h2><span className="lane-count">{reviews.length}</span></header>
     <div className="lane-body">
       {!reviews.length && <div className="lane-empty">No reviews</div>}
-      {reviews.map(review => <ReviewTile key={review.id} review={review} selected={review.id === selectedId} onOpen={onOpen} />)}
+      {reviews.map(review => <ReviewTile key={review.id} review={review} selected={review.id === selectedId} onOpen={onOpen} onDetails={onDetails} />)}
     </div>
   </section>;
 }
 
-const ReviewList = memo(function ReviewList({ view, reviews, showClosed, selectedId, onOpen }: {
-  view: "board" | "list"; reviews: ReviewSummary[]; showClosed: boolean; selectedId?: string | undefined; onOpen: (id: string) => void;
+const ReviewList = memo(function ReviewList({ view, reviews, showClosed, selectedId, onOpen, onDetails }: ReviewListActions & {
+  view: "board" | "list"; reviews: ReviewSummary[]; showClosed: boolean; selectedId?: string | undefined;
 }) {
   if (view === "board") {
     return <div className="board review-lanes reviews-lanes">{groupByColumn(reviews, showClosed).map(([column, items]) =>
-      <ReviewLane key={column} column={column} reviews={items} selectedId={selectedId} onOpen={onOpen} />)}</div>;
+      <ReviewLane key={column} column={column} reviews={items} selectedId={selectedId} onOpen={onOpen} onDetails={onDetails} />)}</div>;
   }
   return <div className="flow-list-wrap">
     <table className="flow-list review-table reviews-table"><thead><tr>
       <th>Pull request</th><th>Author</th><th>State</th><th>Round</th><th>Reviewed</th><th>Findings</th><th>Publication</th><th>Source</th><th>Flow</th><th>Tokens</th>
     </tr></thead><tbody>{reviews.map(review => <tr key={review.id} aria-current={review.id === selectedId || undefined}>
-      <td><button className="review-list-link" onClick={() => onOpen(review.id)}><span className="flow-id">#{review.number}</span> {reviewTitle(review)}</button></td>
+      <td><button className="review-list-link" onClick={() => onOpen(review)}><span className="flow-id">#{review.number}</span> {reviewTitle(review)}</button><ReviewDetailsAction review={review} onDetails={onDetails} /></td>
       <td>{review.card ? review.card.author || "Unknown author" : ""}</td>
       <td>{reviewStateLabel(review)}</td>
       <td>{review.latestRound}</td>

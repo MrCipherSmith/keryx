@@ -112,3 +112,46 @@
 - One review round scoped to the 7 files stage 3's final code changed under stage 4's edits (review.rs, ReviewRuns, ReviewWorkspace, reviews/model.ts, ReviewPanel test, desk-run-store.ts, review-entity.ts): no blockers or majors. Checked: session Attempt placement by the final assignReviews/roundFor, advance against the final newerRoundOf, a session Attempt as the base of a Desktop update round, the Reviews list labels and filters, hasDeskWorker gating.
 - Deferred (owner rule: only blockers and majors are fixed from here): the minors and infos of rounds 1–4 dispositioned in each package's dispositions file, plus the open test gaps (review_complete card registration, card execute wiring, Desktop workspace/dialog gating, payloads/ copy filter, non-URL post fallback), publish-time base comparison, posting under the project-bound gh account, registration recomputing readiness, laterRoundOf reading the UI history snapshot.
 - T10 (real-PR scenario) stays unverified.
+- 2026-11-24T19:30:34.706Z - ac-updated: AC8: "(new)" -> "A diverged PR scopes the merge base to its pinned head, preserves the hosting base identity and retains incremental rounds. [verify: judged]" (Operator extended flow 521 to cover PR 9264 review behavior.)
+- 2026-11-24T19:30:35.076Z - task-added: T15: Use the real PR diff for scope, slices and reviewer inputs
+- 2026-11-24T19:30:35.818Z - task-attempt: T15: started (attempt 1) — Use the real PR diff for scope, slices and reviewer inputs
+- 2026-11-24T19:30:36.219Z - ac-updated: AC9: "(new)" -> "Both entry points associate one review attempt with the actual project session and restore it from the board. [verify: judged]" (Operator extended flow 521 to cover PR 9264 review behavior.)
+- 2026-11-24T19:30:36.619Z - task-added: T16: Open the originating interactive review session from the board and register chat reviews on launch
+- 2026-11-24T19:30:37.332Z - task-attempt: T16: started (attempt 1) — Open the originating interactive review session from the board and register chat reviews on launch
+- 2026-11-24T19:30:37.709Z - ac-updated: AC10: "(new)" -> "The active review shows the PR, changed file count, file/check rationale and current work in the review UI. [verify: judged]" (Operator extended flow 521 to cover PR 9264 review behavior.)
+- 2026-11-24T19:30:38.091Z - task-added: T17: Explain review scope, selected checks and current stage in Desktop
+- 2026-11-24T19:30:38.793Z - task-attempt: T17: started (attempt 1) — Explain review scope, selected checks and current stage in Desktop
+- 2026-11-24T19:30:39.180Z - ac-updated: AC11: "(new)" -> "An exact plan needs at most one approval and a finished single-reviewer run exits without full-review nudges. [verify: judged]" (Operator extended flow 521 to cover PR 9264 review behavior.)
+- 2026-11-24T19:30:39.564Z - task-added: T18: Suspend repeat prompts while awaiting review approval or after single-review ingestion
+- 2026-11-24T19:30:40.277Z - task-attempt: T18: started (attempt 1) — Suspend repeat prompts while awaiting review approval or after single-review ingestion
+- 2026-11-24T19:30:40.704Z - ac-updated: AC12: "(new)" -> "Both launches are verified against PR 9264 with publication disabled, with evidence of scope and session identity. [verify: judged]" (Operator extended flow 521 to cover PR 9264 review behavior.)
+- 2026-11-24T19:30:41.101Z - task-added: T19: Exercise both Desktop entry points on PR 9264 and review the changes
+- 2026-11-24T19:35:10.074Z - task-done: T15: Use the real PR diff for scope, slices and reviewer inputs
+- 2026-11-24T19:35:15.323Z - task-done: T18: Suspend repeat prompts while awaiting review approval or after single-review ingestion
+- 2026-11-24T19:41:52.008Z - task-attempt: T19: started (attempt 1) — Live scope checked against GitHub and actual Desktop launch from original chat. Verifying board return and card initiation.
+- 2026-11-24T20:00:29.571Z - task-done: T16: Open the originating interactive review session from the board and register chat reviews on launch
+- 2026-11-24T20:00:29.964Z - task-done: T17: Explain review scope, selected checks and current stage in Desktop
+- 2026-11-24T20:00:30.348Z - task-done: T19: Exercise both Desktop entry points on PR 9264 and review the changes
+- 2026-11-24T20:01:56.007Z - ac-confirmed: AC8: PR 9264 merge-base and two refs confirmed independently with Git and GitHub. (signed: local automated verification [stated])
+- 2026-11-24T20:01:56.405Z - ac-confirmed: AC9: Both attempted reviews restored their original session from the card. (signed: local automated verification [stated])
+- 2026-11-24T20:01:56.808Z - ac-confirmed: AC10: Native bundle renders 3 files, +169/-2, 15 selected checks and Review finished. (signed: local automated verification [stated])
+- 2026-11-24T20:01:57.206Z - ac-confirmed: AC11: Two live runs with zero operator questions. Approval pause and single-reviewer terminal logic regression-tested. (signed: local automated verification [stated])
+- 2026-11-24T20:01:57.615Z - ac-confirmed: AC12: Both actual entry points on PR 9264 verified locally; run IDs in review-session-verification.md. (signed: local automated verification [stated])
+- 2026-11-24T20:03:00.875Z - task-added: T20: Increase large-review limits and approve affordable plan expansion automatically
+- 2026-11-24T20:03:01.227Z - task-added: T21: Select and explain the effective model tier for each review assignment
+- 2026-11-24T20:03:01.572Z - task-added: T22: Verify large-plan policy and tier assignments on PR 9264
+- 2026-11-24T20:03:13.857Z - task-attempt: T20: started (attempt 1) — Inspect both standalone and Desktop plan confirmation and expansion paths.
+- 2026-11-24T20:03:14.225Z - task-attempt: T21: started (attempt 1) — Trace policy through concrete provider/model assignment and render selection.
+- 2026-11-24T20:03:14.573Z - task-attempt: T22: started (attempt 1) — Verify live PR plan and a large diff with an unchanged and a changed head.
+- 2026-11-24T20:04:11.992Z - ac-updated: AC13: "(new)" -> "Large reviews use higher defaults and a recorded automatic expansion decision within the configured policy. Explicit budgets, changed revisions and manual confirmation are respected. [verify: judged]" (User extended the existing review scope to large PRs and automatic expansion.)
+- 2026-11-24T20:04:12.340Z - ac-updated: AC14: "(new)" -> "Each assignment resolves its model tier from the reviewer and its actual scope, honors overrides, and exposes the chosen route and reason. [verify: judged]" (User requested improved three-tier routing per reviewer.)
+- 2026-11-24T20:20:39.123Z - task-done: T21: Select and explain the effective model tier for each review assignment
+- 2026-11-24T20:32:43.249Z - task-done: T20: Increase large-review limits and approve affordable plan expansion automatically
+- 2026-11-24T20:32:43.839Z - task-done: T22: Verify large-plan policy and tier assignments on PR 9264
+- 2026-11-24T20:32:53.070Z - ac-confirmed: AC8: Hosting and effective bases recorded separately. Three files and line counts match the pinned GitHub diff. (signed: local automated verification [stated])
+- 2026-11-24T20:32:53.808Z - ac-confirmed: AC9: Two launch paths restored the same session for their own attempt, including follow-up after restart. (signed: local automated verification [stated])
+- 2026-11-24T20:32:54.532Z - ac-confirmed: AC10: Verified target, changed-file totals, selected checks and current progress in the running desktop UI. (signed: local automated verification [stated])
+- 2026-11-24T20:32:55.110Z - ac-confirmed: AC11: No operator questions on the completed automatic review or the finished single-reviewer run. Pinned-plan resume is covered. (signed: local automated verification [stated])
+- 2026-11-24T20:32:55.692Z - ac-confirmed: AC12: Both entry points verified in independent local runs. See review-session-verification.md. (signed: local automated verification [stated])
+- 2026-11-24T20:32:56.259Z - ac-confirmed: AC13: Prepared 180 assignments, authorized within capped Auto, refused changed revisions and excess native groups; tested manual and budget limits. (signed: local automated verification [stated])
+- 2026-11-24T20:32:56.859Z - ac-confirmed: AC14: All 15 actual provider/model routes matched the plan; mixed-scope fixture exercised the Light pool. (signed: local automated verification [stated])

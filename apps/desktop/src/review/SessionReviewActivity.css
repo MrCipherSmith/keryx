@@ -3,8 +3,6 @@
 .session-review-item > header { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .session-review-item > header > strong { min-inline-size: 0; overflow-wrap: anywhere; }
 .session-review-item summary { cursor: pointer; color: var(--accent); }
+.session-review-request { margin: 0; padding-inline-start: var(--sp-2); border-inline-start: 2px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; }
 .session-review-message { color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .session-review-message[role="alert"] { display: block; }
-
-.review-reply-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
-.review-reply-actions .btn[aria-pressed="true"] { background: var(--bg-selected); color: var(--accent-text); }

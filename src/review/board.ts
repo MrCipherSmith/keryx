@@ -50,7 +50,7 @@ const listQuery = (state: ReviewBoardState, reviewerFields: string, first: numbe
   }
 }`;
 
-function changeStats({ changedFiles, additions, deletions }: RawCard): ReviewCard["changeStats"] {
+export function changeStats({ changedFiles, additions, deletions }: Pick<RawCard, "changedFiles" | "additions" | "deletions">): ReviewCard["changeStats"] {
   const count = (value: number | undefined): value is number => value !== undefined && Number.isSafeInteger(value) && value >= 0;
   return count(changedFiles) && count(additions) && count(deletions)
     ? { files: changedFiles, additions, deletions }

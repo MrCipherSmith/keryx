@@ -157,8 +157,8 @@ must total at most --max-bytes (default: the manifest's wave budget, else
 ${DEFAULT_SLICE_MAX_BYTES}); more than that is dispatched in waves (\`retry-plan --next-wave\`).
 
 With --package, the round's plan is estimated (\`keryx review estimate\`); a plan over the
-operator threshold (routing.config.json reviewPlan.maxDispatches, default 40 dispatches,
-or reviewPlan.maxMinutes, default 90 min) is refused until the operator confirms it: the
+operator threshold (routing.config.json reviewPlan.maxDispatches, default 160 dispatches,
+or reviewPlan.maxMinutes, default 400 min) is refused until the operator confirms it: the
 review_confirm_plan card inside keryx shell, or \`keryx review estimate --package <dir>
 --confirm --quote "<words>"\` at a terminal. A manifest with neither waveBytes nor maxBytes
 is refused.

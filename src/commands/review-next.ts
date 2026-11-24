@@ -17,7 +17,7 @@ reviewer. It reads the slice manifest and its routing, raw/ (every reviewer's la
 late results the drivers name and the retry state, and decides each reviewer with the same logic
 \`retry-plan\` uses. Output, per dispatch: reviewer, wave (and waves left), slice ids and their
 absolute paths, the model recorded for the reviewer (drivers/<reviewer>-w<n>.json "model", or
-its last reply's), where its reply goes (the driver's "result"), and the reason:
+its last reply's), where its reply goes (the driver's "result"), its scoped tier and modelClass recommendation, and the reason:
   missing    the reviewer has no result for these slices yet
   retry      its last result was unfinished (INCOMPLETE, BLOCKED, NEEDS_CONTEXT) and moved the scope, or
              asked questions to answer in the re-dispatch

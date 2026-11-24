@@ -22,6 +22,7 @@ const DISCUSSION = connection("PullRequest", "comments", MESSAGE);
 const REVIEWS = connection("PullRequest", "reviews", MESSAGE + " state");
 const THREADS = connection("PullRequest", "reviewThreads", `id path line isResolved isOutdated comments(first:10) { ${PAGE} nodes { ${MESSAGE} } }`);
 const REPLIES = connection("PullRequestReviewThread", "comments", MESSAGE);
+const FILES = connection("PullRequest", "files", "path additions deletions");
 const CHECKS = `query ReviewDetailChecks($id:ID!, $cursor:String) {
   viewer { login }
   node(id:$id) { ... on Commit { statusCheckRollup { contexts(first:100, after:$cursor) {
@@ -77,6 +78,16 @@ function check(record: Fields): ReviewCheck {
     id, name: requiredText(record, "context"), status: requiredText(record, "state"), url: str(record, "targetUrl"),
   };
   throw new Error("Unknown GitHub check type.");
+}
+
+function changedFile(record: Fields) {
+  const additions = record.additions, deletions = record.deletions;
+  if (typeof additions !== "number" || !Number.isSafeInteger(additions) || additions < 0 ||
+      typeof deletions !== "number" || !Number.isSafeInteger(deletions) || deletions < 0) {
+    throw new Error("Invalid changed file counts.");
+  }
+  const filePath = requiredText(record, "path");
+  return { id: filePath, path: filePath, additions, deletions };
 }
 
 // Both Desktop hosts cap CLI stdout at 32 MiB. Leave room for the response envelope,
@@ -200,13 +211,16 @@ export async function readReviewBoardDetail(
     }, check, "checks");
   }
 
-  const [comments, reviews, threads, checks] = await Promise.all([
+  const [comments, reviews, threads, checks, files] = await Promise.all([
     readPages(fromNode(prId, DISCUSSION, "comments"), message, "discussion comments"),
     readPages(fromNode(prId, REVIEWS, "reviews"), review, "submitted reviews"), readThreads(), readChecks(),
+    readPages(fromNode(prId, FILES, "files"), changedFile, "changed files"),
   ]);
   return {
     version: 1, viewer, repositoryId: requiredText(repository, "id"), number, fetchedAt: new Date().toISOString(), headSha,
     ...(description !== null && { description }),
+    files: files.map(({ path: filePath, additions, deletions }) => ({ path: filePath, additions, deletions })),
+    filesComplete: !warnings.has("Could not read all changed files.") && !warnings.has("Showing a partial snapshot of this large PR. Choose Open pull request to see all comments and checks on GitHub."),
     comments, reviews: reviews.filter(item => item.state !== "PENDING"), threads, checks, warnings: [...warnings],
   };
 }

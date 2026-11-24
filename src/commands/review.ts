@@ -1300,6 +1300,25 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
           ...(forcedPrior === undefined ? {} : { forced: forcedPrior }),
         });
     await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
+    // Only an ACP-owned shell supplies this child context. Desktop's isolated worker owns its own attempt.
+    const sessionId = process.env.KERYX_REVIEW_SESSION_ID;
+    const sessionRoot = process.env.KERYX_REVIEW_SESSION_PROJECT_ROOT;
+    if (mode === "review-flow" && targetKind === "pr" && sessionId && sessionRoot && process.env.KERYX_DESK_REVIEW_SHELL !== "1" &&
+        await (await import("node:fs/promises")).realpath(sessionRoot).catch(() => "") === await (await import("node:fs/promises")).realpath(cwd).catch(() => "!") &&
+        (await import("../session")).findSession(sessionRoot, sessionId, process.env.KERYX_REVIEW_SESSION_DATA_DIR || undefined)?.id === sessionId) {
+      try {
+        const ownerText = process.env.KERYX_REVIEW_SESSION_OWNER;
+        const owner = ownerText ? JSON.parse(ownerText) as import("../lib/hub-machine/process-identity").ProcessIdentity : undefined;
+        const { readProcessIdentity } = await import("../lib/hub-machine/process-identity");
+        const actual = owner && readProcessIdentity(owner.pid);
+        if (!actual || actual.pgid !== owner?.pgid || actual.startedAt !== owner.startedAt) throw new Error("invalid session owner identity");
+        const taskToken = process.env.KERYX_REVIEW_TASK_TOKEN;
+        if (!taskToken || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(taskToken)) throw new Error("invalid session task identity");
+        await registerSessionPackageForProject(sessionRoot, result.path, undefined, sessionId, owner, taskToken);
+      } catch (error) {
+        console.error(`warning: review not registered in Desktop (${error instanceof Error ? error.message : String(error)})`);
+      }
+    }
     const previousPackage = detected.round.previous?.packagePath;
     if (detected.round.mode === "delta" && previousPackage !== undefined && detected.round.carried.length > 0) {
       const carriedAnswers = await carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), detected.round.carried.map((entry) => entry.findingId), previousPackage, { projectRoot: cwd });
@@ -1317,6 +1336,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const registered = recordFinishedRound(result.path, "ingest", { cwd });
     if (registered.error !== undefined) console.error(`warning: round not recorded in the local round registry (${registered.error})`);
     if (registered.warning !== undefined) console.error(`warning: ${registered.warning}`);
+    if (targetKind === "pr" && process.env.KERYX_DESK_REVIEW_SHELL !== "1" &&
+        await (await import("../review/session-attempt")).readSessionAttempt(result.path)) {
+      try { await registerSessionPackageForProject(cwd, result.path); }
+      catch (error) { console.error(`warning: review not registered in Desktop (${error instanceof Error ? error.message : String(error)})`); }
+    }
   }
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
@@ -5444,7 +5468,7 @@ export function printReviewHelpFor(rest: readonly string[] = []): void {
 }
 
 function printEstimateHelp(): void {
-  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote \"<words>\"] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments (a routed slice is owned by its roles), dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.\nA plan over routing.config.json reviewPlan.maxDispatches (default 40) or reviewPlan.maxMinutes (default 90) is flagged `over threshold`;\ndispatch-check and ledger build refuse it until the operator confirms it: the review_confirm_plan card inside keryx shell, or\n--confirm --quote \"<the operator's words>\" at a terminal (refused without a TTY), which writes <review-dir>/plan-confirmation.json.");
+  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote \"<words>\"] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments (a routed slice is owned by its roles), dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.\nA plan over routing.config.json reviewPlan.maxDispatches (default 160) or reviewPlan.maxMinutes (default 400) is flagged `over threshold`;\ndispatch-check and ledger build refuse it until authorized (bounded project auto-approval requires reviewPlan.autoApprove=true): the review_confirm_plan card inside keryx shell, or\n--confirm --quote \"<the operator's words>\" at a terminal (refused without a TTY), which writes <review-dir>/plan-confirmation.json.");
 }
 
 const GRAPH_TIMEOUT_HELP = `--graph-timeout <seconds> bounds the wait for the graph, wiki and memory refresh of the new package

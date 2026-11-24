@@ -32,7 +32,7 @@ import { lostText, type QueuedPrompt, type Usage } from "./reducer";
 import { desktopReviewRequest, resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
 import type { ProjectGitHubAccount } from "../platform/githubAccounts";
-import { reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "../review/sessionReview";
+import { reviewSessionTitle, type SessionReviewLink } from "../review/sessionReview";
 import { ProjectGitHubAccountButton } from "../project/GitHubSettings";
 import { TelegramSessionDialog } from "./TelegramSessionDialog";
 import { TELEGRAM_SESSION } from "./telegramSession";
@@ -51,7 +51,6 @@ interface Props {
   onProjectSettings?: () => void;
   narrow: boolean;
   reviewActivity?: ReactNode;
-  reviewComposer?: ReviewComposerTarget | undefined;
   reviewLinks?: readonly SessionReviewLink[];
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
   onRouting?: () => void;
@@ -64,7 +63,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewActivity, reviewComposer, reviewLinks }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewActivity, reviewLinks }, composerRef) {
   const { state } = s;
   const reviewBySession = useMemo(() => new Map((reviewLinks ?? []).map(link => [link.sessionId, link])), [reviewLinks]);
   const prefs = usePrefs();
@@ -115,7 +114,6 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
-  const replyTarget = reviewComposer?.sessionId === state.sessionId ? reviewComposer : undefined;
   const disabledReason =
     incompatible
       ? "This keryx is not compatible with the app."
@@ -131,7 +129,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
                 : "No session. Start a new one to continue."
               : !state.held
                 ? `${lostText(state.lostReason)}. Reopen it to continue.`
-                : replyTarget?.disabledReason ?? null;
+                : null;
 
   const fill = (text: string) => {
     const handle = composerRef && typeof composerRef !== "function" ? composerRef.current : null;
@@ -202,13 +200,6 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
   const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[], lineComments: readonly LineComment[] = []) => {
     const hasLocal = imagePaths.length > 0 || local.length > 0 || lineComments.length > 0;
-    if (replyTarget) {
-      if (hasLocal || picks.length) {
-        toast({ level: "info", title: "Send review context as text", body: "Remove the attachments before sending the reply." });
-        return false;
-      }
-      return replyTarget.send(text);
-    }
     // An unrecognized slash line never sends and never clears staged page picks.
     const reviewRequest = desktopReviewRequest(text);
     if ((text.startsWith("/") || reviewRequest) && !hasLocal) return run(text);
@@ -465,8 +456,6 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             sessionId={state.sessionId}
             busy={state.busy}
             disabledReason={disabledReason}
-            replyPlaceholder={replyTarget?.placeholder}
-            replyDraftKey={replyTarget?.draftKey}
             commands={state.commands}
             modes={state.modes}
             model={modelOption(state.configOptions)}

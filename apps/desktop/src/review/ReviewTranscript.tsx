@@ -36,15 +36,18 @@ function ToolGroup({ items }: { items: TranscriptEvent[] }) {
   </details>;
 }
 
-export function ReviewTranscript({ actor, events, loading, error, truncated }: {
-  actor: "Coordinator" | "Reviewer"; events: TranscriptEvent[]; loading: boolean; error: string; truncated?: boolean;
+export function ReviewTranscript({ actor, events, loading, error, truncated, followLatest = true }: {
+  actor: "Coordinator" | "Reviewer"; events: TranscriptEvent[]; loading: boolean; error: string; truncated?: boolean; followLatest?: boolean;
 }) {
   const log = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const last = events.at(-1);
+  useLayoutEffect(() => { if (followLatest) following.current = true; }, [followLatest]);
   useLayoutEffect(() => {
-    if (following.current && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [events.length, last?.kind, last?.text, last?.at]);
+    if (!log.current) return;
+    if (!followLatest) log.current.scrollTop = 0;
+    else if (following.current) log.current.scrollTop = log.current.scrollHeight;
+  }, [events.length, last?.kind, last?.text, last?.at, followLatest]);
   return <section className="review-transcript">
     <h3>Transcript</h3>
     <div ref={log} className="review-session-log" role="log" aria-label={actor + " activity"} aria-live="polite"

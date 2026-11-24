@@ -49,9 +49,9 @@ something, \`merge\` prints each finding (id, severity, file:line, chunk) and ho
 
 \`estimate\` says what a run will cost before it starts: chunks, files, tokens, cost at the middle tier
 and duration. The ceiling is ${DEFAULT_MAX_PASSES} passes of ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${DEFAULT_MAX_PASSES * DEFAULT_BLAST_RADIUS_MAX_FILES} files);
-set reviewChunks.maxPasses in routing.config.json to move it. In automatic review mode a run at or under the
-ceiling goes through without a question and a run over it asks once; in interactive mode a run over
-the ceiling waits for a yes (\`--answer yes --quote "..."\`). \`next\` refuses until then. The estimate and the
+set reviewChunks.maxPasses in routing.config.json to move it. For automatic runs the project can
+preapprove a larger range with reviewChunks.autoApprovePasses (up to 400). Above the applicable ceiling,
+the run waits for the operator. The estimate, applied policy and any human
 answer are recorded in <dir>/chunk-estimate.json.
 
 A reviewer's tool calls go to <input-dir>/tool-calls/<reviewer>.jsonl, one JSON line per call; the

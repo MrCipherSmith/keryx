@@ -8,7 +8,7 @@ import { withoutGithubCredentials } from "./github-cli";
 // the record.
 
 import { execFile, spawn as nodeSpawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 import { ARBITER_LOG_NAME, ENV_ARBITER_LOG, copyArbiterLogToPackage } from "./arbiter-log";
@@ -337,7 +337,24 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   const eventsFile = path.join(runDir, "events.ndjson");
   const answersFile = path.join(runDir, "answers.ndjson");
   const logFile = path.join(runDir, "child.log");
-  writeFileSync(eventsFile, "");
+  const recorder = options.fixedBase ? new ReviewerActivityRecorder() : undefined;
+  const observe = recorder && ((event: Record<string, unknown>) => recorder.observe(event));
+  let eventStart = sameHead ? fileSize(eventsFile) : 0;
+  if (eventStart > 0) {
+    // A killed writer may have left an incomplete line. Keep its bytes and start the next event on a fresh line.
+    const fd = openSync(eventsFile, "r");
+    try {
+      const last = Buffer.alloc(1);
+      readSync(fd, last, 0, 1, eventStart - 1);
+      if (last[0] !== 10) {
+        writeFileSync(eventsFile, "\n", { flag: "a" });
+        eventStart++;
+      }
+    } finally { closeSync(fd); }
+    if (observe) createEventTail(eventsFile, observe).poll();
+  } else {
+    writeFileSync(eventsFile, "");
+  }
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
 
@@ -384,8 +401,8 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   };
   ownChild(terminate);
 
-  const recorder = options.fixedBase ? new ReviewerActivityRecorder() : undefined;
-  const tail = createEventTail(eventsFile, recorder && ((event) => recorder.observe(event)));
+  // RunState already contains usage before this invocation.
+  const tail = createEventTail(eventsFile, observe, eventStart);
   let progress: Progress = tail.poll();
   let lastGrowth = Date.now();
   let lastSeen = -1;

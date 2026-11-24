@@ -19,6 +19,18 @@ export function reviewRunArgs(target: unknown, action: unknown): string[] {
     if (op.id !== undefined) throw new Error("Choose one Review attempt scope.");
     fields.push(["--activity-id", op.activityId]);
   }
+  if (op.activityBefore !== undefined) {
+    if (op.kind !== "status" || typeof op.activityId !== "string" || !Number.isSafeInteger(op.activityBefore) || Number(op.activityBefore) <= 0) {
+      throw new Error("configuration: Invalid review activity cursor.");
+    }
+    fields.push(["--activity-before", String(op.activityBefore)]);
+  }
+  if (op.sessionId !== undefined) {
+    if (op.kind !== "start" || typeof op.sessionId !== "string" || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(op.sessionId)) {
+      throw new Error("configuration: Invalid review session.");
+    }
+    fields.push(["--session-id", op.sessionId]);
+  }
   if (op.kind === "start") fields.push(["--base", op.baseSha], ["--head", op.headSha]);
   if (op.kind === "continue" || op.kind === "cancel" || op.kind === "readiness" || op.kind === "decide" || (op.kind === "status" && op.id !== undefined)) fields.push(["--id", op.id]);
   if (op.kind === "answer") fields.push(["--id", op.id], ["--question-id", op.questionId]);

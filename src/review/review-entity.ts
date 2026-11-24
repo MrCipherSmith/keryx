@@ -14,6 +14,7 @@ export interface ReviewCompare { status: "ahead" | "behind" | "diverged" | "iden
 
 /** One attempt as the Reviews list reads it: no report and no reviewer session history. */
 export interface ReviewAttemptSummary {
+  sessionId?: string;
   id: string;
   round: number;
   previousRunId: string | null;
@@ -60,6 +61,8 @@ export interface ReviewRound {
 }
 
 export interface ReviewSummary {
+  sessionId?: string;
+  runId?: string;
   id: string;
   number: number;
   card: ReviewCard | null;
@@ -184,6 +187,7 @@ export function summarizeReview(row: ReviewRow, card: ReviewCard | null, compare
   const tokens = attempts.reduce<number | null>((sum, a) => a.tokens === null ? sum : (sum ?? 0) + a.tokens, null);
   return {
     id: row.id,
+    ...(settled.sessionId && { sessionId: settled.sessionId, runId: settled.id }),
     number: row.number,
     card,
     state: reviewState(settled, reviewClosed(row, card)),

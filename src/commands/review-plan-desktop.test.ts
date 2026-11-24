@@ -1,18 +1,20 @@
+import { desktopPassAllocator, preflightDesktopPasses } from "../review/desktop-review-passes";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { refreshLayers } from "../review/layers";
 import { createLayersFixture, git } from "../review/layers.test-helpers";
 import { createPinnedSourceInput, prepareBlastInput } from "./review-plan-desktop-context";
 import { SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../lib/subagent-context";
 import path from "node:path";
 import type { PrContext } from "../review/context-collect";
+import { formatRecordLine } from "../review/dispatch-usage";
 import { checkDispatch } from "../review/dispatch-check";
 import { PR_CONTEXT_FILE } from "../review/pr-context";
 import type { SliceEntry, SliceManifest } from "../review/slice";
 import { writeWaveDrivers } from "../review/wave-drivers";
 import { resolveReviewWave } from "../review/wave-key";
 import type { PlanDeps, ReviewPlan } from "./review-plan";
-import { desktopPassAllocator, prepareDesktopDispatch } from "./review-plan-desktop";
+import { prepareDesktopDispatch } from "./review-plan-desktop";
 
 let root: string, dir: string;
 beforeEach(async () => {
@@ -58,14 +60,14 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   mkdirSync(path.dirname(path.join(root, definition)), { recursive: true });
   writeFileSync(path.join(root, definition), "---\nname: review-team\ndescription: test reviewer\nmodel_tier: light\n---\nReview");
   const plan: ReviewPlan = { v: 1, package: dir, target: { kind: "pr", ref, base, head },
-    round: { number: 2, mode: "delta", previous: "previous", source: "local-package", range: { base, head }, fixHunks: 1, newHunks: 1, priorFindings: 1, carried: 0, line: "" },
+    round: { number: 2, mode: "delta", previous: "previous", source: "local-package", range: { base: "3".repeat(40), head }, fixHunks: 1, newHunks: 1, priorFindings: 1, carried: 0, line: "" },
     slices: { fix: [], new: [] }, roster: [role, "review-style"], dispatches: 3, minutes: { min: 1, max: 2 },
     overThreshold: false, overReasons: [], planKey: "key", warnings: [], next: "dispatch" };
   const drivers = await writeWaveDrivers({ packageDir: dir, manifest, sliceDir: path.join(dir, "slices"), reviewers: plan.roster });
   const requirements: number[] = [];
   let maxContext = Infinity;
   const payloads: Array<{ is_fix_round: boolean; skill_path: string; prior_findings?: unknown[]; metaproject: { graph: unknown };
-    review_context: { scope: { pinned_sources?: Array<{ path: string; attachment: string }> }; token_policy: { omissions: string[] } } }> = [];
+    review_context: { git: { base: string }; pr: { base: string }; scope: { pinned_sources?: Array<{ path: string; attachment: string }> }; token_policy: { omissions: string[] } } }> = [];
   for (const s of slices) writeFileSync(path.join(dir, "slices", s.path), "x".repeat(s.bytes));
   const run: PlanDeps["run"] = async args => {
     if (args[0] === "tier") {
@@ -89,6 +91,8 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   expect(queue.calls).toHaveLength(3);
   const fix = payloads.find(p => p.is_fix_round)!;
   expect(fix.skill_path).toBe(definition);
+  expect(fix.review_context.git.base).toBe("3".repeat(40));
+  expect(fix.review_context.pr.base).toBe(base);
   expect(fix.prior_findings).toEqual([{ round: 1, finding, claimed_disposition: "unreported" }]);
   expect(fix.metaproject.graph).toBeDefined();
   const source = fix.review_context.scope.pinned_sources?.find(file => file.path === "src/a.ts");
@@ -121,9 +125,66 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   expect(limited.calls).toHaveLength(1);
   expect(limited.blocked.map((item: { reason: string }) => item.reason)).toEqual(Array(2).fill("Excluded by the configured limit of 1 reviewer waves."));
   expect(tiers).toEqual(["light"]);
+  expect(limited.modelRouting).toMatchObject([{ tier: "light", tierReason: "Fixed routing uses the reviewer skill’s declared tier." }]);
   tiers.length = 0;
   await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, capture, { ...launch, adaptive: true });
   expect(tiers).toEqual(["standard"]); // repeated fix raises the small-scope tier
+  tiers.length = 0;
+  slices[2]!.risk = { score: 0.9, why: ["high-risk scope"] };
+  const mixed = await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, capture, { ...launch, adaptive: true, maxWaves: 3 });
+  expect([...tiers].sort()).toEqual(["deep", "light", "standard"]);
+  expect(JSON.parse(readFileSync(path.join(root, mixed), "utf8")).modelRouting).toEqual(expect.arrayContaining([
+    expect.objectContaining({ tier: "middle", slices: ["slice-01"] }),
+    expect.objectContaining({ tier: "light", slices: ["slice-02"] }),
+    expect.objectContaining({ tier: "strong", slices: ["slice-03"] }),
+  ]));
+
+
+  const selectModel: PlanDeps["run"] = async args => args[0] === "tier"
+    ? { stdout: JSON.stringify({ model: { ...model, provider: "primary", model: "review-model" } }), stderr: "", exitCode: 0 }
+    : { stdout: "", stderr: "", exitCode: 0 };
+  const pools = { ...launch, adaptive: true, maxWaves: 3, modelPools: {
+    middle: [{ provider: "primary", model: "review-model" }, { provider: "fallback", model: "review-model" }],
+    light: [], strong: [],
+  } };
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, pools);
+  const original = JSON.parse(readFileSync(path.join(root, queueFile), "utf8"));
+  mkdirSync(path.join(dir, "raw"), { recursive: true });
+  for (const route of original.modelRouting) {
+    const reply = `STATUS: DONE\nREVIEW_RESULT: ${JSON.stringify({ reviewer: role, status: "DONE", summary: "Checked", findings: [], slices: route.slices })}`;
+    const footer = formatRecordLine(undefined, {
+      incomplete: false, assignment: { key: route.assignmentKey, model: route.slices.includes("slice-01") ? "fallback/review-model" : "primary/review-model" },
+    });
+    writeFileSync(path.join(root, route.result), `${reply}\n${footer}\n`);
+  }
+  slices[2]!.depth = "deep";
+  record("slices/manifest.json", manifest);
+  const retained = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-01"));
+  const legacy = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-02"));
+  const reopened = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-03"));
+  writeFileSync(path.join(root, legacy.result), "An unverified legacy result");
+  const reopenedRaw = readFileSync(path.join(root, reopened.result), "utf8");
+  const reopenedFile = path.basename(reopened.result);
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, pools, [{
+    reviewer: role, result: `raw/${reopenedFile}`, wave: Number(reopenedFile.match(/-w(\d+)\.txt$/)?.[1]),
+    slices: ["slice-03"], paths: [path.join(dir, "slices", slices[2]!.path)], bytes: slices[2]!.bytes,
+    wavesLeft: 1, reason: "escalated", detail: "Slice reopened at deep review",
+    tier: "strong", tierReason: "High risk", modelClass: "expert",
+  }]);
+  const resumed = JSON.parse(readFileSync(path.join(root, queueFile), "utf8"));
+  expect(resumed.calls).toHaveLength(3);
+  expect(resumed.completedAssignments).toEqual([retained.result]);
+  expect(resumed.assignments).toEqual(original.assignments.filter((result: string) => result !== retained.result));
+  expect(resumed.modelRouting.find((route: { result: string }) => route.result === reopened.result).assignmentKey).not.toBe(reopened.assignmentKey);
+  expect(readFileSync(path.join(root, retained.result), "utf8")).toContain("fallback/review-model");
+  const archived = readdirSync(path.join(dir, "raw-history")).find(name => name.startsWith(reopenedFile.replace(".txt", "-")));
+  expect(archived).toBeDefined();
+  expect(readFileSync(path.join(dir, "raw-history", archived!), "utf8")).toBe(reopenedRaw);
+  const changedPools = { ...pools, modelPools: { ...pools.modelPools,
+    middle: [{ provider: "primary", model: "review-model" }, { provider: "different", model: "review-model" }],
+  } };
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, changedPools, []);
+  expect(JSON.parse(readFileSync(path.join(root, queueFile), "utf8")).completedAssignments).toEqual([]);
 
   maxContext = requirements[0]! - 1;
   const smaller = await prepareDesktopDispatch(root, plan, base, manifest, [drivers[0]!], prContext, run);
@@ -142,6 +203,19 @@ test("a 33-call plan uses original slice waves that the host admits and refuses 
   expect(new Set(passes).size).toBe(2);
   for (const pass of new Set(passes)) expect((await resolveReviewWave(root, { package: path.relative(root, dir), pass })).ok).toBe(true);
   expect(() => allocate(["slice-01"])).toThrow("admission limits");
+});
+
+test("Desktop admits 100 native passes and refuses opening another in the same plan", () => {
+  const slices = Array.from({ length: 101 }, (_, index) => slice(`slice-${index}`, 6000, "new"));
+  const allocate = desktopPassAllocator(manifestOf(slices));
+  const admitted = slices.slice(0, 100).map(entry => allocate([entry.id]));
+  expect(new Set(admitted).size).toBe(100);
+  expect(() => allocate([slices[100]!.id])).toThrow("admission limits");
+  expect(allocate([slices[0]!.id])).toBe(admitted[0]!);
+  const assignments = slices.map((entry, index) => ({ reviewer: "review-logic", wave: index + 1, slices: [entry.id] }));
+  expect(() => preflightDesktopPasses(manifestOf(slices), assignments)).toThrow("admission limits");
+  expect(() => preflightDesktopPasses(manifestOf(slices), assignments, 100)).not.toThrow();
+
 });
 
 test("scope B materializes unchanged callers at the reviewed head in the read-only child's context", async () => {

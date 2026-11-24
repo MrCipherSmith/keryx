@@ -27,6 +27,12 @@ export interface ReviewCheck {
   url: string | null;
 }
 
+export interface ReviewFile {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
 export interface LinkedFlowContext {
   id: string;
   title: string;
@@ -45,6 +51,9 @@ export interface ReviewDetailSnapshot {
   fetchedAt: string;
   headSha: string;
   description?: string;
+  /** Public GitHub file list for the current PR head; false when GitHub returned only a partial list. */
+  files?: ReviewFile[];
+  filesComplete?: boolean;
   comments: ReviewMessage[];
   reviews: SubmittedReview[];
   threads: ReviewThread[];

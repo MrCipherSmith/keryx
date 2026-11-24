@@ -6,6 +6,7 @@ import { notReviewPackagesAt } from "./round-record";
 import { asRecord } from "./record";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers, overlapGroupsOf, type ReviewerInventory } from "./reviewers";
+import { isTestFilePath } from "./jev-risk";
 import { CORE_MANDATORY_REVIEWER_IDS } from "./jev-select";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { isAttendedRun, operatorGateApplies, runProfileRefusal } from "./run-profile";
@@ -102,8 +103,8 @@ export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
   "review-flow-graph": (f) => /(^|\/)(src\/core\/flow|src\/graph|src\/shared\/flow)\//.test(f),
   "review-testing-practices": (f) => TEST_FILE.test(f) || /\.msw\.ts$/.test(f),
   "review-frontend-conventions": (f) => FRONTEND_EXT.test(f) || /\.stories\.tsx$/.test(f) || CODE_FILE.test(f),
-  "review-layout": (f) => /\.(tsx|jsx|css|scss)$/.test(f),
-  "review-ui-ux": (f) => /\.(tsx|jsx|vue|svelte|html|css|scss)$/.test(f),
+  "review-layout": (f) => !isTestFilePath(f) && /\.(tsx|jsx|css|scss)$/.test(f),
+  "review-ui-ux": (f) => !isTestFilePath(f) && /\.(tsx|jsx|vue|svelte|html|css|scss)$/.test(f),
 };
 
 /**

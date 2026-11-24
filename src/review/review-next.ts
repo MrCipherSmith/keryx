@@ -1,3 +1,6 @@
+import { isModelTier } from "../gdskills/model-tier";
+import { reviewAssignmentTier } from "./assignment-tier";
+import { readRoundNumber } from "./round-record";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -42,6 +45,9 @@ export type NextDispatch = {
   detail: string;
   /** The model recorded for this reviewer (a driver or an earlier reply), echoed so the dispatcher keeps it. */
   model?: string;
+  tier: ReturnType<typeof reviewAssignmentTier>["tier"];
+  tierReason: string;
+  modelClass: ReturnType<typeof reviewAssignmentTier>["modelClass"];
   /** Where the reply is to be saved: the driver's `result`, else `raw/<reviewer>-w<wave>.txt`. */
   result: string;
   driver?: string;
@@ -122,6 +128,7 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
   const statePath = path.join(sliceDir, "retry-state.json");
   let state: RetryState = existsSync(statePath) ? normalizeRetryState(JSON.parse(await readFile(statePath, "utf8"))) : emptyRetryState();
   const driverFiles = await readDriverFiles(packageDir);
+  const round = readRoundNumber(packageDir) ?? 1;
   const driverOf = new Map<string, { reviewer: string; wave?: number | undefined }>();
   for (const driver of driverFiles) if (driver.result !== undefined) driverOf.set(path.basename(driver.result), { reviewer: driver.reviewer, wave: driver.wave });
   let fingerprint: string | undefined;
@@ -196,7 +203,7 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
         : FINISHED.has(status) && plan.decision === "wave" && refused.length === 0 ? "missing"
         : "retry";
       added.push(...plan.newSlices);
-      const dispatch = describeDispatch({ reviewer, plan, reason, reply, sliceDir, driverFiles, manifest });
+      const dispatch = describeDispatch({ reviewer, plan, reason, reply, sliceDir, driverFiles, round });
       if (refused.length > 0 && usable.length === 0) dispatch.detail = `${refused.map((entry) => entry.name).join(", ")} rejected (no "slices" list); ${dispatch.detail}`;
       dispatches.push(dispatch);
     } catch (error) {
@@ -214,7 +221,7 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
     await writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
     for (const dispatch of dispatches) if (dispatch.needsApply === true) delete dispatch.needsApply;
   }
-  const planAuthorized = await planAuthorization(packageDir, manifest);
+  const planAuthorized = await planAuthorization(packageDir, manifest, input.apply === true);
   return {
     done: dispatches.length === 0 && blocked.length === 0,
     package: packageDir,
@@ -229,15 +236,15 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
   };
 }
 
-async function planAuthorization(packageDir: string, manifest: SliceManifest): Promise<boolean | null> {
+async function planAuthorization(packageDir: string, manifest: SliceManifest, autoAuthorize: boolean): Promise<boolean | null> {
   try {
-    return (await packagePlanGate(packageDir, { manifestValue: manifest })).refusal === undefined;
+    return (await packagePlanGate(packageDir, { manifestValue: manifest, autoAuthorize })).refusal === undefined;
   } catch {
     return null;
   }
 }
 
-type DriverView = { reviewer: string; file: string; wave?: number; slices: string[]; result?: string; model?: string };
+type DriverView = { reviewer: string; file: string; wave?: number; slices: string[]; result?: string; model?: string; declaredTier?: Parameters<typeof reviewAssignmentTier>[0]["declared"] };
 
 async function readDriverFiles(packageDir: string): Promise<DriverView[]> {
   const dir = path.join(packageDir, DRIVERS_DIR);
@@ -255,6 +262,7 @@ async function readDriverFiles(packageDir: string): Promise<DriverView[]> {
       slices,
       ...(typeof driver.result === "string" ? { result: driver.result } : {}),
       ...(typeof driver.model === "string" && driver.model.trim() !== "" ? { model: driver.model.trim() } : {}),
+      ...(isModelTier(driver.declaredTier) && { declaredTier: driver.declaredTier }),
     });
   }
   return out;
@@ -269,9 +277,9 @@ function describeDispatch(input: {
   reply: Reply | undefined;
   sliceDir: string;
   driverFiles: readonly DriverView[];
-  manifest: SliceManifest;
+  round: number;
 }): NextDispatch {
-  const { reviewer, plan, reason, reply, sliceDir, driverFiles } = input;
+  const { reviewer, plan, reason, reply, sliceDir, driverFiles, round } = input;
   const ids = plan.wave.map((entry) => entry.id);
   const mine = driverFiles.filter((driver) => driver.reviewer === reviewer);
   const matching = mine.find((driver) => ids.length > 0 && ids.every((id) => driver.slices.includes(id)));
@@ -286,6 +294,7 @@ function describeDispatch(input: {
     bytes: plan.wave.reduce((total, entry) => total + entry.bytes, 0),
     reason,
     detail: plan.reason,
+    ...reviewAssignmentTier({ reviewer, slices: plan.wave, declared: matching?.declaredTier ?? mine[0]?.declaredTier, round }),
     ...(model === undefined ? {} : { model }),
     result: matching?.result ?? `${RAW_DIR}/${reviewer}-w${wave}.txt`,
     ...(matching === undefined ? {} : { driver: matching.file }),
@@ -308,7 +317,7 @@ export function renderNext(result: NextResult, relativeTo: string = process.cwd(
   }
   if (result.continue) lines.push(CONTINUE_LINE);
   for (const entry of result.dispatches) {
-    lines.push(`- ${entry.reviewer} wave ${entry.wave} (${entry.wavesLeft} left) [${entry.reason}] ${entry.slices.join(", ")} (${entry.bytes} bytes) model: ${entry.model ?? "model not recorded"}`);
+    lines.push(`- ${entry.reviewer} wave ${entry.wave} (${entry.wavesLeft} left) [${entry.reason}] ${entry.slices.join(", ")} (${entry.bytes} bytes) model: ${entry.model ?? "model not recorded"} · ${entry.tier} tier (${entry.modelClass}): ${entry.tierReason}`);
     lines.push(`    result: ${entry.result}${entry.driver === undefined ? "" : `  driver: ${entry.driver}`}`);
     lines.push(`    ${entry.detail}`);
     for (const question of entry.needsContext ?? []) lines.push(`    context: ${question}`);

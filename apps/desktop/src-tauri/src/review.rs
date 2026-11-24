@@ -335,13 +335,21 @@ pub struct RunTarget {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum RunAction {
-    Status { id: Option<String>, #[serde(rename = "activityId")] activity_id: Option<String> },
+    Status {
+        id: Option<String>,
+        #[serde(rename = "activityId")]
+        activity_id: Option<String>,
+        #[serde(rename = "activityBefore")]
+        activity_before: Option<u64>,
+    },
     Start {
         #[serde(rename = "baseSha")]
         base_sha: String,
         #[serde(rename = "headSha")]
         head_sha: String,
         options: Option<Value>,
+        #[serde(rename = "sessionId")]
+        session_id: Option<String>,
     },
     Cancel { id: String },
     Continue { id: String, guidance: Option<String> },
@@ -365,10 +373,17 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
     let mut payload_arg = None;
     let mut waiver_arg = None;
     let (operation, extra) = match action {
-        RunAction::Status { id: Some(_), activity_id: Some(_) } => return Err("Choose one Review attempt scope.".into()),
-        RunAction::Status { id, activity_id } => ("status", id.into_iter().map(|id| ("--id", id))
-            .chain(activity_id.into_iter().map(|id| ("--activity-id", id))).collect()),
-        RunAction::Start { base_sha, head_sha, options } => {
+        RunAction::Status { id: Some(_), activity_id: Some(_), .. } => return Err("Choose one Review attempt scope.".into()),
+        RunAction::Status { id, activity_id, activity_before } => {
+            if activity_before.is_some_and(|cursor| activity_id.is_none() || cursor == 0 || cursor > 9_007_199_254_740_991) {
+                return Err("configuration: Invalid review activity cursor.".into());
+            }
+            ("status", id.into_iter().map(|id| ("--id", id))
+                .chain(activity_id.into_iter().map(|id| ("--activity-id", id)))
+                .chain(activity_before.into_iter().map(|cursor| ("--activity-before", cursor.to_string())))
+                .collect())
+        },
+        RunAction::Start { base_sha, head_sha, options, session_id } => {
             if let Some(options) = options {
                 let json = options.to_string();
                 if !options.is_object() || json.len() > 8192 {
@@ -376,7 +391,17 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
                 }
                 payload_arg = Some(format!("--options={json}"));
             }
-            ("start", vec![("--base", base_sha), ("--head", head_sha)])
+            let mut fields = vec![("--base", base_sha), ("--head", head_sha)];
+            if let Some(id) = session_id {
+                if id.len() != 36 || !id.bytes().enumerate().all(|(i, b)| match i {
+                    8 | 13 | 18 | 23 => b == b'-',
+                    _ => b.is_ascii_hexdigit(),
+                }) {
+                    return Err("configuration: Invalid review session.".into());
+                }
+                fields.push(("--session-id", id));
+            }
+            ("start", fields)
         },
         RunAction::Continue { id, guidance } => {
             if let Some(text) = guidance {
@@ -776,16 +801,18 @@ mod tests {
         let target = || RunTarget {
             repo: "org/r".into(), repository_id: "R_42".into(), viewer: "me".into(), number: 4,
         };
-        let start = RunAction::Start { base_sha: "b".repeat(40), head_sha: "c".repeat(40), options: None };
+        let start = RunAction::Start { base_sha: "b".repeat(40), head_sha: "c".repeat(40), options: None, session_id: None };
         let args = run_args(target(), start).unwrap();
         assert_eq!(&args[..5], ["review", "desk-run", "start", "--json", "--repo"]);
         assert_eq!(&args[12..], ["--base", &"b".repeat(40), "--head", &"c".repeat(40)]);
         let configured = RunAction::Start {
             base_sha: "a".repeat(40),
             head_sha: "b".repeat(40),
+            session_id: Some("4b877578-9c04-422c-84eb-35adc7cc6f80".into()),
             options: Some(serde_json::json!({ "mode": "auto", "adaptive": true })),
         };
         let args = run_args(target(), configured).unwrap();
+        assert!(args.windows(2).any(|pair| pair == ["--session-id", "4b877578-9c04-422c-84eb-35adc7cc6f80"]));
         let payload = args.last().unwrap().strip_prefix("--options=").unwrap();
         let decoded: Value = serde_json::from_str(payload).unwrap();
         assert_eq!(decoded["mode"], "auto");
@@ -798,9 +825,14 @@ mod tests {
         assert!(run_args(target(), RunAction::Cancel { id: "--worker".into() }).is_err());
         let answer = RunAction::Answer { id: "run".into(), question_id: "q".into(), answer: "--continue with this".into() };
         assert_eq!(&run_args(target(), answer).unwrap()[12..], ["--id", "run", "--question-id", "q", "--answer=--continue with this"]);
+        let older = serde_json::from_str::<RunAction>(r#"{"kind":"status","activityId":"attempt","activityBefore":512}"#).unwrap();
+        let args = run_args(target(), older).unwrap();
+        assert_eq!(&args[12..], ["--activity-id", "attempt", "--activity-before", "512"]);
+        let unscoped = RunAction::Status { id: None, activity_id: None, activity_before: Some(512) };
+        assert!(run_args(target(), unscoped).is_err());
         let mut invalid = target();
         invalid.number = 0;
-        assert!(run_args(invalid, RunAction::Status { id: None, activity_id: None }).is_err());
+        assert!(run_args(invalid, RunAction::Status { id: None, activity_id: None, activity_before: None }).is_err());
     }
 
     #[test]

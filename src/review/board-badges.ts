@@ -15,6 +15,8 @@ export const sameRange = (a: DeskRevision | null, b: DeskRevision) => a?.baseSha
 export const runFinished = (run: Pick<DeskRun, "state">) => run.state === "completed" || run.state === "partial" || run.state === "budget";
 
 type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
+  id?: string;
+  sessionId?: string | null;
   decision?: DeskRun["decision"];
   result: { reviewed: DeskRevision | null } | null;
   reviewerProgress?: LocalBadge["progress"];
@@ -43,7 +45,9 @@ export function localBadge(runs: readonly BadgeRun[], revision: DeskRevision): L
   const stale = latest || ready ? undefined : runs.find(run => runFinished(run) && !!run.result?.reviewed);
   const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state,
     ...(typeof stale.round === "number" && { round: stale.round }) } : undefined;
+  const bound = latest ?? stale;
   return {
+    ...(bound?.sessionId && bound.id && { sessionId: bound.sessionId, runId: bound.id }),
     active: !!current,
     ready,
     ...(latest ? { runState: same ? latest.state : "other-revision" } : {}),

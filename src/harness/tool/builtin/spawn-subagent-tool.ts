@@ -26,15 +26,15 @@ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tool
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
 import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
-import { matchesDesktopReviewerDispatch, preparedDesktopReviewer, ReviewerActivity, reviewerDeadline, type ReviewerActivityEvent } from "./reviewer-activity";
+import { desktopReviewerDispatchRoute, preparedDesktopReviewer, ReviewerActivity, reviewerDeadline, type ReviewerActivityEvent } from "./reviewer-activity";
 import type { AskReviewerContext } from "../../../review/desk-reviewer-question";
 import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
-import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
+import { REVIEW_TURN_MAX_WAVES } from "../../../review/wave-limits";
 import { describeReviewWave, resolveReviewWave, REVIEW_WAVE_MAX_CHILDREN } from "../../../review/wave-key";
-import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
+import { type DispatchUsage, type HostAssignmentReceipt, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
@@ -354,6 +354,7 @@ async function writeRecordFile(abs: string, text: string): Promise<string | unde
 /** What one dispatch leaves at `save_result_to`: its text (empty when it wrote none) and its usage, when measured. */
 export type DispatchRecord = {
   text: string;
+  assignment?: HostAssignmentReceipt | undefined;
   /** True only for a child that completed with text: its record replaces whatever is at the path. */
   final: boolean;
   usage?: DispatchUsage | undefined;
@@ -401,13 +402,13 @@ async function saveDispatchRecordNow(abs: string, record: DispatchRecord): Promi
   const existing = await readFile(abs, "utf8").catch(() => undefined);
   const prior = existing === undefined ? undefined : splitUsage(existing);
   const body = splitUsage(record.text).body.trim();
-  const ownLine = formatRecordLine(record.usage, { incomplete: !record.final });
+  const ownLine = formatRecordLine(record.usage, { incomplete: !record.final, assignment: record.final ? record.assignment : undefined });
   const priorHasReply = prior !== undefined && !isEmptyBody(prior.body);
   const priorComplete = priorHasReply && prior.incomplete !== true;
   if (prior !== undefined && priorHasReply && !record.final && (priorComplete || isEmptyBody(body))) {
     // The earlier reply stays the file's, under its own line; this dispatch joins the others.
     const others = [...(prior.others ?? []), record.usage].map(formatOtherUsageLine);
-    const priorLine = formatRecordLine(prior.usage, { incomplete: !priorComplete });
+    const priorLine = formatRecordLine(prior.usage, { incomplete: !priorComplete, assignment: prior.assignment });
     const before = await stat(abs).catch(() => undefined);
     const error = await writeRecordFile(abs, [prior.body, ...others, ...(priorLine === undefined ? [] : [priorLine])].join("\n"));
     if (error !== undefined) return { error };
@@ -465,8 +466,8 @@ export const SUBAGENT_TURN_MAX_CHILDREN = 32;
  */
 export const SUBAGENT_WAVE_MAX_CHILDREN = REVIEW_WAVE_MAX_CHILDREN;
 
-/** Waves one parent turn may open: the chunk plan's own pass bound, so waves x 32 stays finite. */
-export const SUBAGENT_TURN_MAX_WAVES = DEFAULT_MAX_PASSES;
+/** Native review waves one parent turn may open. */
+export const SUBAGENT_TURN_MAX_WAVES = REVIEW_TURN_MAX_WAVES;
 
 const SUBAGENT_LEDGER_CAPS = {
   maxChildren: SUBAGENT_TURN_MAX_CHILDREN,
@@ -1527,8 +1528,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
       // The Desktop host supplies routingProjectRoot at launch. A model's expected_model
       // and review_wave fields alone never select another routing category.
-      const desktopReviewer = deps.routingProjectRoot !== undefined && waveKey !== undefined &&
-        await matchesDesktopReviewerDispatch(deps.cwd, saveTarget.abs, input);
+      const desktopRoute = deps.routingProjectRoot !== undefined && waveKey !== undefined
+        ? await desktopReviewerDispatchRoute(deps.cwd, saveTarget.abs, input) : undefined;
+      const desktopReviewer = desktopRoute !== undefined;
       if (deps.preparedReviewOnly && !desktopReviewer) {
         return { status: "Denied", isError: true, output: "The prepared reviewer assignment changed or its review wave is no longer active. Refresh the plan." };
       }
@@ -1547,10 +1549,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // member of the operator's per-run pools. Routing still verifies policy and live capability.
         const provider = expected && typeof expected === "object" ? Reflect.get(expected, "provider") : undefined;
         const model = expected && typeof expected === "object" ? Reflect.get(expected, "model") : undefined;
-        const pools = options && Object.values(options.modelPools).filter(pool =>
-          pool.some(candidate => candidate.provider === provider && candidate.model === model),
-        );
-        const configured = pools?.[0]?.find(candidate => candidate.provider === provider && candidate.model === model);
+        const candidateMatches = (candidate: { provider: string; model: string }) =>
+          candidate.provider === provider && candidate.model === model;
+        // A prepared tier identifies exactly one pool even when it shares a model with a different tier.
+        const pools = options && (desktopRoute?.tier
+          ? [options.modelPools[desktopRoute.tier]]
+          : Object.values(options.modelPools).filter(pool => pool.some(candidateMatches)));
+        const configured = pools?.[0]?.find(candidateMatches);
         if (configured) {
           deskOverride = { providerId: configured.provider, modelId: configured.model };
           deskAlternatives = (pools?.[0] ?? []).filter(candidate => candidate !== configured &&
@@ -2352,7 +2357,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       /** Save this dispatch's record at `save_result_to` (saveDispatchRecord), when the parent asked for one. */
       const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> => {
         if (saveTarget.abs === undefined) return undefined;
-        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
+        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options),
+          ...(desktopRoute?.assignmentKey && { assignment: { key: desktopRoute.assignmentKey, model: `${runModel.provider}/${runModel.model}` } }) });
         recordSaved = true;
         return saved;
       };

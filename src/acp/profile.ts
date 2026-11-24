@@ -7,6 +7,7 @@
 // Pure: importing this reads nothing and spawns nothing.
 
 import { PREPARE_REVIEW_METHOD } from "./review-draft";
+import { SESSION_REVIEW_REQUEST_METHOD, SESSION_REVIEWS_METHOD } from "./session-reviews-contract";
 import { PERMISSION_MODES, type PermissionMode } from "../commands/permission-mode";
 import type { AcpSessionMode, AcpSessionModeState } from "./protocol";
 
@@ -163,7 +164,7 @@ export function keryxAcpProfileMeta(profile: AcpProfile, prepareReview = false):
   return {
     profile,
     profiles: [...ACP_PROFILES],
-    extensions: [...acpProfileExtensions(profile), ...(profile === "shell" && prepareReview ? [PREPARE_REVIEW_METHOD] : [])],
+    extensions: [...acpProfileExtensions(profile), ...(profile === "shell" && prepareReview ? [PREPARE_REVIEW_METHOD, SESSION_REVIEWS_METHOD, SESSION_REVIEW_REQUEST_METHOD] : [])],
     ...(profile === "shell" ? { liveSessions: true as const, issuePreparation: true as const, minDesktopVersion: MIN_DESKTOP_VERSION } : {}),
   };
 }

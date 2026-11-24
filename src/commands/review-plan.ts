@@ -4,11 +4,11 @@
 // on their own); only the plan's own reading of their results lives here.
 
 import { existsSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { estimatePackage, planConfirmed, type RoundEstimate, CONFIRM_PLAN_TOOL } from "../review/estimate";
+import { autoConfirmPlan, estimatePackage, planConfirmed, readPlanConfirmation, type RoundEstimate, CONFIRM_PLAN_TOOL } from "../review/estimate";
 import { readPriorFindings, readRoundRecord, renderRoundLine, type RoundRecord } from "../review/round-record";
 import { isDeltaRound } from "../review/round-split";
 import type { SliceEntry, SliceManifest } from "../review/slice";
@@ -18,6 +18,8 @@ import { REVIEW_HOSTS } from "../review/host-profile";
 import { requiredSlices } from "../review/waves";
 import { writeWaveDrivers } from "../review/wave-drivers";
 import { isReviewPackageDir, reviewsRoot } from "../review/package-location";
+import { reviewNext } from "../review/review-next";
+import { readPrContext } from "../review/context-collect";
 import type { ManagedReviewManifest } from "../review/types";
 
 export const PLAN_FILE = "plan.json";
@@ -122,6 +124,47 @@ export function renderPlanSummary(plan: ReviewPlan): string {
   return lines.join("\n");
 }
 
+/** Resume from persisted evidence: never recreate the round, scope, slices or prior results. */
+async function resumeDesktopPlan(input: { dir: string; cwd: string; target: string; base: string; head: string;
+  options: NonNullable<ReturnType<typeof deskReviewOptions>> | undefined; deps: PlanDeps; json: boolean }): Promise<void> {
+  const { dir, cwd, target, base, head, options, deps } = input;
+  const prior = JSON.parse(await readFile(path.join(dir, PLAN_FILE), "utf8")) as ReviewPlan;
+  if (prior.v !== 1 || prior.target?.ref !== target || prior.target.base !== base || prior.target.head !== head || !prior.round) {
+    throw new Error("The saved review plan does not match the pinned pull request.");
+  }
+  const queueExists = existsSync(path.join(dir, "desktop-dispatch.json"));
+  const next = await reviewNext({ packageDir: dir, apply: true });
+  const manifestPath = path.join(dir, "slices", "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as SliceManifest;
+  const estimate = await estimatePackage(dir);
+  const roleNames = estimate.perRole.map(entry => entry.role);
+  const driverDir = path.join(dir, "drivers");
+  const existingDrivers = (await readdir(driverDir).catch(() => [])).filter(name => /-w\d+\.json$/.test(name));
+  if (!existingDrivers.length) {
+    const raws = await readdir(path.join(dir, "raw")).catch(() => []);
+    if (raws.some(name => name.endsWith(".txt"))) throw new Error("Cannot resume a review with raw results but no original drivers; preserve the original package and repair its drivers.");
+  }
+  // Rebuild drivers only after next reconciled the original evidence; the previous queue remains available for exact reuse.
+  const drivers = await writeWaveDrivers({ packageDir: dir, manifest, sliceDir: path.dirname(manifestPath), reviewers: roleNames });
+  const warnings = [...(prior.warnings ?? []), ...next.blocked.map(item => `${item.reviewer}: ${item.message}`),
+    ...next.notRun.map(item => `${item.reviewer}: ${item.reason}`)];
+  const confirmed = planConfirmed(dir, estimate);
+  const plan: ReviewPlan = { ...prior, ...(options ? { launchOptions: options } : {}), package: dir,
+    slices: slicesByKind(manifest), roster: roleNames, dispatches: estimate.dispatches, minutes: estimate.minutes,
+    ...(estimate.split ? { split: estimate.split } : {}), overThreshold: estimate.overThreshold,
+    overReasons: estimate.overReasons, planKey: estimate.planKey, warnings, next: nextStepOf(estimate, confirmed) };
+  delete plan.desktopDispatch;
+  await writeFileAtomic(path.join(dir, PLAN_FILE), `${JSON.stringify(plan, null, 2)}\n`);
+  if (plan.next === "dispatch") {
+    const context = await readPrContext(dir) ?? await collectDesktopPlanContext(target, head, dir, deps.run);
+    if (context.headSha !== head) throw new Error("The preserved PR context does not match the pinned head.");
+    plan.desktopDispatch = await prepareDesktopDispatch(cwd, plan, base, manifest, drivers, context, deps.run, options,
+      queueExists ? next.dispatches : undefined);
+    await writeFileAtomic(path.join(dir, PLAN_FILE), `${JSON.stringify(plan, null, 2)}\n`);
+  }
+  console.log(input.json ? JSON.stringify(plan, null, 2) : renderPlanSummary(plan));
+}
+
 export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     printPlanHelp();
@@ -141,12 +184,14 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
 
   const desktopMode = process.env[DESK_REVIEW_SHELL] === "1" && host === "keryx-shell" && kind === "pr" && head && base;
   const resumeId = desktopMode ? process.env[DESK_REVIEW_RESUME_PACKAGE] : undefined;
-  if (resumeId) {
+  if (resumeId && base && head) {
     const dir = path.join(reviewsRoot(cwd), resumeId);
     if (!/^[\w.-]+$/.test(resumeId) || !isReviewPackageDir(dir, cwd)) throw new Error("The preserved review package is unavailable.");
     const saved = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as ManagedReviewManifest;
     if (saved.reviewId !== resumeId || saved.status !== "draft" || saved.target?.ref !== target ||
         saved.target.base !== base || saved.target.head !== head) throw new Error("The preserved review package is for a different revision.");
+    await resumeDesktopPlan({ dir, cwd, target, base, head, options: deskOptions, deps, json: args.includes("--json") });
+    return;
   }
 
   // 1. start: finds the previous round and writes round.json beside the package.
@@ -175,8 +220,8 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const delta = isDeltaRound(round) ? round : undefined;
   warnings.push(...(round?.warnings ?? []));
   if (round?.weakPrevious !== undefined) warnings.push(round.weakPrevious);
-  // A delta round is cut over the previous reviewed head; a first round over --ref, else the base start recorded.
-  const baseRef = delta !== undefined ? delta.range.base! : base ?? round?.range.base ?? undefined;
+  // Use the round’s resolved comparison base: the target base remains recorded separately for identity.
+  const baseRef = round?.range.base ?? base;
 
   // 2. scope: the changed files of the round, recorded as scope-files.json (what required and estimate read).
   const scoped = await deps.run(["scope", "--json", ...(baseRef === undefined ? [] : ["--ref", baseRef, ...(head === undefined ? [] : ["--head", head])])]);
@@ -237,13 +282,14 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const plannedRoles = estimate.perRole.map(entry => entry.role);
   const drivers = await writeWaveDrivers({ packageDir, manifest, sliceDir: path.dirname(manifestPath), reviewers: plannedRoles });
   if (drivers.length !== estimate.dispatches) warnings.push(`${drivers.length} driver(s) written for ${estimate.dispatches} planned dispatch(es); re-run \`keryx review slice --package ${packageDir}\``);
-  const confirmed = planConfirmed(packageDir, estimate);
+  const confirmed = planConfirmed(packageDir, estimate) || (!desktopMode && await autoConfirmPlan(packageDir, estimate, "project-auto"));
+  if (confirmed && readPlanConfirmation(packageDir)?.confirmedVia === "auto-policy") warnings.push("Plan automatically authorized by the bounded review policy; see plan-confirmation.json.");
   const byKind = slicesByKind(manifest);
   const plan: ReviewPlan = {
     v: 1,
     ...(launchOptions ? { launchOptions } : {}),
     package: packageDir,
-    target: { kind, ref: target, base: baseRef ?? null, head: round?.range.head ?? head ?? null },
+    target: { kind, ref: target, base: base ?? baseRef ?? null, head: round?.range.head ?? head ?? null },
     round: {
       number: round?.round ?? 1,
       mode: round?.mode ?? "first",

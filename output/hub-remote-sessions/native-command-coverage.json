@@ -3775,7 +3775,7 @@
         },
         {
           "path": "src/harness/tool/builtin/background-job-registry.ts",
-          "sha256": "a833b3645e0bbda73245c444edd52e090052fd914aa73817805cf7a7f4270a6b",
+          "sha256": "8a10caa554dda618a423705225d423f952da6a2083bc1400e297c9f943dbd243",
           "anchor": "line:1"
         },
         {
@@ -13009,7 +13009,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e32f92377d34730b71a32a6620d2eac5fbc8001c62f583834596e8c02db5e071"
+      "receiptDigest": "5c100bc4abf44c031af48d1d1488f20ef5cf69c9a1ed9808efced9fb9d5ed413"
     },
     {
       "variantId": "setup.init",
@@ -13017,7 +13017,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5e7671cec82cdf027537d30edb39248130c0a011bcacdde8d4563a7bb11440d5"
+      "receiptDigest": "2ec82df7ef5efc676fb97e24c0ab51c8a1245d5afac07e04fafcd360fc8cafa9"
     },
     {
       "variantId": "setup.refresh",
@@ -13025,7 +13025,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "4b64c7d14d340c2aa9ffc905ca683aa922dfb59c543547f523bc1c44c46b2f11"
+      "receiptDigest": "6fb1abcea87969ec1dbc4221512cedc9521a999a5fedaf9a468ffdf0aac9a7ef"
     },
     {
       "variantId": "setup.repair",
@@ -13033,7 +13033,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "238fe8d2a7b29276a7ae4f6eeafd58702b894040689f65dd14456752e536ec8f"
+      "receiptDigest": "6312a007e14eb1a5925fce2cd6a9e9d76dc03d2f5dd63425ed8de66d26435295"
     },
     {
       "variantId": "ac.cached",
@@ -13217,7 +13217,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "725793695987b503a82b45b76a8b49eaaa5b7d2b98e58ec17a50d82c9e98b445"
+      "receiptDigest": "3755dce56d6766cb8ad2c4c1f4a005ab34f5d90b3a0fbd8621439fb7b93abfae"
     },
     {
       "variantId": "intake.list",
@@ -13225,7 +13225,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "b986fe930d4b2a1a82de645b0604a58df837ae25307bed4adcf7aa566f63a38e"
+      "receiptDigest": "dbb90609ed379f13e3e2cb194192c9a22ea3570292c35527f70c97c34b333b21"
     },
     {
       "variantId": "intake.pause",
@@ -14361,7 +14361,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "4c62f8ecef577a721bc9650120fb1461b189df446fcd408ce7d985189a92212b"
+      "receiptDigest": "37761fab6c92a9e4fc647b6281bfcf92e747e6c0756520c990826da14b143f0f"
     },
     {
       "variantId": "bus.modal",
@@ -14369,7 +14369,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8a3c3edd1c76920c4452b1a65883c85911d3a06eee330915605c4555596ca931"
+      "receiptDigest": "10d1fbda606b984b58d7f9334eca0cbded62857641aced0bb575658fe3303e5a"
     },
     {
       "variantId": "bus.-name-text",

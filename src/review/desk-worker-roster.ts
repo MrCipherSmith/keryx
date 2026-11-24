@@ -14,7 +14,7 @@ function planVersion(root: string, packageId?: string) {
     const candidate = path.join(root, dir);
     try {
       if (realpathSync(candidate) !== candidate) return null;
-      return ["manifest.json", "desktop-dispatch.json", "plan.json"].map(file => manifestStamp(path.join(candidate, file)));
+      return ["manifest.json", "desktop-dispatch.json", "plan.json", "scope-files.json"].map(file => manifestStamp(path.join(candidate, file)));
     } catch { return null; }
   });
 }

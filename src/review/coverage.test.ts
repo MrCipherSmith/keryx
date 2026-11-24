@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, widestDiff } from "./coverage";
+import { BUNDLED_PATH_GATES, coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, widestDiff } from "./coverage";
 import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 
 let root: string;
@@ -37,6 +37,15 @@ afterEach(async () => {
 });
 
 const frontendFiles = ["src/app/page.tsx", "src/app/page.store.ts"];
+
+test("integration test markup does not request a visual review of production UI", () => {
+  const testFile = "src/workspace/workspace-routing.integration.test.tsx";
+  for (const role of ["review-layout", "review-ui-ux"]) {
+    expect(BUNDLED_PATH_GATES[role]!(testFile)).toBe(false);
+    expect(BUNDLED_PATH_GATES[role]!("src/workspace/Workspace.tsx")).toBe(true);
+  }
+  expect(BUNDLED_PATH_GATES["review-testing-practices"]!(testFile)).toBe(true);
+});
 
 describe("derivedFromFiles", () => {
   test("frontend files pick logic, frontend and style, plus the convention, layout and ui-ux gates", () => {

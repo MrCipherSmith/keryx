@@ -1071,6 +1071,36 @@ test("native Desktop tier tries the ordered pool and records a verified per-run 
   }
 });
 
+test("all three Desktop tiers authorize their configured provider and model pairs", async () => {
+  const pools = {
+    light: [{ provider: "ollama", model: "llama3.2" }],
+    middle: [{ provider: "openai", model: "gpt-4.1" }],
+    strong: [{ provider: "anthropic", model: "claude-sonnet-4-5" }],
+  };
+  const env = {
+    KERYX_DESK_REVIEW_SHELL: "1", KERYX_DESK_REVIEW_PROJECT_ROOT: ROOT,
+    OPENAI_API_KEY: "fixture", ANTHROPIC_API_KEY: "fixture",
+    KERYX_DESK_REVIEW_OPTIONS: JSON.stringify({ mode: "manual", adaptive: false, modelPools: pools }),
+  };
+  const saved = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, env);
+    const catalog = Object.values(pools).flat().map(({ provider, model }) => ({ name: provider, models: [model] }));
+    for (const { name, models } of catalog) await setModelProfileField(name, models[0]!, { field: "contextLength", value: 100_000 });
+    await writeFile(path.join(ROOT, "all-tiers.json"), JSON.stringify(catalog), "utf8");
+    for (const [tier, expected] of [["light", pools.light[0]], ["standard", pools.middle[0]], ["deep", pools.strong[0]]] as const) {
+      logs.length = 0;
+      await reviewCommand(["tier", "--session-provider", "ollama", "--session-model", "llama3.2", "--catalog", "all-tiers.json", "--desk-tier", tier, "--json"]);
+      expect(modelBlock()).toMatchObject({ tier, ...expected });
+    }
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("the routing review category is the canonical selection, not the relative tier", async () => {
   await configureUserRouting({
     schemaVersion: 2,

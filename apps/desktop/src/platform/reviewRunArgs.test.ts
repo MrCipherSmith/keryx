@@ -35,3 +35,13 @@ test("a launch configuration travels as one JSON argument", () => {
   expect(reviewRunArgs(target, action).at(-1)).toBe("--options=" + JSON.stringify(options));
   expect(() => reviewRunArgs(target, { ...action, options: [] })).toThrow();
 });
+
+
+test("browser bridge forwards an activity cursor only for scoped status", () => {
+  expect(reviewRunArgs(target, { kind: "status", activityId: "attempt", activityBefore: 512 }).slice(-4))
+    .toEqual(["--activity-id", "attempt", "--activity-before", "512"]);
+  for (const activityBefore of [0, -1, 1.5, "512", Number.MAX_SAFE_INTEGER + 1]) {
+    expect(() => reviewRunArgs(target, { kind: "status", activityId: "attempt", activityBefore })).toThrow();
+  }
+  expect(() => reviewRunArgs(target, { kind: "status", activityBefore: 512 })).toThrow();
+});

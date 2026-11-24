@@ -11,13 +11,42 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T12:20:33.826Z",
+  "updatedAt": "2026-11-24T20:32:56.859Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:2980da572a248e1c25f5607a3725d25442f5ccfd36c89be8f902397dd81b3272",
-  "acConfirmed": {},
+  "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd",
+  "acConfirmed": {
+    "AC8": {
+      "at": "2026-11-24T20:32:53.070Z",
+      "note": "Hosting and effective bases recorded separately. Three files and line counts match the pinned GitHub diff."
+    },
+    "AC9": {
+      "at": "2026-11-24T20:32:53.807Z",
+      "note": "Two launch paths restored the same session for their own attempt, including follow-up after restart."
+    },
+    "AC10": {
+      "at": "2026-11-24T20:32:54.532Z",
+      "note": "Verified target, changed-file totals, selected checks and current progress in the running desktop UI."
+    },
+    "AC11": {
+      "at": "2026-11-24T20:32:55.110Z",
+      "note": "No operator questions on the completed automatic review or the finished single-reviewer run. Pinned-plan resume is covered."
+    },
+    "AC12": {
+      "at": "2026-11-24T20:32:55.692Z",
+      "note": "Both entry points verified in independent local runs. See review-session-verification.md."
+    },
+    "AC13": {
+      "at": "2026-11-24T20:32:56.259Z",
+      "note": "Prepared 180 assignments, authorized within capped Auto, refused changed revisions and excess native groups; tested manual and budget limits."
+    },
+    "AC14": {
+      "at": "2026-11-24T20:32:56.859Z",
+      "note": "All 15 actual provider/model routes matched the plan; mixed-scope fixture exercised the Light pool."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -314,6 +343,183 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Use the real PR diff for scope, slices and reviewer inputs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T19:30:35.818Z",
+            "outcome": "started",
+            "detail": "Use the real PR diff for scope, slices and reviewer inputs"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Open the originating interactive review session from the board and register chat reviews on launch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T19:30:37.332Z",
+            "outcome": "started",
+            "detail": "Open the originating interactive review session from the board and register chat reviews on launch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Verified both persisted ACP sessions, prompt receipts, card navigation, native history paging and per-task registration on PR 9264"
+    },
+    {
+      "id": "T17",
+      "title": "Explain review scope, selected checks and current stage in Desktop",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T19:30:38.792Z",
+            "outcome": "started",
+            "detail": "Explain review scope, selected checks and current stage in Desktop"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Verified PR title, three changed files, line totals, concrete roster reasons and lifecycle on PR 9264"
+    },
+    {
+      "id": "T18",
+      "title": "Suspend repeat prompts while awaiting review approval or after single-review ingestion",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T19:30:40.277Z",
+            "outcome": "started",
+            "detail": "Suspend repeat prompts while awaiting review approval or after single-review ingestion"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Exercise both Desktop entry points on PR 9264 and review the changes",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T19:41:52.008Z",
+            "outcome": "started",
+            "detail": "Live scope checked against GitHub and actual Desktop launch from original chat. Verifying board return and card initiation."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two real local PR 9264 attempts finished with zero operator questions; checked both interactive entry points and cold restoration"
+    },
+    {
+      "id": "T20",
+      "title": "Increase large-review limits and approve affordable plan expansion automatically",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T20:03:13.857Z",
+            "outcome": "started",
+            "detail": "Inspect both standalone and Desktop plan confirmation and expansion paths."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Verified bounded automatic and manual authorization, resume, and rejection of stale and over-capacity plans."
+    },
+    {
+      "id": "T21",
+      "title": "Select and explain the effective model tier for each review assignment",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T20:03:14.225Z",
+            "outcome": "started",
+            "detail": "Trace policy through concrete provider/model assignment and render selection."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Verified per-assignment provider/model routing in runtime sessions. Tested mixed tiers, a model shared across pools, and explicit project tier floors."
+    },
+    {
+      "id": "T22",
+      "title": "Verify large-plan policy and tier assignments on PR 9264",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T20",
+        "T21"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T20:03:14.573Z",
+            "outcome": "started",
+            "detail": "Verify live PR plan and a large diff with an unchanged and a changed head."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Compared planned and actual models for all 15 live assignments and exercised 180-check admission and resume on a large fixture."
     }
   ],
   "history": [
@@ -504,6 +710,221 @@
       "at": "2026-11-24T12:20:33.826Z",
       "event": "task-done",
       "detail": "T14: Fix round 4 findings of PR 1302 (U1-U10)"
+    },
+    {
+      "at": "2026-11-24T19:30:34.706Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"(new)\" -> \"A diverged PR scopes the merge base to its pinned head, preserves the hosting base identity and retains incremental rounds. [verify: judged]\" (Operator extended flow 521 to cover PR 9264 review behavior.)"
+    },
+    {
+      "at": "2026-11-24T19:30:35.076Z",
+      "event": "task-added",
+      "detail": "T15: Use the real PR diff for scope, slices and reviewer inputs"
+    },
+    {
+      "at": "2026-11-24T19:30:35.818Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — Use the real PR diff for scope, slices and reviewer inputs"
+    },
+    {
+      "at": "2026-11-24T19:30:36.219Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"(new)\" -> \"Both entry points associate one review attempt with the actual project session and restore it from the board. [verify: judged]\" (Operator extended flow 521 to cover PR 9264 review behavior.)"
+    },
+    {
+      "at": "2026-11-24T19:30:36.619Z",
+      "event": "task-added",
+      "detail": "T16: Open the originating interactive review session from the board and register chat reviews on launch"
+    },
+    {
+      "at": "2026-11-24T19:30:37.332Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — Open the originating interactive review session from the board and register chat reviews on launch"
+    },
+    {
+      "at": "2026-11-24T19:30:37.709Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"(new)\" -> \"The active review shows the PR, changed file count, file/check rationale and current work in the review UI. [verify: judged]\" (Operator extended flow 521 to cover PR 9264 review behavior.)"
+    },
+    {
+      "at": "2026-11-24T19:30:38.091Z",
+      "event": "task-added",
+      "detail": "T17: Explain review scope, selected checks and current stage in Desktop"
+    },
+    {
+      "at": "2026-11-24T19:30:38.793Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — Explain review scope, selected checks and current stage in Desktop"
+    },
+    {
+      "at": "2026-11-24T19:30:39.180Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(new)\" -> \"An exact plan needs at most one approval and a finished single-reviewer run exits without full-review nudges. [verify: judged]\" (Operator extended flow 521 to cover PR 9264 review behavior.)"
+    },
+    {
+      "at": "2026-11-24T19:30:39.564Z",
+      "event": "task-added",
+      "detail": "T18: Suspend repeat prompts while awaiting review approval or after single-review ingestion"
+    },
+    {
+      "at": "2026-11-24T19:30:40.277Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — Suspend repeat prompts while awaiting review approval or after single-review ingestion"
+    },
+    {
+      "at": "2026-11-24T19:30:40.704Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"(new)\" -> \"Both launches are verified against PR 9264 with publication disabled, with evidence of scope and session identity. [verify: judged]\" (Operator extended flow 521 to cover PR 9264 review behavior.)"
+    },
+    {
+      "at": "2026-11-24T19:30:41.101Z",
+      "event": "task-added",
+      "detail": "T19: Exercise both Desktop entry points on PR 9264 and review the changes"
+    },
+    {
+      "at": "2026-11-24T19:35:10.074Z",
+      "event": "task-done",
+      "detail": "T15: Use the real PR diff for scope, slices and reviewer inputs"
+    },
+    {
+      "at": "2026-11-24T19:35:15.323Z",
+      "event": "task-done",
+      "detail": "T18: Suspend repeat prompts while awaiting review approval or after single-review ingestion"
+    },
+    {
+      "at": "2026-11-24T19:41:52.008Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — Live scope checked against GitHub and actual Desktop launch from original chat. Verifying board return and card initiation."
+    },
+    {
+      "at": "2026-11-24T20:00:29.571Z",
+      "event": "task-done",
+      "detail": "T16: Open the originating interactive review session from the board and register chat reviews on launch"
+    },
+    {
+      "at": "2026-11-24T20:00:29.964Z",
+      "event": "task-done",
+      "detail": "T17: Explain review scope, selected checks and current stage in Desktop"
+    },
+    {
+      "at": "2026-11-24T20:00:30.348Z",
+      "event": "task-done",
+      "detail": "T19: Exercise both Desktop entry points on PR 9264 and review the changes"
+    },
+    {
+      "at": "2026-11-24T20:01:56.007Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: PR 9264 merge-base and two refs confirmed independently with Git and GitHub. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:01:56.405Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Both attempted reviews restored their original session from the card. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:01:56.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Native bundle renders 3 files, +169/-2, 15 selected checks and Review finished. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:01:57.206Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Two live runs with zero operator questions. Approval pause and single-reviewer terminal logic regression-tested. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:01:57.615Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Both actual entry points on PR 9264 verified locally; run IDs in review-session-verification.md. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:03:00.875Z",
+      "event": "task-added",
+      "detail": "T20: Increase large-review limits and approve affordable plan expansion automatically"
+    },
+    {
+      "at": "2026-11-24T20:03:01.227Z",
+      "event": "task-added",
+      "detail": "T21: Select and explain the effective model tier for each review assignment"
+    },
+    {
+      "at": "2026-11-24T20:03:01.572Z",
+      "event": "task-added",
+      "detail": "T22: Verify large-plan policy and tier assignments on PR 9264"
+    },
+    {
+      "at": "2026-11-24T20:03:13.857Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — Inspect both standalone and Desktop plan confirmation and expansion paths."
+    },
+    {
+      "at": "2026-11-24T20:03:14.225Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — Trace policy through concrete provider/model assignment and render selection."
+    },
+    {
+      "at": "2026-11-24T20:03:14.573Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — Verify live PR plan and a large diff with an unchanged and a changed head."
+    },
+    {
+      "at": "2026-11-24T20:04:11.992Z",
+      "event": "ac-updated",
+      "detail": "AC13: \"(new)\" -> \"Large reviews use higher defaults and a recorded automatic expansion decision within the configured policy. Explicit budgets, changed revisions and manual confirmation are respected. [verify: judged]\" (User extended the existing review scope to large PRs and automatic expansion.)"
+    },
+    {
+      "at": "2026-11-24T20:04:12.340Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"(new)\" -> \"Each assignment resolves its model tier from the reviewer and its actual scope, honors overrides, and exposes the chosen route and reason. [verify: judged]\" (User requested improved three-tier routing per reviewer.)"
+    },
+    {
+      "at": "2026-11-24T20:20:39.123Z",
+      "event": "task-done",
+      "detail": "T21: Select and explain the effective model tier for each review assignment"
+    },
+    {
+      "at": "2026-11-24T20:32:43.249Z",
+      "event": "task-done",
+      "detail": "T20: Increase large-review limits and approve affordable plan expansion automatically"
+    },
+    {
+      "at": "2026-11-24T20:32:43.839Z",
+      "event": "task-done",
+      "detail": "T22: Verify large-plan policy and tier assignments on PR 9264"
+    },
+    {
+      "at": "2026-11-24T20:32:53.070Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Hosting and effective bases recorded separately. Three files and line counts match the pinned GitHub diff. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:32:53.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Two launch paths restored the same session for their own attempt, including follow-up after restart. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:32:54.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Verified target, changed-file totals, selected checks and current progress in the running desktop UI. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:32:55.110Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: No operator questions on the completed automatic review or the finished single-reviewer run. Pinned-plan resume is covered. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:32:55.692Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Both entry points verified in independent local runs. See review-session-verification.md. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:32:56.259Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Prepared 180 assignments, authorized within capped Auto, refused changed revisions and excess native groups; tested manual and budget limits. (signed: local automated verification [stated])"
+    },
+    {
+      "at": "2026-11-24T20:32:56.859Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: All 15 actual provider/model routes matched the plan; mixed-scope fixture exercised the Light pool. (signed: local automated verification [stated])"
     }
   ],
   "acKinds": {
@@ -532,11 +953,166 @@
     },
     "AC7": {
       "kind": "judged"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
+      "kind": "judged"
+    },
+    "AC13": {
+      "kind": "judged"
+    },
+    "AC14": {
+      "kind": "judged"
     }
   },
   "origin": {
     "kind": "human-request",
     "quote": "The user explicitly asked to start stage 4 now in its own worktree.",
     "source": "session local_4c9fedae-8b67-4970-82be-8662d726ed7d"
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-24T20:01:56.006Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:82dd3dfc979e1684cbbc19f4ab1c203067c09303b1506d22546f2a20f39930f9"
+    },
+    {
+      "at": "2026-11-24T20:01:56.404Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:82dd3dfc979e1684cbbc19f4ab1c203067c09303b1506d22546f2a20f39930f9"
+    },
+    {
+      "at": "2026-11-24T20:01:56.808Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:82dd3dfc979e1684cbbc19f4ab1c203067c09303b1506d22546f2a20f39930f9"
+    },
+    {
+      "at": "2026-11-24T20:01:57.205Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:82dd3dfc979e1684cbbc19f4ab1c203067c09303b1506d22546f2a20f39930f9"
+    },
+    {
+      "at": "2026-11-24T20:01:57.615Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:82dd3dfc979e1684cbbc19f4ab1c203067c09303b1506d22546f2a20f39930f9"
+    },
+    {
+      "at": "2026-11-24T20:32:53.070Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    },
+    {
+      "at": "2026-11-24T20:32:53.807Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    },
+    {
+      "at": "2026-11-24T20:32:54.532Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    },
+    {
+      "at": "2026-11-24T20:32:55.110Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    },
+    {
+      "at": "2026-11-24T20:32:55.692Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    },
+    {
+      "at": "2026-11-24T20:32:56.259Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    },
+    {
+      "at": "2026-11-24T20:32:56.859Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "local automated verification",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:901c195d6ff1a071723e656eec68874707eb959974ef94ffee432f5c879e34fd"
+    }
+  ]
 }

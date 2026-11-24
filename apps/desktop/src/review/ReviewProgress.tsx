@@ -53,12 +53,11 @@ function runProgress(state: DeskRunState, progress?: Roster) {
   const { planned, completed = progress?.finished === 0 ? 0 : undefined } = progress ?? {};
   if (planned != null && Number.isSafeInteger(planned) && planned > 0 &&
       completed != null && Number.isSafeInteger(completed) && completed >= 0 && completed <= planned) {
-    // Starting accounts for 5%. Reserve the final 5% for consolidation and the completion gate.
-    return { percent: 5 + Math.floor(90 * completed / planned), label: `${completed} of ${planned} assignments completed` };
+    return { percent: Math.floor(100 * completed / planned), label: `${completed} of ${planned} assignments completed` };
   }
-  if (state === "queued") return { percent: 5, label: "Queued" };
+  if (state === "queued") return { percent: null, label: "Queued" };
   if (state === "running" || state === "cancelling") {
-    return { percent: 5, label: "Assignment totals pending" };
+    return { percent: null, label: "Assignment totals pending" };
   }
   return { percent: null, label: "Progress unavailable" };
 }
@@ -89,7 +88,7 @@ export function ReviewProgress({ progress, state, showState }: {
       {parts.percent && <strong>{parts.percent}</strong>}
       <span>{parts.state && parts.state + " · "}{label}</span>
     </span>
-    {percent != null && <span role="progressbar" aria-label="Review progress" aria-valuetext={`${percent}% · ${label}`}
+    {percent != null && <span role="progressbar" aria-label="Review assignment progress" aria-valuetext={`${percent}% · ${label}`}
       aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="review-progress-track">
       <span style={{ width: percent + "%" }} />
     </span>}
@@ -97,7 +96,7 @@ export function ReviewProgress({ progress, state, showState }: {
 }
 
 /**
- * A card's local review progress as one line ("Wave 2 · 27% · 1 of 4 assignments completed"), for the title
+ * A card's local review progress as one line ("Wave 2 · 25% · 1 of 4 assignments completed"), for the title
  * of the work row's review slot: AC4 keeps Keryx review state out of the card body, and the row's fixed
  * height leaves no room for a progress block. The same parts as the `ReviewProgress` caption, with the state
  * shown. Null when the card has no run to report on.

@@ -62,27 +62,42 @@ function projectEvent(event: Record<string, unknown>): CoordinatorEvent | undefi
 }
 
 export function coordinatorActivity(directory: string): CoordinatorEvent[] {
+  return coordinatorActivityPage(directory).events;
+}
+
+/** The cursor is an exclusive byte offset in this attempt's append-only log. */
+export function coordinatorActivityPage(directory: string, before?: number): { events: CoordinatorEvent[]; before?: number } {
   const run = path.join(directory, "run");
   const events: CoordinatorEvent[] = [];
+  if (before !== undefined && (!Number.isSafeInteger(before) || before <= 0)) return { events };
   try {
-    if (!lstatSync(directory).isDirectory() || !lstatSync(run).isDirectory()) return events;
+    if (!lstatSync(directory).isDirectory() || !lstatSync(run).isDirectory()) return { events };
     const fd = openSync(path.join(run, "events.ndjson"), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const stat = fstatSync(fd);
-      if (!stat.isFile()) return events;
-      const size = Math.min(stat.size, 512 * 1024);
-      const offset = stat.size - size;
-      const buf = Buffer.alloc(size);
-      const bytes = readSync(fd, buf, 0, size, offset);
-      const lines = buf.toString("utf8", 0, bytes).split("\n");
-      if (offset) lines.shift(); // possibly partial UTF-8 / JSON at the leading edge
-      for (let i = lines.length - 1; i >= 0 && events.length < 80; i--) {
+      if (!stat.isFile()) return { events };
+      const end = Math.min(stat.size, before ?? stat.size);
+      const offset = Math.max(0, end - (512 * 1024 - 1));
+      // Include the byte preceding the read window to tell a full first line from a fragment.
+      const first = offset ? offset - 1 : 0;
+      const buf = Buffer.alloc(end - first);
+      const bytes = readSync(fd, buf, 0, buf.length, first);
+      const start = offset && buf[0] !== 10 ? buf.indexOf(10, 1) + 1 : offset ? 1 : 0;
+      if (offset && (!start || start >= bytes)) return { events, before: offset }; // a single overlong line
+      // A cursor inside an overlong line ends on a fragment. Ignore it on both sides.
+      let lineEnd = before !== undefined && buf[bytes - 1] !== 10 ? buf.lastIndexOf(10, bytes - 1) + 1 : bytes;
+      while (lineEnd > start && events.length < 80) {
+        const scanFrom = lineEnd - (buf[lineEnd - 1] === 10 ? 2 : 1);
+        const lineStart = scanFrom >= 0 ? buf.lastIndexOf(10, scanFrom) + 1 : 0;
         try {
-          const event = projectEvent(JSON.parse(lines[i]!));
+          const event = projectEvent(JSON.parse(buf.toString("utf8", lineStart, lineEnd)));
           if (event && !(event.kind === "message" && events.at(-1)?.kind === "message" && events.at(-1)?.text === event.text)) events.push(event);
         } catch { /* Torn, malformed or unsupported event. */ }
+        lineEnd = lineStart;
       }
+      const earlier = offset ? Math.max(offset, first + lineEnd) : lineEnd;
+      return { events: events.reverse(), ...(earlier > 0 && { before: earlier }) };
     } finally { closeSync(fd); }
   } catch { /* A queued attempt has no transcript yet. */ }
-  return events.reverse();
+  return { events: events.reverse() };
 }

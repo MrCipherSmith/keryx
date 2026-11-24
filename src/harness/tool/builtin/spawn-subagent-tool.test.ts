@@ -1008,8 +1008,8 @@ test("only an unchanged prepared Desktop reviewer call resolves the host-authori
     context_files: [],
     save_result_to: `${pkg}/raw/review-logic-w1.txt`,
   };
-  const writeQueue = (calls: unknown[]) =>
-    writeFile(path.join(checkout, pkg, "desktop-dispatch.json"), JSON.stringify({ calls }));
+  const writeQueue = (calls: unknown[], modelRouting?: unknown[], completedAssignments?: string[]) =>
+    writeFile(path.join(checkout, pkg, "desktop-dispatch.json"), JSON.stringify({ calls, modelRouting, completedAssignments }));
   await writeQueue([request]);
   expect(await writeActiveReview(checkout, { id: "test-round", dir: pkg })).toBe(true);
   await setRoutingCategory("user", location, "review", { mode: "model", target: session });
@@ -1060,9 +1060,10 @@ test("only an unchanged prepared Desktop reviewer call resolves the host-authori
   await setModelProfileField(poolModel.provider, poolModel.model, { field: "contextLength", value: 100_000 }, project);
   const selections: Array<{ provider: string; model: string }> = [];
   const unavailableModel = { provider: poolModel.provider, model: "not-in-live-catalog" };
+  const modelPools = { strong: [], middle: [unavailableModel, poolModel], light: [] as Array<typeof poolModel> };
   const scoped = createSpawnSubagentTool({
     ...deps, preparedReviewOnly: true, routingProjectRoot: project,
-    deskOptions: { mode: "manual", adaptive: false, maxWaves: 1, modelPools: { strong: [], middle: [unavailableModel, poolModel], light: [] } },
+    deskOptions: { mode: "manual", adaptive: false, maxWaves: 1, modelPools },
     getDetectedProviders: () => [{ name: "ollama" }, { name: poolModel.provider, models: [poolModel.model], observedAt }],
     describeProvider: () => {
       const description = stubProvider("").describe();
@@ -1084,6 +1085,21 @@ test("only an unchanged prepared Desktop reviewer call resolves the host-authori
   await writeQueue([later]);
   expect((await scoped.invoke({ assignment: later.save_result_to })).output).toContain("wave limit");
   expect(selections).toEqual([poolModel, poolModel]);
+
+  // The same candidate can be configured in multiple tiers. Its earlier membership
+  // lookup had no authorized alternative when the two pools did not intersect.
+  modelPools.light.push(unavailableModel);
+  const shared = { ...selected, expected_model: unavailableModel };
+  await writeQueue([shared], [{ result: shared.save_result_to, tier: "middle" }]);
+  expect((await scoped.invoke(ref)).output).toContain("reviewed on selected provider");
+  expect(selections).toEqual([poolModel, poolModel, poolModel]);
+  await writeQueue([shared], [{ result: shared.save_result_to, tier: "light" }]);
+  expect((await scoped.invoke(ref)).output).toContain("candidate-unverified");
+  expect(selections).toEqual([poolModel, poolModel, poolModel]);
+
+  await writeQueue([shared], [{ result: shared.save_result_to, tier: "middle" }], [shared.save_result_to]);
+  expect((await scoped.invoke(ref)).status).toBe("Denied");
+  expect(selections).toEqual([poolModel, poolModel, poolModel]);
 
   const changed = { ...request, expected_model: { ...request.expected_model, model: "different" } };
   await writeQueue([changed]);
@@ -1820,8 +1836,8 @@ test("AC4: the refusal names the cap, wave or turn, and the next step", async ()
   }
 }, 120_000);
 
-test("AC6: one turn opens at most 25 waves; the 26th is refused", async () => {
-  expect(SUBAGENT_TURN_MAX_WAVES).toBe(25);
+test("AC6: one turn opens at most 100 waves; the next is refused", async () => {
+  expect(SUBAGENT_TURN_MAX_WAVES).toBe(100);
   const ids = Array.from({ length: SUBAGENT_TURN_MAX_WAVES + 1 }, (_, i) => `chunk-${i}`);
   const { root, pkg } = await reviewProject(ids);
   try {
@@ -1830,7 +1846,7 @@ test("AC6: one turn opens at most 25 waves; the 26th is refused", async () => {
       const r = await tool.invoke({ task: pass, review_wave: { package: pkg, pass } });
       expect(r.status).toBe("Completed");
     }
-    const extra = await tool.invoke({ task: "wave 26", review_wave: { package: pkg, pass: ids[SUBAGENT_TURN_MAX_WAVES] } });
+    const extra = await tool.invoke({ task: "extra wave", review_wave: { package: pkg, pass: ids[SUBAGENT_TURN_MAX_WAVES] } });
     expect(extra.status).toBe("Denied");
     expect(extra.output).toContain(`${SUBAGENT_TURN_MAX_WAVES} review waves`);
     expect(extra.output).toContain("new turn");

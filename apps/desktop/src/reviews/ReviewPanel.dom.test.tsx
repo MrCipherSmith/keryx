@@ -167,6 +167,57 @@ test("historic result survives a push, and retry and stop target the correct att
   expect(actions.at(-1)).toEqual({ kind: "start", baseSha: "base", headSha: "next" });
 });
 
+test("shows the latest completed plan with its own revision and scope, not current card metadata", async () => {
+  const oldBase = "a".repeat(40), oldHead = "b".repeat(40);
+  const newerBase = "c".repeat(40), newerHead = "d".repeat(40);
+  const historical = (id: string, createdAt: string, title: string, files: number, additions: number): DeskRun => ({
+    ...complete,
+    id,
+    baseSha: oldBase,
+    headSha: oldHead,
+    pullRequestTitle: title,
+    createdAt,
+    pullRequestScope: {
+      changeStats: { files, additions, deletions: 4 },
+      files: [{ path: `src/${id}.ts`, additions, deletions: 4 }],
+      filesComplete: true,
+    },
+    reviewerProgress: {
+      planned: 1, finished: 1, completed: 1, wave: 1, sessions: [],
+      planSummary: {
+        baseSha: oldBase, headSha: oldHead, files: [`src/${id}.ts`], filesComplete: true,
+        checks: [{ name: "review-logic", category: "baseline", slices: ["slice-01"], assignments: [
+          { wave: 1, slices: ["slice-01"], tier: "middle", tierReason: "Reviewer default", provider: "openai-codex", model: "gpt-6.1-terra" },
+        ] }],
+        sliceReasons: [], checksComplete: true,
+      },
+    },
+  });
+  const latest = historical("latest-plan", "2026-11-19T12:00:00Z", "Title at reviewed head", 3, 31);
+  const older = historical("older-plan", "2026-11-18T12:00:00Z", "Older title", 2, 21);
+  const currentCard = {
+    ...pr, title: "Current card title", baseSha: newerBase, headSha: newerHead,
+    changeStats: { files: 1, additions: 2, deletions: 1 },
+  };
+  await show(async () => ({ version: 1, runs: [older, latest] }), currentCard);
+
+  const summaryNode = document.querySelector<HTMLElement>(".review-plan-summary")!;
+  expect(summaryNode.dataset.headSha).toBe(oldHead);
+  expect(summaryNode.querySelector("h3")?.textContent).toBe("Title at reviewed head");
+  expect(summaryNode.textContent).toContain("3 files changed");
+  expect(summaryNode.textContent).toContain("+31");
+  expect(summaryNode.textContent).toContain("src/latest-plan.ts");
+  expect(summaryNode.textContent).not.toContain("Current card title");
+  expect(summaryNode.textContent).not.toContain("+2");
+  await act(() => root.render(null));
+});
+
+test("does not show a terminal plan summary when the attempt has no pinned plan data", async () => {
+  await show(async () => ({ version: 1, runs: [complete] }), pr);
+  expect(document.querySelector(".review-plan-summary")).toBeNull();
+  await act(() => root.render(null));
+});
+
 test("a late status from another PR cannot reveal its report and a closed PR cannot launch", async () => {
   let finish!: (r: DeskRunSnapshot) => void;
   const waiting: typeof reviewRun = () => new Promise(resolve => { finish = resolve; });
@@ -380,12 +431,12 @@ test("a reviewer session follows its own wave through completion and Escape retu
   expect(document.activeElement).toBe(row);
 });
 
-test("a starting attempt shows five percent while preparing the plan", async () => {
+test("a starting attempt shows pending assignment totals while preparing the plan", async () => {
   await show(async () => ({ version: 1, runs: [running] }), { ...pr, number: 92 });
   await click("View active review");
   const progress = document.querySelector('[role="progressbar"]');
-  expect(progress).not.toBeNull();
-  expect(progress!.getAttribute("aria-valuenow")).toBe("5");
+  expect(progress).toBeNull();
+  expect(document.querySelector(".review-progress-caption")?.textContent).toContain("Assignment totals pending");
 });
 
 test("expanding a historical session recovers its recorded failure without assigning a duration or token estimate", async () => {
@@ -794,6 +845,18 @@ test("a session attempt is labelled Session and offers no Desktop coordinator se
   expect(document.body.textContent).toContain("Session");
   expect(document.body.textContent).not.toContain("Existing review");
   expect(sessionButtons()).toBe(workerButtons - 1);
+  await act(() => root.render(null));
+});
+
+test("an inline review attempt opens its originating session from the panel", async () => {
+  const { reviewedHead, reviewed } = headMovedFixture(66);
+  const session = { ...reviewed, id: "attempt-session", source: "session" as const, sessionId: "originating-session" };
+  const opened: string[] = [];
+  await show(async () => ({ version: 1, runs: [session] }), { ...pr, number: 66, headSha: reviewedHead }, {
+    onOpenReviewSession: async (_key, run) => { opened.push(run.id); },
+  });
+  await click("Open review session");
+  expect(opened).toEqual([session.id]);
   await act(() => root.render(null));
 });
 
@@ -1224,10 +1287,10 @@ test("a failed freeform answer keeps its draft and retries the same scoped quest
   await click("Close");
 });
 
-test("review assignments stop at 95% until the run completes and a partial run retains only measured progress", async () => {
+test("review shows the measured fraction of finished assignments even while the coordinator continues", async () => {
   const roster = { wave: 2, planned: 4, finished: 4, completed: 4, sessions: [] };
   const values: Array<[DeskRun, string | null]> = [
-    [{ ...running, reviewerProgress: roster }, "95"],
+    [{ ...running, reviewerProgress: roster }, "100"],
     [{ ...complete, reviewerProgress: roster }, "100"],
     [{ ...running, state: "partial", reviewerProgress: { ...roster, completed: 2 } }, "50"],
     [{ ...running, state: "cancelled" }, null],

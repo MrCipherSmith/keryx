@@ -115,12 +115,12 @@ test("a delta round: the steps run in order, plan.json carries the round, both s
   expect(existsSync(path.join(pkg, "scope-files.json"))).toBe(true);
 });
 
-test("a first round: --ref is the base for scope and slice, no kinds, and the human summary is short", async () => {
+test("a first round: the resolved merge base drives scope and slice, and the human summary is short", async () => {
   await runPlan(["--target", "feature/x", "--ref", "origin/main"], deps({ round: deltaRound({ mode: "first", round: 1, previous: null, range: { base: "c".repeat(40), head: HEAD }, fixHunks: [], newHunks: [] }), slices: [entry("slice-01", ["src/a/a.ts"], { roles: ["review-logic"], depth: "deep" })] }));
   // --ref is also the base `review start` reads the merge-base from (a merged PR's merge-base with origin/main is its head).
   expect(calls[0]).toEqual(["start", "--target", "branch", "--target-ref", "feature/x", "--base", "origin/main"]);
-  expect(calls[1]).toEqual(["scope", "--json", "--ref", "origin/main"]);
-  expect(calls[3]).toEqual(["slice", "--package", pkg, "--ref", "origin/main", "--json"]);
+  expect(calls[1]).toEqual(["scope", "--json", "--ref", "c".repeat(40)]);
+  expect(calls[3]).toEqual(["slice", "--package", pkg, "--ref", "c".repeat(40), "--json"]);
   const plan = await readPlan();
   expect(plan.round.mode).toBe("first");
   expect(plan.slices.fix).toEqual([]);
@@ -179,4 +179,62 @@ test("small readers: target kind, the package path of start's output, slices by 
 test("review plan has its own help entry", () => {
   printReviewHelpFor(["plan"]);
   expect(out.join("\n")).toContain("keryx review plan --target");
+});
+
+test("Desktop resume keeps the original round and reviewer evidence before reapproval", async () => {
+  const envKeys = ["KERYX_DESK_REVIEW_SHELL", "KERYX_DESK_REVIEW_RESUME_PACKAGE", "KERYX_DESK_REVIEW_PROJECT_ROOT", "KERYX_DESK_REVIEW_OPTIONS"] as const;
+  const saved = envKeys.map(key => process.env[key]);
+  const target = "https://github.com/o/r/pull/7";
+  try {
+    process.env.KERYX_DESK_REVIEW_SHELL = "1";
+    process.env.KERYX_DESK_REVIEW_RESUME_PACKAGE = "r2";
+    process.env.KERYX_DESK_REVIEW_PROJECT_ROOT = root;
+    delete process.env.KERYX_DESK_REVIEW_OPTIONS;
+    await mkdir(path.join(pkg, "slices"), { recursive: true });
+    await mkdir(path.join(pkg, "raw"), { recursive: true });
+    await mkdir(path.join(pkg, "drivers"), { recursive: true });
+    const targetRecord = { kind: "pr", ref: target, base: BASE, head: HEAD };
+    await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ reviewId: "r2", status: "draft", target: targetRecord }));
+    const round = deltaRound();
+    await writeFile(path.join(pkg, "round.json"), JSON.stringify(round));
+    const slices = [entry("slice-01", ["src/a.ts"], { roles: ["review-logic"], depth: "light" }), entry("slice-02", ["src/b.ts"], { roles: ["review-logic"], depth: "light" })];
+    const manifest = { schemaVersion: 1, maxBytes: 100, waveBytes: 100, source: "diff", slices, omissions: [], totals: {} };
+    await writeFile(path.join(pkg, "slices", "manifest.json"), JSON.stringify(manifest));
+    for (const slice of slices) await writeFile(path.join(pkg, "slices", slice.path), `diff --git a/${slice.files[0]} b/${slice.files[0]}\n+added\n`);
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts", "src/b.ts"], changedLines: 2 }));
+    await writeFile(path.join(pkg, "drivers", "review-logic-w1.json"), JSON.stringify({ reviewer: "review-logic", wave: 1, slices: ["slice-01"], result: "raw/review-logic-w1.txt" }));
+    const raw = 'STATUS: DONE\nREVIEW_RESULT: {"reviewer":"review-logic","status":"DONE","slices":["slice-01"],"findings":[]}\n';
+    await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), raw);
+    const oldQueue = JSON.stringify({ calls: [], assignments: [] });
+    await writeFile(path.join(pkg, "desktop-dispatch.json"), oldQueue);
+    await writeFile(path.join(pkg, PLAN_FILE), JSON.stringify({ v: 1, package: pkg, target: targetRecord, round: { number: 2, range: round.range }, warnings: [] }));
+    await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 1 } }));
+    await runPlan(["--target", target, "--ref", BASE, "--head", HEAD, "--host", "keryx-shell", "--json"], deps({}));
+    expect(calls).toEqual([]);
+    expect(await readFile(path.join(pkg, "round.json"), "utf8")).toBe(JSON.stringify(round));
+    expect(await readFile(path.join(pkg, "raw", "review-logic-w1.txt"), "utf8")).toBe(raw);
+    expect(await readFile(path.join(pkg, "desktop-dispatch.json"), "utf8")).toBe(oldQueue);
+    expect((await readPlan()).next).toContain("confirm plan");
+  } finally {
+    envKeys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; });
+  }
+});
+
+test("standalone plan uses an explicitly configured bounded auto policy for a large pinned review", async () => {
+  const target = "https://github.com/o/r/pull/7";
+  for (const role of ["review-logic", "review-style", "review-clean-code"]) {
+    const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", role);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${role}\ndescription: fixture\n---\n`);
+  }
+  await writeFile(path.join(pkg, "round-roles.json"), JSON.stringify({ enabled: ["review-style", "review-clean-code"] }));
+  await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ reviewId: "r2", status: "draft", target: { kind: "pr", ref: target, base: BASE, head: HEAD } }));
+  await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { autoApprove: true } }));
+  const slices = Array.from({ length: 600 }, (_, i) => ({ ...entry(`slice-${i}`, [`src/f${i}.ts`]), bytes: 18000 }));
+  await runPlan(["--target", target, "--ref", BASE, "--head", HEAD, "--host", "claude-code", "--json"], deps({ round: deltaRound({ mode: "first", round: 1, previous: null, fixHunks: [], newHunks: [] }), slices }));
+  const plan = await readPlan();
+  expect(plan.dispatches).toBeGreaterThan(160);
+  expect(plan.next).toBe("dispatch");
+  const authorization = JSON.parse(await readFile(path.join(pkg, "plan-confirmation.json"), "utf8"));
+  expect(authorization).toMatchObject({ confirmedVia: "auto-policy", autoPolicy: "project-auto", target: { ref: target, base: BASE, head: HEAD } });
 });

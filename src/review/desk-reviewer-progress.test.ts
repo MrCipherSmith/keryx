@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coordinatorActivity } from "./desk-coordinator";
+import { coordinatorActivity, coordinatorActivityPage } from "./desk-coordinator";
 import { createEventTail } from "./autonomous-progress";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { ReviewerActivityRecorder } from "./reviewer-activity";
@@ -168,6 +168,65 @@ test("the pinned plan sets the total before dispatch and keeps blocked and later
   expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 3, completed: 2, finished: 2 });
 });
 
+test("retains completed assignment counts and ignores stale saved results after a plan revision", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  const reviewer = "review-logic";
+  const call = (wave: number) => ({ label: reviewer, save_result_to: `raw/${reviewer}-w${wave}.txt` });
+  const calls = [call(1), call(2)];
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 2 });
+  save(["package", "desktop-dispatch.json"], {
+    calls, completedAssignments: [calls[0]!.save_result_to],
+    modelRouting: calls.map(call => ({ result: call.save_result_to, slices: ["S-1"], assignmentKey: "a".repeat(64) })),
+  });
+  save(["package", calls[1]!.save_result_to], `STATUS: DONE\nREVIEW_RESULT: ${JSON.stringify({
+    reviewer, status: "DONE", summary: "Stale", findings: [], slices: ["S-1"],
+  })}`);
+  for (const detailed of [false, true]) {
+    const progress = readDeskReviewerProgress(directory, key, run, detailed);
+    expect(progress).toMatchObject({ planned: 2, finished: 1, completed: 1, sessions: [{ state: "completed" }, { state: "planned" }] });
+  }
+});
+
+test("projects a bounded plan summary only from artifacts pinned to the attempt range", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 2, roster: ["review-logic", "review-security-code"],
+    slices: { fix: [], new: [{ id: "S-1", files: ["src/cache.ts", "src/cache.test.ts"], roles: ["review-logic", "review-security-code", "review-style"] }] } });
+  save(["package", "desktop-dispatch.json"], { calls: [
+    { label: "review-logic" }, { label: "review-security-code" },
+  ] });
+  save(["package", "slices", "manifest.json"], { projectRoles: ["review-security-code"], slices: [
+    { id: "S-1", depth: "deep", risk: { why: ["security-sensitive code"] } },
+  ] });
+  save(["package", "scope-files.json"], { version: 1, files: ["src/cache.ts", "src/cache.test.ts"], changedLines: 171 });
+  save(["package", "round-depth.json"], { depth: "full", reason: "auto: a file hits the project reviewer code-boss-reviewer path gate (risk class)",
+    head: headSha, files: ["src/cache.test.ts", "src/cache.ts"], changedLines: 171 });
+  const result = readDeskReviewerProgress(directory, key, run, false);
+  expect(result?.planSummary).toEqual({ baseSha, headSha, files: ["src/cache.ts", "src/cache.test.ts"], filesComplete: true,
+    checks: [
+      { name: "review-logic", category: "baseline", slices: ["S-1"] },
+      { name: "review-security-code", category: "project", slices: ["S-1"] },
+    ], sliceReasons: [{ id: "S-1", depth: "deep", reasons: ["security-sensitive code"] }], checksComplete: true,
+    depth: "full", depthReason: "auto: a file hits the project reviewer code-boss-reviewer path gate (risk class)" });
+  expect(result?.planSummary?.checks.some(check => check.name === "review-style")).toBe(false);
+  expect(readDeskReviewerProgress(directory, key, { ...run, headSha: baseSha }, false)?.planSummary).toBeUndefined();
+});
+
+test("truncates large plan projections and keeps file completeness explicit", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  const files = Array.from({ length: 160 }, (_, index) => `src/file-${index}.ts`);
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 1, roster: ["review-logic"],
+    slices: { fix: [], new: [{ id: "S-1", files, roles: ["review-logic"] }] } });
+  save(["package", "scope-files.json"], { version: 1, files });
+  const summary = readDeskReviewerProgress(directory, key, run, false)?.planSummary;
+  expect(summary?.files).toHaveLength(80);
+  expect(summary?.filesComplete).toBe(false);
+  expect(summary?.checks).toEqual([{ name: "review-logic", category: "baseline", slices: ["S-1"] }]);
+  expect(summary?.sliceReasons).toHaveLength(0);
+});
+
 test("details recover a finished reviewer's public result and context request while the coordinator is still running", () => {
   const reviewer = "review-layout", file = "review-layout-w1.txt";
   save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
@@ -203,5 +262,65 @@ test("coordinator activity shows public turns, reviewer questions and their answ
     { kind: "question", questionId, reviewer: "review-layout", text: "Which viewport?" },
     { kind: "answer", questionId, reviewer: "review-layout", text: "The compact layout." },
     { kind: "message", text: "Checked the decision", final: true },
+  ]);
+});
+
+test("pages earlier public coordinator events across bounded byte and event windows", () => {
+  const rows = Array.from({ length: 103 }, (_, index) => ({
+    type: "assistant", text: `Public é ${index}`,
+  }));
+  const records = [
+    ...rows.slice(0, 9),
+    { type: "reasoning", text: "PRIVATE".repeat(100_000) },
+    ...rows.slice(9),
+  ].map(row => JSON.stringify(row)).join("\n") + "\n";
+  save(["run", "events.ndjson"], records);
+  const latest = coordinatorActivityPage(directory);
+  expect(latest.events).toHaveLength(80);
+  expect(latest.events.at(-1)?.text).toBe("Public é 102");
+  expect(latest.before).toBeDefined();
+
+  // Appends do not displace the user's earlier-page anchor.
+  save(["run", "events.ndjson"], records + JSON.stringify({ type: "assistant", text: "Live update" }) + "\n");
+  let cursor = latest.before;
+  const combined = [...latest.events];
+  while (cursor !== undefined) {
+    const page = coordinatorActivityPage(directory, cursor);
+    expect(page.before ?? 0).toBeLessThan(cursor);
+    combined.unshift(...page.events);
+    cursor = page.before;
+  }
+  expect(combined.map(event => event.text)).toEqual(rows.map(row => row.text));
+  expect(JSON.stringify(combined)).not.toContain("PRIVATE");
+});
+
+test("the paged projection never follows a replacement transcript symlink", () => {
+  save(["private.ndjson"], JSON.stringify({ type: "assistant", text: "PRIVATE" }) + "\n");
+  mkdirSync(path.join(directory, "run"));
+  symlinkSync(path.join(directory, "private.ndjson"), path.join(directory, "run", "events.ndjson"));
+  expect(coordinatorActivityPage(directory, 2048)).toEqual({ events: [] });
+});
+
+test("publishes per-wave tier evidence for exact dispatches while keeping old queue summaries readable", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  const role = "review-logic";
+  const planned = { target, roster: [role], slices: { new: [{ id: "a", roles: [role] }, { id: "b", roles: [role] }] } };
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], planned);
+  const first = "raw/review-logic-w1.txt", second = "raw/review-logic-w2.txt";
+  const calls = [
+    { label: role, save_result_to: first, expected_model: { provider: "local", model: "small" } },
+    { label: role, save_result_to: second, expected_model: { provider: "remote", model: "large" } },
+  ];
+  save(["package", "desktop-dispatch.json"], { calls });
+  expect(readDeskReviewerProgress(directory, key, run, false)?.planSummary?.checks[0]?.assignments).toBeUndefined();
+  save(["package", "desktop-dispatch.json"], { calls, modelRouting: [
+    { result: first, slices: ["a"], tier: "light", tierReason: "Mechanical check" },
+    { result: second, slices: ["b"], tier: "strong", tierReason: "Assigned slice has high recorded risk." },
+    { result: "raw/unplanned.txt", slices: ["b"], tier: "strong", tierReason: "Omitted" },
+  ] });
+  expect(readDeskReviewerProgress(directory, key, run, false)?.planSummary?.checks[0]?.assignments).toEqual([
+    { wave: 1, slices: ["a"], tier: "light", tierReason: "Mechanical check", provider: "local", model: "small" },
+    { wave: 2, slices: ["b"], tier: "strong", tierReason: "Assigned slice has high recorded risk.", provider: "remote", model: "large" },
   ]);
 });

@@ -62,7 +62,7 @@ export function desktopReviewCommands(commands: readonly AvailableCommand[]): Av
 export function desktopReviewRequest(line: string): ReviewDraftHints | undefined {
   if (/[\r\n]/.test(line.trim())) return;
   const text = line.trim().replace(/[.!?]$/, "");
-  const launch = /^(?:пожалуйста,?\s+)?(?:запусти|начни)\s+(?:(?:адаптивное|фоновое|автономное|автоматическое)\s+)*ревью(?=\s|$)/iu.exec(text)
+  const launch = /^(?:пожалуйста,?\s+)?(?:запусти|начни|сделай|проведи)\s+(?:(?:адаптивное|фоновое|автономное|автоматическое)\s+)*(?:(?:pr|пулл-реквеста)\s+)?ревью(?=\s|$)/iu.exec(text)
     ?? /^(?:please\s+)?(?:start|run|launch)\s+(?:(?:an?|the|adaptive|background|autonomous|automatic)\s+)*(?:pr\s+)?review(?=\s|$)/iu.exec(text);
   if (!launch) return;
   const target = text.slice(launch[0].length).trim()

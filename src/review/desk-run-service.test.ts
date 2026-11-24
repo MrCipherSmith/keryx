@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { requestDeskRun } from "./desk-run-service";
 import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
 import { earlierRoundAttempts, previousRoundAttempts, previousRunInputs } from "./update-round";
 
@@ -110,4 +111,18 @@ describe("previousRoundAttempts", () => {
     expect(source).not.toContain("deskOptionsKey(item.options)");
     expect(source).not.toMatch(/item\.result\?\.coverage === "complete"/);
   });
+});
+
+test("a session-linked review requires the adapter to resolve the exact owning conversation", async () => {
+  const cwd = "/project/subdirectory";
+  const sessionId = "c6f09d42-e7b1-41cd-8c70-ab21fd8f119e";
+  const key = { repo: "org/repo", repositoryId: "repo-id", viewer: "viewer", number: 1 };
+  const start = { action: "start" as const, sessionId, revision: { baseSha: SHA("a"), headSha: SHA("b") } };
+  await expect(requestDeskRun(cwd, key, start)).rejects.toThrow("The selected conversation is unavailable");
+  const rejected: Array<[string, string]> = [];
+  await expect(requestDeskRun(cwd, key, start, undefined, (scope, id) => {
+    rejected.push([scope, id]);
+    return undefined;
+  })).rejects.toThrow("The selected conversation is unavailable");
+  expect(rejected).toEqual([[cwd, sessionId]]);
 });

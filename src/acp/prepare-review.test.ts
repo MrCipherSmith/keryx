@@ -34,3 +34,18 @@ test.each(["shell", "editor"] as const)("an ordinary %s connection cannot reques
     await h.end();
   }
 }, 15000);
+
+test("an ACP shell task receives its own session identity", async () => {
+  const h = shellHarness({ storedMode: "trust", rounds: [
+    toolRound("shell-session", "shell_exec", { command: 'printf "session=%s" "$KERYX_REVIEW_SESSION_ID"' }),
+    textRound("Done."),
+  ] });
+  try {
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    const id = h.prompt(sessionId, "Check session context.");
+    await h.waitFor(frame => frame.id === id);
+    const output = callsOf(h.frames, "shell_exec").updates.map(update => String(update.rawOutput ?? "")).join("\n");
+    expect(output).toContain(`session=${sessionId}`);
+  } finally { await h.end(); }
+}, 15000);

@@ -103,30 +103,30 @@ describe("review_chunks_answer", () => {
   }
 
   test("the card shows the pass count over the ceiling; yes records the answer, the card quote and confirmedVia", async () => {
-    dropFiles(1100);
+    dropFiles(4100);
     await ensureChunkPlan(pkg, root);
     const t = tool("review_chunks_answer");
     const result = await yes(t, { package: pkg, answer: "yes" });
-    expect(result.card[0]).toBe("Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?");
-    expect(result.card.join("\n")).toContain("passes requested: 28");
-    expect(result.card.join("\n")).toContain("ceiling: 25 passes (1000 files), from the default; 3 over");
+    expect(result.card[0]).toBe("Allow 103 review passes, over the 100-pass ceiling, for .metaproject/reviews/pr7932-r1?");
+    expect(result.card.join("\n")).toContain("passes requested: 103");
+    expect(result.card.join("\n")).toContain("ceiling: 100 passes (4000 files), from the default; 3 over");
     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1");
     expect(result.isError).toBe(false);
     const record = await readChunkEstimate(pkg);
     expect(record?.answer).toEqual({
       value: "yes",
-      quote: "Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?: yes",
+      quote: "Allow 103 review passes, over the 100-pass ceiling, for .metaproject/reviews/pr7932-r1?: yes",
       at: NOW.toISOString(),
       confirmedVia: "tui-card",
     });
   });
 
   test("a yes answered in the remote topic is recorded as remote-card; answer=no records a declined run", async () => {
-    dropFiles(1100);
+    dropFiles(4100);
     await ensureChunkPlan(pkg, root);
     const t = tool("review_chunks_answer");
     const result = await yes(t, { package: pkg, answer: "no" }, "remote");
-    expect(result.card[0]).toContain("Stop the 28-pass chunk run");
+    expect(result.card[0]).toContain("Stop the 103-pass chunk run");
     const answer = (await readChunkEstimate(pkg))?.answer;
     expect(answer?.value).toBe("no");
     expect(answer?.confirmedVia).toBe("remote-card");
@@ -135,7 +135,7 @@ describe("review_chunks_answer", () => {
   });
 
   test("a no changes nothing: the card was built, the tool was never invoked, no estimate is on disk", async () => {
-    dropFiles(1100);
+    dropFiles(4100);
     await ensureChunkPlan(pkg, root);
     const t = tool("review_chunks_answer");
     const card = asked(await ask(t, { package: pkg, answer: "yes" }));
@@ -148,7 +148,7 @@ describe("review_chunks_answer", () => {
   });
 
   test("asking never writes chunks.json: no plan yet is a refusal naming the command, and a no leaves the package as it was", async () => {
-    dropFiles(1100);
+    dropFiles(4100);
     const t = tool("review_chunks_answer");
     const refused = await ask(t, { package: pkg, answer: "yes" });
     expect(refused).toEqual({ error: expect.stringContaining("keryx review chunks plan") });
@@ -165,7 +165,7 @@ describe("review_chunks_answer", () => {
     dropFiles(100);
     await ensureChunkPlan(pkg, root);
     const refused = await ask(tool("review_chunks_answer"), { package: pkg, answer: "yes" });
-    expect(refused).toEqual({ error: expect.stringContaining("within the ceiling of 25") });
+    expect(refused).toEqual({ error: expect.stringContaining("within the ceiling of 100") });
   });
 
   test("a package that is not a directory in the project is refused", async () => {

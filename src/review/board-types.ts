@@ -6,6 +6,8 @@ export type ReviewCi = "passed" | "failed" | "pending" | "none" | "unknown";
 
 export interface ReviewCard {
   localReview?: {
+    sessionId?: string;
+    runId?: string;
     active: boolean;
     ready: boolean;
     awaitingAnswer?: true;

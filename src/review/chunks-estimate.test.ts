@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   process.chdir(originalCwd);
-  process.exitCode = originalExitCode;
+  process.exitCode = originalExitCode ?? 0;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -63,7 +63,7 @@ test("the estimate shows chunk count, files, tokens, cost at the middle tier and
   dropFiles(100);
   const estimate = await estimateChunkRun(pkg, root);
   expect(estimate).not.toBeNull();
-  expect(estimate).toMatchObject({ tier: "middle", reviewer: "review-regression", chunks: 3, files: 100, maxPasses: 25, ceilingFiles: 1000, overCeiling: false, limitsSource: "default" });
+  expect(estimate).toMatchObject({ tier: "middle", reviewer: "review-regression", chunks: 3, files: 100, maxPasses: 100, ceilingFiles: 4000, overCeiling: false, limitsSource: "default" });
   expect(estimate!.tokens.input).toBeGreaterThan(0);
   expect(estimate!.tokens.output).toBe(3 * 1500);
   expect(estimate!.costUsd).toBeGreaterThan(0);
@@ -73,7 +73,7 @@ test("the estimate shows chunk count, files, tokens, cost at the middle tier and
   expect(text).toContain("3 chunk(s), 100 file(s)");
   expect(text).toContain("middle tier");
   expect(text).toMatch(/~\$\d+\.\d\d/);
-  expect(text).toContain("ceiling: 25 passes of 40 files (1000 files)");
+  expect(text).toContain("ceiling: 100 passes of 40 files (4000 files)");
 });
 
 test("no dropped files means no plan and no estimate", async () => {
@@ -87,6 +87,7 @@ test("automatic mode: at or under the ceiling goes through without a question, o
   expect(decisionFor({ overCeiling: false }, "automatic")).toBe("proceed");
   expect(decisionFor({ overCeiling: true }, "automatic")).toBe("ask-once");
 
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 25 } }));
   dropFiles(1000);
   const atCeiling = await estimateChunkRun(pkg, root);
   expect(atCeiling).toMatchObject({ chunks: 25, overCeiling: false });
@@ -102,6 +103,7 @@ test("automatic mode: at or under the ceiling goes through without a question, o
 });
 
 test("interactive mode: a run over the ceiling waits for a yes, and `chunks next` refuses until it comes", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 25 } }));
   dropFiles(1200);
   expect(chunkModeOf(pkg)).toBe("interactive");
   const blocked = await chunkRunBlocker(pkg, root);
@@ -113,7 +115,7 @@ test("interactive mode: a run over the ceiling waits for a yes, and `chunks next
   const refused = await capture(() => runChunks(["next", "--package", pkg], { rejectUnknownFlags: () => {} }));
   expect(refused).toContain("blocked:");
   expect(process.exitCode).toBe(1);
-  process.exitCode = originalExitCode;
+  process.exitCode = originalExitCode ?? 0;
 
   const estimate = (await estimateChunkRun(pkg, root))!;
   await recordChunkEstimate(pkg, estimate, "interactive");
@@ -126,10 +128,11 @@ test("interactive mode: a run over the ceiling waits for a yes, and `chunks next
 });
 
 test("a no keeps the run blocked, and an answer does not carry over to a different plan", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 25 } }));
   dropFiles(1200);
   await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
   await answerChunkEstimate(pkg, "no", "too expensive");
-  expect(await chunkRunBlocker(pkg, root)).toContain("the operator answered no");
+  expect(await chunkRunBlocker(pkg, root)).toContain("operator answered no");
 
   dropFiles(1250);
   const other = (await estimateChunkRun(pkg, root))!;
@@ -140,6 +143,7 @@ test("a no keeps the run blocked, and an answer does not carry over to a differe
 });
 
 test("an answer recorded for another plan neither unblocks nor blocks a run that changed under it", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 25 } }));
   dropFiles(1200);
   await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
   await answerChunkEstimate(pkg, "yes", "run them");
@@ -152,6 +156,7 @@ test("an answer recorded for another plan neither unblocks nor blocks a run that
 });
 
 test("a yes covers the whole plan: recording a chunk DONE does not ask again (R1-06)", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 25 } }));
   dropFiles(1200);
   await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
   await answerChunkEstimate(pkg, "yes", "run them");
@@ -165,6 +170,7 @@ test("a yes covers the whole plan: recording a chunk DONE does not ask again (R1
 });
 
 test("the estimate and the answer are recorded in the package", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 25 } }));
   dropFiles(1200);
   await runChunks(["estimate", "--package", pkg], { rejectUnknownFlags: () => {} });
   await runChunks(["estimate", "--package", pkg, "--answer", "yes", "--quote", "go ahead"], { rejectUnknownFlags: () => {} }, { isTerminal: () => true });
@@ -174,7 +180,7 @@ test("the estimate and the answer are recorded in the package", async () => {
   expect((await readChunkEstimate(pkg))?.decision).toBe("wait-for-yes");
 });
 
-test("the ceiling comes from routing.config.json reviewChunks.maxPasses and falls back to 25", async () => {
+test("the ceiling comes from routing.config.json reviewChunks.maxPasses and falls back to 100", async () => {
   expect((await readChunkLimits(root)).maxPasses).toBe(DEFAULT_MAX_PASSES);
   writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ categories: {}, reviewChunks: { maxPasses: 4, secondsPerPass: 60 } }));
   const limits = await readChunkLimits(root);
@@ -183,7 +189,7 @@ test("the ceiling comes from routing.config.json reviewChunks.maxPasses and fall
   const estimate = (await estimateChunkRun(pkg, root))!;
   expect(estimate).toMatchObject({ chunks: 5, maxPasses: 4, ceilingFiles: 160, overCeiling: true, seconds: 300 });
   writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: -3 } }));
-  expect((await readChunkLimits(root)).maxPasses).toBe(25);
+  expect((await readChunkLimits(root)).maxPasses).toBe(DEFAULT_MAX_PASSES);
 });
 
 test("saving routing settings keeps the reviewChunks key", async () => {
@@ -207,13 +213,13 @@ test("a routing.config.json that is not a JSON object leaves the defaults and a 
   expect(renderChunkEstimate(record).join("\n")).toContain("warning: ");
 });
 
-test("maxPasses is rounded down, capped at 100, and a value that rounds to 0 keeps the default (R2-33)", async () => {
+test("maxPasses is rounded down, capped at 400, and a value that rounds to 0 keeps the default (R2-33)", async () => {
   const limitsFor = async (maxPasses: unknown) => {
     writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses } }));
     return readChunkLimits(root);
   };
   expect((await limitsFor(7.9)).maxPasses).toBe(7);
-  expect((await limitsFor(500)).maxPasses).toBe(100);
+  expect((await limitsFor(500)).maxPasses).toBe(400);
   expect((await limitsFor(0.5)).maxPasses).toBe(DEFAULT_MAX_PASSES);
   expect((await limitsFor("9")).maxPasses).toBe(DEFAULT_MAX_PASSES);
   expect((await limitsFor(7.9)).source).toBe("routing.config.json");
@@ -226,4 +232,35 @@ test("`chunks next` records its estimate from the one it computed (R2-39)", asyn
   const record = await readChunkEstimate(pkg);
   expect(record?.estimate.chunks).toBe(1);
   expect(record?.decision).toBe("proceed");
+});
+
+test("automatic chunk expansion records the project allowance and rechecks it on resume", async () => {
+  const policy = (autoApprovePasses: number) => writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({
+    reviewChunks: { maxPasses: 2, autoApprovePasses },
+  }));
+  policy(5);
+  dropFiles(121);
+  expect(await chunkRunBlocker(pkg, root)).toContain("exceed the ceiling");
+  writeFileSync(path.join(pkg, AUTOMATIC_REVIEW_DISCLOSURE_FILE), "{}");
+  expect(await chunkRunBlocker(pkg, root)).toBeUndefined();
+  const saved = await readChunkEstimate(pkg);
+  expect(saved).toMatchObject({ decision: "auto-approved", asked: false, estimate: { chunks: 4, autoApprovePasses: 5 } });
+  expect(saved?.answer).toBeUndefined();
+  policy(3);
+  expect(await chunkRunBlocker(pkg, root)).toContain("exceed the ceiling");
+  policy(5);
+  await answerChunkEstimate(pkg, "no", "stop the expansion");
+  expect(await chunkRunBlocker(pkg, root)).toContain("answered no");
+});
+
+test("a pinned head change invalidates a human chunk approval with identical files", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 1 } }));
+  const pin = (head: string) => writeFileSync(path.join(pkg, "manifest.json"), JSON.stringify({ target: { ref: "pr:42", head } }));
+  pin("a".repeat(40));
+  dropFiles(42);
+  await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
+  await answerChunkEstimate(pkg, "yes", "approve this revision");
+  expect(await chunkRunBlocker(pkg, root)).toBeUndefined();
+  pin("b".repeat(40));
+  expect(await chunkRunBlocker(pkg, root)).toContain("exceed the ceiling");
 });

@@ -706,3 +706,21 @@ test("a mutation in the Review panel re-reads the list once; opening the panel d
   await click(button("Start review"));
   expect(reads).toBe(2);
 });
+
+test("the Reviews card and list open the originating chat and retain a separate details action", async () => {
+  const opened: string[] = [];
+  const linked = review(14, { sessionId: "original-chat", state: "running" });
+  await render(async () => snapshot([linked]), {
+    onOpenOriginSession: async sessionId => { opened.push(sessionId); },
+  });
+  await click(tile(14));
+  expect(opened).toEqual(["original-chat"]);
+  expect(document.querySelector('aside[aria-label="Review of pull request #14"]')).toBeNull();
+  await click(button("Review details for #14"));
+  expect(document.querySelector('aside[aria-label="Review of pull request #14"]')).not.toBeNull();
+  await click(button("Close review"));
+  await click(button("List"));
+  await click(document.querySelector<HTMLButtonElement>(".review-list-link")!);
+  expect(opened).toEqual(["original-chat", "original-chat"]);
+  expect(has("Review details for #14")).toBe(true);
+});
