@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sessionFlags, type SessionInfo } from "../acp/types";
+import { errMessage } from "../lib/format";
 import type { FlowCard } from "../platform/commands";
 import { FLOW_LINK_WINDOW_MS, resolveFlowLinks, type PendingFlowLink } from "./prWork";
 
@@ -7,6 +8,10 @@ import { FLOW_LINK_WINDOW_MS, resolveFlowLinks, type PendingFlowLink } from "./p
 export interface FlowLinkOffer {
   sessionId: string;
   dir: string;
+  /** Link was pressed and the flag write has not answered yet. */
+  linking?: boolean;
+  /** Why the last Link failed; the offer stays so Link can be pressed again. */
+  error?: string;
 }
 
 /**
@@ -14,12 +19,14 @@ export interface FlowLinkOffer {
  * request (null before the first flow list: nothing can then be told apart, so nothing is offered);
  * `expect(sessionId, known)` waits for the session's package for `FLOW_LINK_WINDOW_MS`. When it is the one
  * new package and this is the one pending request (`resolveFlowLinks`), it becomes an offer: arrival alone
- * cannot tell who made it, so the user confirms. `accept(sessionId)` writes the link through `link`,
- * `dismiss(sessionId)` drops the offer and writes nothing; a package once offered is never offered again.
- * An offer whose session has meanwhile got a Flow is dropped. `actions` keeps its identity.
+ * cannot tell who made it, so the user confirms. `accept(sessionId)` writes the link through `link` and
+ * keeps the offer (`linking`) until the write answers: it goes on success, and stays with its `error` on a
+ * failure, so Link can be pressed again. `dismiss(sessionId)` drops the offer and writes nothing; a package
+ * once offered is never offered again. An offer whose session has meanwhile got a Flow is dropped.
+ * `actions` keeps its identity.
  */
 export function usePendingFlowLinks(flows: readonly FlowCard[], loaded: boolean, sessions: readonly SessionInfo[],
-  link: (sessionId: string, dir: string) => void, now: () => number = Date.now) {
+  link: (sessionId: string, dir: string) => void | Promise<void>, now: () => number = Date.now) {
   const [pending, setPending] = useState<PendingFlowLink[]>([]);
   const [offered, setOffered] = useState<FlowLinkOffer[]>([]);
   const linkRef = useRef(link);
@@ -52,13 +59,22 @@ export function usePendingFlowLinks(flows: readonly FlowCard[], loaded: boolean,
     const expiresAt = nowRef.current() + FLOW_LINK_WINDOW_MS;
     setPending(old => [...old.filter(entry => entry.sessionId !== sessionId), { sessionId, knownDirs, expiresAt }]);
   }, []);
-  const accept = useCallback((sessionId: string) => {
+  const accept = useCallback(async (sessionId: string) => {
     const offer = offersRef.current.find(item => item.sessionId === sessionId);
-    if (!offer) return;
-    // Read and cleared at once, so a second press before the next render cannot write the link twice.
-    offersRef.current = offersRef.current.filter(item => item !== offer);
-    setOffered(old => old.filter(item => item.sessionId !== sessionId));
-    linkRef.current(offer.sessionId, offer.dir);
+    if (!offer || offer.linking) return;
+    const { dir } = offer;
+    // Read and marked at once, so a second press before the next render cannot write the link twice.
+    offersRef.current = offersRef.current.map(item => item === offer ? { sessionId, dir, linking: true } : item);
+    const settle = (next: FlowLinkOffer | null) => setOffered(old => old.flatMap(item =>
+      item.sessionId === sessionId && item.dir === dir ? next ? [next] : [] : [item]));
+    settle({ sessionId, dir, linking: true });
+    try {
+      await linkRef.current(sessionId, dir);
+    } catch (cause) {
+      settle({ sessionId, dir, error: errMessage(cause) });
+      return;
+    }
+    settle(null);
   }, []);
   const dismiss = useCallback((sessionId: string) => {
     offersRef.current = offersRef.current.filter(item => item.sessionId !== sessionId);

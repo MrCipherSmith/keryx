@@ -1,11 +1,13 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { describe, expect, spyOn, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IssueDetail, IssueProjectRef, IssueViewer } from "../../integrations/issues-contract";
+import * as organize from "../organize";
 import { readSessionFlags, setSessionFlags, type SessionSubject } from "../organize";
 import { sessionDir } from "../paths";
-import { type BoundIssue, withIssueBinding } from "./issue-session";
+import { type BoundIssue, issueBindingFile, saveBinding, withIssueBinding } from "./issue-session";
 
 const viewer: IssueViewer = { host: "github.com", login: "reader", nodeId: "user-reader" };
 
@@ -22,6 +24,13 @@ async function boundSessionId(record: BoundIssue): Promise<string> {
   const id = record.launch.sessionId;
   if (id === undefined) throw new Error("the binding reserved no session id");
   return id;
+}
+
+/** keryx lists a session only after its first save, and a later open needs to find it. */
+async function listed(root: string, sessionId: string, dataDir: string): Promise<void> {
+  const { persistHistory, createSession } = await import("../index");
+  const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
+  persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
 }
 
 function workspace(): { root: string; dataDir: string; project: IssueProjectRef } {
@@ -81,6 +90,64 @@ describe("withIssueBinding: session subject", () => {
       setSessionFlags(root, sessionId, { subject: null }, dataDir);
       await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
       expect(readSessionFlags(dir).subject).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a later open reads the flags without the lock and skips the backfill when a subject is stored", async () => {
+    const { root, dataDir, project } = workspace();
+    try {
+      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
+      await listed(root, sessionId, dataDir);
+      const backfill = spyOn(organize, "backfillSessionSubject");
+      try {
+        await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+        // Unlinked by the person: settled too, so no backfill either.
+        setSessionFlags(root, sessionId, { subject: null }, dataDir);
+        await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+        expect(backfill).not.toHaveBeenCalled();
+      } finally {
+        backfill.mockRestore();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a later open whose subject backfill fails still opens the session", async () => {
+    const { root, dataDir, project } = workspace();
+    try {
+      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
+      await listed(root, sessionId, dataDir);
+      const dir = sessionDir(root, sessionId, dataDir);
+      // flags.json cannot be written (a directory stands in its place), and it holds no subject.
+      rmSync(path.join(dir, "flags.json"), { force: true });
+      mkdirSync(path.join(dir, "flags.json"));
+      let applied = false;
+      await withIssueBinding(viewer, project, issue(), dataDir, async () => { applied = true; });
+      expect(applied).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the first bind fails loudly when the subject cannot be written", async () => {
+    const { root, dataDir, project } = workspace();
+    try {
+      // A binding registered but not yet bound, whose session folder has an unwritable flags.json.
+      const sessionId = randomUUID();
+      const launchId = randomUUID();
+      const file = issueBindingFile(viewer, project, issue().ref, dataDir);
+      mkdirSync(path.dirname(file), { recursive: true });
+      saveBinding(file, {
+        launch: { version: 1, launchId, issue: issue().ref, viewer, project, stage: "registered", sessionId, initialTurn: { key: launchId, state: "unsent" } },
+        body: "Body", updatedAt: "2026-11-02T00:00:00Z",
+      });
+      mkdirSync(path.join(sessionDir(root, sessionId, dataDir), "flags.json"), { recursive: true });
+      let applied = false;
+      await expect(withIssueBinding(viewer, project, issue(), dataDir, async () => { applied = true; })).rejects.toThrow();
+      expect(applied).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

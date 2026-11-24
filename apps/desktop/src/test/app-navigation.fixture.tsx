@@ -40,6 +40,10 @@ let accountListGate: Promise<void> | undefined;
 let accountListError: string | undefined;
 /** false: an older keryx that answers `_keryx/session_flags` without `subject`. */
 let storesSubject = false;
+/** Sessions the older keryx has saved: it saves a new session at its first turn and refuses flags before that. */
+const saved = new Set<string>();
+/** The session ids `session/prompt` was sent for. */
+const prompted: string[] = [];
 let newSessions = 0;
 const stored = new Map<string, { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } }>();
 mockWindows("project-navigation");
@@ -76,8 +80,17 @@ mockIPC(async (cmd, args) => {
       calls.push(method);
       if (["session/load", "session/resume", "_keryx/session_shown"].includes(method)) loaded.push(String((params as { sessionId?: string }).sessionId));
       let result: unknown;
-      if (method === "_keryx/session_flags") {
+      if (method === "session/prompt") {
+        const { sessionId } = params as { sessionId: string };
+        prompted.push(sessionId);
+        saved.add(sessionId);
+        result = { stopReason: "end_turn" };
+      } else if (method === "_keryx/session_flags") {
         const { sessionId, subject } = params as { sessionId: string; subject?: Record<string, unknown> };
+        if (!storesSubject && !saved.has(sessionId)) {
+          await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32602, message: `session ${sessionId} not found` } }));
+          return;
+        }
         const flags = storesSubject && subject ? { subject } : {};
         if (storesSubject) stored.set(sessionId, { sessionId, cwd, title: "PR session " + sessionId, updatedAt: new Date(Date.now() + stored.size).toISOString(), _meta: { keryx: flags } });
         result = flags;
@@ -301,7 +314,18 @@ try {
   await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
   assert.equal(opened(), firstOpen + 1);
   assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
+  // keryx has not saved the new session yet: it refuses the binding, which waits for the first turn without a notice.
+  const flagWrites = () => calls.filter(method => method === "_keryx/session_flags").length;
+  await waitFor("the first binding attempt", () => flagWrites() > 0);
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  assert.ok(!/did not save the pull request binding/.test(host.textContent ?? ""), "No notice before keryx has saved the session");
+  const refusedWrites = flagWrites();
+  // The first turn saves the session; the binding is tried again after it and keryx answers without subject.
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
   await waitFor("the notice that the binding was not saved", () => /did not save the pull request binding/.test(host.textContent ?? ""));
+  assert.equal(prompted.length, 1, "One turn was sent");
+  assert.ok(flagWrites() > refusedWrites, "The binding was tried again after the turn");
+  const olderTurns = [...prompted];
   // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
   storesSubject = true;
   await go("Pull requests");
@@ -408,7 +432,7 @@ try {
   await waitFor("#13's review slot shows the started run", () => bareSlot("review") === "Review · running");
   assert.equal(bareSlot("flow"), "Create Flow");
   assert.equal(bareSlot("session"), "Session");
-  assert.ok(!calls.includes("session/prompt"), "Neither the PR URL nor /review is sent as a prompt");
+  assert.deepEqual(prompted, olderTurns, "Neither the PR URL nor /review is sent as a prompt");
   await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");

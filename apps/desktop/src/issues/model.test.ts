@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { IssueSummary } from "../../../../src/integrations/issues-contract";
-import type { SessionInfo } from "../acp/types";
-import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSessions, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
+import { boundSessionIndex, type SessionInfo } from "../acp/types";
+import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
 
 const issue: IssueSummary = {
   ref: { host: "github.com", nodeId: "I_a", repositoryId: "R_a", owner: "org", repo: "sample", number: 3, url: "https://github.com/org/sample/issues/3" },
@@ -61,7 +61,8 @@ describe("issue sessions", () => {
       session("4", { kind: "issue", repo: "org/sample", number: 4, url: closed.ref.url }),
       session("5", { kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url }, { archivedAt: "2026-11-05" }),
     ];
-    expect(issueSessions(sessions, issue).map(s => s.sessionId)).toEqual(["2", "1"]);
-    expect(issueSessions([], issue)).toEqual([]);
+    // The board's path: one index over the sessions, looked up by each issue's subject.
+    expect(boundSessionIndex(sessions)(issueSubject(issue)).map(s => s.sessionId)).toEqual(["2", "1"]);
+    expect(boundSessionIndex([])(issueSubject(issue))).toEqual([]);
   });
 });

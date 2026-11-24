@@ -141,6 +141,10 @@ export interface PendingFlowLink {
 export interface PrFlowOffer {
   sessionId: string;
   flow: FlowCard;
+  /** Link was pressed and the write has not answered yet. */
+  linking?: boolean;
+  /** Why the last Link failed; Link can be pressed again. */
+  error?: string;
 }
 
 /** One pass over the pending requests: those still waiting, and the links to offer. */

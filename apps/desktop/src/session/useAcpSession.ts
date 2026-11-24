@@ -781,11 +781,17 @@ export function useAcpSession(cwd: string) {
     [loadSession, newSession, applyPendingFlow],
   );
 
-  /** Link a session to a flow package; kept pending and retried after its turn while keryx has not stored the session. */
-  const linkFlow = useCallback((sessionId: string, flowDir: string) => {
-    pendingFlow.current.set(sessionId, flowDir);
-    return applyPendingFlow(sessionId);
-  }, [applyPendingFlow]);
+  /**
+   * Link a stored session to a flow package (the PR work row's Link). Rejects when keryx refuses or cannot be
+   * reached, so the caller can keep its offer and say why; nothing is kept pending for a later retry.
+   */
+  const linkFlow = useCallback(async (sessionId: string, flowDir: string) => {
+    const l = live.current;
+    const client = l.client;
+    if (!client) throw new Error("keryx is not connected.");
+    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });
+    if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+  }, [cwd, dispatch]);
 
   /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
   const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);

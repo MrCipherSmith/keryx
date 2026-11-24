@@ -17,6 +17,18 @@ export function isAccessError(reason: string) {
   return /(?:^|\b)(?:access|account_mismatch|source_unavailable):/i.test(reason);
 }
 
+/**
+ * Why the project repository source cannot be read here, from the CLI's reason: "unavailable" for no
+ * GitHub.com fetch remote, Issues turned off, or a remote that names no usable repository; "older" for a
+ * keryx that does not know the source, which refuses it on the first page only. Null for any other error,
+ * which keeps Retry: a stale cursor or a lost connection is not a reason to switch sources.
+ */
+export function repositoryUnavailable(reason: string, firstPage: boolean): "unavailable" | "older" | null {
+  if (/has no GitHub\.com fetch remote|has Issues turned off for|names no usable repository/i.test(reason)) return "unavailable";
+  if (firstPage && /Invalid Issues request/i.test(reason)) return "older";
+  return null;
+}
+
 export function useIssueCollection(cwd: string, login: string, source: IssueListSource | "project", target: ProjectSource | null,
   filters: Filters, verified: IssueViewer, denied: (reason: string) => void, request: typeof requestIssues) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);

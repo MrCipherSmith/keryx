@@ -36,7 +36,7 @@ import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, renam
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
 import {
   readSessionFlags,
-  setSessionFlags,
+  setSessionFlagsAsync,
   trashSession,
   type SessionFlags,
   type SessionFlagsChange,
@@ -2937,7 +2937,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow and a GitHub subject. */
-  function handleSessionFlags(params: unknown): SessionFlags {
+  async function handleSessionFlags(params: unknown): Promise<SessionFlags> {
     const method = KERYX_ACP_EXTENSION_METHODS.sessionFlags;
     const { obj, sessionId, cwd } = organiseTarget(params, method);
     const change: SessionFlagsChange = {};
@@ -2961,7 +2961,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       change.subject = subject as Exclude<SessionFlagsChange["subject"], undefined>;
     }
     try {
-      return setSessionFlags(cwd, sessionId, change, options.dataDir);
+      // Async: another process's flags lock is waited out without freezing this server's event loop.
+      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);
     } catch (error) {
       refuseStore(method, sessionId, error);
     }

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Menu, type MenuItem } from "../components/Menu";
 import type { SessionInfo, SessionSubject } from "../acp/types";
@@ -46,14 +46,23 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
   const createFlow = work.onCreateFlow;
   const [menu, setMenu] = useState(false);
   const more = useRef<HTMLButtonElement>(null);
+  const flowSlot = useRef<HTMLSpanElement>(null);
+  // Link and Dismiss remove themselves with the offer: focus then moves to the control that replaces it.
+  const refocusFlow = useRef(false);
+  useEffect(() => {
+    if (offer || !refocusFlow.current) return;
+    refocusFlow.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body) flowSlot.current?.querySelector("button")?.focus();
+  }, [offer]);
   const of = ` for #${card.number}`;
   return <div className="pr-work-row" role="group" aria-label={`Keryx work${of}`}>
     <span className="pr-work-slot" data-slot="review">
       <button type="button" className={"pr-work-link" + (state ? "" : " is-empty") + (waitsOnViewer ? " is-attention" : "")} title={reviewTitle}
         aria-label={reviewText + of} disabled={!canReview} onClick={() => onReview(card)}>{reviewText}</button>
     </span>
-    <span className="pr-work-slot" data-slot="flow">
-      {offer ? <FlowOffer offer={offer} of={of} work={work} /> :
+    <span ref={flowSlot} className="pr-work-slot" data-slot="flow">
+      {offer ? <FlowOffer offer={offer} of={of} work={work} onAct={() => { refocusFlow.current = true; }} /> :
         <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
           aria-label={flowText + of} disabled={!flow && !createFlow}
           onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>}
@@ -72,19 +81,23 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
 }
 
 /**
- * "Link Flow #<id>?" for a package that appeared after Create Flow: the link is written only on Link, and
- * Dismiss drops the question. Fits the slot's fixed height: one line of text and two small buttons.
+ * "Link Flow #<id> · <title>?" for a package that appeared after Create Flow: the link is written only on
+ * Link, and Dismiss drops the question. While the write runs both wait; a failed write says why and keeps
+ * Link. Fits the slot's fixed height: one line of text and two small buttons.
  */
-function FlowOffer({ offer, of, work }: { offer: PrFlowOffer; of: string; work: PrWork }) {
-  const name = `Flow #${offer.flow.id}`;
+function FlowOffer({ offer, of, work, onAct }: { offer: PrFlowOffer; of: string; work: PrWork; onAct: () => void }) {
+  const name = `Flow #${offer.flow.id} · ${offer.flow.title}`;
+  const text = offer.error ? `Not linked: ${offer.error}` : offer.linking ? `Linking ${name}…` : `Link ${name}?`;
+  const title = offer.error ? `${name} was not linked: ${offer.error} Press Link to try again.`
+    : `${name} appeared after Create Flow. Link it to this pull request's session?`;
+  // aria-disabled, not disabled: a disabled button would drop the keyboard focus while the write runs.
+  const busy = offer.linking || undefined;
   return <>
-    <span className="pr-work-link pr-work-offer" title={`${name} (${offer.flow.title}) appeared after Create Flow. Link it to this pull request's session?`}>
-      Link {name}?
-    </span>
-    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} disabled={!work.onLinkFlowOffer}
-      onClick={() => work.onLinkFlowOffer?.(offer)}>Link</button>
-    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} disabled={!work.onDismissFlowOffer}
-      onClick={() => work.onDismissFlowOffer?.(offer)}>Dismiss</button>
+    <span className={"pr-work-offer" + (offer.error ? " is-attention" : "")} title={title} {...(offer.error && { role: "alert" })}>{text}</span>
+    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} aria-disabled={busy} disabled={!work.onLinkFlowOffer}
+      onClick={() => { if (busy) return; onAct(); work.onLinkFlowOffer?.(offer); }}>Link</button>
+    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} aria-disabled={busy} disabled={!work.onDismissFlowOffer}
+      onClick={() => { if (busy) return; onAct(); work.onDismissFlowOffer?.(offer); }}>Dismiss</button>
   </>;
 }
 

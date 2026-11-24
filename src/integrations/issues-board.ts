@@ -110,12 +110,16 @@ function validateListRequest(request: ListIssueRequest): void {
     throw new Error(invalidInput);
 }
 
+/** The project's GitHub.com remote parses, but its owner or name (`.`, `..`) cannot name a repository. */
+export const unusableRemote = "configuration: This project's GitHub.com remote names no usable repository.";
+
 /** owner/name of the project's GitHub repository, resolved the way the PR board resolves its default. */
 async function projectRepository(cwd: string | undefined): Promise<string> {
+  // No project at all is a caller's bug, not something the person can fix in the project.
   if (!cwd) throw new Error(invalidInput);
   const repository = selectRepository(await reviewRepositories(cwd));
   // The remote parser admits "." and ".." as a name; either would rewrite the request path.
-  if (repository.split("/").some((part) => /^\.+$/.test(part))) throw new Error(invalidInput);
+  if (repository.split("/").some((part) => /^\.+$/.test(part))) throw new Error(unusableRemote);
   return repository;
 }
 

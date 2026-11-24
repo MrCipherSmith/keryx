@@ -10,7 +10,7 @@ import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from
 import { homedir } from "node:os";
 import path from "node:path";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
-import { withFileLock } from "../lib/file-lock";
+import { type FileLockOptions, withFileLock, withFileLockAsync } from "../lib/file-lock";
 import { sessionLeaseState } from "./lease";
 import { sessionDir } from "./paths";
 import { findSession, shortSessionId } from "./store";
@@ -126,23 +126,75 @@ function writeFlags(dir: string, { flags, subjectUnlinked }: StoredFlags): void 
   writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
 }
 
-/** How long a flags writer waits for another, and when a lock is taken as abandoned (the critical section is one small file). */
-const FLAGS_LOCK_TIMEOUT_MS = 3_000;
-const FLAGS_LOCK_STALE_MS = 2_000;
+/** How long a flags writer waits for another, and when a lock is taken as abandoned. */
+export interface FlagsLockTiming {
+  timeoutMs: number;
+  staleMs: number;
+}
+
+/** The production timing: the critical section is one small file. Tests pass their own. */
+export const FLAGS_LOCK_TIMING: Readonly<FlagsLockTiming> = { timeoutMs: 3_000, staleMs: 2_000 };
+
+const lockedError = (dir: string) => new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
+const goneError = (dir: string) => new Error(`no session ${path.basename(dir)} in this project`);
+
+function lockOptions(timing: FlagsLockTiming): FileLockOptions {
+  // The session directory is never created by taking its lock: a session moved
+  // to the trash since it was located must stay gone, not come back as a stub.
+  return { timeoutMs: timing.timeoutMs, staleMs: timing.staleMs, createDir: false };
+}
+
+/** Runs `apply` only while the session is still stored: its directory and summary.json are there. */
+function whileStored<T>(dir: string, apply: () => T): () => T {
+  return () => {
+    if (!existsSync(path.join(dir, "summary.json"))) throw goneError(dir);
+    return apply();
+  };
+}
+
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
+}
 
 /**
  * Runs a read-modify-write of flags.json holding `<dir>/flags.json.lock`, so
  * that writers in other keryx processes (one ACP server per Desktop window, the
- * issue-workspace child) cannot lose each other's change. Synchronous: callers
- * are synchronous, and the section is one read and one atomic write.
+ * issue-workspace child) cannot lose each other's change. Synchronous, for
+ * synchronous callers; a server uses {@link withFlagsLockAsync}.
  */
-function withFlagsLock<T>(dir: string, apply: () => T): T {
-  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {
-    timeoutMs: FLAGS_LOCK_TIMEOUT_MS,
-    staleMs: FLAGS_LOCK_STALE_MS,
-  });
-  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
+function withFlagsLock<T>(dir: string, apply: () => T, timing: FlagsLockTiming): T {
+  let held: { value: T } | null;
+  try {
+    held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: whileStored(dir, apply)() }), lockOptions(timing));
+  } catch (error) {
+    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);
+    throw error;
+  }
+  if (held === null) throw lockedError(dir);
   return held.value;
+}
+
+/** {@link withFlagsLock} waiting without blocking the event loop. */
+async function withFlagsLockAsync<T>(dir: string, apply: () => T, timing: FlagsLockTiming): Promise<T> {
+  let held: { value: T } | null;
+  try {
+    held = await withFileLockAsync(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: whileStored(dir, apply)() }), lockOptions(timing));
+  } catch (error) {
+    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);
+    throw error;
+  }
+  if (held === null) throw lockedError(dir);
+  return held.value;
+}
+
+/**
+ * Whether the session's subject needs no backfill: one is stored, or the
+ * person unlinked it. Read without the lock (a writer replaces flags.json
+ * atomically), so a binder can skip taking it on every open.
+ */
+export function sessionSubjectSettled(dir: string): boolean {
+  const { flags, subjectUnlinked } = readStoredFlags(dir);
+  return flags.subject !== undefined || subjectUnlinked;
 }
 
 /**
@@ -150,7 +202,7 @@ function withFlagsLock<T>(dir: string, apply: () => T): T {
  * has not unlinked one. Returns whether it wrote. For a binder that learns the
  * subject after the session was bound (a binding made before subjects existed).
  */
-export function backfillSessionSubject(dir: string, subject: SessionSubject): boolean {
+export function backfillSessionSubject(dir: string, subject: SessionSubject, timing: FlagsLockTiming = FLAGS_LOCK_TIMING): boolean {
   const parsed = parseSessionSubject(subject);
   if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);
   return withFlagsLock(dir, () => {
@@ -158,7 +210,7 @@ export function backfillSessionSubject(dir: string, subject: SessionSubject): bo
     if (current.flags.subject !== undefined || current.subjectUnlinked) return false;
     writeFlags(dir, { flags: { ...current.flags, subject: parsed }, subjectUnlinked: false });
     return true;
-  });
+  }, timing);
 }
 
 /**
@@ -166,8 +218,23 @@ export function backfillSessionSubject(dir: string, subject: SessionSubject): bo
  * For a caller that already holds the session directory, such as a binder
  * that has just created the session and cannot look it up yet.
  */
-export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
-  return withFlagsLock(dir, () => applyFlagsChange(dir, change, now));
+export function updateSessionFlagsAt(
+  dir: string,
+  change: SessionFlagsChange,
+  now: () => Date = () => new Date(),
+  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
+): SessionFlags {
+  return withFlagsLock(dir, () => applyFlagsChange(dir, change, now), timing);
+}
+
+/** {@link updateSessionFlagsAt} waiting for the lock without blocking the event loop. */
+export function updateSessionFlagsAtAsync(
+  dir: string,
+  change: SessionFlagsChange,
+  now: () => Date = () => new Date(),
+  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
+): Promise<SessionFlags> {
+  return withFlagsLockAsync(dir, () => applyFlagsChange(dir, change, now), timing);
 }
 
 function applyFlagsChange(dir: string, change: SessionFlagsChange, now: () => Date): SessionFlags {
@@ -212,9 +279,26 @@ export function setSessionFlags(
   change: SessionFlagsChange,
   dataDir?: string,
   now: () => Date = () => new Date(),
+  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
 ): SessionFlags {
   const { dir } = locate(cwd, sessionId, dataDir);
-  return updateSessionFlagsAt(dir, change, now);
+  return updateSessionFlagsAt(dir, change, now, timing);
+}
+
+/**
+ * {@link setSessionFlags} for a long-lived server: waiting for another
+ * writer's lock yields to the event loop instead of freezing it.
+ */
+export async function setSessionFlagsAsync(
+  cwd: string,
+  sessionId: string,
+  change: SessionFlagsChange,
+  dataDir?: string,
+  now: () => Date = () => new Date(),
+  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
+): Promise<SessionFlags> {
+  const { dir } = locate(cwd, sessionId, dataDir);
+  return updateSessionFlagsAtAsync(dir, change, now, timing);
 }
 
 export interface TrashOptions {

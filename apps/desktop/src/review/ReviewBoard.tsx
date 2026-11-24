@@ -487,9 +487,10 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
-  // A focus request waits for a snapshot of its repository that holds the PR, then opens its panel once per nonce.
-  // Another repository of this board is selected first (the board remounts on it); one it cannot show is refused
-  // with a notice, so the request is not left armed for a later, unrelated switch.
+  // A focus request waits for a snapshot of its repository, then opens the PR's panel once per nonce.
+  // Another repository of this board is selected first (the board remounts on it). A repository it cannot
+  // show, or a PR missing from the settled list of its repository (its state filtered out, say), is refused
+  // with a notice, so the request is not left armed to open the panel later, unasked.
   const focused = useRef<number | null>(null);
   const [focusNotice, setFocusNotice] = useState("");
   useEffect(() => {
@@ -505,12 +506,19 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       onFocusHandled?.(focus.nonce);
       return;
     }
-    if (!snapshot.cards.some(c => c.number === focus.number)) return;
+    if (!snapshot.cards.some(c => c.number === focus.number)) {
+      // A load in flight, or a cached fallback, may still bring the PR in: wait for the settled list.
+      if (loading || stale) return;
+      focused.current = focus.nonce;
+      setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);
+      onFocusHandled?.(focus.nonce);
+      return;
+    }
     focused.current = focus.nonce;
     setFocusNotice("");
     setSelected({ number: focus.number });
     onFocusHandled?.(focus.nonce);
-  }, [focus, snapshot, onFocusHandled, selectRepo]);
+  }, [focus, snapshot, loading, stale, onFocusHandled, selectRepo]);
   const workRepo = snapshot?.repo ?? "";
   // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
   const index = useMemo(() => prWorkIndex(flows, sessions), [flows, sessions]);
@@ -599,7 +607,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     </div>}
     {focusNotice && <div className="inline-banner tone-warn review-focus-notice" role="status">
       <Icon name="alert" size={15} /><span>{focusNotice}</span>
-      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => setFocusNotice("")}>
+      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => { setFocusNotice(""); search.current?.focus(); }}>
         <Icon name="x" size={15} />
       </button>
     </div>}

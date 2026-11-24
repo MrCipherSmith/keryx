@@ -1,5 +1,5 @@
 import { issueKey, type IssueListSource, type IssueLocalStage, type IssueSummary } from "../../../../src/integrations/issues-contract";
-import { boundSessions, type SessionInfo, type SessionSubject } from "../acp/types";
+import type { SessionSubject } from "../acp/types";
 
 export const STAGES: Record<IssueLocalStage["stage"], string> = {
   none: "No Flow", preparing: "Preparing", active: "In progress", needs_answer: "Needs an answer", done: "Done",
@@ -62,11 +62,6 @@ export function issueGroups(project: ProjectBoard | undefined, state: Filters["s
 /** The Subject a session works on when it is bound to this issue. */
 export function issueSubject(issue: IssueSummary): SessionSubject {
   return { kind: "issue", repo: repoName(issue), number: issue.ref.number, url: issue.ref.url, repositoryId: issue.ref.repositoryId };
-}
-
-/** The non-archived sessions bound to the issue through their `subject`, newest first. */
-export function issueSessions(sessions: readonly SessionInfo[], issue: IssueSummary): SessionInfo[] {
-  return boundSessions(sessions, issueSubject(issue));
 }
 
 export function mergeRows(previous: Row[], next: Row[]): Row[] {

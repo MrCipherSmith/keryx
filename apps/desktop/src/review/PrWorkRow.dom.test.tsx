@@ -336,19 +336,155 @@ test("a focus that nobody clears opens the panel once per nonce, not again after
   expect(panel()).not.toBeNull();
 });
 
+const notice = () => document.body.querySelector(".review-focus-notice");
+const merged: ReviewCard = { ...pr, number: 55, title: "Merged PR", state: "merged", url: pr.url.replace("101", "55") };
+
+test("FE-R3-001: a focus for a PR missing from the loaded list is refused with a notice, and a later load that holds it opens nothing", async () => {
+  const handled: number[] = [];
+  let loads = 0;
+  const host = focusHost(async () => ++loads === 1 ? board([pr]) : board([pr, merged]), handled);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  await host.setFocus({ repo: "org/repo", number: 55, nonce: 1 });
+  expect(panel()).toBeNull();
+  expect(handled).toEqual([1]);
+  expect(notice()?.textContent).toContain("#55 is not in the current list of org/repo");
+  // The next load holds the PR (its state now shown): the refused request does not open it.
+  await click(button("Refresh pull requests"));
+  expect(loads).toBe(2);
+  expect(panel()).toBeNull();
+});
+
+test("FE-R3-001: a focus that arrives while a load runs waits for that load before it decides", async () => {
+  let release!: () => void;
+  let loads = 0;
+  const load: typeof fetchReviewBoard = async () => {
+    if (++loads === 1) return board([pr]);
+    await new Promise<void>(resolve => { release = resolve; });
+    return board([pr, merged]);
+  };
+  const host = focusHost(load, []);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  await click(button("Refresh pull requests"));
+  await host.setFocus({ repo: "org/repo", number: 55, nonce: 1 });
+  expect(notice()).toBeNull();
+  await act(async () => release());
+  expect(panel()?.textContent).toContain("Merged PR");
+});
+
+test("TP-R3-004: a refused request is marked handled, so a refresh does not raise its dismissed notice again", async () => {
+  // Nobody clears the request: only the board's own record of the nonce keeps it from being refused again.
+  const host = focusHost(async () => board([pr]), [], false);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  for (const [nonce, focus] of [[1, { repo: "elsewhere/project", number: 3 }], [2, { repo: "org/repo", number: 55 }]] as const) {
+    await host.setFocus({ ...focus, nonce });
+    expect(notice()).not.toBeNull();
+    await click(button("Dismiss notice"));
+    await click(button("Refresh pull requests"));
+    expect(notice()).toBeNull();
+  }
+});
+
+test("TP-R3-004: a later focus that opens its panel clears the notice of a refused one", async () => {
+  const host = focusHost(async () => board([pr]), []);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  await host.setFocus({ repo: "elsewhere/project", number: 3, nonce: 1 });
+  expect(notice()).not.toBeNull();
+  await host.setFocus({ repo: "org/repo", number: 101, nonce: 2 });
+  expect(panel()).not.toBeNull();
+  expect(notice()).toBeNull();
+});
+
+test("FE-R3-002: Dismiss notice moves focus to the search field, not the page body", async () => {
+  const host = focusHost(async () => board([pr]), []);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  await host.setFocus({ repo: "elsewhere/project", number: 3, nonce: 1 });
+  const dismiss = button("Dismiss notice");
+  (dismiss as HTMLElement).focus();
+  await click(dismiss);
+  expect(notice()).toBeNull();
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+});
+
+/** A board whose offer list the test's Link and Dismiss empty, as App does once the link is written or dismissed. */
+function offerHost(offer: PrFlowOffer, flows: FlowCard[] = []) {
+  const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
+  function Host() {
+    const [offers, set] = useState<PrFlowOffer[]>([offer]);
+    return createElement(ReviewBoard, {
+      cwd: "/project", flows, sessions: bound, load: async () => board([pr]), listRepositories: async () => [],
+      watcherCommand: async () => watcherOff, rulesCommand: rules, onOpenFlow: () => {}, onCreateFlow: () => {}, onOpenSubjectSession: () => {},
+      flowOffers: offers, onLinkFlowOffer: () => set([]), onDismissFlowOffer: () => set([]),
+    });
+  }
+  return act(async () => { root.render(createElement(Host, { key: ++renderKey })); });
+}
+
+test("FE-R3-002: Link and Dismiss move focus to the Flow slot's control that replaces the offer", async () => {
+  const offer: PrFlowOffer = { sessionId: "s1", flow: flow("530") };
+  for (const label of ["Link Flow #530 · Work 530 for #101", "Dismiss Flow #530 · Work 530 for #101"]) {
+    await offerHost(offer);
+    const control = button(label);
+    (control as HTMLElement).focus();
+    await click(control);
+    expect(control.isConnected).toBe(false);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Create Flow for #101");
+  }
+});
+
+test("TP-R3-002: a PR that already has a Flow shows that Flow, not an offer", async () => {
+  await render([pr], { flows: [flow("531", { prUrl: pr.url })], sessions: [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")],
+    offers: [{ sessionId: "s1", flow: flow("530") }] });
+  const slot = document.body.querySelector('[aria-label="Keryx work for #101"] [data-slot="flow"]')!;
+  expect(slot.textContent).toBe("Flow #531 · In progress");
+  expect(slot.querySelector(".pr-work-offer")).toBeNull();
+});
+
+test("UX-010: a Link in flight waits, and a failed one says why and keeps Link", async () => {
+  const calls: Calls = { flows: [], created: [], sessions: [], linked: [], dismissed: [] };
+  const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
+  const linking: PrFlowOffer = { sessionId: "s1", flow: flow("530"), linking: true };
+  await render([pr], { sessions: bound, offers: [linking], calls });
+  const slot = () => document.body.querySelector<HTMLElement>('[aria-label="Keryx work for #101"] [data-slot="flow"]')!;
+  expect(slot().textContent).toBe("Linking Flow #530 · Work 530…LinkDismiss");
+  expect(button("Link Flow #530 · Work 530 for #101").getAttribute("aria-disabled")).toBe("true");
+  await click(button("Link Flow #530 · Work 530 for #101"));
+  await click(button("Dismiss Flow #530 · Work 530 for #101"));
+  expect([calls.linked, calls.dismissed]).toEqual([[], []]);
+  const failed: PrFlowOffer = { sessionId: "s1", flow: flow("530"), error: "keryx is not connected." };
+  await render([pr], { sessions: bound, offers: [failed], calls });
+  const reason = slot().querySelector(".pr-work-offer")!;
+  expect(reason.textContent).toBe("Not linked: keryx is not connected.");
+  expect(reason.getAttribute("role")).toBe("alert");
+  await click(button("Link Flow #530 · Work 530 for #101"));
+  expect(calls.linked).toEqual([failed]);
+});
+
+test("review.css: the offer text truncates and is not a button, its buttons do not shrink, and the slot clips", () => {
+  const css = readFileSync(new URL("../styles/review.css", import.meta.url), "utf8");
+  const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*:()]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+  expect(rule(".pr-work-slot")).toContain("overflow: hidden");
+  expect(rule(".pr-work-offer")).toContain("text-overflow: ellipsis");
+  expect(rule(".pr-work-offer")).toContain("min-width: 0");
+  expect(rule(".pr-work-more")).toContain("flex: none");
+  expect(css).not.toMatch(/\.pr-work-link\.pr-work-offer/);
+});
+
 test("a new package offered for the PR's bound session shows Link and Dismiss in the Flow slot; only those act on it", async () => {
   const calls: Calls = { flows: [], created: [], sessions: [], linked: [], dismissed: [] };
   const offer: PrFlowOffer = { sessionId: "s1", flow: flow("530") };
   const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
   await render([pr, { ...pr, number: 102, url: pr.url.replace("101", "102") }], { sessions: bound, offers: [offer], calls });
   const flowSlot = (n: number) => document.body.querySelector<HTMLElement>(`[aria-label="Keryx work for #${n}"] [data-slot="flow"]`)!;
-  expect(flowSlot(101).textContent).toBe("Link Flow #530?LinkDismiss");
+  // The package is named by number and title, in the text and in Link's accessible name.
+  expect(flowSlot(101).textContent).toBe("Link Flow #530 · Work 530?LinkDismiss");
+  // The question is text, not a control: it has no button class, so no button box and no hover state.
+  expect(flowSlot(101).querySelector(".pr-work-offer")?.classList.contains("pr-work-link")).toBe(false);
   // Only the PR whose bound session asked gets the offer.
   expect(flowSlot(102).textContent).toBe("Create Flow");
   expect(rows().every(row => row.children.length === 3)).toBe(true);
-  await click(button("Link Flow #530 for #101"));
+  await click(button("Link Flow #530 · Work 530 for #101"));
   expect(calls.linked).toEqual([offer]);
-  await click(button("Dismiss Flow #530 for #101"));
+  await click(button("Dismiss Flow #530 · Work 530 for #101"));
   expect(calls.dismissed).toEqual([offer]);
   expect(calls.created).toEqual([]);
   expect(calls.flows).toEqual([]);

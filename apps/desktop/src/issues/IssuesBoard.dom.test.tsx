@@ -31,12 +31,14 @@ beforeEach(async () => { await act(() => root.render(null)); localStorage.clear(
 afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
 
 type Read = (login: string, action: IssuesAction, args: object) => Promise<unknown>;
-function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[]) {
+function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[], cwd = "/fixture") {
   const request: typeof requestIssues = async <T,>(_cwd: string, account: string, action: IssuesAction, args: object) => (action === "viewer" ? { viewer: { ...viewer, login: account, nodeId: account === viewer.login ? viewer.nodeId : "U_b" } } : await read(account, action, args)) as T;
-  return act(async () => { root.render(createElement(Board, { cwd: "/fixture", login, request,
+  return act(async () => { root.render(createElement(Board, { cwd, login, request,
     onSettings: () => {}, onWork: async action => onWork(action), ...(sessions ? { sessions } : {}) })); });
 }
 const account = "keryx.issues." + JSON.stringify([viewer.host, viewer.nodeId]);
+/** The source stored for a project and account; `account + ".source"` alone is the older, per-account key. */
+const sourceKey = (cwd = "/fixture") => account + ".source." + JSON.stringify(cwd);
 const lanes = () => [...host.querySelectorAll(".issue-lanes .lane")].map(lane => lane.getAttribute("aria-label"));
 function button(label: string) {
   const result = [...host.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
@@ -347,7 +349,7 @@ test("AC13 the project repository is the default source; the other sources stay 
   expect([...select.options].map(o => o.textContent)).toEqual(["Project repository", "Assigned to me", "Created by me", "Mentioned", "Subscribed", "GitHub Project"]);
   await act(async () => { select.value = "assigned"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   expect(sources).toEqual(["repository", "assigned"]);
-  expect(localStorage.getItem(account + ".source")).toBe("assigned");
+  expect(localStorage.getItem(sourceKey())).toBe("assigned");
 });
 
 test("AC13 a stored source preference wins over the project repository default", async () => {
@@ -444,13 +446,21 @@ test("AC13 an older keryx that refuses the default repository source offers Assi
     return page([issue]);
   });
   const alert = host.querySelector('[role="alert"]')!;
-  expect(alert.textContent).toContain("update keryx or choose the bundled CLI in Desktop Settings");
+  // Named as Settings names it.
+  expect(alert.textContent).toContain("update keryx or choose Bundled keryx in Settings → Desktop");
+  expect(alert.textContent).not.toContain("configuration:");
   // Retry would send the same refused request again.
   expect(hasButton("Retry")).toBe(false);
-  await click(button("Show issues assigned to me"));
+  const fallback = button("Show issues assigned to me");
+  fallback.focus();
+  await click(fallback);
   expect(sources).toEqual(["repository", "assigned"]);
-  expect(localStorage.getItem(account + ".source")).toBe("assigned");
-  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
+  expect(localStorage.getItem(sourceKey())).toBe("assigned");
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+  expect(select.value).toBe("assigned");
+  // FE-R3-002: the button is gone with the notice; focus lands on the source select, not the page body.
+  expect(fallback.isConnected).toBe(false);
+  expect(document.activeElement).toBe(select);
   expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
 });
 
@@ -458,6 +468,7 @@ test("AC13 a project with no GitHub.com remote, or a repository with Issues turn
   for (const reason of [
     "configuration: This project has no GitHub.com fetch remote.",
     "configuration: GitHub has Issues turned off for fork-owner/sample. Choose another source, such as Assigned to me.",
+    "configuration: This project's GitHub.com remote names no usable repository.",
   ]) {
     await act(() => root.render(null)); localStorage.clear();
     await render(async (_login, action, args) => {
@@ -466,20 +477,81 @@ test("AC13 a project with no GitHub.com remote, or a repository with Issues turn
       return page([issue]);
     });
     const alert = host.querySelector('[role="alert"]')!;
-    expect(alert.textContent).toContain(reason);
+    // UX-013: the reason without its machine prefix.
+    expect(alert.textContent).toContain(reason.replace("configuration: ", ""));
+    expect(alert.textContent).not.toContain("configuration:");
     expect(alert.textContent).toContain("This project's repository issues are not available here.");
-    expect(alert.textContent).not.toContain("bundled CLI");
+    expect(alert.textContent).not.toContain("Bundled keryx");
     expect(hasButton("Retry")).toBe(false);
     await click(button("Show issues assigned to me"));
     expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
   }
 });
 
-test("AC13 a repository source the person chose keeps Retry on a configuration error", async () => {
-  localStorage.setItem(account + ".source", "repository");
+test("UX-017: a repository source the person chose gets the same fallback as the default one", async () => {
+  localStorage.setItem(sourceKey(), "repository");
   await render(async () => { throw new Error("configuration: This project has no GitHub.com fetch remote."); });
+  expect(hasButton("Show issues assigned to me")).toBe(true);
+  expect(hasButton("Retry")).toBe(false);
+});
+
+test("AR-007/TP-R3-003: any other error of the repository source keeps Retry and offers no source switch", async () => {
+  for (const reason of [
+    "rate-limit: GitHub request limit reached.",
+    "unavailable: connection lost",
+    "configuration: Refresh before loading the next page.",
+    "configuration: This project has no remote.",
+  ]) {
+    await act(() => root.render(null)); localStorage.clear();
+    await render(async () => { throw new Error(reason); });
+    expect({ reason, retry: hasButton("Retry"), fallback: hasButton("Show issues assigned to me") }).toEqual({ reason, retry: true, fallback: false });
+  }
+});
+
+test("AR-007: an Invalid Issues request on a later page is not an older keryx: Retry and the snapshot stay", async () => {
+  await render(async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    if ("cursor" in args && args.cursor) throw new Error("configuration: Invalid Issues request.");
+    return page([issue], "more");
+  });
+  await click(button("Load more issues"));
+  const alert = host.querySelector('[role="alert"]')!;
+  expect(alert.textContent).toContain("Showing the last available snapshot.");
   expect(hasButton("Retry")).toBe(true);
   expect(hasButton("Show issues assigned to me")).toBe(false);
+});
+
+test("UX-011: the source is stored per project; the fallback in one project leaves another's source alone", async () => {
+  const sources: string[] = [];
+  const read = (failing: boolean): Read => async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    const { source } = args as { source: string };
+    sources.push(source);
+    if (failing && source === "repository") throw new Error("configuration: This project has no GitHub.com fetch remote.");
+    return page([issue]);
+  };
+  await render(read(true), viewer.login, () => {}, undefined, "/no-remote");
+  await click(button("Show issues assigned to me"));
+  expect(localStorage.getItem(sourceKey("/no-remote"))).toBe("assigned");
+  expect(localStorage.getItem(account + ".source")).toBeNull();
+  sources.length = 0;
+  await render(read(false), viewer.login, () => {}, undefined, "/with-remote");
+  expect(sources).toEqual(["repository"]);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("repository");
+});
+
+test("UX-011: a source stored per account by an earlier Desktop is read until the project has its own", async () => {
+  localStorage.setItem(account + ".source", "created");
+  localStorage.setItem(sourceKey("/chosen"), "mentioned");
+  const sources: string[] = [];
+  const read: Read = async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    sources.push((args as { source: string }).source);
+    return page([issue]);
+  };
+  await render(read, viewer.login, () => {}, undefined, "/legacy");
+  await render(read, viewer.login, () => {}, undefined, "/chosen");
+  expect(sources).toEqual(["created", "mentioned"]);
 });
 
 test("AC12 the work rows read the bound sessions from one index, not once per row", async () => {

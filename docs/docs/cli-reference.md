@@ -474,9 +474,16 @@ is what the keryx desktop app launches, and is open to any ACP client:
   `_keryx/session_shown {sessionId}` (no reply; an id the connection does not
   hold is ignored), so the switch counts as use for the least-recently-used
   choice. The request `_keryx/session_flags {sessionId, cwd?, archived?,
-  pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package
-  (`flow: null` unlinks) a stored session (kept in its `flags.json`) and
-  answers `{archivedAt?, pinnedAt?, flow?}`; `session/list` reports set flags
+  pinned?, flow?, subject?}` archives/unarchives, pins/unpins, links to a flow
+  package (`flow: null` unlinks) or binds to a GitHub pull request or issue
+  (`subject: {kind: "pr"|"issue", repo: "owner/name", number, url,
+  repositoryId?}`, where `url` is the github.com page that agrees with the
+  other fields; `subject: null` unbinds) a stored session (kept in its
+  `flags.json`), and answers `{hasIssue?, archivedAt?, pinnedAt?, flow?,
+  subject?}`. A subject that is not a github.com pull request or issue is
+  refused. The change is written under a per-session lock; when another keryx
+  process holds it too long the request is refused with a message ending in
+  "retry". `session/list` reports set flags
   as `_meta.keryx`, together with `messageCount` (the messages the session
   holds; 0 for a session nobody has written in). The request `_keryx/session_trash {sessionId,
   cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the

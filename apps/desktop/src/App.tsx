@@ -411,7 +411,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
    * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
    * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag.
    */
-  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void acp.current.linkFlow(id, dir));
+  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => acp.current.linkFlow(id, dir));
   const flowLinkActions = flowLinks.actions;
   const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
     const known = flowLinkActions.known();
@@ -422,9 +422,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   }, [flowLinkActions, openPrSession]);
   const flowOffers = useMemo(() => flowLinks.offers.flatMap((offer): PrFlowOffer[] => {
     const flow = flows.cards.find(card => card.dir === offer.dir);
-    return flow ? [{ sessionId: offer.sessionId, flow }] : [];
+    return flow ? [{ sessionId: offer.sessionId, flow, ...(offer.linking && { linking: true }), ...(offer.error && { error: offer.error }) }] : [];
   }), [flowLinks.offers, flows.cards]);
-  const linkFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
+  const linkFlowOffer = useCallback((offer: PrFlowOffer) => void flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
   const dismissFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.dismiss(offer.sessionId), [flowLinkActions]);
 
   const [reviewFocus, setReviewFocus] = useState<{ repo: string; number: number; nonce: number } | null>(null);

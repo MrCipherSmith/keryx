@@ -4,7 +4,7 @@ import path from "node:path";
 import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { withFileLock } from "../../lib/fs";
 import { createSession, findSession, sessionDir } from "../index";
-import { backfillSessionSubject, parseSessionSubject, readSessionFlags } from "../organize";
+import { backfillSessionSubject, parseSessionSubject, readSessionFlags, sessionSubjectSettled } from "../organize";
 import { issueDigest, issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "../../integrations/issue-context/service";
 
 export interface BoundIssue {
@@ -49,11 +49,27 @@ export function issueContextForSession(dir: string, dataDir?: string): BoundIssu
  * An issue whose URL is not a github.com issue page (GitHub Enterprise) has no
  * subject keryx can store. The subject names no GitHub account: a client
  * counting sessions by subject counts those bound under any account.
+ *
+ * The first bind fails loudly when the subject cannot be written. A later open
+ * is best-effort: it reads the flags without the lock and does nothing when a
+ * subject is stored or was unlinked, and a failed backfill (the flags locked by
+ * another process, an unwritable file) leaves the session without a subject
+ * until the next open rather than failing the open itself.
  */
-function bindIssueSubject(dir: string, ref: IssueDetail["ref"]): void {
+function bindIssueSubject(dir: string, ref: IssueDetail["ref"], firstBind: boolean): void {
   const subject = parseSessionSubject({ kind: "issue", repo: `${ref.owner}/${ref.repo}`, number: ref.number, url: ref.url,
     ...(ref.repositoryId ? { repositoryId: ref.repositoryId } : {}) });
-  if (subject !== undefined) backfillSessionSubject(dir, subject);
+  if (subject === undefined) return;
+  if (firstBind) {
+    backfillSessionSubject(dir, subject);
+    return;
+  }
+  if (sessionSubjectSettled(dir)) return;
+  try {
+    backfillSessionSubject(dir, subject);
+  } catch {
+    // Best-effort on a later open: the subject is a display hint, the private record stays the authority.
+  }
 }
 
 /** Only called after the remote issue and viewer were verified. The intent reserves the UUID before creating the session. */
@@ -81,6 +97,7 @@ export async function withIssueBinding<T>(
     }
     const root = launch.project.cwd;
     const dir = sessionDir(root, launch.sessionId, dataDir);
+    const firstBind = launch.stage === "registered";
     if (launch.stage !== "registered" && (!findSession(root, launch.sessionId, dataDir) || readSessionFlags(dir).archivedAt)) {
       throw new Error("The linked session is archived or missing. Restore it in Sessions and retry.");
     }
@@ -96,7 +113,7 @@ export async function withIssueBinding<T>(
     if (!existsSync(dir)) throw new Error("The linked session is missing. Restore it in Sessions and retry.");
     // On first bind, and for a session an older keryx bound without a subject. The flags lock is
     // taken inside the binding lock, never the reverse, so the two cannot deadlock.
-    bindIssueSubject(dir, issue.ref);
+    bindIssueSubject(dir, issue.ref, firstBind);
     if (launch.flow) record.flowSourceUrl ??= launch.issue.url;
     launch.issue = issue.ref;
     record.body = issue.body;

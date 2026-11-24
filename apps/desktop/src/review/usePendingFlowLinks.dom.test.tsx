@@ -32,15 +32,25 @@ function harness() {
   const links: string[] = [];
   const hooks: Hook[] = [];
   const clock = { now: 0 };
+  /** What the flag write answers after recording the link; a test may make it wait or fail. */
+  const write = { answer: (): void | Promise<void> => undefined };
   function Probe({ flows, loaded, sessions }: { flows: FlowCard[]; loaded: boolean; sessions: SessionInfo[] }) {
-    hooks.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => links.push(`${id} ${dir}`), () => clock.now));
+    hooks.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => { links.push(`${id} ${dir}`); return write.answer(); }, () => clock.now));
     return null;
   }
   const render = (flows: FlowCard[], loaded = true, sessions: SessionInfo[] = []) =>
     act(async () => { root.render(createElement(Probe, { flows, loaded, sessions })); });
   const api = () => hooks.at(-1)!.actions;
   const offers = () => hooks.at(-1)!.offers.map(offer => `${offer.sessionId} ${offer.dir}`);
-  return { links, clock, hooks, render, api, offers };
+  const state = () => hooks.at(-1)!.offers.map(({ linking, error }) => ({ ...(linking && { linking }), ...(error && { error }) }));
+  return { links, clock, hooks, write, render, api, offers, state };
+}
+/** An offer of 101-new for s1, after its Create Flow. */
+async function offered(h: ReturnType<typeof harness>) {
+  await h.render([flow("100-old")]);
+  await act(async () => h.api().expect("s1", h.api().known()));
+  await h.render([flow("100-old"), flow("101-new")]);
+  expect(h.offers()).toEqual(["s1 101-new"]);
 }
 // Each test starts from a fresh hook: the previous test's Probe is unmounted first.
 beforeEach(async () => { await act(async () => root.render(null)); });
@@ -151,4 +161,56 @@ test("the hook's actions keep their identity across renders, so callbacks built 
   await h.render([flow("100-old"), flow("101-new")]);
   await h.render([flow("100-old"), flow("101-new")], true, []);
   expect(new Set(h.hooks.map(hook => hook.actions)).size).toBe(1);
+});
+
+test("TP-R3-001: two Link presses before a render write the link once", async () => {
+  const h = harness();
+  await offered(h);
+  await act(async () => { void h.api().accept("s1"); void h.api().accept("s1"); });
+  expect(h.links).toEqual(["s1 101-new"]);
+  expect(h.offers()).toEqual([]);
+});
+
+test("TP-R3-001: Dismiss then Link before a render writes nothing", async () => {
+  const h = harness();
+  await offered(h);
+  await act(async () => { h.api().dismiss("s1"); void h.api().accept("s1"); });
+  expect(h.links).toEqual([]);
+  expect(h.offers()).toEqual([]);
+});
+
+test("TP-R3-001: a new offer for a session replaces that session's older one", async () => {
+  const h = harness();
+  await offered(h);
+  await act(async () => h.api().expect("s1", h.api().known()));
+  await h.render([flow("100-old"), flow("101-new"), flow("102-next")]);
+  expect(h.offers()).toEqual(["s1 102-next"]);
+});
+
+test("UX-010: the offer stays, marked linking, until the flag write answers", async () => {
+  const h = harness();
+  await offered(h);
+  let answer!: () => void;
+  h.write.answer = () => new Promise<void>(resolve => { answer = resolve; });
+  await act(async () => { void h.api().accept("s1"); });
+  expect(h.offers()).toEqual(["s1 101-new"]);
+  expect(h.state()).toEqual([{ linking: true }]);
+  // A press while the write runs sends nothing more.
+  await act(async () => { void h.api().accept("s1"); });
+  expect(h.links).toEqual(["s1 101-new"]);
+  await act(async () => answer());
+  expect(h.offers()).toEqual([]);
+});
+
+test("UX-010: a failed flag write keeps the offer with its reason, and Link can be pressed again", async () => {
+  const h = harness();
+  await offered(h);
+  h.write.answer = () => Promise.reject(new Error("the flags of session s1 are locked by another keryx process; retry"));
+  await act(async () => { await h.api().accept("s1"); });
+  expect(h.offers()).toEqual(["s1 101-new"]);
+  expect(h.state()).toEqual([{ error: "the flags of session s1 are locked by another keryx process; retry" }]);
+  h.write.answer = () => undefined;
+  await act(async () => { await h.api().accept("s1"); });
+  expect(h.links).toEqual(["s1 101-new", "s1 101-new"]);
+  expect(h.offers()).toEqual([]);
 });

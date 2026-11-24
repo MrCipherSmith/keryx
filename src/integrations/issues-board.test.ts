@@ -1,7 +1,7 @@
 import { defaultFilters, groupForRow, mergeRows, visibleRows, type Row } from "../../apps/desktop/src/issues/model";
 import { expect, test } from "bun:test";
 import { issueComments, issueDetail, listIssuePage } from "./issues-board";
-import { authenticatedAccount, IssueGithub, type FetchIssues } from "./issues-github";
+import { authenticatedAccount, IssueGithub, issuesDisabled, type FetchIssues } from "./issues-github";
 import { issueKey, type IssueRef } from "./issues-contract";
 
 function json(value: unknown, init?: ResponseInit) {
@@ -258,7 +258,7 @@ test("AC13 the repository source needs a project with a GitHub remote", async ()
   expect(requested).toBe(0);
 });
 
-test("AC13 a remote named `..` is refused before any request", async () => {
+test("AC13 a remote named `..` is refused before any request, as a remote that names no usable repository", async () => {
   let requested = 0;
   const auth = await account(async () => {
     requested++;
@@ -266,8 +266,12 @@ test("AC13 a remote named `..` is refused before any request", async () => {
   });
   // The remote parser reads `org/..` from this URL; as a path it would turn /repos/org/../issues into /repos/issues.
   await withProject("https://github.com/org/...git", async (cwd) => {
-    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
+      "configuration: This project's GitHub.com remote names no usable repository.",
+    );
   });
+  // No project at all stays an invalid request: the caller sent the repository source without one.
+  await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration: Invalid Issues request.");
   expect(requested).toBe(0);
 });
 
@@ -304,6 +308,26 @@ test("AC13 GitHub's 410 for a repository with Issues turned off is a configurati
     await expect(failure).rejects.toThrow("configuration:");
     await expect(failure).rejects.toThrow("fork-owner/base");
   });
+});
+
+test("AC13 a viewer source never gets the repository-named 410 text", async () => {
+  const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+  const failure = listIssuePage(auth, { source: "assigned" });
+  await expect(failure).rejects.toThrow(issuesDisabled);
+  await expect(failure).rejects.not.toThrow("Choose another source");
+});
+
+test("AC13 a viewer page made only of pull requests does not page on", async () => {
+  const pages: number[] = [];
+  const auth = await account(async (url) => {
+    const n = Number(url.searchParams.get("page") ?? 1);
+    pages.push(n);
+    return json([{ ...row("a", "P_" + n), pull_request: {} }], { headers: { link: `<https://api.github.com/issues?page=${n + 1}>; rel="next"` } });
+  });
+  const page = await listIssuePage(auth, { source: "assigned" });
+  expect(page.items).toEqual([]);
+  expect(page.nextCursor).not.toBeNull();
+  expect(pages).toEqual([1]);
 });
 
 test("AC13 a repository page made only of pull requests does not end the load; the search stops after three pages", async () => {

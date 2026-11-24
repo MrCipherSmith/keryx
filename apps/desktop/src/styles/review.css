@@ -25,7 +25,7 @@
 .review-board .card-actions .btn { gap: 4px; white-space: nowrap; }
 /* The Keryx work row: three slots (review, Flow, session) of one fixed height, filled or empty; text truncates. */
 .pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }
-.pr-work-slot { display: flex; min-width: 0; height: 24px; }
+.pr-work-slot { display: flex; min-width: 0; height: 24px; overflow: hidden; }
 .pr-work-link, .pr-work-more { height: 24px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--accent-text); font: inherit; cursor: pointer; white-space: nowrap; }
 .pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
 .pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
@@ -34,8 +34,10 @@
 .pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
 /* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
 .pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
-/* "Link Flow #<id>?" after Create Flow: a question, not a link, until Link is pressed; one line of the slot's height. */
-.pr-work-link.pr-work-offer { display: block; box-sizing: border-box; line-height: 22px; cursor: default; color: var(--fg); border-style: dashed; }
+/* "Link Flow #<id> · <title>?" after Create Flow: plain text, not a control (no box, no hover); it truncates so
+   Link and Dismiss (flex: none) keep their size, and the slot clips so nothing reaches the session slot. */
+.pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }
+.pr-work-offer.is-attention { color: var(--warn); }
 /* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
 .pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
