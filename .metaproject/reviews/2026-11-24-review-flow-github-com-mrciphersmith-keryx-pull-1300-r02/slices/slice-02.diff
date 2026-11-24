@@ -1,0 +1,2153 @@
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "517",
+   "slug": "desktop-review-v2-stage-1-github-slice-a",
+   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
+   "status": "in-progress",
+   "createdAt": "2026-11-23T19:41:25.622Z",
+-  "updatedAt": "2026-11-24T06:06:20.351Z",
++  "updatedAt": "2026-11-24T07:41:18.017Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": "sha256:da72a72e5ec60754dc27d6402c70d504963f14c2755047d9a08f8aa64635ad98",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "outcomeAuthor": "agent",
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json
+@@ 400,500 @@
+       "budget": {},
+       "disposition": "completed"
+     },
+     {
+       "id": "T20",
+       "title": "Fix round 2 (C): PR body, implementation plan, user docs",
+       "kind": "docs",
+       "status": "done",
+       "dependsOn": [
+         "T18",
+         "T19"
+       ],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed"
++    },
++    {
++      "id": "T21",
++      "title": "Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:15:48.705Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Desktop fixes of review round 3; 32 mutation checks red; desktop tsc 0, bun test src 1070/0"
++    },
++    {
++      "id": "T22",
++      "title": "Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:15:48.890Z",
++            "outcome": "started"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "keryx fixes of review round 3; 14 mutation checks red; root tsc 0, focused suites 94/0, src/acp 455/0"
++    },
++    {
++      "id": "T23",
++      "title": "Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T21",
++        "T22"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "cli-reference ACP session_flags, acp help, desktop-issues guide, implementation plan, journal, PR body"
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-23T19:41:25.622Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-23T19:47:24.862Z",
+       "event": "task-added",
+       "detail": "T5: Subject storage: flags.json subject, session_flags, issue binding"
+     },
+     {
+       "at": "2026-11-23T19:47:25.379Z",
+       "event": "task-added",
+       "detail": "T6: Issues source repository (project repo) in keryx issues list"
+     },
+     {
+       "at": "2026-11-23T19:47:25.904Z",
+       "event": "task-added",
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json
+@@ 716,795 @@
+     },
+     {
+       "at": "2026-11-24T05:27:00.853Z",
+       "event": "task-attempt",
+       "detail": "T19: started (attempt 1) — fix round 2 B"
+     },
+     {
+       "at": "2026-11-24T05:44:30.458Z",
+       "event": "task-done",
+       "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
+     },
+     {
+       "at": "2026-11-24T05:53:04.638Z",
+       "event": "task-done",
+       "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
+     },
+     {
+       "at": "2026-11-24T06:06:20.351Z",
+       "event": "task-done",
+       "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
++    },
++    {
++      "at": "2026-11-24T07:15:43.909Z",
++      "event": "task-added",
++      "detail": "T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests"
++    },
++    {
++      "at": "2026-11-24T07:15:44.090Z",
++      "event": "task-added",
++      "detail": "T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates"
++    },
++    {
++      "at": "2026-11-24T07:15:44.266Z",
++      "event": "task-added",
++      "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
++    },
++    {
++      "at": "2026-11-24T07:15:48.705Z",
++      "event": "task-attempt",
++      "detail": "T21: started (attempt 1)"
++    },
++    {
++      "at": "2026-11-24T07:15:48.890Z",
++      "event": "task-attempt",
++      "detail": "T22: started (attempt 1)"
++    },
++    {
++      "at": "2026-11-24T07:41:17.548Z",
++      "event": "task-done",
++      "detail": "T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests"
++    },
++    {
++      "at": "2026-11-24T07:41:17.792Z",
++      "event": "task-done",
++      "detail": "T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates"
++    },
++    {
++      "at": "2026-11-24T07:41:18.017Z",
++      "event": "task-done",
++      "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
+     }
+   ],
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review/model.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review"
+     },
+     "AC4": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review"
+     },
+     "AC5": {
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md
+@@ 95,131 @@
+ 
+ Operator (AskUserQuestion in this session): HL-001 → "Подтверждение (Recommended)": no silent auto-link; when exactly one new package appears inside the pending window, the work row offers "Link Flow #N?" with Link / Dismiss; flags.json is written only on Link; a pending request is registered only when the flow prompt was actually filled (closes LG-008). Wave 2 of round 2 → "Довести волну 2".
+ - 2026-11-24T05:26:50.183Z - ac-updated: AC9: ""Create Flow" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]" -> ""Create Flow" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers "Link Flow #<id>?" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]" (Owner decision 2026-11-24 in review round 2 (HL-001): no silent link by arrival time; the link is confirmed by the user. Recorded in journal.md 'Review round 2 owner decisions'.)
+ - 2026-11-24T05:26:50.378Z - ac-updated: AC8: "Subject storage: `_keryx/session_flags` accepts `subject` {kind "pr"|"issue", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = "issue"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]" -> "Subject storage: `_keryx/session_flags` accepts `subject` {kind "pr"|"issue", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = "issue"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]" (Review round 2 PC-004: keryx stores a new session only after its first turn, so the older-keryx notice cannot appear before it; criterion text aligned with that fact, and optional repositoryId named.)
+ - 2026-11-24T05:26:59.546Z - task-added: T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures
+ - 2026-11-24T05:26:59.729Z - task-added: T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests
+ - 2026-11-24T05:26:59.911Z - task-added: T20: Fix round 2 (C): PR body, implementation plan, user docs
+ - 2026-11-24T05:27:00.670Z - task-attempt: T18: started (attempt 1) — fix round 2 A
+ - 2026-11-24T05:27:00.853Z - task-attempt: T19: started (attempt 1) — fix round 2 B
+ - 2026-11-24T05:44:30.458Z - task-done: T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests
+ - 2026-11-24T05:53:04.638Z - task-done: T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures
+ 
+ ## Review round 2 on PR #1300 and its fix round (2026-11-24)
+ 
+ Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02`, head 88e3faba9, round 2 (fallback-first: round 1 has no completion evidence; its 32 findings attached as prior). 12 reviewers, 3 waves over 5 slices (29 dispatches; review-frontend and review-pr-contract drivers created by hand because `slice` had not written them). Ingested 44 findings: 1 blocker (HL-001, decided by the operator), 3 major (RG-001 confirmed, TP-R2-001 confirmed, HW2-001 unverifiable), 27 minor, 13 info. Wave D premise judge not run (HL-001 answered by the operator directly). AC8 and AC9 re-frozen with `keryx flow ac update` (reasons recorded there).
+ T18 (a7e…) and T19 (80ef58bd5) fixed: HL-001 (Link Flow #N? offer, Link/Dismiss), LG-008, LG-011, DG-006/UX-007, DG-007, LG-009, AR-003, TP-R2-001..005, LG-015, PF-005; RG-001/UX-008/LG-013 (Assigned to me fallback, 410 mapping, update-keryx hint), HW2-001 (per-session flags lock), DG-009 (up to 3 pages), LG-012/PC-003/DG-010 (subject backfill unless unlinked), PF-003, TP-R2-006..009. All named mutants red. Desktop tsc 0, `bun test src` 1051/0; root tsc 0; root focused 44/0. Attention-set lines: 0 edited.
+ Deferred info: PF-006/HW2-002 (one nodes hydration per request), AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004 (need real-engine measurement), UX-003..006.
+ Behavior changes accepted by the orchestrator (listed for the owner in the PR body): offer has no expiry once shown, Dismiss claims the package; foreign-repo header link shows a banner; session switch during open → no prompt and no request; merged PR keeps "publication pending" text without warn tone; Assigned-to-me fallback only for the default (unstored) source; up to 3 GitHub pages per Issues load; flags write may wait up to 3 s for the lock; subject backfill can re-link a pre-version unlink once.
+ Docs left for T20: PR body, implementation-plan stage-1 state, docs/docs/guides/desktop-issues.md, docs/docs/cli-reference.md (PC-001, PC-002, PC-004, LG-010, DG-008).
+ - 2026-11-24T06:06:20.351Z - task-done: T20: Fix round 2 (C): PR body, implementation plan, user docs
++- 2026-11-24T07:15:43.909Z - task-added: T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests
++- 2026-11-24T07:15:44.090Z - task-added: T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates
++- 2026-11-24T07:15:44.266Z - task-added: T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan
++- 2026-11-24T07:15:48.705Z - task-attempt: T21: started (attempt 1)
++- 2026-11-24T07:15:48.890Z - task-attempt: T22: started (attempt 1)
++
++## Review round 3 on PR #1300 and its fix round (2026-11-24)
++
++Package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300`, head d7b0f7058, round 3 over the round-2 fix range 88e3faba9..d7b0f7058 (round-2 findings attached as prior with claimed dispositions). 11 reviewers, 3 waves over 3 slices (30 dispatches; review-pr-contract drivers created by hand). Ingested 33 findings: 0 blocker, 3 major (FE-R3-001 header focus left armed, FE-R3-002 self-removing controls drop focus, TP-R3-008 wall-clock lock tests; all confirmed by execution in verifications.json), 18 minor, 12 info. Duplicates folded: DG-R3-001/FE-R3-003 -> AR-007, logic F-002 -> FE-R3-001, F-001 -> PC-005, F-004 -> DG-R3-002, PF-R3-001 -> HL3-001, FE-R3-004 -> DG3-001, UX-017 -> UX-011. Research ledger READY. Round tests: root 2722 pass / 1 unrelated load timeout (searchable-sources; 6/0 alone), Desktop 1051/0. Not run: regression lane and blast radius (no tests-to-run for the fix range), layout measurement in the running app.
++T21 (Desktop) fixed FE-R3-001 (+TP-R3-004), FE-R3-002, AR-007/DG-R3-001/FE-R3-003/UX-013/TP-R3-003 (fallback only for the named reasons, Retry kept otherwise, prefix stripped), UX-017/UX-011 (fallback whatever the choice; source stored per project and account, legacy per-account key read only), UX-015, UX-009/UX-010/UX-012/LY-005/TP-R3-001/TP-R3-002 (offer names the title, Link keeps the offer until the write succeeds and shows the failure, own offer class, slot clips), TP-R3-005, DG-R3-002 (issueSessions removed), PC-004 fixture half. 32 mutation checks red.
++T22 (keryx) fixed TP-R3-008/TP-R3-007 (injectable lock timing; ordering, timeout, stale and two-process tests on file barriers, no elapsed-time assertion), HL3-002 (`withFileLock` createDir:false, summary.json check -> "no session"), HL3-001/PF-R3-001 (`withFileLockAsync`, `setSessionFlagsAsync` on the ACP path), DG3-001/FE-R3-004 (backfill best-effort after the first bind, lock-free skip), TP-R3-009, TP-R3-006, AR-007 backend text (`unusableRemote` for a `.`/`..` remote). 14 mutation checks red.
++T23: PC-008 (ACP `_keryx/session_flags` reference in cli-reference.md and the `keryx acp` help), PC-005/F-001 and PC-006/PC-007 (PR body), this journal.
++Behavior changes accepted by the orchestrator: a failed Link is not retried after the turn, it waits for another press; in a very narrow lane the Flow slot clips Dismiss rather than overlapping the Session slot (not measured in a real engine); the Issues fallback stores Assigned to me for this project only; an issue reopen no longer fails when the subject backfill cannot run.
++Deferred: info findings HL3-003, HL3-004, LG-R3-003, UX-014, UX-016, SC3-001 (stale-takeover race in the shared lib/file-lock, separate change), and round-2 info LG-014 (now also: an older keryx's flags write drops the unlink marker).
++- 2026-11-24T07:41:17.548Z - task-done: T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests
++- 2026-11-24T07:41:17.792Z - task-done: T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates
++- 2026-11-24T07:41:18.017Z - task-done: T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan
+
+--- apps/desktop/src/App.tsx
+@@ 394,447 @@
+   /** Open the PR's bound session (newest, named or new); a new one is bound to the PR and gets `prompt`, never sent. */
+   const openPrSession = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject, prompt: string, prefillExisting = false) => {
+     setView("session");
+     const s = acp.current;
+     const flow = prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0];
+     return openSubject({
+       sessions: () => subjectSessionsRef.current,
+       loadSession: s.loadSession,
+       // The PR's Flow (one naming it, or one a bound session works on) is linked to the new session.
+       newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
+       bind: (id, value) => void s.bindSubject(id, value),
+       fill: fillComposer,
+       isShown: s.isShown,
+     }, subject, target, prompt, prefillExisting);
+   }, [fillComposer, openSubject]);
+ 
+   /**
+    * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
+    * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag.
+    */
+-  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void acp.current.linkFlow(id, dir));
++  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => acp.current.linkFlow(id, dir));
+   const flowLinkActions = flowLinks.actions;
+   const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
+     const known = flowLinkActions.known();
+     const opened = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
+     // Only a prompt this press put into the shown session can make the package: a press coalesced into an open in
+     // flight, or an open the user switched away from, registers nothing.
+     if (opened?.filled) flowLinkActions.expect(opened.sessionId, known);
+   }, [flowLinkActions, openPrSession]);
+   const flowOffers = useMemo(() => flowLinks.offers.flatMap((offer): PrFlowOffer[] => {
+     const flow = flows.cards.find(card => card.dir === offer.dir);
+-    return flow ? [{ sessionId: offer.sessionId, flow }] : [];
++    return flow ? [{ sessionId: offer.sessionId, flow, ...(offer.linking && { linking: true }), ...(offer.error && { error: offer.error }) }] : [];
+   }), [flowLinks.offers, flows.cards]);
+-  const linkFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
++  const linkFlowOffer = useCallback((offer: PrFlowOffer) => void flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
+   const dismissFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.dismiss(offer.sessionId), [flowLinkActions]);
+ 
+   const [reviewFocus, setReviewFocus] = useState<{ repo: string; number: number; nonce: number } | null>(null);
+   // Never reused, also after a handled request is cleared: the board opens each nonce once.
+   const focusNonce = useRef(0);
+   const reviewFocusHandled = useCallback((nonce: number) => setReviewFocus(old => old?.nonce === nonce ? null : old), []);
+   const openPrFromBoard = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) =>
+     void openPrSession(card, target, subject, card.url), [openPrSession]);
+   const createFlowFromBoard = useCallback((card: ReviewCard, subject: SessionSubject) => void createPrFlow(card, subject), [createPrFlow]);
+   const openFlowFromBoard = useCallback((dir: string) => {
+     setLinkedFlow(dir);
+     setView("flows");
+   }, []);
+ 
+   useEffect(() => {
+     const onKey = (e: KeyboardEvent) => {
+       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+       const k = e.key.toLowerCase();
+       // While any dialog or overlay is up (an approval above all) the shortcuts stand down;
+       // only the palette itself may be toggled closed again.
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 1,32 @@
+ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+ import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
+ import { boundSessionIndex, type SessionInfo } from "../acp/types";
+ import { Icon } from "../components/Icon";
+ import { errMessage, relativeTime } from "../lib/format";
+ import { requestIssues } from "../platform/issues";
+ import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
+ import { IssueFilters } from "./IssueFilters";
+ import { IssueWorkRow } from "./IssueWorkRow";
+ import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, issueSubject, readPreferences, SOURCES, STAGES, visibleRows,
+   type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
+-import { isAccessError, useIssueCollection } from "./useIssueCollection";
++import { isAccessError, repositoryUnavailable, useIssueCollection } from "./useIssueCollection";
+ import "./IssuesBoard.css";
+ 
+ interface Props extends WorkProps {
+   cwd: string; login: string; onAccessDenied?: () => void; onSettings: () => void; request?: typeof requestIssues;
+   /** The project's sessions; the work row counts those bound to an issue through their `subject`. */
+   sessions?: readonly SessionInfo[];
+ }
+ type Source = IssueSource;
+ const NO_SESSIONS: readonly SessionInfo[] = [];
+ 
+ function stored(key: string): string | null {
+   try { return localStorage.getItem(key); } catch { return null; }
+ }
+ function save(key: string, value: string | null) {
+   try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* Storage unavailable. */ }
+ }
+ 
+ export function IssuesBoard(props: Props) {
+   return <AccountBoard key={JSON.stringify([props.cwd, props.login])} {...props} />;
+ }
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 41,68 @@
+     let active = true;
+     setError("");
+     void request<{viewer: IssueViewer}>(cwd, login, "viewer", {}).then(({viewer: verified}) => {
+       if (verified.login.toLowerCase() !== login.toLowerCase()) throw new Error("access: GitHub account changed.");
+       if (active) setViewer(verified);
+     }).catch(e => { if (active) { setViewer(null); setError(errMessage(e)); } });
+     return () => { active = false; };
+   }, [login, cwd, request, attempt]);
+   if (!viewer) return <section className="flows"><header className="flows-toolbar"><h1>Issues</h1></header>
+     <div className="issues-notice" role={error ? "alert" : "status"}>
+       <p>{error || (login ? "Loading GitHub account…" : "Select a GitHub account to load issues.")}</p>
+       {error && <button className="btn" onClick={() => setAttempt(n => n + 1)}>Retry</button>}
+       {(!login || error) && <button className="btn" onClick={props.onSettings}>GitHub accounts</button>}
+     </div></section>;
+   return <VerifiedBoard key={issueViewerKey(viewer)} {...props} viewer={viewer}
+     verifyAgain={() => { setViewer(null); setAttempt(n => n + 1); }} />;
+ }
+ 
+ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: IssueViewer; verifyAgain: () => void}) {
+   const account = "keryx.issues." + issueViewerKey(viewer);
++  // The source is the project's and the account's: switching it in one project leaves the others alone.
++  // A source stored per account by an earlier Desktop is read as this project's until one is chosen here.
++  const sourceKey = account + ".source." + JSON.stringify(props.cwd);
+   const [denied, setDenied] = useState("");
+-  const [choice, setChoice] = useState<{ source: Source; chosen: boolean }>(() => {
+-    const value = stored(account + ".source");
+-    return value && Object.hasOwn(SOURCES, value) ? { source: value as Source, chosen: true } : { source: DEFAULT_SOURCE, chosen: false };
++  const [source, setSource] = useState<Source>(() => {
++    const value = stored(sourceKey) ?? stored(account + ".source");
++    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
+   });
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 81,110 @@
+     } catch { return null; }
+   });
+   const [owner, setOwner] = useState(target?.owner ?? "");
+   const [number, setNumber] = useState(target?.number.toString() ?? "");
+-  const change = (next: Source) => { setDenied(""); setChoice({ source: next, chosen: true }); save(account + ".source", next); };
+-  // The default source can fail where no choice of the person's is at fault: no GitHub.com remote,
++  const change = (next: Source) => { setDenied(""); setSource(next); save(sourceKey, next); };
++  // The repository source can fail where no choice of the person's is at fault: no GitHub.com remote,
+   // Issues turned off (a fork), or a keryx too old to know it. Offer the source that works anywhere.
+-  const fallback = source === "repository" && !choice.chosen ? () => change("assigned") : undefined;
++  const fallback = source === "repository" ? () => { focusSource.current = true; change("assigned"); } : undefined;
+   const sourceControls = <div className="issue-sources">
+-    <label>Source <select aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
++    <label>Source <select ref={sourceSelect} aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
+       {Object.entries(SOURCES).map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+     </select></label>
+     {source === "project" && <form onSubmit={e => {
+       e.preventDefault();
+       if (!owner.trim() || !Number.isSafeInteger(+number) || +number <= 0) return;
+       const next = { owner: owner.trim(), number: +number };
+       setDenied(""); setTarget(next);
+     }}>
+       <input aria-label="GitHub Project owner" placeholder="Owner" value={owner} required onChange={e => setOwner(e.target.value)} />
+       <input aria-label="GitHub Project number" type="number" placeholder="Number" min={1} value={number} required onChange={e => setNumber(e.target.value)} />
+       <button className="btn btn-sm" type="submit">Open project</button>
+     </form>}
+   </div>;
+   const key = account + ".filters." + JSON.stringify([source, source === "project" ? target : null]);
+   const { onAccessDenied } = props;
+   const clear = useCallback((reason: string) => {
+     onAccessDenied?.();
+     // Private repository names can occur in filters for more than one source.
+     try {
+       for (const k of Object.keys(localStorage)) {
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 112,176 @@
+       }
+     } catch { /* Storage unavailable. */ }
+     save(account + ".project", null);
+     setOwner(""); setNumber(""); setTarget(null); setDenied(reason);
+   }, [account, onAccessDenied]);
+   const remember = useCallback((project: ProjectBoard) => {
+     save(account + ".project", JSON.stringify({ owner: project.owner, number: project.number }));
+   }, [account]);
+   if (denied) return <section className="flows"><header className="flows-toolbar"><h1>Issues</h1>{sourceControls}</header>
+     <div role="alert" className="issues-notice">{denied}
+       <button className="btn btn-sm" onClick={verifyAgain}>Retry</button>
+       <button className="btn btn-sm" onClick={props.onSettings}>GitHub accounts</button>
+     </div></section>;
+   return <Collection key={key} {...props} source={source} target={target} prefsKey={key} viewer={viewer}
+     sourceControls={sourceControls} clear={clear} remember={remember} fallback={fallback} />;
+ }
+ 
+ interface CollectionProps extends Props {
+   prefsKey: string; source: Source; target: ProjectSource | null; sourceControls: React.ReactNode;
+   viewer: IssueViewer; clear: (reason: string) => void; remember: (project: ProjectBoard) => void;
+-  /** Switches from the default repository source to "Assigned to me"; absent once the person chose a source. */
++  /** Switches from the repository source to "Assigned to me"; absent for the other sources. */
+   fallback?: (() => void) | undefined;
+ }
+ 
+ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues,
+   sessions = NO_SESSIONS, fallback }: CollectionProps) {
+   const [prefs, setPrefs] = useState(() => readPreferences(prefsKey));
+   const { filters, list } = prefs;
+   const [filterDialog, setFilterDialog] = useState(false);
+   const [selection, setSelection] = useState<Row | null>(null);
+   const [detailRead, setDetailRead] = useState(0);
+   const [moving, setMoving] = useState<string | null>(null);
+   const [working, setWorking] = useState<string | null>(null);
+   const [notice, setNotice] = useState("");
+   const [mobile, setMobile] = useState(false);
+   const board = useRef<HTMLDivElement>(null);
+   const title = useRef<HTMLHeadingElement>(null);
+   const returnFocus = useRef<HTMLElement | null>(null);
+   const alive = useRef(true);
+   const activeMove = useRef(false);
+   const activeWork = useRef(false);
+   const { snapshot, busy, error, load, invalidate, setSnapshot } = useIssueCollection(cwd, login, source, target, filters, viewer, clear, request);
+   const rows = useMemo(() => visibleRows(snapshot?.rows ?? [], filters), [snapshot, filters]);
+   const boundTo = useMemo(() => boundSessionIndex(sessions), [sessions]);
+-  // Matched like isAccessError: the CLI's reason may arrive behind a prefix.
+-  const unavailable = fallback && /(?:^|\b)configuration:/i.test(error) ? fallback : undefined;
++  const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;
+   const selectedKey = selection && issueKey(selection.issue.ref);
+   const selectedIndex = rows.findIndex(row => issueKey(row.issue.ref) === selectedKey);
+   // Refresh starts again at page one. Keep a selected later-page issue open and
+   // revalidate its detail independently while further pages are available.
+   const selected = rows[selectedIndex] ?? (selection && snapshot?.nextCursor && visibleRows([selection], filters).length ? selection : null);
+ 
+   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+   useEffect(() => {
+     if (snapshot) {
+       save(prefsKey, JSON.stringify(prefs));
+       if (snapshot.project) remember(snapshot.project);
+     }
+   }, [snapshot, prefsKey, prefs, remember]);
+   useLayoutEffect(() => {
+     const el = board.current;
+     if (!el) return;
+     const resize = () => { if (el.clientWidth) setMobile(el.clientWidth < 740); };
+     resize();
+     if (typeof ResizeObserver === "undefined") return;
+     const observer = new ResizeObserver(resize);
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 254,298 @@
+ 
+   const groups = issueGroups(project, filters.state);
+   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "text" && v !== defaultFilters[k as keyof Filters]);
+   const setFilters = (f: Filters) => setPrefs(p => ({ ...p, filters: f }));
+   const dragItem = useRef<Row | null>(null);
+   return <div className="issue-workspace" ref={board}>
+     <section className="flows issues-main" hidden={mobile && !!selected}>
+       <header className="flows-toolbar">
+         <div className="flows-heading"><h1 tabIndex={-1} ref={title}>Issues</h1>{snapshot && <span className="count-label">{snapshot.rows.length} loaded</span>}</div>
+         {sourceControls}
+         <input type="search" aria-label="Search issues" placeholder="Search by title or #number" value={filters.text} onChange={e => setFilters({ ...filters, text: e.target.value })} />
+         <button className="btn btn-sm" onClick={() => setFilterDialog(true)}><Icon name="list" size={14} />Filters{activeFilters.length > 0 && " (" + activeFilters.length + ")"}</button>
+         <div className="segmented" aria-label="Issue layout">{[false, true].map(asList => <button key={String(asList)} aria-pressed={list === asList}
+           onClick={() => setPrefs(p => ({ ...p, list: asList }))}><Icon name={asList ? "list" : "board"} size={14} />{asList ? "List" : "Board"}</button>)}</div>
+         <button className="btn btn-sm" disabled={busy} onClick={() => { setDetailRead(n => n + 1); void load(); }}><Icon name="refresh" size={14} />Refresh</button>
+       </header>
+       {!isAccessError(error) && <div className="review-context"><strong>{snapshot?.viewer.host ?? "GitHub"} · {login}</strong>
+         {project && <span>{project.title}</span>}{snapshot && <span>Read {snapshot.readAt.toLocaleTimeString()}</span>}
+         {activeFilters.map(([key, value]) => <button key={key} className="btn btn-sm" aria-label={"Remove " + key + " filter"} onClick={() => setFilters({ ...filters, [key]: defaultFilters[key as keyof Filters] })}>{key} · {value} ×</button>)}
+       </div>}
+-      {error && (unavailable ? <div className="issues-notice" role="alert">
+-        <p>{error}</p>
++      {error && (unavailable && fallback ? <div className="issues-notice" role="alert">
++        <p>{error.replace(/^configuration:\s*/i, "")}</p>
+         <p>This project's repository issues are not available here.
+-          {/Invalid Issues request/i.test(error) && " If this keryx is older than Desktop, update keryx or choose the bundled CLI in Desktop Settings."}</p>
+-        <button className="btn btn-sm" onClick={unavailable}>Show issues assigned to me</button>
++          {unavailable === "older" && " If this keryx is older than Desktop, update keryx or choose Bundled keryx in Settings → Desktop."}</p>
++        <button className="btn btn-sm" onClick={fallback}>Show issues assigned to me</button>
+       </div> : <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
+         <button className="btn btn-sm" onClick={() => void load()}>Retry</button>
+       </div>)}
+       {notice && <p className="issues-notice" role="status">{notice}</p>}
+       {busy && <p className="issues-notice" role="status">Loading issues…</p>}
+       {project && (!project.canWrite || !project.fieldId) && <p className="issues-notice">{project.fieldId ? "Read-only access to this Project." : "Project Status field unavailable."}</p>}
+       {snapshot?.incomplete && <p className="issues-notice" role="status">GitHub returned partial results.</p>}
+       {!!snapshot && rows.length === 0 && <p className="issues-notice">{snapshot.nextCursor ? "No matching issues on the loaded pages." : "No matching issues."}</p>}
+       {snapshot && (list || (project && !project.fieldId) ? <div className="flow-list-wrap"><table className="flow-list issue-table"><thead><tr>
+         <th>Issue</th><th>GitHub state</th><th>Keryx stage</th>{project && <th>Project Status</th>}<th>Assignees</th><th>Updated</th><th>Actions</th>
+       </tr></thead><tbody>{rows.map(r => <tr key={issueKey(r.issue.ref)}>
+         <td><button className="review-list-link" onClick={e => show(r, e.currentTarget)}>{issueName(r.issue)} {r.issue.title}</button></td>
+         <td>{r.issue.state}</td><td>{STAGES[r.issue.work?.stage ?? "none"]}{r.issue.work?.reason && <small>{r.issue.work.reason}</small>}</td>
+         {project && <td>{project.options.find(o => o.id === r.optionId)?.name ?? "No status"}</td>}
+         <td>{r.issue.assignees.join(", ") || "Unassigned"}</td><td>{relativeTime(r.issue.updatedAt)}</td><td>{workActions(r)}</td></tr>)}</tbody></table></div>
+       : <div className="board issue-lanes">{groups.map(group => {
+         const cards = rows.filter(r => groupForRow(r, !!project) === group.id);
+         return <section className="lane" key={group.id} aria-label={group.label}
+           onDragOver={e => { if (dragItem.current && project?.canWrite && project.fieldId) e.preventDefault(); }}
+           onDrop={e => { e.preventDefault(); const row = dragItem.current; dragItem.current = null; if (row) void move(row, group.id === "unassigned" ? null : group.id); }}>
+
+--- apps/desktop/src/issues/model.ts
+@@ 1,22 @@
+ import { issueKey, type IssueListSource, type IssueLocalStage, type IssueSummary } from "../../../../src/integrations/issues-contract";
+-import { boundSessions, type SessionInfo, type SessionSubject } from "../acp/types";
++import type { SessionSubject } from "../acp/types";
+ 
+ export const STAGES: Record<IssueLocalStage["stage"], string> = {
+   none: "No Flow", preparing: "Preparing", active: "In progress", needs_answer: "Needs an answer", done: "Done",
+ };
+ 
+ /** Where the board reads issues from; the project repository comes first and is the default (D5). */
+ export const SOURCES: Record<IssueListSource | "project", string> = {
+   repository: "Project repository", assigned: "Assigned to me", created: "Created by me", mentioned: "Mentioned", subscribed: "Subscribed", project: "GitHub Project",
+ };
+ 
+ export type IssueSource = keyof typeof SOURCES;
+ /** The source shown when no preference is stored for the account. */
+ export const DEFAULT_SOURCE: IssueSource = "repository";
+ 
+ export type ProjectSource = { owner: string; number: number };
+ export interface ProjectBoard {
+   id: string;
+   owner: string;
+   number: number;
+   title: string;
+
+--- apps/desktop/src/issues/useIssueCollection.ts
+@@ 1,51 @@
+ import { useCallback, useEffect, useRef, useState } from "react";
+ import { issueViewerKey, type IssueListSource, type IssuePage, type IssueSummary, type IssueViewer } from "../../../../src/integrations/issues-contract";
+ import { errMessage } from "../lib/format";
+ import { requestIssues } from "../platform/issues";
+ import { mergeRows, type Filters, type ProjectBoard, type ProjectSource, type Row } from "./model";
+ 
+ interface Snapshot {
+   viewer: IssueViewer;
+   rows: Row[];
+   project?: ProjectBoard;
+   nextCursor: string | null;
+   incomplete: boolean;
+   readAt: Date;
+ }
+ 
+ export function isAccessError(reason: string) {
+   return /(?:^|\b)(?:access|account_mismatch|source_unavailable):/i.test(reason);
+ }
+ 
++/**
++ * Why the project repository source cannot be read here, from the CLI's reason: "unavailable" for no
++ * GitHub.com fetch remote, Issues turned off, or a remote that names no usable repository; "older" for a
++ * keryx that does not know the source, which refuses it on the first page only. Null for any other error,
++ * which keeps Retry: a stale cursor or a lost connection is not a reason to switch sources.
++ */
++export function repositoryUnavailable(reason: string, firstPage: boolean): "unavailable" | "older" | null {
++  if (/has no GitHub\.com fetch remote|has Issues turned off for|names no usable repository/i.test(reason)) return "unavailable";
++  if (firstPage && /Invalid Issues request/i.test(reason)) return "older";
++  return null;
++}
++
+ export function useIssueCollection(cwd: string, login: string, source: IssueListSource | "project", target: ProjectSource | null,
+   filters: Filters, verified: IssueViewer, denied: (reason: string) => void, request: typeof requestIssues) {
+   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+   const [busy, setBusy] = useState(true);
+   const [error, setError] = useState("");
+   const newest = useRef(0);
+   const cursor = useRef<string | null>(null);
+   const loading = useRef(false);
+   const viewer = issueViewerKey(verified);
+   const owner = target?.owner;
+   const number = target?.number;
+   const { state, since, sort } = filters;
+ 
+   const invalidate = useCallback((message: string) => {
+     newest.current++;
+     loading.current = false;
+     cursor.current = null;
+     setSnapshot(null);
+     setError(message);
+     setBusy(false);
+
+--- apps/desktop/src/review/PrWorkRow.tsx
+@@ 1,21 @@
+-import { useRef, useState } from "react";
++import { useEffect, useRef, useState } from "react";
+ import { createPortal } from "react-dom";
+ import { Menu, type MenuItem } from "../components/Menu";
+ import type { SessionInfo, SessionSubject } from "../acp/types";
+ import { flowStage, prSubject, reviewSlotState, type PrFlowOffer, type PrWorkIndex, type SubjectSessionTarget } from "./prWork";
+ import { reviewProgressText } from "./ReviewProgress";
+ import { reviewNote } from "./model";
+ import type { ReviewCard } from "./types";
+ 
+ /** What the work row needs from the board: the repository, the indexed Flows and sessions, and where its links go. */
+ export interface PrWork {
+   repo: string;
+   repositoryId?: string;
+   /** Built once per sessions and Flows change (`prWorkIndex`), shared by every row. */
+   index: PrWorkIndex;
+   onOpenFlow: (dir: string) => void;
+   onCreateFlow?: ((card: ReviewCard, subject: SessionSubject) => void) | undefined;
+   onOpenSubjectSession?: ((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) => void) | undefined;
+   /** The new package offered for one of the PR's bound sessions ("Link Flow #<id>?"), if any. */
+   flowOffer?: ((bound: readonly SessionInfo[]) => PrFlowOffer | undefined) | undefined;
+   onLinkFlowOffer?: ((offer: PrFlowOffer) => void) | undefined;
+
+--- apps/desktop/src/review/PrWorkRow.tsx
+@@ 29,74 @@
+ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: PrWork; onReview: (card: ReviewCard) => void }) {
+   const subject = prSubject(card, work.repo, work.repositoryId);
+   const sessions = work.index.sessions(subject);
+   const flow = work.index.flows(card, sessions)[0];
+   const offer = flow ? undefined : work.flowOffer?.(sessions);
+   const state = reviewSlotState(card.localReview);
+   // A review waiting on the viewer (an answer, a publication decision) gets the warn tone; the text says which.
+   // Open PRs only, as `needsViewerAttention` counts them for the tab indicator.
+   const waitsOnViewer = card.state === "open" && !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);
+   const canReview = !!state || card.state === "open";
+   const reviewText = state ? `Review · ${state}` : "Run review";
+   const progress = reviewProgressText(card.localReview);
+   const reviewTitle = [state === "outdated" ? reviewNote(card) ?? reviewText : canReview ? reviewText : "Only an open pull request can be reviewed", progress]
+     .filter(Boolean).join(" — ");
+   const flowText = flow ? `Flow #${flow.id} · ${flowStage(flow)}` : "Create Flow";
+   const sessionText = sessions.length > 1 ? `${sessions.length} sessions` : sessions.length ? "Session" : "Open in session";
+   const openSession = work.onOpenSubjectSession;
+   const createFlow = work.onCreateFlow;
+   const [menu, setMenu] = useState(false);
+   const more = useRef<HTMLButtonElement>(null);
++  const flowSlot = useRef<HTMLSpanElement>(null);
++  // Link and Dismiss remove themselves with the offer: focus then moves to the control that replaces it.
++  const refocusFlow = useRef(false);
++  useEffect(() => {
++    if (offer || !refocusFlow.current) return;
++    refocusFlow.current = false;
++    const active = document.activeElement;
++    if (!active || active === document.body) flowSlot.current?.querySelector("button")?.focus();
++  }, [offer]);
+   const of = ` for #${card.number}`;
+   return <div className="pr-work-row" role="group" aria-label={`Keryx work${of}`}>
+     <span className="pr-work-slot" data-slot="review">
+       <button type="button" className={"pr-work-link" + (state ? "" : " is-empty") + (waitsOnViewer ? " is-attention" : "")} title={reviewTitle}
+         aria-label={reviewText + of} disabled={!canReview} onClick={() => onReview(card)}>{reviewText}</button>
+     </span>
+-    <span className="pr-work-slot" data-slot="flow">
+-      {offer ? <FlowOffer offer={offer} of={of} work={work} /> :
++    <span ref={flowSlot} className="pr-work-slot" data-slot="flow">
++      {offer ? <FlowOffer offer={offer} of={of} work={work} onAct={() => { refocusFlow.current = true; }} /> :
+         <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
+           aria-label={flowText + of} disabled={!flow && !createFlow}
+           onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>}
+     </span>
+     <span className="pr-work-slot" data-slot="session">
+       <button type="button" className={"pr-work-link" + (sessions.length ? "" : " is-empty")} title={sessionText}
+         aria-label={sessionText + of} disabled={!openSession} onClick={() => openSession?.(card, "latest", subject)}>{sessionText}</button>
+       <button ref={more} type="button" className="pr-work-more" aria-haspopup="menu" aria-expanded={menu}
+         aria-label={`More sessions${of}`} title="Sessions of this pull request" disabled={!openSession}
+
+--- apps/desktop/src/review/PrWorkRow.tsx
+@@ 96,112 @@
+-    <span className="pr-work-link pr-work-offer" title={`${name} (${offer.flow.title}) appeared after Create Flow. Link it to this pull request's session?`}>
+-      Link {name}?
+-    </span>
+-    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} disabled={!work.onLinkFlowOffer}
+-      onClick={() => work.onLinkFlowOffer?.(offer)}>Link</button>
+-    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} disabled={!work.onDismissFlowOffer}
+-      onClick={() => work.onDismissFlowOffer?.(offer)}>Dismiss</button>
++    <span className={"pr-work-offer" + (offer.error ? " is-attention" : "")} title={title} {...(offer.error && { role: "alert" })}>{text}</span>
++    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} aria-disabled={busy} disabled={!work.onLinkFlowOffer}
++      onClick={() => { if (busy) return; onAct(); work.onLinkFlowOffer?.(offer); }}>Link</button>
++    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} aria-disabled={busy} disabled={!work.onDismissFlowOffer}
++      onClick={() => { if (busy) return; onAct(); work.onDismissFlowOffer?.(offer); }}>Dismiss</button>
+   </>;
+ }
+ 
+ /** The session menu: the bound sessions, then "New session". Built only while the menu is open. */
+ function sessionItems(sessions: readonly SessionInfo[], open: (target: SubjectSessionTarget) => void): MenuItem[] {
+   return [
+     ...sessions.map((s): MenuItem => ({ id: "s-" + s.sessionId, label: s.title?.trim() || "New session (not saved yet)",
+       icon: "chat", onSelect: () => open(s.sessionId) })),
+     ...(sessions.length ? [{ kind: "separator" as const, id: "sep" }] : []),
+     { id: "new", label: "New session", icon: "plus", onSelect: () => open("new") },
+   ];
+ }
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 470,501 @@
+     applyFilters(next);
+   }
+   function chooseGrouping(next: Grouping) {
+     setGrouping(next);
+     if (filterKey.current) saveReviewGrouping(filterKey.current, next);
+   }
+   // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
+   // the reset loads the open scope instead of this fresh one.
+   const shownNumbers = new Set(visible.map(c => c.number));
+   const cardNumbers = new Set(snapshot?.cards.map(c => c.number));
+   const resetLoads = scope !== DEFAULT_SCOPE && !error && !stale;
+   const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n) && (resetLoads || cardNumbers.has(n))).length : 0;
+   const hiddenText = `Show ${hiddenAttention} waiting on you`;
+ 
+   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+   const [detailWidth, setDetailWidth] = useState(560);
+   const openReview = useCallback((card: ReviewCard) => {
+     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
+   }, []);
+-  // A focus request waits for a snapshot of its repository that holds the PR, then opens its panel once per nonce.
+-  // Another repository of this board is selected first (the board remounts on it); one it cannot show is refused
+-  // with a notice, so the request is not left armed for a later, unrelated switch.
++  // A focus request waits for a snapshot of its repository, then opens the PR's panel once per nonce.
++  // Another repository of this board is selected first (the board remounts on it). A repository it cannot
++  // show, or a PR missing from the settled list of its repository (its state filtered out, say), is refused
++  // with a notice, so the request is not left armed to open the panel later, unasked.
+   const focused = useRef<number | null>(null);
+   const [focusNotice, setFocusNotice] = useState("");
+   useEffect(() => {
+     if (!focus || focused.current === focus.nonce || !snapshot) return;
+     if (snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()) {
+       const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());
+       if (listed) {
+         selectRepo(listed);
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 519,541 @@
+     setSelected({ number: focus.number });
+     onFocusHandled?.(focus.nonce);
+-  }, [focus, snapshot, onFocusHandled, selectRepo]);
++  }, [focus, snapshot, loading, stale, onFocusHandled, selectRepo]);
+   const workRepo = snapshot?.repo ?? "";
+   // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
+   const index = useMemo(() => prWorkIndex(flows, sessions), [flows, sessions]);
+   const flowOffer = useMemo(() => {
+     if (!flowOffers.length) return undefined;
+     const bySession = new Map(flowOffers.map(offer => [offer.sessionId, offer]));
+     return (bound: readonly SessionInfo[]) => bound.map(session => bySession.get(session.sessionId)).find(offer => offer !== undefined);
+   }, [flowOffers]);
+   const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession,
+     flowOffer, onLinkFlowOffer, onDismissFlowOffer }),
+     [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession, flowOffer, onLinkFlowOffer, onDismissFlowOffer]);
+   const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), []);
+   const openPanelSession = (item: ReviewCard) => onOpenSubjectSession
+     && (() => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId)));
+   const panelFlow = (item: ReviewCard) => index.flows(item, index.sessions(prSubject(item, workRepo, repositoryId)))[0];
+ 
+   return <div className="review-workspace" hidden={!tabActive}>
+     <section className="flows review-board" aria-label="Pull requests">
+     <div className="flows-toolbar">
+       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 590,630 @@
+       </>}
+       {needRepositories && alternatives.length > 0 && <select className="select-compact" aria-label="Base repository"
+         value={repo ?? ""} onChange={(e) => selectRepo(e.target.value)}>
+         <option disabled value="">Choose a repository</option>
+         {alternatives.map((name) => <option key={name}>{name}</option>)}
+       </select>}
+       {!snapshot && repo && <><strong>{repo}</strong><button className="link-btn" onClick={() => selectRepo()}>Use default repository</button></>}
+       {active.length > 0 && <div className="review-active-filters">
+         <button className="icon-btn" aria-label="Clear filters" title="Clear filters" onClick={() => applyFilters(EMPTY_FILTERS)}>
+           <Icon name="clearFilters" size={16} />
+         </button>
+         {active.map((label) => <span key={label}>{label}</span>)}
+       </div>}
+     </div>}
+     {error && <div className="inline-banner tone-warn" role="alert">
+       <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
+       <button className="btn btn-sm" onClick={refresh}>Try again</button>
+     </div>}
+     {focusNotice && <div className="inline-banner tone-warn review-focus-notice" role="status">
+       <Icon name="alert" size={15} /><span>{focusNotice}</span>
+-      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => setFocusNotice("")}>
++      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => { setFocusNotice(""); search.current?.focus(); }}>
+         <Icon name="x" size={15} />
+       </button>
+     </div>}
+     {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
+       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
+       <button className="icon-btn review-dismiss-warning" aria-label="Hide sync details" title="Hide sync details"
+         onClick={() => { setDismissedWarning(warningKey); warningToggle.current?.focus(); }}>
+         <Icon name="x" size={15} />
+       </button>
+     </div>}
+     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
+     {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} grouping={grouping} filters={filters} viewer={snapshot.viewer} onOpen={openDetails} onReview={openReview} work={work}
+         {...(watcherTarget && { onSubscribe: subscribe, subscriptions })} /> :
+       <EmptyState icon={q || active.length ? "search" : "pr"}
+         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
+         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
+         {q || active.length ? "Try another title, number, or filter." : undefined}
+       </EmptyState>)}
+     </section>
+     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
+
+--- apps/desktop/src/review/prWork.ts
+@@ 124,167 @@
+ 
+ /**
+  * How long a "Create Flow" request waits for its package: 15 minutes from the press. The prompt is only
+  * prefilled, so the window covers sending it and the orchestrator creating the package early in its turn;
+  * a package that appears later (another window, the CLI, the Issues board) is not linked.
+  */
+ export const FLOW_LINK_WINDOW_MS = 15 * 60_000;
+ 
+ /** "Create Flow" waiting for its package: the session that was asked, the packages that existed then, and when it expires. */
+ export interface PendingFlowLink {
+   sessionId: string;
+   knownDirs: ReadonlySet<string>;
+   /** Epoch ms; at or after it the request is dropped unlinked. */
+   expiresAt: number;
+ }
+ 
+ /** A new flow package offered for linking to a PR-bound session ("Link Flow #<id>?"); written only on Link. */
+ export interface PrFlowOffer {
+   sessionId: string;
+   flow: FlowCard;
++  /** Link was pressed and the write has not answered yet. */
++  linking?: boolean;
++  /** Why the last Link failed; Link can be pressed again. */
++  error?: string;
+ }
+ 
+ /** One pass over the pending requests: those still waiting, and the links to offer. */
+ export interface FlowLinkPass {
+   pending: PendingFlowLink[];
+   links: Array<{ sessionId: string; dir: string }>;
+ }
+ 
+ /**
+  * What to do with the pending "Create Flow" requests once the flow list changes. A package is offered for
+  * linking (`links`; the user confirms it, nothing is written here) only when exactly one request is pending
+  * and exactly one package appeared since it was recorded. Arrival alone cannot tell who made a package, so
+  * the offer is a question, never a silent link; several new packages or several pending requests offer none
+  * and end every request. An expired request, or one whose session already has a Flow, ends unlinked. A
+  * package in `claimed` (already offered for a request) is never a candidate again.
+  */
+ export function resolveFlowLinks(pending: readonly PendingFlowLink[], dirs: readonly string[],
+   sessionFlow: (sessionId: string) => string | undefined, claimed: ReadonlySet<string>, now: number): FlowLinkPass {
+   const live = pending.filter(entry => entry.expiresAt > now && !sessionFlow(entry.sessionId));
+   const candidates = [...new Set(dirs)].filter(dir => !claimed.has(dir));
+
+--- apps/desktop/src/review/usePendingFlowLinks.ts
+@@ 1,85 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { sessionFlags, type SessionInfo } from "../acp/types";
++import { errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { FLOW_LINK_WINDOW_MS, resolveFlowLinks, type PendingFlowLink } from "./prWork";
+ 
+ /** A package offered for linking to the session that asked for it; nothing is written until `accept`. */
+ export interface FlowLinkOffer {
+   sessionId: string;
+   dir: string;
++  /** Link was pressed and the flag write has not answered yet. */
++  linking?: boolean;
++  /** Why the last Link failed; the offer stays so Link can be pressed again. */
++  error?: string;
+ }
+ 
+ /**
+  * "Create Flow" requests waiting for their package. `known()` takes the packages that exist before the
+  * request (null before the first flow list: nothing can then be told apart, so nothing is offered);
+  * `expect(sessionId, known)` waits for the session's package for `FLOW_LINK_WINDOW_MS`. When it is the one
+  * new package and this is the one pending request (`resolveFlowLinks`), it becomes an offer: arrival alone
+- * cannot tell who made it, so the user confirms. `accept(sessionId)` writes the link through `link`,
+- * `dismiss(sessionId)` drops the offer and writes nothing; a package once offered is never offered again.
+- * An offer whose session has meanwhile got a Flow is dropped. `actions` keeps its identity.
++ * cannot tell who made it, so the user confirms. `accept(sessionId)` writes the link through `link` and
++ * keeps the offer (`linking`) until the write answers: it goes on success, and stays with its `error` on a
++ * failure, so Link can be pressed again. `dismiss(sessionId)` drops the offer and writes nothing; a package
++ * once offered is never offered again. An offer whose session has meanwhile got a Flow is dropped.
++ * `actions` keeps its identity.
+  */
+ export function usePendingFlowLinks(flows: readonly FlowCard[], loaded: boolean, sessions: readonly SessionInfo[],
+-  link: (sessionId: string, dir: string) => void, now: () => number = Date.now) {
++  link: (sessionId: string, dir: string) => void | Promise<void>, now: () => number = Date.now) {
+   const [pending, setPending] = useState<PendingFlowLink[]>([]);
+   const [offered, setOffered] = useState<FlowLinkOffer[]>([]);
+   const linkRef = useRef(link);
+   linkRef.current = link;
+   const nowRef = useRef(now);
+   nowRef.current = now;
+   const listed = useRef({ flows, loaded });
+   listed.current = { flows, loaded };
+   const claimed = useRef(new Set<string>());
+   const flowOf = useCallback((sessionId: string) => {
+     const session = sessions.find(item => item.sessionId === sessionId);
+     return session && sessionFlags(session).flow;
+   }, [sessions]);
+   useEffect(() => {
+     if (!pending.length) return;
+     const pass = resolveFlowLinks(pending, flows.map(flow => flow.dir), flowOf, claimed.current, nowRef.current());
+     for (const { dir } of pass.links) claimed.current.add(dir);
+     if (pass.links.length) {
+       setOffered(old => [...old.filter(offer => !pass.links.some(next => next.sessionId === offer.sessionId)), ...pass.links]);
+     }
+     if (pass.pending.length !== pending.length) setPending(pass.pending);
+   }, [pending, flows, flowOf]);
+   const offers = useMemo(() => offered.filter(offer => !flowOf(offer.sessionId)), [offered, flowOf]);
+   const offersRef = useRef(offers);
+   offersRef.current = offers;
+   const known = useCallback((): ReadonlySet<string> | null =>
+     listed.current.loaded ? new Set(listed.current.flows.map(flow => flow.dir)) : null, []);
+   const expect = useCallback((sessionId: string, knownDirs: ReadonlySet<string> | null) => {
+     if (!knownDirs) return;
+     const expiresAt = nowRef.current() + FLOW_LINK_WINDOW_MS;
+     setPending(old => [...old.filter(entry => entry.sessionId !== sessionId), { sessionId, knownDirs, expiresAt }]);
+   }, []);
+-  const accept = useCallback((sessionId: string) => {
++  const accept = useCallback(async (sessionId: string) => {
+     const offer = offersRef.current.find(item => item.sessionId === sessionId);
+-    if (!offer) return;
+-    // Read and cleared at once, so a second press before the next render cannot write the link twice.
+-    offersRef.current = offersRef.current.filter(item => item !== offer);
+-    setOffered(old => old.filter(item => item.sessionId !== sessionId));
+-    linkRef.current(offer.sessionId, offer.dir);
++    if (!offer || offer.linking) return;
++    const { dir } = offer;
++    // Read and marked at once, so a second press before the next render cannot write the link twice.
++    offersRef.current = offersRef.current.map(item => item === offer ? { sessionId, dir, linking: true } : item);
++    const settle = (next: FlowLinkOffer | null) => setOffered(old => old.flatMap(item =>
++      item.sessionId === sessionId && item.dir === dir ? next ? [next] : [] : [item]));
++    settle({ sessionId, dir, linking: true });
++    try {
++      await linkRef.current(sessionId, dir);
++    } catch (cause) {
++      settle({ sessionId, dir, error: errMessage(cause) });
++      return;
++    }
++    settle(null);
+   }, []);
+   const dismiss = useCallback((sessionId: string) => {
+     offersRef.current = offersRef.current.filter(item => item.sessionId !== sessionId);
+     setOffered(old => old.filter(item => item.sessionId !== sessionId));
+   }, []);
+   const actions = useMemo(() => ({ known, expect, accept, dismiss }), [known, expect, accept, dismiss]);
+   return { offers, actions };
+ }
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 764,814 @@
+   /**
+    * Work on a flow: in a new session linked to the flow (`target` "new"), or in a session already
+    * linked to it. Resolves the session that is now shown, or null when none could be opened.
+    */
+   const workOnFlow = useCallback(
+     async (flowDir: string, target: "new" | string): Promise<string | null> => {
+       if (target !== "new") {
+         await loadSession(target);
+         return target;
+       }
+       const id = await newSession();
+       if (id) {
+         pendingFlow.current.set(id, flowDir);
+         await applyPendingFlow(id);
+       }
+       return id;
+     },
+     [loadSession, newSession, applyPendingFlow],
+   );
+ 
+-  /** Link a session to a flow package; kept pending and retried after its turn while keryx has not stored the session. */
+-  const linkFlow = useCallback((sessionId: string, flowDir: string) => {
+-    pendingFlow.current.set(sessionId, flowDir);
+-    return applyPendingFlow(sessionId);
+-  }, [applyPendingFlow]);
++  /**
++   * Link a stored session to a flow package (the PR work row's Link). Rejects when keryx refuses or cannot be
++   * reached, so the caller can keep its offer and say why; nothing is kept pending for a later retry.
++   */
++  const linkFlow = useCallback(async (sessionId: string, flowDir: string) => {
++    const l = live.current;
++    const client = l.client;
++    if (!client) throw new Error("keryx is not connected.");
++    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });
++    if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
++  }, [cwd, dispatch]);
+ 
+   /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
+   const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);
+ 
+   const setMode = useCallback(
+     async (modeId: string) => {
+       const l = live.current;
+       const client = l.client;
+       const sessionId = l.reg.shown;
+       if (!client || !sessionId || !l.reg.held.has(sessionId)) return;
+       try {
+         await client.request("session/set_mode", { sessionId, modeId });
+         if (l.client === client) {
+           dispatch({ t: "updates", updates: [{ sessionId, at: Date.now(), update: { sessionUpdate: "current_mode_update", currentModeId: modeId } }] });
+         }
+       } catch (e) {
+         if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: `Could not change mode: ${errMessage(e)}` });
+       }
+     },
+     [dispatch],
+
+--- apps/desktop/src/styles/review.css
+@@ 8,32 @@
+ .review-lanes .lane { flex: 1 0 230px; }
+ .review-lane-waiting, .review-lane-requested { background: var(--info); }
+ .review-lane-changes { background: var(--warn); }
+ .review-lane-approved, .review-lane-mine { background: var(--ok); }
+ .review-lane-merged { background: var(--accent); }
+ .review-quick-filters { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+ .review-context [aria-pressed="true"] { color: var(--accent-text); background: var(--bg-selected); border-color: var(--accent-text); }
+ .review-grouping { display: inline-flex; align-items: center; gap: var(--sp-1); }
+ .review-card { display: grid; gap: 6px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: start; }
+ .review-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+ .review-tags .badge { white-space: normal; color: var(--fg-muted); background: var(--bg-sunken); }
+ .review-tags .pr-open, .review-tags .pr-approved { color: var(--ok); background: var(--ok-soft); }
+ .review-tags .pr-merged, .review-tags .pr-review_requested { color: var(--info); background: var(--info-soft); }
+ .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
+ .badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
+ .review-board .card-actions .is-following { color: var(--accent-text); background: var(--bg-selected); }
+ .review-board .card-actions { flex-wrap: wrap; }
+ .review-board .card-actions .btn { gap: 4px; white-space: nowrap; }
+ /* The Keryx work row: three slots (review, Flow, session) of one fixed height, filled or empty; text truncates. */
+ .pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }
+-.pr-work-slot { display: flex; min-width: 0; height: 24px; }
++.pr-work-slot { display: flex; min-width: 0; height: 24px; overflow: hidden; }
+ .pr-work-link, .pr-work-more { height: 24px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--accent-text); font: inherit; cursor: pointer; white-space: nowrap; }
+ .pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+ .pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
+ .pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
+
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 14,61 @@
+ const viewer = { login: "fixture", nodeId: "U_a", host: "github.com" };
+ const issue: IssueSummary = {
+   ref: { host: "github.com", nodeId: "I_a", repositoryId: "R_a", owner: "org", repo: "sample", number: 3, url: "https://github.com/org/sample/issues/3" },
+   title: "Report the failing upload", state: "open", author: "sam", assignees: ["lee"], labels: ["sync"],
+   createdAt: "2026-11-01", updatedAt: "2026-11-02", work: {stage: "done"},
+ };
+ 
+ beforeAll(async () => {
+   registerDom();
+   const react = await import("react");
+   act = react.act as typeof act;
+   createElement = react.createElement;
+   Board = (await import("./IssuesBoard")).IssuesBoard;
+   host = document.createElement("div"); document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ beforeEach(async () => { await act(() => root.render(null)); localStorage.clear(); });
+ afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
+ 
+ type Read = (login: string, action: IssuesAction, args: object) => Promise<unknown>;
+-function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[]) {
++function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[], cwd = "/fixture") {
+   const request: typeof requestIssues = async <T,>(_cwd: string, account: string, action: IssuesAction, args: object) => (action === "viewer" ? { viewer: { ...viewer, login: account, nodeId: account === viewer.login ? viewer.nodeId : "U_b" } } : await read(account, action, args)) as T;
+-  return act(async () => { root.render(createElement(Board, { cwd: "/fixture", login, request,
++  return act(async () => { root.render(createElement(Board, { cwd, login, request,
+     onSettings: () => {}, onWork: async action => onWork(action), ...(sessions ? { sessions } : {}) })); });
+ }
+ const account = "keryx.issues." + JSON.stringify([viewer.host, viewer.nodeId]);
++/** The source stored for a project and account; `account + ".source"` alone is the older, per-account key. */
++const sourceKey = (cwd = "/fixture") => account + ".source." + JSON.stringify(cwd);
+ const lanes = () => [...host.querySelectorAll(".issue-lanes .lane")].map(lane => lane.getAttribute("aria-label"));
+ function button(label: string) {
+   const result = [...host.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
+   if (!result) throw new Error("Missing button: " + label);
+   return result;
+ }
+ const click = (el: HTMLElement) => act(async () => { el.click(); });
+ const page = (items: unknown[], nextCursor: string | null = null) => ({viewer, items, nextCursor, incomplete: false});
+ 
+ test("board and list open one detail panel; comments load on demand and Flow state stays independent", async () => {
+   const calls: IssuesAction[] = [];
+   const work: string[] = [];
+   await render(async (_login, action) => {
+     calls.push(action);
+     if (action === "list") return page([issue]);
+     if (action === "detail") return {viewer, issue: {...issue, body: "See #42 and [README](docs/README.md)."}};
+     if (action === "comments") return page([{id:"comment",author:"demo",body:"More context",createdAt:issue.createdAt,url:issue.ref.url}]);
+     throw new Error("Unexpected " + action);
+   }, viewer.login, a => work.push(a));
+   expect(calls).toEqual(["list"]);
+
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 332,372 @@
+   expect(button("Flow · Done for org/sample#3").textContent).toBe("Flow · Done");
+   expect(button("Create Flow for org/sample#4").textContent).toBe("Create Flow");
+   expect(button("Resume preparation for org/sample#4").textContent).toBe("Resume preparation");
+ });
+ 
+ const other = (number: number, patch: Partial<IssueSummary> = {}): IssueSummary => ({ ...issue, ...patch,
+   ref: { ...issue.ref, nodeId: "I_" + number, number, url: "https://github.com/org/sample/issues/" + number } });
+ 
+ test("AC13 the project repository is the default source; the other sources stay selectable", async () => {
+   const sources: unknown[] = [];
+   await render(async (_login, action, args) => {
+     if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
+     throw new Error("Unexpected " + action);
+   });
+   expect(sources).toEqual(["repository"]);
+   const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+   expect(select.value).toBe("repository");
+   expect([...select.options].map(o => o.textContent)).toEqual(["Project repository", "Assigned to me", "Created by me", "Mentioned", "Subscribed", "GitHub Project"]);
+   await act(async () => { select.value = "assigned"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+   expect(sources).toEqual(["repository", "assigned"]);
+-  expect(localStorage.getItem(account + ".source")).toBe("assigned");
++  expect(localStorage.getItem(sourceKey())).toBe("assigned");
+ });
+ 
+ test("AC13 a stored source preference wins over the project repository default", async () => {
+   localStorage.setItem(account + ".source", "assigned");
+   const sources: unknown[] = [];
+   await render(async (_login, action, args) => {
+     if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
+     throw new Error("Unexpected " + action);
+   });
+   expect(sources).toEqual(["assigned"]);
+   expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
+ });
+ 
+ test("AC11 issues without a Flow spread over Open and Closed; Closed appears only when the state filter includes it", async () => {
+   const rows = [other(5, { work: { stage: "none" } }), other(6, { state: "closed", work: { stage: "none" } }), other(7, { work: { stage: "active" } })];
+   const read: Read = async (_login, action, args) => {
+     if (action !== "list") throw new Error("Unexpected " + action);
+     const { state } = args as { state: string };
+     return page(rows.filter(r => state === "all" || r.state === state));
+   };
+
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 429,575 @@
+ 
+ test("the Issue work row's two columns beat the PR row's three whatever order the stylesheets load in", () => {
+   const css = readFileSync(new URL("./IssuesBoard.css", import.meta.url), "utf8");
+   // Same specificity as `.pr-work-row` (styles/review.css, loaded later) would lose; both classes win.
+   expect(css).toMatch(/(^|\n)\.pr-work-row\.issue-work-row \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+   expect(css).not.toMatch(/(^|\n)\.issue-work-row \{/);
+ });
+ 
+ const hasButton = (label: string) => [...host.querySelectorAll("button")].some(b => b.textContent?.trim() === label);
+ 
+ test("AC13 an older keryx that refuses the default repository source offers Assigned to me and an update hint", async () => {
+   const sources: string[] = [];
+   await render(async (_login, action, args) => {
+     if (action !== "list") throw new Error("Unexpected " + action);
+     const { source } = args as { source: string };
+     sources.push(source);
+     if (source === "repository") throw new Error("configuration: Invalid Issues request.");
+     return page([issue]);
+   });
+   const alert = host.querySelector('[role="alert"]')!;
+-  expect(alert.textContent).toContain("update keryx or choose the bundled CLI in Desktop Settings");
++  // Named as Settings names it.
++  expect(alert.textContent).toContain("update keryx or choose Bundled keryx in Settings → Desktop");
++  expect(alert.textContent).not.toContain("configuration:");
+   // Retry would send the same refused request again.
+   expect(hasButton("Retry")).toBe(false);
+-  await click(button("Show issues assigned to me"));
++  const fallback = button("Show issues assigned to me");
++  fallback.focus();
++  await click(fallback);
+   expect(sources).toEqual(["repository", "assigned"]);
+-  expect(localStorage.getItem(account + ".source")).toBe("assigned");
+-  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
++  expect(localStorage.getItem(sourceKey())).toBe("assigned");
++  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
++  expect(select.value).toBe("assigned");
++  // FE-R3-002: the button is gone with the notice; focus lands on the source select, not the page body.
++  expect(fallback.isConnected).toBe(false);
++  expect(document.activeElement).toBe(select);
+   expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
+ });
+ 
+ test("AC13 a project with no GitHub.com remote, or a repository with Issues turned off, offers Assigned to me instead of Retry", async () => {
+   for (const reason of [
+     "configuration: This project has no GitHub.com fetch remote.",
+     "configuration: GitHub has Issues turned off for fork-owner/sample. Choose another source, such as Assigned to me.",
++    "configuration: This project's GitHub.com remote names no usable repository.",
+   ]) {
+     await act(() => root.render(null)); localStorage.clear();
+     await render(async (_login, action, args) => {
+       if (action !== "list") throw new Error("Unexpected " + action);
+       if ((args as { source: string }).source === "repository") throw new Error(reason);
+       return page([issue]);
+     });
+     const alert = host.querySelector('[role="alert"]')!;
+-    expect(alert.textContent).toContain(reason);
++    // UX-013: the reason without its machine prefix.
++    expect(alert.textContent).toContain(reason.replace("configuration: ", ""));
++    expect(alert.textContent).not.toContain("configuration:");
+     expect(alert.textContent).toContain("This project's repository issues are not available here.");
+-    expect(alert.textContent).not.toContain("bundled CLI");
++    expect(alert.textContent).not.toContain("Bundled keryx");
+     expect(hasButton("Retry")).toBe(false);
+     await click(button("Show issues assigned to me"));
+     expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
+   }
+ });
+ 
+-test("AC13 a repository source the person chose keeps Retry on a configuration error", async () => {
+-  localStorage.setItem(account + ".source", "repository");
++test("UX-017: a repository source the person chose gets the same fallback as the default one", async () => {
++  localStorage.setItem(sourceKey(), "repository");
+   await render(async () => { throw new Error("configuration: This project has no GitHub.com fetch remote."); });
++  expect(hasButton("Show issues assigned to me")).toBe(true);
++  expect(hasButton("Retry")).toBe(false);
++});
++
++test("AR-007/TP-R3-003: any other error of the repository source keeps Retry and offers no source switch", async () => {
++  for (const reason of [
++    "rate-limit: GitHub request limit reached.",
++    "unavailable: connection lost",
++    "configuration: Refresh before loading the next page.",
++    "configuration: This project has no remote.",
++  ]) {
++    await act(() => root.render(null)); localStorage.clear();
++    await render(async () => { throw new Error(reason); });
++    expect({ reason, retry: hasButton("Retry"), fallback: hasButton("Show issues assigned to me") }).toEqual({ reason, retry: true, fallback: false });
++  }
++});
++
++test("AR-007: an Invalid Issues request on a later page is not an older keryx: Retry and the snapshot stay", async () => {
++  await render(async (_login, action, args) => {
++    if (action !== "list") throw new Error("Unexpected " + action);
++    if ("cursor" in args && args.cursor) throw new Error("configuration: Invalid Issues request.");
++    return page([issue], "more");
++  });
++  await click(button("Load more issues"));
++  const alert = host.querySelector('[role="alert"]')!;
++  expect(alert.textContent).toContain("Showing the last available snapshot.");
+   expect(hasButton("Retry")).toBe(true);
+   expect(hasButton("Show issues assigned to me")).toBe(false);
+ });
+ 
++test("UX-011: the source is stored per project; the fallback in one project leaves another's source alone", async () => {
++  const sources: string[] = [];
++  const read = (failing: boolean): Read => async (_login, action, args) => {
++    if (action !== "list") throw new Error("Unexpected " + action);
++    const { source } = args as { source: string };
++    sources.push(source);
++    if (failing && source === "repository") throw new Error("configuration: This project has no GitHub.com fetch remote.");
++    return page([issue]);
++  };
++  await render(read(true), viewer.login, () => {}, undefined, "/no-remote");
++  await click(button("Show issues assigned to me"));
++  expect(localStorage.getItem(sourceKey("/no-remote"))).toBe("assigned");
++  expect(localStorage.getItem(account + ".source")).toBeNull();
++  sources.length = 0;
++  await render(read(false), viewer.login, () => {}, undefined, "/with-remote");
++  expect(sources).toEqual(["repository"]);
++  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("repository");
++});
++
++test("UX-011: a source stored per account by an earlier Desktop is read until the project has its own", async () => {
++  localStorage.setItem(account + ".source", "created");
++  localStorage.setItem(sourceKey("/chosen"), "mentioned");
++  const sources: string[] = [];
++  const read: Read = async (_login, action, args) => {
++    if (action !== "list") throw new Error("Unexpected " + action);
++    sources.push((args as { source: string }).source);
++    return page([issue]);
++  };
++  await render(read, viewer.login, () => {}, undefined, "/legacy");
++  await render(read, viewer.login, () => {}, undefined, "/chosen");
++  expect(sources).toEqual(["created", "mentioned"]);
++});
++
+ test("AC12 the work rows read the bound sessions from one index, not once per row", async () => {
+   const reads = new Map<string, number>();
+   const sessions = Array.from({ length: 5 }, (_, n) => {
+     const id = String(n + 1);
+     const meta = { keryx: { subject: { kind: "issue", repo: "org/sample", number: 5, url: "https://github.com/org/sample/issues/5" } } };
+     return Object.defineProperty({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id }, "_meta", {
+       get: () => { reads.set(id, (reads.get(id) ?? 0) + 1); return meta; },
+     }) as SessionInfo;
+   });
+   const rows = Array.from({ length: 12 }, (_, n) => other(n + 5));
+   await render(async (_login, action) => {
+     if (action === "list") return page(rows);
+     throw new Error("Unexpected " + action);
+   }, viewer.login, () => {}, sessions);
+   expect(button("5 sessions for org/sample#5")).not.toBeUndefined();
+   // Read for the index, a few times at most across renders; never once per row (12 rows).
+   expect(reads.size).toBe(5);
+   for (const count of reads.values()) expect(rows.length).toBeGreaterThan(count);
+ });
+
+--- apps/desktop/src/issues/model.test.ts
+@@ 1,24 @@
+ import { describe, expect, test } from "bun:test";
+ import type { IssueSummary } from "../../../../src/integrations/issues-contract";
+-import type { SessionInfo } from "../acp/types";
+-import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSessions, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
++import { boundSessionIndex, type SessionInfo } from "../acp/types";
++import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
+ 
+ const issue: IssueSummary = {
+   ref: { host: "github.com", nodeId: "I_a", repositoryId: "R_a", owner: "org", repo: "sample", number: 3, url: "https://github.com/org/sample/issues/3" },
+   title: "Report the failing upload", state: "open", author: "sam", assignees: [], labels: [],
+   createdAt: "2026-11-01", updatedAt: "2026-11-02",
+ };
+ const closed: IssueSummary = { ...issue, state: "closed", ref: { ...issue.ref, nodeId: "I_b", number: 4, url: "https://github.com/org/sample/issues/4" } };
+ const project: ProjectBoard = { id: "p", owner: "org", number: 1, title: "Board", fieldId: "f", canWrite: true, options: [{ id: "todo", name: "Todo" }] };
+ 
+ describe("issue grouping", () => {
+   test("without a GitHub Project, issues group by GitHub state whatever their Flow stage", () => {
+     expect(groupForRow({ issue: { ...issue, work: { stage: "done" } } }, false)).toBe("open");
+     expect(groupForRow({ issue: closed }, false)).toBe("closed");
+     expect(groupForRow({ issue }, false)).toBe("open");
+   });
+ 
+   test("the Closed lane is drawn only when the state filter includes closed issues", () => {
+     expect(issueGroups(undefined, "open")).toEqual([{ id: "open", label: "Open" }]);
+     expect(issueGroups(undefined, "closed")).toEqual([{ id: "open", label: "Open" }, { id: "closed", label: "Closed" }]);
+     expect(issueGroups(undefined, "all")).toEqual([{ id: "open", label: "Open" }, { id: "closed", label: "Closed" }]);
+
+--- apps/desktop/src/issues/model.test.ts
+@@ 44,68 @@
+     expect(Object.keys(SOURCES)).toEqual(["repository", "assigned", "created", "mentioned", "subscribed", "project"]);
+   });
+ });
+ 
+ describe("issue sessions", () => {
+   const session = (id: string, subject: unknown, extra: Record<string, unknown> = {}): SessionInfo =>
+     ({ sessionId: id, cwd: "/p", updatedAt: "2026-11-0" + id, _meta: { keryx: { subject, ...extra } } }) as SessionInfo;
+ 
+   test("the subject of an issue names its repository and number", () => {
+     expect(issueSubject(issue)).toEqual({ kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url, repositoryId: "R_a" });
+   });
+ 
+   test("bound sessions match kind, repository without case and number, and skip archived ones", () => {
+     const sessions = [
+       session("1", { kind: "issue", repo: "Org/Sample", number: 3, url: issue.ref.url }),
+       session("2", { kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url }),
+       session("3", { kind: "pr", repo: "org/sample", number: 3, url: "https://github.com/org/sample/pull/3" }),
+       session("4", { kind: "issue", repo: "org/sample", number: 4, url: closed.ref.url }),
+       session("5", { kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url }, { archivedAt: "2026-11-05" }),
+     ];
+-    expect(issueSessions(sessions, issue).map(s => s.sessionId)).toEqual(["2", "1"]);
+-    expect(issueSessions([], issue)).toEqual([]);
++    // The board's path: one index over the sessions, looked up by each issue's subject.
++    expect(boundSessionIndex(sessions)(issueSubject(issue)).map(s => s.sessionId)).toEqual(["2", "1"]);
++    expect(boundSessionIndex([])(issueSubject(issue))).toEqual([]);
+   });
+ });
+
+--- apps/desktop/src/review/PrWorkRow.dom.test.tsx
+@@ 319,507 @@
+   expect(handled).toEqual([1, 2]);
+   expect(document.body.querySelector(".review-focus-notice")?.textContent).toContain("elsewhere/project#3");
+   await click(button("Dismiss notice"));
+   expect(document.body.querySelector(".review-focus-notice")).toBeNull();
+ });
+ 
+ test("a focus that nobody clears opens the panel once per nonce, not again after a refresh", async () => {
+   let loads = 0;
+   const host = focusHost(async () => { loads++; return board([pr]); }, [], false);
+   await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: { repo: "org/repo", number: 101, nonce: 5 } })); });
+   expect(panel()).not.toBeNull();
+   await click(button("Close details"));
+   await click(button("Refresh pull requests"));
+   expect(loads).toBe(2);
+   expect(panel()).toBeNull();
+   // A new nonce opens it again.
+   await host.setFocus({ repo: "org/repo", number: 101, nonce: 6 });
+   expect(panel()).not.toBeNull();
+ });
+ 
++const notice = () => document.body.querySelector(".review-focus-notice");
++const merged: ReviewCard = { ...pr, number: 55, title: "Merged PR", state: "merged", url: pr.url.replace("101", "55") };
++
++test("FE-R3-001: a focus for a PR missing from the loaded list is refused with a notice, and a later load that holds it opens nothing", async () => {
++  const handled: number[] = [];
++  let loads = 0;
++  const host = focusHost(async () => ++loads === 1 ? board([pr]) : board([pr, merged]), handled);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  await host.setFocus({ repo: "org/repo", number: 55, nonce: 1 });
++  expect(panel()).toBeNull();
++  expect(handled).toEqual([1]);
++  expect(notice()?.textContent).toContain("#55 is not in the current list of org/repo");
++  // The next load holds the PR (its state now shown): the refused request does not open it.
++  await click(button("Refresh pull requests"));
++  expect(loads).toBe(2);
++  expect(panel()).toBeNull();
++});
++
++test("FE-R3-001: a focus that arrives while a load runs waits for that load before it decides", async () => {
++  let release!: () => void;
++  let loads = 0;
++  const load: typeof fetchReviewBoard = async () => {
++    if (++loads === 1) return board([pr]);
++    await new Promise<void>(resolve => { release = resolve; });
++    return board([pr, merged]);
++  };
++  const host = focusHost(load, []);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  await click(button("Refresh pull requests"));
++  await host.setFocus({ repo: "org/repo", number: 55, nonce: 1 });
++  expect(notice()).toBeNull();
++  await act(async () => release());
++  expect(panel()?.textContent).toContain("Merged PR");
++});
++
++test("TP-R3-004: a refused request is marked handled, so a refresh does not raise its dismissed notice again", async () => {
++  // Nobody clears the request: only the board's own record of the nonce keeps it from being refused again.
++  const host = focusHost(async () => board([pr]), [], false);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  for (const [nonce, focus] of [[1, { repo: "elsewhere/project", number: 3 }], [2, { repo: "org/repo", number: 55 }]] as const) {
++    await host.setFocus({ ...focus, nonce });
++    expect(notice()).not.toBeNull();
++    await click(button("Dismiss notice"));
++    await click(button("Refresh pull requests"));
++    expect(notice()).toBeNull();
++  }
++});
++
++test("TP-R3-004: a later focus that opens its panel clears the notice of a refused one", async () => {
++  const host = focusHost(async () => board([pr]), []);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  await host.setFocus({ repo: "elsewhere/project", number: 3, nonce: 1 });
++  expect(notice()).not.toBeNull();
++  await host.setFocus({ repo: "org/repo", number: 101, nonce: 2 });
++  expect(panel()).not.toBeNull();
++  expect(notice()).toBeNull();
++});
++
++test("FE-R3-002: Dismiss notice moves focus to the search field, not the page body", async () => {
++  const host = focusHost(async () => board([pr]), []);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  await host.setFocus({ repo: "elsewhere/project", number: 3, nonce: 1 });
++  const dismiss = button("Dismiss notice");
++  (dismiss as HTMLElement).focus();
++  await click(dismiss);
++  expect(notice()).toBeNull();
++  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
++});
++
++/** A board whose offer list the test's Link and Dismiss empty, as App does once the link is written or dismissed. */
++function offerHost(offer: PrFlowOffer, flows: FlowCard[] = []) {
++  const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
++  function Host() {
++    const [offers, set] = useState<PrFlowOffer[]>([offer]);
++    return createElement(ReviewBoard, {
++      cwd: "/project", flows, sessions: bound, load: async () => board([pr]), listRepositories: async () => [],
++      watcherCommand: async () => watcherOff, rulesCommand: rules, onOpenFlow: () => {}, onCreateFlow: () => {}, onOpenSubjectSession: () => {},
++      flowOffers: offers, onLinkFlowOffer: () => set([]), onDismissFlowOffer: () => set([]),
++    });
++  }
++  return act(async () => { root.render(createElement(Host, { key: ++renderKey })); });
++}
++
++test("FE-R3-002: Link and Dismiss move focus to the Flow slot's control that replaces the offer", async () => {
++  const offer: PrFlowOffer = { sessionId: "s1", flow: flow("530") };
++  for (const label of ["Link Flow #530 · Work 530 for #101", "Dismiss Flow #530 · Work 530 for #101"]) {
++    await offerHost(offer);
++    const control = button(label);
++    (control as HTMLElement).focus();
++    await click(control);
++    expect(control.isConnected).toBe(false);
++    expect(document.activeElement?.getAttribute("aria-label")).toBe("Create Flow for #101");
++  }
++});
++
++test("TP-R3-002: a PR that already has a Flow shows that Flow, not an offer", async () => {
++  await render([pr], { flows: [flow("531", { prUrl: pr.url })], sessions: [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")],
++    offers: [{ sessionId: "s1", flow: flow("530") }] });
++  const slot = document.body.querySelector('[aria-label="Keryx work for #101"] [data-slot="flow"]')!;
++  expect(slot.textContent).toBe("Flow #531 · In progress");
++  expect(slot.querySelector(".pr-work-offer")).toBeNull();
++});
++
++test("UX-010: a Link in flight waits, and a failed one says why and keeps Link", async () => {
++  const calls: Calls = { flows: [], created: [], sessions: [], linked: [], dismissed: [] };
++  const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
++  const linking: PrFlowOffer = { sessionId: "s1", flow: flow("530"), linking: true };
++  await render([pr], { sessions: bound, offers: [linking], calls });
++  const slot = () => document.body.querySelector<HTMLElement>('[aria-label="Keryx work for #101"] [data-slot="flow"]')!;
++  expect(slot().textContent).toBe("Linking Flow #530 · Work 530…LinkDismiss");
++  expect(button("Link Flow #530 · Work 530 for #101").getAttribute("aria-disabled")).toBe("true");
++  await click(button("Link Flow #530 · Work 530 for #101"));
++  await click(button("Dismiss Flow #530 · Work 530 for #101"));
++  expect([calls.linked, calls.dismissed]).toEqual([[], []]);
++  const failed: PrFlowOffer = { sessionId: "s1", flow: flow("530"), error: "keryx is not connected." };
++  await render([pr], { sessions: bound, offers: [failed], calls });
++  const reason = slot().querySelector(".pr-work-offer")!;
++  expect(reason.textContent).toBe("Not linked: keryx is not connected.");
++  expect(reason.getAttribute("role")).toBe("alert");
++  await click(button("Link Flow #530 · Work 530 for #101"));
++  expect(calls.linked).toEqual([failed]);
++});
++
++test("review.css: the offer text truncates and is not a button, its buttons do not shrink, and the slot clips", () => {
++  const css = readFileSync(new URL("../styles/review.css", import.meta.url), "utf8");
++  const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*:()]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
++  expect(rule(".pr-work-slot")).toContain("overflow: hidden");
++  expect(rule(".pr-work-offer")).toContain("text-overflow: ellipsis");
++  expect(rule(".pr-work-offer")).toContain("min-width: 0");
++  expect(rule(".pr-work-more")).toContain("flex: none");
++  expect(css).not.toMatch(/\.pr-work-link\.pr-work-offer/);
++});
++
+ test("a new package offered for the PR's bound session shows Link and Dismiss in the Flow slot; only those act on it", async () => {
+   const calls: Calls = { flows: [], created: [], sessions: [], linked: [], dismissed: [] };
+   const offer: PrFlowOffer = { sessionId: "s1", flow: flow("530") };
+   const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
+   await render([pr, { ...pr, number: 102, url: pr.url.replace("101", "102") }], { sessions: bound, offers: [offer], calls });
+   const flowSlot = (n: number) => document.body.querySelector<HTMLElement>(`[aria-label="Keryx work for #${n}"] [data-slot="flow"]`)!;
+-  expect(flowSlot(101).textContent).toBe("Link Flow #530?LinkDismiss");
++  // The package is named by number and title, in the text and in Link's accessible name.
++  expect(flowSlot(101).textContent).toBe("Link Flow #530 · Work 530?LinkDismiss");
++  // The question is text, not a control: it has no button class, so no button box and no hover state.
++  expect(flowSlot(101).querySelector(".pr-work-offer")?.classList.contains("pr-work-link")).toBe(false);
+   // Only the PR whose bound session asked gets the offer.
+   expect(flowSlot(102).textContent).toBe("Create Flow");
+   expect(rows().every(row => row.children.length === 3)).toBe(true);
+-  await click(button("Link Flow #530 for #101"));
++  await click(button("Link Flow #530 · Work 530 for #101"));
+   expect(calls.linked).toEqual([offer]);
+-  await click(button("Dismiss Flow #530 for #101"));
++  await click(button("Dismiss Flow #530 · Work 530 for #101"));
+   expect(calls.dismissed).toEqual([offer]);
+   expect(calls.created).toEqual([]);
+   expect(calls.flows).toEqual([]);
+ });
+ 
+ /** The work row alone, outside a board: the card's own state decides. */
+ function renderRow(card: ReviewCard) {
+   const work = { repo: "org/repo", index: prWorkIndex([], []), onOpenFlow: () => {} };
+   return act(async () => { root.render(createElement(PrWorkRow, { key: ++renderKey, card, work, onReview: () => {} })); });
+ }
+ const reviewLink = () => document.body.querySelector('[data-slot="review"] .pr-work-link')!;
+ 
+ test("the warn tone marks a review waiting on the viewer only on an open PR, as the tab indicator does", async () => {
+   const publication = { active: false, ready: true, runState: "completed" as const, publicationPending: true as const };
+   const answer = { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const };
+   for (const [state, localReview, warn] of [["open", publication, true], ["merged", publication, false], ["closed", publication, false],
+     ["open", answer, true], ["merged", answer, false]] as const) {
+     await renderRow({ ...pr, state, localReview });
+     expect({ state, warn: reviewLink().classList.contains("is-attention") }).toEqual({ state, warn });
+   }
+
+--- apps/desktop/src/review/ReviewProgress.test.tsx
+@@ 1,13 @@
++import { expect, test } from "bun:test";
++import { createElement } from "react";
++import { renderToStaticMarkup } from "react-dom/server";
++import { ReviewProgress } from "./ReviewProgress";
++
++const caption = (showState?: boolean) =>
++  renderToStaticMarkup(createElement(ReviewProgress, { state: "partial", ...(showState !== undefined && { showState }) }));
++
++test("TP-R3-005: ReviewProgress names a labelled run state only when asked to show it", () => {
++  expect(caption()).not.toContain("Partial");
++  expect(caption(false)).not.toContain("Partial");
++  expect(caption(true)).toContain("Partial · ");
++});
+
+--- apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx
+@@ 15,73 @@
+   const React = await import("react");
+   act = React.act as unknown as typeof act;
+   createElement = React.createElement;
+   ({ usePendingFlowLinks } = await import("./usePendingFlowLinks"));
+   ({ FLOW_LINK_WINDOW_MS } = await import("./prWork"));
+   root = (await import("react-dom/client")).createRoot(document.body.appendChild(document.createElement("div")));
+ });
+ afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
+ 
+ const flow = (dir: string): FlowCard => ({
+   id: dir.slice(0, 3), dir, idValid: true, commandRef: null, title: dir, status: "initializing", previousStatus: null, blocked: false,
+   owner: null, prUrl: null, baseBranch: null, tasksDone: 0, tasksTotal: 0, acTotal: 0, acConfirmed: 0, updatedAt: null,
+   completionExceptions: false, error: null,
+ });
+ 
+ type Hook = ReturnType<typeof usePendingFlowLinks>;
+ function harness() {
+   const links: string[] = [];
+   const hooks: Hook[] = [];
+   const clock = { now: 0 };
++  /** What the flag write answers after recording the link; a test may make it wait or fail. */
++  const write = { answer: (): void | Promise<void> => undefined };
+   function Probe({ flows, loaded, sessions }: { flows: FlowCard[]; loaded: boolean; sessions: SessionInfo[] }) {
+-    hooks.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => links.push(`${id} ${dir}`), () => clock.now));
++    hooks.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => { links.push(`${id} ${dir}`); return write.answer(); }, () => clock.now));
+     return null;
+   }
+   const render = (flows: FlowCard[], loaded = true, sessions: SessionInfo[] = []) =>
+     act(async () => { root.render(createElement(Probe, { flows, loaded, sessions })); });
+   const api = () => hooks.at(-1)!.actions;
+   const offers = () => hooks.at(-1)!.offers.map(offer => `${offer.sessionId} ${offer.dir}`);
+-  return { links, clock, hooks, render, api, offers };
++  const state = () => hooks.at(-1)!.offers.map(({ linking, error }) => ({ ...(linking && { linking }), ...(error && { error }) }));
++  return { links, clock, hooks, write, render, api, offers, state };
++}
++/** An offer of 101-new for s1, after its Create Flow. */
++async function offered(h: ReturnType<typeof harness>) {
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.offers()).toEqual(["s1 101-new"]);
+ }
+ // Each test starts from a fresh hook: the previous test's Probe is unmounted first.
+ beforeEach(async () => { await act(async () => root.render(null)); });
+ 
+ test("the one new package after Create Flow is offered, not linked; Link writes it once", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   const known = h.api().known();
+   await act(async () => h.api().expect("s1", known));
+   await h.render([flow("100-old")]);
+   expect(h.offers()).toEqual([]);
+   await h.render([flow("100-old"), flow("101-new")]);
+   expect(h.offers()).toEqual(["s1 101-new"]);
+   expect(h.links).toEqual([]);
+   await act(async () => h.api().accept("s1"));
+   expect(h.links).toEqual(["s1 101-new"]);
+   expect(h.offers()).toEqual([]);
+   await act(async () => h.api().accept("s1"));
+   await h.render([flow("100-old"), flow("101-new"), flow("102-later")]);
+   expect(h.links).toEqual(["s1 101-new"]);
+
+--- apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx
+@@ 145,216 @@
+   const h = harness();
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s1", h.api().known()));
+   // s2 took its known packages before s1's package appeared, and records the request after it was offered.
+   const before = h.api().known();
+   await h.render([flow("100-old"), flow("101-s1")]);
+   expect(h.offers()).toEqual(["s1 101-s1"]);
+   await act(async () => h.api().expect("s2", before));
+   await h.render([flow("100-old"), flow("101-s1")]);
+   expect(h.offers()).toEqual(["s1 101-s1"]);
+ });
+ 
+ test("the hook's actions keep their identity across renders, so callbacks built on them can be memoised", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s1", h.api().known()));
+   await h.render([flow("100-old"), flow("101-new")]);
+   await h.render([flow("100-old"), flow("101-new")], true, []);
+   expect(new Set(h.hooks.map(hook => hook.actions)).size).toBe(1);
+ });
++
++test("TP-R3-001: two Link presses before a render write the link once", async () => {
++  const h = harness();
++  await offered(h);
++  await act(async () => { void h.api().accept("s1"); void h.api().accept("s1"); });
++  expect(h.links).toEqual(["s1 101-new"]);
++  expect(h.offers()).toEqual([]);
++});
++
++test("TP-R3-001: Dismiss then Link before a render writes nothing", async () => {
++  const h = harness();
++  await offered(h);
++  await act(async () => { h.api().dismiss("s1"); void h.api().accept("s1"); });
++  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
++});
++
++test("TP-R3-001: a new offer for a session replaces that session's older one", async () => {
++  const h = harness();
++  await offered(h);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  await h.render([flow("100-old"), flow("101-new"), flow("102-next")]);
++  expect(h.offers()).toEqual(["s1 102-next"]);
++});
++
++test("UX-010: the offer stays, marked linking, until the flag write answers", async () => {
++  const h = harness();
++  await offered(h);
++  let answer!: () => void;
++  h.write.answer = () => new Promise<void>(resolve => { answer = resolve; });
++  await act(async () => { void h.api().accept("s1"); });
++  expect(h.offers()).toEqual(["s1 101-new"]);
++  expect(h.state()).toEqual([{ linking: true }]);
++  // A press while the write runs sends nothing more.
++  await act(async () => { void h.api().accept("s1"); });
++  expect(h.links).toEqual(["s1 101-new"]);
++  await act(async () => answer());
++  expect(h.offers()).toEqual([]);
++});
++
++test("UX-010: a failed flag write keeps the offer with its reason, and Link can be pressed again", async () => {
++  const h = harness();
++  await offered(h);
++  h.write.answer = () => Promise.reject(new Error("the flags of session s1 are locked by another keryx process; retry"));
++  await act(async () => { await h.api().accept("s1"); });
++  expect(h.offers()).toEqual(["s1 101-new"]);
++  expect(h.state()).toEqual([{ error: "the flags of session s1 are locked by another keryx process; retry" }]);
++  h.write.answer = () => undefined;
++  await act(async () => { await h.api().accept("s1"); });
++  expect(h.links).toEqual(["s1 101-new", "s1 101-new"]);
++  expect(h.offers()).toEqual([]);
++});
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 23,113 @@
+   id, reviewer, question: text, options: [], allowFreeform: true,
+ });
+ let questions = [
+   question("question-logic", "review-logic", "Which revision should I inspect?"),
+   question("question-contract", "review-pr-contract", "Where is the backend contract?"),
+ ];
+ const run = {
+   id: runId, source: "manual", state: "running", phase: "Dispatching reviewers", reason: "",
+   baseSha: "b".repeat(40), headSha: "a".repeat(40), createdAt: "2026-11-20T00:00:00Z",
+   startedAt: "2026-11-20T00:00:01Z", finishedAt: null, result: null, coordinatorActivity: [{ kind: "status", text: "Wave 1 started" }],
+ };
+ const bareRun = { ...run, id: bareRunId, baseSha: "d".repeat(40), headSha: "c".repeat(40), coordinatorActivity: [] };
+ let account: string | null = null;
+ let accountConfigured = false;
+ let connectedNewAccount = false;
+ let accountListReads = 0;
+ let accountListGate: Promise<void> | undefined;
+ let accountListError: string | undefined;
+ /** false: an older keryx that answers `_keryx/session_flags` without `subject`. */
+ let storesSubject = false;
++/** Sessions the older keryx has saved: it saves a new session at its first turn and refuses flags before that. */
++const saved = new Set<string>();
++/** The session ids `session/prompt` was sent for. */
++const prompted: string[] = [];
+ let newSessions = 0;
+ const stored = new Map<string, { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } }>();
+ mockWindows("project-navigation");
+ mockIPC(async (cmd, args) => {
+   switch (cmd) {
+     case "window_initial_cwd": return cwd;
+     case "settings_get": return { recentProjects: [] };
+     case "projects_state": return [];
+     case "flows_list": return [{ id: "505", idValid: true, dir: "505-review", title: "Review flow", prUrl }];
+     case "pr_info": return { url: prUrl, number: 12 };
+     case "acp_start": return { keryxPath: "/fixture/keryx" };
+     case "version_check": return { ok: true };
+     case "github_login": connectedNewAccount = true; return null;
+     case "github_accounts": {
+       const request = args as {action: string; cwd?: string; login?: string};
+       if (request.action === "list") {
+         accountListReads++;
+         await accountListGate;
+         if (accountListError) throw accountListError;
+         return { accounts: [
+           { login: "me", active: !connectedNewAccount }, { login: "second", active: false },
+           ...(connectedNewAccount ? [{ login: "new-account", active: true }] : []),
+         ] };
+       }
+       assert.equal(request.cwd, cwd);
+       if (request.action === "bind") {
+         account = request.login ?? null;
+         accountConfigured = true;
+       }
+       return { eligible: true, configured: accountConfigured, login: account };
+     }
+     case "acp_send": {
+       const { method, id, params } = JSON.parse(String((args as {message:string}).message));
+       calls.push(method);
+       if (["session/load", "session/resume", "_keryx/session_shown"].includes(method)) loaded.push(String((params as { sessionId?: string }).sessionId));
+       let result: unknown;
+-      if (method === "_keryx/session_flags") {
++      if (method === "session/prompt") {
++        const { sessionId } = params as { sessionId: string };
++        prompted.push(sessionId);
++        saved.add(sessionId);
++        result = { stopReason: "end_turn" };
++      } else if (method === "_keryx/session_flags") {
+         const { sessionId, subject } = params as { sessionId: string; subject?: Record<string, unknown> };
++        if (!storesSubject && !saved.has(sessionId)) {
++          await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32602, message: `session ${sessionId} not found` } }));
++          return;
++        }
+         const flags = storesSubject && subject ? { subject } : {};
+         if (storesSubject) stored.set(sessionId, { sessionId, cwd, title: "PR session " + sessionId, updatedAt: new Date(Date.now() + stored.size).toISOString(), _meta: { keryx: flags } });
+         result = flags;
+       } else {
+         result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
+           : method === "session/new" ? { sessionId: newSessions++ ? "nav-session-" + newSessions : "nav-session" }
+           : method === "session/list" ? { sessions: [...stored.values()].reverse() } : { sessions: [] };
+       }
+       await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, result }));
+       return;
+     }
+     case "review_board":
+       // The PR panel's detail read (the session header link opens it).
+       if ((args as { number?: number }).number === 12) return { version: 1, viewer: account ?? "me", repositoryId: "RID", number: 12,
+         headSha: run.headSha, fetchedAt: "2026-11-19T00:00:00Z", comments: [], reviews: [], threads: [], checks: [], warnings: [] };
+       reads.push(String((args as {cwd:string}).cwd));
+       if (offline) throw new Error("unavailable: connection lost");
+       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
+         warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
+           { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha,updatedAt:"2026-11-18T00:00:00Z" }] };
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 297,348 @@
+   await React.act(() => send.click());
+   const reply = { kind: "answer", id: runId, questionId: "question-contract", answer: note };
+   assert.deepEqual(replies, [reply, reply]);
+   assert.match(host.textContent ?? "", /1 question is waiting for a reply/);
+   assert.ok([...host.querySelectorAll(".session-review-activity .turn-user")].some(row => row.textContent?.includes(note)));
+   assert.equal(current.placeholder, "Reply to review-logic");
+   assert.equal(current.value, "");
+   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
+   await go("Pull requests");
+   // The review started from the session is the card's review link, without a manual refresh.
+   assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
+ 
+   // "Open in session" with an older keryx: a new session opens, the PR URL waits in the composer, a notice says the binding was not saved.
+   const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
+   const opened = () => calls.filter(method => method === "session/new").length;
+   const firstOpen = opened();
+   await React.act(() => namedButton("Open in session for #12").click());
+   await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
+   assert.equal(opened(), firstOpen + 1);
+   assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
++  // keryx has not saved the new session yet: it refuses the binding, which waits for the first turn without a notice.
++  const flagWrites = () => calls.filter(method => method === "_keryx/session_flags").length;
++  await waitFor("the first binding attempt", () => flagWrites() > 0);
++  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
++  assert.ok(!/did not save the pull request binding/.test(host.textContent ?? ""), "No notice before keryx has saved the session");
++  const refusedWrites = flagWrites();
++  // The first turn saves the session; the binding is tried again after it and keryx answers without subject.
++  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+   await waitFor("the notice that the binding was not saved", () => /did not save the pull request binding/.test(host.textContent ?? ""));
++  assert.equal(prompted.length, 1, "One turn was sent");
++  assert.ok(flagWrites() > refusedWrites, "The binding was tried again after the turn");
++  const olderTurns = [...prompted];
+   // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
+   storesSubject = true;
+   await go("Pull requests");
+   await React.act(() => namedButton("Open in session for #12").click());
+   await waitFor("keryx stores the bound session", () => stored.size === 1 && shownComposer()?.value === prUrl);
+   assert.equal(opened(), firstOpen + 2);
+   await go("Pull requests");
+   await waitFor("#12 counts its bound session", () => !!findButton("Session for #12"));
+   await React.act(() => namedButton("Session for #12").click());
+   await waitFor("the session header names PR #12", () => host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
+   assert.equal(opened(), firstOpen + 2, "Open in session again reuses the bound session");
+   // /review without a target in the PR-bound session preselects the PR.
+   const draft = shownComposer()!;
+   await React.act(() => {
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "/review");
+     draft.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+   await waitFor("the launch dialog", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+   const launch = host.querySelector('[role="dialog"]');
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 415,455 @@
+     bareDraft.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+   await waitFor("the launch dialog for #13", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+   const bareLaunch = host.querySelector('[role="dialog"]');
+   assert.ok(bareLaunch && bareLaunch.textContent?.includes("Run review"));
+   assert.equal(bareLaunch.querySelector<HTMLInputElement>("input.text-input")?.value, barePrUrl);
+   assert.equal(bareLaunch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "13");
+   const bareApply = [...bareLaunch.querySelectorAll("button")].find(button => button.textContent === "Apply");
+   assert.ok(bareApply && !bareApply.disabled);
+   await React.act(() => bareApply.click());
+   await waitFor("the launch dialog closes after the start", () => bareStarts.length === 1 && !host.querySelector('[role="dialog"]'));
+   assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha,
+     options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
+   assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
+   // The started run is the card's review link, without a manual refresh.
+   await go("Pull requests");
+   await waitFor("#13's review slot shows the started run", () => bareSlot("review") === "Review · running");
+   assert.equal(bareSlot("flow"), "Create Flow");
+   assert.equal(bareSlot("session"), "Session");
+-  assert.ok(!calls.includes("session/prompt"), "Neither the PR URL nor /review is sent as a prompt");
++  assert.deepEqual(prompted, olderTurns, "Neither the PR URL nor /review is sent as a prompt");
+   await go("Sessions");
+   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
+   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
+   assert.ok(projectSettings);
+   await React.act(() => projectSettings.click());
+   await chooseAccount("second");
+   // The account switch remounts the board: the header request handled earlier is gone and does not reopen the panel.
+   await go("Pull requests");
+   await waitFor("the board of the second account", () => host.textContent?.includes("Signed in as second") === true);
+   assert.equal(host.querySelector(".review-detail-panel"), null, "A handled header focus is not replayed by a remounted board");
+   await go("Sessions");
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
+   await React.act(() => namedButton("GitHub · @second").click());
+   await React.act(() => namedButton("Disconnect from project").click());
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");
+ } finally {
+   await React.act(() => root.unmount());
+   clearMocks();
+   await unregisterDom();
+ }
+
+--- apps/desktop/src/test/app-work-row.fixture.tsx
+@@ 1,44 @@
+ import assert from "node:assert/strict";
+ import { registerDom, unregisterDom } from "./dom";
+ 
+ // AC9 and AC12 over the App wiring: "Create Flow" on a PR card (prefilled flow prompt in the bound session,
+-// the one new package offered as "Link Flow #<id>?" and linked only on Link, Dismiss and two packages link
++// the one new package offered as "Link Flow #<id> · <title>?" and linked only on Link, Dismiss and two packages link
+ // nothing, a press coalesced into an open in flight registers nothing), one open per PR at a time, a new
+ // session of the PR linked to the Flow its bound session works on, a session switch during an open leaving
+ // the shown composer alone, and the Issue card's session slot counting a session bound to the issue. Runs in
+ // its own process like app-navigation.fixture.tsx: the production backend caches its first host connection.
+ registerDom();
+ const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks");
+ const { emit } = await import("@tauri-apps/api/event");
+ const cwd = "/dev/work-row";
+ const pr = (number: number) => `https://github.com/org/project/pull/${number}`;
+ const subject = (kind: "pr" | "issue", number: number) =>
+   ({ kind, repo: "org/project", number, url: `https://github.com/org/project/${kind === "pr" ? "pull" : "issues"}/${number}` });
+ let flowDirs = ["500-existing"];
+ const flagWrites: Array<{ sessionId: string; flow?: string; subject?: number }> = [];
+ const calls: string[] = [];
+ let created = 0;
+ /** While set, session/new answers only once it resolves: a press can land while an open is in flight. */
+ let newGate: Promise<void> | undefined;
++/** Set: keryx refuses the next flow link with this reason (a held flags lock). */
++let refuseFlowLink: string | undefined;
+ type Stored = { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } };
+ const stored = new Map<string, Stored>([
+   ["pr12-session", { sessionId: "pr12-session", cwd, title: "Work on #12", updatedAt: "2026-11-20T00:00:03Z", _meta: { keryx: { subject: subject("pr", 12) } } }],
+   ["pr13-session", { sessionId: "pr13-session", cwd, title: "Work on #13", updatedAt: "2026-11-20T00:00:02Z", _meta: { keryx: { subject: subject("pr", 13) } } }],
+   ["issue5-session", { sessionId: "issue5-session", cwd, title: "Issue 5", updatedAt: "2026-11-20T00:00:01Z", _meta: { keryx: { subject: subject("issue", 5) } } }],
+ ]);
+ const viewer = { login: "me", nodeId: "U_me", host: "github.com" };
+ const issue = (number: number) => ({
+   ref: { host: "github.com", nodeId: "I_" + number, repositoryId: "RID", owner: "org", repo: "project", number, url: subject("issue", number).url },
+   title: "Issue " + number, state: "open", author: "sam", assignees: [], labels: [], createdAt: "2026-11-01", updatedAt: "2026-11-02",
+   work: { stage: "none" },
+ });
+ const card = (number: number, updatedAt: string) => ({ number, title: "PR " + number, url: pr(number), state: "open", draft: false, author: "author",
+   assignees: [], reviewers: [], decision: null, ci: "passed", headSha: "a".repeat(40), baseSha: "b".repeat(40), updatedAt });
+ 
+ mockWindows("work-row");
+ mockIPC(async (cmd, args) => {
+   switch (cmd) {
+     case "window_initial_cwd": return cwd;
+     case "settings_get": return { recentProjects: [] };
+
+--- apps/desktop/src/test/app-work-row.fixture.tsx
+@@ 45,90 @@
+     case "projects_state": return [];
+     case "flows_list": return flowDirs.map(dir => ({ id: dir.slice(0, 3), idValid: true, dir, title: "Flow " + dir, status: "initializing", prUrl: null }));
+     case "acp_start": return { keryxPath: "/fixture/keryx" };
+     case "version_check": return { ok: true };
+     case "github_accounts": {
+       const request = args as { action: string };
+       if (request.action === "list") return { accounts: [{ login: "me", active: true }] };
+       return { eligible: true, configured: true, login: "me" };
+     }
+     case "issues_request": {
+       const { action } = args as { action: string };
+       if (action === "list") return { viewer, items: [issue(5), issue(6)], nextCursor: null, incomplete: false };
+       return { viewer };
+     }
+     case "acp_send": {
+       const { method, id, params } = JSON.parse(String((args as { message: string }).message));
+       calls.push(method);
+       let result: unknown;
+       if (method === "_keryx/session_flags") {
+         const { sessionId, cwd: _cwd, ...change } = params as { sessionId: string; cwd: string; flow?: string; subject?: { number: number } };
++        // Refused before it is recorded: nothing was written.
++        if (change.flow && refuseFlowLink) {
++          const reason = refuseFlowLink;
++          refuseFlowLink = undefined;
++          throw new Error(reason);
++        }
+         flagWrites.push({ sessionId, ...(change.flow ? { flow: change.flow } : {}), ...(change.subject ? { subject: change.subject.number } : {}) });
+         const entry = stored.get(sessionId);
+         // keryx stores a new session only after its first turn: until then it refuses the flags.
+         if (!entry) throw new Error("no session " + sessionId);
+         entry._meta.keryx = { ...entry._meta.keryx, ...change };
+         result = entry._meta.keryx;
+       } else {
+         if (method === "session/new") await newGate;
+         result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
+           : method === "session/new" ? { sessionId: "fresh-" + ++created }
+           : method === "session/list" ? { sessions: [...stored.values()] } : { sessions: [] };
+       }
+       await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, result }));
+       return;
+     }
+     case "review_board":
+       return { version: 1, repo: "org/project", repositories: ["org/project"], repositoryId: "RID", viewer: "me", fetchedAt: "2026-11-19T00:00:00Z",
+         warnings: [], cards: [card(12, "2026-11-19T00:00:00Z"), card(13, "2026-11-18T00:00:00Z"), card(14, "2026-11-17T00:00:00Z"),
+           card(15, "2026-11-16T00:00:00Z"), card(16, "2026-11-15T00:00:00Z")] };
+     case "review_run": return { version: 1, runs: [] };
+
+--- apps/desktop/src/test/app-work-row.fixture.tsx
+@@ 109,153 @@
+     await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+   }
+ }
+ async function go(label: string) {
+   const button = [...host.querySelectorAll<HTMLButtonElement>("main nav button")].find(b => b.textContent?.startsWith(label));
+   assert.ok(button, "Missing project view " + label);
+   await React.act(() => button.click());
+   await waitFor(label + " is the current view", () => button.getAttribute("aria-current") === "page");
+ }
+ function findButton(label: string) {
+   return [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
+ }
+ function namedButton(label: string) {
+   const button = findButton(label);
+   assert.ok(button, "Missing button " + label);
+   return button;
+ }
+ const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
+ /** The slot's first element: its link or action, or the text of a Flow offer. */
+ const slot = (number: number, name: string) => host.querySelector(`[aria-label="Keryx work for #${number}"] [data-slot="${name}"] > *`)?.textContent;
+-/** The Flow slot offers `id` with its Link and Dismiss buttons. */
+-const offers = (number: number, id: string) => slot(number, "flow") === `Link Flow #${id}?`
+-  && !!findButton(`Link Flow #${id} for #${number}`) && !!findButton(`Dismiss Flow #${id} for #${number}`);
++/** How an offer names the package: its number and title ("Flow #506 · Flow 506-for-twelve"). */
++const offerName = (dir: string) => `Flow #${dir.slice(0, 3)} · Flow ${dir}`;
++/** The Flow slot offers `dir` with its Link and Dismiss buttons. */
++const offers = (number: number, dir: string) => slot(number, "flow") === `Link ${offerName(dir)}?`
++  && !!findButton(`Link ${offerName(dir)} for #${number}`) && !!findButton(`Dismiss ${offerName(dir)} for #${number}`);
+ const newSessions = () => calls.filter(method => method === "session/new").length;
+ const flowWrites = () => flagWrites.filter(write => write.flow);
+ /** The flow list changes on disk; the window's focus re-reads it. Resolves once the Flows board lists every dir. */
+ async function packagesAppear(...dirs: string[]) {
+   flowDirs = [...flowDirs, ...dirs];
+   await React.act(async () => { window.dispatchEvent(new Event("focus")); });
+   await go("Flows");
+   await waitFor("the Flows board lists " + dirs.join(", "), () => dirs.every(dir => host.textContent?.includes("Flow " + dir)));
+   await go("Pull requests");
+ }
+ /** Holds session/new until the returned release is called; the release lets React render the answer. */
+ function holdNewSessions() {
+   let release!: () => void;
+   newGate = new Promise(resolve => { release = resolve; });
+   return () => React.act(async () => { newGate = undefined; release(); });
+ }
+ /** One animation frame: the composer fill App schedules runs before it. */
+ const nextFrame = () => React.act(async () => { await new Promise(resolve => requestAnimationFrame(() => resolve(undefined))); });
+ 
+ try {
+
+--- apps/desktop/src/test/app-work-row.fixture.tsx
+@@ 156,213 @@
+ 
+   // AC12: the Issue card's session slot counts the session bound to that issue through `subject`.
+   await go("Issues");
+   const issueSlot = (number: number) => host.querySelector(`[aria-label="Keryx work for org/project#${number}"] [data-slot="session"] button`)?.textContent;
+   await waitFor("the Issues board shows #5 and #6", () => issueSlot(5) !== undefined && issueSlot(6) !== undefined);
+   assert.equal(issueSlot(5), "Session", "The session bound to issue #5 is counted on its card");
+   assert.equal(issueSlot(6), "Open in session");
+ 
+   // AC9: Create Flow on a PR with a bound session opens that session with the flow prompt, not sent.
+   await go("Pull requests");
+   await waitFor("the PR board shows #12", () => slot(12, "flow") !== undefined);
+   assert.equal(slot(12, "flow"), "Create Flow");
+   assert.equal(slot(12, "session"), "Session");
+   const newBefore = newSessions();
+   await React.act(() => namedButton("Create Flow for #12").click());
+   await waitFor("#12's session composer holds the flow prompt", () => shownComposer()?.value === flowPrompt(pr(12)));
+   assert.equal(newSessions(), newBefore, "The bound session is reused");
+   assert.ok(!calls.includes("session/prompt"), "The flow prompt is not sent");
+   // The one package that then appears is offered on the card, not linked; Link writes it and it becomes the card's Flow.
+   await packagesAppear("506-for-twelve");
+-  await waitFor("#12 offers Flow #506", () => offers(12, "506"));
++  await waitFor("#12 offers Flow #506", () => offers(12, "506-for-twelve"));
+   assert.deepEqual(flowWrites(), [], "Nothing is linked before Link");
+-  await React.act(() => namedButton("Link Flow #506 for #12").click());
++  await React.act(() => namedButton(`Link ${offerName("506-for-twelve")} for #12`).click());
+   await waitFor("#12 shows the linked Flow", () => slot(12, "flow") === "Flow #506 · Initializing");
+   assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }]);
+ 
+   // Dismiss: the offer goes away and nothing is written.
+   await React.act(() => namedButton("Create Flow for #13").click());
+   await waitFor("#13's session composer holds the flow prompt", () => shownComposer()?.value === flowPrompt(pr(13)));
+   await go("Pull requests");
+   await packagesAppear("507-for-thirteen");
+-  await waitFor("#13 offers Flow #507", () => offers(13, "507"));
+-  await React.act(() => namedButton("Dismiss Flow #507 for #13").click());
++  await waitFor("#13 offers Flow #507", () => offers(13, "507-for-thirteen"));
++  // A Link that keryx refuses keeps the offer and says why; Link stays to be pressed again.
++  refuseFlowLink = "the flags of session pr13-session are locked by another keryx process; retry";
++  await React.act(() => namedButton(`Link ${offerName("507-for-thirteen")} for #13`).click());
++  await waitFor("#13 says the link failed", () => /^Not linked: .*locked by another keryx process/.test(slot(13, "flow") ?? ""));
++  assert.ok(findButton(`Link ${offerName("507-for-thirteen")} for #13`), "Link is still offered");
++  await React.act(() => namedButton(`Dismiss ${offerName("507-for-thirteen")} for #13`).click());
+   await waitFor("#13's offer is gone", () => slot(13, "flow") === "Create Flow");
+   assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }], "Dismiss links nothing");
+ 
+   // Two packages appearing for one request: none is offered or linked.
+   await React.act(() => namedButton("Create Flow for #13").click());
+   await waitFor("#13's session composer holds the flow prompt", () => shownComposer()?.value === flowPrompt(pr(13)));
+   await go("Pull requests");
+   await packagesAppear("508-a", "509-b");
+   assert.equal(slot(13, "flow"), "Create Flow", "Two new packages: no offer");
+   assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }], "Nothing more is linked");
+ 
+   // One open per PR at a time: a second press while session/new is in flight starts no second session.
+   let release = holdNewSessions();
+   const beforeDouble = newSessions();
+   await React.act(() => namedButton("Open in session for #14").click());
+   await go("Pull requests");
+   await React.act(() => namedButton("Open in session for #14").click());
+   await release();
+   await waitFor("#14's new session holds its URL", () => shownComposer()?.value === pr(14));
+   await waitFor("#14's new session is bound", () => flagWrites.some(write => write.subject === 14));

@@ -1,0 +1,139 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1` | Range: `d7b0f7058..4cb6c43ef` (round-3 fix range) | Slice: slice-03 (backend, backend tests, docs), read in full (1628 lines)
+- Scope mode: `explicit-hash-range` (diff) | Changed files reviewed: 13 (src/acp/server.ts, src/commands/acp.ts, src/integrations/issues-board.ts + test, src/lib/file-lock.ts + test, src/session/issues/issue-session.ts + test, src/session/organize.ts + test, docs/docs/guides/desktop-issues.md, docs/requirements/keryx-desktop-review-v2/implementation-plan.md)
+- Context read beyond the slice: src/session/organize.ts:90-225 (helpers the hunks call: FlagsLockTiming, lockOptions, whileStored, isMissing), src/lib/file-lock.ts:95-125 (step body), src/session/issues/issue-session.ts:96-124 (the call site).
+- Standard: .metaproject/rules/core/solid-principles.mdc (Thresholds, Review severities), .metaproject/rules/core/error-handling.mdc.
+
+### Summary
+The fix round is structurally sound: `LockAttempt` keeps the lock rules (exclusive create, nonce, deadline-before-stale, takeover) in one place for the sync and async waits, the flags writers are gated by `createDir: false` plus `whileStored`, and the tests replace wall-clock assertions with barrier files and injected timing. Four maintainability items remain, all minor or info: the injected `timing` pushed the flags writers further past the positional-parameter threshold, `bindIssueSubject` gained a boolean flag that selects strict vs best-effort behaviour, two file-lock doc comments were not updated for `createDir: false`, and the ENOENT/locked translation is written twice in organize.ts.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 1
+
+### Findings
+
+#### Functions
+- [CC4-006] Flags writers carry 4–6 positional parameters; callers now pass `undefined` for `now` to reach `timing` (minor).
+- [CC4-007] `bindIssueSubject(dir, ref, firstBind)` boolean flag selects two behaviours (minor).
+
+#### Comments
+- [CC4-008] `LockAttempt.prepare` and `withFileLock` docs contradict the `createDir: false` path (minor).
+
+#### Error Handling
+No error-handling issues found. The empty `catch` in `bindIssueSubject` is a documented, correct fallback (error-handling.mdc Rule 3, second bullet): the private binding record stays the authority and the next open retries.
+
+#### DRY
+- [CC4-009] withFlagsLock / withFlagsLockAsync repeat the same failure translation (info: 2 copies, under the duplication threshold; noted under round obligation 7).
+
+#### SOLID
+No SOLID issues found. `LockAttempt` has one responsibility (one acquisition's state and rules); the sync/async entry points differ only in how they pause.
+
+### Clean Areas
+- src/lib/file-lock.ts `LockAttempt.step`/`release`: behaviour of the removed nonce-write `throw cause` path is preserved (close, remove, fall through to retry); RETRY_MS is a named constant.
+- src/session/organize.ts `FLAGS_LOCK_TIMING`, `lockedError`, `goneError`: named, single definitions; FLAGS_LOCK_TIMEOUT_MS/FLAGS_LOCK_STALE_MS have no remaining references (keryx ctx rg over src).
+- src/integrations/issues-board.ts `unusableRemote`: named constant with a doc; the `invalidInput` / `unusableRemote` split is commented at the site.
+- src/acp/server.ts handleSessionFlags: the async switch is commented with its reason.
+- src/commands/acp.ts help text and docs/docs/cli-reference.md now describe `subject` and the lock refusal (closes PC-008).
+- Tests (file-lock.test.ts, organize.test.ts, issue-session.test.ts, issues-board.test.ts): helpers `spawnScript`, `until`, `listed`, `plantFresh`/`plantAbandoned` remove the copied spawn and setup code; no time-based assertions remain.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round-3 fix range, slice-03 (backend + tests + docs). Lock rules are centralised in LockAttempt and the flags writers are correctly gated; 3 minor maintainability findings (positional parameters on the flags writers, a boolean flag on bindIssueSubject, two file-lock doc comments stale for createDir:false) and 1 info (failure translation written twice in organize.ts). Prior backend findings TP-R3-006..009, TP-R3-008, HL3-001, HL3-002, DG3-001, PC-008 closed; HL3-004 and SC3-001 remain open (deferred in the PR body).",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "CC4-006",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/session/organize.ts",
+      "quote": "export async function setSessionFlagsAsync(",
+      "problem": "SOLID/function design, Positional parameters (solid-principles.mdc Thresholds: 4 or more, no options object). The fix round added a positional `timing` after the optional `now` to setSessionFlags (now 6: cwd, sessionId, change, dataDir, now, timing) and updateSessionFlagsAt (now 4: dir, change, now, timing), and introduced setSessionFlagsAsync (6) and updateSessionFlagsAtAsync (4) with the same shape. setSessionFlags was already at 5 on base, so the change makes existing debt worse and adds two new functions that meet the threshold on their own. Three of the trailing parameters are optional, which is not a natural ordered set: to reach `timing`, every caller that wants it passes `undefined` for `now`.",
+      "impact": "Call sites read `setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)` (organize.test.ts, five sites in this range). The next injected option (a clock for the lock, a waiting callback) extends four signatures again, and the sync/async pairs must be kept in step by hand.",
+      "suggested_fix": "Group the optional trailing parameters into one options object shared by the four writers, e.g. `setSessionFlags(cwd, sessionId, change, { dataDir, now, timing } = {})` and `updateSessionFlagsAt(dir, change, { now, timing } = {})`, with the async variants taking the same type. Production callers (src/acp/server.ts handleSessionFlags, src/session/issues/issues-launch.ts:116) change one argument each.",
+      "evidence": "Slice-03 hunks @@ 210,257 @@ and @@ 262,321 @@ of src/session/organize.ts; test call sites in organize.test.ts (`setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, undefined, { timeoutMs: 30_000, staleMs: 30_000 })`, `setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)`, `setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, stale)` and the async twins). Base signature of setSessionFlags had 5 parameters (removed side of the hunk).",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "dedupe_key": "organize-flags-writers-positional-params",
+      "class_scope": {
+        "sites": ["src/session/organize.ts:221 updateSessionFlagsAt", "src/session/organize.ts updateSessionFlagsAtAsync", "src/session/organize.ts:276 setSessionFlags", "src/session/organize.ts setSessionFlagsAsync"],
+        "enumeration_method": "keryx ctx rg --all over src for the exported flags writers (setSessionFlags, updateSessionFlagsAt, backfillSessionSubject and their Async twins); backfillSessionSubject has 3 and is under the threshold"
+      }
+    },
+    {
+      "id": "CC4-007",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/session/issues/issue-session.ts",
+      "quote": "function bindIssueSubject(dir: string, ref: IssueDetail[\"ref\"], firstBind: boolean): void {",
+      "problem": "Function design, Boolean flag parameter (solid-principles.mdc Thresholds: any, when the flag selects between two behaviours). `firstBind` switches bindIssueSubject between two different contracts: true = take the lock and let any failure propagate; false = skip when settled, then attempt and swallow every failure. The function's own doc now describes both modes in two paragraphs. The same condition (`launch.stage === \"registered\"`) is also re-tested twice on the next lines of withIssueBinding instead of using the new `firstBind` local.",
+      "impact": "A reader of the single call `bindIssueSubject(dir, issue.ref, firstBind)` cannot tell that one value makes the write mandatory and the other makes it best-effort; a future caller passing the wrong value silently changes whether an open can fail on flags.json.",
+      "suggested_fix": "Split into two named operations, e.g. `writeIssueSubject(dir, ref)` (strict, first bind) and `backfillIssueSubjectIfMissing(dir, ref)` (settled check + best-effort catch), sharing a small `issueSubject(ref)` builder; call `firstBind ? writeIssueSubject(...) : backfillIssueSubjectIfMissing(...)` in withIssueBinding and use `firstBind` in the two `launch.stage === \"registered\"` tests that follow it.",
+      "evidence": "Slice-03 hunk @@ 32,108 @@ of src/session/issues/issue-session.ts; call site issue-session.ts:116 (`bindIssueSubject(dir, issue.ref, firstBind)`), condition repeated at :100, :101, :104.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "dedupe_key": "bindIssueSubject-boolean-flag"
+    },
+    {
+      "id": "CC4-008",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/lib/file-lock.ts",
+      "quote": "/** Whether the lock's directory is there (created unless `createDir` is false). False when it cannot be made. */",
+      "problem": "Comments, stale/contradicting (solid-principles.mdc Review severities, Comment row). Two doc comments in this range do not match the new `createDir: false` path. (1) `LockAttempt.prepare` claims to report whether the directory is there, but with `createDir === false` it returns true without looking; a missing directory is only discovered later, as an ENOENT thrown from step(). (2) The withFileLock doc (moved in this range) still says it \"Returns `null` when the lock could not be taken, which callers surface as a write failure rather than a throw\", while with `createDir: false` and a missing directory both withFileLock and withFileLockAsync throw ENOENT (the behaviour file-lock.test.ts asserts).",
+      "impact": "A caller reading withFileLock's contract handles only `null` and is surprised by a throw; a maintainer reading prepare() may rely on it as an existence check and drop the ENOENT branch in step().",
+      "suggested_fix": "prepare(): \"Creates the lock's directory unless `createDir` is false; false when it cannot be created. With `createDir: false` nothing is checked here: a missing directory surfaces as ENOENT from step().\" withFileLock/withFileLockAsync: add \"With `createDir: false`, a missing directory throws its ENOENT instead of returning null.\"",
+      "evidence": "Slice-03 hunks @@ 26,103 @@ and @@ 114,206 @@ of src/lib/file-lock.ts; current file :101-117 (step's `if (this.options.createDir === false && ... === \"ENOENT\") throw error`); file-lock.test.ts 'createDir: false never creates the directory; a missing one throws ENOENT at once' for both variants.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "dedupe_key": "file-lock-createDir-doc-drift"
+    },
+    {
+      "id": "CC4-009",
+      "severity": "info",
+      "reviewer": "review-clean-code",
+      "file": "src/session/organize.ts",
+      "quote": "    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);",
+      "problem": "DRY / round obligation 7 (one rule, one implementation). withFlagsLock and withFlagsLockAsync each implement the same translation of a lock outcome: ENOENT with the directory gone becomes goneError, `null` becomes lockedError, otherwise unwrap `held.value`. Two copies is under the solid-principles.mdc duplication threshold (3), so this is not a defect by that table; it is noted because the review round asks for one implementation of one rule.",
+      "impact": "A future change to the refusal text or the gone check must be made in both functions; today they agree.",
+      "suggested_fix": "Extract `flagsLockFailure(dir, error): unknown` (returns goneError or the original error) and `unwrapFlagsLock(dir, held)`, and call them from both wrappers; only the `await` differs.",
+      "evidence": "Slice-03 hunk @@ 160,202 @@ of src/session/organize.ts (organize.ts:165-188 at head).",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "dedupe_key": "organize-flags-lock-translation-twice"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "TP-R3-008", "disposition": "closed", "evidence": "organize.test.ts: elapsed-time assertions removed; the wait test uses a child holding the lock behind held/go barrier files and asserts ordering ({flow: 'child-flow', pinnedAt}); stale and timeout paths use injected timing ({staleMs: 1}, {timeoutMs: 20}); the two-process test starts both writers from a shared barrier." },
+    { "id": "HL3-001", "disposition": "closed", "evidence": "src/acp/server.ts handleSessionFlags is async and awaits setSessionFlagsAsync → withFileLockAsync (setTimeout between attempts). Remaining sync callers (issues-launch.ts:116 setSessionFlags, issue-session.ts backfillSessionSubject) run under withIssueBinding, not the ACP handler (keryx ctx rg over src)." },
+    { "id": "HL3-002", "disposition": "closed", "evidence": "lockOptions sets createDir:false; whileStored refuses when summary.json is gone; ENOENT with the dir gone maps to goneError; organize.test.ts 'a flags write to a session removed since it was located…' covers sync, async and backfill." },
+    { "id": "PC-008", "disposition": "closed", "evidence": "docs/docs/cli-reference.md changed in range (+10 -3, adds subject and the per-session lock refusal); src/commands/acp.ts help text names subject." },
+    { "id": "TP-R3-006", "disposition": "closed", "evidence": "issues-board.test.ts adds 'a viewer source never gets the repository-named 410 text' and 'a viewer page made only of pull requests does not page on' (pages == [1])." },
+    { "id": "TP-R3-007", "disposition": "closed", "evidence": "organize.test.ts asserts the retry message for sync and async with {timeoutMs: 20}, and 'a subject backfill runs under the flags lock' throws /locked … retry/." },
+    { "id": "TP-R3-009", "disposition": "closed", "evidence": "organize.test.ts 'a backfill of an invalid subject is refused and writes nothing' (mismatched url → /not a GitHub subject/, no flags.json)." },
+    { "id": "DG3-001", "disposition": "closed", "evidence": "issue-session.ts bindIssueSubject: on a later open it skips when sessionSubjectSettled and swallows a failed backfill with a reasoned comment; issue-session.test.ts 'a later open whose subject backfill fails still opens the session'." },
+    { "id": "HL3-004", "disposition": "open", "evidence": "FLAGS_LOCK_TIMING staleMs is still 2_000 (organize.ts:136); listed as deferred info in the PR body." },
+    { "id": "SC3-001", "disposition": "open", "evidence": "LockAttempt.step still removes a stale lock by mtime after a stat (file-lock.ts:118-125); listed as deferred to a separate change in the PR body." }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant — slice text and payload layers supplied the scope; callers enumerated with keryx ctx rg) | wiki_used: no (not-relevant — function-level review of a supplied diff) | ctx_used: yes (keryx ctx rg for flags-writer callers and rule thresholds, keryx ctx diff for cli-reference.md) | raw_rg_used: no

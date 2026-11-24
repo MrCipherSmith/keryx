@@ -1,0 +1,108 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 4, wave 1, slice-01 (read in full). Range d7b0f7058..4cb6c43ef (code 055115a20, record 4cb6c43ef). PR body from payload review_context.pr.body (updated after round 3). Commit message of 055115a20 read via `keryx ctx run -- git show --stat`.
+
+## Prior dispositions (before new findings)
+
+- PC-005 closed — the body now reads "A header link to a PR in a repository the board lists selects that repository; one the board cannot show gets a notice and is cleared." Code: ReviewBoard.tsx focus effect selects a listed repository, refuses an unlisted one with a notice + onFocusHandled, and (new in 055115a20) refuses a PR missing from the settled list (`if (loading || stale) return;` then notice + onFocusHandled). Body "What changes · PR header link" says the same. The older journal line ("foreign-repo header link shows a banner") is a dated log entry of round 2, not a current claim.
+- PC-006 closed — Known gaps now splits by package: round 1 AR-002, PF-002, LG-004, LY-002/LY-004, UX-003..005; round 2 PF-006/HW2-002, AR-004..006, HL-003, LG-014, LG-016, UX-006; round 3 HL3-003, HL3-004, LG-R3-003, UX-014, UX-016, SC3-001. The round-3 list equals the set of prior findings with claimed_disposition "deferred" in the payload (jq over prior_findings).
+- PC-008 closed — docs/docs/cli-reference.md now lists `subject?` in params and `{hasIssue?, archivedAt?, pinnedAt?, flow?, subject?}` in the answer (SessionFlags has `hasIssue?: true`, organize.ts:20), says a non-github.com subject is refused (server.ts:2960 delegates to the store), and names the lock refusal; src/commands/acp.ts help now names flow and subject binding. (The lock-refusal wording itself is filed as PC-009.)
+- PC-007 closed — the body no longer claims round-2 named mutants or "Root focused suites: 44 pass". The same class recurs for round 3 and is filed separately as PC-010.
+- DG-R3-002 closed — `issueSessions` removed from apps/desktop/src/issues/model.ts; `keryx ctx rg "issueSessions" apps src docs` finds 0 references.
+- HL3-001 closed — server.ts handleSessionFlags is async and awaits `setSessionFlagsAsync`, which uses `withFileLockAsync` (setTimeout between attempts). Body claim "the ACP server waits for it without blocking other sessions" matches.
+- HL3-002 closed — lockOptions passes `createDir: false`; LockAttempt.prepare skips mkdir and step rethrows ENOENT; `whileStored` checks summary.json and throws "no session …". Body claim "a write to a session already moved to the trash is refused and does not bring it back" matches.
+- FE-R3-001 closed (contract view) — the missing-PR branch now clears the request after the list settles; matches the body's "shows a notice and is cleared, so nothing opens later on its own".
+- UX-009 closed — FlowOffer name is `Flow #${id} · ${title}`, matching the body's "Link Flow #N · <title>?".
+
+## Checklist form (PR body claims vs slice-01)
+
+The body has no checkbox list; each claim touching slice-01 is a row.
+
+| Claim (quoted) | What the diff/code shows | Verdict |
+|---|---|---|
+| "a write to a session already moved to the trash is refused and does not bring it back" | organize.ts `lockOptions` createDir:false, `whileStored` → goneError | agrees |
+| "the ACP server waits for it without blocking other sessions" | server.ts `await setSessionFlagsAsync` | agrees |
+| "after the first bind a failed backfill no longer stops the issue from opening" | issue-session.ts bindIssueSubject: firstBind propagates, later opens catch | agrees |
+| "the choice is stored per project and account" | IssuesBoard.tsx `sourceKey = account + ".source." + JSON.stringify(props.cwd)`, legacy per-account key read as fallback | agrees (guide desktop-issues.md updated too) |
+| "Link Flow #N · <title>?" … "shows why it failed" | PrWorkRow.tsx FlowOffer text/title with `offer.error`, `aria-disabled` while linking | agrees |
+| "In a very narrow lane the Flow slot clips the offer's Dismiss instead of overlapping the Session slot." | review.css `.pr-work-offer` flex 1 1 auto, min-width 0, ellipsis; comment "the slot clips" | agrees in CSS; body already says not measured |
+| "a PR missing from the loaded list, e.g. filtered out by state … shows a notice and is cleared" | ReviewBoard.tsx notice "its state may be filtered out" + onFocusHandled | agrees |
+| "A flags write waits up to 3 s for the lock, then fails with 'retry'." | FLAGS_LOCK_TIMING staleMs 2_000 < timeoutMs 3_000; LockAttempt.step breaks a lock older than staleMs before the deadline | disagrees → PC-009 |
+| "Each fix in round 3 has a test that fails with the fix reverted (32 Desktop and 14 keryx checks, listed in the Flow 517 journal)" | journal.md: "32 mutation checks red." / "14 mutation checks red." — counts only | disagrees → PC-010 |
+| Commit 055115a20: "a remote naming no usable repository gets its own reason" | issues-board.ts `unusableRemote` replaces invalidInput for `.`/`..` | agrees |
+| Commit 055115a20: "withFileLock gains createDir:false so a flags write never recreates a trashed session" | file-lock.ts FileLockOptions.createDir, prepare/step | agrees |
+| "User docs: docs/docs/guides/desktop-issues.md, docs/docs/cli-reference.md (issues, and _keryx/session_flags in the ACP section)" | both touched in 055115a20 | agrees |
+
+## Findings
+
+### [PC-009] Lock refusal documented as the outcome of a long hold; the 2 s stale takeover comes first
+- Severity: minor
+- File: docs/docs/cli-reference.md (also implementation-plan.md:35, PR body Choices)
+- Problem: cli-reference.md (added in this range): "when another keryx process holds it too long the request is refused with a message ending in "retry"". implementation-plan.md:35: "параллельный писатель ждёт до 3 секунд, затем получает ошибку «retry»". PR body: "A flags write waits up to 3 s for the lock, then fails with 'retry'." Code: FLAGS_LOCK_TIMING is `{ timeoutMs: 3_000, staleMs: 2_000 }`; LockAttempt.step checks the deadline, then removes any lock whose mtime is older than staleMs and retries. A waiter that starts at t0 sees the holder's lock go stale at or before t0+2 s, removes it and takes it before the t0+3 s deadline. A live holder that holds too long is therefore broken, not waited out, and the waiter's write proceeds. The "retry" refusal fires only when the stale lock cannot be removed (unwritable dir) or other writers keep winning the retake. The tests confirm it: every refusal test passes `staleMs: 60_000` with a short timeout (organize.test.ts:234, :300).
+- Impact: a client author or owner reading the reference or the "Choices" list expects concurrent writers to be serialized, with a retryable refusal after 3 s. In fact a second writer goes ahead after about 2 s while the first may still be inside its critical section (the risk HL3-004/SC3-001 defer). The owner is asked to accept "waits up to 3 s, then fails", which is not what production timing does.
+- Fix: describe the real rule in all three places: "a lock older than 2 s is taken as abandoned; the request is refused with 'retry' only when the lock cannot be taken within 3 s (e.g. it cannot be removed)". Or set staleMs ≥ timeoutMs if the documented behaviour is the intended one (a logic-lane decision, tied to HL3-004).
+
+### [PC-010] "listed in the Flow 517 journal" — the journal holds counts, not the checks
+- Severity: minor
+- File: .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md
+- Problem: PR body Verification: "Each fix in round 3 has a test that fails with the fix reverted (32 Desktop and 14 keryx checks, listed in the Flow 517 journal)." The journal's round-3 entry (added in 4cb6c43ef) says "32 mutation checks red." and "14 mutation checks red." It names the findings fixed, but not one check, mutant or result. `keryx ctx rg --hidden -i "mutation|mutant"` over the flow dir finds only these counts and flow.json dispositionReason strings. "Each fix" also covers the T23 docs fixes (PC-005, PC-006, PC-007, PC-008), which have no test. The root counts "94 pass" (incl. src/commands/acp) and "bun test src/acp: 455 pass" appear only in flow.json dispositionReason. The round-4 evidence (research-evidence/verify-tests-to-run-1.txt) ran 7 of the 8 named root suites, without src/commands/acp: 68/0. Desktop 1070/0 is backed.
+- Impact: this is the PC-007 class again. A reader who follows the pointer to verify that the round-3 majors are pinned finds no list. The closure of TP-R3-001/002/003/004/006/007/009 rests on these unlisted checks.
+- Fix: record the 46 checks in the journal (file, mutation, red result) and the commands behind 94/0 and 455/0. Or reword the body to "counted in the Flow 517 journal" and limit "each fix" to code fixes.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "slices": ["slice-01"],
+    "summary": "Round-4 contract check of 055115a20/4cb6c43ef against the updated PR body and commit message. PC-005, PC-006, PC-007 and PC-008 are closed. Two new minors: the documented 3 s 'retry' refusal is pre-empted by the 2 s stale takeover (cli-reference, implementation plan, PR body), and the body says round-3 mutation checks are 'listed' in the journal, which gives only counts.",
+    "findings": [
+      {
+        "id": "PC-009",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "docs/docs/cli-reference.md",
+        "quote": "process holds it too long the request is refused with a message ending in",
+        "problem": "cli-reference.md (added in this range), implementation-plan.md:35 ('ждёт до 3 секунд, затем получает ошибку «retry»') and the PR body ('A flags write waits up to 3 s for the lock, then fails with \"retry\".') say a writer that meets a held flags lock is refused after 3 s. FLAGS_LOCK_TIMING is { timeoutMs: 3_000, staleMs: 2_000 }. LockAttempt.step (src/lib/file-lock.ts) removes any lock older than staleMs and retakes it before the deadline. A holder's lock is stale by t0+2 s at the latest, so the waiter takes it before t0+3 s. A long live hold is broken, not refused. 'retry' fires only when the stale lock cannot be removed or other writers keep winning. Every refusal test injects staleMs: 60_000 (organize.test.ts:234, :300).",
+        "impact": "Client authors and the owner, who is asked to accept the 3 s choice, expect writers to be serialized with a retryable refusal. In production a second writer proceeds after about 2 s, possibly while the first is still writing. That is the risk HL3-004/SC3-001 defer, and the docs hide it.",
+        "suggested_fix": "Describe the actual rule in the three places: a lock older than 2 s is taken as abandoned; 'retry' only when the lock cannot be taken within 3 s (e.g. it cannot be removed). Or make staleMs >= timeoutMs if the documented behaviour is intended (logic decision, with HL3-004).",
+        "evidence": "src/session/organize.ts FLAGS_LOCK_TIMING; src/lib/file-lock.ts LockAttempt.step (deadline check, then stale rmSync, retry); organize.test.ts refusal tests use staleMs 60_000; keryx ctx rg over implementation-plan.md, cli-reference.md, organize.ts/test for '3 s|retry|ending in|locked by another'.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": ["docs/docs/cli-reference.md:484", "docs/requirements/keryx-desktop-review-v2/implementation-plan.md:35", "PR #1300 body, Choices for the owner"],
+          "enumeration_method": "keryx ctx rg -i '3 s|3 с|retry\"|ending in|locked by another' over implementation-plan.md, cli-reference.md, src/session/organize.ts and organize.test.ts, plus the payload PR body"
+        },
+        "dedupe_key": "flags-lock-refusal-doc-vs-stale-takeover"
+      },
+      {
+        "id": "PC-010",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "quote": "32 mutation checks red.",
+        "problem": "PR body Verification: 'Each fix in round 3 has a test that fails with the fix reverted (32 Desktop and 14 keryx checks, listed in the Flow 517 journal).' The journal gives only counts ('32 mutation checks red.', '14 mutation checks red.') and the findings fixed. No check, mutant or result is listed. 'Each fix' also covers the T23 docs fixes (PC-005..PC-008), which have no test. 'Root … 94 pass' and 'bun test src/acp: 455 pass' appear only in flow.json dispositionReason. The round-4 evidence ran 7 of the 8 named root suites (68/0, without src/commands/acp).",
+        "impact": "The PC-007 class recurs: a reader who follows the pointer to verify that the round-3 fixes are pinned finds no list. The closure of the TP-R3 findings rests on checks nobody can re-run from the record.",
+        "suggested_fix": "List the 46 checks (file, mutation, red result) and the commands behind 94/0 and 455/0 in the journal. Or reword to 'counted in the journal' and limit 'each fix' to code fixes.",
+        "evidence": "git diff d7b0f7058..4cb6c43ef -- journal.md (round-3 section); keryx ctx rg --hidden -i 'mutation|mutant' over the flow dir: only counts in journal.md and flow.json:440/:461 dispositionReason; P/research-evidence/verify-tests-to-run-1.txt: 68 pass over 7 root files, Desktop 1070 pass.",
+        "confidence": "high"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "PC-005", "disposition": "closed"},
+      {"id": "PC-006", "disposition": "closed"},
+      {"id": "PC-007", "disposition": "closed"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+  }
+}
+```
+
+Not verified: the 32/14 mutation checks (no list exists); the 94/0 and 455/0 root counts (no run log); slice-02/slice-03 claims (other waves) beyond the lines cited above.
+
+Routing audit: graph_used: no (not-relevant: contract lane; consumers of the removed symbols checked by ctx rg). wiki_used: no (not-relevant: claims are checked against the PR body, journal and code). ctx_used: yes (ctx run git show/diff, ctx rg, ctx read). raw_rg_used: no. Two bounded `sed -n` reads of known line ranges, each marked keryx:raw.

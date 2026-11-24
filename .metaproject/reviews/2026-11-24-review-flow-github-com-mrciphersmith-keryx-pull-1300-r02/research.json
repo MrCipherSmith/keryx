@@ -1,0 +1,909 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:AR-R4-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding AR-R4-001 (Residual of AR-007. The repository-unavailable classifier matches three human-readable sentences. Th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-001",
+      "evidence": "raw/review-architecture-w1.txt#sha256:c9e8ca6273f8",
+      "reason": "reported by review-architecture as AR-R4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-001"
+    },
+    {
+      "id": "review-architecture-w2:AR-R4-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding AR-R4-002 (Round obligation 7 (one rule, one implementation). The UX-013 fix strips the CLI reason prefix with ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-002",
+      "evidence": "raw/review-architecture-w2.txt#sha256:eeaf0bb47d1b",
+      "reason": "reported by review-architecture as AR-R4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-002"
+    },
+    {
+      "id": "review-architecture-w2:AR-R4-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding AR-R4-003 (Round obligation 7. The rewritten linkFlow is a fourth hand-written copy of 'write session flags, di) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-003",
+      "evidence": "raw/review-architecture-w2.txt#sha256:eeaf0bb47d1b",
+      "reason": "reported by review-architecture as AR-R4-003; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-003"
+    },
+    {
+      "id": "review-clean-code-w1:CC4-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC4-001 (Clean Code — DRY. The FE-R3-001 fix adds a third copy of the focus-effect settle sequence (mark the ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-001",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:c31f4be7eedb",
+      "reason": "reported by review-clean-code as CC4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-001"
+    },
+    {
+      "id": "review-clean-code-w1:CC4-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC4-002 (Clean Code — function design (Positional parameters, 4 or more, no options object). The fix appends ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-002",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:c31f4be7eedb",
+      "reason": "reported by review-clean-code as CC4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-002"
+    },
+    {
+      "id": "review-clean-code-w1:CC4-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding CC4-003 (Clean Code — comments (documentation drift). The new `createDir: false` option makes LockAttempt.ste) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-003",
+      "evidence": "raw/review-clean-code-w1.txt#sha256:c31f4be7eedb",
+      "reason": "reported by review-clean-code as CC4-003; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-003"
+    },
+    {
+      "id": "review-clean-code-w2:CC4-004",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC4-004 (Clean Code — comments (documentation drift: a doc describing the rule a later change replaced). The ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-004",
+      "evidence": "raw/review-clean-code-w2.txt#sha256:47a4fcfade26",
+      "reason": "reported by review-clean-code as CC4-004; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-004"
+    },
+    {
+      "id": "review-clean-code-w2:CC4-005",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC4-005 (Clean Code — DRY (observation). The new linkFlow writes its own SESSION_FLAGS request and flags disp) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w2.txt",
+      "reason": "duplicate of AR-R4-003, folded at ingest",
+      "finding": "AR-R4-003"
+    },
+    {
+      "id": "review-clean-code-w3:CC4-006",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC4-006 (SOLID/function design, Positional parameters (solid-principles.mdc Thresholds: 4 or more, no options) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w3.txt",
+      "reason": "duplicate of CC4-002, folded at ingest",
+      "finding": "CC4-002"
+    },
+    {
+      "id": "review-clean-code-w3:CC4-007",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC4-007 (Function design, Boolean flag parameter (solid-principles.mdc Thresholds: any, when the flag selects) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-007",
+      "evidence": "raw/review-clean-code-w3.txt#sha256:3db66a615e31",
+      "reason": "reported by review-clean-code as CC4-007; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-007"
+    },
+    {
+      "id": "review-clean-code-w3:CC4-008",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC4-008 (Comments, stale/contradicting (solid-principles.mdc Review severities, Comment row). Two doc comment) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w3.txt",
+      "reason": "duplicate of CC4-003, folded at ingest",
+      "finding": "CC4-003"
+    },
+    {
+      "id": "review-clean-code-w3:CC4-009",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC4-009 (DRY / round obligation 7 (one rule, one implementation). withFlagsLock and withFlagsLockAsync each i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w3.txt",
+      "reason": "duplicate of DG-R4-006, folded at ingest",
+      "finding": "DG-R4-006"
+    },
+    {
+      "id": "review-degradation-w1:DG-R4-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DG-R4-001 (The repository source has a fourth 'no GitHub.com remote' reason that the new allow-list does not na) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-degradation-w1.txt",
+      "reason": "duplicate of RG-R4-001, folded at ingest",
+      "finding": "RG-R4-001"
+    },
+    {
+      "id": "review-degradation-w1:DG-R4-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DG-R4-002 (On base, handleSessionFlags was synchronous, so a server applied two `_keryx/session_flags` requests) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-002",
+      "evidence": "raw/review-degradation-w1.txt#sha256:4c2ddd7fb2d6",
+      "reason": "reported by review-degradation as DG-R4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-002"
+    },
+    {
+      "id": "review-degradation-w1:DG-R4-003",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DG-R4-003 (A refresh that fails with an `unavailable:` error keeps the same-scope snapshot with `stale: kept ? ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-003",
+      "evidence": "raw/review-degradation-w1.txt#sha256:4c2ddd7fb2d6",
+      "reason": "reported by review-degradation as DG-R4-003; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-003"
+    },
+    {
+      "id": "review-degradation-w2:DG-R4-004",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DG-R4-004 (The PR body (Verification) says: 'Each fix in round 3 has a test that fails with the fix reverted (3) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-degradation-w2.txt",
+      "reason": "duplicate of PC-010, folded at ingest",
+      "finding": "PC-010"
+    },
+    {
+      "id": "review-degradation-w2:DG-R4-005",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DG-R4-005 (The FE-R3-002 test 'Link and Dismiss move focus to the Flow slot's control that replaces the offer' ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-degradation-w2.txt",
+      "reason": "duplicate of TP-R4-001, folded at ingest",
+      "finding": "TP-R4-001"
+    },
+    {
+      "id": "review-degradation-w3:DG-R4-006",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding DG-R4-006 (Round obligation 7 (one rule, one implementation). Base had one withFlagsLock. Head has withFlagsLoc) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-006",
+      "evidence": "raw/review-degradation-w3.txt#sha256:b473154781b9",
+      "reason": "reported by review-degradation as DG-R4-006; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-006"
+    },
+    {
+      "id": "review-degradation-w3:DG-R4-007",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding DG-R4-007 (HL3-001's fix depends on this one call site. The tests pin withFileLockAsync ('waits for a held lock) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-007",
+      "evidence": "raw/review-degradation-w3.txt#sha256:b473154781b9",
+      "reason": "reported by review-degradation as DG-R4-007; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-007"
+    },
+    {
+      "id": "review-frontend-w1:FE-R4-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding FE-R4-001 (Link arms refocusFlow; it is cleared only when the offer disappears. After a failed Link the offer s) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#FE-R4-001",
+      "evidence": "raw/review-frontend-w1.txt#sha256:b6cfd3095fe7",
+      "reason": "reported by review-frontend as FE-R4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#FE-R4-001"
+    },
+    {
+      "id": "review-frontend-w1:FE-R4-002",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding FE-R4-002 (When the client is replaced while the flags request is in flight but the request still resolves, the) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#FE-R4-002",
+      "evidence": "raw/review-frontend-w1.txt#sha256:b6cfd3095fe7",
+      "reason": "reported by review-frontend as FE-R4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#FE-R4-002"
+    },
+    {
+      "id": "review-frontend-w3:FE-R4-003",
+      "source": "raw/review-frontend-w3.txt",
+      "question": "Is review-frontend finding FE-R4-003 (Before this range the ACP server waited for another process's flags lock synchronously, so a second ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-frontend-w3.txt",
+      "reason": "duplicate of DG-R4-002, folded at ingest",
+      "finding": "DG-R4-002"
+    },
+    {
+      "id": "review-highload-w1:HL4-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL4-001 (trashSession takes no flags lock. On the EXDEV path it copies the session and then removes the sourc) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#HL4-001",
+      "evidence": "raw/review-highload-w1.txt#sha256:e9228bf9059d",
+      "reason": "reported by review-highload as HL4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#HL4-001"
+    },
+    {
+      "id": "review-highload-w3:HL4-002",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding HL4-002 (handleSessionFlags now suspends while another process holds the session's flags.json.lock, and the A) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-highload-w3.txt",
+      "reason": "duplicate of DG-R4-002, folded at ingest",
+      "finding": "DG-R4-002"
+    },
+    {
+      "id": "review-layout-w1:LY-R4-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-R4-001 (LY-005 remainder, unverified. In the offer state the Flow slot holds the `.pr-work-offer` span (the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-layout-w1.txt",
+      "reason": "duplicate of UX-R4-001, folded at ingest",
+      "finding": "UX-R4-001"
+    },
+    {
+      "id": "review-layout-w1:fu1",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Measure LY-R4-001 in a real engine (Desktop real-CSS tier or a WebKit probe): Flow slot, offer span, Link/Dismiss rects and elementFromPoint at a 720px and a 1180px window, in board and list view, plu",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-layout-w1.txt",
+      "reason": "a real-engine measurement needs the running Desktop app at 720/1180px, not available in this round; the fix round changed the offer so Link carries the truncating state text and Dismiss is a 24px icon; the measurement stays a named gap in the PR body"
+    },
+    {
+      "id": "review-layout-w2:fu1",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Settle LY-R4-001 with a real-engine probe (Desktop real-CSS tier or a WebKit probe): getBoundingClientRect of [data-slot=flow], .pr-work-offer and both buttons, plus elementFromPoint at each button ce",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-layout-w2.txt",
+      "reason": "a real-engine measurement needs the running Desktop app at 720/1180px, not available in this round; the fix round changed the offer so Link carries the truncating state text and Dismiss is a 24px icon; the measurement stays a named gap in the PR body"
+    },
+    {
+      "id": "review-logic-w1:LG-R4-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-R4-001 (HL3-002's fix makes a flags write refuse a session whose summary.json is gone (whileStored) and neve) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-logic-w1.txt",
+      "reason": "duplicate of HL4-001, folded at ingest",
+      "finding": "HL4-001"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-009",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-009 (cli-reference.md (added in this range), implementation-plan.md:35 ('ждёт до 3 секунд, затем получает) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-009",
+      "evidence": "raw/review-pr-contract-w1.txt#sha256:1b105d6fec14",
+      "reason": "reported by review-pr-contract as PC-009; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-009"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-010",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-010 (PR body Verification: 'Each fix in round 3 has a test that fails with the fix reverted (32 Desktop a) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-010",
+      "evidence": "raw/review-pr-contract-w1.txt#sha256:1b105d6fec14",
+      "reason": "reported by review-pr-contract as PC-010; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-010"
+    },
+    {
+      "id": "review-regression-w2:RG-R4-001",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding RG-R4-001 (Commit 055115a20 replaced the base test `/(?:^|\\b)configuration:/i.test(error)` with `repositoryUnav) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#RG-R4-001",
+      "evidence": "raw/review-regression-w2.txt#sha256:c55d81422079",
+      "reason": "reported by review-regression as RG-R4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#RG-R4-001"
+    },
+    {
+      "id": "review-style-w1:ST-R4-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-R4-001 (LockAttempt.step() returns number | null | \"timeout\", and withFileLock and withFileLockAsync both st) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-001",
+      "evidence": "raw/review-style-w1.txt#sha256:83870fb1b4e3",
+      "reason": "reported by review-style as ST-R4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-001"
+    },
+    {
+      "id": "review-style-w1:ST-R4-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-R4-002 (Two new boolean refs that record a pending focus are named as imperatives: `focusSource` (IssuesBoar) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-002",
+      "evidence": "raw/review-style-w1.txt#sha256:83870fb1b4e3",
+      "reason": "reported by review-style as ST-R4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-002"
+    },
+    {
+      "id": "review-style-w1:ST-R4-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding ST-R4-003 (Pre-existing (05a9a8e36): `age` holds the lock file's mtime timestamp, and the age is computed as `D) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-003",
+      "evidence": "raw/review-style-w1.txt#sha256:83870fb1b4e3",
+      "reason": "reported by review-style as ST-R4-003; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-003"
+    },
+    {
+      "id": "review-style-w2:ST-R4-004",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding ST-R4-004 (accept's settle nests an unparenthesised ternary in the true branch of another ternary (`cond ? next) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-004",
+      "evidence": "raw/review-style-w2.txt#sha256:7474d004cc7d",
+      "reason": "reported by review-style as ST-R4-004; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-004"
+    },
+    {
+      "id": "review-style-w2:ST-R4-005",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding ST-R4-005 (The variable `unavailable` holds a reason whose values are \"unavailable\" | \"older\" | null, so the re) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-005",
+      "evidence": "raw/review-style-w2.txt#sha256:7474d004cc7d",
+      "reason": "reported by review-style as ST-R4-005; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-005"
+    },
+    {
+      "id": "review-style-w3:ST-R4-006",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST-R4-006 (whileStored(dir, apply) returns a closure that both of its callers (withFlagsLock, withFlagsLockAsyn) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-006",
+      "evidence": "raw/review-style-w3.txt#sha256:f85fd0476726",
+      "reason": "reported by review-style as ST-R4-006; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-006"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-R4-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-R4-001 (Both guards of the FE-R3-002 refocus effect survive deletion with all 65 nearest Desktop tests green) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-001",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:e47cab7ac270",
+      "reason": "reported by review-testing-practices as TP-R4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-001"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-R4-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-R4-002 (The `stale` arm of the FE-R3-001 wait survives deletion (D03: 65/65 green). Its comment says a cache) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-002",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:e47cab7ac270",
+      "reason": "reported by review-testing-practices as TP-R4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-002"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-R4-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-R4-003 (The guard that limits the new select-focus effect to the fallback survives deletion (D16: 65/65 gree) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-003",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:e47cab7ac270",
+      "reason": "reported by review-testing-practices as TP-R4-003; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-003"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-R4-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-R4-004 (This range restructured the nonce-write failure path (the inner try/catch became the outer catch's `) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-004",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:e47cab7ac270",
+      "reason": "reported by review-testing-practices as TP-R4-004; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-004"
+    },
+    {
+      "id": "review-testing-practices-w1:TP-R4-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding TP-R4-005 (The three new barrier directories are never removed. This follows the file's existing practice: proj) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-005",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:e47cab7ac270",
+      "reason": "reported by review-testing-practices as TP-R4-005; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-005"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-R4-006",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-R4-006 (tdd-workflow.mdc Rule 6: the PC-004 check 'no notice before keryx has saved the session' waits a fix) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-006",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:55819c3ab8aa",
+      "reason": "reported by review-testing-practices as TP-R4-006; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-006"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-R4-007",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-R4-007 (The fixture's shape contradicts its producer. It names the scenario 'keryx refuses the next flow lin) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-007",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:55819c3ab8aa",
+      "reason": "reported by review-testing-practices as TP-R4-007; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-007"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-R4-008",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-R4-008 (This is the defect the TP-R4-007 coverage gap hides, filed separately as the lens requires. linkFlow) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-008",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:55819c3ab8aa",
+      "reason": "reported by review-testing-practices as TP-R4-008; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-008"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-R4-009",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-R4-009 (A gate added in this range survives deletion. With App's mapping of `linking` dropped (A01), the App) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-009",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:55819c3ab8aa",
+      "reason": "reported by review-testing-practices as TP-R4-009; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-009"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-R4-010",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-R4-010 (The test name claims behaviour that its assertions do not pin. It matches 4 declaration strings in t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-010",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:55819c3ab8aa",
+      "reason": "reported by review-testing-practices as TP-R4-010; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-010"
+    },
+    {
+      "id": "review-testing-practices-w3:TP-R4-011",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding TP-R4-011 (The DG3-001 fix makes a later open read the flags lock-free (sessionSubjectSettled), so an open does) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-011",
+      "evidence": "raw/review-testing-practices-w3.txt#sha256:6a33e8f60259",
+      "reason": "reported by review-testing-practices as TP-R4-011; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-011"
+    },
+    {
+      "id": "review-testing-practices-w3:TP-R4-012",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding TP-R4-012 (The two changes in handleSessionFlags this range added (the HL3-001 fix) both survive at the server ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-testing-practices-w3.txt",
+      "reason": "duplicate of DG-R4-007, folded at ingest",
+      "finding": "DG-R4-007"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-R4-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-R4-001 (Criterion Nielsen #1/#6, State loading+error (secondary view). The offer span is the only visible ca) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-001",
+      "evidence": "raw/review-ui-ux-w1.txt#sha256:70dc309a14cd",
+      "reason": "reported by review-ui-ux as UX-R4-001; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-001"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-R4-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-R4-002 (Criterion Nielsen #9. The new notice for a PR missing from the settled list (typically a merged or c) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-002",
+      "evidence": "raw/review-ui-ux-w1.txt#sha256:70dc309a14cd",
+      "reason": "reported by review-ui-ux as UX-R4-002; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-002"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-R4-003",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-R4-003 (Criterion Nielsen #2/copy. The CLI reason is spliced in raw. The lock error ('the flags of session <) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-003",
+      "evidence": "raw/review-ui-ux-w1.txt#sha256:70dc309a14cd",
+      "reason": "reported by review-ui-ux as UX-R4-003; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-003"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-R4-004",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-R4-004 (Criterion WCAG 4.1.3. The span stays mounted from 'Linking…' to the error, so React switches its rol) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-004",
+      "evidence": "raw/review-ui-ux-w1.txt#sha256:70dc309a14cd",
+      "reason": "reported by review-ui-ux as UX-R4-004; the same finding is canonical 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-004"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "AR-007": "closed",
+      "DG-R3-002": "closed",
+      "DG3-001": "closed",
+      "FE-R3-001": "closed",
+      "FE-R3-002": "closed",
+      "HL3-001": "closed",
+      "HL3-002": "closed",
+      "HL3-003": "open",
+      "HL3-004": "open",
+      "LG-R3-003": "open",
+      "LY-005": "closed",
+      "PC-005": "closed",
+      "PC-006": "partial",
+      "PC-007": "partial",
+      "PC-008": "closed",
+      "SC3-001": "open",
+      "TP-R3-001": "closed",
+      "TP-R3-002": "closed",
+      "TP-R3-003": "closed",
+      "TP-R3-004": "closed",
+      "TP-R3-005": "closed",
+      "TP-R3-006": "partial",
+      "TP-R3-007": "closed",
+      "TP-R3-008": "closed",
+      "TP-R3-009": "closed",
+      "UX-009": "closed",
+      "UX-010": "partial",
+      "UX-011": "closed",
+      "UX-012": "closed",
+      "UX-013": "closed",
+      "UX-014": "open",
+      "UX-015": "closed",
+      "UX-016": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:4aa09e32d65d",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:4aa09e32d65d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:3db66a615e31",
+        "rawEvidence": "raw/review-clean-code-w3.txt#sha256:3db66a615e31",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:b473154781b9",
+        "rawEvidence": "raw/review-degradation-w3.txt#sha256:b473154781b9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:27bbd287fce3",
+        "rawEvidence": "raw/review-frontend-w3.txt#sha256:27bbd287fce3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:31f3458fe0bc",
+        "rawEvidence": "raw/review-highload-w3.txt#sha256:31f3458fe0bc",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:c6365eead8b6",
+        "rawEvidence": "raw/review-layout-w2.txt#sha256:c6365eead8b6",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:7dc70bbc0834",
+        "rawEvidence": "raw/review-logic-w3.txt#sha256:7dc70bbc0834",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:6eb246e80c72",
+        "rawEvidence": "raw/review-performance-w3.txt#sha256:6eb246e80c72",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:394062d45a2c",
+        "rawEvidence": "raw/review-pr-contract-w3.txt#sha256:394062d45a2c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:62a47103ec58",
+        "rawEvidence": "raw/review-regression-w3.txt#sha256:62a47103ec58",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:f9ed9c9e9665",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:f9ed9c9e9665",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:f85fd0476726",
+        "rawEvidence": "raw/review-style-w3.txt#sha256:f85fd0476726",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:6a33e8f60259",
+        "rawEvidence": "raw/review-testing-practices-w3.txt#sha256:6a33e8f60259",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:471d5d8cec18",
+        "rawEvidence": "raw/review-ui-ux-w2.txt#sha256:471d5d8cec18",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 40,
+    "known": 0,
+    "unknown": 40,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

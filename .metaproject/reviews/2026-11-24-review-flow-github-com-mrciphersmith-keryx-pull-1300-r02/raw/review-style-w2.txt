@@ -1,0 +1,109 @@
+STATUS: DONE
+
+# Style Review Report — review-style, round 4, wave 2
+
+## Summary
+Slice-02 of the round-3 fix range (d7b0f7058..4cb6c43ef) covers the Desktop code and tests: App.tsx, IssuesBoard.tsx, issues/model.ts, useIssueCollection.ts, PrWorkRow.tsx, ReviewBoard.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css, the Desktop tests and the two App fixtures. Names follow the surrounding code and no readability threshold is crossed in production code. I found one minor issue (a ternary nested in the true branch of another ternary in `accept`'s `settle`) and one info naming observation. Wave-1 findings ST-R4-001..003 are not filed again.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (explicit-hash-range, diff mode)
+- Slice read in full: slice-02 (2153 lines; 37 hunks over 20 files, including flow.json and journal.md)
+- Context read beyond the slice: `.metaproject/rules/core/solid-principles.mdc` Readability thresholds and the Name row; base/head line counts via `git show <rev>:<file> | wc -l`
+
+## Stats
+- major: 0
+- minor: 1
+- info: 1
+
+## Minor & Info
+
+### [ST-R4-004] minor — a ternary nested in the true branch of another ternary in `settle` (apps/desktop/src/review/usePendingFlowLinks.ts)
+`settle` in `accept` reads `old.flatMap(item => item.sessionId === sessionId && item.dir === dir ? next ? [next] : [] : [item])`. The inner ternary has no parentheses. The reader has to work out that `: []` closes `next ?` and `: [item]` closes the outer test. No other line in this file nests a ternary (`keryx ctx rg -n ' \? [^:;]{1,40} \? '` over usePendingFlowLinks.ts, prWork.ts and useAcpSession.ts: 1 match, this one). The same nested-in-true-branch shape does occur in 20 non-test files under apps/desktop/src (`keryx ctx rg -c ' \? [^:;]{1,40} \? [^:;]+ : [^:;]+ : ' apps/desktop/src -g '!*.test.*' -g '!*fixture*'`). It is a common habit, not a recorded decision, and this one is new code in a file that did not have it.
+Fix: split the match from the replacement, e.g. `old.flatMap(item => item.sessionId !== sessionId || item.dir !== dir ? [item] : next ? [next] : [])`. That is a flat chain. Another option is a small helper `const replace = (item) => …` with `if` / early return.
+
+### [ST-R4-005] info — `unavailable` holds a reason whose values include "older" (apps/desktop/src/issues/IssuesBoard.tsx)
+`const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;`. It then reads `unavailable === "older"`. The variable is named after one of its own values ("unavailable" | "older" | null), so the check reads as "unavailable equals older". `repositoryUnavailable` likewise reads as a predicate but returns a reason. The JSDoc on `repositoryUnavailable` explains it, and both sites are 120 lines apart in one component (consumers: `keryx ctx rg -n repositoryUnavailable apps/desktop/src`, 1 call site). That is why this is info.
+Fix (optional): `const repositoryProblem = …` / `repositoryProblem === "older"`, or rename the function `repositoryUnavailableReason`.
+
+## Verified clean (style lens)
+- **File length:** no production file crosses a threshold in this range. Line counts, base → head: App.tsx 790→790, usePendingFlowLinks.ts 69→85, useAcpSession.ts 1083→1089 (already over 800 at base; diff mode, not made worse in kind), useIssueCollection.ts 91→103, prWork.ts 234→238, review.css 126→128. PrWorkRow.dom.test.tsx 381→517 and IssuesBoard.dom.test.tsx 503→575 are test files, which `solid-principles.mdc` exempts.
+- **Single-letter `l` in `linkFlow`** (`const l = live.current;`): this is the file's convention, with 25 sites in useAcpSession.ts (`keryx ctx rg -c 'const l = live\.current'`), so it is not reported (law 4).
+- **Finding-id prefixes in test names** ("FE-R3-001: …", "UX-010: …", "TP-R3-001: …"): this convention was set in earlier rounds of this PR. The base PrWorkRow.dom.test.tsx already has one, and prWork.test.ts has 4. Current spread is 24 tests in 5 files (`keryx ctx rg -c 'test\("(?:[A-Z]{2,}\d*-(?:R\d-)?\d{3}|TP-R\d|UX-\d|FE-R)' apps/desktop/src`). Not reported.
+- **Boolean conditions:** none on `+` lines exceeds 3 clauses. Checked: `item.sessionId === sessionId && item.dir === dir`, `unavailable && fallback`, `fallback && error`, `!active || active === document.body`, `change.flow && refuseFlowLink`.
+- **Nesting and branches:** `accept` (try/catch, one guard), `linkFlow` (one guard), `repositoryUnavailable` (2 branches) and the PrWorkRow refocus effect (2 guards) all stay within depth 3 and 10 branches.
+- **New exports have consumers and JSDoc:** `repositoryUnavailable` (IssuesBoard.tsx:156), `PrFlowOffer.linking` / `PrFlowOffer.error` (App.tsx flowOffers, PrWorkRow FlowOffer) and `FlowLinkOffer.linking` / `FlowLinkOffer.error` (usePendingFlowLinks accept/settle, App.tsx flowOffers).
+- **Console usage:** none added in slice-02.
+- **`I`-prefixed interfaces:** none added.
+- **Test helper names** read as what they return: `offerHost`, `offered`, `state`, `sourceKey`, `offerName`, `notice`, `merged`, `refuseFlowLink`, `saved`, `prompted`, `olderTurns`. One exception is pre-existing: `offers(number, dir)` in app-work-row.fixture.tsx is a predicate named as a noun. This range changes only its parameter (id → dir) and does not make it worse.
+- **Left to other lenses:** the duplicated JSDoc pairs on `PrFlowOffer` / `FlowLinkOffer` `linking`/`error`, the twin `^configuration:\s*` prefix strips (IssuesBoard.tsx, ReviewBoard.tsx) and the `repositoryUnavailable(reason, firstPage)` boolean positional parameter go to review-clean-code. The behaviour change in `linkFlow`, which now throws instead of keeping the link pending, goes to review-logic.
+
+## Prior dispositions (round 3, sites in slice-02, judged against the slice's head code)
+- **AR-007 closed:** the reason is decoded in `useIssueCollection.repositoryUnavailable`, which matches the three named phrases. "Invalid Issues request" counts only on the first page. The view tests the returned kind.
+- **TP-R3-001 closed:** usePendingFlowLinks.dom.test.tsx adds "two Link presses before a render write the link once", "Dismiss then Link before a render writes nothing" and "a new offer for a session replaces that session's older one".
+- **TP-R3-002 closed:** PrWorkRow.dom.test.tsx "a PR that already has a Flow shows that Flow, not an offer" renders a Flow and an offer together.
+- **TP-R3-003 closed:** IssuesBoard.dom.test.tsx "any other error of the repository source keeps Retry" covers rate-limit, unavailable, a stale cursor and a no-remote configuration reason.
+- **TP-R3-004 closed:** "a refused request is marked handled …" with an uncleared host, and "a later focus that opens its panel clears the notice of a refused one".
+- **TP-R3-005 closed:** the new ReviewProgress.test.tsx renders without showState, with false and with true.
+- **UX-010 closed:** the offer carries `linking` and `error`. `accept` keeps it until `link` settles. `linkFlow` rejects with the reason. PrWorkRow shows "Not linked: …" with role=alert. Covered by hook, row and App fixture tests.
+- **UX-011 closed:** `sourceKey = account + ".source." + JSON.stringify(cwd)`. The legacy per-account key is read only as a fallback. Two tests pin the per-project storage and the legacy read.
+- **UX-013 closed:** the alert renders `error.replace(/^configuration:\s*/i, "")`, and the tests assert `not.toContain("configuration:")`.
+- **UX-015 closed:** the hint now says "choose Bundled keryx in Settings → Desktop", matching the SettingsView.tsx:12 label "Bundled keryx".
+- **FE-R3-001 / FE-R3-002:** closed in wave 1. Slice-02 adds their tests (PrWorkRow.dom.test.tsx FE-R3-001 ×2 and FE-R3-002 ×2; IssuesBoard.dom.test.tsx source-select focus). They are consistent with that disposition.
+- **Not judged by this lens:** LY-005 (layout; `.pr-work-slot` gained `overflow: hidden`, which a CSS test pins, not measured), UX-009 and UX-012 (closed in wave 1). Deferred: HL3-003, LG-R3-003, UX-014, UX-016.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-style",
+    "round": 4,
+    "status": "DONE",
+    "slices": ["slice-02"],
+    "findings": [
+      {
+        "id": "ST-R4-004",
+        "severity": "minor",
+        "reviewer": "review-style",
+        "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "quote": "      item.sessionId === sessionId && item.dir === dir ? next ? [next] : [] : [item]));",
+        "problem": "accept's settle nests an unparenthesised ternary in the true branch of another ternary (`cond ? next ? [next] : [] : [item]`). The reader must pair each `:` with its `?`. It is the only nested ternary in usePendingFlowLinks.ts, prWork.ts and useAcpSession.ts.",
+        "impact": "Readability only. The replacement rule for the settled offer (keep others, replace or drop this one) is hard to read at a glance. No wrong behaviour.",
+        "suggested_fix": "Flatten: `old.flatMap(item => item.sessionId !== sessionId || item.dir !== dir ? [item] : next ? [next] : [])`. Or extract a helper with if/early return.",
+        "evidence": "slice-02 usePendingFlowLinks.ts hunk; keryx ctx rg -n ' \\? [^:;]{1,40} \\? ' over the three files: 1 match (this line). The shape exists in 20 other non-test apps/desktop/src files (keryx ctx rg -c), a habit with no recorded decision.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "pending-flow-links-settle-nested-ternary"
+      },
+      {
+        "id": "ST-R4-005",
+        "severity": "info",
+        "reviewer": "review-style",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "quote": "  const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;",
+        "problem": "The variable `unavailable` holds a reason whose values are \"unavailable\" | \"older\" | null, so the render reads `unavailable === \"older\"`. `repositoryUnavailable` also reads as a predicate but returns that reason.",
+        "impact": "Readability only. The JSDoc on repositoryUnavailable explains the values, and there is one call site.",
+        "suggested_fix": "Optional: `repositoryProblem` for the variable, or `repositoryUnavailableReason` for the function.",
+        "evidence": "keryx ctx rg -n repositoryUnavailable apps/desktop/src: definition useIssueCollection.ts:26, sole call IssuesBoard.tsx:156; read at IssuesBoard.tsx:274 and :277.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "issues-unavailable-holds-reason-kind"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "AR-007", "disposition": "closed", "evidence": "useIssueCollection.repositoryUnavailable matches the three named phrases; 'Invalid Issues request' counts only on the first page; IssuesBoard tests the returned kind."},
+      {"id": "TP-R3-001", "disposition": "closed", "evidence": "usePendingFlowLinks.dom.test.tsx adds double-press, Dismiss-then-Link and replace-older-offer tests."},
+      {"id": "TP-R3-002", "disposition": "closed", "evidence": "PrWorkRow.dom.test.tsx 'a PR that already has a Flow shows that Flow, not an offer' renders a Flow plus an offer."},
+      {"id": "TP-R3-003", "disposition": "closed", "evidence": "IssuesBoard.dom.test.tsx 'any other error of the repository source keeps Retry' over four non-fallback reasons."},
+      {"id": "TP-R3-004", "disposition": "closed", "evidence": "PrWorkRow.dom.test.tsx: refused nonce marked handled with an uncleared host; a later successful focus clears the notice."},
+      {"id": "TP-R3-005", "disposition": "closed", "evidence": "New ReviewProgress.test.tsx renders showState undefined/false/true."},
+      {"id": "UX-010", "disposition": "closed", "evidence": "Offer has linking/error; accept keeps it until link settles; linkFlow rejects; PrWorkRow shows 'Not linked: …' role=alert; hook, row and App fixture tests."},
+      {"id": "UX-011", "disposition": "closed", "evidence": "IssuesBoard sourceKey = account + '.source.' + JSON.stringify(cwd); legacy per-account key read only as fallback; two tests."},
+      {"id": "UX-013", "disposition": "closed", "evidence": "Alert renders error.replace(/^configuration:\\s*/i, ''); tests assert not.toContain('configuration:')."},
+      {"id": "UX-015", "disposition": "closed", "evidence": "Hint names 'Bundled keryx in Settings → Desktop'; SettingsView.tsx:12 label is 'Bundled keryx'."}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1, "files_reviewed": 20, "prior_disposed": 10}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; the payload layers supplied the files and the affected set); wiki_used: no (not-relevant to a naming/readability lens); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no. I read the slice file raw with a keryx:raw marker because it has to be read in full and verbatim, and used `git show <rev>:<file> | wc -l` for the base/head line counts.

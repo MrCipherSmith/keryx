@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
   "status": "in-progress",
   "createdAt": "2026-11-23T19:41:25.622Z",
-  "updatedAt": "2026-11-24T07:41:18.017Z",
+  "updatedAt": "2026-11-24T08:37:54.554Z",
   "source": {
     "type": "description",
     "ref": null
@@ -478,6 +478,67 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "cli-reference ACP session_flags, acp help, desktop-issues guide, implementation plan, journal, PR body"
+    },
+    {
+      "id": "T24",
+      "title": "Fix round 4 (A): Issues reason contract in Desktop, offer slot layout and states, Link refusal reason, focus/test gaps",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:16:05.579Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Desktop fixes of review round 4; 32 mutants red (research-evidence/round4-fix-mutants-A.md); desktop tsc 0, bun test src 1081/0"
+    },
+    {
+      "id": "T25",
+      "title": "Fix round 4 (B): per-session flags write order, organize/file-lock API cleanup, reason-contract tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:16:05.760Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx fixes of review round 4; 20 mutants red (round4-fix-mutants-B.md); root tsc 0, focused 103/0, src/acp 457/0"
+    },
+    {
+      "id": "T26",
+      "title": "Fix round 4 (C): lock wording, PR body evidence, journal deferred list",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T24",
+        "T25"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "lock wording (cli-reference, plan), Issues guide non-Git reason, journal deferred list, PR body evidence"
     }
   ],
   "history": [
@@ -773,6 +834,46 @@
       "at": "2026-11-24T07:41:18.017Z",
       "event": "task-done",
       "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
+    },
+    {
+      "at": "2026-11-24T08:16:04.996Z",
+      "event": "task-added",
+      "detail": "T24: Fix round 4 (A): Issues reason contract in Desktop, offer slot layout and states, Link refusal reason, focus/test gaps"
+    },
+    {
+      "at": "2026-11-24T08:16:05.198Z",
+      "event": "task-added",
+      "detail": "T25: Fix round 4 (B): per-session flags write order, organize/file-lock API cleanup, reason-contract tests"
+    },
+    {
+      "at": "2026-11-24T08:16:05.383Z",
+      "event": "task-added",
+      "detail": "T26: Fix round 4 (C): lock wording, PR body evidence, journal deferred list"
+    },
+    {
+      "at": "2026-11-24T08:16:05.579Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T08:16:05.760Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T08:37:54.030Z",
+      "event": "task-done",
+      "detail": "T24: Fix round 4 (A): Issues reason contract in Desktop, offer slot layout and states, Link refusal reason, focus/test gaps"
+    },
+    {
+      "at": "2026-11-24T08:37:54.333Z",
+      "event": "task-done",
+      "detail": "T25: Fix round 4 (B): per-session flags write order, organize/file-lock API cleanup, reason-contract tests"
+    },
+    {
+      "at": "2026-11-24T08:37:54.554Z",
+      "event": "task-done",
+      "detail": "T26: Fix round 4 (C): lock wording, PR body evidence, journal deferred list"
     }
   ],
   "acKinds": {

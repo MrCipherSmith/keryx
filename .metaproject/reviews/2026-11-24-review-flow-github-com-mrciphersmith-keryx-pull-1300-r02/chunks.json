@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 17,
+  "droppedKey": "ccf9356aa608954b",
+  "fileBytes": {
+    "apps/desktop/src/review/PrSubscriptionDialog.tsx": 7401,
+    "apps/desktop/src/review/ReviewDetail.tsx": 21580,
+    "apps/desktop/src/shell/RoutingDialog.tsx": 6749,
+    "scripts/verify-native-coverage.ts": 77145,
+    "src/commands/help.ts": 2179,
+    "src/commands/projects.ts": 7427,
+    "src/commands/serve.ts": 43137,
+    "src/commands/worktree.ts": 12705,
+    "src/harness/hooks/trust.ts": 18962,
+    "src/harness/routing/config-file.ts": 3724,
+    "src/harness/routing/trust.ts": 7321,
+    "src/lib/desktop-serve-bootstrap.ts": 3559,
+    "src/lib/hub-machine/trial.test-support.ts": 23371,
+    "src/mcp-servers/oauth-provider.ts": 10278,
+    "src/mcp-servers/trust.ts": 12495,
+    "src/worktree/prepare.ts": 7277,
+    "src/worktree/remove.ts": 7537
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/harness/routing/trust.ts",
+        "src/mcp-servers/trust.ts",
+        "src/mcp-servers/oauth-provider.ts",
+        "src/worktree/prepare.ts",
+        "src/commands/serve.ts",
+        "src/harness/hooks/trust.ts",
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "src/commands/projects.ts",
+        "src/lib/desktop-serve-bootstrap.ts"
+      ],
+      "bytes": 132036
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/lib/hub-machine/trial.test-support.ts",
+        "src/worktree/remove.ts",
+        "scripts/verify-native-coverage.ts",
+        "src/commands/help.ts",
+        "src/harness/routing/config-file.ts",
+        "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "src/commands/worktree.ts"
+      ],
+      "bytes": 140811
+    }
+  ]
+}

@@ -1,0 +1,901 @@
+[
+  {
+    "id": "RG-R4-001",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "Commit 055115a20 replaced the base test `/(?:^|\\b)configuration:/i.test(error)` with `repositoryUnavailable` (apps/desktop/src/issues/useIssueCollection.ts), which recognises only 'has no GitHub.com fetch remote', 'has Issues turned off for', 'names no usable repository' and a first-page 'Invalid Issues request'. The repository source has a fourth unavailable reason: src/review/board-github.ts reviewRepositories (reached from issues-board.ts projectRepository) throws 'configuration: Open a Git project with a GitHub.com remote.' when `git remote -v` fails, i.e. the project folder is not a Git checkout or git is not available. That text matches none of the patterns, so repositoryUnavailable returns null and Collection renders the generic notice with Retry.",
+    "impact": "Trigger: open the Issues tab in a Desktop project folder that is not a Git checkout (IssuesView needs only a global GitHub account, not a project remote), with no source stored for it, so the D5 default 'repository' is sent. Base d7b0f7058: the configuration: error showed 'This project's repository issues are not available here' and 'Show issues assigned to me'. Head: the error with 'Retry', which re-sends the same request and fails the same way; the only way out is to find the Source select. docs/docs/guides/desktop-issues.md:46 (updated in this range) promises the fallback when the project lacks a GitHub.com remote.",
+    "suggested_fix": "Add the reason to repositoryUnavailable, e.g. `/has no GitHub\\.com fetch remote|Open a Git project with a GitHub\\.com remote|has Issues turned off for|names no usable repository/i`, or better give every repository-source failure one CLI prefix (AR-007's suggestion) and match that. Add 'configuration: Open a Git project with a GitHub.com remote.' to the IssuesBoard test that lists the fallback reasons, and replace the invented 'configuration: This project has no remote.' in the keep-Retry test with a real non-repository reason such as 'configuration: Refresh before loading the next page.'.",
+    "evidence": "Base: `git grep d7b0f7058 -- apps/desktop/src/issues/IssuesBoard.tsx` line 147 `const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;` with line 78 fallback for the unchosen repository source. Head: useIssueCollection.ts repositoryUnavailable regex (slice-02 hunk @@ 1,51 @@). src/review/board-github.ts:61-69 reviewRepositories catch → 'configuration: Open a Git project with a GitHub.com remote.' (blame ac6a50116, predates the PR). src/integrations/issues-board.ts:117-124 projectRepository calls selectRepository(await reviewRepositories(cwd)). apps/desktop/src/platform/issues.ts passes the CLI error through unchanged. apps/desktop/src/issues/IssuesView.tsx renders IssuesBoard whenever any GitHub account is listed. `keryx ctx rg 'Open a Git project' apps/desktop/src` finds no Desktop match. Read, not executed.",
+    "confidence": "high",
+    "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+    "line": 156,
+    "quote": "  const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "issues-fallback-misses-not-git-project",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/issues/IssuesBoard.tsx Collection: unavailable = repositoryUnavailable(error, !snapshot)",
+        "apps/desktop/src/issues/useIssueCollection.ts repositoryUnavailable (the classifier missing the reason)"
+      ],
+      "enumeration_method": "Every first-page error the repository source can raise, from src/integrations/issues-board.ts projectRepository/listIssuePage/issuePage and src/review/board-github.ts reviewRepositories/selectRepository (keryx ctx rg --all over src for the reason texts), checked against the repositoryUnavailable regex: one configuration reason ('Open a Git project with a GitHub.com remote.') is unmatched; selectRepository's 'Choose a GitHub repository' is unreachable without `requested`. repositoryUnavailable has one caller (IssuesBoard Collection)."
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#RG-R4-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Scratch script (bun run <scratch>/check.ts, scratch dir removed afterwards) at head 4cb6c43ef called src/integrations/issues-board.ts listIssuePage({viewer, api: <throws if reached>}, {source: \"repository\"}, <temp dir>) where `git -C <temp dir> rev-parse --git-dir` printed 'fatal: not a git repository'. Output: emitted: \"configuration: Open a Git project with a GitHub.com remote.\" (thrown by projectRepository -> reviewRepositories before any network call); head repositoryUnavailable(reason, true) from apps/desktop/src/issues/useIssueCollection.ts: null; base test /(?:^|\\b)configuration:/i (git show d7b0f7058:apps/desktop/src/issues/IssuesBoard.tsx line 147): true. Head IssuesBoard.tsx:156 `const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;` gates the 'Show issues assigned to me' button (line 278), so the base offered the fallback for this reason and head does not. Not executed: the Desktop render itself and the Tauri pass-through of the CLI stderr (traced by the finding, not re-run).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "TP-R4-006",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "tdd-workflow.mdc Rule 6: the PC-004 check 'no notice before keryx has saved the session' waits a fixed 20 ms after the first flags request is sent, then asserts the notice is absent. The wait is on time, not on a state: waitFor only checks that the request went out, not that its refusal was handled. A notice raised on the refusal any time after 20 ms passes the check, and the later waitFor for the notice is then satisfied by that wrong notice. Neither the code comment nor commit 055115a20 gives a reason for the delay.",
+    "impact": "Mutant A08 (PendingSubjects raises SUBJECT_NOT_SAVED 40 ms after the refused write) stays green in 3 of 3 runs, so the PC-004 behaviour 'the older-keryx notice waits for the first turn' is pinned only against a regression that raises the notice within the same 20 ms. The check is also timing-dependent on a loaded CI host, where the refusal reply can take longer than 20 ms to be handled.",
+    "suggested_fix": "Wait on the state, not on time. Have the mock record when it has emitted the refusal for the session (e.g. `refused.add(sessionId)` before the emit) and waitFor that, then flush once with React.act. Make the negative check order-proof as well: after the turn, assert that the notice text appears exactly once (count the transcript notices), and record (e.g. with a MutationObserver) that it first appeared after `prompted.length === 1`.",
+    "evidence": "Scratch worktree at 4cb6c43ef. A08 (`return; // not stored yet` -> `setTimeout(() => this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED), 40); return;` in subjectBinding.ts): ProjectNavigation.dom.test.tsx 4 pass / 0 fail, 3 runs. A06 (the same notice raised synchronously) is red on exactly this assertion, and A07 (no retry after the turn) is red. Rule: .metaproject/rules/core/tdd-workflow.mdc, Review severities: 'Sleep or fixed delay for async work (Rule 6) | always | major'.",
+    "confidence": "high",
+    "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+    "line": 320,
+    "quote": "  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });\n  assert.ok(!/did not save the pull request binding/.test(host.textContent ?? \"\"), \"No notice before keryx has saved the session\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "app-nav-pc004-fixed-delay-negative-check",
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/test/app-navigation.fixture.tsx (PC-004 block: setTimeout(resolve, 20) before 'No notice before keryx has saved the session')"
+      ],
+      "enumeration_method": "git diff -U0 d7b0f7058..4cb6c43ef -- 'apps/desktop/src/**/*.test.*' 'apps/desktop/src/test/*' | grep -E '^\\+.*(setTimeout|sleep|Date\\.now|requestAnimationFrame)': exactly 1 added line, this one. The existing waitFor helpers poll a predicate with a deadline and are not fixed delays."
+    },
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Site: head 4cb6c43ef apps/desktop/src/test/app-navigation.fixture.tsx:320 `await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });` directly before line 321 assert 'No notice before keryx has saved the session'; the preceding waitFor (line 319) only waits for flagWrites() > 0. Scratch worktree (git worktree add --detach <scratch>/v4 4cb6c43ef, bun install --frozen-lockfile; removed afterwards). Baseline: bun test src/shell/ProjectNavigation.dom.test.tsx -> 4 pass, 0 fail. Mutant (apps/desktop/src/session/subjectBinding.ts apply() catch: `return; // not stored yet: tried again after its turn` -> `setTimeout(() => this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED), 40); return;`): 3 runs -> 4 pass, 0 fail each. Control (same notice raised synchronously): 3 pass, 1 fail, `AssertionError: No notice before keryx has saved the session` at fixture line 321. So the check catches only a notice inside the 20 ms window. Severity: .metaproject/rules/core/tdd-workflow.mdc Rule 6 'Never wait with a sleep or a fixed delay' and its table row 'Sleep or fixed delay for async work (Rule 6) | always | major' (exception only for fake timers advanced by the test; this is a real setTimeout); none of the four blocker shapes in review-orchestrator '## Severity (canonical)' applies, so major is within the rubric.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "AR-R4-001",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Residual of AR-007. The repository-unavailable classifier matches three human-readable sentences. They are defined in three backend modules: src/review/board-github.ts:45 (the PR board's 'This project has no GitHub.com fetch remote.'), src/integrations/issues-board.ts:188 ('GitHub has Issues turned off for ...') and src/integrations/issues-board.ts:114 (the new exported `unusableRemote`). The 'older' case still matches the invalidInput text of issues-github.ts. The fix exported `unusableRemote`, but Desktop does not import it. Desktop already imports runtime values from src/integrations/issues-contract, so the contract is the natural place for a shared constant or reason code.",
+    "impact": "Trigger: a rewording of any of those sentences, most likely the PR board's message in board-github.ts, which is edited for PR-board reasons. Outcome: the Issues board silently loses the 'Show issues assigned to me' fallback for a project with no GitHub.com remote and shows Retry. No test spans the boundary: backend tests pin the backend strings, and IssuesBoard.dom.test.tsx:469-471 restates the literals by hand.",
+    "suggested_fix": "Define the repository-unavailable reasons once in src/integrations/issues-contract.ts, as exported constants or a `repository_unavailable:` prefix. Throw them from issues-board.ts and board-github.ts, and import them in repositoryUnavailable and in the IssuesBoard test fixtures.",
+    "evidence": "apps/desktop/src/issues/useIssueCollection.ts repositoryUnavailable (055115a20); keryx ctx rg 'has no GitHub.com fetch remote|has Issues turned off for|unusableRemote|names no usable repository' src apps/desktop/src: definitions at src/review/board-github.ts:45, src/integrations/issues-board.ts:114 and :188, src/integrations/issues-github.ts:10 (issuesDisabled, unused by the Desktop regex); Desktop imports issueKey/issueViewerKey from src/integrations/issues-contract (IssuesBoard.tsx:2, useIssueCollection.ts:2).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/issues/useIssueCollection.ts",
+    "line": 27,
+    "quote": "  if (/has no GitHub\\.com fetch remote|has Issues turned off for|names no usable repository/i.test(reason)) return \"unavailable\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "desktop-issues-fallback-decodes-configuration-category",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-001"
+  },
+  {
+    "id": "AR-R4-002",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Round obligation 7 (one rule, one implementation). The UX-013 fix strips the CLI reason prefix with a second inline regex that knows only `configuration:`. ReviewBoard.tsx strips `^(access|configuration|unavailable):`. The two copies of one display rule for the same CLI error contract disagree on the category set, and isAccessError in useIssueCollection.ts is a third reading of that vocabulary. UX-013's own suggested fix named a shared helper.",
+    "impact": "No wrong display today: repositoryUnavailable only lets `configuration:` reasons into this branch. The next change to the CLI's category vocabulary has to be found and repeated in two components, and they have already diverged.",
+    "suggested_fix": "Add one displayReason(error) beside isAccessError in useIssueCollection.ts (or in lib/format) that covers the full category set, and use it in IssuesBoard and ReviewBoard.",
+    "evidence": "slice-02 IssuesBoard.tsx hunk @@ 254,298 @@ (`error.replace(/^configuration:\\s*/i, \"\")`); slice-02 ReviewBoard.tsx hunk @@ 590,630 @@ context line (`error.replace(/^(access|configuration|unavailable):\\s*/i, \"\")`); useIssueCollection.ts isAccessError.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+    "line": 275,
+    "quote": "        <p>{error.replace(/^configuration:\\s*/i, \"\")}</p>",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "desktop-cli-reason-prefix-strip-duplicated",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-002"
+  },
+  {
+    "id": "AR-R4-003",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Round obligation 7. The rewritten linkFlow is a fourth hand-written copy of 'write session flags, dispatch the answer if the client is unchanged'. The others are applyPendingFlow (:236-238), archiveIdle (:301-303) and setFlags (:944-945), and setFlags already accepts `flow`. The guards differ: setFlags and archiveIdle require l.usable, archiveIdle also checks the SESSION_FLAGS extension, and linkFlow and applyPendingFlow check neither. Each copy has its own error policy (quiet, banner, rethrow).",
+    "impact": "Guard drift already exists across the copies. A future rule for flag writes (a capability or usable check, a client-generation guard) has to be added at four sites, and the copy written in this fix round shows that the next caller writes another one.",
+    "suggested_fix": "Extract writeFlags(sessionId, change): Promise<SessionFlags>. It holds the client, usable and capability checks, the request and the stale-client-guarded dispatch, and throws on failure. setFlags adds the banner, applyPendingFlow and archiveIdle catch quietly, and linkFlow becomes writeFlags(sessionId, { flow }).",
+    "evidence": "slice-02 useAcpSession.ts hunk @@ 764,814 @@ (new linkFlow). keryx ctx rg --all 'SESSION_FLAGS|t: \"flags\"' apps/desktop/src --glob '!*.test.*': request+dispatch pairs at useAcpSession.ts:236/238, :301/303, :792/793 and :944/945. The PendingSubjects write at :277/:280 is a fifth path that splits request and dispatch through the class. Guards read at :234, :296 and :942.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/session/useAcpSession.ts",
+    "line": 792,
+    "quote": "    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });\n    if (l.client === client) dispatch({ t: \"flags\", sessionId, flags: flags ?? {} });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "desktop-session-flags-write-copies",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-003"
+  },
+  {
+    "id": "CC4-001",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Clean Code — DRY. The FE-R3-001 fix adds a third copy of the focus-effect settle sequence (mark the nonce, set the notice, call onFocusHandled). Copies: the repository-not-shown branch, the new card-absent branch, and the success path. Before the fix there were two; the change crosses the 3-copy threshold.",
+    "impact": "Each future refusal branch has to repeat all three steps; dropping onFocusHandled leaves the App's focus request armed, which is the outcome FE-R3-001 and LG-009 reported.",
+    "suggested_fix": "Add a local `const settle = (notice: string) => { focused.current = focus.nonce; setFocusNotice(notice); onFocusHandled?.(focus.nonce); };` inside the effect and call it from the three branches (the success branch calls settle(\"\") then setSelected).",
+    "evidence": "ReviewBoard.tsx:504-506, :512-514, :517-520 at 4cb6c43ef; slice-01 hunk @@ 502,518 @@ adds the third copy.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 512,
+    "quote": "      focused.current = focus.nonce;\n      setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);\n      onFocusHandled?.(focus.nonce);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "review-focus-settle-duplicated",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/review/ReviewBoard.tsx:504",
+        "apps/desktop/src/review/ReviewBoard.tsx:512",
+        "apps/desktop/src/review/ReviewBoard.tsx:517"
+      ],
+      "enumeration_method": "Read the single useEffect that consumes `focus` (ReviewBoard.tsx:496-521); every branch that writes focused.current."
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-001"
+  },
+  {
+    "id": "CC4-002",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Clean Code — function design (Positional parameters, 4 or more, no options object). The fix appends the test-only `timing` after the optional `now` (and `dataDir`) on setSessionFlags and the new setSessionFlagsAsync (6 positionals) and on updateSessionFlagsAt and the new updateSessionFlagsAtAsync (4). The parameters are not a natural ordered set: two optional injection knobs follow each other.",
+    "impact": "Callers that need the timing must pass placeholders: organize.test.ts:209 `setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)`, :222, :255 and :262 `updateSessionFlagsAt(trashed, { pinned: true }, undefined, quick)`. The next knob extends the chain again.",
+    "suggested_fix": "Replace the trailing `now` and `timing` with one options object, e.g. `opts: { now?: () => Date; timing?: FlagsLockTiming } = {}`, on the four functions; production callers (server.ts:2965, issues-launch.ts:116) pass nothing.",
+    "evidence": "organize.ts:221-237, :276-302 at 4cb6c43ef; organize.test.ts:209, :222, :255, :262, :300.",
+    "confidence": "high",
+    "file": "src/session/organize.ts",
+    "line": 292,
+    "quote": "export async function setSessionFlagsAsync(\n  cwd: string,\n  sessionId: string,\n  change: SessionFlagsChange,\n  dataDir?: string,\n  now: () => Date = () => new Date(),\n  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,\n): Promise<SessionFlags> {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "flags-timing-positional",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/session/organize.ts:221",
+        "src/session/organize.ts:231",
+        "src/session/organize.ts:276",
+        "src/session/organize.ts:292"
+      ],
+      "enumeration_method": "keryx ctx rg 'FLAGS_LOCK_TIMING' src (non-test): every function that takes `timing` positionally; backfillSessionSubject (3 params) is under the threshold."
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-002"
+  },
+  {
+    "id": "CC4-003",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Clean Code — comments (documentation drift). The new `createDir: false` option makes LockAttempt.step() rethrow ENOENT out of withFileLock/withFileLockAsync (documented on FileLockOptions.createDir), but withFileLock's own contract still says a lock that cannot be taken yields null rather than a throw, and withFileLockAsync defers to that doc. Separately, `prepare()`'s doc 'Whether the lock's directory is there' is false for createDir:false, where it returns true without looking.",
+    "impact": "A new caller reading withFileLock's contract handles only null and gets an uncaught ENOENT when it passes createDir:false; organize.ts had to add its own isMissing catch to know about it.",
+    "suggested_fix": "Add to the withFileLock doc: 'With `createDir: false`, a missing directory throws its ENOENT instead.' Reword prepare(): 'Creates the lock's directory unless `createDir` is false; false when it cannot be made.'",
+    "evidence": "file-lock.ts withFileLock doc block and LockAttempt.prepare() doc at 4cb6c43ef versus FileLockOptions.createDir doc and step()'s `if (this.options.createDir === false && ... === \"ENOENT\") throw error;`.",
+    "confidence": "high",
+    "file": "src/lib/file-lock.ts",
+    "line": null,
+    "quote": " * Returns `null` when the lock could not be taken, which callers surface as a\n * write failure rather than a throw.",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "quote_unlocated": {
+      "reason": "absent"
+    },
+    "dedupe_key": "file-lock-doc-createdir-throw",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-003"
+  },
+  {
+    "id": "CC4-004",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Clean Code — comments (documentation drift: a doc describing the rule a later change replaced). The UX-011 fix in this range stores the Issues source per project and account (IssuesBoard.tsx: `const sourceKey = account + \".source.\" + JSON.stringify(props.cwd)`). The per-account key is now only a legacy fallback that is read and never written. DEFAULT_SOURCE's doc still says the default shows when no preference is stored for the account.",
+    "impact": "A reader of the model learns the old rule. Someone changing the default or the storage key from this doc would expect one stored choice per account, so a choice in one project would wrongly appear to suppress the default in every other project.",
+    "suggested_fix": "Reword to: 'The source shown when no preference is stored for this project and account (nor, from an earlier Desktop, for the account).'",
+    "evidence": "slice-02 model.ts hunk @@ 1,22 @@ (context line, unchanged) against IssuesBoard.tsx hunk @@ 41,68 @@ (+sourceKey, +stored(sourceKey) ?? stored(account + \".source\")) and @@ 81,110 @@ (change saves sourceKey).",
+    "confidence": "high",
+    "file": "apps/desktop/src/issues/model.ts",
+    "line": 14,
+    "quote": "/** The source shown when no preference is stored for the account. */\nexport const DEFAULT_SOURCE: IssueSource = \"repository\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "issues-default-source-doc-per-account",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-004"
+  },
+  {
+    "id": "CC4-007",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Function design, Boolean flag parameter (solid-principles.mdc Thresholds: any, when the flag selects between two behaviours). `firstBind` switches bindIssueSubject between two different contracts: true = take the lock and let any failure propagate; false = skip when settled, then attempt and swallow every failure. The function's own doc now describes both modes in two paragraphs. The same condition (`launch.stage === \"registered\"`) is also re-tested twice on the next lines of withIssueBinding instead of using the new `firstBind` local.",
+    "impact": "A reader of the single call `bindIssueSubject(dir, issue.ref, firstBind)` cannot tell that one value makes the write mandatory and the other makes it best-effort; a future caller passing the wrong value silently changes whether an open can fail on flags.json.",
+    "suggested_fix": "Split into two named operations, e.g. `writeIssueSubject(dir, ref)` (strict, first bind) and `backfillIssueSubjectIfMissing(dir, ref)` (settled check + best-effort catch), sharing a small `issueSubject(ref)` builder; call `firstBind ? writeIssueSubject(...) : backfillIssueSubjectIfMissing(...)` in withIssueBinding and use `firstBind` in the two `launch.stage === \"registered\"` tests that follow it.",
+    "evidence": "Slice-03 hunk @@ 32,108 @@ of src/session/issues/issue-session.ts; call site issue-session.ts:116 (`bindIssueSubject(dir, issue.ref, firstBind)`), condition repeated at :100, :101, :104.",
+    "confidence": "high",
+    "file": "src/session/issues/issue-session.ts",
+    "line": 59,
+    "quote": "function bindIssueSubject(dir: string, ref: IssueDetail[\"ref\"], firstBind: boolean): void {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "bindIssueSubject-boolean-flag",
+    "degradation_class": "debt",
+    "evidence_kind": "base-diff",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-007"
+  },
+  {
+    "id": "DG-R4-006",
+    "reviewer": "review-degradation",
+    "severity": "minor",
+    "problem": "Round obligation 7 (one rule, one implementation). Base had one withFlagsLock. Head has withFlagsLock and withFlagsLockAsync with the same body except the await: the same catch that maps ENOENT on a missing dir to goneError, and the same `if (held === null) throw lockedError(dir)`. Second site of the same shape: sessionSubjectSettled returns `flags.subject !== undefined || subjectUnlinked`, and backfillSessionSubject repeats that predicate inside the lock (`if (current.flags.subject !== undefined || current.subjectUnlinked) return false;`). The two copies agree today. file-lock.ts already shows the pattern that avoids this: LockAttempt is shared by the sync and the async wait.",
+    "impact": "A later change to the refusal mapping, such as a new error kind or a reworded 'retry', or to what counts as a settled subject, has to be made twice. A change made to one copy only lets the ACP server path and the CLI path disagree, or makes the unlocked pre-check skip a backfill that the in-lock check would allow.",
+    "suggested_fix": "Extract `settleFlagsLock<T>(dir, run: () => {value:T}|null): T` (or a `mapFlagsLockError(dir, error)` plus `unwrapHeld(dir, held)`) that both wrappers call. Have backfillSessionSubject's in-lock guard call a `subjectSettled(stored)` predicate that sessionSubjectSettled also uses.",
+    "evidence": "base-diff: base organize.ts (d7b0f7058) has one withFlagsLock, whose only refusal is `if (held === null) throw new Error(...retry)`. In head, slice-03 hunk @@ 160,202 @@ adds withFlagsLock and withFlagsLockAsync with identical try/catch and null checks, and sessionSubjectSettled. Hunk @@ 210,257 @@ keeps the in-lock guard `current.flags.subject !== undefined || current.subjectUnlinked`. Enumeration: `keryx ctx rg -n --all \"sessionSubjectSettled|setSessionFlagsAsync|updateSessionFlagsAtAsync|withFileLockAsync\" src apps/desktop/src` finds the sync/async pairs only in organize.ts and file-lock.ts, and file-lock.ts shares LockAttempt. Refute: the comments give no reason for the copies ('{@link withFlagsLock} waiting without blocking the event loop'), and the sibling file-lock.ts in the same commit factors its shared part out, so the copies are not a stated choice.",
+    "confidence": "medium",
+    "file": "src/session/organize.ts",
+    "line": null,
+    "quote": "    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 170, 183, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        170,
+        183
+      ]
+    },
+    "dedupe_key": "flags-lock-sync-async-duplicated-rules",
+    "degradation_class": "debt",
+    "evidence_kind": "base-diff",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-006"
+  },
+  {
+    "id": "PC-009",
+    "reviewer": "review-pr-contract",
+    "severity": "minor",
+    "problem": "cli-reference.md (added in this range), implementation-plan.md:35 ('ждёт до 3 секунд, затем получает ошибку «retry»') and the PR body ('A flags write waits up to 3 s for the lock, then fails with \"retry\".') say a writer that meets a held flags lock is refused after 3 s. FLAGS_LOCK_TIMING is { timeoutMs: 3_000, staleMs: 2_000 }. LockAttempt.step (src/lib/file-lock.ts) removes any lock older than staleMs and retakes it before the deadline. A holder's lock is stale by t0+2 s at the latest, so the waiter takes it before t0+3 s. A long live hold is broken, not refused. 'retry' fires only when the stale lock cannot be removed or other writers keep winning. Every refusal test injects staleMs: 60_000 (organize.test.ts:234, :300).",
+    "impact": "Client authors and the owner, who is asked to accept the 3 s choice, expect writers to be serialized with a retryable refusal. In production a second writer proceeds after about 2 s, possibly while the first is still writing. That is the risk HL3-004/SC3-001 defer, and the docs hide it.",
+    "suggested_fix": "Describe the actual rule in the three places: a lock older than 2 s is taken as abandoned; 'retry' only when the lock cannot be taken within 3 s (e.g. it cannot be removed). Or make staleMs >= timeoutMs if the documented behaviour is intended (logic decision, with HL3-004).",
+    "evidence": "src/session/organize.ts FLAGS_LOCK_TIMING; src/lib/file-lock.ts LockAttempt.step (deadline check, then stale rmSync, retry); organize.test.ts refusal tests use staleMs 60_000; keryx ctx rg over implementation-plan.md, cli-reference.md, organize.ts/test for '3 s|retry|ending in|locked by another'.",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "line": 485,
+    "quote": "process holds it too long the request is refused with a message ending in",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "flags-lock-refusal-doc-vs-stale-takeover",
+    "class_scope": {
+      "sites": [
+        "docs/docs/cli-reference.md:484",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md:35",
+        "PR #1300 body, Choices for the owner"
+      ],
+      "enumeration_method": "keryx ctx rg -i '3 s|3 с|retry\"|ending in|locked by another' over implementation-plan.md, cli-reference.md, src/session/organize.ts and organize.test.ts, plus the payload PR body"
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-009"
+  },
+  {
+    "id": "PC-010",
+    "reviewer": "review-pr-contract",
+    "severity": "minor",
+    "problem": "PR body Verification: 'Each fix in round 3 has a test that fails with the fix reverted (32 Desktop and 14 keryx checks, listed in the Flow 517 journal).' The journal gives only counts ('32 mutation checks red.', '14 mutation checks red.') and the findings fixed. No check, mutant or result is listed. 'Each fix' also covers the T23 docs fixes (PC-005..PC-008), which have no test. 'Root … 94 pass' and 'bun test src/acp: 455 pass' appear only in flow.json dispositionReason. The round-4 evidence ran 7 of the 8 named root suites (68/0, without src/commands/acp).",
+    "impact": "The PC-007 class recurs: a reader who follows the pointer to verify that the round-3 fixes are pinned finds no list. The closure of the TP-R3 findings rests on checks nobody can re-run from the record.",
+    "suggested_fix": "List the 46 checks (file, mutation, red result) and the commands behind 94/0 and 455/0 in the journal. Or reword to 'counted in the journal' and limit 'each fix' to code fixes.",
+    "evidence": "git diff d7b0f7058..4cb6c43ef -- journal.md (round-3 section); keryx ctx rg --hidden -i 'mutation|mutant' over the flow dir: only counts in journal.md and flow.json:440/:461 dispositionReason; P/research-evidence/verify-tests-to-run-1.txt: 68 pass over 7 root files, Desktop 1070 pass.",
+    "confidence": "high",
+    "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+    "line": 124,
+    "quote": "32 mutation checks red.",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-010"
+  },
+  {
+    "id": "ST-R4-004",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "accept's settle nests an unparenthesised ternary in the true branch of another ternary (`cond ? next ? [next] : [] : [item]`). The reader must pair each `:` with its `?`. It is the only nested ternary in usePendingFlowLinks.ts, prWork.ts and useAcpSession.ts.",
+    "impact": "Readability only. The replacement rule for the settled offer (keep others, replace or drop this one) is hard to read at a glance. No wrong behaviour.",
+    "suggested_fix": "Flatten: `old.flatMap(item => item.sessionId !== sessionId || item.dir !== dir ? [item] : next ? [next] : [])`. Or extract a helper with if/early return.",
+    "evidence": "slice-02 usePendingFlowLinks.ts hunk; keryx ctx rg -n ' \\? [^:;]{1,40} \\? ' over the three files: 1 match (this line). The shape exists in 20 other non-test apps/desktop/src files (keryx ctx rg -c), a habit with no recorded decision.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+    "line": 69,
+    "quote": "      item.sessionId === sessionId && item.dir === dir ? next ? [next] : [] : [item]));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "pending-flow-links-settle-nested-ternary",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-004"
+  },
+  {
+    "id": "TP-R4-001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Both guards of the FE-R3-002 refocus effect survive deletion with all 65 nearest Desktop tests green. D12 drops `offer ||`. D13 replaces `!active || active === document.body` with `true`. The FE-R3-002 test's offerHost empties the offer list inside onLinkFlowOffer, so the offer goes straight from present to absent. The producer does not work that way: usePendingFlowLinks.accept first emits the offer again with `linking: true` (`settle({ sessionId, dir, linking: true })`) and removes it only when the write answers. The fixture therefore never sends a re-render with the offer still present, which is exactly the case `offer ||` exists for. No test moves focus elsewhere before the offer goes either, so the guard against stealing focus is unpinned too.",
+    "impact": "In the real flow, Link -> linking -> removed, the `offer ||` guard is load-bearing. Without it, the linking re-render consumes refocusFlow, and when the offer is removed focus falls to the page body, which is the FE-R3-002 defect, and the suite stays green. Without the activeElement guard, the slot would take focus back from wherever the person moved it while the write ran.",
+    "suggested_fix": "In the FE-R3-002 test, drive the offer the way the producer does: on Link, set the offer to `{ ...offer, linking: true }`, render, then set []. Assert that focus lands on 'Create Flow for #101'. Add a case that focuses another control (e.g. 'Search pull requests') between the linking render and the removal, and assert that focus stays there.",
+    "evidence": "Scratch worktree at 4cb6c43ef. D12 and D13: 65 pass / 0 fail on PrWorkRow.dom.test.tsx + IssuesBoard.dom.test.tsx + usePendingFlowLinks.dom.test.tsx. D07 (the effect body dropped) is red, so the test does reach the effect. Producer: usePendingFlowLinks.ts accept() calls `settle({ sessionId, dir, linking: true })` before `await linkRef.current(...)`. The fixture's `onLinkFlowOffer: () => set([])` is in offerHost in PrWorkRow.dom.test.tsx.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/PrWorkRow.tsx",
+    "line": 53,
+    "quote": "if (offer || !refocusFlow.current) return;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "prworkrow-refocus-guards-unpinned",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-001"
+  },
+  {
+    "id": "TP-R4-002",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The `stale` arm of the FE-R3-001 wait survives deletion (D03: 65/65 green). Its comment says a cached fallback 'may still bring the PR in: wait for the settled list'. No test sends a focus while the board shows a stale (cached-fallback) snapshot that lacks the PR. The `loading` arm is pinned (D02 red).",
+    "impact": "If someone drops the stale arm, a focus that arrives while the board shows a cached snapshot is refused with 'is not in the current list' even though the next good load would hold the PR, and no test fails.",
+    "suggested_fix": "Add a focus-host case whose first load succeeds without the PR and whose refresh fails, so the board shows the stale snapshot. Send the focus and assert no notice and no handled nonce. Then let a later load return the PR and assert that the panel opens.",
+    "evidence": "D03 (`if (loading || stale)` -> `if (loading)`): 65 pass / 0 fail. D02 (`-> if (stale)`): red on 'FE-R3-001: a focus that arrives while a load runs waits for that load before it decides'.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 511,
+    "quote": "if (loading || stale) return;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "reviewboard-focus-stale-arm-unpinned",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-002"
+  },
+  {
+    "id": "TP-R4-003",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The guard that limits the new select-focus effect to the fallback survives deletion (D16: 65/65 green). The effect runs on mount and on every source change. Without the guard it focuses the Issue source select every time the board opens or the source changes. The FE-R3-002 assertion in the AC13 test only checks the positive path (focus on the select after the fallback). No test asserts that focus is left alone on mount or on a source change the person makes from the select.",
+    "impact": "Opening the Issues board could take keyboard focus away from where the person was, and the suite would stay green.",
+    "suggested_fix": "In 'AC13 the project repository is the default source', or a new test, record document.activeElement before render (e.g. a focused button outside the host). Assert that it is still focused after the board mounts and after a change event on the select.",
+    "evidence": "D16 (line deleted): 65 pass / 0 fail. D14 and D15 (arm dropped, focus call dropped) are both red on 'AC13 an older keryx that refuses the default repository source…'.",
+    "confidence": "high",
+    "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+    "line": 73,
+    "quote": "if (!focusSource.current) return;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "issuesboard-focus-guard-unpinned",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-003"
+  },
+  {
+    "id": "TP-R4-004",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "This range restructured the nonce-write failure path (the inner try/catch became the outer catch's `if (handle !== null)` branch), and it survives deletion. Dropping its `rmSync(this.lockPath, { force: true })` leaves all 39 nearest tests green (F03). No test makes the nonce write fail after the exclusive open succeeds. The behaviour predates this range, but the restructure changed its control flow without a test.",
+    "impact": "A regression would leave an empty lock file on a failed nonce write, which every caller then waits out for the stale window. The restructure is the kind of edit that loses this, and nothing would catch it.",
+    "suggested_fix": "Spy on node:fs writeFileSync, or inject the writer, so that the first nonce write throws. Then assert that withFileLock still takes the lock on the next attempt and that no lock file is left behind.",
+    "evidence": "F03 (`closeSync(handle);\\n        rmSync(this.lockPath, { force: true });` -> `closeSync(handle);`): 39 pass / 0 fail on organize + issue-session + file-lock tests. Parent d7b0f7058 had the same cleanup inside an inner try/catch.",
+    "confidence": "high",
+    "file": "src/lib/file-lock.ts",
+    "line": 109,
+    "quote": "The open succeeded but the nonce did not land. Holding it would run the",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "file-lock-nonce-failure-cleanup-unpinned",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-004"
+  },
+  {
+    "id": "TP-R4-007",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The fixture's shape contradicts its producer. It names the scenario 'keryx refuses the next flow link with this reason (a held flags lock)', but it refuses by throwing from the mocked acp_send IPC. To the AcpClient that is a transport write failure (client.ts write() rejects), and the request rejects with an Error whose message is the internal reason. keryx refuses in another way: handleSessionFlags -> refuseStore answers with a JSON-RPC error `invalidRequest({ reason: `${method}: ${message}`, method, sessionId })`, i.e. code -32600, message 'Invalid request', and the reason only in `data.reason` (src/acp/server.ts refuseStore, src/acp/jsonrpc.ts invalidRequest). The fixture therefore covers 'acp_send failed with this text', which keryx never produces, and leaves the real refusal untested.",
+    "impact": "The App-level UX-010 test asserts `/^Not linked: .*locked by another keryx process/`. That holds only for the made-up shape. With the real one the user sees 'Not linked: Invalid request' (probe P01), and the suite stays green. The next author reads the test as coverage of the lock refusal.",
+    "suggested_fix": "Answer the refusal the way the server does: `await emit(\"acp://message\", JSON.stringify({ jsonrpc: \"2.0\", id, error: { code: -32600, message: \"Invalid request\", data: { reason: `_keryx/session_flags: ${reason}`, method, sessionId } } })); return;`. Keep the assertion on the reason text, which then fails until TP-R4-008 is fixed.",
+    "evidence": "Probe P01 in the scratch worktree: with the JSON-RPC-shaped refusal and the waitFor loosened to /^Not linked:/, slot(13, 'flow') is 'Not linked: Invalid request'. Producer: src/acp/server.ts:2935-2936 refuseStore, :2963-2968 handleSessionFlags catch; src/acp/jsonrpc.ts:125-127 invalidRequest. The client path: apps/desktop/src/acp/client.ts:84 (RpcError(code, message, data)), :48-50 (a send failure rejects with the thrown value).",
+    "confidence": "high",
+    "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+    "line": 66,
+    "quote": "        if (change.flow && refuseFlowLink) {\n          const reason = refuseFlowLink;\n          refuseFlowLink = undefined;\n          throw new Error(reason);\n        }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "app-work-row-refusal-shape-not-keryx",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-007"
+  },
+  {
+    "id": "TP-R4-008",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "This is the defect the TP-R4-007 coverage gap hides, filed separately as the lens requires. linkFlow passes keryx's RpcError on unchanged, and usePendingFlowLinks shows `errMessage(cause)`, which is RpcError.message. keryx answers every store refusal of _keryx/session_flags (the flags lock held past 3 s, a session trashed since it was listed, a write error) as 'Invalid request', with the actual reason in error.data.reason. The sibling in the same file already reads it: useAcpSession.ts:70-73 takes `(e.data as { reason?: unknown })?.reason` for a leased session.",
+    "impact": "Trigger: press Link on a 'Link Flow #N?' offer while another keryx process holds the session's flags lock (the case UX-010 named), or after the session was trashed. Outcome: the offer reads 'Not linked: Invalid request' instead of '... locked by another keryx process; retry'. The person is not told that retrying will help. Link stays available, so nothing is lost.",
+    "suggested_fix": "In linkFlow, or in one shared helper used by every session_flags caller, rethrow an RpcError with a string `data.reason` as `new Error(reason.replace(/^_keryx\\/session_flags:\\s*/, \"\"))`. Then make the fixture refusal JSON-RPC shaped (TP-R4-007), so the App test pins the real path.",
+    "evidence": "Probe P01: 'Not linked: Invalid request'. apps/desktop/src/review/usePendingFlowLinks.ts accept: `settle({ sessionId, dir, error: errMessage(cause) })`; apps/desktop/src/lib/format.ts:43-45 errMessage returns e.message; src/acp/server.ts:2935-2936; apps/desktop/src/session/useAcpSession.ts:70-73 (sibling that reads data.reason).",
+    "confidence": "high",
+    "file": "apps/desktop/src/session/useAcpSession.ts",
+    "line": 792,
+    "quote": "    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "linkflow-refusal-reason-in-rpc-data-dropped",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-008"
+  },
+  {
+    "id": "TP-R4-009",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "A gate added in this range survives deletion. With App's mapping of `linking` dropped (A01), the App fixtures stay green: the mocked _keryx/session_flags answers the flow link at once, so the App never renders an offer in its linking state. The PrWorkRow test renders a hand-built `linking: true` offer and never goes through App's mapping, and the hook test checks only the hook's state. The `error` arm beside it is pinned (A02 red).",
+    "impact": "If App stopped passing `linking` through, the row would keep Link and Dismiss active and drop the 'Linking Flow #N…' text while the write runs. That is the 'waits' half of UX-010, and the suite would not notice.",
+    "suggested_fix": "In app-work-row.fixture.tsx, hold the flow-link flags reply the way holdNewSessions holds session/new. Press Link, waitFor the slot to read `Linking ${offerName(...)}…`, and assert Link's aria-disabled is 'true'. Then release and assert the linked Flow.",
+    "evidence": "A01 (`...(offer.linking && { linking: true }), ` removed): ProjectNavigation.dom.test.tsx 4 pass / 0 fail in 3 runs. A02 (the error arm removed) fails 'Timed out waiting for: #13 says the link failed'.",
+    "confidence": "high",
+    "file": "apps/desktop/src/App.tsx",
+    "line": 425,
+    "quote": "    return flow ? [{ sessionId: offer.sessionId, flow, ...(offer.linking && { linking: true }), ...(offer.error && { error: offer.error }) }] : [];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "app-offer-linking-mapping-unpinned",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-009"
+  },
+  {
+    "id": "TP-R4-010",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The test name claims behaviour that its assertions do not pin. It matches 4 declaration strings in the first rule for each selector: overflow:hidden on .pr-work-slot, text-overflow:ellipsis and min-width:0 on .pr-work-offer, and flex:none on .pr-work-more. 'The offer text truncates' also depends on .pr-work-offer's overflow:hidden, white-space:nowrap and flex:1 1 auto, and none of these is asserted. Because the test reads only the first rule per selector, a later rule that overrides one of them is not seen. The behaviour the LY-005 fix is about is geometry (the offer fits a 60 px / ~75 px slot), and this test cannot observe it.",
+    "impact": "C01 (no overflow:hidden on the offer), C02 (no nowrap), C04 (offer `flex: none`) and C03 (a later override putting overflow back to visible and the offer back to flex:none) all keep the suite green. Under C04 the long 'Link Flow #N · <title>?' text no longer shrinks, so the clipped slot hides Link and Dismiss, which is the LY-005 outcome. The PR body already says the widths are not measured. This test reads as if they were pinned.",
+    "suggested_fix": "Assert the full set of declarations the claim rests on: overflow:hidden, white-space:nowrap and a shrinkable flex on .pr-work-offer. Better, inject review.css into the happy-dom document, render the offer inside `.review-board`, and assert getComputedStyle on the rendered span and slot, so later overrides count. Leave the geometry claim to a real-engine measurement (LY-005's settle step) and rename the test to what it checks.",
+    "evidence": "C01, C02, C03, C04: PrWorkRow.dom.test.tsx 26 pass / 0 fail each (C04 in 3 runs). The current rule at review.css:39: `.pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }`.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+    "line": 462,
+    "quote": "test(\"review.css: the offer text truncates and is not a button, its buttons do not shrink, and the slot clips\", () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "review-css-test-declarations-not-truncation",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-010"
+  },
+  {
+    "id": "UX-R4-001",
+    "reviewer": "review-ui-ux",
+    "severity": "minor",
+    "problem": "Criterion Nielsen #1/#6, State loading+error (secondary view). The offer span is the only visible carrier of the question ('Link Flow #N · <title>?'), the busy state ('Linking …') and the failure ('Not linked: <reason>'). At the board's widths it gets no room: a 230px lane gives a Flow slot of about 60px (LY-005: 74.7px in the 16rem list column), Link and Dismiss (flex: none) need about 80px, so the span shrinks to its 8px padding. Its title is on that 8px non-focusable span. While linking, the buttons carry only aria-disabled, which no CSS rule styles, and the :hover:not(:disabled) rule and cursor:pointer still apply.",
+    "impact": "Sighted users see 'Link' and a clipped 'Dismiss' with no Flow number or title, which is the decision HL-001 asked them to make. Nothing visible changes while Link runs. A failed Link (the lock error the app fixture exercises) looks identical to the untouched offer. Only screen-reader users get the name and the alert.",
+    "suggested_fix": "Carry the state on the controls. Label Link 'Linking…' and style .pr-work-more[aria-disabled=\"true\"] like :disabled while busy. After a failure show a short 'Retry' label in the warn tone with a title holding the reason. Give Link a title with the full question. Or use one truncating 'Link #N?' button at narrow widths. Measure at a 230px lane and the 16rem list column.",
+    "evidence": "review.css: .review-lanes .lane { flex: 1 0 230px }, .pr-work-row grid repeat(3, minmax(0,1fr)) gap 4px, .pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px } + 1px border at --fs-xs 11px; no [aria-disabled] rule in apps/desktop/src/**/*.css (keryx ctx rg). PrWorkRow.tsx FlowOffer renders text/title only in the span. Computed, not rendered.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/styles/review.css",
+    "line": 39,
+    "quote": ".pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "pr-flow-offer-state-invisible-at-board-width",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/review/PrWorkRow.tsx:FlowOffer",
+        "apps/desktop/src/styles/review.css:.pr-work-offer"
+      ],
+      "enumeration_method": "keryx ctx rg \"pr-work-offer|aria-disabled\" apps/desktop/src — FlowOffer is the only renderer of .pr-work-offer and the only aria-disabled control in the work row"
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-001"
+  },
+  {
+    "id": "DG-R4-002",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "On base, handleSessionFlags was synchronous, so a server applied two `_keryx/session_flags` requests for one session in arrival order, even while it waited for another process's lock. On head, each request polls withFileLockAsync on its own 15 ms setTimeout. When another process holds `flags.json.lock`, both requests wait, and the first timer to fire after the release wins. That can be the later request, so for example pin then unpin can be stored as pinned. The flags reply arrives last, so Desktop shows the same wrong value. If true: minor, the user's last archive, pin or flow change on a session is overwritten by an earlier one.",
+    "impact": "This needs two flags requests for one session within the lock wait, and another keryx process (the issue-workspace child, another window) holding that session's flags lock at the same time. It can only happen in that window.",
+    "suggested_fix": "Check: in a scratch test, hold <dir>/flags.json.lock from a child process, send `{pinned:true}` and then `{pinned:false}` to one server, release the lock, and read flags.json. If it is reachable, chain the async writes per session in the server (one promise queue per sessionId) so arrival order is kept.",
+    "evidence": "consumer-trace (unrun): server.ts:2940-2968 is now async. file-lock.ts withFileLockAsync loops `await new Promise(r => setTimeout(r, RETRY_MS)); handle = attempt.step();` with no per-path queue. organize.ts withFlagsLockAsync -> applyFlagsChange reads the current flags inside the lock, so the later winner's change is the stored one. Not reproduced. Whether Desktop ever sends two flags requests for one session concurrently is not settled by the code read.",
+    "confidence": "low",
+    "file": "src/acp/server.ts",
+    "line": 2965,
+    "quote": "return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "degradation_class": "behaviour-delta",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-002"
+  },
+  {
+    "id": "DG-R4-003",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "A refresh that fails with an `unavailable:` error keeps the same-scope snapshot with `stale: kept ? old.stale : true` (ReviewBoard.tsx:301). The kept snapshot is therefore not marked stale, and `loading` is false. A header focus for a PR newer than that snapshot is then refused with '#N is not in the current list of R: its state may be filtered out.', although the cause is the failed refresh. The error banner shows at the same time. Base kept the request armed instead, which FE-R3-001 reported as the worse outcome. If true: minor, the notice gives a wrong cause and the PR does not open after a successful Retry.",
+    "impact": "The notice names the wrong cause when the network is down. This happens only for a PR missing from a snapshot taken before a refresh failure.",
+    "suggested_fix": "Check: in ReviewBoard.dom tests, load a snapshot, make the next load reject with 'unavailable: offline', then set focus to a number not in the snapshot. If the filtered-out notice shows, also wait when `error` is set (`if (loading || stale || error) return;`), or word the notice for the error case.",
+    "evidence": "consumer-trace: ReviewBoard.tsx:298-302 (unavailable keeps the snapshot and does not set stale on a same-scope keep), :433-434 (error and loading), :509-515 (refusal). Refute: no guard on `error` in the effect at :496-520.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 511,
+    "quote": "if (loading || stale) return;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "degradation_class": "behaviour-delta",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-003"
+  },
+  {
+    "id": "DG-R4-007",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "HL3-001's fix depends on this one call site. The tests pin withFileLockAsync ('waits for a held lock without blocking the event loop') and setSessionFlagsAsync (organize.test.ts). No test drives `_keryx/session_flags` through the server while another process holds flags.json.lock. Reverting this line to `return setSessionFlags(...)` gives the same replies for every request in shell-session-organize.test.ts and shell-profile.test.ts. Under contention it would freeze the server's event loop again for up to the 3 s timeout, and the suite would stay green. Round obligation 5 (red on the parent) does not hold for the HL3-001 fix at the server layer.",
+    "impact": "Nothing is worse today: the server awaits the async variant. The fix is unpinned at the only site where a user sees its effect, so a later refactor could undo it silently.",
+    "suggested_fix": "In shell-session-organize.test.ts, plant a fresh `<sessionDir>/flags.json.lock`, send `_keryx/session_flags`, and before releasing the lock assert that another request (for example `_keryx/info` or `session/list`) is answered. Then remove the lock and assert the flags reply arrives.",
+    "evidence": "consumer-trace: server.ts handleSessionFlags (slice-03 @@ 2920,2985 @@) is the only production caller of setSessionFlagsAsync (`keryx ctx rg -n --all \"setSessionFlagsAsync\" src apps/desktop/src`: server.ts, organize.ts, organize.test.ts). `keryx ctx rg -n --all \"flags\\.json\\.lock|locked by another|session_flags|sessionFlags\" src/acp --glob '*.test.ts'` finds no lock in the ACP tests, only the method names in shell-session-organize.test.ts:2,13 and shell-profile.test.ts:463. Unrun: the revert was traced by reading, not executed.",
+    "confidence": "high",
+    "file": "src/acp/server.ts",
+    "line": 2965,
+    "quote": "      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "server-async-flags-wiring-unpinned",
+    "degradation_class": "blind-test",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-007"
+  },
+  {
+    "id": "FE-R4-001",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "Link arms refocusFlow; it is cleared only when the offer disappears. After a failed Link the offer stays with its error, so the flag stays armed, and a later removal of the offer by another path (the session gets a Flow elsewhere) focuses the slot's button whenever activeElement is <body>, which a mouse click on any non-focusable area also produces. focus() scrolls it into view.",
+    "impact": "A rare unasked focus move and scroll long after the failed press. Needs a failed Link plus an external Flow link for the same session; no concrete trigger observed.",
+    "suggested_fix": "Disarm the flag when the offer settles with an error (in the effect: if (offer?.error) refocusFlow.current = false), or arm it only for Dismiss and Link's success.",
+    "evidence": "PrWorkRow.tsx refocus effect and FlowOffer onAct; usePendingFlowLinks.ts accept() keeps the offer with error on rejection.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/review/PrWorkRow.tsx",
+    "line": 52,
+    "quote": "  useEffect(() => {\n    if (offer || !refocusFlow.current) return;\n    refocusFlow.current = false;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "pr-flow-offer-refocus-flag-armed-after-error",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#FE-R4-001"
+  },
+  {
+    "id": "FE-R4-002",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "When the client is replaced while the flags request is in flight but the request still resolves, the dispatch is skipped, accept() settles the offer to null, and the Flow slot shows 'Create Flow' (and receives focus) although the flow flag was written.",
+    "impact": "Until the sessions list reloads, pressing the focused 'Create Flow' would start a second Flow. Not settled whether a request can resolve after its client is replaced, or whether reconnect refreshes sessions.",
+    "suggested_fix": "On a skipped dispatch, refresh the sessions list, or keep the offer linking until the session carries the flow.",
+    "evidence": "useAcpSession.ts linkFlow; usePendingFlowLinks.ts accept() settle(null) after await; PrWorkRow refocus effect.",
+    "confidence": "low",
+    "file": "apps/desktop/src/session/useAcpSession.ts",
+    "line": null,
+    "quote": "    if (l.client === client) dispatch({ t: \"flags\", sessionId, flags: flags ?? {} });",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 238, 793, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        238,
+        793
+      ]
+    },
+    "dedupe_key": "pr-flow-link-dispatch-skipped-on-client-change",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#FE-R4-002"
+  },
+  {
+    "id": "HL4-001",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "trashSession takes no flags lock. On the EXDEV path it copies the session and then removes the source. A flags write from another keryx process (another Desktop window's ACP server) whose in-lock summary.json check and atomic write both fall between cpSync and rmSync succeeds in the source directory. The write is reported as stored, and then rmSync deletes it. The trashed copy keeps the old flags.json (and may carry a flags.json.lock or .tmp file copied mid-write).",
+    "impact": "Trigger: a session stored on a different volume from ~/.Trash, trashed in one window while another window pins/archives/links it. The copy of a large transcript makes the window last seconds. The lost change only matters if the session is later put back. The rename path is not affected: after the rename the write fails with ENOENT and maps to goneError. The code is unchanged in this range, so this is outside diff scope.",
+    "suggested_fix": "Track separately: have trashSession hold the session's flags lock (withFileLock on <dir>/flags.json.lock with createDir:false and FLAGS_LOCK_TIMING) around the rename/copy. A concurrent writer then either completes before the move or sees the directory gone.",
+    "evidence": "src/session/organize.ts trashSession: renameSync(dir, target), on EXDEV cpSync then rmSync, with no lock. whileStored checks existsSync(summary.json) only at the start of the critical section. writeOwnerOnlyFileAtomic (src/lib/config-dir.ts) writes a temp file beside the target and renames, with no mkdir. Read from code, not executed.",
+    "confidence": "medium",
+    "file": "src/session/organize.ts",
+    "line": 357,
+    "quote": "      cpSync(dir, target, { recursive: true });\n      rmSync(dir, { recursive: true, force: true });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "trash-exdev-copy-drops-concurrent-flags-write",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#HL4-001"
+  },
+  {
+    "id": "ST-R4-001",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "LockAttempt.step() returns number | null | \"timeout\", and withFileLock and withFileLockAsync both store it in a variable named `handle`, then test `handle === \"timeout\"`. A name for a file descriptor carries a string sentinel.",
+    "impact": "The reader tracks three meanings of `handle` (descriptor, retry, timeout) across the loop and the guard; no wrong behaviour.",
+    "suggested_fix": "Optional: name the variable for the attempt result (`taken`), or return a discriminated value from step() such as { handle } | \"retry\" | \"timeout\".",
+    "evidence": "file-lock.ts withFileLock and withFileLockAsync at head (range diff d7b0f7058..4cb6c43ef).",
+    "confidence": "high",
+    "file": "src/lib/file-lock.ts",
+    "line": null,
+    "quote": "  let handle = attempt.step();\n  while (handle === null) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 174, 195, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        174,
+        195
+      ]
+    },
+    "dedupe_key": "file-lock-handle-holds-timeout-sentinel",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-001"
+  },
+  {
+    "id": "ST-R4-002",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Two new boolean refs that record a pending focus are named as imperatives: `focusSource` (IssuesBoard.tsx) and `refocusFlow` (PrWorkRow.tsx). `focusSource.current = false` sits beside `sourceSelect.current?.focus()` and reads as an action.",
+    "impact": "Readability only. Most boolean refs in apps/desktop/src name a state (refreshPending, catalogPending, inFlight, openingLink) but some do not (archiveSelection, again), so the convention is mixed.",
+    "suggested_fix": "Optional: sourceFocusPending and flowRefocusPending.",
+    "evidence": "keryx ctx rg -n \"useRef\\(false\\)\" apps/desktop/src (42 matches, 23 files); sites IssuesBoard.tsx:70, PrWorkRow.tsx:51.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+    "line": 70,
+    "quote": "  const focusSource = useRef(false);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "imperative-boolean-ref-names",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-002"
+  },
+  {
+    "id": "ST-R4-003",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Pre-existing (05a9a8e36): `age` holds the lock file's mtime timestamp, and the age is computed as `Date.now() - age`. This range only moved the line into LockAttempt.step and added `this.`; not made worse.",
+    "impact": "A reader of `Date.now() - age > this.staleMs` must notice that `age` is a timestamp. No wrong behaviour.",
+    "suggested_fix": "Pre-existing-defect disposition: rename to `mtime` the next time the line is touched; not a reason to hold this change.",
+    "evidence": "git show d7b0f7058:src/lib/file-lock.ts line 109 holds the same name; git log -S 'const age = statSync' names 05a9a8e36.",
+    "confidence": "high",
+    "file": "src/lib/file-lock.ts",
+    "line": 118,
+    "quote": "    const age = statSync(this.lockPath, { throwIfNoEntry: false })?.mtimeMs;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "file-lock-age-is-mtime",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-003"
+  },
+  {
+    "id": "ST-R4-005",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "The variable `unavailable` holds a reason whose values are \"unavailable\" | \"older\" | null, so the render reads `unavailable === \"older\"`. `repositoryUnavailable` also reads as a predicate but returns that reason.",
+    "impact": "Readability only. The JSDoc on repositoryUnavailable explains the values, and there is one call site.",
+    "suggested_fix": "Optional: `repositoryProblem` for the variable, or `repositoryUnavailableReason` for the function.",
+    "evidence": "keryx ctx rg -n repositoryUnavailable apps/desktop/src: definition useIssueCollection.ts:26, sole call IssuesBoard.tsx:156; read at IssuesBoard.tsx:274 and :277.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+    "line": 156,
+    "quote": "  const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "issues-unavailable-holds-reason-kind",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-005"
+  },
+  {
+    "id": "ST-R4-006",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "whileStored(dir, apply) returns a closure that both of its callers (withFlagsLock, withFlagsLockAsync) invoke immediately, so each lock section reads as an arrow that calls a factory and then calls the closure it returns. No other use of the returned closure exists.",
+    "impact": "Readability only. The reader has to notice the trailing `()` to see that the summary.json check runs inside the lock. No wrong behaviour.",
+    "suggested_fix": "Optional: make it a plain runner, e.g. `applyWhileStored(dir, apply): T` (check summary.json, then return apply()), and call `() => ({ value: applyWhileStored(dir, apply) })` at both sites.",
+    "evidence": "slice-03 organize.ts hunk @@160,202 (both call sites); definition in the @@127 hunk (slice-01), read via git diff d7b0f7058..4cb6c43ef -- src/session/organize.ts; keryx ctx rg -n --all whileStored src: organize.ts:148 (definition), :168, :181 (calls).",
+    "confidence": "medium",
+    "file": "src/session/organize.ts",
+    "line": 168,
+    "quote": "    held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: whileStored(dir, apply)() }), lockOptions(timing));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "organize-whilestored-immediately-invoked-closure",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-006"
+  },
+  {
+    "id": "TP-R4-005",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The three new barrier directories are never removed. This follows the file's existing practice: project() roots are not removed either, and the file has no afterEach. No author change is asked for. It is noted for hygiene only.",
+    "impact": "Each run leaves a few empty directories in the temp dir. Determinism is not affected.",
+    "suggested_fix": "None required. If the file gains an afterEach cleanup later, include the barrier directories.",
+    "evidence": "keryx ctx rg 'afterEach|afterAll|rmSync\\(' src/session/organize.test.ts: only two rmSync calls, both inside the 'removed since located' test.",
+    "confidence": "high",
+    "file": "src/session/organize.test.ts",
+    "line": null,
+    "quote": "const barrier = mkdtempSync(path.join(tmpdir(), \"keryx-organize-barrier-\"));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 170, 284, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "quote_unlocated": {
+      "reason": "ambiguous",
+      "candidate_lines": [
+        170,
+        284
+      ]
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-005"
+  },
+  {
+    "id": "UX-R4-002",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "Criterion Nielsen #9. The new notice for a PR missing from the settled list (typically a merged or closed PR opened from the session header) states a hedged cause and offers only 'Dismiss notice'. The request is cleared, so widening the state filter afterwards does not open the PR. This is the same class as the deferred UX-014 (other-repository notice).",
+    "impact": "To reach the PR the user came for, they must open Filters, add the state and find the card by hand.",
+    "suggested_fix": "Add one forward action: 'Show all states' (apply the state filter and keep the request for that load), or 'Open on GitHub' via the url App already holds, which also closes UX-014.",
+    "evidence": "ReviewBoard.tsx focus effect and banner (only an icon-btn 'Dismiss notice'); owner choice 'is cleared' is kept.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "line": 513,
+    "quote": "setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "review-focus-notice-no-remedy",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-002"
+  },
+  {
+    "id": "UX-R4-003",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "Criterion Nielsen #2/copy. The CLI reason is spliced in raw. The lock error ('the flags of session <id> are locked by another keryx process; retry') has no closing period, so the tooltip reads '…; retry Press Link to try again.', and the visible 'Not linked: …' exposes the session directory id.",
+    "impact": "A run-on, technical message on the one failure the user can act on.",
+    "suggested_fix": "Terminate the reason with a period when it lacks one or split the remedy off. Map the lock error to a short user-facing reason.",
+    "evidence": "src/session/organize.ts lockedError text; app-work-row.fixture.tsx asserts /^Not linked: .*locked by another keryx process/.",
+    "confidence": "high",
+    "file": "apps/desktop/src/review/PrWorkRow.tsx",
+    "line": 91,
+    "quote": "const title = offer.error ? `${name} was not linked: ${offer.error} Press Link to try again.`",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "pr-flow-offer-error-copy",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-003"
+  },
+  {
+    "id": "UX-R4-004",
+    "reviewer": "review-ui-ux",
+    "severity": "info",
+    "problem": "Criterion WCAG 4.1.3. The span stays mounted from 'Linking…' to the error, so React switches its role attribute and text in place instead of inserting an alert. Screen readers announce such a switched alert inconsistently. Unverified.",
+    "impact": "A screen-reader user may not hear that Link failed.",
+    "suggested_fix": "Keep a persistent aria-live region in the slot (or render the error in a separately keyed element with role=alert). Settle with a VoiceOver/NVDA run.",
+    "evidence": "Static reading of FlowOffer; no AT run.",
+    "confidence": "low",
+    "file": "apps/desktop/src/review/PrWorkRow.tsx",
+    "line": 96,
+    "quote": "{...(offer.error && { role: \"alert\" })}",
+    "locator": {
+      "state": "derived",
+      "method": "substring",
+      "reported_line": null
+    },
+    "dedupe_key": "pr-flow-offer-alert-role-toggle",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-004"
+  },
+  {
+    "id": "TP-R4-011",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The DG3-001 fix makes a later open read the flags lock-free (sessionSubjectSettled), so an open does not wait on another process's flags lock. That property survives a mutant that takes the lock: M1 makes sessionSubjectSettled read under withFlagsLock with production timing, and all 39 nearest tests stay green. The test whose title claims 'without the lock' never has the lock held during the open. It asserts only that backfillSessionSubject is not called, and that would hold for a locking read too. The test sets this gate a prior round asked for, so pinning it is mandatory.",
+    "impact": "A regression that takes the flags lock on every open passes the suite. With another keryx process holding the session's flags lock, an Issues open would then wait up to the 2 s stale window, break that writer's lock, or fail after 3 s, which is what DG3-001 removed.",
+    "suggested_fix": "In this test, before the later open, plant a held lock: `writeFileSync(path.join(sessionDir(root, sessionId, dataDir), \"flags.json.lock\"), \"another-writer\")`. After the open, assert that it resolved and that `readFileSync(lock, \"utf8\")` is still \"another-writer\". Then remove the lock before the unlink step. I probed this change: green at head, red under M1.",
+    "evidence": "Scratch worktree at 4cb6c43ef. M1 (`const { flags, subjectUnlinked } = readStoredFlags(dir); return …` wrapped in `withFlagsLock(dir, () => …, FLAGS_LOCK_TIMING)` in organize.ts sessionSubjectSettled): 39 pass / 0 fail on organize + issue-session + file-lock tests. Probe M1-fix: head 7/7 pass; under M1, '(fail) … a later open reads the flags without the lock…' [2068 ms]. The other writer's lock was broken at the 2 s stale window.",
+    "confidence": "high",
+    "file": "src/session/issues/issue-session.test.ts",
+    "line": 98,
+    "quote": "test(\"a later open reads the flags without the lock and skips the backfill when a subject is stored\", async () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "issue-open-lock-free-settled-read-unpinned",
+    "evidence_kind": "probe",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-011"
+  }
+]

@@ -1,0 +1,117 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1` | Parent ref: `d7b0f7058` | Head: `4cb6c43ef` (code commit 055115a20)
+- Scope mode: `explicit-hash-range` (round 4, wave 2) | Slice: slice-02 (read in full, 2154 lines: flow record, App.tsx, IssuesBoard/model/useIssueCollection, PrWorkRow, ReviewBoard, prWork, usePendingFlowLinks, useAcpSession, review.css, and the Desktop tests and App fixtures). The PrWorkRow FlowOffer header lines missing from the slice were read with one raw `git diff` of that file.
+
+### Summary
+The Desktop fixes are tidy. The CLI-reason classifier moved beside `isAccessError` in useIssueCollection.ts, the Link state (`linking`/`error`) is a small `settle` inside `accept`, and the FlowOffer text, title and busy state are named locals. There is one minor finding: the `DEFAULT_SOURCE` doc still says the source preference is stored "for the account", but this range moved it to per project and account. There is one info item: the new `linkFlow` adds a fifth hand-written "request SESSION_FLAGS then dispatch flags" block next to `setFlags`, which already takes `flow`. The duplication threshold was already crossed before this change, so the item is `info`.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Findings
+
+#### Functions
+No function-design issues found. `repositoryUnavailable(reason, firstPage)` has two parameters and its boolean is a call-site expression (`!snapshot`), so it is not a flag literal. `FlowOffer` gained one prop.
+
+#### Comments
+[CC4-004] minor — apps/desktop/src/issues/model.ts `DEFAULT_SOURCE`: the doc reads "The source shown when no preference is stored for the account." The UX-011 fix in this range changed where the preference lives: `sourceKey = account + ".source." + JSON.stringify(props.cwd)` in IssuesBoard.tsx. The per-account key is now only a legacy fallback that is read and never written. The doc describes the replaced rule. Fix: "The source shown when no preference is stored for this project and account (nor, from an earlier Desktop, for the account)."
+
+#### Error Handling
+No error-handling issues found. `linkFlow` now rejects instead of swallowing, which is the point of UX-010, and `accept` turns the rejection into the offer's `error` with `errMessage(cause)`. Nothing is hidden.
+
+#### DRY
+[CC4-005] info — apps/desktop/src/session/useAcpSession.ts `linkFlow`: the new body repeats the shape `const l = live.current; const client = l.client; … await client.request<SessionFlags>(SESSION_FLAGS, {sessionId, cwd, …}); if (l.client === client) dispatch({ t: "flags", … })`. The same shape is at :236-238 (applyPendingFlow), :301-303 (trash/archive), :944-945 (setFlags, which already accepts `flow`) and :277-280 (subjects). It was 4 copies before this range, so this change did not cross the threshold; recorded as info. If it is touched again, one `writeFlags(sessionId, change): Promise<SessionFlags>` that requests and dispatches, with setFlags (banner), applyPendingFlow (quiet) and linkFlow (reject) as thin wrappers, would end the copies.
+
+Two-copy shapes, under the threshold, not reported: PrFlowOffer/FlowLinkOffer both declare `linking?`/`error?` with the same docs; the error-prefix strip in IssuesBoard.tsx:275 and ReviewBoard.tsx:605; the Link/Dismiss `onClick={() => { if (busy) return; onAct(); … }}` in FlowOffer.
+
+#### SOLID
+No SOLID issues found. `repositoryUnavailable` holds one job (map a CLI reason to a UI category) and sits with its sibling `isAccessError`. `usePendingFlowLinks.accept` stays a single-responsibility state transition.
+
+### Clean Areas
+IssuesBoard source key and fallback, useIssueCollection classifier and its doc, PrWorkRow refocus effect and FlowOffer, ReviewBoard focus-effect comment (updated to the new card-absent rule) and its deps, prWork PrFlowOffer docs, usePendingFlowLinks doc (matches the linking/error behaviour), review.css slot clip, flow.json/journal records, the new Desktop tests and App fixtures.
+
+### Prior dispositions (slice-02)
+- FE-R3-001 closed — the ReviewBoard comment and the effect deps (loading, stale) cover the settled card-absent refusal; PrWorkRow.dom tests cover the refusal, the wait during a load, and no re-raise after a refresh.
+- FE-R3-002 closed — PrWorkRow refocusFlow → Flow slot button; Dismiss notice → search; Issues fallback → source select (tests assert document.activeElement).
+- AR-007 closed — the classifier moved to useIssueCollection.repositoryUnavailable beside isAccessError, matches only the three named reasons, and treats "older" as first page only; other errors keep Retry (tests). It still matches message text, not a code. That residue belongs to review-architecture, not this lens.
+- DG-R3-002 closed — issueSessions gone; model.test now pins boundSessionIndex(...)(issueSubject(issue)).
+- UX-009 closed — the offer text and the Link/Dismiss aria-labels carry `Flow #N · <title>`.
+- UX-010 closed — linking/error states, Link aria-disabled while busy, linkFlow rejects.
+- UX-011 closed — source stored per project and account (the doc drift is CC4-004).
+- UX-012 closed — `.pr-work-offer` without `.pr-work-link`; css test asserts it.
+- UX-013 closed — the configuration prefix is stripped in the fallback notice.
+- UX-015 closed — the hint names "Bundled keryx in Settings → Desktop".
+- LY-005 closed in code (`.pr-work-slot { overflow: hidden }`), not measured in a real engine (the journal says so).
+- TP-R3-001, TP-R3-002, TP-R3-003, TP-R3-004, TP-R3-005 closed — the named tests are present in slice-02.
+- HL3-003, LG-R3-003, UX-014, UX-016 open (deferred by the author; the code is unchanged in this range).
+Not given: PC-005/PC-006/PC-007 (PR body and journal contract, review-pr-contract's) and the backend findings outside slice-02.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-clean-code",
+    "summary": "Slice-02 Desktop fixes are clean in shape. One minor finding: DEFAULT_SOURCE's doc still says the preference is stored per account, after the range moved it to per project and account. One info item: linkFlow adds a fifth hand-written SESSION_FLAGS request-and-dispatch block next to setFlags, which already accepts flow (the threshold was crossed before this change).",
+    "slices": ["slice-02"],
+    "findings": [
+      {
+        "id": "CC4-004",
+        "severity": "minor",
+        "reviewer": "review-clean-code",
+        "file": "apps/desktop/src/issues/model.ts",
+        "quote": "/** The source shown when no preference is stored for the account. */\nexport const DEFAULT_SOURCE: IssueSource = \"repository\";",
+        "problem": "Clean Code — comments (documentation drift: a doc describing the rule a later change replaced). The UX-011 fix in this range stores the Issues source per project and account (IssuesBoard.tsx: `const sourceKey = account + \".source.\" + JSON.stringify(props.cwd)`). The per-account key is now only a legacy fallback that is read and never written. DEFAULT_SOURCE's doc still says the default shows when no preference is stored for the account.",
+        "impact": "A reader of the model learns the old rule. Someone changing the default or the storage key from this doc would expect one stored choice per account, so a choice in one project would wrongly appear to suppress the default in every other project.",
+        "suggested_fix": "Reword to: 'The source shown when no preference is stored for this project and account (nor, from an earlier Desktop, for the account).'",
+        "evidence": "slice-02 model.ts hunk @@ 1,22 @@ (context line, unchanged) against IssuesBoard.tsx hunk @@ 41,68 @@ (+sourceKey, +stored(sourceKey) ?? stored(account + \".source\")) and @@ 81,110 @@ (change saves sourceKey).",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "issues-default-source-doc-per-account"
+      },
+      {
+        "id": "CC4-005",
+        "severity": "info",
+        "reviewer": "review-clean-code",
+        "file": "apps/desktop/src/session/useAcpSession.ts",
+        "quote": "    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });\n    if (l.client === client) dispatch({ t: \"flags\", sessionId, flags: flags ?? {} });",
+        "problem": "Clean Code — DRY (observation). The new linkFlow writes its own SESSION_FLAGS request and flags dispatch. Other copies of that shape: applyPendingFlow (:236-238), the archive path (:301-303), setFlags (:944-945, which already accepts `flow` but turns errors into a banner) and the subject bind (:277-280). The block had 4 copies before this range, so the change did not cross the 3-copy threshold. Recorded as info.",
+        "impact": "None today. Each flags write repeats the client-identity guard and dispatch by hand.",
+        "suggested_fix": "Optional: one writeFlags(sessionId, change) that requests and dispatches and returns the flags. setFlags (banner), applyPendingFlow (quiet) and linkFlow (reject) become thin wrappers over it.",
+        "evidence": "keryx ctx rg -n --all 'request<SessionFlags>\\(SESSION_FLAGS|t: \"flags\"' apps/desktop/src: 5 request sites and 5 dispatches in useAcpSession.ts; before this range linkFlow delegated to applyPendingFlow (slice-02 useAcpSession.ts hunk @@ 764,814 @@).",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "desktop-session-flags-write-repeated"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "AR-007", "disposition": "closed"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"},
+      {"id": "UX-010", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"},
+      {"id": "UX-013", "disposition": "closed"},
+      {"id": "UX-015", "disposition": "closed"},
+      {"id": "LY-005", "disposition": "closed"},
+      {"id": "TP-R3-001", "disposition": "closed"},
+      {"id": "TP-R3-002", "disposition": "closed"},
+      {"id": "TP-R3-003", "disposition": "closed"},
+      {"id": "TP-R3-004", "disposition": "closed"},
+      {"id": "TP-R3-005", "disposition": "closed"},
+      {"id": "HL3-003", "disposition": "open"},
+      {"id": "LG-R3-003", "disposition": "open"},
+      {"id": "UX-014", "disposition": "open"},
+      {"id": "UX-016", "disposition": "open"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the payload supplied a fixed slice and named files); wiki_used: no (not-relevant: a maintainability lens over supplied hunks); ctx_used: yes (keryx ctx rg for the flags-write sites, the error-prefix strips and the solid-principles thresholds); raw_rg_used: no. One raw `git diff` of PrWorkRow.tsx over the fix range, marked keryx:raw, to read the FlowOffer header lines missing from the slice.

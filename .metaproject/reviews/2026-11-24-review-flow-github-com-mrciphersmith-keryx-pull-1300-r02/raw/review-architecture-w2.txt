@@ -1,0 +1,124 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (code commit 055115a20), round 4, wave 2
+- Scope mode: explicit-hash-range (diff mode). slice-02 was read in full (2153 lines): flow.json and journal.md, App.tsx, IssuesBoard.tsx, issues/model.ts, useIssueCollection.ts, PrWorkRow.tsx, ReviewBoard.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css, and the Desktop tests and fixtures.
+- Stack detected: React (Desktop hooks and components; no MobX, no NestJS)
+- Read beyond the slice for context only: apps/desktop/src/session/useAcpSession.ts:225-309 (applyPendingFlow, PendingSubjects write, archiveIdle) and :937-951 (setFlags).
+- Test evidence: research-evidence/verify-tests-to-run-1.txt (Desktop 1070/0). I did not run it (exec_budget 0).
+
+### Summary
+The Desktop half of the fix round adds four things. The Link offer carries its own `linking` and `error` state through `usePendingFlowLinks` → App → `PrFlowOffer`. `linkFlow` now rejects instead of queueing a quiet retry. The Issues source is stored per project and account. Focus is returned after controls that remove themselves. Dependency direction stays inward: review/ and issues/ import acp/types, lib/format and the shared issues contract, and nothing new points outward. issues/model.ts drops its `boundSessions` value import. I found two minor duplications under round obligation 7 ("one rule, one implementation"), both introduced or extended in this range. AR-R4-001 (wave 1) is not filed again.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. Imports added or changed in the range: usePendingFlowLinks.ts → lib/format (errMessage); IssuesBoard.tsx → useIssueCollection (repositoryUnavailable); model.test.ts → acp/types (boundSessionIndex); model.ts now has only a type import from acp/types. All point inward or sideways within Desktop.
+
+### Module Boundary Violations
+[AR-R4-002] minor: The CLI-reason prefix is stripped for display by two hand-written regexes with different vocabularies.
+- File: apps/desktop/src/issues/IssuesBoard.tsx (unavailable notice)
+- Problem: The UX-013 fix strips only `configuration:` inline (`error.replace(/^configuration:\s*/i, "")`). ReviewBoard.tsx strips `^(access|configuration|unavailable):`. UX-013's suggested fix named a shared helper. The result is a second copy of the same display rule for the same CLI error contract, and the two copies disagree on the prefix set. A third reading of that contract, `isAccessError`, lives in useIssueCollection.ts.
+- Why it matters: Trigger: an error the Issues board shows whose prefix is not `configuration:`. Today `repositoryUnavailable` only lets `configuration:` reasons into this branch, so nothing shows wrongly yet. The cost is that the next edit to the CLI's category vocabulary has to find two regexes in two components.
+- Fix: Add one `displayReason(error)` next to `isAccessError` in useIssueCollection.ts (or in lib/format), covering the full category set, and use it in both boards.
+
+### Design Pattern Misuse
+[AR-R4-003] minor: The flags-write-then-dispatch sequence now has a fourth hand-written copy (`linkFlow`), with its own guard set.
+- File: apps/desktop/src/session/useAcpSession.ts (linkFlow)
+- Problem: The rewritten `linkFlow` repeats `client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow })` then `if (l.client === client) dispatch({ t: "flags", ... })`. The same pair already exists in `applyPendingFlow` (:236-238, quiet), `archiveIdle` (:301-303) and `setFlags` (:944-945, banner). `setFlags` already accepts `flow` in its change type. The copies differ only in their guards and error policy. `setFlags` and `archiveIdle` require `l.usable`; `linkFlow` and `applyPendingFlow` do not. Each copy swallows, banners or rethrows in its own way.
+- Why it matters: The guard sets have already drifted. A later rule for flag writes, such as a capability check (`l.extensions.includes(SESSION_FLAGS)`, which archiveIdle applies) or a client-generation check, has to be added at four sites. The fix round itself chose to write a new copy instead of reusing one.
+- Fix: Extract one `writeFlags(sessionId, change): Promise<SessionFlags>` that holds the client and usable checks, the request and the stale-client-guarded dispatch, and throws on failure. `setFlags` adds the banner, `applyPendingFlow` and `archiveIdle` catch quietly, and `linkFlow` becomes `writeFlags(sessionId, { flow })`.
+
+### Dependency Inversion
+None detected. `usePendingFlowLinks` takes `link` as an injected `(sessionId, dir) => void | Promise<void>`. App supplies `acp.current.linkFlow`, so the hook stays free of ACP.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. React: the PrWorkRow refocus effect, the ReviewBoard search focus and the IssuesBoard select focus each keep their refs in the component that owns them. The ReviewBoard focus effect now lists `loading` and `stale` in its dependencies, which matches its body. No boundary issue.
+
+### Prior dispositions (slice-02 files, checked against head)
+- FE-R3-001 closed: the effect deps add loading and stale. The tests cover a refused focus with no later open and waiting for an in-flight load (PrWorkRow.dom.test.tsx).
+- FE-R3-002 closed: PrWorkRow refocuses through flowSlot, Dismiss notice focuses search, and the IssuesBoard fallback focuses the source select. Each has a DOM test that asserts document.activeElement.
+- AR-007 partial: the impact paths are closed (tests for later-page Invalid Issues request, rate-limit, unavailable and stale cursor). The structural residual is carried as AR-R4-001 (wave 1), not filed again.
+- DG-R3-002 closed: model.test.ts now pins boundSessionIndex(sessions)(issueSubject(issue)), and the issueSessions import is gone.
+- TP-R3-001 closed: added tests for a double accept in one act, dismiss then accept, and a session's newer offer replacing its older one.
+- TP-R3-002 closed: the "PR that already has a Flow shows that Flow, not an offer" test.
+- TP-R3-003 closed: rate-limit, unavailable and other configuration reasons keep Retry.
+- TP-R3-004 closed: a refused nonce is not re-raised after Refresh, and a later successful focus clears the notice.
+- TP-R3-005 closed: ReviewProgress.test.tsx covers showState absent, false and true.
+- UX-009 closed: the offer text and the Link/Dismiss aria-labels carry "Flow #id · title".
+- UX-010 closed: accept keeps the offer with `linking` until the write answers and keeps `error` on failure. linkFlow rejects. App passes the promise through. Covered by hook and App-fixture tests (refuseFlowLink).
+- UX-011 closed: the source key is account + ".source." + JSON(cwd). The legacy per-account key is read only as a fallback, and there is a test for it.
+- UX-012 closed: the offer span has no `.pr-work-link` class, and the CSS test asserts it.
+- UX-013 closed: the `configuration:` prefix is stripped. The duplicated stripping rule is filed as AR-R4-002.
+- UX-015 closed: the hint reads "Bundled keryx in Settings → Desktop".
+- LY-005 closed: `.pr-work-slot` has overflow:hidden and the offer text truncates. No layout was measured in a real engine; the journal records this as an owner choice.
+- PC-006 and PC-007 are not disposed here: their fixes are in the PR body and the journal, and the slice holds only the journal's new section. That section now lists HL3-003, HL3-004, LG-R3-003, UX-014, UX-016, SC3-001 and LG-014 as deferred.
+
+Not disposed here (outside slice-02 or outside this lens): HL3-001, HL3-002, PC-005, PC-008, TP-R3-006..009, DG3-001 (wave 1 or other slices); HL3-003, HL3-004, LG-R3-003, SC3-001, UX-014, UX-016 (deferred by claim).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "round": 4,
+    "slices": ["slice-02"],
+    "findings": [
+      {
+        "id": "AR-R4-002",
+        "severity": "minor",
+        "reviewer": "review-architecture",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "quote": "        <p>{error.replace(/^configuration:\\s*/i, \"\")}</p>",
+        "problem": "Round obligation 7 (one rule, one implementation). The UX-013 fix strips the CLI reason prefix with a second inline regex that knows only `configuration:`. ReviewBoard.tsx strips `^(access|configuration|unavailable):`. The two copies of one display rule for the same CLI error contract disagree on the category set, and isAccessError in useIssueCollection.ts is a third reading of that vocabulary. UX-013's own suggested fix named a shared helper.",
+        "impact": "No wrong display today: repositoryUnavailable only lets `configuration:` reasons into this branch. The next change to the CLI's category vocabulary has to be found and repeated in two components, and they have already diverged.",
+        "suggested_fix": "Add one displayReason(error) beside isAccessError in useIssueCollection.ts (or in lib/format) that covers the full category set, and use it in IssuesBoard and ReviewBoard.",
+        "evidence": "slice-02 IssuesBoard.tsx hunk @@ 254,298 @@ (`error.replace(/^configuration:\\s*/i, \"\")`); slice-02 ReviewBoard.tsx hunk @@ 590,630 @@ context line (`error.replace(/^(access|configuration|unavailable):\\s*/i, \"\")`); useIssueCollection.ts isAccessError.",
+        "confidence": "medium",
+        "dedupe_key": "desktop-cli-reason-prefix-strip-duplicated"
+      },
+      {
+        "id": "AR-R4-003",
+        "severity": "minor",
+        "reviewer": "review-architecture",
+        "file": "apps/desktop/src/session/useAcpSession.ts",
+        "quote": "    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });\n    if (l.client === client) dispatch({ t: \"flags\", sessionId, flags: flags ?? {} });",
+        "problem": "Round obligation 7. The rewritten linkFlow is a fourth hand-written copy of 'write session flags, dispatch the answer if the client is unchanged'. The others are applyPendingFlow (:236-238), archiveIdle (:301-303) and setFlags (:944-945), and setFlags already accepts `flow`. The guards differ: setFlags and archiveIdle require l.usable, archiveIdle also checks the SESSION_FLAGS extension, and linkFlow and applyPendingFlow check neither. Each copy has its own error policy (quiet, banner, rethrow).",
+        "impact": "Guard drift already exists across the copies. A future rule for flag writes (a capability or usable check, a client-generation guard) has to be added at four sites, and the copy written in this fix round shows that the next caller writes another one.",
+        "suggested_fix": "Extract writeFlags(sessionId, change): Promise<SessionFlags>. It holds the client, usable and capability checks, the request and the stale-client-guarded dispatch, and throws on failure. setFlags adds the banner, applyPendingFlow and archiveIdle catch quietly, and linkFlow becomes writeFlags(sessionId, { flow }).",
+        "evidence": "slice-02 useAcpSession.ts hunk @@ 764,814 @@ (new linkFlow). keryx ctx rg --all 'SESSION_FLAGS|t: \"flags\"' apps/desktop/src --glob '!*.test.*': request+dispatch pairs at useAcpSession.ts:236/238, :301/303, :792/793 and :944/945. The PendingSubjects write at :277/:280 is a fifth path that splits request and dispatch through the class. Guards read at :234, :296 and :942.",
+        "confidence": "medium",
+        "dedupe_key": "desktop-session-flags-write-copies"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "AR-007", "disposition": "partial"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "TP-R3-001", "disposition": "closed"},
+      {"id": "TP-R3-002", "disposition": "closed"},
+      {"id": "TP-R3-003", "disposition": "closed"},
+      {"id": "TP-R3-004", "disposition": "closed"},
+      {"id": "TP-R3-005", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"},
+      {"id": "UX-010", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"},
+      {"id": "UX-013", "disposition": "closed"},
+      {"id": "UX-015", "disposition": "closed"},
+      {"id": "LY-005", "disposition": "closed"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the only changed export with callers, linkFlow, was enumerated with keryx ctx rg; payload layers used as the lead), wiki_used: no (not-relevant: the intent is stated in code comments and the journal), ctx_used: yes (keryx ctx rg), raw_rg_used: no. metaproject: index read.

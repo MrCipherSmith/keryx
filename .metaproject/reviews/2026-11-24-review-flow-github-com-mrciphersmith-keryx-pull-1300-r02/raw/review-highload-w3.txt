@@ -1,0 +1,79 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: PR #1300, round 4 wave 3, fix range d7b0f7058..4cb6c43ef, diff mode, slice-03 read in full (src/lib/file-lock.ts + test, src/session/organize.ts + test, src/session/issues/issue-session.ts + test, src/acp/server.ts, src/commands/acp.ts, src/integrations/issues-board.ts + test, two docs). Load profile: not provided; triggers used are concrete: several flags requests in flight in one ACP server while another keryx process (another Desktop window's ACP server, the issue-workspace child) holds the session's flags.json.lock.
+Summary: The async flags wait does what HL3-001 asked (the ACP event loop keeps serving other sessions), and createDir:false closes HL3-002 without recreating a trashed session. DG-R4-002 is settled as a real mechanism with no reachable conflicting pair today: waiters are not FIFO, so two in-flight flags requests can apply out of wire order, but the Desktop client never has two opposing values for the same field of one session in flight at once. Filed as info. Stats: 0 blocker | 0 major | 0 minor | 1 info.
+
+### DG-R4-002 trace (the question asked)
+
+1. Dispatch is concurrent. src/acp/server.ts readLoop calls `dispatch(line)` for every framed line without awaiting; `dispatch` starts `dispatcher.handleLine(line)` and only tracks it in `inflight`. The comment above it says handlers "START in wire order" and replies "may land in completion order", and claims "Not awaiting does not reorder anything that matters". `_keryx/session_flags` is wired as `(params) => handleSessionFlags(params)` in the shell-profile request table.
+2. Before this range the handler was synchronous: a contended request blocked the whole loop, so the next request could not even start, and wire order was apply order by construction. Now `handleSessionFlags` awaits `setSessionFlagsAsync`, so a second request starts and runs its own wait while the first is parked.
+3. Waiters retry on independent timers, not a queue. `withFileLockAsync` does one synchronous `attempt.step()`, then `await setTimeout(RETRY_MS=15)` and `step()` again. Each waiter's ticks are on its own 15 ms grid from its own start. When the foreign holder releases, whichever waiter's next tick comes first takes the lock: request A started at t=0 ticks at 15, 30, …; request B started at t=7 ticks at 22, 37, …; a release at t=16 lets B in at 22 and A at 30. B's change is written first and A's last: wire order A,B, apply order B,A.
+4. Without a foreign holder, order is kept: the critical section (`whileStored(dir, apply)`) is synchronous, so a request that gets the lock on its first step writes before anything else runs; a request arriving while it is held (only during the one microtask before `release`) waits 15 ms and goes in after. Waiters started in the same tick fire in registration order.
+5. Reachability from one Desktop window. The senders of SESSION_FLAGS are useAcpSession.ts setFlags (sidebar Pin/Unpin, Archive/Unarchive), archiveIdle (archived:true, sequential awaits), applyPendingFlow and linkFlow (flow), and PendingSubjects.write (non-null subject). The sidebar label comes from server-confirmed flags (`label: pinned ? "Unpin" : "Pin"`, `onSelect: () => onSetFlags(s.sessionId, { pinned: !pinned })`, and the state is updated only from the reply via `dispatch({ t: "flags", ... })`), so while a Pin is parked on the lock a second click sends Pin again, not Unpin. Opposite values for one field are therefore not in flight together; requests for different fields commute because each is a read-modify-write under the lock. Desktop sends no `subject: null`. Two different `flow` values for one session (pending flow from a flow-opened new session plus a Link offer on the same session) would be needed for the flow field, and I found no path that puts both on one session at once.
+6. Across windows (two processes) there was never a defined order, so that is not a regression of this range.
+
+Conclusion: the reordering is real at the server, and it drops the dispatcher comment's premise for this handler. No current client path produces a wrong final state, so under shared law 1 it is `info`. It becomes `major` (lost user intent on a shared state file) as soon as a client makes the toggle optimistic or adds an unlink while a bind can be in flight.
+
+### Findings
+
+CLI / Multi-Session: HL4-002 (info), below.
+Concurrency & Races: covered by HL4-002. None else detected.
+Resources: None detected. Each parked request holds one 15 ms timer until 3 s at most; no fd is held while waiting (`openSync(..., "wx")` only on success).
+Caching: None detected (not applicable).
+Lock Contention: None detected beyond the deferred HL3-004/SC3-001.
+Async / Queues: None detected.
+Retry / Timeout / Circuit Breaker: None detected. The async retry is capped by the 3 s deadline, which is checked before the stale branch.
+Idempotency & Distributed Invariants: None detected.
+
+### Clean areas (with sites)
+
+- No event-loop block left on the ACP path: the only flags writer reached from src/acp/server.ts is `setSessionFlagsAsync`. The remaining synchronous writers (`backfillSessionSubject` from issue-session.ts:64/69, `setSessionFlags` from issues-launch.ts:116) run in the CLI children src/commands/issues.ts and src/commands/issue-workspace.ts, not in the server. Enumerated with `keryx ctx rg --all "withIssueBinding\(|backfillSessionSubject\(|updateSessionFlagsAt\(|setSessionFlags\(" src --glob '!*.test.ts'` and `keryx ctx rg --all "issues-launch" src`.
+- No directory resurrection: `lockOptions` passes `createDir: false`; `LockAttempt.step` rethrows ENOENT; `whileStored` checks summary.json inside the lock; `writeOwnerOnlyFileAtomic` (src/lib/config-dir.ts:461) does not mkdir. A trash that lands while a request is parked makes that request fail with "no session", which the docs now state.
+- Lock parity between the sync and async variants: both use `LockAttempt` with the same nonce, deadline-first check and stale rule, so a synchronous holder in one process excludes an async waiter in another and the reverse.
+- DG3-001 extra I/O: a later issue open does one unlocked read (`sessionSubjectSettled`) and takes the lock only when no subject is settled.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-highload",
+    "summary": "Round-4 fix range, slice-03. The async flags wait keeps the ACP loop free (HL3-001 closed) and createDir:false stops a trashed session being recreated (HL3-002 closed). DG-R4-002: withFileLockAsync waiters retry on independent 15 ms timers, so in-flight flags requests in one ACP server can apply out of wire order behind a foreign holder. No Desktop path puts opposing values for one field of one session in flight together (the toggles are server-confirmed and different fields commute), so it is filed as info HL4-002.",
+    "slices": ["slice-03"],
+    "findings": [
+      {
+        "id": "HL4-002",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "src/acp/server.ts",
+        "quote": "      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);",
+        "problem": "handleSessionFlags now suspends while another process holds the session's flags.json.lock, and the ACP read loop dispatches the next line without awaiting. withFileLockAsync has no queue: each waiter polls on its own 15 ms timer from its own start, and the first tick after the holder's release wins. Two flags requests for one session sent A then B can therefore be written B then A (for example A parked at t=0 ticks at 15/30, B parked at t=7 ticks at 22; a release at t=16 lets B write first and A last). Before this range the synchronous handler blocked the loop, so wire order was apply order. The dispatcher comment ('Not awaiting does not reorder anything that matters') no longer holds for this handler.",
+        "impact": "No wrong final state is reachable from the current Desktop client: Pin/Unpin and Archive/Unarchive labels come from the server-confirmed flags, so a second click while the first is parked repeats the same value. Different fields commute under the lock, and Desktop never sends subject:null. The shape becomes a lost user intent on flags.json (major) if a client makes a toggle optimistic, or sends an unlink or a second flow/subject for one session while the first write is parked.",
+        "suggested_fix": "Optional hardening: serialise flags writes per session inside the server, e.g. a Map<sessionId, Promise> chain in handleSessionFlags (`const prev = chain.get(id) ?? Promise.resolve(); const next = prev.catch(() => {}).then(() => setSessionFlagsAsync(...)); chain.set(id, next)`, deleted when settled), so in-process requests apply in wire order whatever the lock timing. Also correct the read-loop comment to name session_flags as a handler whose completion order can differ from wire order.",
+        "evidence": "src/acp/server.ts readLoop/dispatch (lines are started, not awaited; comment 'Not awaiting does not reorder anything that matters'); shell-profile table entry `[KERYX_ACP_EXTENSION_METHODS.sessionFlags]: (params: unknown) => handleSessionFlags(params)`; src/lib/file-lock.ts withFileLockAsync (`await new Promise((resolve) => setTimeout(resolve, RETRY_MS))` then `attempt.step()`, RETRY_MS = 15, no waiter queue); src/session/organize.ts FLAGS_LOCK_TIMING { timeoutMs: 3_000, staleMs: 2_000 }. Client senders enumerated with `keryx ctx rg --all \"SESSION_FLAGS\" apps/desktop/src`: useAcpSession.ts setFlags (from SessionSidebar.tsx menu, `label: pinned ? \"Unpin\" : \"Pin\"`, `{ pinned: !pinned }`, state updated only from the reply), archiveIdle (archived:true, sequential), applyPendingFlow / linkFlow (flow), PendingSubjects.write (non-null subject). `keryx ctx rg --all \"subject: null\" apps/desktop/src` (non-test) has no match.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "acp-session-flags-async-wait-reorders-inflight-requests"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "HL3-001", "disposition": "closed" },
+      { "id": "HL3-002", "disposition": "closed" },
+      { "id": "HL3-004", "disposition": "open" },
+      { "id": "SC3-001", "disposition": "open" },
+      { "id": "DG3-001", "disposition": "closed" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+  }
+}
+```
+
+Prior dispositions, evidence:
+- HL3-001 closed: server.ts imports and awaits setSessionFlagsAsync; the async wait yields via setTimeout (file-lock.test.ts 'waits for a held lock without blocking the event loop'). The remaining sync waiters are CLI children only (enumeration above).
+- HL3-002 closed: lockOptions createDir:false; step() rethrows ENOENT; withFlagsLock(Async) maps it to goneError; organize.test.ts 'a flags write to a session removed since it was located is refused and does not bring it back' covers the sync, async and backfill paths.
+- HL3-004 open (deferred, unchanged): stale is still by age only with staleMs 2_000 against timeoutMs 3_000.
+- SC3-001 open (deferred, unchanged): LockAttempt.step still stats, then rm's unconditionally on age; the refactor moved the code without changing the rule.
+- DG3-001 closed: bindIssueSubject on a later open returns after the unlocked sessionSubjectSettled read when a subject is stored or unlinked, and a failed backfill is swallowed (issue-session.test.ts spy test and 'backfill fails still opens').
+Not touched by this lens: TP-R3-006/007/008/009 (testing lens), PC-008 (contract lens). Their files are in this slice, but they make no concurrency claim.
+
+Routing audit: graph_used: no (narrow slice-bound review; the callers were enumerated with ctx rg instead). wiki_used: not-relevant. ctx_used: yes (keryx ctx rg/read). raw_rg_used: no. Not run: tests (read-only, exec_budget 0). Not verified: actual Desktop interleavings at runtime.

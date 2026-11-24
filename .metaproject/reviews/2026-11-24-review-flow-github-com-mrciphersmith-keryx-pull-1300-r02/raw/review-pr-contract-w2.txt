@@ -1,0 +1,89 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 4, wave 2, slice-02 (read in full). Range d7b0f7058..4cb6c43ef. PR body from payload review_context.pr.body. Wave-1 PC-009 and PC-010 are not re-filed.
+
+Concern for the orchestrator (package, not PR): slice-02.diff leaves out changed hunks. `git diff d7b0f7058..4cb6c43ef -- apps/desktop/src/review/PrWorkRow.tsx apps/desktop/src/styles/review.css` shows the FlowOffer head (the `name`/`text`/`title`/`busy` lines, PrWorkRow.tsx @@ -72,19 +81,23) and the review.css offer rule change (@@ -34,8 +34,10: `.pr-work-link.pr-work-offer` replaced by `.pr-work-offer` and `.pr-work-offer.is-attention`). The slice has only the tail of each hunk. I checked them with git diff. Other wave-2 reviewers of slice-02 did not get these lines from the slice.
+
+## Prior dispositions (slice-02 findings)
+
+- FE-R3-001 closed. The focus effect waits for `loading`/`stale` (deps `[focus, snapshot, loading, stale, …]`) and refuses a PR missing from the settled list. Tests "FE-R3-001: … refused with a notice, and a later load that holds it opens nothing" and "… waits for that load before it decides" cover it.
+- FE-R3-002 closed. PrWorkRow `refocusFlow` + effect on `offer` focuses the Flow slot's button. IssuesBoard `fallback` sets `focusSource` and focuses the source select. Dismiss notice focuses `search`. A test exists for each of the three.
+- AR-007 closed. `repositoryUnavailable` in useIssueCollection.ts names the three reasons, and "older" applies to the first page only. Tests: "any other error … keeps Retry" and "Invalid Issues request on a later page is not an older keryx".
+- DG-R3-002 closed. `issueSessions` was removed, and model.test.ts uses `boundSessionIndex`.
+- PC-005 closed (wave 1; the slice-02 code agrees).
+- TP-R3-001, TP-R3-002, TP-R3-003, TP-R3-004, TP-R3-005 closed from the contract view: the tests that the journal names are in the diff (usePendingFlowLinks.dom.test "two Link presses…", "Dismiss then Link…", "a new offer … replaces"; PrWorkRow.dom.test "TP-R3-002…", "TP-R3-004…" ×2; IssuesBoard.dom.test "AR-007/TP-R3-003…"; ReviewProgress.test.tsx "TP-R3-005…"). This lane does not check whether they go red.
+- UX-009 closed. The offer reads `Flow #${id} · ${title}`, as the body says ("Link Flow #N · <title>?").
+- UX-010 closed. `accept` keeps the offer `linking` until `await linkRef.current(...)`, then removes it on success or sets `error` on failure. `linkFlow` now rejects ("keryx is not connected.", or keryx's refusal) and keeps nothing pending. The body says "the offer stays until that write succeeds and shows why it failed" and "A failed Link is not retried after the turn; it waits for another press", and the code agrees with both.
+- UX-011 closed. `sourceKey = account + ".source." + JSON.stringify(props.cwd)` is written. The legacy `account + ".source"` is read only as a fallback. The body says "the choice is stored per project and account" and "stores Assigned to me for this project only", and the code agrees with both.
+- UX-012 closed. The offer span has class `pr-work-offer` only (no `pr-work-link`), and the review.css test asserts it.
+- UX-013 closed. The text runs through `error.replace(/^configuration:\s*/i, "")`, and the tests assert "configuration:" is absent.
+- UX-015 closed. The hint says "choose Bundled keryx in Settings → Desktop". SettingsView.tsx:12 has the label "Bundled keryx", and docs/docs/desktop-app.md:68 and platform/githubAccounts.ts:4 name the same path.
+- LY-005 closed (CSS only): `.pr-work-slot` has `overflow: hidden`. The body still says it was not measured in a real engine.
+- HL3-003, LG-R3-003, UX-014, UX-016 open (deferred). The range does not touch them (prWork.ts fillShown, resolveFlowLinks claim rule, the focus notice actions, and Create Flow's view switch are unchanged). The body's Known gaps lists all four.
+
+## Checklist form (PR body and journal claims vs slice-02)
+
+The body has no checkboxes, so each claim that touches slice-02 is one row.
+
+| Claim (quoted) | What the diff shows | Verdict |
+|---|---|---|
+| "the PR work row asks "Link Flow #N · <title>?" with Link and Dismiss" | PrWorkRow FlowOffer `name = Flow #${id} · ${title}`, text `Link ${name}?` | agrees |
+| "Only Link writes the session's `flow` flag; the offer stays until that write succeeds and shows why it failed" | usePendingFlowLinks.accept: `linking`, then `settle(null)` on success or `{error}` on throw; FlowOffer shows "Not linked: …" with role=alert | agrees |
+| "A failed Link is not retried after the turn; it waits for another press" | useAcpSession.linkFlow now does a direct `client.request(SESSION_FLAGS …)`; `pendingFlow` is no longer used for it | agrees |
+| "If the repository source is unavailable (no GitHub.com remote, a remote that names no usable repository, Issues turned off → 410, or an older keryx) … "Show issues assigned to me", plus an update hint for an older keryx; any other error keeps Retry" | `repositoryUnavailable` regex: "has no GitHub.com fetch remote / has Issues turned off for / names no usable repository" → unavailable; first-page "Invalid Issues request" → older; otherwise null → Retry branch | agrees |
+| "the choice is stored per project and account" | `sourceKey` includes cwd; `change` saves to it | agrees |
+| ""Show issues assigned to me" appears whenever … unavailable for one of the named reasons, chosen or not" | `fallback = source === "repository" ? …` (no `chosen` gate); test "UX-017: … the same fallback as the default one" | agrees |
+| "A link the board cannot show (… or a PR missing from the loaded list, e.g. filtered out by state) shows a notice and is cleared" | the focus effect waits for loading/stale; tests assert the notice "#55 is not in the current list of org/repo" and no later open | agrees |
+| "In a very narrow lane the Flow slot clips the offer's Dismiss" | review.css `.pr-work-slot … overflow: hidden` | agrees (not measured, as the body says) |
+| "Older keryx … the notice "binding was not saved" appears after that turn at the latest" | app-navigation.fixture: the older keryx refuses flags until `session/prompt`; asserts no notice before the turn and the notice after it | agrees |
+| "The scenario … is an App-level test" | app-navigation/app-work-row fixtures run from ProjectNavigation.dom.test.tsx:84/:89, inside `bun test src` | agrees |
+| "`bun test src`: 1070 pass, 0 fail" | research-evidence/verify-tests-to-run-1.txt: "1070 pass / 0 fail … 96 files" | agrees |
+| "`cd apps/desktop && bunx tsc --noEmit`: clean" | no tsc run in the round-4 evidence | unverified (same evidence class as PC-010; not re-filed) |
+| "Stage 0 attention set: no line edited in any fix round" | the ReviewBoard.tsx changes in this range are the focus comment, the effect deps and Dismiss-notice focus; no `carriedAttention`/`seeded`/`attentionPrs`/write-back line is edited (hiddenAttention lines are context only) | agrees |
+| Journal T21: "FE-R3-001 (+TP-R3-004), FE-R3-002, AR-007/…/TP-R3-003 …, UX-017/UX-011 …, UX-015, UX-009/UX-010/UX-012/LY-005/TP-R3-001/TP-R3-002 …, TP-R3-005, DG-R3-002 (issueSessions removed), PC-004 fixture half" | each has a code change and a named test in slice-02 (see dispositions) | agrees ("32 mutation checks red" is PC-010) |
+| flow.json T21 dispositionReason "desktop tsc 0, bun test src 1070/0" | 1070/0 is backed; tsc is not | partly unverified (PC-010 class) |
+| app-work-row.fixture header: "offered as "Link Flow #<id> · <title>?"" | the `offerName` helper and the assertions use the same form | agrees |
+
+## Findings
+
+None new. The minor wording leftover in Choices ("A shown "Link Flow #N?" does not expire", without "· <title>") misleads no reader about behaviour, so it is not filed.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "slices": ["slice-02"],
+    "summary": "Round-4 wave-2 contract check of the Desktop fixes (055115a20) and the flow journal/flow.json against the PR body. Every Desktop claim in the body agrees with the code and has a named test: Link Flow offer naming/linking/failure, the repository-source fallback reasons and Retry, the per-project source key, the header-focus refusal, narrow-lane clipping, the older-keryx notice timing, and 1070/0. No new findings. Concern: slice-02.diff omits parts of the PrWorkRow FlowOffer hunk and the review.css offer-rule hunk; I checked them with git diff.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "AR-007", "disposition": "closed"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "PC-005", "disposition": "closed"},
+      {"id": "TP-R3-001", "disposition": "closed"},
+      {"id": "TP-R3-002", "disposition": "closed"},
+      {"id": "TP-R3-003", "disposition": "closed"},
+      {"id": "TP-R3-004", "disposition": "closed"},
+      {"id": "TP-R3-005", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"},
+      {"id": "UX-010", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"},
+      {"id": "UX-013", "disposition": "closed"},
+      {"id": "UX-015", "disposition": "closed"},
+      {"id": "LY-005", "disposition": "closed"},
+      {"id": "HL3-003", "disposition": "open"},
+      {"id": "LG-R3-003", "disposition": "open"},
+      {"id": "UX-014", "disposition": "open"},
+      {"id": "UX-016", "disposition": "open"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Not verified: Desktop tsc (no run in the evidence); whether the named tests go red with each fix reverted (testing lane; the journal gives counts only, PC-010); LY-005 clipping in a real engine.
+
+Routing audit: graph_used: no (not-relevant: contract lane; the one consumer question, linkFlow callers, was settled by ctx rg, App.tsx:414 only). wiki_used: no (not-relevant: claims checked against the PR body, journal and code). ctx_used: yes (ctx rg for Bundled keryx, pr-work-offer, linkFlow(, attention set, fixture runners; ctx run git diff --stat; ctx read of the test evidence). raw_rg_used: no. One bounded raw `git diff` of two files and jq reads of the payload/schema, each marked keryx:raw.

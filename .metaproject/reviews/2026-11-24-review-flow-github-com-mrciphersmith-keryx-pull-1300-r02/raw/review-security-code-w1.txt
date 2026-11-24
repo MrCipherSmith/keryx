@@ -1,0 +1,64 @@
+STATUS: DONE
+
+## Security Review — round 4, wave 1 (review-security-code)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`, PR #1300
+- Range: d7b0f7058..4cb6c43ef (code commit 055115a20), scope mode: explicit-hash-range (diff mode)
+- Slice: slice-01 read in full (310 lines). `src/lib/file-lock.ts` read in full at head.
+- Beyond the slice excerpts, read the exact range hunks of `src/lib/file-lock.ts`, `src/session/organize.ts`, `src/acp/server.ts`, `src/commands/acp.ts`, `src/session/issues/issue-session.ts`, `apps/desktop/src/issues/IssuesBoard.tsx`, `apps/desktop/src/issues/useIssueCollection.ts` and `apps/desktop/src/review/usePendingFlowLinks.ts` (`git diff d7b0f7058..4cb6c43ef -- <files>`), plus `refuseStore`/`handleSessionFlags` (src/acp/server.ts:2935-2969) and `writeOwnerOnlyFileAtomic` (src/lib/config-dir.ts:461-477).
+
+### Withdrawn
+None.
+
+### Prior dispositions (findings this slice touches)
+- SC3-001 (info, src/lib/file-lock.ts) — open (deferred by the owner, recorded in the PR body Known gaps). The refactor into `LockAttempt.step()` keeps the stat-then-rm takeover verbatim (file-lock.ts:118-126): (a) two waiters that stat the same stale lock can still each remove a lock, the second removing the first one's fresh lock; (b) a holder that outlives `staleMs` is still broken while it runs. Note for the separate change: `withFileLockAsync` now accepts an async `fn` (file-lock.ts:192, `return await fn()`), so a future caller that awaits inside the section would hit (b) on every slow await; its only production caller today (`withFlagsLockAsync`, organize.ts:181) passes a synchronous section, so nothing reaches it now.
+- HL3-001 (minor) — closed. `handleSessionFlags` is async and calls `setSessionFlagsAsync` (server.ts:2940, 2965), which waits through `withFileLockAsync` (setTimeout between attempts), so the ACP server's event loop is not blocked by another process's flags lock.
+- HL3-002 (minor) — closed. Flags locks pass `createDir: false` (organize.ts `lockOptions`); `LockAttempt.prepare()` then skips `mkdirSync` and `step()` rethrows ENOENT at once (file-lock.ts:86, 116); `withFlagsLock[Async]` turns it into `no session <id> in this project`. `whileStored` re-checks `summary.json` under the lock, and `writeOwnerOnlyFileAtomic` creates no directory (config-dir.ts:461-477), so a session trashed between the check and the write fails with ENOENT instead of coming back as a stub.
+- HL3-004 (info) — open (deferred; `FLAGS_LOCK_TIMING.staleMs` is still 2 000 ms). Same mechanism as SC3-001 (b).
+- DG3-001 (info) — closed. `bindIssueSubject` is loud only on first bind; later opens skip when `sessionSubjectSettled` and swallow a failed backfill (issue-session.ts bindIssueSubject).
+- UX-011 (minor) — closed. The source preference key is now `account + ".source." + JSON.stringify(props.cwd)` (IssuesBoard.tsx VerifiedBoard). Security check of the new key: the value read back is still gated by `Object.hasOwn(SOURCES, value)`, the key holds a local project path and an account key (host + node id), no token or secret; no finding.
+- UX-013 (info) — closed. The unavailable notice strips the leading `configuration:` (IssuesBoard.tsx `error.replace(/^configuration:\s*/i, "")`); rendered as a JSX text child, so escaped.
+- PC-008 (minor) — closed. docs/docs/cli-reference.md now names `subject`, the answer fields and the "retry" refusal.
+
+### Regressions the fixes introduced
+None found under the security lens. The `LockAttempt` refactor preserves the deadline-before-stale order, the exclusive `wx` create with mode 0o600, the nonce write and its cleanup on failure, and the nonce-checked release; the default path (`createDir` unset) still creates the directory with mode 0o700, so existing callers (project registry, serve credentials, config) keep their behaviour.
+
+### Findings
+None new.
+
+### Verified clean (with sites)
+- Lock exclusivity and ownership: file-lock.ts:104-115 (`openSync(..., "wx", 0o600)` refuses an existing path, symlink included; nonce from `randomUUID()`, file-lock.ts:73); release removes only a lock holding its own nonce (file-lock.ts:145-151). Sync and async waits share `LockAttempt`, so the rules cannot diverge (enumerated with `keryx ctx rg "withFileLockAsync|createDir: false" src apps`: production callers only in src/session/organize.ts).
+- ENOENT path: only thrown with `createDir === false` (file-lock.ts:116); callers map it to a fixed message without paths when the directory is gone (organize.ts `withFlagsLock`/`withFlagsLockAsync`).
+- Error texts shown to the user: `lockedError`/`goneError` carry only `path.basename(dir)` (the session id the client sent); `refuseStore` (server.ts:2935-2937) echoes `error.message` to the local ACP client — a raw fs error there can name a local path, but the client is the same user's Desktop, so nothing crosses a trust boundary. Desktop renders `offer.error` (`errMessage(cause)`, usePendingFlowLinks.ts), `offer.flow.title` (PrWorkRow.tsx FlowOffer) and the Issues `error` as JSX text/attributes, never HTML. `dangerouslySetInnerHTML` in apps/desktop/src/review and src/issues (`keryx ctx rg "dangerouslySetInnerHTML|innerHTML" ... --all`: ReviewReportMarkdown.tsx, IssueMarkdown.tsx, DiscussionMarkdown.tsx) is untouched by this range.
+- Subject input: `handleSessionFlags` still type-checks `subject` and the store refuses a non-GitHub subject (server.ts:2955-2962; organize.ts `parseSessionSubject`), unchanged in this range.
+- `repositoryUnavailable` (useIssueCollection.ts) classifies by regex over the CLI reason; it only chooses which notice and button to show, no privileged action.
+- Categories with nothing in this range: SQL/command/template injection, eval, auth/authz, IDOR, crypto, CSRF, open redirect, path traversal (session id → directory resolution in `locate` is unchanged).
+
+### Not verified
+- No test run (exec_budget_s 0). History not read beyond the range diff.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-security-code",
+    "round": 4,
+    "slices": ["slice-01"],
+    "status": "DONE",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "SC3-001", "disposition": "open", "evidence": "src/lib/file-lock.ts:118-126 keeps the stat-then-rm stale takeover unchanged; deferred by the owner (PR body Known gaps). withFileLockAsync now accepts an async fn, but its only production caller (organize.ts withFlagsLockAsync) passes a synchronous section."},
+      {"id": "HL3-001", "disposition": "closed", "evidence": "src/acp/server.ts:2940,2965 handleSessionFlags awaits setSessionFlagsAsync -> withFileLockAsync (setTimeout between attempts)."},
+      {"id": "HL3-002", "disposition": "closed", "evidence": "organize.ts lockOptions createDir:false; file-lock.ts:86 prepare skips mkdir, :116 rethrows ENOENT; whileStored checks summary.json under the lock; writeOwnerOnlyFileAtomic (config-dir.ts:461-477) creates no directory."},
+      {"id": "HL3-004", "disposition": "open", "evidence": "FLAGS_LOCK_TIMING.staleMs is still 2000; same mechanism as SC3-001 (b); deferred."},
+      {"id": "DG3-001", "disposition": "closed", "evidence": "issue-session.ts bindIssueSubject: loud on firstBind only; later opens skip when sessionSubjectSettled and swallow a failed backfill."},
+      {"id": "UX-011", "disposition": "closed", "evidence": "IssuesBoard.tsx sourceKey = account + '.source.' + JSON.stringify(props.cwd); value still gated by Object.hasOwn(SOURCES, value)."},
+      {"id": "UX-013", "disposition": "closed", "evidence": "IssuesBoard.tsx renders error.replace(/^configuration:\\s*/i, '') as text."},
+      {"id": "PC-008", "disposition": "closed", "evidence": "docs/docs/cli-reference.md _keryx/session_flags now lists subject, the answer fields and the retry refusal."}
+    ],
+    "stats": {"files_reviewed": 10, "findings": 0, "blocker": 0, "major": 0, "minor": 0, "info": 0, "prior_dispositions": 8}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: payload layers carried the affected set; callers enumerated with keryx ctx rg), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg/diff), raw_rg_used: no. Raw `git diff` on named files used with a keryx:raw marker for exact hunks.

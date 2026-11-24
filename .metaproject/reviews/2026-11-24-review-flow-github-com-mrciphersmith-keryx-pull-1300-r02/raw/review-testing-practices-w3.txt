@@ -1,0 +1,91 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 4, wave 3. I read slice-03 (fix range d7b0f7058..4cb6c43ef) in full: the docs, server.ts, acp.ts help, issues-board(.test).ts, file-lock(.test).ts, organize(.test).ts and issue-session(.test).ts. This wave covered what waves 1 and 2 left open: test isolation, cleanup of child processes and temp dirs, determinism of the barrier tests across runs and under load, whether the issues-board tests use real producer messages, and the spy-based test. I did not re-run wave 1's 50 mutants or re-file TP-R4-001..010.
+
+## Method
+
+All work ran in a scratch git worktree at 4cb6c43ef, under the session scratchpad, with `bun install --frozen-lockfile`. The worktree was removed afterwards, and no `bun -e` child is left running. Each mutant was one exact-string replacement, run against the nearest suite, then restored. I did not use `keryx review mutate`, because it writes to research-evidence/, and this dispatch allows writes only to P/raw/.
+
+## Isolation, cleanup, determinism (executed)
+
+- **HOME isolation.** I ran the 4 slice suites (organize, issue-session, file-lock, issues-board; 54 pass) with HOME and TMPDIR pointed at empty scratch dirs. Nothing was written under HOME except bun's own cache. The spawned `bun -e` writers inherit the test env and wrote nothing outside TMPDIR either.
+- **Temp dirs.** file-lock.test.ts and issue-session.test.ts remove every root in `finally`. organize.test.ts leaves its 20 project() roots and the 3 new barrier dirs behind. That is TP-R4-005, already filed, so it is not re-filed here.
+- **Child processes.** No child is ever killed: there is no `child.kill()`. Each barrier test still writes `go` in a `finally`, so every child is released on every parent path, including when an assertion inside `try` fails or `until()` throws. `until()` stops waiting when its child exits. After all runs, no `bun -e` process was left. I found no path that orphans a child short of killing the parent test process.
+- **Determinism under load.** I ran organize + file-lock + issue-session as 8 parallel processes, 3 times over (24 runs). Result: 24/24 green, 39 pass each. That includes the 200-round two-process test with the production 3 s / 2 s timing, and the staleMs 1 takeover test.
+- **Producer messages in issues-board.test.ts.** The new tests import the producer constant `issuesDisabled` from issues-github.ts:10, or spell the producer text verbatim (`unusableRemote` at issues-board.ts:149, `invalidInput` at issues-github.ts:8). `rejects.toThrow(issuesDisabled)` is a real distinction: the repository-named 410 text (issues-board.ts:188) does not contain the generic one. The viewer-page-of-PRs fixture uses GitHub's `link: <…?page=N>; rel="next"` shape.
+- **First-bind error (probe).** "the first bind fails loudly" uses a bare `.rejects.toThrow()`. I logged the error, and it is the intended one: `EISDIR … rename … flags.json.<pid>.<uuid>.tmp -> …/flags.json`, raised by the subject write. The test pins the right path, so this is not a finding.
+- **Spy test.** `spyOn(organize, "backfillSessionSubject")` calls through and is restored in `finally`, and wave 1's B08 shows it intercepts. However, the test's title claims "reads the flags without the lock", and that claim is not pinned (TP-R4-011).
+
+## Mutation pass (executed)
+
+| id | mutation | nearest suite | result |
+|---|---|---|---|
+| M1 | `sessionSubjectSettled` reads under `withFlagsLock(dir, …, FLAGS_LOCK_TIMING)` instead of lock-free (the DG3-001 property) | organize + issue-session + file-lock | **39/39 green** |
+| M1-fix | probe: the TP-R4-011 test change (plant a held flags.json.lock before the later open) | issue-session | head 7/7 green; with M1, 1 fail (the spy test) |
+| S1 | server.ts handleSessionFlags back to sync `setSessionFlags` (the HL3-001 fix reverted) | shell-session-organize + shell-profile | **24/24 green** |
+| S2 | server.ts `return await setSessionFlagsAsync(` -> `return setSessionFlagsAsync(` (a store refusal escapes refuseStore's try) | shell-session-organize + shell-profile | **24/24 green** |
+| U1 | issues-board `throw new Error(unusableRemote)` -> `invalidInput` | issues-board | 1 fail |
+| U2 | drop the `.`/`..` remote-part check | issues-board | 1 fail |
+| U3 | `if (!cwd)` throws `unusableRemote` instead of `invalidInput` | issues-board | 1 fail |
+
+Totals: I ran 6 mutants and 1 probe. 3 went red and 3 survived (M1, S1, S2). Not reached: none of the gates I listed for this slice. The docs hunks have no gate. The acp.ts hunk is help text.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-testing-practices",
+    "slices": ["slice-03"],
+    "summary": "Isolation, cleanup and determinism hold: HOME is untouched, children are always released through the barrier finally, and nothing is left running. 24/24 runs under 8-way load were green, and the issues-board tests use the producers' texts. 6 mutants (3 red, 3 green). Two prior-round fixes are unpinned at the layer that carries them: DG3-001's lock-free settled read (M1), and HL3-001's async server wait, together with the refusal mapping that wraps it (S1, S2).",
+    "findings": [
+      {
+        "id": "TP-R4-011",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "src/session/issues/issue-session.test.ts",
+        "line": null,
+        "quote": "test(\"a later open reads the flags without the lock and skips the backfill when a subject is stored\", async () => {",
+        "problem": "The DG3-001 fix makes a later open read the flags lock-free (sessionSubjectSettled), so an open does not wait on another process's flags lock. That property survives a mutant that takes the lock: M1 makes sessionSubjectSettled read under withFlagsLock with production timing, and all 39 nearest tests stay green. The test whose title claims 'without the lock' never has the lock held during the open. It asserts only that backfillSessionSubject is not called, and that would hold for a locking read too. The test sets this gate a prior round asked for, so pinning it is mandatory.",
+        "impact": "A regression that takes the flags lock on every open passes the suite. With another keryx process holding the session's flags lock, an Issues open would then wait up to the 2 s stale window, break that writer's lock, or fail after 3 s, which is what DG3-001 removed.",
+        "suggested_fix": "In this test, before the later open, plant a held lock: `writeFileSync(path.join(sessionDir(root, sessionId, dataDir), \"flags.json.lock\"), \"another-writer\")`. After the open, assert that it resolved and that `readFileSync(lock, \"utf8\")` is still \"another-writer\". Then remove the lock before the unlink step. I probed this change: green at head, red under M1.",
+        "evidence": "Scratch worktree at 4cb6c43ef. M1 (`const { flags, subjectUnlinked } = readStoredFlags(dir); return …` wrapped in `withFlagsLock(dir, () => …, FLAGS_LOCK_TIMING)` in organize.ts sessionSubjectSettled): 39 pass / 0 fail on organize + issue-session + file-lock tests. Probe M1-fix: head 7/7 pass; under M1, '(fail) … a later open reads the flags without the lock…' [2068 ms]. The other writer's lock was broken at the 2 s stale window.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "issue-open-lock-free-settled-read-unpinned"
+      },
+      {
+        "id": "TP-R4-012",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "src/acp/server.ts",
+        "line": null,
+        "quote": "      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);",
+        "problem": "The two changes in handleSessionFlags this range added (the HL3-001 fix) both survive at the server level. S1 reverts the handler to the blocking `setSessionFlags`. S2 drops the `await`, so a rejected store write leaves the try and skips refuseStore. Both leave shell-session-organize.test.ts and shell-profile.test.ts green (24/24). No ACP test sends `_keryx/session_flags` while the flags lock is held, or for a store refusal (an unknown or trashed session). The lock layer is pinned (wave 1 F04 is red), but the server could stop using it unnoticed.",
+        "impact": "Under S1, a Desktop window's ACP server freezes for up to 3 s for every session while another process holds one session's flags lock, which is the HL3-001 defect. Under S2, every store refusal reaches the client without refuseStore's `invalidRequest` wrapping, so the `_keryx/session_flags: …` reason is lost. Neither change fails a test.",
+        "suggested_fix": "In shell-session-organize.test.ts, add two cases. (1) Plant a fresh `flags.json.lock` in a stored session's dir and send `_keryx/session_flags`. While it waits, send `_keryx/info` or a session_flags call for another session, and assert that it answers before the first call does. Then remove the lock and assert that the first call lands. (2) Send session_flags for an unknown sessionId, and assert error code -32600 and `data.reason` starting `_keryx/session_flags: no session`.",
+        "evidence": "S1 (`setSessionFlags` imported, `return setSessionFlags(cwd, sessionId, change, options.dataDir)`): 24 pass / 0 fail. S2 (`return setSessionFlagsAsync(`): 24 pass / 0 fail. Suites found with keryx ctx rg -l 'session_flags|sessionFlags' src --glob '*.test.ts': shell-profile.test.ts and shell-session-organize.test.ts, and neither has a lock case.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "acp-session-flags-async-and-refusal-unpinned"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "TP-R3-008", "disposition": "closed", "evidence": "No wall-clock assertion. 24/24 green under 8-way parallel load (organize + file-lock + issue-session). Children are always released via the barrier finally, and none is left running."},
+      {"id": "TP-R3-006", "disposition": "partial", "evidence": "Unchanged from wave 1 (M55 not run). The new viewer-410 and viewer-PR-page tests use producer texts. U1-U3 red."},
+      {"id": "TP-R3-007", "disposition": "closed", "evidence": "Wave 1 B14/B15 red. Not re-run."},
+      {"id": "TP-R3-009", "disposition": "closed", "evidence": "Wave 1 B13 red. Not re-run."},
+      {"id": "HL3-001", "disposition": "closed", "evidence": "The code fix is present (handleSessionFlags awaits setSessionFlagsAsync, and withFileLockAsync yields; wave 1 F04 red). It is not pinned at the server: S1 is green (TP-R4-012)."},
+      {"id": "HL3-002", "disposition": "closed", "evidence": "Wave 1 B01-B04/F01/F02 red. The file-lock 'createDir: false never creates the directory' test covers both variants."},
+      {"id": "DG3-001", "disposition": "closed", "evidence": "The best-effort backfill (B09) and the skip (B08) are pinned per wave 1. The lock-free property of the skip is not pinned: M1 is green (TP-R4-011)."}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: slice-03 named the files, and the ACP suites were found with keryx ctx rg). wiki_used: no (not-relevant: this lens is about test discipline). ctx_used: yes (keryx ctx rg / keryx ctx run). raw_rg_used: no. I used raw git/awk/find/ps with keryx:raw markers, only for short pass/fail lines and the cleanup checks.
+
+Not run or not verified:
+- The full root suite. Only the nearest suites ran.
+- Linux CI. Determinism was checked on macOS only.
+- Wave 1's mutants, which were not re-run.

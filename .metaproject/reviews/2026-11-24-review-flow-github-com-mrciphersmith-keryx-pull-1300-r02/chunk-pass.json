@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "totals": {
+    "chunks": 2,
+    "files": 17,
+    "done": 2,
+    "failed": 0,
+    "pending": 0
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/harness/routing/trust.ts",
+        "src/mcp-servers/trust.ts",
+        "src/mcp-servers/oauth-provider.ts",
+        "src/worktree/prepare.ts",
+        "src/commands/serve.ts",
+        "src/harness/hooks/trust.ts",
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "src/commands/projects.ts",
+        "src/lib/desktop-serve-bootstrap.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/lib/hub-machine/trial.test-support.ts",
+        "src/worktree/remove.ts",
+        "scripts/verify-native-coverage.ts",
+        "src/commands/help.ts",
+        "src/harness/routing/config-file.ts",
+        "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "src/commands/worktree.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    }
+  ],
+  "uncoveredFiles": [],
+  "findings": []
+}

@@ -1,0 +1,24 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "2 findings, 2 executed, 2 confirmed",
+  "verifications": [
+    {
+      "finding": "RG-R4-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Scratch script (bun run <scratch>/check.ts, scratch dir removed afterwards) at head 4cb6c43ef called src/integrations/issues-board.ts listIssuePage({viewer, api: <throws if reached>}, {source: \"repository\"}, <temp dir>) where `git -C <temp dir> rev-parse --git-dir` printed 'fatal: not a git repository'. Output: emitted: \"configuration: Open a Git project with a GitHub.com remote.\" (thrown by projectRepository -> reviewRepositories before any network call); head repositoryUnavailable(reason, true) from apps/desktop/src/issues/useIssueCollection.ts: null; base test /(?:^|\\b)configuration:/i (git show d7b0f7058:apps/desktop/src/issues/IssuesBoard.tsx line 147): true. Head IssuesBoard.tsx:156 `const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;` gates the 'Show issues assigned to me' button (line 278), so the base offered the fallback for this reason and head does not. Not executed: the Desktop render itself and the Tauri pass-through of the CLI stderr (traced by the finding, not re-run)."
+    },
+    {
+      "finding": "TP-R4-006",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Site: head 4cb6c43ef apps/desktop/src/test/app-navigation.fixture.tsx:320 `await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });` directly before line 321 assert 'No notice before keryx has saved the session'; the preceding waitFor (line 319) only waits for flagWrites() > 0. Scratch worktree (git worktree add --detach <scratch>/v4 4cb6c43ef, bun install --frozen-lockfile; removed afterwards). Baseline: bun test src/shell/ProjectNavigation.dom.test.tsx -> 4 pass, 0 fail. Mutant (apps/desktop/src/session/subjectBinding.ts apply() catch: `return; // not stored yet: tried again after its turn` -> `setTimeout(() => this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED), 40); return;`): 3 runs -> 4 pass, 0 fail each. Control (same notice raised synchronously): 3 pass, 1 fail, `AssertionError: No notice before keryx has saved the session` at fixture line 321. So the check catches only a notice inside the 20 ms window. Severity: .metaproject/rules/core/tdd-workflow.mdc Rule 6 'Never wait with a sleep or a fixed delay' and its table row 'Sleep or fixed delay for async work (Rule 6) | always | major' (exception only for fake timers advanced by the test; this is a real setTimeout); none of the four blocker shapes in review-orchestrator '## Severity (canonical)' applies, so major is within the rubric."
+    }
+  ],
+  "stats": {
+    "confirmed": 2,
+    "refuted": 0,
+    "unverifiable": 0
+  }
+}

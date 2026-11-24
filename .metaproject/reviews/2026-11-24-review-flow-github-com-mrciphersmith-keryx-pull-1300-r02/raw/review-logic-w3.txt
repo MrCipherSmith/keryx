@@ -1,0 +1,85 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (code commit 055115a20), explicit-hash-range, round 4 wave 3
+- Slice: slice-03, read in full: desktop-issues.md, implementation-plan.md, src/acp/server.ts, src/commands/acp.ts, issues-board(.test).ts, file-lock(.test).ts, issue-session(.test).ts, organize(.test).ts.
+- Code also read at head: organize.ts lines 100-301 (readStoredFlags, FLAGS_LOCK_TIMING, lockOptions, whileStored, withFlagsLock/Async, backfill, applyFlagsChange, locate, setSessionFlags/Async); file-lock.ts LockAttempt.step; server.ts 3290-3404 (request map and line dispatch); issue-session.ts withIssueBinding 98-123; issues-launch.ts prepare-flow; Desktop useAcpSession.ts setFlags/applyPendingFlow/subjects/archiveIdle/linkFlow, SessionSidebar.tsx menu items.
+- Spec compliance gate: ran against AC8 (keryx half). No gap. `_keryx/session_flags` still validates `subject` (object/null in server.ts, fields in applyFlagsChange); `return await setSessionFlagsAsync(...)` inside the try, so a store refusal (invalid subject, lock timeout, gone session) still reaches refuseStore as an invalidRequest. A first bind (`launch.stage === "registered"`) still writes `subject.kind = "issue"` and fails loudly; the stage is saved only after bindIssueSubject, so a failed first bind is retried as a first bind.
+
+### Summary
+The round-3 fixes in slice-03 are logically sound. The file-lock refactor keeps the old rules (deadline first, nonce, stale takeover, cleanup when the nonce write fails) in one LockAttempt shared by the sync and async waits. `createDir: false` plus `whileStored` means a flags write never recreates a trashed session and reports "no session" instead of "retry". The ACP server waits for the lock asynchronously. A later issue open reads the flags without the lock and backfills best-effort. The new tests use file barriers and injected timing instead of wall-clock checks. DG-R4-002 does not hold for any request Desktop can send (see below). No findings.
+
+### DG-R4-002 (asked to settle): no finding
+- The server can now apply two flags requests for one session out of arrival order. server.ts:3356-3385 starts each line's handler in wire order and does not await it. handleSessionFlags now awaits `setSessionFlagsAsync`, and each request runs its own `LockAttempt` that retries on a separate 15 ms `setTimeout` (file-lock.ts withFileLockAsync), with no queue per lock path. While another process holds `flags.json.lock`, the first timer to fire after the release wins. Without contention nothing is reordered: `step()` and the synchronous section run in the same tick as the request starts (prepare → step → `await fn()` with a synchronous fn), and the release happens on the microtask queue before the next I/O macrotask. A reply is written after its section has run, so replies leave in the order the changes were applied.
+- No Desktop path produces a lost or wrong result from that reordering. These are every sender of `_keryx/session_flags` (found with `keryx ctx rg "SESSION_FLAGS"` and `setFlags\(` in apps/desktop/src):
+  - SessionSidebar.tsx:183/190 sends `{pinned: !pinned}` and `{archived: !archived}`. `pinned`/`archived` come from the stored flags, and useAcpSession.setFlags updates them only from the reply, without an optimistic update. A second click while the first request is pending sends the same value again. Opposite values (pin, then unpin) can be sent only after the first reply, when the first change is already applied.
+  - Requests for different fields: archiveIdle (`archived: true`), applyPendingFlow and linkFlow (`flow`), PendingSubjects.write (`subject`). Each runs applyFlagsChange, which reads the current flags inside the lock, so both changes survive in either order. `pinnedAt ??=` and `archivedAt ??=` make a repeated `true` independent of order.
+  - The last reply holds the merged state, because replies leave in the order the changes were applied.
+- So the pin-then-unpin case DG-R4-002 describes cannot be produced by the current client. A client that toggled optimistically would expose it. That is a hypothetical, so it is not filed (shared law 2).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected beyond the deferred HL3-004/SC3-001, whose stale rule this range does not change. DG-R4-002 is settled above.
+
+### Error Handling
+None detected. In withFlagsLock/Async, an ENOENT whose session directory is gone becomes "no session …". The `goneError` from whileStored passes through unchanged. A missing lock returns null and becomes "… locked by another keryx process; retry". The `catch {}` around the backfill on a later open in issue-session.ts is a documented choice: the subject is a display hint, and the first bind still fails loudly.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected. `withFileLockAsync` accepts `fn: () => T | Promise<T>` and awaits it before releasing. The server's request map already accepted async handlers (handleSessionTrash).
+
+### Edge Cases
+None detected. The `cwd`-less repository request keeps `invalidInput` ("configuration: Invalid Issues request."), and a `.`/`..` remote now gives `unusableRemote`. Desktop's useIssueCollection.ts:27 regex matches "names no usable repository".
+
+### Prior dispositions notes
+- TP-R3-008 closed: the wait test orders by barrier files (`held`/`go`), with no elapsed-time assertion. The parent's first lock attempt runs synchronously before `go` is written, so the exclusion is deterministic. The two-process test starts from a file barrier. A new deterministic mid-read-modify-write exclusion test pins M38.
+- TP-R3-007 closed: the timeout test injects `{timeoutMs: 20, staleMs: 60_000}` (sync and async) and asserts the retry text and that the holder's lock is left. "a subject backfill runs under the flags lock" kills M47.
+- TP-R3-009 closed: the mismatched-subject backfill test asserts it throws /not a GitHub subject/ and leaves no flags.json.
+- TP-R3-006 closed: the viewer-410 test kills M51, and the PR-only viewer page test (one request) kills M54.
+- HL3-001 closed: the server path is setSessionFlagsAsync → withFileLockAsync. The remaining synchronous callers (withIssueBinding backfill; issues-launch.ts:116 setSessionFlags) run in the issue-workspace/issues CLI child, not in the ACP server.
+- HL3-002 closed: lockOptions sets `createDir: false` on every flags lock (sync and async, backfill included), and whileStored refuses when summary.json is gone.
+- DG3-001 closed: a later open skips the lock when sessionSubjectSettled and swallows a failed backfill. The test "a later open whose subject backfill fails still opens the session" covers it.
+- PC-008 closed for this slice: the sibling help text in src/commands/acp.ts now names flow and subject. The cli-reference change is in another slice, and wave 1 closed it.
+- HL3-004 open: FLAGS_LOCK_TIMING keeps `staleMs: 2_000`, and the rule is unchanged. Deferred info.
+- SC3-001 open: the stale takeover in LockAttempt.step is the same stat-then-rm as before. Deferred info, tracked as a separate change.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "slices": ["slice-03"],
+    "summary": "Round-3 fixes in slice-03 (file-lock refactor with createDir:false and an async wait, whileStored guard, async ACP flags handler, best-effort later-open subject backfill, issues-board unusable-remote error, deterministic lock tests) are logically sound; AC8 keryx half met. DG-R4-002 settled as not reachable: the server can reorder two contended same-session flags requests, but every Desktop sender either repeats the same value while pending (no optimistic toggle in SessionSidebar/setFlags) or changes a different field read-modify-written under the lock, so no lost or wrong state. No findings.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "DG3-001", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "HL3-004", "disposition": "open"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "SC3-001", "disposition": "open"},
+      {"id": "TP-R3-006", "disposition": "closed"},
+      {"id": "TP-R3-007", "disposition": "closed"},
+      {"id": "TP-R3-008", "disposition": "closed"},
+      {"id": "TP-R3-009", "disposition": "closed"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: callers enumerated with keryx ctx rg; narrow fix range) | wiki_used: no (not-relevant: intent stated in code comments and the implementation plan) | ctx_used: yes (keryx ctx rg/read; git show with a keryx:raw marker for one bounded excerpt) | raw_rg_used: no.
+Test evidence: research-evidence/verify-tests-to-run-1.txt (root focused 68 pass/0 fail incl. file-lock and organize; Desktop 1070/0). This lens ran no tests or mutants (exec_budget_s 0), so the "kills M.." claims above come from reading the assertions, not from mutation runs.

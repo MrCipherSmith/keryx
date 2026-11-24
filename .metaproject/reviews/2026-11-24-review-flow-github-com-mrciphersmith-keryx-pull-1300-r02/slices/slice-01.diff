@@ -1,0 +1,310 @@
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 69,80 @@
+-  const { source } = choice;
++  const sourceSelect = useRef<HTMLSelectElement>(null);
++  const focusSource = useRef(false);
++  // The board remounts on a source change; the fallback button that asked for it is gone, so focus the select.
++  useEffect(() => {
++    if (!focusSource.current) return;
++    focusSource.current = false;
++    sourceSelect.current?.focus();
++  }, [source]);
+   const [target, setTarget] = useState<ProjectSource | null>(() => {
+     try {
+       const value = JSON.parse(stored(account + ".project") ?? "null");
+       return value && typeof value.owner === "string" && Number.isSafeInteger(value.number) && value.number > 0 ? value : null;
+
+--- apps/desktop/src/issues/model.ts
+@@ 47,86 @@
+ 
+ export function repoName(issue: IssueSummary): string { return issue.ref.owner + "/" + issue.ref.repo; }
+ export function issueName(issue: IssueSummary): string { return repoName(issue) + "#" + issue.ref.number; }
+ 
+ /** A GitHub Project groups by its Status field; any other source groups by the issue's GitHub state. */
+ export function groupForRow(row: Row, project: boolean): string {
+   return project ? row.optionId ?? "unassigned" : row.issue.state;
+ }
+ 
+ /** The board's lanes: the Project's Status options, or Open and, when the state filter includes closed issues, Closed. */
+ export function issueGroups(project: ProjectBoard | undefined, state: Filters["state"]): { id: string; label: string }[] {
+   if (project) return [...project.options.map(o => ({ id: o.id, label: o.name })), { id: "unassigned", label: "No status" }];
+   return [{ id: "open", label: "Open" }, ...(state === "open" ? [] : [{ id: "closed", label: "Closed" }])];
+ }
+ 
+ /** The Subject a session works on when it is bound to this issue. */
+ export function issueSubject(issue: IssueSummary): SessionSubject {
+   return { kind: "issue", repo: repoName(issue), number: issue.ref.number, url: issue.ref.url, repositoryId: issue.ref.repositoryId };
+ }
+ 
+-/** The non-archived sessions bound to the issue through their `subject`, newest first. */
+-export function issueSessions(sessions: readonly SessionInfo[], issue: IssueSummary): SessionInfo[] {
+-  return boundSessions(sessions, issueSubject(issue));
+-}
+-
+ export function mergeRows(previous: Row[], next: Row[]): Row[] {
+   const rows = new Map(previous.map(row => [issueKey(row.issue.ref), row]));
+   for (const row of next) rows.set(issueKey(row.issue.ref), row);
+   return [...rows.values()];
+ }
+ 
+ function includesOption(filter: string, values: string[]): boolean {
+   const choices = filter.toLowerCase().split(",").map(value => value.trim()).filter(Boolean);
+   return !choices.length || values.some(value => choices.includes(value.toLowerCase()));
+ }
+ 
+ export function visibleRows(rows: Row[], f: Filters): Row[] {
+   const query = f.text.trim().toLowerCase();
+   const numberQuery = /^(?:([\w.-]+\/[\w.-]+))?#(\d+)$/.exec(query);
+   return rows.filter(({ issue, optionId }) => {
+     const searchMatches = numberQuery
+       ? issue.ref.number === Number(numberQuery[2]) && (!numberQuery[1] || numberQuery[1] === repoName(issue).toLowerCase())
+       : issue.title.toLowerCase().includes(query) || issueName(issue).toLowerCase().includes(query);
+     return searchMatches && (f.state === "all" || issue.state === f.state)
+       && (!f.since || issue.updatedAt.slice(0, 10) >= f.since)
+
+--- apps/desktop/src/review/PrWorkRow.tsx
+@@ 75,95 @@
+         onClick={() => setMenu(open => !open)}>More</button>
+       {/* Portaled: the card's content-visibility contains paint, which would clip a fixed menu inside it. */}
+       {menu && createPortal(<Menu anchor={more.current} items={sessionItems(sessions, open => openSession?.(card, open, subject))}
+         label={`Sessions${of}`} placement="auto" closeOnScroll onClose={() => setMenu(false)} />, document.body)}
+     </span>
+   </div>;
+ }
+ 
+ /**
+- * "Link Flow #<id>?" for a package that appeared after Create Flow: the link is written only on Link, and
+- * Dismiss drops the question. Fits the slot's fixed height: one line of text and two small buttons.
++ * "Link Flow #<id> · <title>?" for a package that appeared after Create Flow: the link is written only on
++ * Link, and Dismiss drops the question. While the write runs both wait; a failed write says why and keeps
++ * Link. Fits the slot's fixed height: one line of text and two small buttons.
+  */
+-function FlowOffer({ offer, of, work }: { offer: PrFlowOffer; of: string; work: PrWork }) {
+-  const name = `Flow #${offer.flow.id}`;
++function FlowOffer({ offer, of, work, onAct }: { offer: PrFlowOffer; of: string; work: PrWork; onAct: () => void }) {
++  const name = `Flow #${offer.flow.id} · ${offer.flow.title}`;
++  const text = offer.error ? `Not linked: ${offer.error}` : offer.linking ? `Linking ${name}…` : `Link ${name}?`;
++  const title = offer.error ? `${name} was not linked: ${offer.error} Press Link to try again.`
++    : `${name} appeared after Create Flow. Link it to this pull request's session?`;
++  // aria-disabled, not disabled: a disabled button would drop the keyboard focus while the write runs.
++  const busy = offer.linking || undefined;
+   return <>
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 502,518 @@
+         return;
+       }
+       focused.current = focus.nonce;
+       setFocusNotice(`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") || snapshot.repo}).`);
+       onFocusHandled?.(focus.nonce);
+       return;
+     }
+-    if (!snapshot.cards.some(c => c.number === focus.number)) return;
++    if (!snapshot.cards.some(c => c.number === focus.number)) {
++      // A load in flight, or a cached fallback, may still bring the PR in: wait for the settled list.
++      if (loading || stale) return;
++      focused.current = focus.nonce;
++      setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);
++      onFocusHandled?.(focus.nonce);
++      return;
++    }
+     focused.current = focus.nonce;
+     setFocusNotice("");
+
+--- apps/desktop/src/styles/review.css
+@@ 33,60 @@
+ .pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+ .pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
+ /* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
+ .pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
+-/* "Link Flow #<id>?" after Create Flow: a question, not a link, until Link is pressed; one line of the slot's height. */
+-.pr-work-link.pr-work-offer { display: block; box-sizing: border-box; line-height: 22px; cursor: default; color: var(--fg); border-style: dashed; }
++/* "Link Flow #<id> · <title>?" after Create Flow: plain text, not a control (no box, no hover); it truncates so
++   Link and Dismiss (flex: none) keep their size, and the slot clips so nothing reaches the session slot. */
++.pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }
++.pr-work-offer.is-attention { color: var(--warn); }
+ /* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
+ .pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
+ .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
+ .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
+ .review-request { font-size: var(--fs-xs); color: var(--fg-muted); overflow-wrap: anywhere; }
+ .review-ci { font-size: var(--fs-xs); font-weight: 550; color: var(--fg-muted); }
+ .review-ci.ci-passed { color: var(--ok); }
+ .review-ci.ci-failed { color: var(--danger); }
+ .review-ci.ci-pending { color: var(--warn); }
+ .review-table { min-width: 1000px; }
+ .review-table th:first-child { width: 30%; }
+ .review-table th:last-child { width: 11rem; }
+ .review-table th:nth-child(6) { width: 16rem; }
+ .review-table th:nth-child(4) { width: 18%; }
+ .review-table tbody tr:hover { background: transparent; }
+ .review-list-link { border: 0; background: none; color: var(--accent-text); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 0.14em; cursor: pointer; }
+ .review-list-link:hover { text-decoration-thickness: 2px; }
+ .review-filter-hint { margin: 0 0 var(--sp-3); color: var(--fg-muted); font-size: var(--fs-sm); }
+ .review-filter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: var(--sp-4); }
+ .review-filter-groups fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
+
+--- docs/docs/cli-reference.md
+@@ 457,506 @@
+ - **Live sessions:** every session a `session/new` or `session/load` opens is
+   held by the connection beside the others, and opening one releases none. Each
+   keeps its own turn, mode, model, usage, client MCP servers, plan and shell
+   tasks; a turn in a session the client is not showing keeps running, and its
+   `session/update`s, permission requests and `_keryx/ask_user` questions carry
+   its `sessionId`. A `session/load` of a session the connection holds rebuilds
+   nothing: it replays the transcript and answers with the session's current
+   mode and model (its `mcpServers` are not started), and is refused while the
+   session's turn runs. At most 8 sessions are held: past that, the least
+   recently used session with no running turn, no running shell task and no
+   request in flight is released — its lease goes back (so `keryx shell
+   --resume` can open it), its client MCP servers stop unless another session
+   uses the same list, and its hooks end with `SessionEnd` — and keryx sends the
+   notification `_keryx/session_released {sessionId, reason: "idle-cap"}`.
+   Later requests for it get `Unknown ACP session` until it is loaded again; a
+   load restores its permission mode, model and usage totals. A client that
+   switches the shown session locally sends the notification
+   `_keryx/session_shown {sessionId}` (no reply; an id the connection does not
+   hold is ignored), so the switch counts as use for the least-recently-used
+   choice. The request `_keryx/session_flags {sessionId, cwd?, archived?,
+-  pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package
+-  (`flow: null` unlinks) a stored session (kept in its `flags.json`) and
+-  answers `{archivedAt?, pinnedAt?, flow?}`; `session/list` reports set flags
++  pinned?, flow?, subject?}` archives/unarchives, pins/unpins, links to a flow
++  package (`flow: null` unlinks) or binds to a GitHub pull request or issue
++  (`subject: {kind: "pr"|"issue", repo: "owner/name", number, url,
++  repositoryId?}`, where `url` is the github.com page that agrees with the
++  other fields; `subject: null` unbinds) a stored session (kept in its
++  `flags.json`), and answers `{hasIssue?, archivedAt?, pinnedAt?, flow?,
++  subject?}`. A subject that is not a github.com pull request or issue is
++  refused. The change is written under a per-session lock; when another keryx
++  process holds it too long the request is refused with a message ending in
++  "retry". `session/list` reports set flags
+   as `_meta.keryx`, together with `messageCount` (the messages the session
+   holds; 0 for a session nobody has written in). The request `_keryx/session_trash {sessionId,
+   cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the
+   freedesktop trash on Linux) and answers `{trashedTo}`: a held idle session
+   is released first; one with a running turn or task, or held by another
+   keryx process, is refused. When every held
+   session is busy none is released. A `session/new` or `session/load` that
+   fails gives back only the session it was opening. The `editor` profile keeps
+   every session until the connection ends.
+ - **Session updates:** `plan` when the execution plan changes (and on
+   `session/load`), `usage_update` after every model call (`used`/`size` per
+   ACP, plus `_meta.keryx.call`/`turn`/`session` input and output token
+   totals), and `session_info_update` with the session title.
+ - **Discovery:** `initialize` carries `_meta.keryx = {profile, profiles,
+   extensions, liveSessions: true}` in this profile; `_keryx/info` answers
+   `{version, profile, profiles, extensions}` in either profile (plus
+   `liveSessions: true` in this one), and
+   `agentInfo.version` is the keryx version.
+ 
+ Any other value of `--profile` is a usage error: keryx exits with status 2
+
+--- src/lib/file-lock.ts
+@@ 104,113 @@
+-      handle = openSync(lockPath, "wx", 0o600);
+-      try {
+-        writeFileSync(handle, nonce, { encoding: "utf8" });
+-      } catch (cause) {
+-        // The open succeeded but the nonce did not land. Leaving `handle` set
+-        // would run the critical section holding a lock whose contents can never
+-        // match, so the finally would decline to remove it and every other
+-        // caller would wait out the stale window. Drop it and retry cleanly.
++      handle = openSync(this.lockPath, "wx", 0o600);
++      writeFileSync(handle, this.nonce, { encoding: "utf8" });
++      return handle;
++    } catch (error) {
++      if (handle !== null) {
++        // The open succeeded but the nonce did not land. Holding it would run the
++        // critical section holding a lock whose contents can never match, so the
++        // release would decline to remove it and every other caller would wait
++        // out the stale window. Drop it and retry cleanly.
+         closeSync(handle);
+
+--- src/session/issues/issue-session.ts
+@@ 109,124 @@
+       }
+       writeOwnerOnlyFileAtomic(path.join(dir, "issue-link.json"), JSON.stringify({ key: path.basename(file, ".json") }));
+       launch.stage = "session_bound";
+     }
+     if (!existsSync(dir)) throw new Error("The linked session is missing. Restore it in Sessions and retry.");
+     // On first bind, and for a session an older keryx bound without a subject. The flags lock is
+     // taken inside the binding lock, never the reverse, so the two cannot deadlock.
+-    bindIssueSubject(dir, issue.ref);
++    bindIssueSubject(dir, issue.ref, firstBind);
+     if (launch.flow) record.flowSourceUrl ??= launch.issue.url;
+     launch.issue = issue.ref;
+     record.body = issue.body;
+     record.updatedAt = issue.updatedAt;
+     saveBinding(file, record);
+     return apply(record, file);
+   });
+ }
+
+--- src/session/organize.ts
+@@ 109,159 @@
+       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
+       ...(subject !== undefined ? { subject } : {}),
+     };
+     return { flags, subjectUnlinked: subject === undefined && raw["subjectUnlinked"] === true };
+   } catch {
+     return { flags: origin, subjectUnlinked: false };
+   }
+ }
+ 
+ /** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
+ export function readSessionFlags(dir: string): SessionFlags {
+   return readStoredFlags(dir).flags;
+ }
+ 
+ function writeFlags(dir: string, { flags, subjectUnlinked }: StoredFlags): void {
+   const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject,
+     ...(subjectUnlinked && flags.subject === undefined ? { subjectUnlinked: true } : {}) };
+   writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
+ }
+ 
+-/** How long a flags writer waits for another, and when a lock is taken as abandoned (the critical section is one small file). */
+-const FLAGS_LOCK_TIMEOUT_MS = 3_000;
+-const FLAGS_LOCK_STALE_MS = 2_000;
++/** How long a flags writer waits for another, and when a lock is taken as abandoned. */
++export interface FlagsLockTiming {
++  timeoutMs: number;
++  staleMs: number;
++}
++
++/** The production timing: the critical section is one small file. Tests pass their own. */
++export const FLAGS_LOCK_TIMING: Readonly<FlagsLockTiming> = { timeoutMs: 3_000, staleMs: 2_000 };
++
++const lockedError = (dir: string) => new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
++const goneError = (dir: string) => new Error(`no session ${path.basename(dir)} in this project`);
++
++function lockOptions(timing: FlagsLockTiming): FileLockOptions {
++  // The session directory is never created by taking its lock: a session moved
++  // to the trash since it was located must stay gone, not come back as a stub.
++  return { timeoutMs: timing.timeoutMs, staleMs: timing.staleMs, createDir: false };
++}
++
++/** Runs `apply` only while the session is still stored: its directory and summary.json are there. */
++function whileStored<T>(dir: string, apply: () => T): () => T {
++  return () => {
++    if (!existsSync(path.join(dir, "summary.json"))) throw goneError(dir);
++    return apply();
++  };
++}
++
++function isMissing(error: unknown): boolean {
++  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
++}
+ 
+ /**
+
+--- src/session/organize.ts
+@@ 203,209 @@
+  * subject after the session was bound (a binding made before subjects existed).
+  */
+-export function backfillSessionSubject(dir: string, subject: SessionSubject): boolean {
++export function backfillSessionSubject(dir: string, subject: SessionSubject, timing: FlagsLockTiming = FLAGS_LOCK_TIMING): boolean {
+   const parsed = parseSessionSubject(subject);
+   if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);
+   return withFlagsLock(dir, () => {
+     const current = readStoredFlags(dir);

@@ -1,0 +1,28 @@
+Round-4 fix verification (working tree after T24/T25, before commit)
+commands: bunx tsc --noEmit -p . ; (apps/desktop) bunx tsc --noEmit ; (apps/desktop) bun test src ; bun test src/integrations/issues-contract.test.ts src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues src/integrations/issues-board.test.ts src/integrations/issues-launch.test.ts src/commands/issues.test.ts src/lib/file-lock.test.ts src/commands/acp ; bun test src/acp
+root tsc=0
+desktop tsc=0
+ 1081 pass
+ 0 fail
+ 11644 expect() calls
+Ran 1081 tests across 97 files. [11.03s]
+ 103 pass
+ 0 fail
+ 688 expect() calls
+Ran 103 tests across 10 files. [24.55s]
+ 457 pass
+ 0 fail
+ 2710 expect() calls
+Ran 457 tests across 49 files. [116.27s]
+
+Re-run of the focused root suites after restoring the original issues-contract tests (an overwrite had replaced them) and appending the displayReason tests:
+ 113 pass
+ 0 fail
+ 711 expect() calls
+Ran 113 tests across 10 files. [24.82s]
+
+Re-run of the focused root suites after restoring the original issues-contract tests (an overwrite had replaced them) and appending the displayReason tests:
+ 113 pass
+ 0 fail
+ 711 expect() calls
+Ran 113 tests across 10 files.

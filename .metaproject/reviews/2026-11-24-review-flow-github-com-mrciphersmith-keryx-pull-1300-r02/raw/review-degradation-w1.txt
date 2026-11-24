@@ -1,0 +1,195 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 4, wave 1, slice-01 (fix range d7b0f7058..4cb6c43ef, code commit 055115a20). Read slice-01.diff in full, and the full commit hunks of every file it names (git show 055115a20), plus the consumers listed below. Base for "worse than base" = d7b0f7058.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-degradation",
+    "slices": [
+      "slice-01"
+    ],
+    "summary": "One minor behaviour-delta (a non-Git project loses the Issues fallback it had on base) and two info questions (async flags writes can apply out of order under cross-process contention; a PR focus is refused with a filtered-out reason after a failed refresh). withFileLock's refactor is behaviour-identical for its 7 default-option consumers; the flags-lock, trash and backfill changes close HL3-001, HL3-002 and DG3-001.",
+    "findings": [
+      {
+        "id": "DG-R4-001",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/issues/useIssueCollection.ts",
+        "quote": "if (/has no GitHub\\.com fetch remote|has Issues turned off for|names no usable repository/i.test(reason)) return \"unavailable\";",
+        "problem": "The repository source has a fourth 'no GitHub.com remote' reason that the new allow-list does not name. reviewRepositories (src/review/board-github.ts:67) throws 'configuration: Open a Git project with a GitHub.com remote.' when `git remote -v` fails, for example when the project is not a Git checkout. projectRepository (src/integrations/issues-board.ts:120) passes it through. On base, IssuesBoard offered 'Show issues assigned to me' for any `configuration:` reason of the default source. On head, repositoryUnavailable returns null for this text, so the board shows the error and only Retry.",
+        "impact": "Someone who opens a folder that is not a Git checkout gets a Retry that can never succeed on the default Issues source. The fallback the board's own comment promises for 'no GitHub.com remote' is gone for this case. They can still change the Source select by hand, so the board is not blocked.",
+        "suggested_fix": "Add the 'Open a Git project with a GitHub.com remote' reason to repositoryUnavailable's 'unavailable' set, or have projectRepository map a failed remote read to the same 'has no GitHub.com fetch remote' reason. Add that exact CLI string to the AC13 test, which now uses only two of the three real reasons, plus an invented 'This project has no remote.'",
+        "evidence": "base-diff: base IssuesBoard.tsx (d7b0f7058) `const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;` vs head `repositoryUnavailable(error, !snapshot)` (useIssueCollection.ts:27). Consumer trace: issues-board.ts:117-123 projectRepository -> board-github.ts:61-68 reviewRepositories catch -> 'configuration: Open a Git project with a GitHub.com remote.'. Refute: read IssuesBoard.dom.test.tsx:498-509 (the Retry test lists 'configuration: This project has no remote.', which no CLI path emits) and :467-495 (AC13 covers only the 'no fetch remote' and 'Issues turned off' texts). Nothing upstream rewrites the reason. The commit message names 'the named repository-unavailable reasons' and does not mention this one.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "publication": "finding",
+        "degradation_class": "behaviour-delta",
+        "evidence_kind": "base-diff",
+        "dedupe_key": "issues-fallback-not-git-project"
+      },
+      {
+        "id": "DG-R4-002",
+        "severity": "info",
+        "reviewer": "review-degradation",
+        "file": "src/acp/server.ts",
+        "quote": "return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);",
+        "problem": "On base, handleSessionFlags was synchronous, so a server applied two `_keryx/session_flags` requests for one session in arrival order, even while it waited for another process's lock. On head, each request polls withFileLockAsync on its own 15 ms setTimeout. When another process holds `flags.json.lock`, both requests wait, and the first timer to fire after the release wins. That can be the later request, so for example pin then unpin can be stored as pinned. The flags reply arrives last, so Desktop shows the same wrong value. If true: minor, the user's last archive, pin or flow change on a session is overwritten by an earlier one.",
+        "impact": "This needs two flags requests for one session within the lock wait, and another keryx process (the issue-workspace child, another window) holding that session's flags lock at the same time. It can only happen in that window.",
+        "suggested_fix": "Check: in a scratch test, hold <dir>/flags.json.lock from a child process, send `{pinned:true}` and then `{pinned:false}` to one server, release the lock, and read flags.json. If it is reachable, chain the async writes per session in the server (one promise queue per sessionId) so arrival order is kept.",
+        "evidence": "consumer-trace (unrun): server.ts:2940-2968 is now async. file-lock.ts withFileLockAsync loops `await new Promise(r => setTimeout(r, RETRY_MS)); handle = attempt.step();` with no per-path queue. organize.ts withFlagsLockAsync -> applyFlagsChange reads the current flags inside the lock, so the later winner's change is the stored one. Not reproduced. Whether Desktop ever sends two flags requests for one session concurrently is not settled by the code read.",
+        "confidence": "low",
+        "location_class": "in-diff",
+        "publication": "question",
+        "degradation_class": "behaviour-delta"
+      },
+      {
+        "id": "DG-R4-003",
+        "severity": "info",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "if (loading || stale) return;",
+        "problem": "A refresh that fails with an `unavailable:` error keeps the same-scope snapshot with `stale: kept ? old.stale : true` (ReviewBoard.tsx:301). The kept snapshot is therefore not marked stale, and `loading` is false. A header focus for a PR newer than that snapshot is then refused with '#N is not in the current list of R: its state may be filtered out.', although the cause is the failed refresh. The error banner shows at the same time. Base kept the request armed instead, which FE-R3-001 reported as the worse outcome. If true: minor, the notice gives a wrong cause and the PR does not open after a successful Retry.",
+        "impact": "The notice names the wrong cause when the network is down. This happens only for a PR missing from a snapshot taken before a refresh failure.",
+        "suggested_fix": "Check: in ReviewBoard.dom tests, load a snapshot, make the next load reject with 'unavailable: offline', then set focus to a number not in the snapshot. If the filtered-out notice shows, also wait when `error` is set (`if (loading || stale || error) return;`), or word the notice for the error case.",
+        "evidence": "consumer-trace: ReviewBoard.tsx:298-302 (unavailable keeps the snapshot and does not set stale on a same-scope keep), :433-434 (error and loading), :509-515 (refusal). Refute: no guard on `error` in the effect at :496-520.",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "publication": "question",
+        "degradation_class": "behaviour-delta"
+      }
+    ],
+    "prior_dispositions": [
+      {
+        "id": "FE-R3-001",
+        "disposition": "closed"
+      },
+      {
+        "id": "FE-R3-002",
+        "disposition": "closed"
+      },
+      {
+        "id": "AR-007",
+        "disposition": "closed"
+      },
+      {
+        "id": "DG-R3-002",
+        "disposition": "closed"
+      },
+      {
+        "id": "HL3-001",
+        "disposition": "closed"
+      },
+      {
+        "id": "HL3-002",
+        "disposition": "closed"
+      },
+      {
+        "id": "PC-005",
+        "disposition": "closed"
+      },
+      {
+        "id": "PC-008",
+        "disposition": "closed"
+      },
+      {
+        "id": "TP-R3-003",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-009",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-010",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-011",
+        "disposition": "closed"
+      },
+      {
+        "id": "DG3-001",
+        "disposition": "closed"
+      },
+      {
+        "id": "LY-005",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-012",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-013",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-015",
+        "disposition": "closed"
+      },
+      {
+        "id": "HL3-004",
+        "disposition": "open"
+      },
+      {
+        "id": "SC3-001",
+        "disposition": "open"
+      },
+      {
+        "id": "UX-014",
+        "disposition": "open"
+      },
+      {
+        "id": "UX-016",
+        "disposition": "open"
+      }
+    ],
+    "stats": {
+      "blocker": 0,
+      "major": 0,
+      "minor": 1,
+      "info": 2
+    }
+  }
+}
+```
+
+## Prior dispositions, with the reason for each
+
+- FE-R3-001 closed: ReviewBoard.tsx:509-515 refuses a PR missing from a settled (not loading, not stale) snapshot with a notice and onFocusHandled; `loading` and `stale` were added to the deps. A residual edge is filed as DG-R4-003 (info).
+- FE-R3-002 closed: PrWorkRow refocusFlow effect (focuses the slot's button when focus fell to body), notice Dismiss focuses `search`, the Issues fallback focuses the source select through a [source] effect.
+- AR-007 closed: the view now asks repositoryUnavailable (useIssueCollection.ts) for named reasons; `older` applies on the first page only. The missing reason is DG-R4-001.
+- DG-R3-002 closed: issueSessions was removed. No caller is left (search over apps/desktop/src), and boundSessions is still used by prWork.ts and App.tsx.
+- HL3-001 closed: server.ts handleSessionFlags awaits setSessionFlagsAsync -> withFileLockAsync. The remaining sync setSessionFlags caller is issues-launch.ts:116, reached only from the CLI commands issues.ts and issue-workspace.ts, not the server.
+- HL3-002 closed: lockOptions sets createDir:false. A missing directory throws ENOENT, mapped to "no session ..."; whileStored checks summary.json inside the lock; writeOwnerOnlyFileAtomic (config-dir.ts:461) does not mkdir, so nothing recreates a trashed session.
+- PC-005 closed: the PR body now says a link "the board cannot show (another repository ... or a PR missing from the loaded list ...) shows a notice and is cleared", which matches the code.
+- PC-008 closed: cli-reference.md documents `subject`, the reply `{hasIssue?, archivedAt?, pinnedAt?, flow?, subject?}` (hasIssue exists in SessionFlags, organize.ts:20,99) and the "retry" refusal (lockedError).
+- TP-R3-003 closed: IssuesBoard.dom.test.tsx:498-509 asserts Retry and no fallback for non-unavailable errors, so the 'any error' mutant would fail it.
+- UX-009 closed: the visible offer text is "Link Flow #id · title?".
+- UX-010 closed: accept keeps the offer with `linking` until the write answers and shows `error` on failure. linkFlow (useAcpSession.ts:788) now rejects instead of swallowing errors.
+- UX-011 closed: the source key is account + ".source." + JSON(cwd); the legacy per-account key is only read as a default.
+- DG3-001 closed: a later open reads flags once without the lock (sessionSubjectSettled). The non-registered path already read flags.json through readSessionFlags on base, so the remaining I/O adds nothing new.
+- LY-005 and UX-012 closed: the offer is a plain `.pr-work-offer` span (no `.pr-work-link`, so no hover or box) and `.pr-work-slot` clips.
+- UX-013 closed: the unavailable branch strips `configuration:` (the Retry branch still shows raw reasons, which UX-013 did not cover).
+- UX-015 closed: the text "Bundled keryx in Settings → Desktop" matches SettingsView.tsx:12.
+- HL3-004, SC3-001, UX-014, UX-016 open: deferred in round 3. The stale rule (file-lock LockAttempt.step) and 2 s FLAGS_LOCK_TIMING are unchanged, and no repository action or session-side indicator was added.
+- Not judged here (outside slice-01, left to waves 2 and 3): TP-R3-001, TP-R3-002, TP-R3-004..009, PC-006, PC-007, HL3-003, LG-R3-003.
+
+## Verified clean
+
+- withFileLock (src/lib/file-lock.ts) refactor into LockAttempt: deadline-first, exclusive create plus nonce, nonce-write failure close-and-remove, stale takeover, the one-time onWaiting and nonce-checked release all match base step for step when createDir is the default. Consumers traced, all on default options, with no behaviour change: worktree/ports.ts, worktree/promote.ts, lib/permission-mode-config.ts, lib/config-update.ts, lib/serve-credential.ts, lib/project-registry.ts, mcp-servers/credentials.ts (enumerated by search for imports of lib/file-lock, `search-derived`; lib/fs.ts has its own separate withFileLock, which this change does not touch).
+- setSessionFlags/updateSessionFlagsAt/backfillSessionSubject: the new trailing `timing` parameter defaults to the old 3 s/2 s values. Callers: issues-launch.ts:116, issue-session.ts:64,69, server.ts:2965 (async variant).
+- whileStored summary.json check: createSession writes summary.json at creation (store.ts:682), so a first issue bind still passes. ACP session/new creates the session on disk through openLeasedSession (acp/session.ts:122).
+- bindIssueSubject firstBind: a failed first bind still fails the open, and the record is not saved, so the next open is again a first bind. A later open is best-effort.
+- linkFlow consumer (App.tsx usePendingFlowLinks): it lost base's pending retry for a session that keryx had not stored. A current keryx stores at session/new, so this affects only an older external keryx, and there the failure is now shown with Link kept. Not filed.
+- Issues source key: base (main) stored the source per account. Head reads that value as the per-project default, so existing choices carry over.
+- `.pr-work-slot { overflow: hidden }`: the Menu is portaled and focus rings use outline-offset -2px, so nothing in the slot is clipped that was visible before.
+- Test evidence: research-evidence/verify-tests-to-run-1.txt shows 68/68 root tests in 7 files and 1070/1070 Desktop tests passing at head (exit 0). I did not run anything.
+
+## Notes
+
+- The payload's layers graph was not queried (`keryx gdgraph affected`). Consumers were enumerated with `keryx ctx rg` import searches, labelled search-derived above. No cap applied.
+- No acceptance criteria were supplied beyond the PR body in review_context, which I used.
+- routing audit: graph_used: no (consumers enumerated by import search; the package graph was not needed for a 9-file slice), wiki_used: not-relevant (fix-range degradation check against base), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

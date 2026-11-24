@@ -1,0 +1,180 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 4, wave 1. Slice-01 (fix range d7b0f7058..4cb6c43ef, code commit 055115a20), read in full. The tests the slice touches were read at head: src/session/organize.test.ts, src/session/issues/issue-session.test.ts, src/lib/file-lock.test.ts, apps/desktop/src/review/PrWorkRow.dom.test.tsx, apps/desktop/src/issues/IssuesBoard.dom.test.tsx and apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx. I also read the round-3 fix hunks in usePendingFlowLinks.ts and useIssueCollection.ts, because the prior dispositions depend on them.
+
+## Mutation pass (executed)
+
+I ran the mutations by hand in a scratch worktree at 4cb6c43ef, created under the session scratchpad and then removed, with `bun install --frozen-lockfile`. Each mutant was one exact-string replacement, followed by the nearest suites and a restore. I did not use `keryx review mutate`, because it writes into the package's research-evidence/ and this dispatch allows writes only to P/raw/.
+- Suite B: `bun test src/session/organize.test.ts src/session/issues/issue-session.test.ts src/lib/file-lock.test.ts`. Baseline 39 pass / 0 fail.
+- Suite D (apps/desktop): `bun test src/review/PrWorkRow.dom.test.tsx src/issues/IssuesBoard.dom.test.tsx src/review/usePendingFlowLinks.dom.test.tsx`. Baseline 65 pass / 0 fail.
+- Mutants that carry a `cmd` ran only that file.
+
+| id | mutation | result |
+|---|---|---|
+| B01 | organize lockOptions `createDir: false` -> `true` (HL3-002) | 1 fail (removed-since-located) |
+| B02 | drop whileStored summary.json check | 1 fail |
+| B03 | drop ENOENT->"no session" mapping, sync | 1 fail |
+| B04 | drop ENOENT->"no session" mapping, async | 1 fail |
+| B05 | withFlagsLock without the file lock (TP-R3-008), 3 runs | 5 fail every run (incl. the barrier exclusion test and the two-process test) |
+| B06 | withFlagsLockAsync without the file lock, 3 runs | 3 fail every run (incl. "waits for a writer in another process") |
+| B07 | injected timing ignored (production 3s/2s) | 3 fail |
+| B08 | drop `if (sessionSubjectSettled(dir)) return;` (DG3-001 lock-free skip) | 1 fail (the spyOn test, so the namespace spy does see the call) |
+| B09 | later-open backfill failure rethrown (DG3-001 best-effort) | 1 fail |
+| B10 | `firstBind = false` | 1 fail (first bind fails loudly) |
+| B11 | `firstBind = true` | 2 fail |
+| B12 | sessionSubjectSettled ignores subjectUnlinked | 2 fail |
+| B13 | backfill subject validation removed (TP-R3-009) | 1 fail |
+| B14 | drop `if (held === null) throw lockedError(dir)` (TP-R3-007 M39) | 3 fail |
+| B15 | backfillSessionSubject without withFlagsLock (TP-R3-007 M47) | 2 fail |
+| F01 | file-lock prepare ignores createDir:false | 3 fail |
+| F02 | file-lock drops the createDir:false ENOENT throw | 3 fail |
+| F03 | file-lock keeps the lock file when the nonce write fails (drop rmSync) | **39/39 green** |
+| F04 | withFileLockAsync waits with sleepSync | 2 fail (10 s / 30 s timeouts) |
+| F05 | withFileLockAsync releases before the async section settles | 1 fail |
+| D01 | FE-R3-001 refusal reverted to the old silent `return` | 2 fail |
+| D02 | refusal: drop `loading ||` | 1 fail |
+| D03 | refusal: drop `|| stale` | **65/65 green** |
+| D04 | refusal does not mark the nonce (TP-R3-004 M24) | 1 fail |
+| D05 | refusal does not call onFocusHandled | 1 fail |
+| D06 | Dismiss notice does not focus search (FE-R3-002) | 1 fail |
+| D07 | PrWorkRow refocus effect body dropped (FE-R3-002) | 1 fail |
+| D08 | Link without onAct | 1 fail |
+| D09 | Dismiss without onAct | 1 fail |
+| D10 | Link without busy guard | 1 fail |
+| D11 | Dismiss without busy guard | 1 fail |
+| D12 | refocus effect: drop `offer ||` | **65/65 green** |
+| D13 | refocus effect: focus even when focus is elsewhere (`if (true)`) | **65/65 green** |
+| D14 | IssuesBoard fallback does not arm focusSource | 1 fail |
+| D15 | IssuesBoard effect does not focus the select | 1 fail |
+| D16 | IssuesBoard effect: drop `if (!focusSource.current) return;` | **65/65 green** |
+| D17 | UX-010: failed write drops the offer | 1 fail |
+| D18 | accept ignores `offer.linking` | 2 fail |
+| D19 | accept: no synchronous offersRef mark (TP-R3-001 M01) | 1 fail |
+| D20 | success keeps the offer | 4 fail |
+| D21 | no `linking` mark rendered | 1 fail |
+| D22 | dismiss: no synchronous offersRef clear (TP-R3-001 M05) | 1 fail |
+| D23 | older offer kept beside the new one (TP-R3-001 M08) | 1 fail |
+| D24 | offer shown despite a Flow (TP-R3-002 M20) | 1 fail |
+| D25 | repositoryUnavailable: any error is "unavailable" (TP-R3-003 M34) | 2 fail |
+| D26 | "older" on any page | 1 fail |
+| D27 | a successful focus keeps the refused notice (TP-R3-004 M26) | 1 fail |
+| D28 | ReviewProgress drops `showState &&` (TP-R3-005 M29), ReviewProgress.test.tsx | 1 fail |
+| I01 | issues-board 410 branch drops `repository &&` (TP-R3-006 M51), issues-board.test.ts | 1 fail |
+| I02 | issues-board extra-page loop drops `repository &&` (TP-R3-006 M54) | 1 fail |
+
+Totals: I ran 50 distinct mutants, plus 4 repeat runs of B05 and B06 to check determinism. 45 went red and 5 survived (F03, D03, D12, D13, D16). Every spot check the dispatch asked for went red. Not reached: TP-R3-006 M55 (turnPage key clearing, called near-equivalent in round 3), the presentation-only `role="alert"` on the error text, and the IssuesBoard `.replace(/^configuration:\s*/i, "")`. The UX-013 test asserts that the prefix is absent, so that last one is probably pinned, but I did not run it.
+
+Red-on-parent (round obligation 5), Desktop only: I restored the parent's (d7b0f7058) production files for the 10 changed Desktop sources and ran the 5 nearest suites: 57 pass, 16 fail. Every new FE-R3-001/002, UX-010, UX-011, review.css and AC13 test failed on the parent. These new tests pass on the parent:
+- the FE-R3-001 "waits for that load" test, TP-R3-004 "later focus clears", TP-R3-002, the TP-R3-001 hook tests and TP-R3-005. They pin behaviour the parent already had, which is what those prior findings asked for, and each of them goes red under its mutant above.
+- UX-017. On the parent it passes only because the parent ignores the new per-project key and takes the default path. At head it is still meaningful.
+
+Backend red-on-parent was not run per test: the new tests import exports that are new at head (setSessionFlagsAsync, sessionSubjectSettled, updateSessionFlagsAtAsync), so every test fails at import on the parent. Instead, each new backend test went red under at least one of B01–B15 and F01–F05.
+
+Wall-clock and flakiness: I found no elapsed-time assertion in the new tests. The lock tests sync on barrier files, through `until()`, which polls a file and fails when the child exits. The "held off past its timeout" test uses timeoutMs 20 against a lock that is never released, and the stale test uses staleMs 1 with a 30 s timeout, so neither outcome depends on timing. The async first attempt runs synchronously before `go` is written (withFileLockAsync calls step() before its first await), so "waits for a writer in another process" is deterministic. B06 went red 3 times out of 3. The two-process stress test still detects loss by chance, but it now went red in 3 of 3 B05 runs, and B05 is also caught deterministically by the barrier exclusion test.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-testing-practices",
+    "slices": ["slice-01"],
+    "summary": "50 mutants run on the round-3 fix range (45 red, 5 green), plus 4 determinism repeats. Every spot check the dispatch asked for (FE-R3-001 refusal, FE-R3-002 focus, UX-010, TP-R3-008 lock exclusion, HL3-002 createDir:false, DG3-001 best-effort backfill) is pinned. The lock tests have no wall-clock dependence. Four gates added or restructured in this range survive deletion. All 12 prior findings checked are closed.",
+    "findings": [
+      {
+        "id": "TP-R4-001",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "if (offer || !refocusFlow.current) return;",
+        "problem": "Both guards of the FE-R3-002 refocus effect survive deletion with all 65 nearest Desktop tests green. D12 drops `offer ||`. D13 replaces `!active || active === document.body` with `true`. The FE-R3-002 test's offerHost empties the offer list inside onLinkFlowOffer, so the offer goes straight from present to absent. The producer does not work that way: usePendingFlowLinks.accept first emits the offer again with `linking: true` (`settle({ sessionId, dir, linking: true })`) and removes it only when the write answers. The fixture therefore never sends a re-render with the offer still present, which is exactly the case `offer ||` exists for. No test moves focus elsewhere before the offer goes either, so the guard against stealing focus is unpinned too.",
+        "impact": "In the real flow, Link -> linking -> removed, the `offer ||` guard is load-bearing. Without it, the linking re-render consumes refocusFlow, and when the offer is removed focus falls to the page body, which is the FE-R3-002 defect, and the suite stays green. Without the activeElement guard, the slot would take focus back from wherever the person moved it while the write ran.",
+        "suggested_fix": "In the FE-R3-002 test, drive the offer the way the producer does: on Link, set the offer to `{ ...offer, linking: true }`, render, then set []. Assert that focus lands on 'Create Flow for #101'. Add a case that focuses another control (e.g. 'Search pull requests') between the linking render and the removal, and assert that focus stays there.",
+        "evidence": "Scratch worktree at 4cb6c43ef. D12 and D13: 65 pass / 0 fail on PrWorkRow.dom.test.tsx + IssuesBoard.dom.test.tsx + usePendingFlowLinks.dom.test.tsx. D07 (the effect body dropped) is red, so the test does reach the effect. Producer: usePendingFlowLinks.ts accept() calls `settle({ sessionId, dir, linking: true })` before `await linkRef.current(...)`. The fixture's `onLinkFlowOffer: () => set([])` is in offerHost in PrWorkRow.dom.test.tsx.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "prworkrow-refocus-guards-unpinned"
+      },
+      {
+        "id": "TP-R4-002",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "if (loading || stale) return;",
+        "problem": "The `stale` arm of the FE-R3-001 wait survives deletion (D03: 65/65 green). Its comment says a cached fallback 'may still bring the PR in: wait for the settled list'. No test sends a focus while the board shows a stale (cached-fallback) snapshot that lacks the PR. The `loading` arm is pinned (D02 red).",
+        "impact": "If someone drops the stale arm, a focus that arrives while the board shows a cached snapshot is refused with 'is not in the current list' even though the next good load would hold the PR, and no test fails.",
+        "suggested_fix": "Add a focus-host case whose first load succeeds without the PR and whose refresh fails, so the board shows the stale snapshot. Send the focus and assert no notice and no handled nonce. Then let a later load return the PR and assert that the panel opens.",
+        "evidence": "D03 (`if (loading || stale)` -> `if (loading)`): 65 pass / 0 fail. D02 (`-> if (stale)`): red on 'FE-R3-001: a focus that arrives while a load runs waits for that load before it decides'.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "reviewboard-focus-stale-arm-unpinned"
+      },
+      {
+        "id": "TP-R4-003",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "if (!focusSource.current) return;",
+        "problem": "The guard that limits the new select-focus effect to the fallback survives deletion (D16: 65/65 green). The effect runs on mount and on every source change. Without the guard it focuses the Issue source select every time the board opens or the source changes. The FE-R3-002 assertion in the AC13 test only checks the positive path (focus on the select after the fallback). No test asserts that focus is left alone on mount or on a source change the person makes from the select.",
+        "impact": "Opening the Issues board could take keyboard focus away from where the person was, and the suite would stay green.",
+        "suggested_fix": "In 'AC13 the project repository is the default source', or a new test, record document.activeElement before render (e.g. a focused button outside the host). Assert that it is still focused after the board mounts and after a change event on the select.",
+        "evidence": "D16 (line deleted): 65 pass / 0 fail. D14 and D15 (arm dropped, focus call dropped) are both red on 'AC13 an older keryx that refuses the default repository source…'.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "issuesboard-focus-guard-unpinned"
+      },
+      {
+        "id": "TP-R4-004",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "src/lib/file-lock.ts",
+        "line": null,
+        "quote": "The open succeeded but the nonce did not land. Holding it would run the",
+        "problem": "This range restructured the nonce-write failure path (the inner try/catch became the outer catch's `if (handle !== null)` branch), and it survives deletion. Dropping its `rmSync(this.lockPath, { force: true })` leaves all 39 nearest tests green (F03). No test makes the nonce write fail after the exclusive open succeeds. The behaviour predates this range, but the restructure changed its control flow without a test.",
+        "impact": "A regression would leave an empty lock file on a failed nonce write, which every caller then waits out for the stale window. The restructure is the kind of edit that loses this, and nothing would catch it.",
+        "suggested_fix": "Spy on node:fs writeFileSync, or inject the writer, so that the first nonce write throws. Then assert that withFileLock still takes the lock on the next attempt and that no lock file is left behind.",
+        "evidence": "F03 (`closeSync(handle);\\n        rmSync(this.lockPath, { force: true });` -> `closeSync(handle);`): 39 pass / 0 fail on organize + issue-session + file-lock tests. Parent d7b0f7058 had the same cleanup inside an inner try/catch.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "file-lock-nonce-failure-cleanup-unpinned"
+      },
+      {
+        "id": "TP-R4-005",
+        "reviewer": "review-testing-practices",
+        "severity": "info",
+        "file": "src/session/organize.test.ts",
+        "line": null,
+        "quote": "const barrier = mkdtempSync(path.join(tmpdir(), \"keryx-organize-barrier-\"));",
+        "problem": "The three new barrier directories are never removed. This follows the file's existing practice: project() roots are not removed either, and the file has no afterEach. No author change is asked for. It is noted for hygiene only.",
+        "impact": "Each run leaves a few empty directories in the temp dir. Determinism is not affected.",
+        "suggested_fix": "None required. If the file gains an afterEach cleanup later, include the barrier directories.",
+        "evidence": "keryx ctx rg 'afterEach|afterAll|rmSync\\(' src/session/organize.test.ts: only two rmSync calls, both inside the 'removed since located' test.",
+        "confidence": "high"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed", "evidence": "D01 red (2 tests), D02/D04/D05 red. The stale arm is unpinned (TP-R4-002) but does not reopen the refusal."},
+      {"id": "FE-R3-002", "disposition": "closed", "evidence": "D06/D07/D08/D09/D14/D15 red. Two refocus guards are unpinned (TP-R4-001, TP-R4-003). That is coverage only: the code at head does the refocus."},
+      {"id": "TP-R3-001", "disposition": "closed", "evidence": "M01 -> D19 red, M05 -> D22 red, M08 -> D23 red."},
+      {"id": "TP-R3-002", "disposition": "closed", "evidence": "M20 -> D24 red."},
+      {"id": "TP-R3-003", "disposition": "closed", "evidence": "M34 -> D25 red (2 tests). The firstPage gate D26 is red too."},
+      {"id": "TP-R3-004", "disposition": "closed", "evidence": "M24 -> D04 red, M26 -> D27 red."},
+      {"id": "TP-R3-005", "disposition": "closed", "evidence": "M29 -> D28 red in ReviewProgress.test.tsx."},
+      {"id": "TP-R3-006", "disposition": "partial", "evidence": "M51 -> I01 red, M54 -> I02 red. M55 not run (near-equivalent per round 3)."},
+      {"id": "TP-R3-007", "disposition": "closed", "evidence": "M39 -> B14 red (3 tests), M47 -> B15 red. The unlocked updateSessionFlagsAt (M38/B05) is red 3/3 runs, including deterministic barrier tests."},
+      {"id": "TP-R3-008", "disposition": "closed", "evidence": "No elapsed-time assertion remains. Ordering, timeout, stale and exclusion are barrier-file or never-released-lock based. B05 red 3/3 (5 tests), B06 red 3/3 (3 tests), B07 red."},
+      {"id": "TP-R3-009", "disposition": "closed", "evidence": "B13 red: 'a backfill of an invalid subject is refused and writes nothing'."},
+      {"id": "HL3-002", "disposition": "closed", "evidence": "B01 (createDir true), B02, B03, B04, F01, F02 all red on 'a flags write to a session removed since it was located…'."},
+      {"id": "DG3-001", "disposition": "closed", "evidence": "B08 (lock-free skip) red via the spyOn test, B09 (best-effort catch) red, B10/B11 (firstBind) red."},
+      {"id": "UX-010", "disposition": "closed", "evidence": "D17 (failure drops offer) red, D10/D11/D18/D20/D21 red."}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 1}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: I read the slice and its test files directly, and the test files were found with keryx ctx rg). wiki_used: no (not-relevant: this lens is about test discipline). ctx_used: yes (keryx ctx rg/diff/run). raw_rg_used: no. Raw `git diff`/`git show`/`tail` were used with keryx:raw markers to write diffs and mutation output to scratch files.
+
+Not run or not verified: the app-level fixtures (app-work-row.fixture.tsx, app-navigation.fixture.tsx), which need their own runner. Per-test red-on-parent for the backend tests (they fail at import on the parent). M55. The full root and Desktop suites (only the nearest suites ran).

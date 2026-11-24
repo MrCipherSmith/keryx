@@ -1,0 +1,94 @@
+STATUS: DONE
+
+# review-ui-ux — round 4, wave 2 (slice-02, range d7b0f7058..4cb6c43ef)
+
+## Verdict
+
+Slice-02 holds the same Desktop UI sites as slice-01 (PrWorkRow FlowOffer, review.css, ReviewBoard focus notice, IssuesBoard fallback) plus their tests and the App fixtures. Every UX defect in these sites is already filed in wave 1 (UX-R4-001..004) and is not filed again. The slice adds nothing new for this lens. The tests pin the behaviour the round-3 UX findings asked for: the offer is named, it stays visible while linking and after a failure, focus is restored after self-removing controls, the Issues fallback is limited to the named reasons, and the source is stored per project. No blocker, major, minor or new info finding.
+
+## Context
+
+- Product: Keryx Desktop. Audience: a developer working on GitHub PRs and issues through Keryx sessions.
+- Primary task (inferred from AC9/AC13): confirm or dismiss a Flow link on a PR card. Switch the Issues source when the repository source cannot be read.
+- Surface: app screen. The marketing rows of `ui-anti-slop.mdc` do not apply.
+- Mode: code only (no URL or screenshots supplied).
+
+## Scores
+
+- Slop score: 0. The range adds no T1/T2/T3 tell. The only CSS change is `overflow: hidden` on `.pr-work-slot`.
+- WCAG 2.2 AA floor (code reading): accessible names on Link/Dismiss carry the Flow number and title. `aria-disabled` keeps focus during the write. Focus lands on a real control after Link/Dismiss ("Create Flow for #101" in the test), after "Dismiss notice" (the search field) and after "Show issues assigned to me" (the source select). Contrast and target size were not measured.
+- Viewports: not run.
+
+## Findings
+
+None new. Candidates I checked and did not file:
+
+- A failed Link leaves `refocusFlow.current` set while the offer stays. The effect refocuses only when focus is on `body`, so a later removal of the offer cannot pull focus away from a control the user is on. No path to harm.
+- The older-keryx notice leads with the CLI text "Invalid Issues request.". The next paragraph gives the cause and remedy ("update keryx or choose Bundled keryx in Settings → Desktop"). The class is UX-013, which wave 1 recorded as fixed for this branch, and the remedy is present.
+- With an older keryx, "Open in session" now shows no "binding was not saved" notice until the first turn (app-navigation fixture). The PR body lists this ("Older keryx") and AC8 was re-frozen on it. Owner choice.
+- The Retry branch of the Issues notice still shows raw prefixes such as "rate-limit:". This predates the range and is outside UX-013 as filed (wave 1 already noted it).
+
+## Prior dispositions (round 3, sites in this slice)
+
+- FE-R3-001: fixed. The focus effect now depends on `loading`/`stale`. A PR missing from the settled list gets the notice "#N is not in the current list of <repo>…" and is marked handled. Tests: "FE-R3-001" ×2 (refused and not reopened by a later load; waits for an in-flight load) and "TP-R3-004" ×2. Static reading, tests not run.
+- FE-R3-002: fixed. Same evidence as wave 1. Slice-02 adds the tests "FE-R3-002: Link and Dismiss move focus…", "FE-R3-002: Dismiss notice moves focus to the search field" and the IssuesBoard fallback test asserting `document.activeElement === select`.
+- AR-007: fixed. `repositoryUnavailable` matches only "has no GitHub.com fetch remote", "has Issues turned off for" and "names no usable repository", plus "Invalid Issues request" on the first page only. Tests: AR-007/TP-R3-003 (rate-limit, connection lost, stale cursor and "no remote" keep Retry) and the later-page test.
+- DG-R3-002: fixed. `issueSessions` is removed from model.ts, and model.test uses `boundSessionIndex`.
+- TP-R3-001: fixed. New tests in usePendingFlowLinks.dom.test cover double press, Dismiss then Link, and a replaced offer.
+- TP-R3-002: fixed. Test "TP-R3-002: a PR that already has a Flow shows that Flow, not an offer".
+- TP-R3-003: fixed. Covered by the AR-007/TP-R3-003 test.
+- TP-R3-004: fixed. Two TP-R3-004 tests.
+- TP-R3-005: fixed. ReviewProgress.test.tsx asserts `showState`.
+- UX-009: fixed. The offer name is `Flow #id · title` in the text, title and accessible names, and the fixtures assert it. Visibility at board widths is UX-R4-001.
+- UX-010: fixed in behaviour. `accept` keeps `linking` and stores `error` on rejection, and `linkFlow` rejects ("keryx is not connected." or the keryx error). Hook tests and the app-work-row fixture (refused lock, then Dismiss) cover it. Visibility: UX-R4-001.
+- UX-011: fixed. `sourceKey = account + ".source." + JSON.stringify(cwd)`, and the legacy per-account key is read only as a fallback. Tests UX-011 ×2.
+- LY-005: fixed as to overlap (`.pr-work-slot { overflow: hidden }`, CSS test). Residual: UX-R4-001. Not measured.
+- UX-012: fixed. A CSS test asserts no `.pr-work-link.pr-work-offer`, and a DOM test asserts the offer span lacks `pr-work-link`.
+- UX-013: fixed for the unavailable/older branch (`error.replace(/^configuration:\s*/i, "")`, test asserts no "configuration:"). The Retry branch was not in the finding.
+- UX-014: still_open (deferred). Wave 1 filed a second site as UX-R4-002.
+- UX-015: fixed. The copy is "choose Bundled keryx in Settings → Desktop", and the test asserts it.
+- UX-016: still_open (deferred). Unchanged in this range.
+
+## What works (keep)
+
+- The tests assert focus targets by accessible name, not just "focus is not on body".
+- The fallback test runs every named reason and also runs the negative set (other errors keep Retry), so the fallback cannot silently widen.
+
+## Checks not run
+
+- No render was supplied. Offer geometry at a 230px lane and the 16rem list column, `--warn` contrast on `.pr-work-offer.is-attention`, Link/Dismiss target size against 24×24, and screen-reader announcement of the offer error and the focus notice were not measured. Screenshots of a PR card in offer, Linking and error states at 1440/768 would close the gap.
+- Tests were not run (exec budget 0). Every "fixed" above is a static reading of code and tests.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-ui-ux",
+    "status": "DONE",
+    "slices": ["slice-02"],
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "fixed", "evidence": "ReviewBoard focus effect deps [focus, snapshot, loading, stale, ...]; notice '#N is not in the current list of <repo>' and request marked handled; tests FE-R3-001 x2 and TP-R3-004 x2 in PrWorkRow.dom.test. Static, not run"},
+      {"id": "FE-R3-002", "disposition": "fixed", "evidence": "tests 'FE-R3-002: Link and Dismiss move focus…' (activeElement 'Create Flow for #101'), 'Dismiss notice moves focus to the search field', IssuesBoard fallback test activeElement === select"},
+      {"id": "AR-007", "disposition": "fixed", "evidence": "useIssueCollection.repositoryUnavailable matches only the three named reasons plus first-page 'Invalid Issues request'; tests AR-007/TP-R3-003 and the later-page test"},
+      {"id": "DG-R3-002", "disposition": "fixed", "evidence": "issueSessions removed from issues/model.ts; model.test uses boundSessionIndex(sessions)(issueSubject(issue))"},
+      {"id": "TP-R3-001", "disposition": "fixed", "evidence": "usePendingFlowLinks.dom.test: two presses write once, Dismiss then Link writes nothing, new offer replaces older"},
+      {"id": "TP-R3-002", "disposition": "fixed", "evidence": "PrWorkRow.dom.test 'TP-R3-002: a PR that already has a Flow shows that Flow, not an offer'"},
+      {"id": "TP-R3-003", "disposition": "fixed", "evidence": "IssuesBoard.dom.test 'AR-007/TP-R3-003: any other error … keeps Retry'"},
+      {"id": "TP-R3-004", "disposition": "fixed", "evidence": "two TP-R3-004 tests (refused request not re-raised after refresh; later opened focus clears the notice)"},
+      {"id": "TP-R3-005", "disposition": "fixed", "evidence": "ReviewProgress.test.tsx asserts the state label only with showState"},
+      {"id": "UX-009", "disposition": "fixed", "evidence": "FlowOffer name `Flow #${id} · ${title}` in text, title, aria-labels; fixtures assert offerName. Visibility at board width: UX-R4-001"},
+      {"id": "UX-010", "disposition": "fixed", "evidence": "accept keeps linking then error on reject; linkFlow rejects; hook tests UX-010 x2, PrWorkRow test UX-010, app-work-row refused-lock path. Visibility: UX-R4-001"},
+      {"id": "UX-011", "disposition": "fixed", "evidence": "sourceKey per account and cwd, legacy key as read fallback only; tests UX-011 x2"},
+      {"id": "LY-005", "disposition": "fixed", "evidence": ".pr-work-slot overflow:hidden with CSS test; residual text width is UX-R4-001; not measured"},
+      {"id": "UX-012", "disposition": "fixed", "evidence": "CSS test: no .pr-work-link.pr-work-offer; DOM test: offer span lacks pr-work-link"},
+      {"id": "UX-013", "disposition": "fixed", "evidence": "unavailable/older branch strips 'configuration:'; test asserts not.toContain('configuration:')"},
+      {"id": "UX-014", "disposition": "still_open", "evidence": "deferred; second site filed in wave 1 as UX-R4-002"},
+      {"id": "UX-015", "disposition": "fixed", "evidence": "copy 'choose Bundled keryx in Settings → Desktop', asserted in IssuesBoard.dom.test"},
+      {"id": "UX-016", "disposition": "still_open", "evidence": "deferred; unchanged in this range"}
+    ],
+    "stats": {"files_reviewed": 19, "findings": 0, "blocker": 0, "major": 0, "minor": 0, "info": 0, "slop_score": 0, "render": "not supplied", "not_refiled": ["UX-R4-001", "UX-R4-002", "UX-R4-003", "UX-R4-004"]}
+  }
+}
+```
+
+routing audit: graph_used: no (scope fixed by the payload slice), wiki_used: not-relevant (static UX review of a fix range), ctx_used: yes (keryx ctx rg), raw_rg_used: no

@@ -1,0 +1,91 @@
+STATUS: DONE
+
+# Style Review Report — review-style, round 4, wave 3
+
+## Summary
+Slice-03 of the round-3 fix range (d7b0f7058..4cb6c43ef) holds the backend code, its tests and the docs: src/acp/server.ts, src/commands/acp.ts (help text), src/integrations/issues-board.ts and its test, src/lib/file-lock.ts and the new file-lock.test.ts, src/session/organize.ts and its test, src/session/issues/issue-session.ts and its test, docs/docs/guides/desktop-issues.md and the implementation plan. Names follow the surrounding code, the new test helpers read as what they do, and no readability threshold is crossed. I found one info observation and no minor or major finding. ST-R4-001..005 from waves 1 and 2 are not filed again. That includes `handle` holding "timeout", which appears again in this slice's file-lock.ts hunk.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (explicit-hash-range, diff mode)
+- Slice read in full: slice-03 (1627 lines; 22 hunks over 13 files)
+- Context read beyond the slice: the organize.ts hunk @@127 (FlagsLockTiming, lockOptions, whileStored, lockedError/goneError), which is in slice-01, read with `git diff -U2 d7b0f7058..4cb6c43ef -- src/session/organize.ts`; `keryx ctx rg` for the 410 texts and the `whileStored` sites; my wave-1 and wave-2 replies.
+
+## Stats
+- major: 0
+- minor: 0
+- info: 1
+
+## Minor & Info
+
+### [ST-R4-006] info — `whileStored(dir, apply)()` builds a closure only to call it at once (src/session/organize.ts)
+Both lock wrappers pass `() => ({ value: whileStored(dir, apply)() })`. `whileStored` returns a function `() => T`, and the only two callers (organize.ts:168, :181; `keryx ctx rg -n --all whileStored src`: 1 definition, 2 calls) invoke it on the spot. So the reader sees an arrow that calls a factory that returns an arrow that is then called. A plain call reads straight through. For example, `function applyWhileStored<T>(dir, apply): T { if (!existsSync(…summary.json)) throw goneError(dir); return apply(); }` called as `() => ({ value: applyWhileStored(dir, apply) })`. Another option is to inline the check in the section. No comment gives a reason for the curried shape, and nothing else uses the returned closure.
+Fix (optional): turn `whileStored` into a function that runs `apply` and returns its value, and drop the trailing `()` at both sites.
+
+## Verified clean (style lens)
+- **File length:** test files are exempt under `solid-principles.mdc`: organize.test.ts gains about 170 lines, file-lock.test.ts is new at 128 and issue-session.test.ts gains about 65. In production code, issues-board.ts gains 4 lines, server.ts 2, and acp.ts 4 lines of help text. The file-lock.ts and organize.ts line counts were checked in wave 1, and no threshold is crossed.
+- **New names:** `unusableRemote` follows its siblings `invalidInput` and `issuesDisabled`, which are message constants named for the condition. `setSessionFlagsAsync` and `updateSessionFlagsAtAsync` follow the `withFileLockAsync` / `withFlagsLockAsync` suffix pair. `handleSessionFlags` stays the same name and is now `async`.
+- **Test helpers:** `plantFresh`, `plantAbandoned`, `scratch`, `variants`, `spawnScript`, `until(file, child)` and the `ORGANIZE` path constant all read as what they do. `listed(root, id, dataDir)` follows the sibling `stored(cwd, dataDir)` in organize.test.ts, a participle that names the state it creates (law 4). The local timing objects `held`, `stale` and `quick` are named for the scenario they set up, and they are consistent with each other.
+- **`import * as organize` beside named imports** (issue-session.test.ts): this has a reason. `spyOn(organize, "backfillSessionSubject")` needs the namespace object, so it is not a barrel-import finding.
+- **Boolean conditions and nesting:** no `+` line has more than 3 clauses. `isMissing(error) && !existsSync(dir)` has 2, `subject !== null && (typeof subject !== "object" || Array.isArray(subject))` is pre-existing, and `bindIssueSubject` has 3 guards at depth 1. No nested ternaries were added in production code. The test fixture `n === 1 ? … : n === 2 ? … : …` (issues-board.test.ts) is pre-existing.
+- **Console usage:** none added.
+- **`I`-prefixed interfaces:** none (`FileLockOptions` is the only new interface in this slice).
+- **Left to other lenses:**
+  - review-clean-code owns three items. `withFlagsLock` / `withFlagsLockAsync` and `withFileLock` / `withFileLockAsync` keep near-twin bodies (noted in wave 1). The new `listed()` helper in issue-session.test.ts repeats the `createSession` + `persistHistory` lines that the earlier "older keryx" test (hunk @@78) still inlines. The `bindIssueSubject(…, firstBind)` flag parameter was noted in wave 1.
+  - The review-docs/UX owner can check one wording point. The acp.ts help sentence "archives, pins, links a flow package to or binds a GitHub pull request or issue (subject) to a stored session" is hard to parse because "to or binds … to" splits the verb object. It is user-facing prose, not a code name.
+  - review-testing-practices owns one check. The test name "a later open reads the flags without the lock …" asserts only that no backfill call is made, not the lock behaviour itself.
+
+## Prior dispositions (round 3; sites in slice-03, judged against the slice's head code)
+- **TP-R3-008 closed:** the wall-clock assertions (`Date.now() - started >= 1500`, `< 1500`) and the `while (Date.now() < startAt)` start are gone. The waits are now ordered by file barriers (`until(held|read|pinned|flow, child)` and a `go` file), and the timing is injected through `FlagsLockTiming` (`{ timeoutMs: 20, staleMs: 60_000 }`, `{ staleMs: 1 }`).
+- **TP-R3-007 closed:** "a flags change held off past its timeout fails with the retry error …" asserts the `retry` message for both the sync and async paths. "a subject backfill runs under the flags lock" throws on a planted lock. Without the lock (M47), the backfill would write.
+- **TP-R3-009 closed:** "a backfill of an invalid subject is refused and writes nothing" asserts `/not a GitHub subject/` and that there is no flags.json.
+- **TP-R3-006 closed:** "a viewer source never gets the repository-named 410 text" asserts `issuesDisabled` and `not.toThrow("Choose another source")`. That is the repository-only text at issues-board.ts:188. "a viewer page made only of pull requests does not page on" asserts `pages === [1]`.
+- **HL3-001 closed:** server.ts `handleSessionFlags` is `async` and awaits `setSessionFlagsAsync`. file-lock.test.ts "waits for a held lock without blocking the event loop" pins the yield.
+- **HL3-002 closed:** "a flags write to a session removed since it was located is refused and does not bring it back" covers the sync path, the async path and the backfill, both for a missing directory and for a missing summary.json. file-lock.test.ts adds a `createDir: false` ENOENT test.
+- **DG3-001 closed:** `bindIssueSubject(dir, ref, firstBind)` skips the backfill when `sessionSubjectSettled`, and it swallows the failure on a later open. Three tests in issue-session.test.ts cover this: skipped when settled, opens despite a failed backfill, and a first bind that fails loudly.
+- **PC-008 closed:** the acp.ts help site now names flow linking and subject binding. The cli-reference.md site was closed in wave 1.
+- **AR-007 (backend side) consistent with closed:** a `.`/`..` remote now throws `unusableRemote` (a `configuration:` reason the person can act on) instead of `invalidInput`. A missing cwd stays `invalidInput`. The renamed test pins both.
+- **Deferred, unchanged by this slice:** HL3-004 (the 2 s age-only stale rule, `FLAGS_LOCK_TIMING.staleMs` is still 2_000) and SC3-001 (the stale takeover in `LockAttempt.step` still stats and then removes, with no re-check).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-style",
+    "round": 4,
+    "status": "DONE",
+    "slices": ["slice-03"],
+    "findings": [
+      {
+        "id": "ST-R4-006",
+        "severity": "info",
+        "reviewer": "review-style",
+        "file": "src/session/organize.ts",
+        "quote": "    held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: whileStored(dir, apply)() }), lockOptions(timing));",
+        "problem": "whileStored(dir, apply) returns a closure that both of its callers (withFlagsLock, withFlagsLockAsync) invoke immediately, so each lock section reads as an arrow that calls a factory and then calls the closure it returns. No other use of the returned closure exists.",
+        "impact": "Readability only. The reader has to notice the trailing `()` to see that the summary.json check runs inside the lock. No wrong behaviour.",
+        "suggested_fix": "Optional: make it a plain runner, e.g. `applyWhileStored(dir, apply): T` (check summary.json, then return apply()), and call `() => ({ value: applyWhileStored(dir, apply) })` at both sites.",
+        "evidence": "slice-03 organize.ts hunk @@160,202 (both call sites); definition in the @@127 hunk (slice-01), read via git diff d7b0f7058..4cb6c43ef -- src/session/organize.ts; keryx ctx rg -n --all whileStored src: organize.ts:148 (definition), :168, :181 (calls).",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "organize-whilestored-immediately-invoked-closure"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "TP-R3-008", "disposition": "closed", "evidence": "organize.test.ts: wall-clock assertions and the Date.now() start barrier removed; file barriers (until + go file) and injected FlagsLockTiming."},
+      {"id": "TP-R3-007", "disposition": "closed", "evidence": "organize.test.ts: 'held off past its timeout fails with the retry error' (sync and async) and 'a subject backfill runs under the flags lock'."},
+      {"id": "TP-R3-009", "disposition": "closed", "evidence": "organize.test.ts: 'a backfill of an invalid subject is refused and writes nothing'."},
+      {"id": "TP-R3-006", "disposition": "closed", "evidence": "issues-board.test.ts: viewer 410 keeps issuesDisabled and not 'Choose another source' (issues-board.ts:188 repository-only text); viewer all-PR page requests page 1 only."},
+      {"id": "HL3-001", "disposition": "closed", "evidence": "server.ts handleSessionFlags is async and awaits setSessionFlagsAsync; file-lock.test.ts pins a non-blocking wait."},
+      {"id": "HL3-002", "disposition": "closed", "evidence": "organize.test.ts: write to a removed session (dir gone, or summary.json gone) refused as 'no session' on sync, async and backfill paths without recreating it; file-lock.test.ts createDir:false ENOENT test."},
+      {"id": "DG3-001", "disposition": "closed", "evidence": "issue-session.ts bindIssueSubject skips when sessionSubjectSettled and swallows a later-open failure; issue-session.test.ts covers skip, open-despite-failure and loud first bind."},
+      {"id": "PC-008", "disposition": "closed", "evidence": "src/commands/acp.ts help names flow linking and subject binding for _keryx/session_flags; the cli-reference.md site was closed in wave 1."},
+      {"id": "AR-007", "disposition": "closed", "evidence": "issues-board.ts: '.'/'..' remote throws unusableRemote, missing cwd stays invalidInput; issues-board.test.ts pins both texts."},
+      {"id": "HL3-004", "disposition": "deferred", "evidence": "Unchanged by slice-03: FLAGS_LOCK_TIMING.staleMs is 2_000 and the stale rule is age-only."},
+      {"id": "SC3-001", "disposition": "deferred", "evidence": "Unchanged by slice-03: LockAttempt.step still stats then removes a stale lock without a re-check."}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1, "files_reviewed": 13, "prior_disposed": 11}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; the slice and payload supplied the scope); wiki_used: no (not-relevant to a naming/readability lens); ctx_used: yes (keryx ctx rg for prior-finding ids, slice file lists, the 410 texts and the whileStored sites); raw_rg_used: no. One raw `git diff -U2 … -- src/session/organize.ts` with a keryx:raw marker, to read the slice-01 hunk that defines whileStored verbatim.

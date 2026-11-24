@@ -1,0 +1,80 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (code commit 055115a20), round 4, wave 3
+- Scope mode: explicit-hash-range (diff mode). slice-03 read in full (1627 lines): docs/docs/guides/desktop-issues.md, implementation-plan.md, src/acp/server.ts, src/commands/acp.ts, src/integrations/issues-board.ts + test, src/lib/file-lock.ts + test, src/session/issues/issue-session.ts + test, src/session/organize.ts + test.
+- Stack detected: generic-TS backend (keryx CLI / ACP server); no NestJS, React or MobX in this slice.
+- Read beyond the slice for context only: src/session/organize.ts:55-219 (FlagsLockTiming, FLAGS_LOCK_TIMING, lockedError/goneError, lockOptions, whileStored, isMissing, backfillSessionSubject).
+- Test evidence: research-evidence/verify-tests-to-run-1.txt (named in the dispatch). I did not run anything (exec_budget 0).
+
+### Summary
+The backend half of the fix round does four things. It splits lib/file-lock into one `LockAttempt` (exclusive create, nonce, deadline before stale, stale takeover, nonce-checked release) driven by a blocking loop (`withFileLock`) and a yielding loop (`withFileLockAsync`). It gives the session flags store a matching async entry (`setSessionFlagsAsync` / `updateSessionFlagsAtAsync`) that the ACP server now awaits. Taking the flags lock no longer creates the session directory (`createDir: false` plus `whileStored`). The issue-subject backfill is fatal only on the first bind. Dependency direction stays inward: acp/server → session/organize → lib/file-lock, and session/issues/issue-session → session/organize. lib/file-lock imports nothing from the domain. No new findings in this lens. AR-R4-001..003 are not filed again.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Layer Violations
+None detected. The lock mechanics stay in lib (no session or path knowledge). Session-specific policy stays in session/organize: the 3 s / 2 s timing, the "retry" and "no session" errors, and the rule that the session directory is never created. The server handler validates the request shape and delegates to the store.
+
+### Dependency Direction
+None detected. Imports added in the range: server.ts → organize.setSessionFlagsAsync; organize.ts → file-lock {FileLockOptions, withFileLockAsync}; issue-session.ts → organize.sessionSubjectSettled. All point inward.
+
+### Module Boundary Violations
+None new. `unusableRemote` is exported from integrations/issues-board.ts, and Desktop does not consume it. That is the residual already filed as AR-R4-001 (wave 1), so it is not filed again.
+
+### Design Pattern Misuse
+None detected. Sync and async lock drivers: the shared `LockAttempt` is the single implementation of the locking rules, and the two exported functions differ only in how they pause (sleepSync vs setTimeout). The lock-file protocol is the same, so a sync holder in the issue-workspace child excludes the async server waiter and the reverse. The docstrings state this choice, and I accept it (law 4). The two near-identical wrappers `withFlagsLock` / `withFlagsLockAsync` (try/catch → goneError, null → lockedError) are a duplication question. They belong to review-clean-code under this lens's Scope Boundaries, so I do not file them here.
+
+### Dependency Inversion
+None detected. `FlagsLockTiming` / `FileLockOptions` are plain value seams with production defaults (FLAGS_LOCK_TIMING), not an I/O dependency that needs an interface.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+### Round obligations
+- 1 (enumerate): `keryx ctx rg -n "setSessionFlags\b|setSessionFlagsAsync|updateSessionFlagsAt\b|updateSessionFlagsAtAsync|backfillSessionSubject|sessionSubjectSettled|withFlagsLock|withFileLockAsync" src --glob '!*.test.ts'` → production writers: src/acp/server.ts:2965 (async), src/session/issues/issues-launch.ts:116 (sync setSessionFlags), src/session/issues/issue-session.ts:64,69 (sync backfill). `keryx ctx rg --all "issues-launch\"|issue-session\"|flags\.json|FLAGS_FILE" src --glob '!*.test.ts'` → issues-launch/issue-session are reached only from src/commands/issues.ts:89 and src/commands/issue-workspace.ts:5 (CLI child), not from the ACP server. No other flags.json writer outside organize.ts.
+- 2 (quantified claims): implementation-plan.md "сервер ACP ждёт асинхронно и не останавливает другие сессии" holds against that enumeration: the server's only flags writer is the async handleSessionFlags. "Блокировка не создаёт папку сессии" holds: every flags write goes through lockOptions (createDir:false) and whileStored (organize.ts:141-153, 168, 181).
+- 3 (verified clean): see the site lists above.
+- 4 (pre-existing defects in the touched contract): SC3-001 (stale-takeover race in src/lib/file-lock.ts, which predates the PR) is named out of scope in the PR body (Known gaps, "a separate change"). The refactor keeps the race's shape (step(): stat then rmSync without a nonce check) and does not widen it. The async path takes the same steps. HL3-004 (2 s stale window) is likewise named deferred.
+
+### Prior dispositions (slice-03 files, checked against head)
+- TP-R3-008 closed: organize.test.ts replaces the elapsed-time assertions with file barriers (`until(held|read|go)`) and injected `FlagsLockTiming`. The only timer left is the 2 ms poll inside `until`, which asserts nothing about time.
+- TP-R3-007 closed: "a flags change held off past its timeout fails with the retry error and leaves the other writer's lock" asserts the lockedError text for both the sync and the async path, and that the holder's lock is untouched.
+- TP-R3-009 closed: "a backfill of an invalid subject is refused and writes nothing" asserts the throw and that flags.json does not exist. Without the parse guard, writeFlags would create the file.
+- TP-R3-006 closed: "a viewer source never gets the repository-named 410 text" pins the `repository &&` gate on the 410 rename (M51), and "a viewer page made only of pull requests does not page on" pins the loop gate (M54).
+- HL3-001 closed: server.ts handleSessionFlags awaits setSessionFlagsAsync. The wait yields through withFileLockAsync's setTimeout loop. The sync callers left are CLI-child only (enumeration above).
+- HL3-002 closed: lockOptions sets createDir:false, LockAttempt.prepare skips mkdir, step rethrows ENOENT at once, withFlagsLock[Async] maps it to goneError, and whileStored checks summary.json inside the section. The test "a flags write to a session removed since it was located…" covers the sync, async and backfill sites, for both a removed directory and a half-moved one.
+- PC-008 closed: commands/acp.ts help now names flow and subject binding for _keryx/session_flags. The server handler's docstring matches.
+- DG3-001 closed: bindIssueSubject(dir, ref, firstBind). The first bind is fatal (test "the first bind fails loudly…"). A later open skips when sessionSubjectSettled and otherwise backfills inside try/catch (tests "a later open reads the flags without the lock…" and "…whose subject backfill fails still opens the session").
+- HL3-004 open (deferred by the PR body): FLAGS_LOCK_TIMING.staleMs is still 2_000 (organize.ts:136). The PR names it as a deferred info finding.
+- SC3-001 open (deferred by the PR body): the stale takeover in LockAttempt.step still runs stat → rmSync with no ownership check. The PR body names it as out of scope ("a separate change").
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "round": 4,
+    "slices": ["slice-03"],
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "TP-R3-008", "disposition": "closed"},
+      {"id": "TP-R3-007", "disposition": "closed"},
+      {"id": "TP-R3-009", "disposition": "closed"},
+      {"id": "TP-R3-006", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "DG3-001", "disposition": "closed"},
+      {"id": "HL3-004", "disposition": "open"},
+      {"id": "SC3-001", "disposition": "open"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the changed exports' callers were enumerated with keryx ctx rg, and the payload layers block, built at head 4cb6c43ef, was used as the lead), wiki_used: no (not-relevant: intent is stated in docstrings and the PR body), ctx_used: yes (keryx ctx rg ×2), raw_rg_used: no. metaproject: index read.

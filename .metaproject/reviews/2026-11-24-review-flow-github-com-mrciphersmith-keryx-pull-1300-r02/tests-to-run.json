@@ -1,0 +1,539 @@
+[
+  {
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewLaunchTarget"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/prWork.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FLOW_LINK_WINDOW_MS",
+      "PendingFlowLink",
+      "SubjectSessionDeps",
+      "boundSessions",
+      "flowPrompt",
+      "flowStage",
+      "openSubjectSession",
+      "prFlows",
+      "prSubject",
+      "prWorkIndex",
+      "resolveFlowLinks",
+      "reviewLaunchTarget",
+      "reviewSlotState",
+      "subjectOpener",
+      "withPendingSubjects"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SessionInfoPanel"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/acp/delegate-history-replay.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/editor-profile-golden.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/hook-notices.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/mcp-servers.process.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/acp/prepare-review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/server-archive.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/server-mcp.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/server-models.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/server-remember-model.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/session-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-command-views.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-commands.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-delegate-model.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-delegate-terminal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-goal-delegate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-profile-modes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-profile.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-providers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-session-organize.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-session-switch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "IDLE_CAP_RELEASE_REASON",
+      "MAX_HELD_SESSIONS"
+    ]
+  },
+  {
+    "file": "src/acp/shell-subagents.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/shell-tasks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellHarness"
+    ]
+  },
+  {
+    "file": "src/acp/telegram-session.server.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/capability/stale-snapshot-writers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "updateConfigFile"
+    ]
+  },
+  {
+    "file": "src/commands/acp.process.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/acp.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ResolveAcpProviderDeps",
+      "parseAcpArgs",
+      "rememberAcpModel",
+      "resolveAcpProvider",
+      "shellGrantRefresh",
+      "shellModelSource"
+    ]
+  },
+  {
+    "file": "src/commands/issues.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issuesCommand"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-auth-flow.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-auth-secrecy.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-servers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/commands/projects.escape.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/commands/serve.bridges.process.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken"
+    ]
+  },
+  {
+    "file": "src/commands/serve.process.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken"
+    ]
+  },
+  {
+    "file": "src/commands/serve.research-sync.process.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-dispatch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "setProjectPermissionMode"
+    ]
+  },
+  {
+    "file": "src/governance/report.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/integrations/issues-launch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueBindingFile",
+      "issueContextForSession"
+    ]
+  },
+  {
+    "file": "src/integrations/issues-projects.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "moveIssueProjectItem",
+      "readIssueProject"
+    ]
+  },
+  {
+    "file": "src/lib/config-dir.permissions.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/lib/config-update.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "updateConfigFile"
+    ]
+  },
+  {
+    "file": "src/lib/desktop-serve-bootstrap.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken"
+    ]
+  },
+  {
+    "file": "src/lib/permission-mode-config.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "setProjectPermissionMode"
+    ]
+  },
+  {
+    "file": "src/lib/project-registry.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "forgetProject",
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/lib/serve-approvals.route.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/lib/serve-credential.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken",
+      "revokeServeToken",
+      "rotateServeToken"
+    ]
+  },
+  {
+    "file": "src/lib/serve-credential.waiting.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "LOCK_STALE_MS"
+    ]
+  },
+  {
+    "file": "src/lib/serve-listener.turns.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/lib/serve-server.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/lib/serve-throttle.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken"
+    ]
+  },
+  {
+    "file": "src/lib/serve-turns.route.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "registerProject"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/constraints.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "clearCredential",
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/credentials.isolation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "clearCredential",
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/credentials.table.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "clearCredential",
+      "forgetByName",
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/doctor.oauth.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/oauth-integration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/oauth-provider.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/mcp-servers/session-oauth.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/remote/token-scope.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "issueServeToken"
+    ]
+  },
+  {
+    "file": "src/tui/mcp-consumer.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCredential"
+    ]
+  },
+  {
+    "file": "src/tui/settings-state.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "setProjectPermissionMode"
+    ]
+  },
+  {
+    "file": "src/worktree/exec.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "allocatePorts"
+    ]
+  },
+  {
+    "file": "src/worktree/no-forbidden-git.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "promoteWorktree"
+    ]
+  },
+  {
+    "file": "src/worktree/ports.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "allocatePorts",
+      "releasePorts"
+    ]
+  },
+  {
+    "file": "src/worktree/promote.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "promoteWorktree"
+    ]
+  },
+  {
+    "file": "src/worktree/remove.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "promoteWorktree"
+    ]
+  }
+]
