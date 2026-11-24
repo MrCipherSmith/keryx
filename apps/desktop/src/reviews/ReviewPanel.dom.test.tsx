@@ -44,7 +44,7 @@ const target = { repo: "owner/repo", viewer: "tester", repositoryId: "node" };
 function summary(card: ReviewCard): ReviewSummary {
   return { id: "review-" + card.number, number: card.number, card, state: "ready", freshness: { kind: "current" }, onHeadMove: "ask",
     closedAt: null, rounds: [{ number: 1, baseSha: card.baseSha, headSha: card.headSha, previousRunId: null, attempts: [] }],
-    latestRound: 1, findings: null, publication: null, source: "manual", flowId: null, tokens: null };
+    latestRound: 1, reviewed: null, archived: false, findings: null, publication: null, source: "manual", flowId: null, tokens: null };
 }
 type Extra = Partial<Pick<ComponentProps<typeof ReviewPanel>, "reviewIntent" | "publishCommand" | "onAccessLost" | "onClose">> & { onRefreshBoard?: () => void };
 async function show(command: typeof reviewRun, card: ReviewCard, { onRefreshBoard = () => {}, onClose = () => {}, ...extra }: Extra = {}) {
@@ -113,7 +113,7 @@ test("starts the pinned range, ignores an older read and polls through to a dist
     await show(command, pr);
     expect(btn("Checking review…").disabled).toBe(true);
     await act(async () => old({ version: 1, runs: [] }));
-      await click("Refresh runs");
+    await click("Refresh runs");
     await click("Start review");
     expect(actions.at(-1)).toEqual({ kind: "start", baseSha: "base", headSha: "head" });
     expect(document.body.textContent).toContain("Reviewing diff");
@@ -153,7 +153,7 @@ test("historic result survives a push, and retry and stop target the correct att
     return { version: 1, runs: [{ ...next, state: "cancelled", reason: "Stopped by user" }, complete] };
   };
   await show(command, newer);
-  await click("Review again");
+  await click("New review round");
   expect(document.querySelectorAll("article.desk-run")).toHaveLength(1);
   expect(document.body.textContent).not.toContain("Earlier revision");
   await click("Stop review");
@@ -185,10 +185,12 @@ test("a stale range keeps the board refresh action through status polling; denie
     onRefreshBoard: () => { refreshed++; },
     onAccessLost: message => { denied = message; },
   });
-  await click("Review again");
-  expect(btn("Review again").disabled).toBe(true);
+  await click("New review round");
+  expect(btn("New review round").disabled).toBe(true);
   await click("Refresh runs");
-  await click("Refresh board");
+  // The Review panel lives in the Reviews tab: its refresh re-reads that list, not "the board".
+  expect(document.body.textContent).toContain("The PR revision changed. Refresh to load the latest range.");
+  await click("Refresh");
   expect(refreshed).toBe(1);
   const attempt = document.querySelector(`article[aria-label="Review attempt ${complete.id}"]`)!;
   expect(attempt.textContent).toContain("REQUEST_CHANGES");

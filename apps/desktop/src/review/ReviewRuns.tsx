@@ -35,7 +35,7 @@ export function launchAction(runs: DeskRun[], card: ReviewCard) {
     return { open: true, label: "View active review", sessionId: same !== runs[0] ? same.id : undefined };
   }
   if (same?.state === "completed" && same.scope === DESK_RUN_SCOPE && same.result?.coverage === "complete" && sameRange(same.result?.reviewed ?? null, card)) return { open: true, label: "View review result", sessionId: same !== runs[0] ? same.id : undefined };
-  return { open: false, label: same ? "Retry review" : runs.some(run => run.headSha && run.baseSha && !sameRange(run, card)) ? "Review again" : "Start review" };
+  return { open: false, label: same ? "Retry review" : runs.some(run => run.headSha && run.baseSha && !sameRange(run, card)) ? "New review round" : "Start review" };
 }
 
 interface ReportProps {

@@ -10,7 +10,7 @@ import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
 import type { reviewPublish } from "../review/ReviewPublishDialog";
 import { ReviewWorkspace, type ReviewIntent } from "../review/ReviewWorkspace";
 import type { RunObserver } from "../review/useReviewRuns";
-import { findingsLabel, freshnessLabel, publicationLabel, reviewedCommit, reviewTitle, SOURCE_LABEL, STATE_LABEL } from "./model";
+import { findingsLabel, freshnessLabel, publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL } from "./model";
 
 const ATTEMPT_STATE: Record<DeskRunState, string> = {
   queued: "Queued", running: "Running", cancelling: "Stopping", completed: "Completed", partial: "Partial",
@@ -29,7 +29,7 @@ function Attempt({ attempt, scope, known }: { attempt: ReviewAttemptSummary; sco
     <time dateTime={attempt.createdAt} title={absoluteTime(attempt.createdAt)}>{relativeTime(attempt.createdAt)}</time>
     <span className="mono" title={attempt.id}>Run {attempt.id.slice(0, 8)}</span>
     {previous && (known.has(previous)
-      ? <button type="button" className="link-btn" aria-label={`Go to the attempt this one follows, run ${previous.slice(0, 8)}`}
+      ? <button type="button" className="link-btn" aria-label={`after ${previous.slice(0, 8)} — go to the attempt this one follows`}
         onClick={() => document.getElementById(attemptAnchor(scope, previous))?.focus()}>after {previous.slice(0, 8)}</button>
       : <span className="mono" title={previous}>after {previous.slice(0, 8)}</span>)}
   </li>;
@@ -65,11 +65,13 @@ interface Props {
   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
   onOpenFlow?: ((dir: string) => void) | undefined;
   onRefresh: () => void;
+  /** The board action's intent was taken by the review interface. */
+  onIntentConsumed?: (() => void) | undefined;
   onClose: () => void;
 }
 
 /** One Review: its state, rounds timeline and the review interface of the PR's current range. */
-export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onClose }: Props) {
+export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onIntentConsumed, onClose }: Props) {
   const panel = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
@@ -102,7 +104,7 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
       </div>
       <h2 className="sheet-title">{reviewTitle(review)}</h2>
       <div className="review-detail-meta review-panel-facts">
-        <strong>{STATE_LABEL[review.state] ?? review.state}</strong>
+        <strong>{reviewStateLabel(review)}</strong>
         <span>Round {review.latestRound}</span>
         <span className="mono">{reviewedCommit(review)}</span>
         {freshness && <span>{freshness}</span>}
@@ -117,10 +119,13 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
       {card ? <ReviewWorkspace key={JSON.stringify([target.repositoryId, target.viewer, review.number, card.baseSha, card.headSha])} cwd={cwd} subject={subject} card={card}
         reviewIntent={reviewIntent} flow={flow} projectFlows={flows} reviewModels={reviewModels} runCommand={runCommand}
         publishCommand={publishCommand} onRunSnapshot={onRunSnapshot} onAccessLost={onAccessLost}
-        onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onRefreshBoard={onRefresh} onLeave={onClose}>
+        onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onRefreshBoard={onRefresh} onLeave={onClose} onIntentConsumed={onIntentConsumed}>
         <Rounds rounds={review.rounds} />
       </ReviewWorkspace> : <>
-        <p className="inline-banner tone-warn" role="status">GitHub did not return this pull request, so its current range is unknown. Refresh to try again.</p>
+        <div className="inline-banner tone-warn" role="status">
+          <span>GitHub did not return this pull request, so its current range is unknown. Refresh the Reviews list to try again.</span>
+          <button className="btn btn-sm" onClick={onRefresh}>Refresh</button>
+        </div>
         <Rounds rounds={review.rounds} />
       </>}
     </div>

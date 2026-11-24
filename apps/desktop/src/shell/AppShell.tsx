@@ -12,6 +12,7 @@ import { Kbd } from "../components/ui";
 import { projectHue, projectInitials, type ProjectActivity } from "./projectRail";
 import type { LiveProject } from "../platform/projects";
 import type { ReviewTabIndicator } from "../review/ReviewBoard";
+import type { ReviewsTabIndicator } from "../reviews/ReviewsView";
 
 export type View = "session" | "flows" | "reviews" | "review" | "issues" | "metaproject" | "settings";
 
@@ -29,9 +30,6 @@ export const PROJECT_VIEWS = [
 export function projectViewForKey(key: string): (typeof PROJECT_VIEWS)[number]["id"] | undefined {
   return /^[1-9]$/.test(key) ? PROJECT_VIEWS[Number(key) - 1]?.id : undefined;
 }
-
-/** The Reviews tab lights when a Review waits on the viewer: an answer, a publication decision or a stopped round. */
-export type ReviewsTabIndicator = "attention" | null;
 
 /**
  * With `titleBarStyle: "Overlay"` the web view runs under the traffic lights and

@@ -1,4 +1,3 @@
-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
@@ -9,7 +8,6 @@ import { reviewRun } from "../platform/reviewRuns";
 import { PullRequestAutomation } from "./PullRequestAutomation";
 import type { reviewRules } from "../platform/reviewRules";
 import { launchAction } from "./ReviewRuns";
-import { reviewIsArchived } from "./ReviewLifecycle";
 import { sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
 import { fetchReviewDetail } from "../platform/review";
 import type { ReviewDetailSnapshot, ReviewMessage } from "./ReviewDetailTypes";
@@ -42,8 +40,6 @@ interface Props {
   onAccessLost?: (reason: string) => void;
   load?: typeof fetchReviewDetail;
   openBrowser?: typeof openExternal;
-  /** Accepted from the board; the review interface that opens review sessions lives in the Reviews tab. */
-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
   onOpenSession?: (() => void) | undefined;
   /** Shows this PR's Review in the Reviews tab; offered once the PR has a Review. */
   onOpenInReviews?: (() => void) | undefined;
@@ -178,7 +174,8 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
   // Read once (and followed while a run is active) to choose between launching and opening the Review.
   const local = useReviewRuns(cwd, subject, card.baseSha, card.headSha, false, runCommand, onRunSnapshot, onAccessLost);
   const action = launchAction(local.runs, card);
-  const hasReview = local.runs.some(run => !reviewIsArchived(run));
+  // An archived run still has its Review in the Reviews tab (under Show closed), where History restores or deletes it.
+  const hasReview = local.runs.length > 0;
   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
   const associatedFlow = associatedFlowId
     ? projectFlows?.find(candidate => candidate.id === associatedFlowId)
@@ -265,6 +262,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
           <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request"><Icon name="external" /></ReviewBrowserLink>
         </div>
       </div>
+      {local.error && !local.staleRange && <p className="inline-banner tone-warn" role="alert">{local.error}</p>}
       {associatedFlow ? (onOpenFlow ? <button className="link-btn review-associated-flow" onClick={() => onOpenFlow(associatedFlow.dir)}>Flow #{associatedFlow.id} · {associatedFlow.title}</button>
         : <span className="review-associated-flow">Flow #{associatedFlow.id} · {associatedFlow.title}</span>)
         : associatedFlowId && <span className="review-associated-flow">Flow #{associatedFlowId}</span>}
@@ -299,7 +297,6 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
         {tab === "discussion" ? <Discussion key={JSON.stringify([data.viewer, data.repositoryId, data.number])} data={data} /> : <ReviewChecks checks={data.checks} partial={!!data.warnings.length} />}
       </>}
       </>}
-      {local.error && !local.staleRange && <p className="inline-banner tone-warn" role="alert">{local.error}</p>}
     </div>
     {launchCard && reviewModels && <RunLaunchDialog cwd={cwd} subject={subject} card={launchCard} stale={!!revisionChanged}
       models={reviewModels} flows={projectFlows ?? []} defaultFlow={associatedFlow?.id} runCommand={runCommand}

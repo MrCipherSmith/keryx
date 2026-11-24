@@ -14,14 +14,14 @@ import {
 import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename, errMessage } from "./lib/format";
 import { Dialog, EmptyState, overlayOpen } from "./components/ui";
-import { AppShell, PROJECT_VIEWS, projectViewForKey, type ReviewsTabIndicator, type View } from "./shell/AppShell";
+import { AppShell, PROJECT_VIEWS, projectViewForKey, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
 import type { ReviewIntent } from "./review/ReviewWorkspace";
-import { ReviewsView, type ReviewsFocus } from "./reviews/ReviewsView";
+import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./reviews/ReviewsView";
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
 import { SessionReviewActivity } from "./review/SessionReviewActivity";
@@ -216,10 +216,19 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     setReviewsNotice({ binding: reviewViewer, indicator });
   }, [reviewViewer]);
   const [reviewsFocus, setReviewsFocus] = useState<ReviewsFocus | null>(null);
-  const openInReviews = useCallback((number: number, intent?: ReviewIntent) => {
-    setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));
+  const reviewsFocusNonce = useRef(0);
+  const openInReviews = useCallback((target: { repo: string; repositoryId: string; number: number }, intent?: ReviewIntent) => {
+    setReviewsFocus({ ...target, intent, nonce: ++reviewsFocusNonce.current });
     setView("reviews");
   }, []);
+  // A focus request is handed over once: dropped as soon as the Reviews tab took it, so a remount cannot replay it.
+  const reviewsFocusHandled = useCallback((nonce: number) => {
+    setReviewsFocus(old => old?.nonce === nonce ? null : old);
+  }, []);
+  // The PR watcher's background polls and the board's identity reach the Reviews tab.
+  const [watcherPolls, setWatcherPolls] = useState(0);
+  const noteWatcherPoll = useCallback(() => setWatcherPolls(n => n + 1), []);
+  const [boardIdentity, setBoardIdentity] = useState<{ repo: string; repositoryId: string; viewer: string } | null>(null);
   const [githubAccountError, setGitHubAccountError] = useState("");
   const [projectSettings, setProjectSettings] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -699,20 +708,22 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
         setView("session");
       }} />
-      {/* Mounted like the PR board, so the Reviews indicator stays current on every tab. */}
+      {/* Mounted while hidden: it re-reads on a session review, a PR watcher poll and, while a Review runs, every minute,
+          so the Reviews indicator follows those on every tab. Mounted once the account read settled, so it reads once. */}
       <div className="view" hidden={view !== "reviews"}>
         {reviewDisconnected ? (
           <EmptyState title="GitHub is not connected" icon="checklist">
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
-        ) : (
+        ) : (githubAccount || githubAccountError) ? (
           <ReviewsView key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} active={workView === "reviews"} cwd={cwd}
-            focus={reviewsFocus} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
+            focus={reviewsFocus} onFocusHandled={reviewsFocusHandled} reloadSignal={watcherPolls}
+            rulesTarget={boardIdentity} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
             onOpenReviewSession={openReviewWorkspace} onOpenFlow={(dir) => {
               setLinkedFlow(dir);
               setView("flows");
             }} />
-        )}
+        ) : null}
       </div>
       <div className="view" hidden={view !== "review"}>
         {reviewDisconnected ? (
@@ -720,7 +731,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenInReviews={openInReviews}
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenInReviews={openInReviews} onWatcherPoll={noteWatcherPoll} onIdentityChange={setBoardIdentity}
             sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}
             onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard}
             flowOffers={flowOffers} onLinkFlowOffer={linkFlowOffer} onDismissFlowOffer={dismissFlowOffer} />

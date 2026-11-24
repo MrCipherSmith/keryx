@@ -66,6 +66,8 @@ interface Props {
   onRefreshBoard?: (() => void) | undefined;
   /** The review moved to Sessions: the surrounding panel closes. */
   onLeave?: (() => void) | undefined;
+  /** The board action's intent was taken (acted on or dropped); the caller must not hand it over again. */
+  onIntentConsumed?: (() => void) | undefined;
   /** Shown between the primary action and the latest attempt (the Review panel puts its rounds here). */
   children?: ReactNode;
 }
@@ -74,7 +76,7 @@ interface Props {
  * The Keryx review interface of one PR's current range: the primary action, run history, the latest
  * attempt with its report, answers, cancel, continue, publication and lifecycle actions, and the launch form.
  */
-export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow, projectFlows, reviewModels, runCommand = reviewRun, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefreshBoard, onLeave, children }: Props) {
+export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow, projectFlows, reviewModels, runCommand = reviewRun, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefreshBoard, onLeave, onIntentConsumed, children }: Props) {
   const toast = useToast();
   // The run hook re-reads whenever its key changes identity, so the key follows the target's fields.
   const { repo, repositoryId, viewer, number } = target;
@@ -87,6 +89,8 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [launchCard, setLaunchCard] = useState<ReviewCard | null>(null);
   const initialLaunch = useRef(reviewIntent);
+  const intentConsumed = useRef(onIntentConsumed);
+  intentConsumed.current = onIntentConsumed;
   const publication = { cwd, target: subject, url: card.url, publishCommand };
   const loadAttempt = useCallback(async (id: string) => {
     const history = await runCommand(cwd, subject, { kind: "status", id });
@@ -130,10 +134,12 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
     if (local.error || (next.kind === "start" && (card.state !== "open" || revisionChanged)) ||
       next.baseSha !== card.baseSha || next.headSha !== card.headSha) {
       initialLaunch.current = undefined;
+      intentConsumed.current?.();
       return;
     }
     if (!local.loaded) return;
     initialLaunch.current = undefined;
+    intentConsumed.current?.();
     if (next.kind === "answer" && action.sessionId && local.runs.some(run => run.id === action.sessionId && pendingManualQuestions(run).length > 0)) {
       setSessionId(action.sessionId);
     } else if (next.kind === "start" && !action.open) {
@@ -161,8 +167,8 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       : <span className="review-associated-flow">Flow #{associatedFlow.id} · {associatedFlow.title}</span>)
       : associatedFlowId && <span className="review-associated-flow">Flow #{associatedFlowId}</span>}
     {revisionChanged && <div className="inline-banner tone-warn" role="status">
-      <span>The PR revision changed. Refresh the board to load the latest range.</span>
-      {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh board</button>}
+      <span>The PR revision changed. Refresh to load the latest range.</span>
+      {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh</button>}
     </div>}
     {children}
     <ReviewRuns publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}

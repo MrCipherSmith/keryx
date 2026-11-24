@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import type { Root } from "react-dom/client";
 import { registerDom, unregisterDom } from "../test/dom";
 import { MOD } from "../lib/prefs";
-import type { ReviewsTabIndicator, View } from "./AppShell";
+import type { View } from "./AppShell";
+import type { ReviewsTabIndicator } from "../reviews/ReviewsView";
 
 let root: Root;
 let host: HTMLElement;

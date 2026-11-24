@@ -26,7 +26,6 @@ import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilte
 import {
   EMPTY_FILTERS, GROUPING_LABEL, QUICK_FILTERS, filterReviews, needsViewerAttention, stateQuery, type Filters, type Grouping, type QuickFilter,
 } from "./model";
-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 import { displayReason } from "../../../../src/integrations/issues-contract";
 
@@ -41,7 +40,6 @@ interface Props {
   reviewModels?: readonly ReviewLaunchModel[];
   currentRepairModel?: ReviewLaunchModel | undefined;
   onOpenFlow: (dir: string) => void;
-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
   /** The project's sessions (pending Subject bindings included): the session slot lists those bound to each PR. */
   sessions?: readonly SessionInfo[];
   onOpenSubjectSession?: PrWork["onOpenSubjectSession"];
@@ -58,8 +56,13 @@ interface Props {
    */
   focus?: { repo: string; number: number; nonce: number } | null;
   onFocusHandled?: (nonce: number) => void;
-  /** Shows the PR's Review in the Reviews tab: the card's view and answer actions, and the panel's "Open in Reviews". */
-  onOpenInReviews?: ((number: number, intent?: ReviewIntent) => void) | undefined;
+  /** Shows the PR's Review in the Reviews tab: the card's view and answer actions, and the panel's "Open in Reviews".
+   * The target names this board's repository: the Reviews tab chooses its own. */
+  onOpenInReviews?: ((target: { repo: string; repositoryId: string; number: number }, intent?: ReviewIntent) => void) | undefined;
+  /** A background PR watcher poll completed (the Reviews tab re-reads its list on it). */
+  onWatcherPoll?: (() => void) | undefined;
+  /** The board's verified repository and account, or null before a read (the Reviews tab offers Review rules from it). */
+  onIdentityChange?: ((target: { repo: string; repositoryId: string; viewer: string } | null) => void) | undefined;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
@@ -116,7 +119,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenInReviews, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenInReviews, onWatcherPoll, onIdentityChange, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -485,12 +488,17 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
 
   const openDetails = useCallback((number: number) => setSelected({ number }), []);
   const [detailWidth, setDetailWidth] = useState(560);
+  const boardRepo = snapshot?.repo, boardRepositoryId = snapshot?.repositoryId;
   const openReview = useCallback((card: ReviewCard) => {
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
     const reviewIntent: ReviewIntent = { kind, baseSha: card.baseSha, headSha: card.headSha };
-    if (kind !== "start" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);
-    else setSelected({ number: card.number, reviewIntent });
-  }, [onOpenInReviews]);
+    // Only a start runs in the PR panel; viewing or answering happens in the Reviews tab.
+    if (kind === "start") setSelected({ number: card.number, reviewIntent });
+    else if (onOpenInReviews && boardRepo && boardRepositoryId) onOpenInReviews({ repo: boardRepo, repositoryId: boardRepositoryId, number: card.number }, reviewIntent);
+    else setSelected({ number: card.number });
+  }, [onOpenInReviews, boardRepo, boardRepositoryId]);
+  const watcherPolled = useCallback(() => { refresh(); onWatcherPoll?.(); }, [refresh, onWatcherPoll]);
+  useEffect(() => { onIdentityChange?.(watcherTarget); }, [watcherTarget, onIdentityChange]);
   // A focus request waits for a snapshot of its repository, then opens the PR's panel once per nonce.
   // Another repository of this board is selected first (the board remounts on it). A repository it cannot
   // show, or a PR missing from the settled list of its repository (its state filtered out, say), is refused
@@ -554,7 +562,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
       </button>
       <div className="grow" />
-      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
+      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={watcherPolled} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
       <div className="segmented" role="group" aria-label="Review view">
         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
           aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
@@ -638,8 +646,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
       width={detailWidth} onResize={setDetailWidth}
-      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={openPanelSession(card)}
-      onOpenInReviews={onOpenInReviews && (() => onOpenInReviews(card.number))}
+      reviewModels={reviewModels} onOpenSession={openPanelSession(card)}
+      onOpenInReviews={onOpenInReviews && (() => onOpenInReviews({ repo: snapshot.repo, repositoryId: snapshot.repositoryId, number: card.number }))}
       projectFlows={flows} flow={panelFlow(card)}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </div>;

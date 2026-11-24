@@ -220,24 +220,22 @@ test("a changed GitHub account closes a filter dialog and removes the previous a
 });
 
 test("a changed GitHub account returns focus to search from the portaled PR watcher dialog", async () => {
-  for (const opener of ["PR watcher · Off"]) {
-    let finish!: (value: ReviewBoardSnapshot) => void;
-    let calls = 0;
-    await render(async () => {
-      if (++calls === 1) return snapshot([pr]);
-      return new Promise((resolve) => { finish = resolve; });
-    }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
-    async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
-    await click(button("Refresh pull requests"));
-    await click(button(opener));
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.parentElement?.parentElement).toBe(document.body);
-    await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
-    expect(dialog.contains(document.activeElement)).toBe(true);
-    await act(async () => { finish({ ...snapshot([]), viewer: "new-account-" + opener.length }); });
-    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
-  }
+  let finish!: (value: ReviewBoardSnapshot) => void;
+  let calls = 0;
+  await render(async () => {
+    if (++calls === 1) return snapshot([pr]);
+    return new Promise((resolve) => { finish = resolve; });
+  }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
+  async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
+  await click(button("Refresh pull requests"));
+  await click(button("PR watcher · Off"));
+  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.parentElement?.parentElement).toBe(document.body);
+  await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
+  expect(dialog.contains(document.activeElement)).toBe(true);
+  await act(async () => { finish({ ...snapshot([]), viewer: "new-account" }); });
+  expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
 });
 
 test("historical states are requested lazily and a merged pull request appears in Merged", async () => {
@@ -755,11 +753,34 @@ test("opening a running review from its badge action shows it in Reviews and sta
     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; }, watcherDisabled, undefined,
-    { onOpenInReviews: (number, intent) => { opened.push([number, intent]); } });
+    { onOpenInReviews: (target, intent) => { opened.push([target, intent]); } });
   await click(button("Review · running for #101"));
-  expect(opened).toEqual([[101, { kind: "view", baseSha: pr.baseSha, headSha: pr.headSha }]]);
+  // The Reviews tab keeps its own base repository, so the request names the board's.
+  expect(opened).toEqual([[{ repo: "org/repo", repositoryId: "repo1", number: 101 }, { kind: "view", baseSha: pr.baseSha, headSha: pr.headSha }]]);
   expect(document.body.querySelector(".review-detail-panel")).toBeNull();
   expect(calls).toEqual([]);
+});
+
+test("with Reviews wired, a start action stays in the PR panel; without it, a view action opens the PR panel and starts nothing", async () => {
+  const detail: typeof fetchReviewDetail = async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+    headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] });
+  for (const card of [pr, { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } }]) {
+    const calls: string[] = [];
+    const opened: unknown[] = [];
+    await render(async () => snapshot([card]), "/project", ++renderKey, undefined, detail,
+      async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; }, watcherDisabled, undefined,
+      { onOpenInReviews: (target, intent) => { opened.push([target, intent]); } });
+    await click(button((card.localReview ? "New review round" : "Run review") + " for #101"));
+    expect(opened).toEqual([]);
+    expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
+    expect(calls).toContain("start");
+  }
+  const calls: string[] = [];
+  await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey, undefined, detail,
+    async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+  await click(button("View review for #101"));
+  expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
+  expect(calls).not.toContain("start");
 });
 
 test("applied filters survive cold board mounts within the verified project, repository and account", async () => {
@@ -865,15 +886,18 @@ test("a merged PR awaiting a Keryx answer stays actionable when the merged state
   const opened: unknown[] = [];
   for (const mode of ["Board", "List"]) {
     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command, watcherDisabled, undefined,
-      { onOpenInReviews: (number, intent) => { opened.push([number, intent]); } });
+      { onOpenInReviews: (target, intent) => { opened.push([target.number, intent]); } });
     await click(button(mode));
     if (mode === "Board") expect(document.body.querySelector('[aria-label="Merged"]')?.textContent).toContain("#" + pr.number);
     else expect(document.body.querySelector("tbody")?.textContent).toContain("#" + pr.number);
-    // The question itself is answered in the Review panel (src/reviews/ReviewPanel.dom.test.tsx, answer intent).
+    // The question itself is answered in the Review panel (src/reviews/ReviewsView.dom.test.tsx, answer intent);
+    // the PR panel does not open, so nothing here can launch a review.
     await click(button("Review · needs your answer for #" + pr.number));
+    expect(document.body.querySelector(".review-detail-panel")).toBeNull();
   }
   expect(opened).toEqual([0, 1].map(() => [pr.number, { kind: "answer", baseSha: pr.baseSha, headSha: pr.headSha }]));
-  expect(actions).not.toContain("start");
+  // Only badge polling reads the run status.
+  expect(actions.every(kind => kind === "status")).toBe(true);
 });
 
 test("Review tab signal follows unfiltered open requests to the viewer and background watcher refreshes without extra reads", async () => {
@@ -892,18 +916,25 @@ test("Review tab signal follows unfiltered open requests to the viewer and backg
   };
   let status: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
   const watch = async () => status;
+  let polls = 0;
+  const identities: unknown[] = [];
   const show = (active: boolean, cwd = "/project", expectedViewer = "ann") => act(async () => root.render(createElement(ReviewBoard, {
     key, active, cwd, expectedViewer, flows: [], onOpenFlow() {}, load, watcherCommand: watch, onIndicatorChange: notify,
-    listRepositories: async () => [],
+    listRepositories: async () => [], onWatcherPoll: () => { polls++; }, onIdentityChange: target => { identities.push(target); },
   })));
   await show(false);
   expect(seen.at(-1)).toBe("watching");
   expect(reads).toBe(1);
+  // The board's identity is shared, so the Reviews tab can offer Review rules without its own list.
+  expect(identities.at(-1)).toEqual({ repo: "org/repo", repositoryId: "repo1", viewer: "ann" });
   cards = [mine, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
   status = { ...status, lastSuccessAt: "2026-11-20T12:03:00Z" };
+  expect(polls).toBe(0);
   await act(async () => { window.dispatchEvent(new Event("focus")); });
   expect(seen.at(-1)).toBe("attention");
   expect(reads).toBe(2);
+  // A completed background poll is shared with the Reviews tab, which keeps its indicator current while hidden.
+  expect(polls).toBe(1);
   await show(true);
   await click(button("Filters"));
   await click(option("Author", "bob"));

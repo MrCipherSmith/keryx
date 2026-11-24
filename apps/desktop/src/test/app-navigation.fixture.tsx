@@ -113,8 +113,13 @@ mockIPC(async (cmd, args) => {
       // The Reviews tab reads its own list; the board reads counted below are the Pull requests tab's.
       if ((args as {reviewsOnly?: boolean}).reviewsOnly) {
         reviewReads.push(String((args as {cwd:string}).cwd));
+        // Once the session starts a review, PR #12 has a running Review in this list.
+        const reviews = starts.length ? [{ id: "review-12", number: 12, state: "running", freshness: { kind: "current" }, onHeadMove: "ask",
+          closedAt: null, latestRound: 1, reviewed: null, archived: false, findings: null, publication: null, source: "manual", flowId: null, tokens: null,
+          card: { number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
+          rounds: [{ number: 1, baseSha: run.baseSha, headSha: run.headSha, previousRunId: null, attempts: [] }] }] : [];
         return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me",
-          fetchedAt:"2026-11-19T00:00:00Z", reviews: [], warnings: [] };
+          fetchedAt:"2026-11-19T00:00:00Z", reviews, warnings: [] };
       }
       reads.push(String((args as {cwd:string}).cwd));
       if (offline) throw new Error("unavailable: connection lost");
@@ -259,7 +264,8 @@ try {
   // Review warms once for the active gh account and once after onboarding binds it.
   const accountReads = [cwd, cwd];
   assert.deepEqual(reads, accountReads);
-  const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");
+  // The Pull requests dot only: the Reviews dot shares the base class and comes first in the nav.
+  const reviewDot = () => host.querySelector("nav .review-tab-dot:not(.reviews-tab-dot)")?.getAttribute("data-indicator");
   assert.equal(reviewDot(), "attention", "Review requests reach the navigation on Sessions");
   assert.ok(reviewReads.length > 0, "The Reviews list is read while its tab is hidden");
   assert.equal(host.querySelector("nav .reviews-tab-dot"), null, "No Review waits on the viewer");
@@ -341,6 +347,20 @@ try {
   await go("Pull requests");
   // The review started from the session is the card's review link, without a manual refresh.
   assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
+  // The card's review action hands the PR to the Reviews tab, which opens its Review; a second request opens it again.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const reviewAction = [...host.querySelectorAll<HTMLButtonElement>("button[aria-label]")]
+      .find(b => /^Review · (running|needs your answer) for #12$/.test(b.getAttribute("aria-label") ?? ""));
+    assert.ok(reviewAction, "The PR card offers its review");
+    await React.act(async () => { reviewAction.click(); });
+    for (let wait = 0; wait < 50 && !host.querySelector('aside[aria-label="Review of pull request #12"]'); wait++) {
+      await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    }
+    assert.equal(host.querySelector('main nav button[aria-current="page"]')?.textContent, "Reviews");
+    assert.ok(host.querySelector('aside[aria-label="Review of pull request #12"]'), "The Reviews tab opens the PR's Review");
+    await React.act(() => namedButton("Close review").click());
+    await go("Pull requests");
+  }
 
   // "Open in session" with an older keryx: a new session opens, the PR URL waits in the composer, a notice says the binding was not saved.
   const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));

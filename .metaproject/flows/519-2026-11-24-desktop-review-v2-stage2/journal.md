@@ -118,3 +118,11 @@ implementation-plan.md 0.1.4 adds a «Состояние этапа 2» section;
 FA reported DONE_WITH_CONCERNS: FA-1..FA-17 fixed, red probes first except FA-10 (perf refactor) and pinning fixtures in FA-12; 181 backend tests pass, typecheck and eslint clean. Desktop typecheck/one DOM test await FB (new `reviewed`/`archived` fields, AC8 ready+null case).
 FA also rewrote specification.md «Хранение» migration bullet to D-R1 and desktop-app.md ~92 (outside the exact list, consistent with decisions).
 Operator answers (AskUserQuestion): archived Review never lights the indicator; a Review with no PR card lights only for needs_answer; locally closed Reviews fetch their cards only while 'Show closed' is on (new `--include-closed`, follow-up sent to FA).
+- 2026-11-24T09:38:39.412Z - task-done: T15: Fix round 1 backend (FA-1..FA-17)
+- 2026-11-24T09:38:39.616Z - task-attempt: T16: started (attempt 1) — 519-T16
+
+## 2026-11-24 · Fix round 1 Desktop (T16)
+
+FB reported DONE_WITH_CONCERNS: FB-1..FB-12 fixed; red run in a temporary detached worktree at 85fa985c1 (126 pass / 21 fail, model.test import fail), green after: Desktop `bun test src` 1007 pass / 0 fail, `tsc --noEmit` clean (orchestrator re-ran both). ReviewBoard.tsx diff: 30 lines, no attention-set identifier touched (orchestrator check).
+Operator answers (AskUserQuestion): card without PR shows 'Pull request #N' with no author; hidden 60 s reload + watcher/session events kept; a waiting 'Open in Reviews' request is dropped when the user picks another base repository; new Reviews-tab banner/link wording accepted.
+Concerns kept: two role=alert elements can coexist in the PR panel when both reads fail; account-switch dot assertion not added (mock never lights the dot); no live render of the FB-9 CSS.

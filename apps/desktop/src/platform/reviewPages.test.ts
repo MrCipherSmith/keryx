@@ -28,6 +28,15 @@ test("browser host sends the Reviews list as its own read and refuses it combine
   }
 });
 
+test("browser host reads closed Reviews' PR cards only for the Reviews list", () => {
+  expect(reviewBoardArgs({reviewsOnly:true,includeClosed:true})).toEqual(["review","reviews","--json","--include-closed"]);
+  expect(reviewBoardArgs({reviewsOnly:true,repo:"org/repo",includeClosed:true})).toEqual(["review","reviews","--json","--repo","org/repo","--include-closed"]);
+  expect(reviewBoardArgs({reviewsOnly:true,includeClosed:false})).toEqual(["review","reviews","--json"]);
+  for (const args of [{includeClosed:true}, {prState:"open",includeClosed:true}, {repo:"org/repo",number:1,includeClosed:true}]) {
+    expect(() => reviewBoardArgs(args)).toThrow("only in the Reviews list");
+  }
+});
+
 test("a board larger than the transport limit combines bounded pages without missing the final PR", async () => {
   const text = "x".repeat(65536);
   let calls = 0;

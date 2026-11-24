@@ -8,7 +8,7 @@ import type { fetchReviews } from "../platform/review";
 import type { reviewRules } from "../platform/reviewRules";
 import type { reviewRun } from "../platform/reviewRuns";
 import type { ReviewCard } from "../review/types";
-import type { ReviewsTabIndicator } from "../shell/AppShell";
+import type { ReviewsTabIndicator } from "./ReviewsView";
 import { registerDom, unregisterDom } from "../test/dom";
 
 let root: Root;
@@ -44,16 +44,23 @@ function card(number: number, title = "Change " + number): ReviewCard {
 function attempt(id: string, round: number, extra: Partial<ReviewAttemptSummary> = {}): ReviewAttemptSummary {
   return { id, round, previousRunId: null, state: "completed", source: "manual", baseSha: "b".repeat(40), headSha: "c".repeat(40),
     reviewed: { baseSha: "b".repeat(40), headSha: "c".repeat(40) }, coverage: "complete", findings: { blocker: 1, major: 0, minor: 2, info: 0 },
-    verdict: "REQUEST_CHANGES", publication: "pending", decision: null, flowId: null, tokens: 1200, awaitingAnswer: false,
+    verdict: "REQUEST_CHANGES", publication: "pending", decision: null, flowId: null, tokens: 1200, awaitingAnswer: false, archived: false,
     createdAt: time, finishedAt: time, ...extra };
 }
 function review(number: number, extra: Partial<ReviewSummary> = {}): ReviewSummary {
   return { id: "review-" + number, number, card: card(number), state: "ready", freshness: { kind: "current" }, onHeadMove: "ask",
     closedAt: null, rounds: [{ number: 1, baseSha: "b".repeat(40), headSha: "c".repeat(40), previousRunId: null, attempts: [attempt("run-" + number, 1)] }],
-    latestRound: 1, findings: { blocker: 1, major: 0, minor: 2, info: 0 }, publication: "pending", source: "manual", flowId: null, tokens: 1200, ...extra };
+    latestRound: 1, reviewed: { baseSha: "b".repeat(40), headSha: "c".repeat(40) }, archived: false,
+    findings: { blocker: 1, major: 0, minor: 2, info: 0 }, publication: "pending", source: "manual", flowId: null, tokens: 1200, ...extra };
 }
 function snapshot(reviews: ReviewSummary[], viewer = "ann"): ReviewsSnapshot {
   return { version: 1, repo: "org/repo", repositories: ["org/repo"], repositoryId: "repo1", viewer, fetchedAt: time, reviews, warnings: [] };
+}
+/** The card button of a Review on the board, found by its PR number. */
+function tile(number: number) {
+  const card = [...document.body.querySelectorAll(".review-summary-card")].find(item => item.querySelector(".flow-id")?.textContent === "#" + number);
+  if (!card) throw new Error("Missing card #" + number);
+  return card.querySelector<HTMLButtonElement>("button.review-card")!;
 }
 
 const noRuns: typeof reviewRun = async () => ({ version: 1, runs: [] });
@@ -114,19 +121,24 @@ test("AC6 columns read Running · Waiting on you · Behind · Published, with Cl
 
 test("AC6 a card shows the PR, round, reviewed commit with freshness, findings, publication, source, Flow and tokens; list shows the same", async () => {
   const item = review(6, { state: "ready", freshness: behind, latestRound: 2, flowId: "488", source: "scheduled", tokens: 15000,
+    reviewed: { baseSha: "b".repeat(40), headSha: "abcdef0123456" },
     rounds: [{ number: 2, baseSha: "b".repeat(40), headSha: "d".repeat(40), previousRunId: "run-a", attempts: [attempt("run-b", 2, { reviewed: { baseSha: "b".repeat(40), headSha: "abcdef0123456" } })] }] });
   await render(async () => snapshot([item, review(8, { state: "published", publication: "published", freshness: { kind: "behind", commits: null, rewritten: false } })]));
-  const tile = lane("Behind")!.querySelector(".review-summary-card")!;
+  const card6 = lane("Behind")!.querySelector(".review-summary-card")!;
   for (const text of ["#6", "Change 6", "lee", "Round 2", "abcdef0", "behind 3", "1 blocker · 2 minor", "Not published", "Scheduled", "Flow #488", (15000).toLocaleString() + " tokens"]) {
-    expect(tile.textContent).toContain(text);
+    expect(card6.textContent).toContain(text);
   }
+  // The card's facts are its accessible name: no aria-label replaces them.
+  expect(tile(6).hasAttribute("aria-label")).toBe(false);
   expect(lane("Behind")!.textContent).toContain("Published on GitHub");
   expect(lane("Behind")!.textContent).toMatch(/· behind(?! \d)/);
   await click(button("List"));
   const row = [...document.body.querySelectorAll("tbody tr")].find(r => r.textContent?.includes("Change 6"))!;
-  for (const text of ["lee", "Ready", "2", "abcdef0", "behind 3", "1 blocker · 2 minor", "Not published", "Scheduled", "#488", (15000).toLocaleString()]) {
+  for (const text of ["lee", "Ready", "abcdef0", "behind 3", "1 blocker · 2 minor", "Not published", "Scheduled", "#488", (15000).toLocaleString()]) {
     expect(row.textContent).toContain(text);
   }
+  const columns = [...document.body.querySelectorAll("thead th")].map(th => th.textContent);
+  expect(row.children[columns.indexOf("Round")]!.textContent).toBe("2");
 });
 
 test("AC6 search by title or number and the state, freshness and source filters narrow board and list", async () => {
@@ -184,12 +196,17 @@ test("an empty list says so, and the Review rules moved to this toolbar", async 
   expect(has("Review rules")).toBe(true);
 });
 
-test("AC8 the indicator lights for needs_answer, ready without a publication decision and stopped, and stays off otherwise", async () => {
+test("AC8 the indicator lights for needs_answer, ready with a publication to choose and stopped, and stays off otherwise", async () => {
   const cases: Array<[Partial<ReviewSummary>, ReviewsTabIndicator]> = [
     [{ state: "needs_answer" }, "attention"],
     [{ state: "ready", publication: "pending" }, "attention"],
-    [{ state: "ready", publication: null }, "attention"],
+    // Partial, budget or an imported package: no publication decision applies.
+    [{ state: "ready", publication: null }, null],
     [{ state: "stopped", publication: null }, "attention"],
+    // An archived Review never waits on the viewer; without its PR card only a question does.
+    [{ state: "stopped", publication: null, archived: true }, null],
+    [{ state: "stopped", publication: null, card: null }, null],
+    [{ state: "needs_answer", card: null }, "attention"],
     [{ state: "ready", publication: "skipped" }, null],
     [{ state: "running", publication: null }, null],
     [{ state: "queued", publication: null }, null],
@@ -219,7 +236,7 @@ test("state matrix: a failed first load offers Try again, a failed refresh keeps
   await click(button("Try again"));
   expect(document.body.querySelector('[role="alert"]')).toBeNull();
   expect(indicator).toBe("attention");
-  await click(document.body.querySelector<HTMLButtonElement>('[aria-label^="Open review of #4"]')!);
+  await click(tile(4));
   expect(document.body.querySelector('aside[aria-label="Review of pull request #4"]')).not.toBeNull();
   failure = "unavailable: offline";
   await click(button("Refresh reviews"));
@@ -240,13 +257,13 @@ test("state matrix: refresh keeps the selection while the Review exists; an acco
   let reviews = [review(4), review(5, { state: "stopped" })];
   let viewer = "ann";
   await render(async () => snapshot(reviews, viewer));
-  await click(document.body.querySelector<HTMLButtonElement>('[aria-label^="Open review of #4"]')!);
+  await click(tile(4));
   await click(button("Refresh reviews"));
   expect(document.body.querySelector('aside[aria-label="Review of pull request #4"]')).not.toBeNull();
   reviews = [review(5, { state: "stopped" })];
   await click(button("Refresh reviews"));
   expect(document.body.querySelector("aside.review-panel")).toBeNull();
-  await click(document.body.querySelector<HTMLButtonElement>('[aria-label^="Open review of #5"]')!);
+  await click(tile(5));
   await choose("Review state", "stopped");
   viewer = "bob";
   await click(button("Refresh reviews"));
@@ -268,7 +285,7 @@ test("state matrix: a late response for the previous project is dropped", async 
   expect(document.body.textContent).not.toContain("Old project review");
 });
 
-test("the list reloads on tab activation and every minute while a Review is running and the tab is shown", async () => {
+test("the list reloads on tab activation and every minute while a Review is running, also while the tab is hidden, but not in a hidden window", async () => {
   let reads = 0;
   let reviews = [review(4)];
   const load: typeof fetchReviews = async () => { reads++; return snapshot(reviews); };
@@ -296,12 +313,52 @@ test("the list reloads on tab activation and every minute while a Review is runn
     expect(timers.size).toBe(1);
     await act(async () => { [...timers.values()][0]!(); });
     expect(reads).toBe(4);
+    // Hidden tab: the indicator still follows the running Review.
     await render(load, { active: false }, key);
+    expect(timers.size).toBe(1);
+    await act(async () => { [...timers.values()][0]!(); });
+    expect(reads).toBe(5);
+    // A hidden window reads for nobody.
+    const visibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    try {
+      await act(async () => { [...timers.values()][0]!(); });
+      expect(reads).toBe(5);
+    } finally {
+      if (visibility) Object.defineProperty(document, "visibilityState", visibility);
+      else delete (document as { visibilityState?: unknown }).visibilityState;
+    }
+    reviews = [review(4)];
+    await act(async () => { [...timers.values()][0]!(); });
+    expect(reads).toBe(6);
     expect(timers.size).toBe(0);
   } finally {
     clock.setInterval = schedule;
     clock.clearInterval = cancel;
   }
+});
+
+test("a hidden Reviews tab re-reads its list on a session review snapshot and on the PR watcher's poll", async () => {
+  const { publishSessionReview } = await import("../platform/reviewRuns");
+  let reads = 0;
+  let reviews = [review(4, { state: "running", publication: null })];
+  let indicator: ReviewsTabIndicator | undefined;
+  const load: typeof fetchReviews = async () => { reads++; return snapshot(reviews); };
+  const key = ++renderKey;
+  const show = (reloadSignal: number) => render(load, { active: false, reloadSignal, onIndicatorChange: value => { indicator = value; } }, key);
+  await show(0);
+  expect([reads, indicator]).toEqual([1, null]);
+  reviews = [review(4, { state: "ready", publication: "pending" })];
+  await act(async () => publishSessionReview("/project", { repo: "org/repo", repositoryId: "repo1", viewer: "ann", number: 4 }, { version: 1, runs: [] }));
+  expect([reads, indicator]).toEqual([2, "attention"]);
+  // Another project's session review is not this list's.
+  await act(async () => publishSessionReview("/other", { repo: "org/repo", repositoryId: "repo1", viewer: "ann", number: 4 }, { version: 1, runs: [] }));
+  expect(reads).toBe(2);
+  reviews = [review(4, { state: "published", publication: "published" })];
+  await show(1);
+  expect([reads, indicator]).toEqual([3, null]);
+  await show(1);
+  expect(reads).toBe(3);
 });
 
 test("AC7 the Review panel shows the rounds timeline and the review interface, with a link to the previous attempt", async () => {
@@ -316,7 +373,7 @@ test("AC7 the Review panel shows the rounds timeline and the review interface, w
     phase: "Consolidated", reason: "", createdAt: time, startedAt: time, finishedAt: time,
     result: { reviewed: { baseSha: "base4", headSha: "head4" }, verdict: "COMMENT", coverage: "complete", findings: { blocker: 0, major: 0, minor: 0, info: 0 }, report: "Fine" } };
   await render(async () => snapshot([item]), { runCommand: async () => ({ version: 1, runs: [complete] }) });
-  await click(document.body.querySelector<HTMLButtonElement>('[aria-label^="Open review of #4"]')!);
+  await click(tile(4));
   const panel = document.body.querySelector('aside[aria-label="Review of pull request #4"]')!;
   const rounds = panel.querySelector('section[aria-label="Rounds"]')!;
   expect([...rounds.querySelectorAll(".review-round-head strong")].map(s => s.textContent)).toEqual(["Round 2", "Round 1"]);
@@ -325,7 +382,9 @@ test("AC7 the Review panel shows the rounds timeline and the review interface, w
   expect(rounds.textContent).toContain("2 attempts");
   expect(rounds.textContent).toContain("Coverage partial");
   expect(rounds.textContent).toContain("Failed");
-  const link = rounds.querySelector<HTMLButtonElement>('button[aria-label="Go to the attempt this one follows, run 11111111"]')!;
+  const link = [...rounds.querySelectorAll<HTMLButtonElement>("button.link-btn")].find(b => b.textContent === "after 11111111")!;
+  // The accessible name starts with the visible text (WCAG 2.5.3).
+  expect(link.getAttribute("aria-label")?.startsWith("after 11111111")).toBe(true);
   await click(link);
   expect(document.activeElement?.textContent).toContain("Run 11111111");
   // The review interface: primary action, history, latest attempt with report and publication.
@@ -342,20 +401,20 @@ test("a focus request from Pull requests opens that Review, re-reading once when
   let reviews = [review(4), review(5, { state: "closed" })];
   const load: typeof fetchReviews = async () => { reads++; return snapshot(reviews); };
   const key = ++renderKey;
-  await render(load, { focus: { number: 4, nonce: 1 } }, key);
+  await render(load, { focus: { repo: "org/repo", number: 4, nonce: 1 } }, key);
   expect(document.body.querySelector('aside[aria-label="Review of pull request #4"]')).not.toBeNull();
   await choose("Review state", "ready");
-  await render(load, { focus: { number: 5, nonce: 2 } }, key);
+  await render(load, { focus: { repo: "org/repo", number: 5, nonce: 2 } }, key);
   // A closed Review is revealed: the closed column is shown and the filter that hid it is cleared.
   expect(document.body.querySelector('aside[aria-label="Review of pull request #5"]')).not.toBeNull();
   expect(button("Show closed").getAttribute("aria-pressed")).toBe("true");
   expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Review state"]')!.value).toBe("");
   const before = reads;
   reviews = [...reviews, review(6)];
-  await render(load, { focus: { number: 6, nonce: 3 } }, key);
+  await render(load, { focus: { repo: "org/repo", number: 6, nonce: 3 } }, key);
   expect(reads).toBe(before + 1);
   expect(document.body.querySelector('aside[aria-label="Review of pull request #6"]')).not.toBeNull();
-  await render(load, { focus: { number: 99, nonce: 4 } }, key);
+  await render(load, { focus: { repo: "org/repo", number: 99, nonce: 4 } }, key);
   expect(reads).toBe(before + 2);
   expect(document.body.textContent).toContain("Pull request #99 has no Keryx review in this list.");
 });
@@ -365,8 +424,62 @@ test("an answer intent carried from Pull requests opens the waiting question in 
   const run: DeskRun = { id: "run-4", baseSha: "base4", headSha: "head4", source: "manual", state: "running", phase: "Review", reason: "",
     createdAt: time, startedAt: time, finishedAt: null, result: null, pendingQuestion: { id: "scope", question: "Which scope?", options: [], allowFreeform: true } };
   await render(async () => snapshot([item]), { runCommand: async () => ({ version: 1, runs: [run] }),
-    focus: { number: 4, nonce: 1, intent: { kind: "answer", baseSha: "base4", headSha: "head4" } } });
+    focus: { repo: "org/repo", number: 4, nonce: 1, intent: { kind: "answer", baseSha: "base4", headSha: "head4" } } });
   expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+});
+
+test("an answer intent is consumed once: returning to the tab does not open the question again", async () => {
+  const run: DeskRun = { id: "run-4", baseSha: "base4", headSha: "head4", source: "manual", state: "running", phase: "Review", reason: "",
+    createdAt: time, startedAt: time, finishedAt: null, result: null, pendingQuestion: { id: "scope", question: "Which scope?", options: [], allowFreeform: true } };
+  const key = ++renderKey;
+  const focus = { repo: "org/repo", number: 4, nonce: 1, intent: { kind: "answer" as const, baseSha: "base4", headSha: "head4" } };
+  const props = { runCommand: async () => ({ version: 1 as const, runs: [run] }), focus };
+  await render(async () => snapshot([review(4, { state: "needs_answer" })]), props, key);
+  const dialog = document.querySelector<HTMLElement>(".review-question")!.closest<HTMLElement>('[role="dialog"]')!;
+  await act(async () => { dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
+  expect(document.querySelector(".review-question")).toBeNull();
+  await render(async () => snapshot([review(4, { state: "needs_answer" })]), { ...props, active: false }, key);
+  await render(async () => snapshot([review(4, { state: "needs_answer" })]), { ...props, active: true }, key);
+  expect(document.body.querySelector('aside[aria-label="Review of pull request #4"]')).not.toBeNull();
+  expect(document.querySelector(".review-question")).toBeNull();
+});
+
+test("a focus request names its repository: the Reviews tab switches to it and matches repository and number", async () => {
+  const repos: Array<string | undefined> = [];
+  const load: typeof fetchReviews = async (_cwd, repo) => {
+    repos.push(repo);
+    const name = repo ?? "a/x";
+    return { ...snapshot([review(7, { card: card(7, "In " + name) })]), repo: name, repositories: ["a/x", "b/y"], repositoryId: name === "a/x" ? "RA" : "RB" };
+  };
+  const handled: number[] = [];
+  await render(load, { focus: { repo: "b/y", repositoryId: "RB", number: 7, nonce: 1 }, onFocusHandled: nonce => { handled.push(nonce); } });
+  expect(repos).toEqual([undefined, "b/y"]);
+  expect(document.body.querySelector('aside[aria-label="Review of pull request #7"]')?.textContent).toContain("In b/y");
+  expect(handled).toEqual([1]);
+});
+
+test("a handled focus request never replays: not after a base repository switch, nor after a failed access is retried", async () => {
+  let failure = "";
+  const load: typeof fetchReviews = async (_cwd, repo) => {
+    if (failure) throw new Error(failure);
+    const name = repo ?? "a/x";
+    return { ...snapshot([review(7, { card: card(7, "In " + name) })]), repo: name, repositories: ["a/x", "b/y"], repositoryId: name === "a/x" ? "RA" : "RB" };
+  };
+  const key = ++renderKey;
+  const focus = { repo: "a/x", number: 7, nonce: 1 };
+  await render(load, { focus }, key);
+  await click(button("Close review"));
+  await choose("Base repository", "b/y");
+  expect(document.body.textContent).toContain("In b/y");
+  expect(document.body.querySelector("aside.review-panel")).toBeNull();
+  expect(document.body.textContent).not.toContain("has no Keryx review");
+  // Lost access while a request waits: the request is dropped with the list, so Try again does not select #8.
+  failure = "access: Permission revoked";
+  await render(load, { focus: { repo: "b/y", number: 8, nonce: 2 } }, key);
+  failure = "";
+  await click(button("Try again"));
+  expect(document.body.querySelector("aside.review-panel")).toBeNull();
+  expect(document.body.textContent).not.toContain("has no Keryx review");
 });
 
 test("AC7 the Pull requests panel has no review interface and offers Open in Reviews once the PR has a Review", async () => {
@@ -384,12 +497,38 @@ test("AC7 the Pull requests panel has no review interface and offers Open in Rev
   expect(has("Start review")).toBe(true);
   expect(has("Open in Reviews")).toBe(false);
   expect(document.body.querySelector('section[aria-label="Latest Keryx review"]')).toBeNull();
+  // An archived run still has a Review in the Reviews tab (under Show closed), where History offers Restore and Delete.
   await show([{ ...run, decision: { action: "archive", reason: "old", at: time } }]);
-  expect(has("Open in Reviews")).toBe(false);
+  expect(has("Open in Reviews")).toBe(true);
   await show([run]);
   expect(document.body.querySelector(".review-run-history")).toBeNull();
   await click(button("Open in Reviews"));
   expect(opened).toEqual([4]);
+});
+
+test("the Pull requests panel takes only a start intent: a view or answer intent starts nothing there", async () => {
+  const detail = async () => ({ version: 1 as const, viewer: "ann", repositoryId: "repo1", number: 4, headSha: "head4", fetchedAt: time,
+    comments: [], reviews: [], threads: [], checks: [], warnings: [] });
+  for (const kind of ["view", "answer", "start"] as const) {
+    const actions: string[] = [];
+    await act(async () => root.render(createElement(ReviewDetail, {
+      key: ++renderKey, cwd: "/project", repo: "org/repo", repositoryId: "repo1", viewer: "ann", card: card(4), load: detail,
+      reviewIntent: { kind, baseSha: "base4", headSha: "head4" },
+      runCommand: async (_cwd, _key, action) => { actions.push(action.kind); return { version: 1 as const, runs: [] }; }, onClose: () => {},
+    })));
+    expect([kind, actions.includes("start")]).toEqual([kind, kind === "start"]);
+  }
+});
+
+test("the Pull requests panel shows a failed run-status read next to its primary action", async () => {
+  const detail = async () => ({ version: 1 as const, viewer: "ann", repositoryId: "repo1", number: 4, headSha: "head4", fetchedAt: time,
+    comments: [], reviews: [], threads: [], checks: [], warnings: [] });
+  await act(async () => root.render(createElement(ReviewDetail, {
+    key: ++renderKey, cwd: "/project", repo: "org/repo", repositoryId: "repo1", viewer: "ann", card: card(4), load: detail,
+    runCommand: async () => { throw new Error("unavailable: Review status could not be read."); }, onClose: () => {},
+  })));
+  const alert = [...document.body.querySelectorAll('[role="alert"]')].find(node => node.textContent?.includes("Review status could not be read"));
+  expect(alert?.closest(".sheet-head")).not.toBeNull();
 });
 
 // Moved with the Review rules button from the Pull requests toolbar.
@@ -483,8 +622,87 @@ test("a rules dialog pending for a previous account cannot expose that account's
   await click(button("Review rules"));
   expect(document.body.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
   viewer = "other";
+  await act(async () => { document.body.querySelector<HTMLElement>('[role="dialog"] button')!.focus(); });
   await click(button("Refresh reviews"));
   await act(async () => resolveRules({ version: 1, rules: [{ ...automationRule, name: "Previous account secret rule" }], choice: { mode: "project" }, activity: [] }));
   expect(document.body.querySelector('[role="dialog"]')).toBeNull();
   expect(document.body.textContent).not.toContain("Previous account secret rule");
+  // The dialog that held focus is gone with the previous account: focus lands on search, not on the page body.
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search reviews");
+});
+
+test("Review rules stay reachable when the list cannot be read, from the Pull requests board's identity", async () => {
+  const fallback = { repo: "org/repo", repositoryId: "repo1", viewer: "ann" };
+  await render(async () => { throw new Error("unavailable: Unknown command: reviews"); }, { rulesTarget: fallback, expectedViewer: "ann" });
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Unknown command");
+  expect(has("Review rules")).toBe(true);
+  // Another account's identity is not used.
+  await render(async () => { throw new Error("unavailable: Unknown command: reviews"); }, { rulesTarget: { ...fallback, viewer: "bob" }, expectedViewer: "ann" });
+  expect(has("Review rules")).toBe(false);
+});
+
+test("an archived Review is listed under Show closed as Archived, and its panel History reaches Restore", async () => {
+  const archivedRun: DeskRun = { id: "run-5", baseSha: "base5", headSha: "head5", source: "manual", state: "completed", phase: "Done", reason: "",
+    createdAt: time, startedAt: time, finishedAt: time, result: null, decision: { action: "archive", reason: "old", at: time } };
+  await render(async () => snapshot([review(4), review(5, { state: "stopped", archived: true })]),
+    { runCommand: async () => ({ version: 1, runs: [archivedRun] }) });
+  expect(numbersIn(document.body.querySelector(".board"))).toEqual(["#4"]);
+  expect(button("Show closed").getAttribute("title")).toBe("Show closed (1)");
+  await click(button("Show closed"));
+  expect(numbersIn(lane("Closed"))).toEqual(["#5"]);
+  expect(lane("Closed")!.querySelector(".badge")?.textContent).toBe("Archived");
+  await click(tile(5));
+  await click(document.body.querySelector<HTMLButtonElement>(".review-run-history button")!);
+  await click(document.body.querySelector<HTMLElement>('[role="menuitem"]')!);
+  expect(has("Restore review")).toBe(true);
+});
+
+test("closed Reviews' PR cards are read only while Show closed is on", async () => {
+  const calls: boolean[] = [];
+  await render(async (_cwd, _repo, _viewer, includeClosed) => {
+    calls.push(!!includeClosed);
+    return snapshot([review(4), review(9, { state: "closed", card: null })]);
+  });
+  expect(calls).toEqual([false]);
+  await click(button("Show closed"));
+  expect(calls).toEqual([false, true]);
+  // A closed Review read without its card shows the PR number only.
+  expect(tile(9).textContent).toContain("Pull request #9");
+});
+
+test("a Review without its PR card offers Refresh next to the reason", async () => {
+  let reads = 0;
+  await render(async () => { reads++; return snapshot([review(4, { card: null })]); });
+  await click(tile(4));
+  const panel = document.body.querySelector('aside[aria-label="Review of pull request #4"]')!;
+  const banner = panel.querySelector(".inline-banner")!;
+  expect(banner.textContent).toContain("GitHub did not return this pull request");
+  await click([...banner.querySelectorAll("button")].find(b => b.textContent === "Refresh")!);
+  expect(reads).toBe(2);
+});
+
+test("a filter select shows its selected value in full through its title", async () => {
+  await render(async () => snapshot([review(4)]));
+  const state = () => document.body.querySelector<HTMLSelectElement>('select[aria-label="Review state"]')!;
+  expect(state().title).toBe("All states");
+  await choose("Review state", "needs_answer");
+  expect(state().title).toBe("Needs your answer");
+  await choose("Source", "existing");
+  expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Source"]')!.title).toBe("Existing review");
+});
+
+test("a mutation in the Review panel re-reads the list once; opening the panel does not", async () => {
+  let reads = 0;
+  let runs: DeskRun[] = [];
+  const started: DeskRun = { id: "run-new", baseSha: "base4", headSha: "head4", source: "manual", state: "queued", phase: "Queued", reason: "",
+    createdAt: time, startedAt: null, finishedAt: null, result: null };
+  const command: typeof reviewRun = async (_cwd, _key, action) => {
+    if (action.kind === "start") runs = [started];
+    return { version: 1, runs, ...(action.kind === "start" && { startedRunId: started.id }) };
+  };
+  await render(async () => { reads++; return snapshot([review(4, { state: "stopped" })]); }, { runCommand: command });
+  await click(tile(4));
+  expect(reads).toBe(1);
+  await click(button("Start review"));
+  expect(reads).toBe(2);
 });

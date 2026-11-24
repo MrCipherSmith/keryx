@@ -1,4 +1,4 @@
-import type { ReviewAttemptSummary, ReviewFreshness, ReviewSource, ReviewState, ReviewSummary } from "../../../../src/review/review-entity";
+import type { ReviewFreshness, ReviewSource, ReviewState, ReviewSummary } from "../../../../src/review/review-entity";
 
 export type ReviewColumn = "running" | "waiting" | "behind" | "published" | "closed";
 
@@ -31,10 +31,10 @@ export function isBehind(freshness: ReviewFreshness | { kind: string }): freshne
   return freshness.kind === "behind";
 }
 
-/** Column choice order: closed → running → needs_answer → behind → by state. An unknown PR head goes by state. */
-export function reviewColumn(review: Pick<ReviewSummary, "state" | "freshness">): ReviewColumn {
+/** Column choice order: closed or archived → running → needs_answer → behind → by state. An unknown PR head goes by state. */
+export function reviewColumn(review: Pick<ReviewSummary, "state" | "freshness"> & { archived?: boolean }): ReviewColumn {
   const { state } = review;
-  if (state === "closed") return "closed";
+  if (state === "closed" || review.archived) return "closed";
   if (state === "queued" || state === "running") return "running";
   if (state === "needs_answer") return "waiting";
   if (isBehind(review.freshness)) return "behind";
@@ -49,19 +49,21 @@ export function freshnessLabel(freshness: ReviewFreshness | { kind: string }): s
   return freshness.rewritten ? `${amount} · history rewritten` : amount;
 }
 
-/** The newest attempt that produced a reviewed result, across rounds (rounds and attempts are newest first). */
-export function latestReviewed(review: Pick<ReviewSummary, "rounds">): ReviewAttemptSummary | undefined {
-  for (const round of review.rounds) {
-    const attempt = round.attempts.find(item => item.reviewed !== null);
-    if (attempt) return attempt;
-  }
-  return undefined;
+/** The reviewed head commit, short: the domain's reference range (the one freshness is measured from);
+ * the latest requested head when no attempt finished with a result. */
+export function reviewedCommit(review: Pick<ReviewSummary, "reviewed" | "rounds">): string {
+  const head = review.reviewed?.headSha ?? review.rounds[0]?.headSha ?? "";
+  return head.slice(0, 7);
 }
 
-/** The reviewed head commit, short; the latest requested head when no attempt finished with a result. */
-export function reviewedCommit(review: Pick<ReviewSummary, "rounds">): string {
-  const head = latestReviewed(review)?.reviewed?.headSha ?? review.rounds[0]?.headSha ?? "";
-  return head.slice(0, 7);
+/** The state shown for a Review: an archived one reads "Archived" (it is listed under Show closed). */
+export function reviewStateLabel(review: Pick<ReviewSummary, "state"> & { archived?: boolean }): string {
+  return review.archived ? "Archived" : STATE_LABEL[review.state] ?? review.state;
+}
+
+/** Listed only under Show closed: closed locally, or every attempt archived. */
+export function isClosedOrArchived(review: Pick<ReviewSummary, "state"> & { archived?: boolean }): boolean {
+  return review.state === "closed" || !!review.archived;
 }
 
 const SEVERITIES = ["blocker", "major", "minor", "info"] as const;
@@ -95,18 +97,16 @@ export function filtersActive(filters: ReviewFilters): boolean {
   return !!(filters.state || filters.freshness || filters.source);
 }
 
-/** Search matches the PR title, or its number with or without `#`. */
+/** Search matches the PR title, or its number anywhere with or without `#`, as on the Pull requests board. */
 export function matchesSearch(review: Pick<ReviewSummary, "number" | "card">, query: string): boolean {
   const text = query.trim().toLowerCase();
   if (!text) return true;
-  const number = text.replace(/^#/, "");
-  if (/^\d+$/.test(number)) return String(review.number).startsWith(number);
-  return reviewTitle(review).toLowerCase().includes(text);
+  return reviewTitle(review).toLowerCase().includes(text) || String(review.number).includes(text.replace(/^#(?=\d)/, ""));
 }
 
 export function filterReviewList(reviews: readonly ReviewSummary[], filters: ReviewFilters, query: string, showClosed: boolean): ReviewSummary[] {
   return reviews.filter(review =>
-    (showClosed || review.state !== "closed") &&
+    (showClosed || !isClosedOrArchived(review)) &&
     (!filters.state || review.state === filters.state) &&
     (!filters.freshness || review.freshness.kind === filters.freshness) &&
     (!filters.source || review.source === filters.source) &&

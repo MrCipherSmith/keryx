@@ -13,6 +13,8 @@
   .review-detail-panel .review-detail-resize { display: none; }
 }
 .review-detail-body { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-3); }
+/* The moved review interface keeps the panel body's column and gap (its children were direct children of it). */
+.review-workspace-block { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-3); min-width: 0; }
 .review-detail-body > .btn { align-self: flex-start; }
 .review-detail-meta { color: var(--fg-muted); font-size: var(--fs-sm); display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2); }
 .review-detail-meta strong { color: var(--fg); overflow-wrap: anywhere; }
