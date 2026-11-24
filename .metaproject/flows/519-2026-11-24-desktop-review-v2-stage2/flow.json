@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T08:21:05.118Z",
+  "updatedAt": "2026-11-24T08:26:21.029Z",
   "source": {
     "type": "description",
     "ref": null
@@ -167,7 +167,7 @@
       "id": "T8",
       "title": "Pull requests board: indicator without local review, New review round label, F-024",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -183,7 +183,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -270,7 +271,7 @@
       "id": "T14",
       "title": "Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -286,7 +287,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -417,6 +419,16 @@
       "at": "2026-11-24T08:21:05.118Z",
       "event": "task-attempt",
       "detail": "T14: started (attempt 1) — 519-T14"
+    },
+    {
+      "at": "2026-11-24T08:23:45.674Z",
+      "event": "task-done",
+      "detail": "T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab"
+    },
+    {
+      "at": "2026-11-24T08:26:21.029Z",
+      "event": "task-done",
+      "detail": "T8: Pull requests board: indicator without local review, New review round label, F-024"
     }
   ],
   "acKinds": {
