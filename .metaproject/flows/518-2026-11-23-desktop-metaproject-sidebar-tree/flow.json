@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: tree navigation in the sidebar",
   "status": "in-progress",
   "createdAt": "2026-11-23T20:02:01.811Z",
-  "updatedAt": "2026-11-23T21:31:29.571Z",
+  "updatedAt": "2026-11-24T05:09:34.959Z",
   "source": {
     "type": "description",
     "ref": null
@@ -248,7 +248,7 @@
       "id": "T12",
       "title": "Fix round 1: review findings of PR 1301 (3 major, 19 minor)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -262,7 +262,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -388,6 +389,11 @@
       "at": "2026-11-23T21:31:29.571Z",
       "event": "task-attempt",
       "detail": "T12: started (attempt 1) — 518-T12 fix round 1"
+    },
+    {
+      "at": "2026-11-24T05:09:34.959Z",
+      "event": "task-done",
+      "detail": "T12: Fix round 1: review findings of PR 1301 (3 major, 19 minor)"
     }
   ],
   "acKinds": {
