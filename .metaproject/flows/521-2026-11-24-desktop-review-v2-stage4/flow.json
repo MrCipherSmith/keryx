@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T08:18:00.971Z",
+  "updatedAt": "2026-11-24T10:50:30.749Z",
   "source": {
     "type": "description",
     "ref": null
@@ -138,7 +138,7 @@
       "id": "T7",
       "title": "Shared publish code: review publish uses desk-publication acceptance, receipt, duplicate marker (needs stages 2+3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -154,13 +154,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Session and Desktop prompt use the same update command (needs stage 3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -176,7 +177,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -415,6 +417,16 @@
       "at": "2026-11-24T08:18:00.971Z",
       "event": "task-done",
       "detail": "T9: Review round on the branch via review-orchestrator"
+    },
+    {
+      "at": "2026-11-24T10:50:30.559Z",
+      "event": "task-done",
+      "detail": "T7: Shared publish code: review publish uses desk-publication acceptance, receipt, duplicate marker (needs stages 2+3)"
+    },
+    {
+      "at": "2026-11-24T10:50:30.749Z",
+      "event": "task-done",
+      "detail": "T8: Session and Desktop prompt use the same update command (needs stage 3)"
     }
   ],
   "acKinds": {
