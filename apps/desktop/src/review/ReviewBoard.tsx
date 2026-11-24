@@ -21,7 +21,7 @@ import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import type { PrWork } from "./PrWorkRow";
-import { prSubject, prWorkIndex } from "./prWork";
+import { prSubject, prWorkIndex, type PrFlowOffer } from "./prWork";
 import type { SessionInfo } from "../acp/types";
 import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilters, saveReviewGrouping } from "./reviewFilterStorage";
 import {
@@ -46,9 +46,15 @@ interface Props {
   sessions?: readonly SessionInfo[];
   onOpenSubjectSession?: PrWork["onOpenSubjectSession"];
   onCreateFlow?: PrWork["onCreateFlow"];
+  /** New packages offered for linking to PR-bound sessions after Create Flow: the work row asks Link / Dismiss. */
+  flowOffers?: readonly PrFlowOffer[];
+  onLinkFlowOffer?: PrWork["onLinkFlowOffer"];
+  onDismissFlowOffer?: PrWork["onDismissFlowOffer"];
   /**
-   * Open this PR's panel on the board of `repo` (compared without case); a new `nonce` opens it again. Once
-   * opened, `onFocusHandled(nonce)` lets the owner clear the request, so a remounted board cannot replay it.
+   * Open this PR's panel on the board of `repo` (compared without case); a new `nonce` opens it again. A
+   * `repo` among the board's other repositories is selected first; one the board cannot show gets a notice.
+   * Once opened or refused, `onFocusHandled(nonce)` lets the owner clear the request, so a remounted board
+   * cannot replay it.
    */
   focus?: { repo: string; number: number; nonce: number } | null;
   onFocusHandled?: (nonce: number) => void;
@@ -72,7 +78,7 @@ interface ReadState {
 
 export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
-    && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending && a?.lastActivityAt === b?.lastActivityAt
+    && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending
     && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
@@ -97,6 +103,7 @@ const attentionNumbers = (board: ReviewBoardSnapshot) =>
 const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
 const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
 const NO_SESSIONS: readonly SessionInfo[] = [];
+const NO_OFFERS: readonly PrFlowOffer[] = [];
 
 export function ReviewBoard(props: Props) {
   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
@@ -107,7 +114,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -481,19 +488,41 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
   // A focus request waits for a snapshot of its repository that holds the PR, then opens its panel once per nonce.
+  // Another repository of this board is selected first (the board remounts on it); one it cannot show is refused
+  // with a notice, so the request is not left armed for a later, unrelated switch.
   const focused = useRef<number | null>(null);
+  const [focusNotice, setFocusNotice] = useState("");
   useEffect(() => {
-    if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()
-      || !snapshot.cards.some(c => c.number === focus.number)) return;
+    if (!focus || focused.current === focus.nonce || !snapshot) return;
+    if (snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()) {
+      const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());
+      if (listed) {
+        selectRepo(listed);
+        return;
+      }
+      focused.current = focus.nonce;
+      setFocusNotice(`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") || snapshot.repo}).`);
+      onFocusHandled?.(focus.nonce);
+      return;
+    }
+    if (!snapshot.cards.some(c => c.number === focus.number)) return;
     focused.current = focus.nonce;
+    setFocusNotice("");
     setSelected({ number: focus.number });
     onFocusHandled?.(focus.nonce);
-  }, [focus, snapshot, onFocusHandled]);
+  }, [focus, snapshot, onFocusHandled, selectRepo]);
   const workRepo = snapshot?.repo ?? "";
   // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
   const index = useMemo(() => prWorkIndex(flows, sessions), [flows, sessions]);
-  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession }),
-    [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession]);
+  const flowOffer = useMemo(() => {
+    if (!flowOffers.length) return undefined;
+    const bySession = new Map(flowOffers.map(offer => [offer.sessionId, offer]));
+    return (bound: readonly SessionInfo[]) => bound.map(session => bySession.get(session.sessionId)).find(offer => offer !== undefined);
+  }, [flowOffers]);
+  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession,
+    flowOffer, onLinkFlowOffer, onDismissFlowOffer }),
+    [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession, flowOffer, onLinkFlowOffer, onDismissFlowOffer]);
+  const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), []);
   const openPanelSession = (item: ReviewCard) => onOpenSubjectSession
     && (() => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId)));
   const panelFlow = (item: ReviewCard) => index.flows(item, index.sessions(prSubject(item, workRepo, repositoryId)))[0];
@@ -568,6 +597,12 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
       <button className="btn btn-sm" onClick={refresh}>Try again</button>
     </div>}
+    {focusNotice && <div className="inline-banner tone-warn review-focus-notice" role="status">
+      <Icon name="alert" size={15} /><span>{focusNotice}</span>
+      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => setFocusNotice("")}>
+        <Icon name="x" size={15} />
+      </button>
+    </div>}
     {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
       <button className="icon-btn review-dismiss-warning" aria-label="Hide sync details" title="Hide sync details"
@@ -577,7 +612,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
     {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} grouping={grouping} filters={filters} viewer={snapshot.viewer} onOpen={openDetails} onReview={openReview} work={work}
-        {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
+        {...(watcherTarget && { onSubscribe: subscribe, subscriptions })} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>

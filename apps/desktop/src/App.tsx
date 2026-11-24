@@ -32,7 +32,7 @@ import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { boundSessions, sessionFlags, type SessionSubject } from "./acp/types";
-import { flowPrompt, prFlows, reviewLaunchTarget, subjectOpener, withPendingSubjects, type SubjectSessionTarget } from "./review/prWork";
+import { flowPrompt, prFlows, reviewLaunchTarget, subjectOpener, withPendingSubjects, type PrFlowOffer, type SubjectSessionTarget } from "./review/prWork";
 import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
 import type { ReviewCard } from "./review/types";
 import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
@@ -403,16 +403,29 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
       bind: (id, value) => void s.bindSubject(id, value),
       fill: fillComposer,
+      isShown: s.isShown,
     }, subject, target, prompt, prefillExisting);
   }, [fillComposer, openSubject]);
 
-  /** "Create Flow": the PR's session with a flow prompt; the one package that then appears is linked to it. */
-  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void s.linkFlow(id, dir));
+  /**
+   * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
+   * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag.
+   */
+  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void acp.current.linkFlow(id, dir));
+  const flowLinkActions = flowLinks.actions;
   const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
-    const known = flowLinks.known();
-    const id = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
-    if (id) flowLinks.expect(id, known);
-  }, [flowLinks, openPrSession]);
+    const known = flowLinkActions.known();
+    const opened = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
+    // Only a prompt this press put into the shown session can make the package: a press coalesced into an open in
+    // flight, or an open the user switched away from, registers nothing.
+    if (opened?.filled) flowLinkActions.expect(opened.sessionId, known);
+  }, [flowLinkActions, openPrSession]);
+  const flowOffers = useMemo(() => flowLinks.offers.flatMap((offer): PrFlowOffer[] => {
+    const flow = flows.cards.find(card => card.dir === offer.dir);
+    return flow ? [{ sessionId: offer.sessionId, flow }] : [];
+  }), [flowLinks.offers, flows.cards]);
+  const linkFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
+  const dismissFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.dismiss(offer.sessionId), [flowLinkActions]);
 
   const [reviewFocus, setReviewFocus] = useState<{ repo: string; number: number; nonce: number } | null>(null);
   // Never reused, also after a handled request is cleared: the board opens each nonce once.
@@ -692,7 +705,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         ) : (
           <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace}
             sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}
-            onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard} />
+            onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard}
+            flowOffers={flowOffers} onLinkFlowOffer={linkFlowOffer} onDismissFlowOffer={dismissFlowOffer} />
         )}
       </div>
       {view === "settings" ? (

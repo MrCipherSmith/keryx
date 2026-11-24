@@ -173,8 +173,7 @@ export interface SessionSubject {
 
 /** Whether two subjects name the same PR or issue: same kind and number, repo compared without case as GitHub does. */
 export function sameSubject(a: SessionSubject | null | undefined, b: SessionSubject | null | undefined): boolean {
-  if (!a || !b) return false;
-  return a.kind === b.kind && a.number === b.number && a.repo.toLowerCase() === b.repo.toLowerCase();
+  return !!a && !!b && subjectKey(a) === subjectKey(b);
 }
 
 export interface SessionInfo {
@@ -199,17 +198,15 @@ const newestBoundFirst = (a: SessionInfo, b: SessionInfo) => unsaved(b) - unsave
  * so pure models (the issues board, shared with the root tests) reach no platform module.
  */
 export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
-  return sessions
-    .filter(s => sessionFlags(s).archivedAt === undefined && sameSubject(sessionFlags(s).subject, subject))
-    .sort(newestBoundFirst);
+  return [...boundSessionIndex(sessions)(subject)];
 }
 
-/** A key that is equal for two subjects exactly when `sameSubject` holds. */
+/** The one identity of a Subject: same kind and number, repo without case as GitHub compares it (`sameSubject`). */
 export function subjectKey(subject: SessionSubject): string {
   return `${subject.kind}/${subject.repo.toLowerCase()}/${subject.number}`;
 }
 
-/** `boundSessions` for many subjects: the sessions grouped once, each group in the same order. */
+/** The one rule behind `boundSessions`, for many subjects: the sessions grouped once, each group newest first. */
 export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {
   const groups = new Map<string, SessionInfo[]>();
   for (const session of sessions) {

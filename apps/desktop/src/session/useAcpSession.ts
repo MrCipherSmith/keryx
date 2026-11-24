@@ -1066,6 +1066,8 @@ export function useAcpSession(cwd: string) {
     workOnFlow,
     linkFlow,
     bindSubject,
+    /** Whether `sessionId` is the session shown now (read live, not from the last render). */
+    isShown: (sessionId: string) => live.current.reg.shown === sessionId,
     /** Bindings keryx has not stored yet, by session id. */
     pendingSubjects,
     setMode,

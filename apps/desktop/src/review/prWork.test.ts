@@ -142,6 +142,12 @@ test("a package already linked to one request is never linked to another", () =>
     .toEqual({ pending: [], links: [{ sessionId: "s2", dir: "3-own" }] });
 });
 
+test("TP-R2-003: one request with a fresh package and one without: no offer, and every request ends", () => {
+  // s2 recorded its request after 2-b appeared, so only s1 sees a new package; `some`, not `every`, decides that a pass happens.
+  expect(resolveFlowLinks([entry("s1", ["1-a"]), entry("s2", ["1-a", "2-b"])], ["1-a", "2-b"], noFlow, new Set(), 0))
+    .toEqual({ pending: [], links: [] });
+});
+
 /** An app stand-in: new sessions are shown, bound through PendingSubjects, and the composer is only filled. */
 function fakeApp(reply: (subject: SessionSubject) => Record<string, unknown> | "not-stored" = s => ({ subject: s })) {
   const stored: SessionInfo[] = [];
@@ -170,16 +176,17 @@ function fakeApp(reply: (subject: SessionSubject) => Record<string, unknown> | "
     newSession: async () => { const id = "s" + ++next; events.push("new " + id); return id; },
     bind: (id, value) => void subjects.bind(id, value),
     fill: text => events.push("fill " + text),
+    isShown: () => true,
   };
   return { deps, events, notices, subjects, stored };
 }
 
 test("Open in session: a new bound session with the PR URL in the composer, not sent; again opens the same session", async () => {
   const app = fakeApp(() => "not-stored");
-  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
+  expect(await openSubjectSession(app.deps, subject, "latest", url)).toEqual({ sessionId: "s1", filled: true });
   // Prefilled only: the deps have no way to send, and the composer got the URL.
   expect(app.events).toEqual(["new s1", "fill " + url]);
-  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
+  expect(await openSubjectSession(app.deps, subject, "latest", url)).toEqual({ sessionId: "s1", filled: false });
   expect(app.events.slice(2)).toEqual(["load s1"]);
 });
 
@@ -188,24 +195,24 @@ test("the session menu's New session creates another bound session; a listed ses
   await openSubjectSession(app.deps, subject, "latest", url);
   await Promise.resolve();
   expect(boundSessions(app.deps.sessions(), subject).map(s => s.sessionId)).toEqual(["s1"]);
-  expect(await openSubjectSession(app.deps, subject, "new", url)).toBe("s2");
+  expect((await openSubjectSession(app.deps, subject, "new", url))?.sessionId).toBe("s2");
   await Promise.resolve();
   expect(boundSessions(app.deps.sessions(), subject).map(s => s.sessionId).sort()).toEqual(["s1", "s2"]);
-  expect(await openSubjectSession(app.deps, subject, "s1", url)).toBe("s1");
+  expect((await openSubjectSession(app.deps, subject, "s1", url))?.sessionId).toBe("s1");
   expect(app.events.at(-1)).toBe("load s1");
 });
 
 test("Create Flow opens the bound session and prefills the flow prompt even when the session exists", async () => {
   const app = fakeApp(() => "not-stored");
   await openSubjectSession(app.deps, subject, "latest", url);
-  expect(await openSubjectSession(app.deps, subject, "latest", flowPrompt(url), true)).toBe("s1");
+  expect(await openSubjectSession(app.deps, subject, "latest", flowPrompt(url), true)).toEqual({ sessionId: "s1", filled: true });
   expect(app.events.slice(-2)).toEqual(["load s1", "fill " + flowPrompt(url)]);
 });
 
 test("a keryx that answers without subject still opens the session and says the binding was not saved", async () => {
   let stored = false;
   const app = fakeApp(() => stored ? { archivedAt: undefined } : "not-stored");
-  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
+  expect((await openSubjectSession(app.deps, subject, "latest", url))?.sessionId).toBe("s1");
   expect(app.events).toEqual(["new s1", "fill " + url]);
   expect(app.notices).toEqual([]);
   expect(app.subjects.get("s1")).toEqual(subject);
@@ -227,15 +234,15 @@ test("a repeat Open in session for a Subject while one is opening gets the same 
   const first = open(deps, subject, "latest", url);
   const again = open(deps, { ...subject, repo: "Org/Repo" }, "latest", url);
   const otherPr = open(deps, { ...subject, number: 102, url: url.replace("101", "102") }, "latest", url);
-  expect(again).toBe(first);
-  expect(otherPr).not.toBe(first);
   expect(created).toBe(2);
   release[0]!("s1");
-  expect(await first).toBe("s1");
+  expect(await first).toEqual({ sessionId: "s1", filled: true });
+  // The repeat press shares the open: the same session, and its prompt was not filled again.
+  expect(await again).toEqual({ sessionId: "s1", filled: false });
   release[1]!("s2");
   await otherPr;
   // Settled: the next press opens again (here the bound session, no new one).
-  expect(await open(deps, subject, "latest", url)).toBe("s1");
+  expect((await open(deps, subject, "latest", url))?.sessionId).toBe("s1");
   expect(created).toBe(2);
 });
 
@@ -268,4 +275,37 @@ test("a keryx that stores the subject answers it and no notice is shown", async 
   expect(app.notices).toEqual([]);
   expect(app.stored[0]?._meta?.keryx?.subject).toEqual(subject);
   expect(app.subjects.get("s1")).toBeUndefined();
+});
+
+test("LG-015: latest opens the newest of two sessions bound to the PR", async () => {
+  const app = fakeApp();
+  app.stored.push(session("older", { subject }, "2026-11-01T00:00:00Z"), session("newer", { subject }, "2026-11-05T00:00:00Z"));
+  expect((await openSubjectSession(app.deps, subject, "latest", url))?.sessionId).toBe("newer");
+  expect(app.events).toEqual(["load newer"]);
+  app.stored.reverse();
+  expect((await openSubjectSession(app.deps, subject, "latest", url))?.sessionId).toBe("newer");
+});
+
+test("LG-011: a session switch while the new session opens binds it but leaves the shown composer alone", async () => {
+  const app = fakeApp(() => "not-stored");
+  const deps: SubjectSessionDeps = { ...app.deps, isShown: () => false };
+  expect(await openSubjectSession(deps, subject, "latest", flowPrompt(url), true)).toEqual({ sessionId: "s1", filled: false });
+  expect(app.events).toEqual(["new s1"]);
+  expect(app.subjects.get("s1")).toEqual(subject);
+  // An existing bound session that another load overtook is not filled either.
+  expect(await openSubjectSession(deps, subject, "latest", flowPrompt(url), true)).toEqual({ sessionId: "s1", filled: false });
+  expect(app.events).toEqual(["new s1", "load s1"]);
+});
+
+test("HL-001/LG-008: a press coalesced into an in-flight open reports that it filled nothing", async () => {
+  const app = fakeApp(() => "not-stored");
+  let release!: (id: string | null) => void;
+  const deps: SubjectSessionDeps = { ...app.deps, newSession: () => new Promise(resolve => { release = resolve; }) };
+  const open = subjectOpener();
+  const first = open(deps, subject, "latest", url);
+  const flow = open(deps, subject, "latest", flowPrompt(url), true);
+  release("s1");
+  expect(await first).toEqual({ sessionId: "s1", filled: true });
+  expect(await flow).toEqual({ sessionId: "s1", filled: false });
+  expect(app.events.filter(event => event.startsWith("fill"))).toEqual(["fill " + url]);
 });

@@ -798,6 +798,12 @@ test("the reason line shows GitHub data only, whatever the local review, in boar
   }
 });
 
+test("a badge whose only change is the transcript time is equal: nothing on the board shows it, so the board does not re-render", () => {
+  const a = { active: true, ready: false, runState: "running" as const, lastActivityAt: "2026-11-10T01:00:00Z" };
+  expect(badgesEqual(a, { ...a, lastActivityAt: "2026-11-10T01:05:00Z" })).toBe(true);
+  expect(badgesEqual(a, { ...a, runState: "partial" })).toBe(false);
+});
+
 test("a badge whose only change is the outdated review counts as changed", () => {
   const base = { active: false, ready: false };
   const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };
@@ -1541,44 +1547,57 @@ const laneNames = () => Array.from(document.body.querySelectorAll(".review-lanes
 const laneNumbers = (lane: string) =>
   Array.from(document.body.querySelectorAll(`section[aria-label="${lane}"] .review-card .flow-id`), id => id.textContent);
 
-test("a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first", async () => {
-  const clock: Window = window;
-  const schedule = clock.setTimeout;
-  let tick: (() => unknown) | undefined;
-  clock.setTimeout = (fn, ms, ...args) => {
-    if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
-    tick = () => fn(...args); return -78;
-  };
-  const cards: ReviewCard[] = [
-    { ...pr, number: 201, updatedAt: "2026-11-01T00:00:00Z" },
-    { ...pr, number: 202, updatedAt: "2026-11-03T00:00:00Z", localReview: { active: true, ready: false, runState: "queued" } },
-    { ...pr, number: 203, updatedAt: "2026-11-05T00:00:00Z" },
-    { ...pr, number: 204, updatedAt: "2026-11-04T00:00:00Z", decision: "APPROVED" },
-  ];
-  const badges = [
-    { active: true, ready: false, runState: "running" as const, progress: { wave: 1, planned: 2, finished: 1, completed: 1 } },
-    { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const },
-    { active: false, ready: true, runState: "completed" as const, publicationPending: true as const },
-  ];
-  let polls = 0;
-  try {
-    await act(async () => { root.render(createElement(ReviewBoard, {
-      key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards), watcherCommand: watcherDisabled,
-      loadBadges: async (_cwd, key, subjects) => ({ version: 1, ...key, cards: subjects.map(card => ({ ...card, localReview: badges[polls++]! })) }),
-    })); });
-    const layout = () => ({ waiting: laneNumbers("Waiting for review"), approved: laneNumbers("Approved"),
-      shown: document.body.querySelectorAll(".review-card").length });
-    const before = layout();
-    expect(before).toEqual({ waiting: ["#203", "#202", "#201"], approved: ["#204"], shown: 4 });
-    for (let step = 0; step < badges.length; step++) {
-      await act(async () => { await tick!(); });
-      expect({ step, layout: layout() }).toEqual({ step, layout: before });
-    }
-    expect(polls).toBe(3);
-    await click(button("List"));
-    expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#203", "#204", "#202", "#201"]);
-  } finally { clock.setTimeout = schedule; }
-});
+const allLanes = () => Object.fromEntries(Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane =>
+  [lane.getAttribute("aria-label"), Array.from(lane.querySelectorAll(".review-card .flow-id"), id => id.textContent)]));
+const reviewSlot = (n: number) => document.body.querySelector(`[aria-label="Keryx work for #${n}"] [data-slot="review"] .pr-work-link`)?.textContent;
+
+for (const grouping of ["Status", "My role"] as const) {
+  test(`a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first (${grouping})`, async () => {
+    const clock: Window = window;
+    const schedule = clock.setTimeout;
+    let tick: (() => unknown) | undefined;
+    clock.setTimeout = (fn, ms, ...args) => {
+      if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
+      tick = () => fn(...args); return -78;
+    };
+    // #202 is the viewer's own approved PR: outside "Waiting for review" and in "Mine", so a lane that followed
+    // the local review would move it.
+    const cards: ReviewCard[] = [
+      { ...pr, number: 201, updatedAt: "2026-11-01T00:00:00Z" },
+      { ...pr, number: 202, author: "ann", decision: "APPROVED", updatedAt: "2026-11-03T00:00:00Z", localReview: { active: true, ready: false, runState: "queued" } },
+      { ...pr, number: 203, updatedAt: "2026-11-05T00:00:00Z" },
+      { ...pr, number: 204, updatedAt: "2026-11-04T00:00:00Z", decision: "APPROVED" },
+    ];
+    const badges = [
+      { active: true, ready: false, runState: "running" as const, progress: { wave: 1, planned: 2, finished: 1, completed: 1 } },
+      { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const },
+      { active: false, ready: true, runState: "completed" as const, publicationPending: true as const },
+    ];
+    const slotTexts = ["Review · running", "Review · needs your answer", "Review · publication pending"];
+    let polls = 0;
+    try {
+      await act(async () => { root.render(createElement(ReviewBoard, {
+        key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards), watcherCommand: watcherDisabled,
+        loadBadges: async (_cwd, key, subjects) => ({ version: 1, ...key, cards: subjects.map(card => ({ ...card, localReview: badges[polls++]! })) }),
+      })); });
+      if (grouping === "My role") await chooseGrouping("My role");
+      const layout = () => ({ lanes: allLanes(), shown: document.body.querySelectorAll(".review-card").length });
+      const before = layout();
+      expect(before).toEqual(grouping === "Status"
+        ? { lanes: { Draft: [], "Waiting for review": ["#203", "#201"], "Changes requested": [], Approved: ["#204", "#202"] }, shown: 4 }
+        : { lanes: { "Requested from me": [], Mine: ["#202"], Others: ["#203", "#204", "#201"] }, shown: 4 });
+      expect(reviewSlot(202)).toBe("Review · queued");
+      for (let step = 0; step < badges.length; step++) {
+        await act(async () => { await tick!(); });
+        // The polled badge reached the card, and nothing moved.
+        expect({ step, slot: reviewSlot(202), layout: layout() }).toEqual({ step, slot: slotTexts[step], layout: before });
+      }
+      expect(polls).toBe(3);
+      await click(button("List"));
+      expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#203", "#204", "#202", "#201"]);
+    } finally { clock.setTimeout = schedule; }
+  });
+}
 
 test("grouping by my role, quick filters in the context row, and an active review never bypasses them", async () => {
   const requested: ReviewCard = { ...pr, number: 401, author: "bob", reviewers: ["ann"], updatedAt: "2026-11-10T04:00:00Z" };

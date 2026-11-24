@@ -140,8 +140,19 @@ async function go(label: string) {
   assert.ok(button, "Missing project view " + label);
   await React.act(() => button.click());
 }
+/** Polls until `ok` holds, flushing React between polls; fails with `what` after `ms`. */
+async function waitFor(what: string, ok: () => boolean, ms = 2000) {
+  const deadline = Date.now() + ms;
+  while (!ok()) {
+    if (Date.now() > deadline) assert.fail(`Timed out waiting for: ${what} (title: ${host.querySelector(".titlebar")?.textContent}, last calls: ${calls.slice(-6).join(", ")})`);
+    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  }
+}
+function findButton(label: string) {
+  return [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
+}
 function namedButton(label: string) {
-  const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
+  const button = findButton(label);
   assert.ok(button, "Missing button " + label);
   return button;
 }
@@ -284,28 +295,24 @@ try {
 
   // "Open in session" with an older keryx: a new session opens, the PR URL waits in the composer, a notice says the binding was not saved.
   const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
-  const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
   const opened = () => calls.filter(method => method === "session/new").length;
   const firstOpen = opened();
   await React.act(() => namedButton("Open in session for #12").click());
-  await settle();
+  await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
   assert.equal(opened(), firstOpen + 1);
-  assert.equal(shownComposer()?.value, prUrl, "The composer holds the PR URL");
   assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
-  assert.match(host.textContent ?? "", /did not save the pull request binding/);
+  await waitFor("the notice that the binding was not saved", () => /did not save the pull request binding/.test(host.textContent ?? ""));
   // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
   storesSubject = true;
   await go("Pull requests");
   await React.act(() => namedButton("Open in session for #12").click());
-  await settle();
+  await waitFor("keryx stores the bound session", () => stored.size === 1 && shownComposer()?.value === prUrl);
   assert.equal(opened(), firstOpen + 2);
-  assert.equal(stored.size, 1);
-  assert.equal(shownComposer()?.value, prUrl);
   await go("Pull requests");
+  await waitFor("#12 counts its bound session", () => !!findButton("Session for #12"));
   await React.act(() => namedButton("Session for #12").click());
-  await settle();
+  await waitFor("the session header names PR #12", () => host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
   assert.equal(opened(), firstOpen + 2, "Open in session again reuses the bound session");
-  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"));
   // /review without a target in the PR-bound session preselects the PR.
   const draft = shownComposer()!;
   await React.act(() => {
@@ -313,7 +320,7 @@ try {
     draft.dispatchEvent(new Event("input", { bubbles:true }));
   });
   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
-  await settle();
+  await waitFor("the launch dialog", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
   const launch = host.querySelector('[role="dialog"]');
   assert.ok(launch && launch.textContent?.includes("Run review"));
   assert.equal(launch.querySelector<HTMLInputElement>("input.text-input")?.value, prUrl);
@@ -325,15 +332,21 @@ try {
   const menuNew = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "New session");
   assert.ok(menuNew);
   await React.act(() => menuNew.click());
-  await settle();
+  await waitFor("keryx stores the second bound session", () => stored.size === 2);
   assert.equal(opened(), firstOpen + 3);
-  assert.equal(stored.size, 2);
   assert.ok([...stored.values()].every(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12));
-  // The session header links back to the PR's card and opens its panel.
+  // The session header links back to the PR's card and opens its panel, each time it is pressed.
+  const panel = () => host.querySelector(".review-detail-panel");
+  await waitFor("the header links the new session's PR", () => !!findButton("PR org/project#12"));
   await React.act(() => namedButton("PR org/project#12").click());
-  await settle();
+  await waitFor("the PR panel opens", () => !!panel());
   assert.ok(host.querySelector('main nav button[aria-current="page"]')?.textContent?.startsWith("Pull requests"));
-  assert.ok(host.querySelector(".review-detail-panel"), "The PR panel is open");
+  await React.act(() => namedButton("Close details").click());
+  assert.equal(panel(), null);
+  await go("Sessions");
+  await React.act(() => namedButton("PR org/project#12").click());
+  await waitFor("the PR panel opens again from a second header press", () => !!panel());
+  await React.act(() => namedButton("Close details").click());
 
   // AC16: PR without Flow and review -> Open in session -> /review -> review link on the card.
   await go("Pull requests");
@@ -343,7 +356,8 @@ try {
   assert.equal(bareSlot("session"), "Open in session", "#13 has no bound session");
   const beforeBare = opened();
   await React.act(() => namedButton("Open in session for #13").click());
-  await settle();
+  await waitFor("keryx stores #13's bound session", () => [...stored.values()].some(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13));
+  await waitFor("the composer holds #13's URL", () => shownComposer()?.value === barePrUrl);
   assert.equal(opened(), beforeBare + 1, "Open in session creates one session");
   const bareSessions = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13);
   assert.equal(bareSessions.length, 1, "The new session is bound to #13");
@@ -353,14 +367,18 @@ try {
   assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
   // Pressing it again, from another session, opens the same session: no second session/new.
   await go("Pull requests");
+  // "latest" opens the newest of #12's two bound sessions: the one the menu created.
+  const newest12 = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!.sessionId; // two are stored, asserted above
   await React.act(() => namedButton("2 sessions for #12").click());
-  await settle();
-  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"), "Another session is shown first");
+  await waitFor("the newest #12 session is shown", () => loaded.at(-1) === newest12
+    && host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
   await go("Pull requests");
   assert.equal(bareSlot("session"), "Session");
   const loadsBefore = loaded.length;
   await React.act(() => namedButton("Session for #13").click());
-  await settle();
+  await waitFor("#13's bound session is shown again", () => loaded.length > loadsBefore
+    && host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13") === true);
   assert.equal(opened(), beforeBare + 1, "The second press reuses the bound session");
   assert.equal(stored.size, 3);
   assert.deepEqual(loaded.slice(loadsBefore), [bareSession], "The bound session is shown again");
@@ -373,7 +391,7 @@ try {
     bareDraft.dispatchEvent(new Event("input", { bubbles:true }));
   });
   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
-  await settle();
+  await waitFor("the launch dialog for #13", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
   const bareLaunch = host.querySelector('[role="dialog"]');
   assert.ok(bareLaunch && bareLaunch.textContent?.includes("Run review"));
   assert.equal(bareLaunch.querySelector<HTMLInputElement>("input.text-input")?.value, barePrUrl);
@@ -381,13 +399,13 @@ try {
   const bareApply = [...bareLaunch.querySelectorAll("button")].find(button => button.textContent === "Apply");
   assert.ok(bareApply && !bareApply.disabled);
   await React.act(() => bareApply.click());
-  await settle();
+  await waitFor("the launch dialog closes after the start", () => bareStarts.length === 1 && !host.querySelector('[role="dialog"]'));
   assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha,
     options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
   assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
   // The started run is the card's review link, without a manual refresh.
   await go("Pull requests");
-  assert.equal(bareSlot("review"), "Review · running");
+  await waitFor("#13's review slot shows the started run", () => bareSlot("review") === "Review · running");
   assert.equal(bareSlot("flow"), "Create Flow");
   assert.equal(bareSlot("session"), "Session");
   assert.ok(!calls.includes("session/prompt"), "Neither the PR URL nor /review is sent as a prompt");
@@ -397,6 +415,11 @@ try {
   assert.ok(projectSettings);
   await React.act(() => projectSettings.click());
   await chooseAccount("second");
+  // The account switch remounts the board: the header request handled earlier is gone and does not reopen the panel.
+  await go("Pull requests");
+  await waitFor("the board of the second account", () => host.textContent?.includes("Signed in as second") === true);
+  assert.equal(host.querySelector(".review-detail-panel"), null, "A handled header focus is not replayed by a remounted board");
+  await go("Sessions");
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
   await React.act(() => namedButton("GitHub · @second").click());
   await React.act(() => namedButton("Disconnect from project").click());

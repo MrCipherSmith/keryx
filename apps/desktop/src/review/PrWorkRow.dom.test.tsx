@@ -7,7 +7,7 @@ import type { fetchReviewBoard } from "../platform/review";
 import type { reviewRules } from "../platform/reviewRules";
 import type { ReviewWatcherSnapshot } from "../platform/reviewWatcher";
 import { registerDom, unregisterDom } from "../test/dom";
-import type { SubjectSessionTarget } from "./prWork";
+import type { PrFlowOffer, SubjectSessionTarget } from "./prWork";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
 let root: Root;
@@ -16,6 +16,8 @@ let act: (fn: () => void | Promise<void>) => Promise<void>;
 let createElement: typeof import("react").createElement;
 let useState: typeof import("react").useState;
 let ReviewBoard: typeof import("./ReviewBoard").ReviewBoard;
+let PrWorkRow: typeof import("./PrWorkRow").PrWorkRow;
+let prWorkIndex: typeof import("./prWork").prWorkIndex;
 let publishSessionReview: typeof import("../platform/reviewRuns").publishSessionReview;
 let renderKey = 0;
 
@@ -26,6 +28,8 @@ beforeAll(async () => {
   createElement = React.createElement;
   useState = React.useState;
   ({ ReviewBoard } = await import("./ReviewBoard"));
+  ({ PrWorkRow } = await import("./PrWorkRow"));
+  ({ prWorkIndex } = await import("./prWork"));
   ({ publishSessionReview } = await import("../platform/reviewRuns"));
   host = document.createElement("div");
   document.body.append(host);
@@ -56,8 +60,8 @@ const watcherOff: ReviewWatcherSnapshot = { version: 1, state: "disabled", insta
   lastAttemptAt: null, lastSuccessAt: null, lastError: null, events: [] };
 const rules: typeof reviewRules = async () => ({ version: 1, rules: [], subscriptions: [] }) as unknown as Awaited<ReturnType<typeof reviewRules>>;
 
-interface Calls { flows: string[]; created: number[]; sessions: Array<[number, SubjectSessionTarget, SessionSubject]> }
-function render(cards: ReviewCard[], extra: { flows?: FlowCard[]; sessions?: SessionInfo[]; calls?: Calls } = {}) {
+interface Calls { flows: string[]; created: number[]; sessions: Array<[number, SubjectSessionTarget, SessionSubject]>; linked?: PrFlowOffer[]; dismissed?: PrFlowOffer[] }
+function render(cards: ReviewCard[], extra: { flows?: FlowCard[]; sessions?: SessionInfo[]; calls?: Calls; offers?: PrFlowOffer[] } = {}) {
   const calls = extra.calls ?? { flows: [], created: [], sessions: [] };
   const load: typeof fetchReviewBoard = async () => board(cards);
   return act(async () => {
@@ -67,6 +71,9 @@ function render(cards: ReviewCard[], extra: { flows?: FlowCard[]; sessions?: Ses
       onOpenFlow: dir => calls.flows.push(dir),
       onCreateFlow: card => calls.created.push(card.number),
       onOpenSubjectSession: (card, target, value) => calls.sessions.push([card.number, target, value]),
+      flowOffers: extra.offers ?? [],
+      onLinkFlowOffer: offer => calls.linked?.push(offer),
+      onDismissFlowOffer: offer => calls.dismissed?.push(offer),
     }));
   });
 }
@@ -257,10 +264,9 @@ test("the PR panel names the same Flow as the work row, a Flow linked to a bound
   expect(document.body.querySelector(".review-detail-panel .review-associated-flow")?.textContent).toContain("Flow #520");
 });
 
-test("the session header's PR focus opens the panel only on the board of its repository, and a remount does not replay it", async () => {
-  let handled: number[] = [];
-  const load: typeof fetchReviewBoard = async () => board([pr]);
-  type Focus = { repo: string; number: number; nonce: number } | null;
+type Focus = { repo: string; number: number; nonce: number } | null;
+/** A board whose focus the test drives; `handles` false leaves the request armed (no onFocusHandled). */
+function focusHost(load: typeof fetchReviewBoard, handled: number[], handles = true) {
   let setFocus!: (focus: Focus) => void;
   function Host({ boardKey, initial }: { boardKey: number; initial: Focus }) {
     const [focus, set] = useState<Focus>(initial);
@@ -268,20 +274,108 @@ test("the session header's PR focus opens the panel only on the board of its rep
     return createElement(ReviewBoard, {
       key: boardKey, cwd: "/project", flows: [], sessions: [], load, listRepositories: async () => [],
       watcherCommand: async () => watcherOff, rulesCommand: rules, onOpenFlow: () => {}, focus,
-      onFocusHandled: (nonce: number) => { handled.push(nonce); set(old => old?.nonce === nonce ? null : old); },
+      ...(handles && { onFocusHandled: (nonce: number) => { handled.push(nonce); set(old => old?.nonce === nonce ? null : old); } }),
     });
   }
-  const panel = () => document.body.querySelector(".review-detail-panel");
-  await act(async () => { root.render(createElement(Host, { key: ++renderKey, boardKey: 1, initial: { repo: "other/repo", number: 101, nonce: 1 } })); });
-  expect(panel()).toBeNull();
-  expect(handled).toEqual([]);
-  await act(async () => setFocus({ repo: "Org/Repo", number: 101, nonce: 2 }));
+  return { Host, setFocus: (focus: Focus) => act(async () => setFocus(focus)) };
+}
+const panel = () => document.body.querySelector(".review-detail-panel");
+
+test("the session header's PR focus opens the panel on the board of its repository, and a remount does not replay it", async () => {
+  const handled: number[] = [];
+  const host = focusHost(async () => board([pr]), handled);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  await host.setFocus({ repo: "Org/Repo", number: 101, nonce: 2 });
   expect(panel()).not.toBeNull();
   expect(handled).toEqual([2]);
   await click(button("Close details"));
-  handled = [];
+  handled.length = 0;
   // The board remounts (a repository or account switch): the handled request is gone and nothing reopens.
-  await act(async () => { root.render(createElement(Host, { key: renderKey, boardKey: 2, initial: null })); });
+  await act(async () => { root.render(createElement(host.Host, { key: renderKey, boardKey: 2, initial: null })); });
   expect(panel()).toBeNull();
   expect(handled).toEqual([]);
+});
+
+test("LG-009: a focus for another repository of the board switches to it and opens the panel; one the board cannot show says so", async () => {
+  const handled: number[] = [];
+  const requested: Array<string | undefined> = [];
+  const other: ReviewCard = { ...pr, number: 7, url: "https://github.com/org/other/pull/7", title: "Other repository PR" };
+  const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
+    requested.push(repo);
+    const snapshot = repo === "org/other" ? { ...board([other]), repo: "org/other", repositoryId: "repo2" } : board([pr]);
+    return { ...snapshot, repositories: ["org/repo", "org/other"] };
+  };
+  const host = focusHost(load, handled);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
+  await host.setFocus({ repo: "Org/Other", number: 7, nonce: 1 });
+  expect(requested.at(-1)).toBe("org/other");
+  expect(panel()?.textContent).toContain("Other repository PR");
+  expect(handled).toEqual([1]);
+  expect(document.body.querySelector(".review-focus-notice")).toBeNull();
+  await click(button("Close details"));
+  // A repository the board does not list: no panel, a visible notice, and the request is handled (not left armed).
+  await host.setFocus({ repo: "elsewhere/project", number: 3, nonce: 2 });
+  expect(panel()).toBeNull();
+  expect(handled).toEqual([1, 2]);
+  expect(document.body.querySelector(".review-focus-notice")?.textContent).toContain("elsewhere/project#3");
+  await click(button("Dismiss notice"));
+  expect(document.body.querySelector(".review-focus-notice")).toBeNull();
+});
+
+test("a focus that nobody clears opens the panel once per nonce, not again after a refresh", async () => {
+  let loads = 0;
+  const host = focusHost(async () => { loads++; return board([pr]); }, [], false);
+  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: { repo: "org/repo", number: 101, nonce: 5 } })); });
+  expect(panel()).not.toBeNull();
+  await click(button("Close details"));
+  await click(button("Refresh pull requests"));
+  expect(loads).toBe(2);
+  expect(panel()).toBeNull();
+  // A new nonce opens it again.
+  await host.setFocus({ repo: "org/repo", number: 101, nonce: 6 });
+  expect(panel()).not.toBeNull();
+});
+
+test("a new package offered for the PR's bound session shows Link and Dismiss in the Flow slot; only those act on it", async () => {
+  const calls: Calls = { flows: [], created: [], sessions: [], linked: [], dismissed: [] };
+  const offer: PrFlowOffer = { sessionId: "s1", flow: flow("530") };
+  const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
+  await render([pr, { ...pr, number: 102, url: pr.url.replace("101", "102") }], { sessions: bound, offers: [offer], calls });
+  const flowSlot = (n: number) => document.body.querySelector<HTMLElement>(`[aria-label="Keryx work for #${n}"] [data-slot="flow"]`)!;
+  expect(flowSlot(101).textContent).toBe("Link Flow #530?LinkDismiss");
+  // Only the PR whose bound session asked gets the offer.
+  expect(flowSlot(102).textContent).toBe("Create Flow");
+  expect(rows().every(row => row.children.length === 3)).toBe(true);
+  await click(button("Link Flow #530 for #101"));
+  expect(calls.linked).toEqual([offer]);
+  await click(button("Dismiss Flow #530 for #101"));
+  expect(calls.dismissed).toEqual([offer]);
+  expect(calls.created).toEqual([]);
+  expect(calls.flows).toEqual([]);
+});
+
+/** The work row alone, outside a board: the card's own state decides. */
+function renderRow(card: ReviewCard) {
+  const work = { repo: "org/repo", index: prWorkIndex([], []), onOpenFlow: () => {} };
+  return act(async () => { root.render(createElement(PrWorkRow, { key: ++renderKey, card, work, onReview: () => {} })); });
+}
+const reviewLink = () => document.body.querySelector('[data-slot="review"] .pr-work-link')!;
+
+test("the warn tone marks a review waiting on the viewer only on an open PR, as the tab indicator does", async () => {
+  const publication = { active: false, ready: true, runState: "completed" as const, publicationPending: true as const };
+  const answer = { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const };
+  for (const [state, localReview, warn] of [["open", publication, true], ["merged", publication, false], ["closed", publication, false],
+    ["open", answer, true], ["merged", answer, false]] as const) {
+    await renderRow({ ...pr, state, localReview });
+    expect({ state, warn: reviewLink().classList.contains("is-attention") }).toEqual({ state, warn });
+  }
+});
+
+test("the review slot title carries the progress without the running label, and nothing for an answer without progress", async () => {
+  await renderRow({ ...pr, localReview: { active: true, ready: false, runState: "running", progress: { wave: 2, planned: 4, finished: 1, completed: 1 } } });
+  expect(reviewLink().getAttribute("title")).toBe("Review · running — Wave 2 · 27% · 1 of 4 assignments completed");
+  await renderRow({ ...pr, localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } });
+  expect(reviewLink().getAttribute("title")).toBe("Review · needs your answer");
+  await renderRow({ ...pr, localReview: { active: false, ready: false, runState: "partial" } });
+  expect(reviewLink().getAttribute("title")).toBe("Review · partial — Partial · Progress unavailable");
 });

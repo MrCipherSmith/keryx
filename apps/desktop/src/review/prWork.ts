@@ -137,18 +137,25 @@ export interface PendingFlowLink {
   expiresAt: number;
 }
 
-/** One pass over the pending requests: those still waiting, and the links to write. */
+/** A new flow package offered for linking to a PR-bound session ("Link Flow #<id>?"); written only on Link. */
+export interface PrFlowOffer {
+  sessionId: string;
+  flow: FlowCard;
+}
+
+/** One pass over the pending requests: those still waiting, and the links to offer. */
 export interface FlowLinkPass {
   pending: PendingFlowLink[];
   links: Array<{ sessionId: string; dir: string }>;
 }
 
 /**
- * What to do with the pending "Create Flow" requests once the flow list changes. A package is linked only
- * when exactly one request is pending and exactly one package appeared since it was recorded: which package
- * belongs to which request cannot be told otherwise, so several new packages or several pending requests
- * link none and end every request. An expired request, or one whose session already has a Flow, ends
- * unlinked. A package in `claimed` (already linked to a request) is never a candidate again.
+ * What to do with the pending "Create Flow" requests once the flow list changes. A package is offered for
+ * linking (`links`; the user confirms it, nothing is written here) only when exactly one request is pending
+ * and exactly one package appeared since it was recorded. Arrival alone cannot tell who made a package, so
+ * the offer is a question, never a silent link; several new packages or several pending requests offer none
+ * and end every request. An expired request, or one whose session already has a Flow, ends unlinked. A
+ * package in `claimed` (already offered for a request) is never a candidate again.
  */
 export function resolveFlowLinks(pending: readonly PendingFlowLink[], dirs: readonly string[],
   sessionFlow: (sessionId: string) => string | undefined, claimed: ReadonlySet<string>, now: number): FlowLinkPass {
@@ -170,42 +177,56 @@ export interface SubjectSessionDeps {
   newSession: () => Promise<string | null>;
   /** Bind the new session to the subject (pending until keryx stores it). */
   bind: (id: string, subject: SessionSubject) => void;
-  /** Prefill the composer; never sends. */
+  /** Prefill the composer of the shown session; never sends. */
   fill: (text: string) => void;
+  /** Whether `id` is the session shown now: the user may have switched elsewhere while it opened. */
+  isShown: (id: string) => boolean;
+}
+
+/** The session "Open in session" resolved, and whether this call put its prompt into that session's composer. */
+export interface SubjectOpen {
+  sessionId: string;
+  filled: boolean;
 }
 
 /**
  * Open the session for a Subject: the newest non-archived bound session for "latest", the named one, or a
  * new bound session for "new" or when none is bound. A new session gets `prompt` in its composer; an
- * existing one keeps its draft unless `prefillExisting` is set. Resolves the shown session, or null.
+ * existing one keeps its draft unless `prefillExisting` is set. The prompt goes in only when that session is
+ * the one shown once it has opened: a switch made meanwhile keeps the other session's draft (`filled` false).
+ * Resolves the opened session, or null.
  */
 export async function openSubjectSession(deps: SubjectSessionDeps, subject: SessionSubject, target: SubjectSessionTarget,
-  prompt: string, prefillExisting = false): Promise<string | null> {
+  prompt: string, prefillExisting = false): Promise<SubjectOpen | null> {
   const bound = boundSessions(deps.sessions(), subject);
   const existing = target === "latest" ? bound[0]?.sessionId : target === "new" ? undefined : bound.find(s => s.sessionId === target)?.sessionId;
   if (existing) {
     await deps.loadSession(existing);
-    if (prefillExisting) deps.fill(prompt);
-    return existing;
+    return { sessionId: existing, filled: prefillExisting && fillShown(deps, existing, prompt) };
   }
   const id = await deps.newSession();
   if (!id) return null;
   deps.bind(id, subject);
+  return { sessionId: id, filled: fillShown(deps, id, prompt) };
+}
+
+function fillShown(deps: SubjectSessionDeps, id: string, prompt: string): boolean {
+  if (!deps.isShown(id)) return false;
   deps.fill(prompt);
-  return id;
+  return true;
 }
 
 /**
  * `openSubjectSession` with one open per Subject at a time: a repeat call for the same Subject while an
- * open is in flight (a second press before `session/new` answers) gets that open's promise, whatever its
- * target or prompt, so it cannot start a second bound session.
+ * open is in flight (a second press before `session/new` answers) gets that open's session, whatever its
+ * target or prompt, so it cannot start a second bound session. Its own prompt was not filled (`filled` false).
  */
 export function subjectOpener(): typeof openSubjectSession {
-  const inFlight = new Map<string, Promise<string | null>>();
+  const inFlight = new Map<string, Promise<SubjectOpen | null>>();
   return (deps, subject, target, prompt, prefillExisting = false) => {
     const key = subjectKey(subject);
     const running = inFlight.get(key);
-    if (running) return running;
+    if (running) return running.then(open => open && { ...open, filled: false });
     const open = openSubjectSession(deps, subject, target, prompt, prefillExisting).finally(() => inFlight.delete(key));
     inFlight.set(key, open);
     return open;

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Menu, type MenuItem } from "../components/Menu";
 import type { SessionInfo, SessionSubject } from "../acp/types";
-import { flowStage, prSubject, reviewSlotState, type PrWorkIndex, type SubjectSessionTarget } from "./prWork";
+import { flowStage, prSubject, reviewSlotState, type PrFlowOffer, type PrWorkIndex, type SubjectSessionTarget } from "./prWork";
 import { reviewProgressText } from "./ReviewProgress";
 import { reviewNote } from "./model";
 import type { ReviewCard } from "./types";
@@ -16,6 +16,10 @@ export interface PrWork {
   onOpenFlow: (dir: string) => void;
   onCreateFlow?: ((card: ReviewCard, subject: SessionSubject) => void) | undefined;
   onOpenSubjectSession?: ((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) => void) | undefined;
+  /** The new package offered for one of the PR's bound sessions ("Link Flow #<id>?"), if any. */
+  flowOffer?: ((bound: readonly SessionInfo[]) => PrFlowOffer | undefined) | undefined;
+  onLinkFlowOffer?: ((offer: PrFlowOffer) => void) | undefined;
+  onDismissFlowOffer?: ((offer: PrFlowOffer) => void) | undefined;
 }
 
 /**
@@ -26,9 +30,11 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
   const subject = prSubject(card, work.repo, work.repositoryId);
   const sessions = work.index.sessions(subject);
   const flow = work.index.flows(card, sessions)[0];
+  const offer = flow ? undefined : work.flowOffer?.(sessions);
   const state = reviewSlotState(card.localReview);
   // A review waiting on the viewer (an answer, a publication decision) gets the warn tone; the text says which.
-  const waitsOnViewer = !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);
+  // Open PRs only, as `needsViewerAttention` counts them for the tab indicator.
+  const waitsOnViewer = card.state === "open" && !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);
   const canReview = !!state || card.state === "open";
   const reviewText = state ? `Review · ${state}` : "Run review";
   const progress = reviewProgressText(card.localReview);
@@ -47,9 +53,10 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
         aria-label={reviewText + of} disabled={!canReview} onClick={() => onReview(card)}>{reviewText}</button>
     </span>
     <span className="pr-work-slot" data-slot="flow">
-      <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
-        aria-label={flowText + of} disabled={!flow && !createFlow}
-        onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>
+      {offer ? <FlowOffer offer={offer} of={of} work={work} /> :
+        <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
+          aria-label={flowText + of} disabled={!flow && !createFlow}
+          onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>}
     </span>
     <span className="pr-work-slot" data-slot="session">
       <button type="button" className={"pr-work-link" + (sessions.length ? "" : " is-empty")} title={sessionText}
@@ -62,6 +69,23 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
         label={`Sessions${of}`} placement="auto" closeOnScroll onClose={() => setMenu(false)} />, document.body)}
     </span>
   </div>;
+}
+
+/**
+ * "Link Flow #<id>?" for a package that appeared after Create Flow: the link is written only on Link, and
+ * Dismiss drops the question. Fits the slot's fixed height: one line of text and two small buttons.
+ */
+function FlowOffer({ offer, of, work }: { offer: PrFlowOffer; of: string; work: PrWork }) {
+  const name = `Flow #${offer.flow.id}`;
+  return <>
+    <span className="pr-work-link pr-work-offer" title={`${name} (${offer.flow.title}) appeared after Create Flow. Link it to this pull request's session?`}>
+      Link {name}?
+    </span>
+    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} disabled={!work.onLinkFlowOffer}
+      onClick={() => work.onLinkFlowOffer?.(offer)}>Link</button>
+    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} disabled={!work.onDismissFlowOffer}
+      onClick={() => work.onDismissFlowOffer?.(offer)}>Dismiss</button>
+  </>;
 }
 
 /** The session menu: the bound sessions, then "New session". Built only while the menu is open. */
