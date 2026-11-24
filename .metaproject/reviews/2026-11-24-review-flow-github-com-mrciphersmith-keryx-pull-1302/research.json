@@ -1,0 +1,544 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (Head-move detection is put in the instruction layer as a raw `gh` call repeated at every wave bounda) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R3",
+      "reason": "duplicate of review-performance-w1:F-001",
+      "finding": "R3"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (Only one stage-3 dependency is feature-gated: `advance` is checked with `keryx review --help`. Three) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R1",
+      "reason": "duplicate of review-logic-w1:F-001",
+      "finding": "R1"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (Row 4 of the extraction plan sends the session publish through Desktop's head check and refuses a mo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R9",
+      "reason": "representative",
+      "finding": "R9"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (At head, the D1 COMMENT-only rule for a moved head is enforced by the skill text alone. The divergen) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "reason": "Same as security F-002: code enforcement of D1 is T7 work"
+    },
+    {
+      "id": "review-architecture-w1:F-005",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-005 (The new copy-parity assertion repeats `src/gdskills/review-orchestrator-skill-parity.test.ts`, which) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R12",
+      "reason": "representative",
+      "finding": "R12"
+    },
+    {
+      "id": "review-degradation-w1:DEG-1",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-1 (Head adds a gh pr view call at every wave boundary (also SKILL.md Round plan step 5), while unchange) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R3",
+      "reason": "duplicate of review-performance-w1:F-001",
+      "finding": "R3"
+    },
+    {
+      "id": "review-degradation-w1:DEG-S1",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-S1 (The skill promises that the fallback review plan attaches the stopped round's findings and marks its) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R1",
+      "reason": "duplicate of review-logic-w1:F-001",
+      "finding": "R1"
+    },
+    {
+      "id": "review-degradation-w1:DEG-S2",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-S2 (The D1 COMMENT-only rule applies only to a head that moved after the round completed. A head that mo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R7",
+      "reason": "duplicate of review-logic-w1:F-004",
+      "finding": "R7"
+    },
+    {
+      "id": "review-degradation-w1:fu1",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is the parent follow-up from review-degradation done or ruled out, and where is that recorded? Confirm which manifest status `keryx review ingest` writes for a round stopped mid-wave (settles DEG-S1).",
+      "status": "finding",
+      "evidence": "research-evidence/verify-F-001-1.txt (round-record.ts:207)",
+      "reason": "Answered by R1: a partial package is never a previous round, whatever status ingest writes",
+      "finding": "R1"
+    },
+    {
+      "id": "review-degradation-w1:fu2",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is the parent follow-up from review-degradation done or ruled out, and where is that recorded? Confirm whether `keryx review next --json` already exposes the PR head (would let DEG-1 be fixed without a gh call per wave).",
+      "status": "finding",
+      "evidence": "R3 fix uses a read-only git head read at wave boundaries",
+      "reason": "Folded into R3",
+      "finding": "R3"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (The Head moved procedure checks the PR head before publishing, and computeReadiness/completeHeadGate) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "reason": "Existing publish code (publish.ts/github.ts): no re-check after confirmation, no commit_id; deferred to flow 521 T7 (divergence-map §4 rows 3-4)"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (The per-wave head read is a raw `gh` call. In a trust/auto session, SKILL.md says 'A `gh` call still) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R3",
+      "reason": "duplicate of review-performance-w1:F-001",
+      "finding": "R3"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The procedure states stage-3 carry-over behaviour as current. The `keryx review plan` fallback in st) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R1",
+      "reason": "representative",
+      "finding": "R1"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (The check compares the PR head with the round's pinned head before every `keryx review next`. After ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R5",
+      "reason": "representative",
+      "finding": "R5"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (For update-after, follow and ignore, the round completes on a moved head. completeHeadGate throws un) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R6",
+      "reason": "representative",
+      "finding": "R6"
+    },
+    {
+      "id": "review-logic-w1:F-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-004 (Step 1 checks 'before publishing' and then flows into step 3 (on_head_move). Step 5, which holds the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R7",
+      "reason": "representative",
+      "finding": "R7"
+    },
+    {
+      "id": "review-logic-w1:F-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-005 (Only exits 0 and 1 are mapped. If the fetch failed or the reviewed SHA is missing locally, `git merg) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R8",
+      "reason": "representative",
+      "finding": "R8"
+    },
+    {
+      "id": "review-logic-w1:F-006",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-006 (The spec (specification.md:84) makes `follow` the default for rule-triggered runs. The procedure def) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R2",
+      "reason": "duplicate of review-regression-w1:F-001",
+      "finding": "R2"
+    },
+    {
+      "id": "review-performance-w1:F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-001 (The per-wave head check is a `gh pr view` call. SKILL.md 'Shell calls in a trust or auto session' sa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R3",
+      "reason": "representative",
+      "finding": "R3"
+    },
+    {
+      "id": "review-performance-w1:F-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-002 (The new section adds context to SKILL.detail.md.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R13",
+      "reason": "representative",
+      "finding": "R13"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (Head moved step 4 says 'Desktop runs the same command'. The PR body lists that as pending (Item 3, T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R4",
+      "reason": "representative",
+      "finding": "R4"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The option, followed by step 4's fallback ('keryx review plan ... attaches the prior findings'), pro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R1",
+      "reason": "duplicate of review-logic-w1:F-001",
+      "finding": "R1"
+    },
+    {
+      "id": "review-regression-w1:F-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-001 (The change adds a 'Head moved' section to review-orchestrator SKILL.detail.md (both copies). Its Una) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R2",
+      "reason": "representative",
+      "finding": "R2"
+    },
+    {
+      "id": "review-regression-w1:fu1",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Scope A: review-orchestrator's frontmatter version was not bumped, so skill-drift.ts (version-only comparison) will not flag older host copies that still carry the removed 'If head moved, re-check fin",
+      "status": "finding",
+      "evidence": "SKILL.md frontmatter version 1.17.0 at head",
+      "reason": "Raised as R14",
+      "finding": "R14"
+    },
+    {
+      "id": "review-regression-w1:fu2",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Unverified: the flow journal reports install.test.ts failing locally (EACCES), not confirmed on base; not attributed to this change.",
+      "status": "out-of-scope",
+      "evidence": "journal.md T5 entry",
+      "reason": "install.test.ts is outside the changed files; recorded as unverified on base"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (The procedure calls gh at every wave boundary. SKILL.md's trust/auto shell rule says a gh call alway) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R3",
+      "reason": "duplicate of review-performance-w1:F-001",
+      "finding": "R3"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-002 (D1 (an old commit is published only with --event COMMENT) exists only in skill text. publishReview r) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "reason": "Existing publish code enforces D1 only in skill text; deferred to flow 521 T7"
+    },
+    {
+      "id": "review-security-code-w1:F-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-003 (The text does not say where 'the Review's own value' is read from. No store exists before stage 3, s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R11",
+      "reason": "representative",
+      "finding": "R11"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (AC1's D1 rule says an old commit is published as is only with a FIRST line naming the reviewed commi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R10",
+      "reason": "representative",
+      "finding": "R10"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The unattended test asserts 'ask nothing', 'never publish' and 'unless `on_head_move` is `follow`'. ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R10",
+      "reason": "duplicate of review-testing-practices-w1:F-001",
+      "finding": "R10"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (The on_head_move test pins the two option labels and the existence of `follow`/`ignore` list items, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R10",
+      "reason": "duplicate of review-testing-practices-w1:F-001",
+      "finding": "R10"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (The stop-list test asserts only that the Between-waves section references § \"Head moved\". It does no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into R10",
+      "reason": "duplicate of review-testing-practices-w1:F-001",
+      "finding": "R10"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (Not a defect in the test. It is a hazard for this round's mutation pass. `keryx review mutate` mutat) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "reason": "Hazard note for a mutation pass, not a defect; mutation pass not run this round"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run mutant_candidates M01-M13 with `bun test src/gdskills/review-orchestrator-preflight.test.ts`. Count a mutant as killed only when a test other than 'the bundled and installed … are identical' fails",
+      "status": "out-of-scope",
+      "evidence": "report-draft.md How this review was run",
+      "reason": "Mutation pass not run this round (recorded Not run); the assertion gaps it targets are fixed under R10"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:4b17b8c86ee1",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:4b17b8c86ee1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:006d10b3eb81",
+        "rawEvidence": "raw/review-degradation-w1.txt#sha256:006d10b3eb81",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:bf65644f8ea0",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:bf65644f8ea0",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:95c098e5cab5",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:95c098e5cab5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:5451e9a3b606",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:5451e9a3b606",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:4f6d0eba1f7d",
+        "rawEvidence": "raw/review-pr-contract-w1.txt#sha256:4f6d0eba1f7d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:1b97149e1a84",
+        "rawEvidence": "raw/review-regression-w1.txt#sha256:1b97149e1a84",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:d078d75f336c",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:d078d75f336c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:68b2eb6752c8",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:68b2eb6752c8",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 9,
+    "known": 0,
+    "unknown": 9,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

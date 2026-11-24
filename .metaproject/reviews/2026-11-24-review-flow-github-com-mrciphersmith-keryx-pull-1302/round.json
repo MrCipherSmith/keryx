@@ -1,0 +1,133 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+    "head": "2e01447f96161913880e02db4394be6ad15e1335"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 1,
+      "endLine": 71
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 1,
+      "endLine": 360
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+      "startLine": 1,
+      "endLine": 42
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+      "startLine": 1,
+      "endLine": 132
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 587,
+      "endLine": 587
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 595,
+      "endLine": 616
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 913,
+      "endLine": 914
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 587,
+      "endLine": 587
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 595,
+      "endLine": 616
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 913,
+      "endLine": 914
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 385,
+      "endLine": 459
+    }
+  ],
+  "carried": [],
+  "mergeBase": "a5d1ab236fe85dee62a758a19390049dde4eb7f9"
+}

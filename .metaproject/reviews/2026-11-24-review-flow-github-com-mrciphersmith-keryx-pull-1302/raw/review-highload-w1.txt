@@ -1,0 +1,106 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: PR #1302, base a5d1ab236, head 2e01447f9, round 1, diff mode, slice-01 read in full (flow 521 files, both copies of review-orchestrator SKILL.md / SKILL.detail.md, preflight test). Load profile: not provided. Concrete triggers used: one `gh pr view` per wave boundary, a push to the PR while a round or a publish is in flight, two sessions reviewing the same PR on one checkout. Code read to check the procedure's claims: src/review/publish.ts (publishReview), src/review/complete-head-gate.ts, src/flow/tracker/github.ts (githubPostReview), src/review/desk-publication.ts (verifyDeskSubject, commit_id), src/commands/review.ts:5054. Test evidence: verify-tests-to-run-1.txt, 83 pass / 0 fail.
+
+Summary: The diff is skill text plus string-assertion tests; the procedure only adds reads (`gh pr view`, `git fetch`, `git merge-base`, `git rev-list`) and operator questions, and writes no shared state, so it adds no lock or state-file race. The one real concurrency gap is pre-existing in the session publish code that the procedure relies on: the head is re-read before an unbounded operator confirmation and the post is not pinned to a commit, so a push during the `[y/N]` prompt is not caught, and D1's COMMENT-only rule is not enforced in code. The divergence map already defers this to T7, so it is rated minor. Stats: blocker 0 | major 0 | minor 1 | info 1.
+
+### CLI / Multi-Session
+
+[F-002] info — one `gh pr view` per wave boundary: no rate-limit risk, but in a `trust`/`auto` session each call is a permission prompt.
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (§ Head moved, step 1)
+- Failure mode: no rate-limit failure. The calls are one authenticated read per wave boundary, plus one before `complete` and one before publish. The round ceiling is 5 and the plan has few waves, so there are tens of calls per review, far below any GitHub quota. The cost is elsewhere. SKILL.md "Shell calls in a `trust` or `auto` session" says "A `gh` call still asks: that is expected, so make it once and reuse what it printed". With this procedure, each wave boundary now raises an operator permission prompt. That conflicts in spirit with "No question about pace" in § Between waves.
+- Fix (optional): Say that the per-wave head read is the expected exception to "make it once". Or let `keryx review next` read the head itself (one keryx command, routine), so the read stays inside the keryx path.
+
+### Concurrency & Races
+
+[F-001] minor (pre-existing code; the procedure relies on it) — the head check before publishing is check-then-act. The last re-read comes before an unbounded operator confirmation, and the post is not pinned to the reviewed commit.
+- File: src/review/publish.ts (publishReview)
+- Pattern: Concurrency A — TOCTOU.
+- Failure mode: here is the sequence when someone pushes to the PR while the operator sits at the `Post this … review? [y/N]` prompt (src/commands/review.ts:5054):
+  1. Step 1 of the procedure reads the head, and `computeReadiness` → `completeHeadGate` reads it again. Both see the reviewed SHA.
+  2. A push lands during the prompt.
+  3. `options.post` runs `gh pr review <url> --approve|--request-changes|--comment --body-file -` (src/flow/tracker/github.ts:144-147). The call carries no commit pin and does not re-read the head.
+
+  An APPROVE or REQUEST_CHANGES for the reviewed SHA is then posted to a PR whose head was never reviewed. That is exactly what D1 forbids. Two further points:
+  - D1 is enforced only by instruction. When the head has moved and report line 1 names the reviewed SHA, `completeHeadGate` lets the publish through with any `--event`, not only COMMENT.
+  - The Desktop path closes both gaps. It re-verifies the subject right before the POST (`verifyDeskSubject`, desk-publication.ts:341) and pins `commit_id: run.headSha` (:334).
+
+  Which commit an unpinned review attaches to is GitHub behaviour with no pinned file:line here. That part of the claim is info-grade, but the missing re-check after confirmation is in keryx code.
+- Fix: in T7 (divergence-map.md row 4):
+  - Re-read the PR head after `confirm` returns and immediately before `post`, and refuse if it differs from the head readiness saw.
+  - Post through `gh api …/reviews` with `commit_id = manifest.target.head`.
+  - In `publishReview`, refuse `event !== "COMMENT"` when the head has moved.
+
+  Until then, add one sentence to step 5 of § Head moved: the check is advisory, and the operator re-runs it if the prompt sat open.
+- Note: the divergence map (§2 "head moved", §4 rows 4 and 7) and the journal ("T7 must add the COMMENT restriction") already record this, which is why it is minor and not major.
+
+Multiple sessions on the same PR: none detected beyond what is already known. Each session has its own package. The procedure only reads (`gh pr view`, `git merge-base`, `git rev-list`). `git fetch origin <sha>` from two sessions on one checkout only updates FETCH_HEAD and objects, and git's own locking covers that. The duplicate-publish risk when two sessions both publish (no receipt or marker on the session path, O15) is pre-existing and already in divergence-map.md §2 "duplicate detection", so it is not raised again. Two sessions that both take the `ask` path ask the operator twice. That is noise, not corruption.
+
+### Resources
+None detected (no connections, pools, files or buffers introduced).
+
+### Caching
+None detected.
+
+### Lock Contention
+None detected (the procedure takes no lock. On the Desktop side, `withFileLock(publication.lock)` is untouched).
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+None detected. The procedure adds no retry loop. The head read is a single `gh` call. A failed read is not covered by the text: it says nothing about what to do when `gh pr view` fails mid-round. I did not raise this, because the round stays pinned and `completeHeadGate` already treats an unreachable tracker as a warning.
+
+### Idempotency & Distributed Invariants
+Covered by F-001 (D1 not enforced at the moment of posting). "Stop and start on the new head" ingests a partial round. Whether the fallback `keryx review plan` treats it as the prior round is a logic question already named in the PR's "Not verified" section (round-record.ts:207). I left it to review-logic.
+
+Clean Areas: Part 0 (no shared state writes, no fan-out, no unbounded retry), B, C, D, E, F, G apart from F-001.
+
+Not verified: whether GitHub attaches an unpinned `gh pr review` to the latest head. That is external behaviour, read from no source. I ran no tests, because the budget was 0; the test evidence file is from the orchestrator.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "The procedure only adds reads and operator questions, with no shared-state writes, locks or retries, so there is no new race or load risk. Rate limits are not a concern: one gh read per wave boundary, at most 5 rounds. One minor issue is pre-existing in the session publish code the procedure relies on: the head is re-read before an unbounded [y/N] confirmation, the post is not pinned to a commit, and D1's COMMENT-only rule is enforced only by instruction. The divergence map already defers it to T7.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": null,
+      "quote": "  if (!(await options.confirm(body, manifest.target.ref, event))) return { readiness, body, event, partial, posted: false };\n  const result = await options.post(manifest.target.ref, event, body);",
+      "problem": "The Head moved procedure checks the PR head before publishing, and computeReadiness/completeHeadGate re-reads it. Both reads happen before the operator's unbounded [y/N] confirmation (src/commands/review.ts:5054). After confirmation, githubPostReview runs `gh pr review --approve|--request-changes|--comment` with no commit pin and no fresh head check. In addition, completeHeadGate lets a moved head through with any --event once report line 1 names the reviewed SHA, so D1's 'only --event COMMENT' is enforced by instruction only.",
+      "impact": "A push to the PR while the confirmation prompt is open lets an APPROVE or REQUEST_CHANGES for the reviewed SHA be posted to a PR whose new head was never reviewed. That is the outcome D1 is meant to prevent. The Desktop path avoids it by re-verifying just before the POST (verifyDeskSubject, desk-publication.ts:341) and pinning commit_id (:334). Which commit GitHub attaches an unpinned review to is external behaviour, not read at a pinned ref.",
+      "suggested_fix": "In T7 (divergence-map.md row 4): re-read the PR head after confirm() and immediately before post(), and refuse on a mismatch. Post via `gh api .../reviews` with commit_id = manifest.target.head. Refuse event !== COMMENT in publishReview when the head moved. Until T7 lands, add one sentence to § Head moved step 5 saying the check is advisory and must be repeated if the confirmation sat open.",
+      "evidence": "src/review/publish.ts publishReview: computeReadiness (head gate) → build body → options.confirm → options.post, with no head read after confirm. src/flow/tracker/github.ts:144-147 githubPostReview spawns `gh pr review url flag --body-file -` without a commit. src/review/complete-head-gate.ts returns no error for a moved head when the first line names the SHA and says it moved, regardless of event. src/review/desk-publication.ts:334 commit_id: run.headSha, :341 verifyDeskSubject before the POST. Already recorded in divergence-map.md §2 'head moved' and §4 rows 4 and 7, and in journal.md ('T7 must add the COMMENT restriction').",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing.",
+      "problem": "The per-wave head read is a raw `gh` call. In a trust/auto session, SKILL.md says 'A `gh` call still asks: that is expected, so make it once and reuse what it printed', so every wave boundary now raises an operator permission prompt.",
+      "impact": "No rate-limit risk: there are tens of authenticated reads per review at most. The cost is operator friction at every wave, which pulls against § Between waves 'No question about pace'.",
+      "suggested_fix": "Either name this read as the expected exception to 'make it once', or have `keryx review next` read and compare the head itself, so the check stays one routine keryx command.",
+      "evidence": "SKILL.md 'Shell calls in a `trust` or `auto` session' paragraph (unchanged context in the slice). § Head moved step 1. Round plan step 5 (changed line).",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the targets were named by the slice and the divergence map). wiki_used: no (not-relevant). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no.

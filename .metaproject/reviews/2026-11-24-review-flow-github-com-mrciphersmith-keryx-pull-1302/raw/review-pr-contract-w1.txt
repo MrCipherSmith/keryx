@@ -1,0 +1,96 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract — PR #1302, round 1, head 2e01447f96161913880e02db4394be6ad15e1335
+
+Inputs read: pr-context.md (in full), slice-01.diff (in full, 1210 lines), the review-pr-contract SKILL.md, reviewer-finding.schema.json, research-evidence/verify-tests-to-run-1.txt (83 pass, 0 fail). Read-only commands only.
+
+## Checklist form
+
+The PR body has no checkbox list. Each stated claim is one row.
+
+| Box or claim (quoted) | State | What the diff / tree shows | Expectation | Result |
+|---|---|---|---|---|
+| "New section `## Head moved` in `SKILL.detail.md`" | claimed | `SKILL.detail.md` adds `## Head moved` (bundled and installed copies) | section present | holds |
+| "The PR head is checked at every wave boundary (before each `keryx review next`), before `review complete`, and before publishing" | claimed | step 1 of Head moved: "at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing" | text present | holds |
+| "N new commits are counted, and rewritten history is detected" | claimed | step 2: `git merge-base --is-ancestor`, `git rev-list --count`, "Exit 1: history was rewritten" | text present | holds |
+| "`on_head_move` defaults to `ask` (D2), with two operator choices. `follow`, `ignore` and the unattended behaviour are also covered" | claimed | step 3 lists ask (two options), follow, ignore, Unattended | text present | holds |
+| "The update round runs through `keryx review advance`. While that command does not exist, it falls back to `keryx review plan --head <new sha>`" | claimed | step 4 present | text present | holds for the command; see PC-001 for the "Desktop runs the same command" sentence and PC-002 for the partial-round fallback |
+| "Publishing the old commit as is is allowed only as `--event COMMENT`, with a first line that names the reviewed commit (D1)" | claimed | step 5 option 2; `templates/review-report.md:37` already carries the "Reviewed `<sha>` — the PR has since ... moved on to `<new sha>`." first line; README.md:1218 and docs/docs/cli-reference.md:5393 describe `review complete` refusing a moved head without it | consistent | holds |
+| "In `SKILL.md`, Round plan step 5 and the end of 'PR Review Report Publication' point to the procedure, and 'If head moved, re-check findings' is gone" | claimed | SKILL.md hunks at step 5 and lines ~913-914; the old two lines removed in both copies | consistent | holds |
+| "Its line count stays at the 918-line ceiling" | claimed | hunk `@@ 893,918 @@`; preflight test passes (83/83) | consistent | holds |
+| "The bundled and installed copies are byte-identical" | claimed | `git log --raw` for 992a2a7e5: both SKILL.md copies -> blob 4ba06722a, both SKILL.detail.md copies -> blob 4aff8a53f | identical blobs | holds |
+| "Tests: a new block in `src/gdskills/review-orchestrator-preflight.test.ts`" | claimed | new `describe("Flow 521 AC1-AC3 ...")` with 10 tests; journal "83 pass (10 new)" matches verify-tests-to-run-1.txt | consistent | holds |
+| "Divergence map ... 18 points of divergence with file:line ... and a 7-step extraction plan" | claimed | divergence-map.md §2 has 18 concern rows; §4 has 7 plan rows | consistent | holds (file:line accuracy of the map itself not re-verified here; AC4 is `judged`) |
+| "The Desktop prompt line 'New commits belong to a separate request' (`src/review/autonomous-profile.ts:199`)" | claimed | `keryx ctx rg` finds it at `src/review/autonomous-profile.ts:199` | location correct | holds |
+| "This PR does not touch [desk-run-store.ts, desk-publication.ts, review-desk-publish.ts, ReviewPublishDialog.tsx]" | claimed | diff stat: none of these files | consistent | holds |
+| "`keryx review plan` fallback may not yet treat a partial package as the prior round (`round-record.ts:207`)" | disclosed (Not verified) | `src/review/round-record.ts:207`: "a draft or partial package is never a previous round" | the caveat is real; the skill text does not carry it | see PC-002 |
+| "Draft: only the parts that do not depend on stages 2 and 3 are in" | claimed | `gh pr view`: isDraft true; AC5-AC7 (T7, T8, T10) not in the diff, recorded blocked in flow.json | consistent | holds |
+| "Lint and type-check did not run locally" / "1 fail in install.test.ts" / "real-PR scenario ... was not run" | disclosed | not checkable from the diff | author statements | recorded, not contradicted |
+
+Documentation outside the diff: `keryx ctx rg -i "head moved|re-check findings|has since moved|moved on to"` over docs, README.md and the bundled review skills, and `keryx ctx rg -i "re-read head|headRefOid|moved head|head move"` over docs/docs and README.md. Hits: README.md:1218 and docs/docs/cli-reference.md:5393 (describe `review complete` on a moved head; still accurate), docs/docs/guides/autonomous-review.md:73 (Desktop autonomous rounds; behaviour unchanged by this PR), docs/docs/guides/review-with-a-record.md:429 (unrelated `comments reply --sha`), specification.md:28 (O13, the problem this PR addresses). No document outside the diff still quotes the removed "If head moved, re-check findings" procedure.
+
+## Findings
+
+### [PC-001] "Desktop runs the same command" is stated as current, while Desktop still says the opposite
+
+- **Severity**: minor
+- **File**: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (same text in .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md)
+- **Problem**: Head moved step 4 says "`keryx review advance` opens the next round of the same Review on the current head; Desktop runs the same command." The PR body says that item is not done: "Item 3, the session uses the same update command (T8). `keryx review advance` comes with stage 3. The Desktop prompt line 'New commits belong to a separate request' (`src/review/autonomous-profile.ts:199`) is replaced then." The tree at head still has `src/review/autonomous-profile.ts:199` "New commits belong to a separate request."
+- **Why it matters**: an agent or operator reading the skill takes Desktop parity as true today; the PR body and the code say it is not.
+- **Fix**: word it as the target, e.g. "Desktop will run the same command (stage 3)", or drop the clause until T8 lands.
+
+### [PC-002] The "Stop and start on the new head" path relies on a partial round that the fallback does not read; the caveat is only in the PR body
+
+- **Severity**: minor
+- **File**: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (same text in the installed copy)
+- **Problem**: step 3 option "Stop and start on the new head: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked", and step 4's fallback "`keryx review plan ... --head <new sha>` ... attaches the prior findings". `src/review/round-record.ts:207`: "a draft or partial package is never a previous round". The PR body's Not verified section concedes this ("may not yet treat a partial package as the prior round (`round-record.ts:207`), which is stage 3's change"), and journal.md says the same, but the shipped skill text states the outcome with no caveat.
+- **Why it matters**: an operator who picks the second option today gets a new round that does not carry the partial round's findings, while the skill told them it would.
+- **Fix**: add one clause to that option (until `advance` exists, the fallback ignores a partial package, so its findings are not attached), or restrict the fallback text to the "Update after this round finishes" option.
+
+## Not verified
+
+- The file:line references inside divergence-map.md were not re-read against origin/main (AC4 is a judged criterion; outside this lane's checklist test).
+- Whether `keryx review plan` picks `delta`/`fallback-first` for the completed-round case was checked only by reading `prior-round.ts`/`round-record.ts` mode names, not by running it.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Every claim in the PR body holds against the diff (Head moved section contents, SKILL.md pointers, removed phrase, 918-line ceiling, byte-identical copies by blob SHA, 10 new preflight tests, 18-row divergence map, untouched stage 2/3 files, draft state). Two minor gaps: the shipped skill states two things as current that the PR body itself names as pending (Desktop using `keryx review advance`; the fallback attaching a partial round's findings). No document outside the diff still describes the removed procedure.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; Desktop runs the same command.",
+      "problem": "Head moved step 4 says 'Desktop runs the same command'. The PR body lists that as pending (Item 3, T8, stage 3), and src/review/autonomous-profile.ts:199 still tells Desktop 'New commits belong to a separate request.' The same text is in the installed copy.",
+      "impact": "A reader of the skill takes session/Desktop parity on the update command as true today; the PR body and the code say it is not.",
+      "suggested_fix": "Word it as the target (\"Desktop will run the same command once stage 3 lands\") or drop the clause until T8.",
+      "evidence": "slice-01.diff SKILL.detail.md hunk (both copies); keryx ctx rg 'New commits belong to a separate request' src -> src/review/autonomous-profile.ts:199; pr-context.md 'Waiting on stages 2 and 3' item 3.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "- **Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.",
+      "problem": "The option, followed by step 4's fallback ('keryx review plan ... attaches the prior findings'), promises the partial round carries into the new plan. src/review/round-record.ts:207: 'a draft or partial package is never a previous round'. The PR body's Not verified section and journal.md concede this, but the shipped skill text carries no caveat.",
+      "impact": "An operator choosing 'Stop and start on the new head' before stage 3 gets a new round that does not attach the partial round's findings, contrary to what the skill told them.",
+      "suggested_fix": "Add a clause: until `keryx review advance` exists, the `review plan` fallback ignores a partial package, so its findings are not attached; or name the limitation next to the option.",
+      "evidence": "slice-01.diff SKILL.detail.md Head moved steps 3-4; keryx ctx rg 'partial' src/review/round-record.ts -> 207; pr-context.md 'Not verified' last bullet.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: claims settled from the diff and targeted searches); wiki_used: no (not-relevant: no wiki question needed to settle a row); ctx_used: yes (keryx ctx rg/read/run); raw_rg_used: no.

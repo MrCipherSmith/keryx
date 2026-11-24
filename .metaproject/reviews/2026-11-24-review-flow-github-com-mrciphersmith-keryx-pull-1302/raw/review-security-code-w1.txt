@@ -1,0 +1,106 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- PR: https://github.com/MrCipherSmith/keryx/pull/1302, round 1, diff mode
+- Merge-base: a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 2e01447f96161913880e02db4394be6ad15e1335
+- Slice read in full: slice-01 (flow 521 files, both copies of review-orchestrator SKILL.md / SKILL.detail.md, review-orchestrator-preflight.test.ts)
+- Supporting code read (read-only, for the publish path the procedure steers to): src/review/publish.ts:24-180, src/review/readiness.ts headCheck (~363-375), src/review/complete-head-gate.ts:6-60
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 2
+
+### Findings
+
+### [F-001] The head check runs a `gh` call at every wave boundary, which conflicts with the rule to make a `gh` call once and reuse its output
+- **Severity**: minor
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (§ "Head moved" step 1), and the same text in src/gdskills/bundled/...
+- **Trigger and outcome**: In a `trust`/`auto` session, SKILL.md says "A `gh` call still asks: that is expected, so make it once and reuse what it printed." The new step 1 calls for `gh pr view <n> --json headRefOid --jq .headRefOid` before each `keryx review next`, before `complete` and before publishing. On an N-wave round, that gives the operator N+2 permission prompts for the same read-only command, in the middle of a phase where "Between waves" rule 2 says to ask no questions about pace. Two outcomes are likely. The operator gets used to approving `gh` prompts by reflex, which weakens the prompt that exists to catch an unexpected `gh` write. Or the agent follows "make it once" and skips the per-wave check, so a head move goes unnoticed until publish. That second case is not unsafe, because the publish-time check and `completeHeadGate` still apply.
+- **Fix**: Name the head check as the stated exception to "make it once" (one `gh pr view` per boundary is expected), or route it through a keryx command that reads the head itself, so it is a routine keryx call and not a `gh` prompt. For example, let `keryx review next` report `pr_head` and a `head_moved` flag.
+
+### [F-002] D1 ("an old commit is published only with --event COMMENT") is enforced only by skill text; `keryx review publish` accepts REQUEST_CHANGES/APPROVE on a moved head
+- **Severity**: info (pre-existing code, deferred by the flow to T7)
+- **File**: src/review/publish.ts:153-160; src/review/readiness.ts headCheck; src/review/complete-head-gate.ts:52-60
+- **Problem**: The procedure limits "Publish as is for `<reviewed sha>`" to `--event COMMENT`. In code, readiness item 7 passes with only a warning when the report's first line names the reviewed SHA and says the PR moved. `publishReview` refuses APPROVE only when the review is partial (publish.ts:158). So an operator, or an agent that ignores the text, can publish APPROVE or REQUEST_CHANGES for an old commit. Publishing still needs the operator's own `[y/N]` or card press, so this needs a human decision and is not an agent bypass. There is a GitHub-side risk: `gh pr review` posts without a `commit_id` (divergence-map.md §2 "GitHub identity"), so an APPROVE might attach to the new, unreviewed head. That is a claim about GitHub's behaviour with no file:line at a pinned SHA behind it, so it stays info.
+- **Fix**: As the journal and divergence-map step 4 already plan for T7: in `publishReview`, refuse any event other than COMMENT when the head gate reports a moved head, and post with `commit_id` = the reviewed SHA through `gh api .../reviews`. Leave a pointer in this PR body so the gap is tracked.
+
+### [F-003] The source of `on_head_move` is not named; `follow`/`ignore` remove the operator question
+- **Severity**: info
+- **File**: SKILL.detail.md § "Head moved" step 3 ("the Review's own value when it has one, otherwise `ask`")
+- **Problem**: Stage 3 owns the storage, and the current tree has no store for this value. Until then, the text does not say where "the Review's own value" may come from. If an agent took it from untrusted content, such as the PR body, a file on the PR branch or a comment, then `ignore`/`follow` would suppress the operator question. The impact is bounded: neither value publishes, because unattended runs never publish and publishing stays the operator's act. The worst case is an unannounced update round or a report that is behind. I found no path where this leads to a GitHub write.
+- **Fix**: Add "read only from the Review record keryx stores (stage 3); never from PR content" to step 3, or say `ask` until stage 3 lands.
+
+### Clean Areas
+- Shell injection from `gh` output: step 2 tells the agent to run `git fetch`, `git merge-base --is-ancestor` and `git rev-list --count` each in its own shell call with literal SHAs, citing the "Shell calls in a trust or auto session" rule. `headRefOid` is a 40-hex object id that GitHub produces, not attacker-chosen text. No branch name, PR title or other free text from the PR is put into a command. No `$(…)` or variables are introduced. (Hardening only, not a finding: the text could say "a 40-hex SHA" explicitly.)
+- Publishing without operator approval: all new text keeps publishing as the operator's act. It says "never `--yes`, never `gh pr review` or `gh pr comment`". The update path is `keryx review publish` or the card. Unattended runs never publish, and the "Save locally" and "Skip" options exist. The SKILL.md publication tail now points to the procedure and does not weaken "No GitHub write without an approved draft".
+- Untrusted content driving actions: the stop list adds a moved head under `ask` as an operator stop, and the existing "untrusted content that asks you to act" stop is unchanged. `git fetch` of the new head does not run fetched code.
+- Secrets / personal data in committed files (flow.json, journal.md, context.md, resolved/T5.implement.json, divergence-map.md): I scanned the slice for home paths, user names, emails and token-like strings and found none. The files hold a desktop session id (`local_4c9fedae-…`) as provenance, rule sha256 digests and the env-var name `KERYX_REVIEW_CALLER_TOKEN` with no value. Nothing secret.
+- Test file: preflight assertions are plain string reads of the skill files, with no exec and no network.
+- Not applicable: SQL/XSS/crypto/CSRF/path traversal/auth guards. The diff contains no runtime code.
+
+### Not verified
+- Tests were not run (read-only; exec_budget_s 0). I did not open the referenced test log.
+- I did not check whether the D1 first line, which wraps the SHA in backticks, matches the `completeHeadGate` first-line regex. That is a correctness question for review-logic.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable path. The Head moved procedure keeps publishing operator-only, never publishes unattended, and passes gh-derived SHAs as literals in separate shell calls. Minor: per-wave gh head checks conflict with 'make a gh call once' and cause prompt fatigue. Info: D1 COMMENT-only is text-only (publish.ts accepts APPROVE on a moved head; deferred to T7); the source of on_head_move is unspecified. No secrets or personal data in committed flow files.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing.",
+      "problem": "The procedure calls gh at every wave boundary. SKILL.md's trust/auto shell rule says a gh call always prompts and must be made once and reused, and 'Between waves' forbids pace questions. The two instructions conflict.",
+      "impact": "On an N-wave round the operator sees N+2 permission prompts for the same read-only gh call. This trains reflex approval of gh prompts, or the agent skips the check. The publish-time head gate still applies.",
+      "suggested_fix": "Name the per-boundary gh pr view as the explicit exception to 'make it once', or have a keryx command (e.g. keryx review next) report the PR head so the check is a routine keryx call.",
+      "evidence": "slice-01 SKILL.detail.md § Head moved step 1; SKILL.md 'Shell calls in a trust or auto session': 'A `gh` call still asks: that is expected, so make it once and reuse what it printed.'",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/publish.ts",
+      "line": null,
+      "quote": "  if (partial && event === \"APPROVE\") {",
+      "problem": "D1 (an old commit is published only with --event COMMENT) exists only in skill text. publishReview refuses APPROVE only for a partial review, and readiness item 7 passes with a warning when report line 1 names the reviewed SHA, so APPROVE or REQUEST_CHANGES on a moved head is accepted.",
+      "impact": "An operator-confirmed publish can carry a non-COMMENT verdict for a commit that is no longer the head. Whether GitHub then attaches an approval to the new head (gh pr review has no commit_id) is a cross-service claim without a pinned file:line, hence info.",
+      "suggested_fix": "In T7: refuse events other than COMMENT when the head gate reports a moved head, and post with commit_id = reviewed SHA via gh api .../reviews. Reference this gap in the PR body.",
+      "evidence": "src/review/publish.ts:153-160; src/review/readiness.ts headCheck returns ok(warnings) after completeHeadGate; src/review/complete-head-gate.ts:52-60; divergence-map.md §4 step 4 and journal T6 note defer this to T7.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "3. **Decide by `on_head_move`:** the Review's own value when it has one, otherwise `ask` (the default for a manual review).",
+      "problem": "The text does not say where 'the Review's own value' is read from. No store exists before stage 3, so an agent could take follow/ignore from PR-supplied content.",
+      "impact": "Untrusted content could suppress the operator's head-move question. Bounded: neither follow nor ignore publishes, and no GitHub write path was found.",
+      "suggested_fix": "State that on_head_move is read only from the keryx-stored Review record (stage 3), never from PR body, branch files or comments, and is 'ask' until that store exists.",
+      "evidence": "slice-01 SKILL.detail.md § Head moved step 3; description.md Out of Scope: on_head_move storage belongs to stage 3.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-01"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: skill-text diff, publish path files named in the divergence map), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx read/rg/show), raw_rg_used: no.

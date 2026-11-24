@@ -1,0 +1,8 @@
+review next: 2 dispatch(es) for 2 reviewer(s); dispatch them in one batch, save each reply under its result path, then run `keryx review next --package .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302` again.
+plan authorized; continue the loop without asking the operator; stop only for the card list, for plan growth, or on done / Not run
+- review-pr-contract wave 1 (1 left) [missing] slice-01 (108125 bytes) model: model not recorded
+    result: raw/review-pr-contract-w1.txt
+    no result; 1 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent
+- review-regression wave 1 (1 left) [missing] slice-01 (108125 bytes) model: model not recorded
+    result: raw/review-regression-w1.txt  driver: drivers/review-regression-w1.json
+    DONE_WITH_CONCERNS; 1 slice(s) are uncovered — dispatch the next wave (1 left), no attempt is spent

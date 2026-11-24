@@ -1,0 +1,22 @@
+# keryx review verify-run
+finding: REG-F-001
+command: sed -n '196,207p' src/review/autonomous-profile.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00
+time: 2026-11-24T07:49:18.675Z
+exit: 0
+
+--- stdout ---
+    `When \`keryx review blast-radius\` says "Cut blast radius", run \`keryx review chunks plan\` and \`keryx review chunks estimate\` (never with --mode or --answer: those are the operator's), then \`chunks next\` and \`chunks record\` until none is left, then \`chunks merge\`. When \`chunks next\` says the run is over the ceiling, nobody here can answer it: stop the chunk run and report it as needing the operator, not as done. A review with files nobody read does not close: \`keryx review readiness\` lists what is missing.`,
+    `Review the source only (source-only): skip any check that needs a browser or a running app and say that it was skipped.`,
+    input.fixedBase
+      ? `Open one review round for the fixed range ${input.fixedBase}...${input.head}. New commits belong to a separate request. Keep this range throughout the review.`
+      : `Open ${AUTONOMOUS_PROFILE.roundLimit} review round on this head and dispatch at most ${AUTONOMOUS_PROFILE.waveSize} reviewers per wave. Do not open another round on the same head: a second round of the same reviewers on the same commit only repeats the first. Open one more round only if the head moved while you worked, and review the new head.`,
+    input.fixedBase
+      ? `After the prepared reviewer calls return, run keryx review next --package <package> for outstanding waves. Reconcile the actual persisted raw results, run keryx review ledger build --package <package>, then write the final input report to <package>/report-draft.md with the verified range. The planner has already created report.md. It is the canonical output owned by ingest. If a draft write fails, update the draft in place and keep its structured project slots. Put the required Evidence level line directly below its title, ahead of generated sections. If the review used only source, write exactly "Evidence level: static only — did not run: browser or running application". If checks actually ran, name each one on the Evidence level line. Ingest it using keryx review ingest --target pr --target-ref ${input.ref} --base ${input.fixedBase} --head ${input.head} --review-id <package-directory-name> --report <package>/report-draft.md --research <package>/research.json. Include a fenced JSON keryx:findings block in report.md, using the canonical findings array. Preserve reviewer attribution, evidence and class_scope for every blocker or major. Mark any unverified findings with the exact count in report.md (Not verified: N). Run keryx review readiness <package>, then keryx review complete <package> --head ${input.head}. An unavailable or missing reviewer result is partial coverage. Use one native tool invocation per operation. Each shell call must contain exactly one simple command. Run each review CLI step on its own, with no shell operators, pipes, redirection, or chained reads.`
+      : `Dispatch the full reviewer set: write the scope with \`keryx review scope${scopeRef} --json > ${scopeFile}\` (this run's own file: another run may be writing the shared one), then run \`keryx review required --mode all --scope ${scopeFile} --package <the package directory keryx review start printed>\` and dispatch every reviewer it prints, with dispatch mode "all". Without --scope and --package it can only name the whole set for a full round. Nobody can name a narrower review in a run like this, so do not use mode "diff".`,
+    `Run the whole orchestration yourself in this session. A subagent has no shell and cannot dispatch reviewers (it answers BLOCKED nested_dispatch_unavailable), so hand a subagent only the review of one slice, never the orchestration, the ledger, the ingest or the complete.`,
+    `The review skills live in this clone under \`.metaproject/skills/gdskills/review/\` (the orchestration is \`review-orchestrator/SKILL.md\` there): read them from that path and do not search the filesystem or \`$HOME/.keryx\` for them.`,
+    `A guard refuses raw \`git diff\`, \`cat\`, \`sed\`, \`find\` and \`tail\` in the shell. Use \`keryx ctx diff\`, \`keryx ctx read <file>\` and \`keryx ctx run -- <command>\` instead, or end a command that must stay raw with \`# keryx:raw <why>\`.`,
+    `The run is finished only when keryx review complete has closed the package.`,
+--- stderr ---
+

@@ -1,0 +1,3 @@
+READY: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/research.json written and satisfies the completion gate.
+models: review-architecture anthropic/claude-opus-5-5, review-degradation anthropic/claude-opus-5-5, review-highload anthropic/claude-opus-5-5, review-logic anthropic/claude-opus-5-5, review-performance anthropic/claude-opus-5-5, review-pr-contract anthropic/claude-opus-5-5, review-regression anthropic/claude-opus-5-5, review-security-code anthropic/claude-opus-5-5, review-testing-practices anthropic/claude-opus-5-5
+token spend: unknown (9 dispatch(es), none reported usage)

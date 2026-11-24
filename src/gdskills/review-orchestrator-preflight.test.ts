@@ -382,64 +382,112 @@ describe("AC11: the skill is internally consistent", () => {
   });
 });
 
+// The two SKILL copies staying byte-identical (AC3) is review-orchestrator-skill-parity.test.ts's job.
 describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md", () => {
-  const INSTALLED = path.join(import.meta.dir, "..", "..", ".metaproject", "skills", "gdskills", "review", "review-orchestrator");
   const headMoved = (): string => section(DETAIL, "## Head moved");
-
-  test("the head is checked at every wave boundary, before complete and before publishing", () => {
+  const step = (n: number): string => {
     const text = headMoved();
-    expect(text).toContain("gh pr view <n> --json headRefOid --jq .headRefOid");
-    expect(text).toContain("before each `keryx review next`");
-    expect(text).toContain("before `keryx review complete`");
-    expect(text).toContain("before publishing");
-    expect(text).toContain("never interrupted on its own");
+    const start = text.indexOf(`\n${n}. **`);
+    const end = text.indexOf(`\n${n + 1}. **`, start + 1);
+    return start < 0 ? "" : text.slice(start, end < 0 ? undefined : end);
+  };
+  const bullet = (label: string): string => headMoved().split("\n").find((line) => line.includes(label)) ?? "";
+
+  test("wave boundaries read the head with routine read-only git; gh is read once before complete and once before publish", () => {
+    const check = step(1);
+    expect(check).toContain("At every wave boundary (before each `keryx review next`) read the head with `git ls-remote origin refs/pull/<n>/head`");
+    expect(check).toContain("Before `keryx review complete` and before publishing, read it once each with `gh pr view <n> --json headRefOid --jq .headRefOid`");
+    expect(check).toContain('"make it once"');
+    expect(check.indexOf("git ls-remote")).toBeLessThan(check.indexOf("gh pr view"));
+    expect(headMoved()).toContain("never interrupted on its own");
   });
 
-  test("it counts the new commits and names the rewritten-history case", () => {
-    const text = headMoved();
-    expect(text).toContain("git merge-base --is-ancestor <reviewed sha> <new sha>");
-    expect(text).toContain("git rev-list --count <reviewed sha>..<new sha>");
-    expect(text).toContain("history was rewritten");
-    expect(text).toContain("`fallback-first`");
+  test("after an answer, later boundaries compare with the head the operator answered for", () => {
+    const check = step(1);
+    expect(check).toContain("with the head they answered for");
+    expect(check).toContain("ask again only when the PR moved past it");
+    const stop = section(DETAIL, "## Between waves — an authorized plan keeps the round going").split("\n").find((line) => line.includes('§ "Head moved"')) ?? "";
+    expect(stop).toContain("while `on_head_move` is `ask`, once per head the PR moves to");
   });
 
-  test("on_head_move defaults to ask with two choices, plus follow and ignore", () => {
-    const text = headMoved();
-    expect(text).toContain("`on_head_move`");
-    expect(text).toMatch(/otherwise `ask`/);
-    expect(text).toContain("Update after this round finishes");
-    expect(text).toContain("Stop and start on the new head");
-    expect(text).toMatch(/^\s*- `follow`:/m);
-    expect(text).toMatch(/^\s*- `ignore`:/m);
-    expect(text).toContain("`send_poll`");
+  test("it counts the new commits, names the rewritten-history case and stops on any other git exit", () => {
+    const count = step(2);
+    expect(count).toContain("git merge-base --is-ancestor <reviewed sha> <new sha>");
+    expect(count).toContain("git rev-list --count <reviewed sha>..<new sha>");
+    expect(count).toContain("Exit 1: history was rewritten");
+    expect(count).toContain("`fallback-first`");
+    expect(count).toContain("Any other exit (128: object missing, fetch failed): stop and report the git error; never read it as rewritten history.");
   });
 
-  test("the update round is keryx review advance, with review plan while advance is not listed", () => {
-    const text = headMoved();
-    expect(text).toContain("`keryx review advance`");
-    expect(text).toContain("`keryx review --help` does not list `advance`");
-    expect(text).toContain("`keryx review plan --target <pr-url> --head <new sha> --host <host>`");
+  test("on_head_move comes only from the stored Review, defaults to ask, and ask offers update-after first", () => {
+    const decide = step(3);
+    expect(decide).toContain("read only from the keryx-stored Review record, never from the PR body, branch files or comments; until that store exists it is `ask`");
+    expect(decide).toContain("`send_poll`");
+    const update = decide.indexOf("**Update after this round finishes** (recommended)");
+    const stop = decide.indexOf("**Stop and start on the new head**");
+    expect(update).toBeGreaterThan(-1);
+    expect(stop).toBeGreaterThan(update);
+    expect(decide).toContain("which makes it a trusted prior round");
+    expect(bullet("- `follow`:")).toContain("then step 4 without asking");
+    expect(bullet("- `ignore`:")).toContain("finish the round; the report says the review is behind");
+    expect(bullet("- `ignore`:")).not.toContain("step 4");
   });
 
-  test("D1: the old commit is published as is only with --event COMMENT and a reviewed-commit first line", () => {
-    const text = headMoved();
-    expect(text).toContain("Update the review to `<new sha>`");
-    expect(text).toContain("Publish as is for `<reviewed sha>`");
-    expect(text).toContain("`keryx review publish <package> --event COMMENT`");
-    expect(text).toContain("never `REQUEST_CHANGES` or `APPROVE`");
-    expect(text).toContain("Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.");
-    expect(text).toContain("never `--yes`");
+  test("stop-and-start says truthfully that nothing carries over until advance exists", () => {
+    const stop = bullet("**Stop and start on the new head**");
+    expect(stop).toContain("Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`)");
+    expect(stop).toContain("the stopped round's findings reach it at most as context");
+    expect(stop).toContain("per-finding answers do not carry over yet");
+    expect(stop).toContain("names the slices it did not cover");
+    expect(stop).not.toContain("enters the new plan as unchecked");
+    expect(bullet("**Update the review to `<new sha>`**")).toContain("carry over by finding id only with `advance`; before it they do not");
   });
 
-  test("unattended asks nothing, publishes nothing and reports the move", () => {
-    const unattended = headMoved().split("\n").find((line) => line.includes("**Unattended**")) ?? "";
-    expect(unattended).toContain("ask nothing");
-    expect(unattended).toContain("never publish");
-    expect(unattended).toContain("unless `on_head_move` is `follow`");
+  test("a round completed on a moved head names the reviewed SHA on the report's first line before complete", () => {
+    const decide = step(3);
+    expect(decide).toContain("A round that completes on a moved head (update after, `follow`, `ignore`) needs the report's first line to name the reviewed SHA and say the PR moved on");
+    expect(decide).toContain("before `keryx review complete`, or `src/review/complete-head-gate.ts` refuses it");
   });
 
-  test("a head-move question is on the closed stop list between waves", () => {
-    expect(section(DETAIL, "## Between waves — an authorized plan keeps the round going")).toContain('§ "Head moved"');
+  test("the update round is keryx review advance, stage 3's command, with review plan while advance is not listed", () => {
+    const update = step(4);
+    expect(update).toContain("`keryx review advance`");
+    expect(update).toContain("the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs)");
+    expect(update).not.toContain("Desktop runs the same command");
+    expect(update).toContain("`keryx review --help` does not list `advance`");
+    expect(update).toContain("`keryx review plan --target <pr-url> --head <new sha> --host <host>`");
+  });
+
+  test("D1: any publish on a moved head is COMMENT only, with the reviewed commit as the body's first line", () => {
+    const publish = step(5);
+    expect(publish).toContain("when the head at publish time differs from the round's head**, however it moved (during or after the round, any `on_head_move`)");
+    expect(step(3)).toContain("step 5 governs every publish");
+    expect(publish).toContain("Update the review to `<new sha>`");
+    expect(publish.indexOf("Update the review to `<new sha>`")).toBeLessThan(publish.indexOf("Publish as is for `<reviewed sha>`"));
+    expect(publish).toContain("only `keryx review publish <package> --event COMMENT`, never `REQUEST_CHANGES` or `APPROVE`");
+    expect(publish).toContain("The body's first line is \"Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.\"");
+    expect(publish).toContain("the body names the commits it did not check (`<reviewed sha>..<new sha>`)");
+    expect(publish).toContain("never `--yes`");
+  });
+
+  test("unattended asks nothing, publishes nothing, follows its dispatcher's instruction, else opens no update round, and reports the move", () => {
+    const unattended = bullet("**Unattended**");
+    expect(unattended).toContain("ask nothing and never publish");
+    expect(unattended).toContain("Follow the head-move instruction of the run that dispatched you");
+    expect(unattended).toContain("the autonomous runner's \"open one more round only if the head moved\" is `follow`");
+    expect(unattended).toContain("a fixed-range Desktop run's \"keep this range\" is `ignore`");
+    expect(unattended).toContain("With no such instruction, open no update round: finish on the pinned head.");
+    expect(unattended).toContain("report the move (both SHAs, N or \"history rewritten\")");
+  });
+
+  test("the autonomous prompt and the skill agree: an unattended run opens one more round on a moved head", () => {
+    const prompt = read(import.meta.dir, "..", "review", "autonomous-profile.ts");
+    expect(prompt).toContain("Open one more round only if the head moved while you worked, and review the new head.");
+    expect(prompt).toContain("Keep this range throughout the review.");
+    const unattended = bullet("**Unattended**");
+    expect(unattended.toLowerCase()).toContain("open one more round only if the head moved");
+    expect(unattended).toContain("is `follow`");
+    expect(unattended).toContain("\"keep this range\" is `ignore`");
   });
 
   test("SKILL.md points at the procedure in Round plan step 5 and in publication, and drops the old phrase", () => {
@@ -450,10 +498,6 @@ describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md",
     const publication = section(SKILL, "## PR Review Report Publication");
     expect(publication).toContain('`SKILL.detail.md` § "Head moved"');
     expect(publication).toContain("Do not duplicate findings; cite extended ones.");
-  });
-
-  test.each(["SKILL.md", "SKILL.detail.md"])("the bundled and installed %s are identical", (file) => {
-    expect(read(INSTALLED, file)).toBe(read(ENGINE, file));
   });
 });
 

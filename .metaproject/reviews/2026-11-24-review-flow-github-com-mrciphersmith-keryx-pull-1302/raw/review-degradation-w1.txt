@@ -1,0 +1,120 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, PR #1302, round 1, diff mode, base a5d1ab236 .. head 2e01447f9, slice-01 read in full (lines 1-1211).
+
+## Findings
+
+### [DEG-1] Head check at every wave boundary is a `gh` call, which the skill says always asks the operator and should be made once
+
+- Severity: minor
+- Class: behaviour-delta
+- Evidence kind: base-diff
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (§ "Head moved", step 1). The same text is in the bundled copy.
+- Problem: On base, nothing ran between waves except `keryx review next`. On head, step 1 says to run `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary, before `complete` and before publishing. Round plan step 5 in SKILL.md now does the same before every `keryx review next`. The unchanged SKILL.md "Terminal or card only" bullet (diff context, SKILL.md line 52) still says: "A `gh` call still asks: that is expected, so make it once and reuse what it printed." The two rules contradict each other, and an agent cannot follow both. In a `trust`/`auto` session, reviewer replies are external-agent results that have already entered the turn. From then on, every wave boundary adds a permission prompt to a loop that "Between waves" requires to run without pauses ("No question about pace", "Do not end the turn before `next` returns `done`"). The prompts also pile up: one per wave, plus `complete`, plus publish.
+- Why it matters: a round that ran through its waves without a stop on base now stops at a permission prompt after every batch until the operator answers. The result is delayed, not wrong, so this is minor.
+- Fix: say how the check stays routine. Either (a) one `gh pr view` per wave boundary is the expected prompt, and the "make it once" sentence gets that exception, or (b) the check runs only before `complete` and before publish, plus at wave boundaries only where a `keryx` command already returns the PR head. Option (b) needs a `keryx review next` field such as `prHead`. Today there is none (unverified: I did not read `next`'s output shape).
+- Refute: I read the base SKILL.md text in the slice context (line 381 of slice-01 = SKILL.md:52). The "make it once and reuse" sentence is unchanged. No new sentence in the diff exempts the per-wave head read. Round plan step 1 already used `gh pr view` once, which is consistent with "once", not with "every wave". The PR body does not name the prompt cost.
+
+## Suspicions
+
+### [DEG-S1] "Stop and start on the new head" may not carry the stopped round's findings into the new plan
+
+- Severity: info, publication: question
+- Class: behaviour-delta
+- Evidence kind: consumer-trace (unrun)
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (§ "Head moved", step 3 `ask` option 2 and step 4)
+- Problem: The skill says to "ingest what finished as a partial round". It says the fallback `keryx review plan --head <new sha>` "attaches the prior findings" and that the uncovered area "enters the new plan as unchecked". Here is the consumer path. `prior-round.ts:414` drops a candidate unless `eligible`. `completionOf` (`round-record.ts:217-221`) marks a package eligible only if its status is reviewed, decided, learned or closed, or if it has a `scopeReviewed` ledger. The comment at `round-record.ts:207` reads "a draft or partial package is never a previous round". If the stopped package is left at `draft`, the new plan skips it: its findings are not attached, and the round is not a delta over it. The PR body names this limitation under "Not verified".
+  If true: minor. Findings from the stopped round silently disappear from the new round's `prior_findings`, against what the skill text promises.
+- Check: in a scratch package, stop a round mid-wave, run `keryx review ingest` on the finished replies, then run `keryx review plan --target <pr> --head <new sha>` and check whether `prior_findings.json` lists the stopped round's findings.
+
+### [DEG-S2] Under `ignore`, the D1 COMMENT-only rule does not apply when publishing an old head
+
+- Severity: info, publication: question
+- Class: behaviour-delta
+- Evidence kind: base-diff
+- File: SKILL.detail.md § "Head moved", steps 3 (`ignore`) and 5
+- Problem: Step 5 (COMMENT only, plus a first line naming the reviewed commit) applies "when the head moved after the round completed". A head that moved during an `ignore` round reaches publish without a stated event restriction. On base, the general "If head moved, re-check findings and name unchecked commits" covered every moved head. Today `ignore` cannot be reached: there is no stored `on_head_move` until stage 3, so the value always falls back to `ask`.
+  If true: minor. Once stage 3 stores `ignore`, an old commit could be published with APPROVE or REQUEST_CHANGES. `completeHeadGate` (`src/review/complete-head-gate.ts:52-61`) still forces the first line, so the reviewed SHA stays named.
+- Check: decide whether step 5's condition should read "when the head differs from the round's head at publish time". Re-check when stage 3 adds `on_head_move` storage.
+
+## Verified clean
+
+- "name unchecked commits" did not disappear. It is restated in step 5 option 2 ("the body names the commits it did not check (`<reviewed sha>..<new sha>`)"). `ignore` names both SHAs. Both `ask` options lead to the update round, which checks those commits.
+- "re-check findings" is replaced by the update round (step 4), which recomputes findings on the new head. That is stronger than base for the default `ask`/`follow` paths.
+- The new stop added to the closed "Between waves" stop list is gated on `on_head_move: ask` and a real head move. The PR body names it ("`on_head_move` defaults to `ask` (D2), with two operator choices"), and the journal records it as an accepted deviation from the brief. It is an intended default change, so I filed no finding.
+- D1 first line vs code: step 5's line "Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`." matches `templates/review-report.md:37`. It also satisfies `completeHeadGate`: SAYS_SO matches "PR … moved" within 40 chars, and the line names the 7-char SHA (`complete-head-gate.ts:6-8,56-58`).
+- Unattended: base did not publish unattended. Head adds "never publish, report the move". No default weakened.
+- The SKILL.md publication tail swaps 2 lines for 2 lines, and the ceiling stays at 918. The ceiling test passes. Bundled and installed copies are identical in the slice and asserted by the new test.
+- Tests: the new preflight block pins each phrase the AC names. Each assertion would fail if its phrase were removed, so I found no blind test. `verify-tests-to-run-1.txt`: `bun test src/gdskills/review-orchestrator-preflight.test.ts` gives 83 pass, 0 fail, exit 0.
+- Flow files (`.metaproject/flows/521-*`, `resolved/T5.implement.json`) are records and plans. They have no runtime consumers, so they cannot degrade behaviour.
+
+## Consumers / coverage
+
+The graph listed 0 consumers (0 of 0, cap not hit). The one changed shared export is the test file, which has no importers. 13 changed files are absent from the graph. They are skill text, flow records and one test, and their consumers are the agents that read the skill. I traced the code that the skill text points to instead, located by search (`search-derived`): `src/review/complete-head-gate.ts`, `src/review/round-record.ts:207-226`, `src/review/prior-round.ts:378-420`, `templates/review-report.md:37`. Not traced: the output shape of `keryx review next` (whether it already reports the PR head) and `keryx review ingest`'s status write for a partial package. Both are left open in DEG-1's fix and in DEG-S1.
+
+Acceptance criteria: AC1-AC7 from the flow. AC5-AC7 are blocked per the PR and outside this diff.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "summary": "One minor degradation: the head check before every keryx review next is a gh call, and the unchanged SKILL.md says a gh call asks the operator and should be made once, so trust/auto rounds now pause at a permission prompt every wave. Two suspicions (info, question): a 'stop and start on the new head' partial package may be skipped as prior round (round-record.ts:207, prior-round.ts:414); step 5's COMMENT-only rule does not cover a head that moved during an `ignore` round (unreachable until stage 3). Verified clean: 'name unchecked commits' and 're-check findings' are replaced, not lost; new stop-list entry is an intended, described default; D1 first line matches completeHeadGate and the template; SKILL.md stays at its 918 ceiling; bundled/installed identical; preflight 83 pass. Graph consumers: 0 of 0, cap not hit; 13 changed files absent from the graph, code consumers traced search-derived.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "DEG-1",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing. The same SHA as the round's `head`: carry on.",
+      "problem": "Head adds a gh pr view call at every wave boundary (also SKILL.md Round plan step 5), while unchanged SKILL.md:52 still says 'A `gh` call still asks: that is expected, so make it once and reuse what it printed.' The two instructions contradict each other. In a trust/auto session, every wave boundary now adds a permission prompt to a loop that 'Between waves' requires to run without pauses. Base had no call between waves.",
+      "impact": "Rounds that ran unbroken on base now stop for an operator approval after every batch, plus before complete and publish. The result is delayed, not wrong.",
+      "suggested_fix": "Reconcile the two rules. Either state that one gh pr view per wave boundary is an expected prompt and except it from 'make it once', or check only before complete and publish, and at wave boundaries only through a keryx command that already returns the PR head.",
+      "evidence": "base-diff: slice-01 line 381 (SKILL.md:52, unchanged context) 'make it once and reuse what it printed' vs slice-01 line 979 (detail step 1) and line 1041 (SKILL.md step 5) adding a per-wave head read. Refute: no sentence in the diff exempts the per-wave call. Base Round plan step 1 used gh pr view once. The PR body does not mention the prompt cost.",
+      "confidence": "high",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "DEG-S1",
+      "severity": "info",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "- **Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.",
+      "problem": "The skill promises that the fallback review plan attaches the stopped round's findings and marks its uncovered area as unchecked. But prior-round.ts:414 skips non-eligible packages, and round-record.ts:207 says 'a draft or partial package is never a previous round'. If the stopped package stays at draft, its findings are not carried over. If true: minor, findings of the stopped round silently drop out of the new round's prior_findings.",
+      "impact": "An operator who picks 'Stop and start on the new head' may lose the stopped round's findings from the next round's prior set.",
+      "suggested_fix": "Check: in a scratch package, stop a round mid-wave, run keryx review ingest on the finished replies, then run keryx review plan --target <pr> --head <new sha> and see whether prior_findings.json lists the stopped round's findings.",
+      "evidence": "consumer-trace (read, not run): round-record.ts:207-221 (REVIEWED_STATUSES, completionOf), prior-round.ts:378-420 (diskCandidate, localPackageCandidates skip !eligible). Refute: the PR body names this limitation under 'Not verified'. I did not read which status ingest writes, so the question stays open.",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "DEG-S2",
+      "severity": "info",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "5. **Before publishing, when the head moved after the round completed.** Offer these options, in this order, with the host question tool:",
+      "problem": "The D1 COMMENT-only rule applies only to a head that moved after the round completed. A head that moved during an `ignore` round reaches publish with no event restriction. Base's general 're-check findings' covered every moved head. `ignore` is unreachable today: there is no stored on_head_move before stage 3. If true: minor, an old commit published with APPROVE/REQUEST_CHANGES once stage 3 stores `ignore`. completeHeadGate still forces the first line naming the SHA.",
+      "impact": "Once stage 3 lands, an `ignore` Review could post a non-COMMENT verdict on a stale commit.",
+      "suggested_fix": "Check: decide whether step 5 should trigger on 'head at publish differs from the round's head' regardless of when it moved. Re-check when stage 3 adds on_head_move storage.",
+      "evidence": "base-diff: base SKILL.md publication tail 'If head moved, re-check findings and name unchecked commits' (slice-01 lines 438-439) vs head detail step 3 `ignore` + step 5 condition (lines 986, 989). complete-head-gate.ts:52-61 read.",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    }
+  ],
+  "follow_ups": [
+    "Confirm which manifest status `keryx review ingest` writes for a round stopped mid-wave (settles DEG-S1).",
+    "Confirm whether `keryx review next --json` already exposes the PR head (would let DEG-1 be fixed without a gh call per wave)."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (blast radius supplied in brief; 0 consumers, changed files mostly absent from the graph); wiki_used: not-relevant (skill-text change, contracts read in code directly); ctx_used: yes (keryx ctx rg / ctx read); raw_rg_used: no. metaproject index: not read (narrow bounded reviewer dispatch per CLAUDE.md subagent rule).

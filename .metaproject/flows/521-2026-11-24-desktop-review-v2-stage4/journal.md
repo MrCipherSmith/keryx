@@ -40,3 +40,12 @@
 ## 2026-11-24 Stages 2/3 check
 
 - `git fetch origin`: no remote branch for stage 2 or stage 3. Local `feat/desktop-review-v2-stage2` has 3 commits (incl. 3f8c6ee9c "group desk review attempts into Reviews and rounds"), unpushed; stage 3 branch has 0 commits. Per the operator instruction T7, T8, T10 stay blocked; flow stays in-progress. Resume: rebase onto the stage 3 branch once it is pushed and sits on stage 2.
+- 2026-11-24T07:54:50.153Z - task-added: T11: Fix round 1 findings of PR 1302 (R1-R14)
+- 2026-11-24T07:54:50.353Z - task-attempt: T11: started (attempt 1) — 521-T11 fix round 1
+- 2026-11-24T08:00:43.963Z - ac-updated: AC6: "The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says "New commits belong to a separate request". [verify: invariant `! git grep -q "New commits belong to a separate request" -- src/review`]" -> "The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says "New commits belong to a separate request", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's "Head moved" unattended rule. [verify: invariant `! git grep -q "New commits belong to a separate request" -- src/review`]" (Review round 1 of PR 1302 (review-regression F-001) found autonomous-profile.ts:200 also governs head moves and was untracked)
+
+## 2026-11-24 Review round 1 of PR 1302 and fix round T11
+
+- Round 1 (package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302`): 9 reviewers, 34 raw items consolidated into 14 canonical (2 major, 9 minor, 3 info; R14 screened at ingest). Majors: R1 stop-and-start promised stage-3 prior-round rules; R2 unattended rule contradicted autonomous-profile.ts:200. Both confirmed by recorded code reads (research-evidence/verify-F-001-1.txt, verify-REG-F-001-1.txt). Not run: Wave C verifier, Wave D premise judge, mutation pass. Start questions took defaults (dispatched session).
+- T11 fixed R1–R12 and R14 (R13 info, no action). 15 hand mutations of the new section each fail a non-parity test. Preflight + parity: 91 pass. bun test src/gdskills: 8471 pass, 1 known unrelated fail (install.test.ts EACCES).
+- AC6 extended (keryx flow ac update) to include autonomous-profile.ts:200.

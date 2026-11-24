@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T07:38:05.650Z",
+  "updatedAt": "2026-11-24T08:00:43.963Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:2aa44ed1fa42ed403133867b1147ad4b56061b92fc1e0e27d8f9bb6e2edb825f",
+  "acChecksum": "sha256:122e0be7cab9cc9cd5ec4ba6c89d5446e63c723ca29bc17d2e73aa2a08a6a2c0",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -217,6 +217,28 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Fix round 1 findings of PR 1302 (R1-R14)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:54:50.353Z",
+            "outcome": "started",
+            "detail": "521-T11 fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -322,6 +344,21 @@
       "at": "2026-11-24T07:38:05.650Z",
       "event": "task-attempt",
       "detail": "T10: blocked (attempt 1) — needs T7 and T8"
+    },
+    {
+      "at": "2026-11-24T07:54:50.153Z",
+      "event": "task-added",
+      "detail": "T11: Fix round 1 findings of PR 1302 (R1-R14)"
+    },
+    {
+      "at": "2026-11-24T07:54:50.353Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 521-T11 fix round 1"
+    },
+    {
+      "at": "2026-11-24T08:00:43.963Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\". [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" -> \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule. [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" (Review round 1 of PR 1302 (review-regression F-001) found autonomous-profile.ts:200 also governs head moves and was untracked)"
     }
   ],
   "acKinds": {

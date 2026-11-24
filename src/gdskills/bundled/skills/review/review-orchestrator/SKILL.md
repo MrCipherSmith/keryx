@@ -14,7 +14,7 @@ triggers:
   - "review --hierarchical"
 metadata:
   author: "MrCipherSmith"
-  version: "1.17.0"
+  version: "1.18.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"

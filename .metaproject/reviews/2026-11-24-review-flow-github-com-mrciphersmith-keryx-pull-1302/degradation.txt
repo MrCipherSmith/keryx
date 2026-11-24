@@ -1,0 +1,17 @@
+range: a5d1ab236fe8...2e01447f9616 (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: degradation
+
+QUESTION: after this change, is the code worse than on the base branch: in behaviour, in defaults, in speed or in
+structure, and can that be shown? Scope is the diff plus the consumers below. The consumer list is the code
+graph's, not yours: trace those, and say so when you traced fewer.
+
+CHANGED SHARED EXPORTS (1):
+  - src/gdskills/review-orchestrator-preflight.test.ts  (every export)
+
+CONSUMERS (0 of 0; the files that import the module holding each changed export, or a barrel re-exporting it; most imported first, cap 40):
+
+CAP: the cap of 40 dropped no consumer (0 found). The cap is one budget shared by all changed exports, not one per export.
+
+tests to run: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/tests-to-run.json
+unresolved: 13 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

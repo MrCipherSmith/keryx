@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "files": [
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/review-orchestrator-preflight.test.ts"
+  ],
+  "prHead": "2e01447f96161913880e02db4394be6ad15e1335",
+  "graphCommit": "2e01447f96161913880e02db4394be6ad15e1335",
+  "maxBytes": 8192,
+  "affected": {
+    "depth": 2,
+    "files": []
+  },
+  "symbols": [],
+  "relatedTests": [
+    "src/gdskills/review-orchestrator-preflight.test.ts"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+}

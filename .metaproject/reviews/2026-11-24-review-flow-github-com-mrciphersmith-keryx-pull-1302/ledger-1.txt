@@ -1,0 +1,82 @@
+NOT READY: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/research.json written, but the completion gate would refuse it.
+models: review-architecture anthropic/claude-opus-5-5, review-degradation anthropic/claude-opus-5-5, review-highload anthropic/claude-opus-5-5, review-logic anthropic/claude-opus-5-5, review-performance anthropic/claude-opus-5-5, review-pr-contract anthropic/claude-opus-5-5, review-regression anthropic/claude-opus-5-5, review-security-code anthropic/claude-opus-5-5, review-testing-practices anthropic/claude-opus-5-5
+token spend: unknown (9 dispatch(es), none reported usage)
+- gap: review-architecture-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-architecture-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-architecture-w1:F-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-architecture-w1:F-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-architecture-w1:F-003: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-architecture-w1:F-003","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-architecture-w1:F-004: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-architecture-w1:F-004","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-architecture-w1:F-005: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-architecture-w1:F-005","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-degradation-w1:DEG-1: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-degradation-w1:DEG-1","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-degradation-w1:DEG-S1: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-degradation-w1:DEG-S1","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-degradation-w1:DEG-S2: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-degradation-w1:DEG-S2","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-degradation-w1:fu1: parent follow-up is open (Confirm which manifest status `keryx review ingest` writes for a round stopped mid-wave (settles DEG)
+    next: do it or rule it out, then add a disposition {"id":"review-degradation-w1:fu1","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-degradation-w1:fu2: parent follow-up is open (Confirm whether `keryx review next --json` already exposes the PR head (would let DEG-1 be fixed wit)
+    next: do it or rule it out, then add a disposition {"id":"review-degradation-w1:fu2","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-highload-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-highload-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-highload-w1:F-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-highload-w1:F-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-logic-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-logic-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-logic-w1:F-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-logic-w1:F-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-logic-w1:F-003: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-logic-w1:F-003","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-logic-w1:F-004: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-logic-w1:F-004","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-logic-w1:F-005: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-logic-w1:F-005","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-logic-w1:F-006: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-logic-w1:F-006","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-performance-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-performance-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-performance-w1:F-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-performance-w1:F-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-pr-contract-w1:PC-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-pr-contract-w1:PC-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-pr-contract-w1:PC-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-pr-contract-w1:PC-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-regression-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-regression-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-regression-w1:fu1: parent follow-up is open (Scope A: review-orchestrator's frontmatter version was not bumped, so skill-drift.ts (version-only c)
+    next: do it or rule it out, then add a disposition {"id":"review-regression-w1:fu1","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-regression-w1:fu2: parent follow-up is open (Unverified: the flow journal reports install.test.ts failing locally (EACCES), not confirmed on base)
+    next: do it or rule it out, then add a disposition {"id":"review-regression-w1:fu2","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-security-code-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-security-code-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-security-code-w1:F-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-security-code-w1:F-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-security-code-w1:F-003: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-security-code-w1:F-003","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-testing-practices-w1:F-001: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-testing-practices-w1:F-001","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-testing-practices-w1:F-002: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-testing-practices-w1:F-002","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-testing-practices-w1:F-003: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-testing-practices-w1:F-003","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-testing-practices-w1:F-004: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-testing-practices-w1:F-004","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-testing-practices-w1:F-005: raw finding is not in the canonical findings and has no closure
+    next: add a disposition {"id":"review-testing-practices-w1:F-005","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gap: review-testing-practices-w1:fu1: parent follow-up is open (Run mutant_candidates M01-M13 with `bun test src/gdskills/review-orchestrator-preflight.test.ts`. Co)
+    next: do it or rule it out, then add a disposition {"id":"review-testing-practices-w1:fu1","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions
+- gate: raw observations are not reconciled
+- gate: review-architecture-w1:F-001: unresolved research (unresolved)
+- gate: review-architecture-w1:F-001: closure needs evidence and reason
+- gate: review-architecture-w1:F-002: unresolved research (unresolved)
+- gate: review-architecture-w1:F-002: closure needs evidence and reason
+- gate: review-architecture-w1:F-003: unresolved research (unresolved)
+- gate: review-architecture-w1:F-003: closure needs evidence and reason
+- gate: review-architecture-w1:F-004: unresolved research (unresolved)
+- gate: review-architecture-w1:F-004: closure needs evidence and reason
+- gate: review-architecture-w1:F-005: unresolved research (unresolved)
+- gate: … and 59 more

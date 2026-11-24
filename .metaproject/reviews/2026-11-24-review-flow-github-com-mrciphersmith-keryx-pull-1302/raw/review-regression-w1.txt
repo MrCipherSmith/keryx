@@ -1,0 +1,68 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Regression Review (scope B)
+
+PR #1302, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 2e01447f96161913880e02db4394be6ad15e1335, round 1, diff mode. slice-01 read in full (lines 1-1210).
+
+### What the radius could answer
+It could not answer anything. The computed blast radius is empty. 13 of 14 changed files are absent from the code graph, so the result is unresolved, not clean. No cap dropped files because there was no set to cap. I enumerated the consumers of the review-orchestrator skill text myself with `keryx ctx rg` over `src`: tests and code that read SKILL.md or SKILL.detail.md, length ceilings, copy-parity guards, bundled-eval cross-reference checks, the version-based skill-drift check, and the code-built autonomous review prompt.
+
+### Consumers checked that still hold (no regression)
+- Length ceiling: SKILL.md is 918 lines at both base and head, and `SKILL_LENGTH_CEILINGS["review/review-orchestrator"]` is 918. The equality checks hold: `review-orchestrator-skill-parity.test.ts:39-45`, `review-orchestrator-preflight.test.ts` "the skill only shrinks", and `skill-length.test.ts:12` (plus the `<=` checks in `clean-context.test.ts`). The edit replaces line 64 with one line and lines 913-914 with two lines, so the count does not change.
+- Copy parity: the bundled and installed copies change from the same blobs to the same blobs (SKILL.md edaee9dd4 -> 4ba06722a, SKILL.detail.md dae2e6088 -> 4aff8a53f), and the slice shows identical hunks for both copies. The parity tests in `skill-length.test.ts`, `review-orchestrator-skill-parity.test.ts` and `clean-context.test.ts` still hold.
+- Negative-text guards: none of these matches the new text. Checked: retired nested-model phrases (preflight test lines 460-496), shouted emphasis, bare find/grep recipes, model ids (`review-first-round-completeness.test.ts:236`), and the `review-pr-feedback-wiring` and `enforcement-claims` negatives.
+- Section-scoped assertions: these still match because their lines were not touched: AC10 "publication" `/Unattended: do not publish/` and the "every asking section names unattended" sweep. Inserting `## Head moved` after "Between waves" only shortens that section's slice, and no existing test asserts text that moved.
+- bundled-eval companion sweep (`scanCrossReferences`): the new DETAIL text adds no `skills/`, `rules/`, `scripts/` or `.metaproject/` path and no backticked skill name, so `xref:path` and `xref:skill` have nothing new to resolve. The cited `templates/review-report.md` exists, and so does the cited label "Shell calls in a `trust` or `auto` session" (SKILL.md:52).
+- Install/update sync: `install.test.ts` refreshes companions from the bundled copy. There is no hash manifest of skill files. `skill-drift.ts` compares only the frontmatter `version`. The PR does not bump the version, so an older host copy is not flagged as stale. That leaves the status quo unchanged, so it is not a break. It is noted here for scope A.
+- The flow-521 records (acceptance-criteria, context, description, divergence-map, flow.json, journal, plan, tasks, resolved/T5.implement.json) are new files in a new flow folder. No code reads them as a contract outside `keryx flow`, which created them.
+
+### What the slice adds
+- plan.md (step 3) and AC6 already know that `src/review/autonomous-profile.ts:199` ("New commits belong to a separate request", the fixed-range Desktop branch) has to change to the shared update command. They defer it to T8, which is blocked on stage 3. That contradiction is tracked. The unattended branch at `autonomous-profile.ts:200` ("Open one more round only if the head moved ... review the new head") is not named anywhere in the plan, the ACs or the journal. That untracked contradiction is F-001.
+- The journal says `clean-context` and `harness-robustness` tests "fail to load (zod)" locally, so the implementer never ran the one test that pins the autonomous prompt (`harness-robustness.test.ts:179`). It would not catch F-001 anyway, because it asserts only the prompt string.
+- The journal also says "install.test.ts 1 fail (EACCES read-only rules/core), not confirmed on base". It is not in a changed file and is not attributed to this change. I did not verify it.
+- The test evidence (verify-tests-to-run-1.txt) shows 83 pass, 0 fail across 1 file (the preflight test). The other consumer tests above were not run in this round. Their holding is a static judgment from the code.
+
+### Finding
+[F-001] (major) The new unattended head-move rule contradicts the autonomous review prompt, which still opens a round on the moved head. Details in REVIEW_RESULT.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "The blast radius is empty and unresolved (13/14 changed files are not in the graph), so consumers were enumerated by search; slice-01 was read in full. Length ceiling (918 = 918), bundled/installed parity, negative-text guards, section-scoped assertions, bundled-eval cross-references and install sync all still hold. One regression: the new 'Head moved' unattended rule in SKILL.detail.md forbids an update round unless on_head_move is follow. No code sets on_head_move. The code-built autonomous prompt (src/review/autonomous-profile.ts:200), which tells the same agent to read review-orchestrator/SKILL.md, still says to open one more round on a moved head. Following the skill now drops that existing behaviour. The flow's plan tracks only the fixed-range line 199 (AC6/T8), not line 200.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "title": "Unattended 'Head moved' rule in SKILL.detail.md cancels the autonomous run's existing 'review the new head' round",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": 607,
+      "problem": "The change adds a 'Head moved' section to review-orchestrator SKILL.detail.md (both copies). Its Unattended bullet says: 'Finish the round on its pinned head, open no update round unless `on_head_move` is `follow`'. SKILL.md Round plan step 5 (line 64) now sends the agent there after every batch. `on_head_move` has no source anywhere in code: `keryx ctx rg on_head_move src` finds only the new test. So for an unattended run the rule always resolves to 'no update round'. The existing autonomous review prompt, built in code at src/review/autonomous-profile.ts:200 for a run with no fixedBase and pinned by harness-robustness.test.ts:179, tells the same agent: 'Open one more round only if the head moved while you worked, and review the new head.' Line 206 of the same prompt tells the agent to read `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md`, so the agent now holds two opposite instructions for the same event. The flow's plan.md step 3 and AC6 track only the fixed-range line 199 for a later fix (T8, blocked on stage 3). Line 200 is not tracked.",
+      "trigger": "An unattended autonomous review (autonomous-run.ts:346 -> buildAutonomousPrompt with no fixedBase and no desktopOperator) of a PR whose head moves while the round is running.",
+      "outcome": "If the agent follows the changed skill text, it finishes on the old head and opens no round on the new head. The run then reviews a stale commit, where before this change the prompt's instruction to review the new head stood alone. Which instruction wins is up to the model, so the behaviour varies between runs. The prompt test pins only the prompt string, and per the flow journal it did not even load locally, so nothing catches the change.",
+      "fix": "Make the two agree in one place. Either have the unattended bullet in SKILL.detail.md § 'Head moved' defer to a caller-supplied policy (the autonomous prompt counts as `follow`), or change autonomous-profile.ts:200 to the skill's rule and update harness-robustness.test.ts:179 with it. Add a test that reads both texts and asserts they agree, and add line 200 to T8/AC6 next to line 199.",
+      "evidence": "SKILL.detail.md:607 (bundled and .metaproject copies, identical; slice-01 lines 340 and 987); SKILL.md:64; src/review/autonomous-profile.ts:199, :200, :206; src/review/harness-robustness.test.ts:179; flow 521 plan.md step 3 and acceptance-criteria AC6 name only line 199 (slice-01 lines 23, 252); `keryx ctx rg on_head_move src` -> only src/gdskills/review-orchestrator-preflight.test.ts:406,408,438.",
+      "class_scope": {
+        "sites": [
+          "src/review/autonomous-profile.ts:200",
+          "src/review/autonomous-profile.ts:199",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:607",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:607"
+        ],
+        "enumeration_method": "`keryx ctx rg 'head moved|Re-read head|If head moved|unchecked commits' src` and `keryx ctx rg on_head_move src`, then reading every code-built prompt that tells an agent to run review-orchestrator (buildAutonomousPrompt, the only caller being autonomous-run.ts:346). Two prompt branches state a head-move policy. Line 200 (no fixedBase, unattended) contradicts the new rule directly and is untracked. Line 199 (fixedBase, Desktop) says 'Keep this range throughout'; under the skill's `ask` path an operator can pick 'Stop and start on the new head', which conflicts with it. That conflict is already tracked by AC6/T8. The skill-text sites are the two identical copies of the changed line."
+      }
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Scope A: review-orchestrator's frontmatter version was not bumped, so skill-drift.ts (version-only comparison) will not flag older host copies that still carry the removed 'If head moved, re-check findings' wording.",
+    "Unverified: the flow journal reports install.test.ts failing locally (EACCES), not confirmed on base; not attributed to this change."
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (the brief already reported the graph as unresolved for 13/14 changed files, so gdgraph affected could not answer; consumers were found by search instead); wiki_used: not-relevant (the question is about text consumers, not architecture intent); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: yes, once: a single `grep -n -A5` on bundled-eval.ts constants after `keryx ctx rg -A` returned empty output, plus `grep -n` for line numbers in three known files.
