@@ -1,0 +1,100 @@
+STATUS: DONE
+
+## Frontend Review (round 2, wave 1)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Range: `98bec59046d0ce30500b341e8c18ba5b767069bb..412258583206e539ce61727b9c4d71bb12fda3a0` (stage 2 tip .. head)
+- Scope mode: diff (explicit range from payload)
+- Slice read in full: slice-01 (flow 520 docs/flow.json/resolved dispatch files, `ReviewPublishDialog.tsx`, `ReviewRuns.tsx`, `ReviewWorkspace.tsx`, `reviews/ReviewPanel.dom.test.tsx`, `docs/docs/desktop-app.md`).
+- Context read outside the slice: `apps/desktop/src/review/useReviewRuns.ts` (`request`, lines 1-90), `launchAction` in `ReviewRuns.tsx`, `src/review/desk-publication.ts` (blockedReason chain and the headMoved base comparison), round 1 result `raw/review-frontend-w1.txt` of package `...-pull-1303`.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 1
+
+No MobX in this surface (React `useState`/`useRef`/`useCallback` only), so the observer, action, store and inter-store callback laws do not apply. The T13 wiring is correct: `ReviewWorkspace.updateReview` starts a `start` action on `{ baseSha: run.baseSha, headSha: currentHead }` with the reviewed attempt's options; the base matches the one the server compares (`pr.baseRefOid === run.baseSha` in `desk-publication.ts:382`), so the range sent is the one the head-moved variant was offered for. In the dialog only one button carries `btn-primary` at a time (Update when offered, otherwise Publish as is / Submit), and Update is not rendered once the review is posted.
+
+### Round 1 fixes checked
+- Round 1 frontend F-001 (refusal text pointed at the disabled Inline checkbox): holds. `desk-publication.ts:324-326` now branches on `headMoved`: "Enable General comment. Inline comments are not available when publishing for an earlier commit."
+- Round 1 UX-001/frontend overlap (locked controls unexplained): holds. The notice has an id from `useId()`, is `role="status"`, and both settings fieldsets carry `aria-describedby` pointing to it only while the head moved; the DOM test asserts the link.
+
+### Findings
+
+### [F-001] "Update review" can close the dialog and start nothing, with no feedback, when another run mutation is in flight
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewWorkspace.tsx:1950 (slice line), `updateReview`; with `apps/desktop/src/review/useReviewRuns.ts:32`
+- **Rule**: canonical rubric (no rule row covers it; `code-style-patterns.mdc` is absent from this worktree)
+- **Problem**: `useReviewRuns.request` returns early, without setting an error, when a non-status action is already pending (`if (pending.current && (action.kind === "status" || pending.current !== "status")) return;`). The Update button in the publish dialog is disabled only by the dialog's own `writing`, not by the workspace's `working`, and `RunAttempt` closes the dialog before calling `updateReview`. If the user clicks Update while a cancel/start/answer is still running in the workspace, the dialog closes, the start is silently dropped, and in the board-behind case `.then(() => onRefreshBoard?.())` still refreshes the board as if the round had started.
+- **Why it matters**: The user's explicit action is lost with no message; they see the dialog close and no new attempt. Narrow window (needs a concurrent mutation), so it is not a correctness bug of the main path.
+- **Fix**: Pass the workspace's `working` to the dialog (or to `PublicationTarget`) and disable "Update review" while it is true; or have `request` report whether it ran and only refresh the board / close the dialog when the start was accepted.
+
+### [F-002] (info) The current-head-already-has-an-attempt guard uses `launchAction(...).open`, which is false for a partial or failed attempt on the current head
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewWorkspace.tsx:1949 (slice line)
+- **Problem**: `if (!boardBehind && action.open) return;` skips the start only when the current range has an active attempt or a completed full-coverage one. With a partial/failed attempt already on the current head, Update starts another attempt (the same as the panel's "Retry review"). This matches the launch semantics and the PR decision text ("If the current head already has an attempt, nothing new starts") only approximately; no defect, recorded so the decision wording can be read precisely. In the board-behind case the guard is skipped entirely and the backend decides.
+
+### Clean Areas
+- Observer / MobX laws: not applicable (no MobX in the changed frontend files).
+- API placement: the dialog calls no IO directly; Update goes through the existing `local.request` path, and `request` catches and surfaces errors via `actionError` (no unhandled rejection from `void local.request(...).then(...)`).
+- Hooks: `updateReview` is a `useCallback` with complete deps (`card`, `action.open`, `local.request`, `onRefreshBoard`; `setSessionId` is stable). No new effects; `headMoved`/`updateOffered` are derived during render, no duplicated state.
+- TypeScript: new props typed `((...) => void) | undefined` consistent with `exactOptionalPropertyTypes`; conditional spread `{...(updateReview && { onUpdateReview })}` keeps the prop absent rather than `undefined`. No `any`; `!` only in tests.
+- Accessibility: button accessible names include the short SHA ("Update review to ccccccc", "Publish as is for bbbbbbb"); full SHAs in `title` on the notice's `<code>`.
+- Keys/lists: no new lists.
+- Docs: `desktop-app.md` describes publish as is; it does not mention "Update review" (not a frontend-code finding).
+
+### Not verified / notes
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc` (named in the payload) does not exist in this worktree (`.metaproject/rules/stacks/` holds only `ts-js-node`); severities come from the canonical rubric.
+- No tests run (read-only, exec budget 0). Brief evidence: Desktop `src/review src/reviews` 142 pass.
+- Desktop `.tsx` files are not linted by the root ESLint config (stated in the PR).
+- No live Desktop run of the Update flow.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "T13 Desktop wiring (Update review in the head-moved publish dialog, ReviewRuns/ReviewWorkspace callback, single primary action) is correct and round 1 frontend F-001 and the aria-describedby fix hold. No MobX in scope. One minor: Update review can close the dialog and silently drop the start when another run mutation is in flight; one info on the already-has-an-attempt guard semantics.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "void local.request({ kind: \"start\", ...revision, ...(reviewed.options && { options: reviewed.options }) })\n      .then(() => { if (boardBehind) onRefreshBoard?.(); });",
+      "problem": "useReviewRuns.request returns early without any error when another non-status action is pending (useReviewRuns.ts:32). The Update review button is disabled only by the dialog's own `writing`, and RunAttempt closes the dialog before calling updateReview, so a click during an in-flight cancel/start/answer closes the dialog, drops the start silently, and (board-behind case) still refreshes the board.",
+      "impact": "The user's explicit Update action is lost with no feedback. Narrow window requiring a concurrent mutation; main path unaffected.",
+      "suggested_fix": "Disable Update review while the workspace's `working` is true (pass it through PublicationTarget), or have request report whether it ran and only refresh the board when the start was accepted.",
+      "evidence": "useReviewRuns.ts:32 `if (pending.current && (action.kind === \"status\" || pending.current !== \"status\")) return;`; ReviewPublishDialog.tsx Update button `disabled={writing}`; ReviewRuns.tsx onUpdateReview wrapper calls `setPublishOpen(false)` then `updateReview(...)`.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-review-start-silently-dropped-while-mutation-pending",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "if (!boardBehind && action.open) return;",
+      "problem": "launchAction(...).open is true only for an active attempt or a completed full-coverage one on the current range; with a partial or failed attempt on the current head, Update starts another attempt, like Retry review. The PR decision text says nothing new starts if the current head already has an attempt.",
+      "impact": "No defect; the behaviour matches the panel's launch semantics, but the PR decision wording is broader than the code.",
+      "suggested_fix": "Either word the PR decision as 'an active or finished full review' or keep as is.",
+      "evidence": "ReviewRuns.tsx launchAction lines 26-39.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-review-existing-attempt-guard-semantics",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": [".metaproject/rules/stacks/react/code-style-patterns.mdc (absent in worktree)"]
+}
+```
+
+Routing audit: graph_used: no (not-relevant; payload `layers.affected` supplied the dependents); wiki_used: no (not-relevant; intent stated in PR body and flow docs); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

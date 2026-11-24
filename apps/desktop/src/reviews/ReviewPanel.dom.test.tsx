@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { ComponentProps } from "react";
 import type { Root } from "react-dom/client";
+import type { DeskReviewOptions } from "../../../../src/review/desk-run-options";
 import { DESK_RUN_SCOPE, type DeskRun, type DeskRunSnapshot } from "../../../../src/review/desk-run-types";
 import type { ReviewSummary } from "../../../../src/review/review-entity";
 import type { ReviewRunAction, reviewRun } from "../platform/reviewRuns";
@@ -19,11 +20,14 @@ beforeAll(async () => {
   const React = await import("react");
   act = React.act as unknown as typeof act;
   const panel = (await import("./ReviewPanel")).ReviewPanel;
+  const { ToastProvider } = await import("../components/Toasts");
   const host = document.createElement("div");
   document.body.append(host);
   root = (await import("react-dom/client")).createRoot(host);
-  renderComponent = props => act(async () => { root.render(React.createElement(panel, props)); });
+  // The app renders the panel under its toast provider; the tests read the toasts the panel raises.
+  renderComponent = props => act(async () => { root.render(React.createElement(ToastProvider, null, React.createElement(panel, props))); });
 });
+const toastTitles = () => [...document.querySelectorAll(".toast-title")].map(node => node.textContent);
 afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
 
 const time = "2026-11-19T12:00:00Z";
@@ -589,6 +593,470 @@ test("updates automatic verdicts and only enables submission after the latest co
   await click("Submit review");
   expect(requests.at(-1)).toMatchObject({ kind: "submit", digest: "7".padStart(64, "0"),
     settings: { verdictOverride: null, verdict: "changes", answers: { held: "uphold" } } });
+  await click("Close");
+});
+
+test("a moved head locks the dialog to the as-is Comment for the reviewed commit", async () => {
+  const requests: PublicationRequest[] = [];
+  const reviewedHead = "b".repeat(40);
+  const currentHead = "c".repeat(40);
+  const settings: PublicationSettings = { inline: false, general: true, keryxTemplate: true, overlay: false,
+    verdict: "comment", verdictOverride: "comment", answers: {} };
+  const command = async (_cwd: string, _target: unknown, request: PublicationRequest): Promise<PublicationState> => {
+    requests.push(request);
+    return { version: 1, settings, body: `Reviewed commit \`${reviewedHead}\`.`, inlineCount: 0, questions: [],
+      overlayAvailable: false, canSubmit: true, digest: "d".repeat(64), headMoved: { reviewedHead, currentHead } };
+  };
+  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 47 }, { publishCommand: command });
+  await click("View review result");
+  await click("Publish to GitHub");
+  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  const input = (name: string) => [...dialog.querySelectorAll("label")]
+    .find(node => node.textContent?.trim().startsWith(name))!.querySelector("input")!;
+  const status = dialog.querySelector(".review-publish-head-moved")!;
+  expect(status.textContent).toContain("bbbbbbb");
+  expect(status.textContent).toContain("ccccccc");
+  expect(status.matches(".inline-banner.tone-warn[role=status]")).toBe(true);
+  expect(status.textContent).toContain("The verdict is Comment only, and inline comments are off");
+  // Each locked control is explained by the notice.
+  for (const legend of ["Include in the review", "Review verdict"]) {
+    const fieldset = [...dialog.querySelectorAll("fieldset")].find(node => node.querySelector("legend")?.textContent === legend)!;
+    expect(fieldset.getAttribute("aria-describedby")).toBe(status.id);
+  }
+  expect(status.id).not.toBe("");
+  expect(input("Comment only").checked).toBe(true);
+  for (const name of ["Use recommendation", "Approve", "Request changes", "Comment only", "Inline comments"]) {
+    expect(input(name).matches(":disabled")).toBe(true);
+  }
+  expect(input("General comment").matches(":disabled")).toBe(false);
+  expect(() => btn("Submit review")).toThrow("Missing button");
+  // The panel offers the update round as the first footer action.
+  expect(dialog.querySelector(".review-publish-footer button")?.textContent).toBe("Update review to ccccccc");
+  await click("Publish as is for bbbbbbb");
+  expect(requests.at(-1)).toMatchObject({ kind: "submit", digest: "d".repeat(64) });
+  await click("Close");
+
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
+  let updates = 0;
+  await act(async () => root.render(React.createElement(ReviewPublishDialog, {
+    cwd: "/project", target: { repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 47 }, id: complete.id,
+    command, onUpdateReview: () => { updates++; }, onClose() {},
+  })));
+  const footer = document.querySelector(".review-publish-footer")!;
+  expect(footer.querySelector("button")?.textContent).toBe("Update review to ccccccc");
+  await click("Update review to ccccccc");
+  expect(updates).toBe(1);
+  await act(async () => root.render(null));
+});
+
+test("Update review is offered only while the head has moved and the review is unpublished", async () => {
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
+  const reviewedHead = "b".repeat(40);
+  const base: PublicationState = { version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false,
+    verdict: "comment", verdictOverride: "comment", answers: {} }, body: "Draft", inlineCount: 0, questions: [],
+    overlayAvailable: false, canSubmit: true, digest: "f".repeat(64) };
+  // Each pair: the state, and text that proves the dialog rendered that state.
+  const states: Array<[PublicationState, string]> = [
+    [base, "Submit review"],
+    [{ ...base, canSubmit: false, headMoved: { reviewedHead, currentHead: "c".repeat(40) },
+      publishedUrl: "https://github.com/owner/repo/pull/47#pullrequestreview-1" }, "Review published on GitHub."],
+  ];
+  for (const [state, rendered] of states) {
+    await act(async () => root.render(React.createElement(ReviewPublishDialog, {
+      cwd: "/project", target: { repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 47 }, id: complete.id,
+      command: async () => state, onUpdateReview: () => {}, onClose() {},
+    })));
+    expect(document.querySelector(".dialog")?.textContent).toContain(rendered);
+    expect(document.querySelector(".review-publish-footer")?.textContent).not.toContain("Update review to");
+    await act(async () => root.render(null));
+  }
+});
+
+/** A finished attempt on `reviewedHead` whose publish dialog reports that the PR moved to `currentHead`. */
+function headMovedFixture(number: number, extraOptions: Partial<DeskReviewOptions> = {}) {
+  const reviewedHead = "b".repeat(40);
+  const currentHead = "c".repeat(40);
+  const options: DeskReviewOptions = { mode: "manual", adaptive: true, maxParallel: 3, flowId: "488",
+    modelPools: { strong: [], middle: [], light: [] }, ...extraOptions };
+  const reviewed: DeskRun = { ...complete, id: "attempt-reviewed", headSha: reviewedHead, options,
+    result: { ...complete.result!, reviewed: { baseSha: "base", headSha: reviewedHead } } };
+  const next: DeskRun = { ...running, id: "attempt-next", headSha: currentHead, previousRunId: reviewed.id };
+  const actions: ReviewRunAction[] = [];
+  let started = false;
+  const command: typeof reviewRun = async (_cwd, key, action) => {
+    expect(key).toEqual({ ...target, number });
+    actions.push(action);
+    if (action.kind === "start") {
+      started = true;
+      return { version: 1, runs: [next, reviewed], startedRunId: next.id };
+    }
+    return { version: 1, runs: started ? [next, reviewed] : [reviewed] };
+  };
+  const publishCommand = async (): Promise<PublicationState> => ({ version: 1, settings: { inline: false, general: true,
+    keryxTemplate: true, overlay: false, verdict: "comment", verdictOverride: "comment", answers: {} }, body: "Draft",
+    inlineCount: 0, questions: [], overlayAvailable: false, canSubmit: true, digest: "d".repeat(64),
+    headMoved: { reviewedHead, currentHead } });
+  return { reviewedHead, currentHead, options, reviewed, next, actions, command, publishCommand };
+}
+
+/** Opens the publish dialog of `id` from the History menu of the mounted Review panel. */
+async function publishFromHistory(id: string, head: string) {
+  await act(async () => [...document.querySelectorAll("button")].find(node => node.textContent?.includes("History"))!.click());
+  await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    .find(node => node.textContent?.includes(head.slice(0, 9)))!.click());
+  const session = document.querySelector(`article[aria-label="Review attempt ${id}"]`)!;
+  await act(async () => [...session.querySelectorAll("button")].find(node => node.textContent === "Publish to GitHub")!.click());
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+test("Update review is disabled while another review action runs, and nothing starts or refreshes the board", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(52);
+  const other: DeskRun = { ...running, id: "attempt-other", headSha: "x".repeat(40) };
+  const actions: ReviewRunAction[] = [];
+  const cancel = deferred();
+  let refreshed = 0;
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    if (action.kind === "cancel") await cancel.promise;
+    return { version: 1, runs: [other, reviewed] };
+  }, { ...pr, number: 52, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  await click("Stop review");
+  expect(actions.at(-1)).toEqual({ kind: "cancel", id: other.id });
+  await publishFromHistory(reviewed.id, reviewedHead);
+  expect(btn("Update review to ccccccc").disabled).toBe(true);
+  await click("Update review to ccccccc");
+  expect(actions.some(action => action.kind === "start")).toBe(false);
+  expect(document.querySelector(".review-publish-footer")).not.toBeNull();
+  expect(refreshed).toBe(0);
+  await act(async () => cancel.resolve());
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  await act(() => root.render(null));
+});
+
+test("a failed Update review start shows its error and does not refresh the board", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(53);
+  let refreshed = 0;
+  await show(async (_cwd, _key, action) => {
+    if (action.kind === "start") throw new Error("The selected Keryx CLI refused the start.");
+    return { version: 1, runs: [reviewed] };
+  }, { ...pr, number: 53, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(document.body.textContent).toContain("The selected Keryx CLI refused the start.");
+  expect(refreshed).toBe(0);
+  await act(() => root.render(null));
+});
+
+test("Update review does not start when the current head already has a failed attempt, whatever the board shows", async () => {
+  for (const [number, boardHead] of [[54, "c".repeat(40)], [55, "b".repeat(40)]] as const) {
+    const { currentHead, reviewedHead, reviewed, publishCommand } = headMovedFixture(number);
+    const failed: DeskRun = { ...running, id: "attempt-failed", headSha: currentHead, state: "failed", phase: "Failed",
+      reason: "Reviewer crashed", finishedAt: time };
+    const actions: ReviewRunAction[] = [];
+    let refreshed = 0;
+    // The earlier attempt is listed first, so the panel's latest attempt is not the failed one.
+    await show(async (_cwd, _key, action) => {
+      actions.push(action);
+      return { version: 1, runs: [reviewed, failed] };
+    }, { ...pr, number, headSha: boardHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+    await publishFromHistory(reviewed.id, reviewedHead);
+    await click("Update review to ccccccc");
+    expect(actions.some(action => action.kind === "start")).toBe(false);
+    // A board behind the push is re-read once, so the panel follows the head the attempt covers.
+    expect(refreshed).toBe(boardHead === currentHead ? 0 : 1);
+    // The attempt that already covers the current head is shown instead.
+    expect(document.querySelector(".review-publish-footer")).toBeNull();
+    expect(document.querySelector('article[aria-label="Review attempt attempt-failed"]')).not.toBeNull();
+    expect(toastTitles()).toContain("Commit ccccccc already has a review attempt");
+    await act(() => root.render(null));
+  }
+});
+
+test("Update review starts a round when the only attempt on the current head is archived or imported", async () => {
+  const archive = { action: "archive" as const, reason: "Superseded by hand", at: time };
+  for (const [number, covering] of [[61, { decision: archive }], [62, { source: "existing" as const }]] as const) {
+    const { currentHead, reviewedHead, reviewed, next, publishCommand } = headMovedFixture(number);
+    const other: DeskRun = { ...complete, id: "attempt-other-on-head", headSha: currentHead, ...covering,
+      result: { ...complete.result!, reviewed: { baseSha: "base", headSha: currentHead } } };
+    const actions: ReviewRunAction[] = [];
+    let started = false;
+    await show(async (_cwd, _key, action) => {
+      actions.push(action);
+      if (action.kind === "start") started = true;
+      return { version: 1, runs: started ? [next, reviewed, other] : [reviewed, other], ...(action.kind === "start" && { startedRunId: next.id }) };
+    }, { ...pr, number, headSha: currentHead }, { publishCommand });
+    await publishFromHistory(reviewed.id, reviewedHead);
+    await click("Update review to ccccccc");
+    expect(actions.filter(action => action.kind === "start")).toHaveLength(1);
+    expect(toastTitles()).not.toContain("Commit ccccccc already has a review attempt");
+    await act(() => root.render(null));
+  }
+});
+
+test("Update review shows the running attempt on the current head rather than a failed one", async () => {
+  const { currentHead, reviewedHead, reviewed, publishCommand } = headMovedFixture(63);
+  const failed: DeskRun = { ...running, id: "attempt-failed", headSha: currentHead, state: "failed", phase: "Failed",
+    reason: "Reviewer crashed", finishedAt: time };
+  const live: DeskRun = { ...running, id: "attempt-live", headSha: currentHead };
+  const actions: ReviewRunAction[] = [];
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    return { version: 1, runs: [reviewed, failed, live] };
+  }, { ...pr, number: 63, headSha: currentHead }, { publishCommand });
+  await publishFromHistory(reviewed.id, reviewedHead);
+  await click("Update review to ccccccc");
+  expect(actions.some(action => action.kind === "start")).toBe(false);
+  // The running attempt is the panel's latest attempt: no dialog opens on the failed one.
+  expect(document.querySelector(".dialog")).toBeNull();
+  expect(document.querySelector('article[aria-label="Review attempt attempt-live"]')).not.toBeNull();
+  expect(document.querySelector('article[aria-label="Review attempt attempt-failed"]')).toBeNull();
+  await act(() => root.render(null));
+});
+
+test("an Update review that raced another action does not start, refresh the board or stay silent", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(64);
+  const other: DeskRun = { ...running, id: "attempt-other", headSha: "x".repeat(40) };
+  const actions: ReviewRunAction[] = [];
+  const cancel = deferred();
+  let refreshed = 0;
+  // The board has not seen the push: a start that was reported as done would re-read it.
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    if (action.kind === "cancel") await cancel.promise;
+    return { version: 1, runs: [other, reviewed] };
+  }, { ...pr, number: 64, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  await publishFromHistory(reviewed.id, reviewedHead);
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  // Both clicks land before the panel re-renders, so the Update button is still enabled for the second one.
+  await act(async () => {
+    btn("Stop review").click();
+    btn("Update review to ccccccc").click();
+  });
+  expect(actions.filter(action => action.kind !== "status")).toEqual([{ kind: "cancel", id: other.id }]);
+  expect(refreshed).toBe(0);
+  expect(toastTitles()).toContain("Update review did not start");
+  await act(async () => cancel.resolve());
+  await act(() => root.render(null));
+});
+
+test("Update review does not carry automatic publication into the new round", async () => {
+  const { currentHead, options, actions, command, publishCommand } = headMovedFixture(56, { autoPublish: true });
+  expect(options.autoPublish).toBe(true);
+  await show(command, { ...pr, number: 56, headSha: currentHead }, { publishCommand });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  const { autoPublish: _dropped, ...carried } = options;
+  const starts = actions.filter(action => action.kind === "start");
+  expect(starts).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options: carried }]);
+  expect(starts[0]?.kind === "start" && starts[0].options && "autoPublish" in starts[0].options).toBe(false);
+  await act(() => root.render(null));
+});
+
+test("Update review closes the publish dialog before the start answers", async () => {
+  const { currentHead, reviewed, next, publishCommand } = headMovedFixture(57);
+  const start = deferred();
+  await show(async (_cwd, _key, action) => {
+    if (action.kind === "start") {
+      await start.promise;
+      return { version: 1, runs: [next, reviewed], startedRunId: next.id };
+    }
+    return { version: 1, runs: [reviewed] };
+  }, { ...pr, number: 57, headSha: currentHead }, { publishCommand });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(document.querySelector(".review-publish-footer")).toBeNull();
+  await act(async () => start.resolve());
+  expect(document.querySelector(`article[aria-label="Review attempt ${next.id}"]`)).not.toBeNull();
+  await act(() => root.render(null));
+});
+
+test("Update review is disabled while a publication write is in flight", async () => {
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
+  const { publishCommand } = headMovedFixture(58);
+  const submit = deferred();
+  let updates = 0;
+  await act(async () => root.render(React.createElement(ReviewPublishDialog, {
+    cwd: "/project", target: { ...target, number: 58 }, id: complete.id,
+    command: async (_cwd, _key, request) => {
+      if (request.kind === "submit") await submit.promise;
+      return publishCommand();
+    },
+    onUpdateReview: () => { updates++; }, onClose() {},
+  })));
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  await click("Publish as is for bbbbbbb");
+  expect(btn("Update review to ccccccc").disabled).toBe(true);
+  await click("Update review to ccccccc");
+  expect(updates).toBe(0);
+  await act(async () => submit.resolve());
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  await act(async () => root.render(null));
+});
+
+test("Update review waits for the latest preview, and a disabled Update review says why", async () => {
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
+  const { publishCommand } = headMovedFixture(65);
+  let preview = deferred();
+  let updates = 0;
+  const render = (updateDisabled: boolean) => act(async () => root.render(React.createElement(ReviewPublishDialog, {
+    cwd: "/project", target: { ...target, number: 65 }, id: complete.id,
+    command: async (_cwd, _key, request) => {
+      if (request.kind === "preview" && !request.refresh) await preview.promise;
+      return publishCommand();
+    },
+    onUpdateReview: () => { updates++; }, updateDisabled, onClose() {},
+  })));
+  await render(false);
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  expect(btn("Update review to ccccccc").getAttribute("aria-describedby")).toBeNull();
+  // A settings change sends a preview: the dialog's head is not confirmed until it answers.
+  const general = [...document.querySelectorAll("label")].find(node => node.textContent?.trim() === "General comment")!.querySelector("input")!;
+  await act(async () => general.click());
+  expect(btn("Update review to ccccccc").disabled).toBe(true);
+  await click("Update review to ccccccc");
+  expect(updates).toBe(0);
+  await act(async () => preview.resolve());
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  await act(async () => root.render(null));
+
+  // Another action of the review is in flight: the reason is visible text the button points at.
+  preview = deferred();
+  await render(true);
+  const update = btn("Update review to ccccccc");
+  expect(update.disabled).toBe(true);
+  const reason = document.getElementById(update.getAttribute("aria-describedby") ?? "");
+  expect(reason?.textContent).toContain("Another action of this review is still running.");
+  expect(reason?.closest(".dialog")).not.toBeNull();
+  await act(async () => root.render(null));
+});
+
+test("the primary footer action follows the dialog state, and the head-moved alternatives sit together", async () => {
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
+  const { publishCommand } = headMovedFixture(59);
+  const current = async (): Promise<PublicationState> => {
+    const { headMoved: _moved, ...state } = await publishCommand();
+    return state;
+  };
+  const cases: Array<[typeof publishCommand, boolean, string, string[]]> = [
+    [publishCommand, true, "Update review to ccccccc",
+      ["Update review to ccccccc", "Publish as is for bbbbbbb", "Close", "Skip publication", "Save locally"]],
+    [publishCommand, false, "Publish as is for bbbbbbb", ["Close", "Skip publication", "Save locally", "Publish as is for bbbbbbb"]],
+    [current, true, "Submit review", ["Close", "Skip publication", "Save locally", "Submit review"]],
+  ];
+  for (const [command, offerUpdate, primary, order] of cases) {
+    await act(async () => root.render(React.createElement(ReviewPublishDialog, {
+      cwd: "/project", target: { ...target, number: 59 }, id: complete.id, command,
+      ...(offerUpdate && { onUpdateReview: () => {} }), onClose() {},
+    })));
+    const footer = [...document.querySelectorAll<HTMLButtonElement>(".review-publish-footer button")];
+    expect(footer.map(node => node.textContent)).toEqual(order);
+    expect(footer.filter(node => node.classList.contains("btn-primary")).map(node => node.textContent)).toEqual([primary]);
+    await act(async () => root.render(null));
+  }
+});
+
+test("a review dialog opened from Sessions offers no Update review", async () => {
+  const React = await import("react");
+  const { ReviewRunDialog } = await import("../review/ReviewRunDialog");
+  const { sessionReviewPublication } = await import("../review/SessionReviewActivity");
+  const { reviewed, publishCommand } = headMovedFixture(60);
+  const key = { ...target, number: 60 };
+  const publication = sessionReviewPublication("/project", key);
+  expect("onUpdateReview" in publication).toBe(false);
+  await act(async () => root.render(React.createElement(ReviewRunDialog, {
+    run: reviewed, card: { number: 60, baseSha: reviewed.baseSha, headSha: reviewed.headSha },
+    publication: { ...publication, publishCommand }, working: false,
+    activity: { follow: () => () => {}, loaded: reviewed.id, error: "" }, error: "",
+    onClose() {}, onRefresh() {}, onAnswer() {}, onCancel() {}, loadAttempt: async () => reviewed,
+  })));
+  await click("Publish to GitHub");
+  expect(document.querySelector(".review-publish-footer")?.textContent).not.toContain("Update review to");
+  expect(btn("Publish as is for bbbbbbb").classList.contains("btn-primary")).toBe(true);
+  await act(async () => root.render(null));
+});
+
+test("Update review in a head-moved dialog starts the next round of the same Review on the current head", async () => {
+  const { currentHead, options, next, actions, command, publishCommand } = headMovedFixture(49);
+  let refreshed = 0;
+  await show(command, { ...pr, number: 49, headSha: currentHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  // A keyboard user opens the dialog from the reviewed attempt's button, which the new attempt replaces.
+  btn("Publish to GitHub").focus();
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  // Focus moves to the Latest review heading instead of falling to the page body.
+  expect(document.activeElement?.matches(".desk-runs h3")).toBe(true);
+  expect(document.activeElement?.textContent).toBe("Latest review");
+  // The same PR and account, the PR's current range, and the reviewed attempt's settings.
+  expect(actions.filter(action => action.kind === "start")).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options }]);
+  expect(document.querySelector(".dialog")).toBeNull();
+  expect(document.querySelector(`article[aria-label="Review attempt ${next.id}"]`)).not.toBeNull();
+  expect(refreshed).toBe(0);
+  await act(() => root.render(null));
+});
+
+test("Update review from a board that has not seen the push starts on the dialog's head and refreshes the board", async () => {
+  const { reviewedHead, currentHead, options, actions, command, publishCommand } = headMovedFixture(50);
+  let refreshed = 0;
+  await show(command, { ...pr, number: 50, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(actions.filter(action => action.kind === "start")).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options }]);
+  expect(document.querySelector(".dialog")).toBeNull();
+  expect(refreshed).toBe(1);
+  await act(() => root.render(null));
+});
+
+test("Update review from an earlier attempt does not start a second attempt when the current head already has one", async () => {
+  const { currentHead, actions, publishCommand, command } = headMovedFixture(51);
+  const current: DeskRun = { ...complete, id: "attempt-current", headSha: currentHead,
+    result: { ...complete.result!, reviewed: { baseSha: "base", headSha: currentHead } } };
+  const reviewedRuns = (await command("/project", { ...target, number: 51 }, { kind: "status" })).runs;
+  actions.length = 0;
+  const runs = [current, ...reviewedRuns];
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    return { version: 1, runs };
+  }, { ...pr, number: 51, headSha: currentHead }, { publishCommand });
+  // The current head already has a finished attempt.
+  expect(btn("View review result").disabled).toBe(false);
+  await act(async () => [...document.querySelectorAll("button")].find(node => node.textContent?.includes("History"))!.click());
+  await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    .find(node => node.textContent?.includes("bbbbbbbbb"))!.click());
+  const session = document.querySelector('article[aria-label="Review attempt attempt-reviewed"]')!;
+  await act(async () => [...session.querySelectorAll("button")].find(node => node.textContent === "Publish to GitHub")!.click());
+  await click("Update review to ccccccc");
+  expect(actions.some(action => action.kind === "start")).toBe(false);
+  expect(document.querySelector(".dialog")).toBeNull();
+  expect(document.querySelector('article[aria-label="Review attempt attempt-reviewed"]')).toBeNull();
+  // The attempt on the current head is the one shown, and the toast says why nothing started.
+  expect(document.querySelector('article[aria-label="Review attempt attempt-current"]')).not.toBeNull();
+  expect(toastTitles()).toContain("Commit ccccccc already has a review attempt");
+  await act(() => root.render(null));
+});
+
+test("the current head keeps the dialog's verdict choice and Submit review", async () => {
+  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 48 }, {
+    publishCommand: async () => ({ version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false,
+      verdict: "comment", verdictOverride: null, answers: {} }, body: "Draft", inlineCount: 0, questions: [],
+      overlayAvailable: false, canSubmit: true, digest: "e".repeat(64) }),
+  });
+  await click("View review result");
+  await click("Publish to GitHub");
+  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  expect(dialog.querySelector(".review-publish-head-moved")).toBeNull();
+  expect([...dialog.querySelectorAll<HTMLInputElement>("input")].some(node => node.matches(":disabled"))).toBe(false);
+  expect(btn("Submit review").disabled).toBe(false);
+  expect([...dialog.querySelectorAll("button")].some(node => /^(Publish as is|Update review)/.test(node.textContent ?? ""))).toBe(false);
   await click("Close");
 });
 

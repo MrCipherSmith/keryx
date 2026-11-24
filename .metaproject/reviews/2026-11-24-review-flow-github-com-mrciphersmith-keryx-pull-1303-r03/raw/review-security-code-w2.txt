@@ -1,0 +1,77 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 2, round 3)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..822192905b3d26eb976d83e5bbd46cee14ca9a6f` (diff mode)
+- Slice read in full: slice-02 (lines 1-1914: `ReviewPanel.dom.test.tsx`, `docs/docs/desktop-app.md`, `desk-publication-types.ts`, `desk-publication.ts`, `desk-run-executor.ts`, `desk-run-service.ts`, `head-move.ts`, `prior-round.ts`, `round-registry.ts`, `update-round.ts`)
+- Supporting reads outside the slice, to settle trust questions: `src/review/round-record.ts` 195-370 (`packageHashesOf`, `completionOf`, `packageFacts`, `previousRoundFacts`), `src/review/prior-round.ts` 725-787 and 905-965 (`weakReasons`, `choosePrevious`, delta assembly), `src/review/desk-run-executor.ts` 324-394 (`regularPackage`, `collectResult`), `src/review/desk-run-executor-recovery.ts` 200-244, `src/review/desk-run-service.ts` 66-91 (`finishExecution`), `src/lib/file-lock.ts` header.
+- Wave 1 (`raw/review-security-code-w1.txt`, slice-01) had no findings; nothing here repeats it.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 0
+
+### TM-04 re-check (prior-round.ts header): can data a PR commits narrow a round?
+No. Checked path by path:
+1. **Partial-round vouch (`partialRoundVouch`, packageTrust lines 335-340, localPackageCandidates 429).** A draft package is admitted only when a `desk-partial` entry in the machine-local registry matches its package id, manifest identity hash, findings.json hash (required non-null) and round.json hash. A PR can only meet that by committing byte-identical content to what Desktop recorded from the user's own run store, which yields the same reviewed head and findings as the genuine round: no gain.
+2. **The weak backstop holds for every partial previous round.** `weakReasons` always adds `not completed (...)` when `completed.ok` is false, so in `findPreviousRound` the unchanged code of merge-base..head is appended to `newHunks` (lines 922-930). The union of delta + unchanged is the whole merge-base..head; a partial previous round can carry prior findings and fix-hunk mapping, never shrink the reviewed scope. This also neutralises a wrong `reviewedHead` (see F-001).
+3. **Mixing PR files into the copied package.** The executor `cp`s the run-store package into `.metaproject/reviews/<reviewId>` of the PR checkout, which merges with any directory the PR committed under that id (the id is public in the round block). Files outside the hash set cannot help: a planted `published.json` or a `research.json` with `scopeReviewed:true` makes the candidate "completed", which leaves the partial path; `registryVouches` excludes `desk-partial`, and the git-log check sees the PR's commit in that directory, so it is untrusted and the round falls back to a full review (fail closed). A planted `research.json` without `scopeReviewed` leaves it partial, hence weak (point 2).
+4. **No escalation from partial to full vouch.** `registryVouches` filters out `desk-partial`; `registryVouchesPackage` (used by `premise-question.ts:193` before re-recording as `decide-premise`) goes through it, so a premise answer on a partial package cannot mint a full-vouch entry. Enumerated every registry consumer (`keryx ctx rg 'readRoundRegistry|registryVouches|partialRoundVouch|recordPartialRound|matchingEntry|compactEntries|appendRoundRegistry' src`, non-test): round-registry.ts, prior-round.ts, desk-run-executor.ts, premise-question.ts. None reads `entries` directly other than through these two filters.
+5. **Who writes `desk-partial`.** Only `recordPartialRound`, called only from the executor hand-on loop, for a run-store package (`prior.runDir`) with `prior.partial` and an array findings.json. Repo identity comes from the checkout's git config (not committed content). A write failure (lock contention included) returns `{error}`, `handOn` is false, and the loop tries the next candidate: fail closed.
+
+### Other T14 surfaces checked
+- **Registry lock (`appendRoundRegistry`).** Append, re-read and compaction all run under `withFileLock(file.lock)` (O_EXCL, nonce, stale recovery); `null` → throw. Callers catch it (`recordFinishedRound`, `recordPartialRound`) and report it. Compaction keeps the newest entry per package id whatever its event, so a later `desk-partial` for the same id could drop an older full vouch; that only costs trust (a full round), never grants it. No finding.
+- **Superseded-round refusal (`newerRoundOf`, desk-publication 846-881).** A superseded attempt is never rendered as the as-is variant and gets a blocking reason; deleted/archived newer rounds still count (fail closed). Earlier-attempt directories come from `store.history(found.key)` of the verified attempt's own key and `store.directory(id)`; only `settings.answers` is read from them, and each answer is checked against the current question ids/option ids. No finding.
+- **As-is publication on a moved head.** The compare call uses an argv array with `key.repo` (regex-checked), `run.headSha` (40-hex checked) and `pr.headRefOid` (40-hex checked); any failed or unknown status fails closed and is not cached. Submit does not read the preview cache file, so `headStatus` is fresh. The write re-verifies GitHub against `{base, currentHead}` with both connections, the digest binds `currentHead`, the verdict is forced to Comment with inline off, and automatic publication refuses a moved head before any further GitHub read and again in `blockedReason`. No finding.
+- **One prior-attempt rule (`update-round.ts`).** Excludes `existing` sources, withdrawn attempts and attempts of the current round; requires `result.reviewed` and `findingsKnown`. Pure selection over the user's own store. No finding.
+
+### Findings
+
+### [F-001] The executor records a `desk-partial` vouch without matching the package to the attempt it came from
+- **Severity**: minor
+- **File**: src/review/desk-run-executor.ts:1090-1095 (slice lines; source ~527-533)
+- **Attack vector**: none reachable. The precondition is a run-store package whose manifest names a revision other than the attempt's; `collectResult` keeps the package even when `matching` is false and `finishExecution` copies `checkedHead` from that manifest into `result.reviewed`, so such an attempt can end `partial` and be a candidate. Even then the partial round is always weak, so the next round still covers all of merge-base..head (`prior-round.ts` 922-930).
+- **Problem**: `usable` checks `target.ref`, the review id shape and regular files, but not `manifest.target.base/head` against the prior attempt's `baseSha/headSha`, before `recordPartialRound` writes a trust record for whatever head the manifest names. The executor is the only writer of that record, and it has the attempt's revision at hand.
+- **Why it matters**: a mismatched package would set the delta range and fix-hunk mapping of the next round from a revision the attempt did not review. Scope is not narrowed, because of the weak rule, so this is hardening only.
+- **Fix**: pass each candidate's `baseSha/headSha` in `previousRunInputs` and require `manifest.target.base === prior.baseSha && manifest.target.head === prior.headSha` for the partial path, before calling `recordPartialRound`.
+
+### Clean Areas
+Injection: gh calls take argv arrays with validated repo/sha; no shell strings, eval or templates added. AuthN/AuthZ/IDOR: publication still binds attempt key (repo, repositoryId, number, viewer) to the request and re-verifies the subject on GitHub with both connections before writing. Input validation: answers validated against question/option ids; request size limits unchanged. Secrets/logging: none added (the preview cache key hashes tokens, as before). Crypto: sha256 only, for identity hashes. Path traversal: run directories derive from store ids; review ids are checked against `^[\w.-]+$` and not `.`/`..`; `regularPackage` rejects symlinks in the source. CSRF/open redirect: not applicable. React: the DOM test file adds tests only.
+
+### Not verified
+- `keryx gdgraph`/`keryx wiki` not consulted (not needed: the slice and the named supporting reads settled each question). No tests run (read-only reviewer).
+- Whether the autonomous run can name a package the PR committed as `summary.package` (`collectResult`) is outside this slice and predates this PR. I did not trace it; the weak backstop above means it does not let a partial round narrow scope.
+- How Bun's `fs.promises.cp` behaves on a symlinked `.metaproject/reviews` or package directory committed by the PR. The same `cp` was already used for the closed/resume paths, so this PR did not introduce it. Not verified.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 3, slice-02 (backend trust logic after T14). TM-04 holds: a desk-partial registry entry admits only byte-identical content Desktop recorded from the user's run store, registryVouches never counts it as a finished round, PR-planted extra files push the candidate onto the untrusted completed path, and a partial previous round is always weak so merge-base..head is reviewed in full. The registry lock, superseded-round refusal, as-is publication and one prior-attempt rule are sound. One minor hardening item: the partial hand-on does not match the package's manifest revision to the attempt's before recording the vouch.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "title": "desk-partial vouch is recorded without matching the package revision to its attempt",
+      "file": "src/review/desk-run-executor.ts",
+      "line": 533,
+      "problem": "The hand-on loop's `usable` check does not compare manifest.target.base/head with the prior attempt's baseSha/headSha before recordPartialRound writes a trust record for whatever head the manifest names. collectResult keeps mismatched packages and result.reviewed is taken from the manifest, so a mismatched partial attempt can be a candidate.",
+      "why_it_matters": "The next round's delta range and fix-hunk mapping would come from a revision the attempt did not review. Scope is not narrowed, because a partial previous round is always weak and the unchanged code is re-planned as new (prior-round.ts 922-930), so this is hardening.",
+      "suggested_fix": "Carry baseSha/headSha per candidate in previousRunInputs and require manifest.target.base === prior.baseSha && manifest.target.head === prior.headSha on the partial path before recordPartialRound."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": [ { "id": "slice-02", "coverage": "read in full (lines 1-1914)", "status": "DONE" } ],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Out of slice, predates this PR: confirm collectResult cannot be pointed at a PR-committed package via summary.package, and how cp behaves on a symlinked .metaproject/reviews committed by the PR."
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice plus targeted reads settled every trust question); wiki_used: no (not-relevant: the TM-04 contract is stated in the prior-round.ts and round-registry.ts headers under review); ctx_used: yes (`keryx ctx rg` for registry consumers, package hand-on sites and `reviewed:` writers; `keryx ctx read` for file-lock.ts); raw_rg_used: no.

@@ -1,0 +1,131 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 2, code mode only: no render was supplied, so every visual and live check was judged statically. All three round-1 minors are fixed at head 412258583. UX-001: desk-publication.ts now gives the as-is variant its own blocked reason. UX-002: the notice explains the inline lock, and both fieldsets point aria-describedby at it. UX-003: the notice is an inline-banner tone-warn. Round-1 info UX-004 is resolved by T13: \"Update review to <sha>\" is wired and is the primary button. New surface since round 1 is the T13 Update review action and the carried finding answers. No blocker, major or minor findings. Five info observations: (1) the primary button sits leftmost, before Close; (2) Update review can silently do nothing when the current head already has an attempt; (3) Update starts a token-spending run with one click, a recorded owner decision raised as a question; (4) carried answers look the same as fresh ones; (5) the user docs do not mention Update review. Slop score 0. Round-1 UX-005 (recommended verdict hidden in the as-is variant) is unchanged and was not re-filed.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "UX-101",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={writing}",
+      "problem": "In the head-moved dialog the primary action, \"Update review to <sha>\", renders first in the footer, left of Close. The other actions follow it: Close, Skip publication, Save locally, then the now-secondary \"Publish as is for <sha>\" in the slot where Submit review normally sits. When the head has not moved, the same dialog puts its primary last.",
+      "impact": "Nielsen #4 (consistency): the emphasized action moves between the two states of one dialog, and the old primary's position now holds a different, secondary action. Desktop dialogs are themselves mixed: ReviewLaunchDialog puts Apply last, while ReviewRunDialog puts Open in Sessions before Close. So this is polish, not a rule breach. Not measured on a render.",
+      "suggested_fix": "Keep one primary slot. Render Update review last, where Submit review is in the current-head state, and move Publish as is just before it. Or keep the order and add a visual gap after the primary so it does not read as part of the Close group.",
+      "evidence": "Footer JSX order in ReviewPublishDialog.tsx: the Update button, then the `Close` button, then the `!posted` group ending with the publish button. The DOM test pins the order: `expect(dialog.querySelector(\".review-publish-footer button\")?.textContent).toBe(\"Update review to ccccccc\")`. ReviewLaunchDialog footer: Cancel, then btn-primary Apply. ReviewRunDialog footer: btn-primary Open in Sessions, then Close.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-102",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "if (!boardBehind && action.open) return;",
+      "problem": "Suppose the user opens the publish dialog of an earlier attempt from History and presses \"Update review to <sha>\", and the current head already has an attempt. The dialog closes, no run starts, and the panel switches to the existing attempt. Nothing tells the user that a review of that head already exists, or that their click was turned into navigation.",
+      "impact": "Nielsen #1 (visibility of system status): the button promised to start an update, but the user sees a different attempt with no explanation, and may press again or assume the start failed. The outcome itself, showing the existing review of the head, is reasonable.",
+      "suggested_fix": "When the start is skipped, say so. For example, show a toast or a status line in the panel: \"<sha> already has a review; showing it.\" Or relabel the dialog action to \"Open the review of <sha>\" when such an attempt is known.",
+      "evidence": "updateReview in ReviewWorkspace.tsx returns before `local.request({ kind: \"start\", ... })` when `!boardBehind && action.open`. It sets no message, and the toast hook is available in the component (`const toast = useToast()`). The DOM test \"Update review from an earlier attempt does not start a second attempt when the current head already has one\" asserts no start, the dialog closed and the earlier attempt's article gone. It asserts no message.",
+      "confidence": "high"
+    },
+    {
+      "id": "UX-103",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "publication": "question",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "void local.request({ kind: \"start\", ...revision, ...(reviewed.options && { options: reviewed.options }) })",
+      "problem": "Update review starts a full review run (models, parallelism, tokens) on one click, reusing the earlier attempt's options. Every other start path in this component opens the launch form when models are configured (`if (reviewModels) setLaunchCard(card)`). The dialog button does not say that it starts a run, or with which settings.",
+      "impact": "Nielsen #5 (error prevention) and #3 (control): a costly action has no preview of its settings. The run can be stopped (Stop review), so it is recoverable. This was a deliberate decision listed for the owner (journal T13 needs_operator (1)), so it is an exemption and only raised as a question.",
+      "suggested_fix": "If the owner keeps the one-click start, make the cost visible on the button or in the notice. For example: \"Update review to <sha> (starts a new round with the same settings)\".",
+      "evidence": "ReviewWorkspace.tsx `start` opens `setLaunchCard(card)` when `reviewModels` is set, while `updateReview` calls `local.request({ kind: \"start\" ... })` directly. Journal: \"Update starts directly with the previous options instead of opening the launch form\".",
+      "confidence": "high"
+    },
+    {
+      "id": "UX-104",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "<input type=\"radio\" name={answerName} value={choice.id} checked={settings.answers[question.id] === choice.id}",
+      "problem": "Keep/Dismiss answers carried from an earlier round's draft (AC10) arrive as already-checked radios. They also lower the \"N unanswered\" count. Nothing in the question block marks them as carried over from the previous round, so they look like answers the user gave to this round's findings.",
+      "impact": "Nielsen #1 and #6: a user can reach Submit without revisiting carried answers. A finding with the same id may have new evidence in the update round. Unverified: whether the finding text can change under the same id was not checked.",
+      "suggested_fix": "Expose a carried flag per answer in PublicationState and render a small \"From round N\" note next to a carried choice. Or show one line above the questions: \"N answers were carried over from the previous round.\"",
+      "evidence": "desk-publication.ts `earlierAnswers` returns only the answer map (\"never its other settings\"). PublicationState carries no per-answer provenance, and the dialog renders the answer radios only from `settings.answers`.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-105",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "docs/docs/desktop-app.md",
+      "line": null,
+      "quote": "commits and offers **Publish as is for** the reviewed commit instead. That",
+      "problem": "The user docs describe the head-moved dialog as offering only \"Publish as is for\". They do not mention \"Update review to <sha>\", which is now the primary action there. They also do not say that the new round carries the earlier Keep/Dismiss answers.",
+      "impact": "Nielsen #10 (help and documentation): the docs point the reader at the secondary action.",
+      "suggested_fix": "Add one sentence. For example: \"The dialog also offers **Update review to** the new head commit, which starts the next round of the same review with the same settings and keeps your Keep/Dismiss answers for findings it finds again.\"",
+      "evidence": "The docs/docs/desktop-app.md hunk in slice-01 contains no \"Update review\" text.",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 5 },
+  "inputs_unreadable": []
+}
+```
+
+## Summary (review-ui-ux, wave 1, round 2, slice-01 read in full)
+
+**Verdict:** DONE. No blocker, major or minor findings; 5 info.
+
+**Context:** Keryx Desktop, an app screen: the Publish to GitHub dialog and the Review panel. The audience is the operator publishing a local review. Primary task: when the PR moved past the reviewed commit, either publish the old review as is or start an update round, knowing which one each button does. Mode: code only. No URL or screenshots were supplied, so nothing was rendered and every judgment is static.
+
+**Round-1 fixes (checked at head 412258583):**
+- UX-001 holds. desk-publication.ts now has an as-is-specific blocked reason: "Enable General comment. Inline comments are not available when publishing for an earlier commit."
+- UX-002 holds. The notice now says the verdict is Comment only and that inline comments cannot be placed on an earlier commit. Both fieldsets carry `aria-describedby` pointing at the notice id, and a DOM test pins it.
+- UX-003 holds. The notice is `inline-banner tone-warn` with `role="status"`.
+- UX-004 (info) is resolved. Update review is wired through ReviewRuns and ReviewWorkspace and is `btn-primary`, while Publish as is is demoted to `btn`.
+- UX-005 (info, the recommended verdict is hidden while the verdict is forced to Comment) is unchanged. It is not re-filed.
+
+**Scores:**
+- Slop score 0 (T1 0 / T2 0 / T3 0). This is an app screen and the change adds no new visual treatment.
+- WCAG 2.2 AA floor: no code-level failure found. Contrast, focus and target size were not measured.
+- Viewports: not run.
+
+**Top 3 changes**
+1. Tell the user when Update review opens an existing attempt instead of starting one (UX-102).
+2. Mark answers carried from the previous round (UX-104).
+3. Keep the primary action in one footer slot across the dialog's states (UX-101).
+
+**What works (keep):**
+- Both commits are named in a warning banner whose text explains each locked control.
+- The short SHA appears in both action labels.
+- Exactly one primary button in each state.
+- The update closes the dialog and shows the new attempt in the same panel.
+- A board that has not seen the push is refreshed.
+- The current-head dialog is unchanged, and a test pins that.
+
+**Checks not run:**
+- No live render, so none of these ran:
+  - the 1440/768/390 viewports;
+  - light and dark modes;
+  - computed contrast of the tone-warn banner and `<code>` inside the buttons;
+  - focus order, and where focus lands after the dialog closes on Update review (the new attempt or the panel);
+  - the screen-reader announcement of a `role="status"` banner present at mount;
+  - footer target sizes;
+  - the visual weight of the leftmost primary.
+- A render that would close the gap: screenshots or a URL of the publish dialog in the head-moved state, before and after pressing Update review, at 1440 and 390 in both themes.
+- Not checked: whether a failed start after Update review surfaces in the panel. useReviewRuns sets `actionError` for a failed start, but its rendering in ReviewWorkspace was not traced.
+- Tests were not run (read-only lens). The brief's evidence reports Desktop `src/review src/reviews` with 142 passing.
+
+**Routing audit:** metaproject: index.md read.
+- graph_used: no. Not relevant: the payload's `layers` supplied the changed and affected files.
+- wiki_used: no. Not relevant: the flow docs and the AC were in the slice.
+- ctx_used: yes (`keryx ctx read`, `keryx ctx rg`).
+- raw_rg_used: no.

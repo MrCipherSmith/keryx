@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1303,
+  "headSha": "822192905b3d26eb976d83e5bbd46cee14ca9a6f",
+  "collectedAt": "2026-11-24T09:55:33.266Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "Desktop Review v2 stage 3: publish as is (D1), update round of the same Review, on_head_move (D2)",
+    "body": "Stage 3 of Desktop Review v2, flow 520 (`.metaproject/flows/520-2026-11-24-desktop-review-v2-stage3`). Requirements are in `docs/requirements/keryx-desktop-review-v2/`: implementation plan v0.1.3 stage 3, owner decisions D1 and D2, and the spec sections \"Поведение при смене head\" and \"Раунд обновления\".\n\n## Stacked on stage 2: merge stage 2 first\n\nThis branch is rebased onto `feat/desktop-review-v2-stage2` at `98bec5904` (flow 519). That point contains the Review/round/attempt store, `keryx review reviews` and the Reviews tab. Stage 2 has no PR yet, so this PR targets `main` and its diff also shows the stage 2 commits.\n\nThe stage 3 commits are the ones after `98bec5904`. To review only stage 3, use `git diff 98bec5904..feat/desktop-review-v2-stage3`.\n\nStage 2 is still changing its T8 (the PR-board indicator, the \"New review round\" label, F-024). If stage 2 is rebased or force-pushed, this branch gets rebased again.\n\n**Overlap with stage 1** (Draft MrCipherSmith/keryx#1300, which changes the board, the Issues tab, and card links in `ReviewBoard.tsx` and `model.ts`): this PR does not touch `ReviewBoard.tsx`, `model.ts`, `ReviewResults.tsx`, `board-badges.ts`, `desk-run-store.ts` or `review.css`.\n\n## What changes\n\n1. **Publish as is after the head moved (D1).** This applies when the PR is open on the reviewed base, the head is newer, and GitHub's compare API reports the reviewed commit as an ancestor of the head (`ahead`).\n   - `desk-publish` returns `headMoved` and forces verdict `comment` with inline comments off.\n   - The body starts with \"Reviewed commit `<sha>`. The pull request has moved to `<sha>` since; this review does not cover the newer commits.\"\n   - The review posts with `commit_id` set to the reviewed head.\n   - Another push makes the preview stale. Before the write, the head shown in the preview is checked again.\n   - These cases keep today's refusal: a rewritten history (diverged or behind), a failed compare, a changed base, or a closed PR.\n   - Automatic publication refuses a moved head right after reading the PR, before any compare or discussion read.\n   - The dialog shows a warning that names both commits and explains why the controls are locked.\n2. **Update the review (item 3).** In the head-moved dialog, the primary action is \"Update review to `<sha>`\". It starts an attempt on the current head with the reviewed attempt's options. Stage 2's store makes that attempt round N+1 of the same Review.\n   - **Builds on the previous round.** One rule chooses the previous attempt: `selectPriorAttempt`, over the earlier rounds of the same Review. It replaces the old rule (completed, complete coverage, same settings). A partial previous round or one with other settings now feeds the next round in `delta` mode with its findings attached.\n   - **Partial previous round.** It is accepted only through a `desk-partial` record in the machine-local round registry. Only Desktop's executor writes that record, when it hands on a package from the user's own run store. Packages a PR can commit gain no trust. Everything a partial round did not prove it covered is reviewed as new code.\n   - **Answers carry over.** Keep and dismiss answers from the previous round's draft are pre-selected in the new round's draft, matched by finding id. The new round's own draft always wins.\n3. **`on_head_move` (D2).** New `src/review/head-move.ts`: `ask | follow | ignore`, defaulting to `ask` for a manual review and `follow` for a rule-run review. `parseOnHeadMove` reads a missing or unknown stored value as the default, and `headMoveResponse` encodes the spec table.\n4. **Tests for the previous-round rules** cover a partial previous round and changed settings, in the `prior-round`, `desk-run-service`, `desk-run-executor` and `update-round` tests.\n\n`docs/docs/desktop-app.md` describes publishing as is.\n\n## Decisions taken in the flow (please check)\n\n- \"Update review\" starts the attempt directly with the previous attempt's options; it does not open the launch form. The user stays in the Reviews panel.\n- If the board has not seen the push yet, it is refreshed. If the current head already has an attempt, nothing new starts.\n- With a moved head, Save locally stores the forced settings (`comment`, no inline).\n- A failed compare refuses the as-is variant: it fails closed.\n- A retry on the same range builds only on earlier rounds, not on another attempt of its own round. Within a round, a complete attempt is preferred over a later partial one. If the chosen attempt cannot be handed on, the next usable one is used.\n- \"Update review\" does not carry automatic publication into the new round. It is disabled while another action of the review is running.\n  - If the current head already has an attempt of any state, that attempt is shown instead of starting a second one, with a toast: \"Commit <sha> already has a review attempt\".\n  - A review dialog opened from Sessions offers no \"Update review\".\n- A superseded round (a newer round of the same Review exists, in any state) no longer offers publish as is: \"Round N of this review is newer. Publish from that round.\"\n- Every round-registry write now takes a file lock. If the lock cannot be taken within 15 seconds, the entry is skipped, and the next round falls back to a fuller review; no trust is ever granted wrongly.\n\n## Review\n\n- **Round 1:** review-orchestrator on PR head `9e871b17f`, 12 reviewers. It found 0 blockers, 1 major and 11 minors.\n  - The major: the as-is variant was offered after a force-push.\n  - Every finding was fixed in T11 or recorded as a stage 3 T8 obligation, except one minor: two different rules for choosing the previous attempt. T12 merged them into one.\n- **Round 2:** head `412258583`, range `98bec5904..head`, 11 reviewers across 2 slices (20 dispatches). It found 0 blockers and 2 majors:\n  - The previous-round choice had no fallback, so an update round could silently become a first review.\n  - Registry compaction had no lock. This was pre-existing; this PR added a second writer.\n\n  It also found about 20 minors. All were fixed in T14 (backend) and T15 (Desktop) with red-to-green or mutation evidence.\n- **Round 3** has not been run yet. It would verify T14 and T15.\n\n## Verification\n\n- `bun test` passes for the review suites listed in the flow's acceptance criteria.\n- The Desktop `src/review` and `src/reviews` suites pass, and root and Desktop `tsc` are clean.\n- `eslint` passes on `src/review`.\n- The Desktop `.tsx` files are excluded from the root ESLint config, so they are not linted.\n\n## Not verified\n\n- No scenario was run on a real pull request (AC9). That includes a commit pushed during a round, then publishing as is or updating from Desktop. Coverage is unit and DOM tests only.\n- The GitHub compare call and the 422 behaviour were exercised only through fixtures.\n- `runDeskWorker` was not run end to end, and no live Desktop update round was run.\n- The Desktop Rust side (`review_publish` passes JSON through; there is no Rust change in stage 3) is verified only in CI. There is no local Rust toolchain.\n- Not in this PR (plan stage 3 and spec items outside this flow's scope):\n  - checking the head at the wave boundary in the executor;\n  - acting on `on_head_move` while a round runs (the `follow` auto-queue, the `ask` notice);\n  - watcher `push` events updating a Review;\n  - writing a per-source `on_head_move` default into `reviews` (the column currently defaults to `ask` for every Review).\n"
+  },
+  "ci": {
+    "state": "pending",
+    "checks": [
+      {
+        "name": "client matrix (streaming)",
+        "state": "pending"
+      },
+      {
+        "name": "standard-pr",
+        "state": "pending"
+      },
+      {
+        "name": "Core tests (3/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "AC8 remaining tests",
+        "state": "pending"
+      },
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "Core tests (2/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "pending"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "pending"
+      },
+      {
+        "name": "team-hub-distribution",
+        "state": "pending"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "pending"
+      },
+      {
+        "name": "Core tests (4/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "Core tests (1/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "pending"
+      },
+      {
+        "name": "Desktop Metaproject graph and wiki acceptance",
+        "state": "pending"
+      },
+      {
+        "name": "Issues board, Projects and session-to-Flow acceptance",
+        "state": "pending"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "pending"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "pending"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "pending"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "pending"
+      },
+      {
+        "name": "Lint and typecheck",
+        "state": "pending"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "pending"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "pending"
+      },
+      {
+        "name": "desktop check",
+        "state": "pending"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

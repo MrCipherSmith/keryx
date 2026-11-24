@@ -1,0 +1,135 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Code-mode review of the head-moved publish dialog (ReviewPublishDialog.tsx) and the server copy it shows (desk-publication.ts). No render was supplied, so no live checks ran. The user can tell they are publishing for an older commit: the primary button reads \"Publish as is for <short sha>\", a status line names both commits, and the preview body's first line names the reviewed commit. Three minor findings and three info findings. (1) With General comment off, the blocked reason tells the user to select inline comments, which this variant disables. (2) The disabled verdict and Inline controls have no explanation attached to them, and the status line never says why inline comments are off. (3) The most important notice in the dialog uses muted text, while the codebase uses a tone-warn banner for the same kind of range-mismatch notice. Info: \"Update review to\" is secondary and has no caller; the forced Comment hides the recommended verdict; a second push shows only a generic stale message. Slop score 0 (app screen, no new visual tells).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": ": !settings.general && !comments.length ? \"Enable General comment or select inline comments that are on the diff.\" : undefined;",
+      "problem": "In the head-moved (as-is) variant the server forces inline off and the dialog disables the Inline comments checkbox. General comment stays toggleable (a decision recorded in the PR). If the user unchecks it, this blocked reason appears in the dialog. Half of its remedy, \"select inline comments\", is an action the dialog has disabled.",
+      "impact": "Nielsen #9 (error recovery): the user is told to fix the block with a control they cannot use, and may think the dialog is broken. Recovery is still possible by re-checking General comment.",
+      "suggested_fix": "Branch the message on headMoved, e.g. `headMoved && !settings.general ? \"Publishing as is needs the General comment. Turn it back on.\"`. Or keep General comment locked on in the as-is variant, as the verdict and Inline already are.",
+      "evidence": "desk-publication.ts: the headMoved settings set `inline: false`, so `comments` stays empty. ReviewPublishDialog.tsx disables Inline with `disabled={!!headMoved}`, while General comment has no such guard (the DOM test asserts `input(\"General comment\").matches(\":disabled\")).toBe(false)`). Trigger: head moved, General comment unchecked. Outcome: the misleading remedy. Of the other inline-related blocked reasons, the unavailable-diff message is unreachable here because inline is false.",
+      "confidence": "high"
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "<label><input type=\"checkbox\" checked={settings.inline} disabled={!!headMoved}",
+      "problem": "In the head-moved state, all five verdict radios and the Inline comments checkbox are disabled. No hint is attached to them: no aria-describedby and no note next to the fieldset. The status line above says \"Publishing as is posts a Comment for the reviewed commit only\", which covers the verdict lock but never says that inline comments are off, or why.",
+      "impact": "Nielsen #1 and #10. A user who had saved Inline comments or a Request changes verdict finds both greyed out with no stated reason. Disabled inputs leave the tab order, so a keyboard or screen-reader user cannot find out why from the controls themselves.",
+      "suggested_fix": "Extend the status line, e.g. \"... posts a Comment for the reviewed commit only, without inline comments, because line positions on the new commits do not match it.\" Give the status paragraph an id and point aria-describedby at it from both fieldsets. Or put a one-line <small> under Inline comments: \"Off when publishing as is.\"",
+      "evidence": "ReviewPublishDialog.tsx: `disabled={!!headMoved}` on the Inline checkbox, the \"recommended\" radio and each verdict radio. The status copy is \"Publishing as is posts a Comment for the reviewed commit only.\" with no mention of inline comments. No aria-describedby in the file.",
+      "confidence": "high"
+    },
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "{headMoved && <p className=\"review-detail-muted review-publish-head-moved\" role=\"status\">",
+      "problem": "The notice that the draft will post for an older commit is the most consequential message in this state. It renders with `review-detail-muted` (`color: var(--fg-muted)`), the same treatment as \"Last saved locally\" and the blocked reason, and it gets no style of its own (`review-publish-head-moved` has no CSS rule). The codebase already uses a warning banner for the same kind of notice: ReviewRuns.tsx shows \"The recorded review covers a different range from the request.\" as `inline-banner tone-warn`.",
+      "impact": "Inconsistent tokens and hierarchy (rated by the ui-anti-slop row for T2 tells, hierarchy competition and inconsistent tokens): the reason for the locked controls and the changed button label reads as secondary metadata. Visual weight was not measured on a render.",
+      "suggested_fix": "Render the notice as `<div className=\"inline-banner tone-warn\" role=\"status\">`, matching the existing range-mismatch banner, and keep the copy.",
+      "evidence": "Token pair: `.review-detail-muted { color: var(--fg-muted); }` (apps/desktop/src/review/ReviewDetail.css) against the existing `inline-banner tone-warn` range-mismatch notice in apps/desktop/src/review/ReviewRuns.tsx. A *.css search for `review-publish-head-moved` under apps/desktop/src returned no rule. Not measured on a render.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-004",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "publication": "question",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "{headMoved && onUpdateReview && !posted && <button type=\"button\" className=\"btn\" disabled={writing}",
+      "problem": "The spec (\"Перед публикацией\") calls \"Update review to <sha>\" the primary action. The dialog renders it as a secondary `btn`, leftmost and next to Close, while the primary styling stays on \"Publish as is\". No caller passes onUpdateReview yet: the only production call site is ReviewRuns.tsx, which passes cwd, target, id, command, onAccessLost, onDecision and onClose. So today the dialog offers no route to an up-to-date review and gives no hint that one exists.",
+      "impact": "Until item 3 lands, the only forward action is publishing the outdated review. The user is not told that a new review on the current head is the alternative. When item 3 is wired, the recommended action will look secondary unless the placement is revisited (the PR lists this as provisional).",
+      "suggested_fix": "When onUpdateReview is wired, give \"Update review to\" `btn-primary` and demote \"Publish as is\" to `btn`. Until then, consider one sentence in the status line pointing to the alternative (for example, run a new review on the current head from the card).",
+      "evidence": "A keryx ctx rg search for `onUpdateReview|<ReviewPublishDialog` in apps/desktop/src found one production call site (apps/desktop/src/review/ReviewRuns.tsx) without onUpdateReview. Only the DOM test passes it.",
+      "confidence": "high"
+    },
+    {
+      "id": "UX-005",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "<span>Use recommendation{settings.verdictOverride == null && <>",
+      "problem": "The server forces `verdictOverride: \"comment\"` for the as-is variant, so the \"<verdict> recommended\" sub-line under Use recommendation is never rendered. The user publishing a Comment for the old commit can no longer see that the review recommended, say, Request changes.",
+      "impact": "Information the user needs in order to choose between publishing as is and updating the review is hidden. This is an observation; no failure path is demonstrated.",
+      "suggested_fix": "In the head-moved state, keep showing the recommendation as text, e.g. \"Recommended: Request changes. Publishing as is posts a Comment.\"",
+      "evidence": "desk-publication.ts headMoved settings: `verdict: \"comment\", verdictOverride: \"comment\"`. The dialog renders the recommended sub-line only when `settings.verdictOverride == null`.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-006",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "if (request.kind === \"submit\" && request.digest !== state.digest) throw new Error(\"stale: The review preview changed. Refresh it before submitting.\");",
+      "problem": "In the as-is variant, a further push now invalidates the preview through the digest. The user then sees only the generic \"The review preview changed\" message, which does not say that the pull request moved again. Whether the `stale:` prefix itself reaches the user was not checked; errMessage passes the message through unchanged.",
+      "impact": "Minor confusion in a newly reachable path. The fix (Refresh preview) is available, and the status line shows the new head after a refresh.",
+      "suggested_fix": "When headMoved is set and the current head differs from the previewed one, say \"The pull request moved again. Refresh the preview to see the new head.\"",
+      "evidence": "The new digest includes `headMoved.currentHead`. desk-publication.test.ts asserts `rejects.toThrow(/^stale:/)` after `setHead(\"d\".repeat(40))`.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 3 },
+  "inputs_unreadable": []
+}
+```
+
+## Summary (review-ui-ux, round 1, slice-01 read in full)
+
+**Verdict:** DONE. No blocker or major findings. 3 minor, 3 info.
+
+**Context:** Keryx Desktop, an app screen (the Publish to GitHub dialog). Audience: the operator publishing a local review. Primary task: knowingly publish, save or skip the review of a commit the PR has since moved past. Mode: code only (no URL or screenshots supplied).
+
+**Does the user understand they publish a Comment for an older commit?** Mostly yes. Three cues agree:
+- the primary button reads "Publish as is for `bbbbbbb`";
+- a status line names both commits and says "posts a Comment for the reviewed commit only";
+- the preview's first body line names the full reviewed SHA.
+
+The gaps are weight and explanation: the notice is muted text (UX-003), the disabled controls say nothing about why (UX-002), and one blocked reason points to a disabled control (UX-001).
+
+**Scores:** Slop score 0 (T1 0 / T2 0 / T3 0). No new visual surface, only copy and disabled states. WCAG 2.2 AA floor: no code-level failure found. Contrast and focus were not measured. Viewports: not run.
+
+**Top 3 changes**
+1. Branch the General-comment blocked reason for the as-is variant (UX-001).
+2. Say in the status line that inline comments are off and why, and tie it to the fieldsets with aria-describedby (UX-002).
+3. Render the head-moved notice as `inline-banner tone-warn`, like the existing range-mismatch notice (UX-003).
+
+**What works (keep):**
+- The SHA in the button label.
+- Full SHAs in the preview body and the code `title`.
+- The verdict shown locked to "Comment only" (checked, not hidden).
+- The current-head dialog is unchanged, and a DOM test pins that.
+- `role="status"` on the notice.
+
+**Checks not run:**
+- No live render (no URL or screenshots supplied; this reviewer starts no server), so none of these ran:
+  - 1440/768/390 viewports;
+  - light and dark modes;
+  - computed contrast of `--fg-muted` on the dialog surface;
+  - focus order and focus-visible;
+  - the screen-reader announcement of the status region;
+  - the target size of the footer buttons.
+- A URL or screenshots of the publish dialog in the head-moved state (with and without questions, General comment off) would close this gap.
+- Not checked: whether Tauri passes the `stale:` / `configuration:` prefixes through to the alert text.
+- Test evidence (verify-tests-to-run-1/2) shows one unrelated worker test failing in -1 and passing alone in -2. Not UI.
+
+**Routing audit:** graph_used: no (not-relevant: the payload supplied the layers and affected set). wiki_used: no (not-relevant: the spec was read directly). ctx_used: yes (`keryx ctx rg`, `keryx ctx read`). raw_rg_used: no. metaproject: index.md read.

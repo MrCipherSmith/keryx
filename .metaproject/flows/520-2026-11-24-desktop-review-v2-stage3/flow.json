@@ -1,0 +1,707 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "520",
+  "slug": "desktop-review-v2-stage3",
+  "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
+  "status": "in-progress",
+  "createdAt": "2026-11-24T07:28:08.299Z",
+  "updatedAt": "2026-11-24T13:00:43.745Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:bdd2e053f2d34f9f6a6684b9b9b61161b56966424867a2ef9f8441ed7580a8ff",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T5",
+      "title": "D1: publish as is for the reviewed commit (server + dialog + tests)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:29:54.815Z",
+            "outcome": "started",
+            "detail": "520-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "D2: on_head_move type, defaults and parse (head-move.ts + tests)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:29:54.994Z",
+            "outcome": "started",
+            "detail": "520-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:29:55.173Z",
+            "outcome": "started",
+            "detail": "520-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented by T12 (backend: prior selection, partial prior, trust vouch) and T13 (Update review, answers by finding id) after stage 2 landed; findingsKnown-undefined alignment and on_head_move default resolution remain info-level follow-ups recorded in journal"
+    },
+    {
+      "id": "T9",
+      "title": "Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Backend review suites (5499/5501; the 2 failures are timing tests in untouched files, one inherited from stage 2), Desktop review suites 150/150, root and Desktop tsc clean, eslint clean on src/review; CI green on heads 9e871b17f and 412258583"
+    },
+    {
+      "id": "T10",
+      "title": "review-orchestrator round on the branch",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Three review-orchestrator rounds on PR #1303 (packages ...-pull-1303, -r02, -r03); every blocker/major/minor fixed in T11, T14-T17; infos recorded in raw/"
+    },
+    {
+      "id": "T11",
+      "title": "Fix round 1: review findings of round 1 on PR #1303",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:16:58.249Z",
+            "outcome": "started",
+            "detail": "520-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:28:37.754Z",
+            "outcome": "started",
+            "detail": "520-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Item 3 Desktop: Update review action and finding answers carried by id",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:28:38.153Z",
+            "outcome": "started",
+            "detail": "520-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T09:24:31.665Z",
+            "outcome": "started",
+            "detail": "520-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T09:24:31.922Z",
+            "outcome": "started",
+            "detail": "520-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T10:08:12.238Z",
+            "outcome": "started",
+            "detail": "520-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 3 Desktop: focus after Update, existing attempt on a behind board, toasts pinned, Update disabled while preview stale, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T10:08:12.424Z",
+            "outcome": "started",
+            "detail": "520-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commit 0e0520295; file-lock.reclaim.test.ts red before (1 fail) and green after (4/4); all 13 withFileLock caller test files pass; CI on 0e0520295 pending"
+    },
+    {
+      "id": "T19",
+      "title": "Rebase onto stage 2 b38e33ce8 (main 666d71468) with the lock fix ported onto main's file-lock.ts; AC8 base and lint paths re-pointed",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "rebased 24 commits, 3 conflicts (ReviewWorkspace, desk-run-store.test, file-lock); backend 5547/0, Desktop 252/0, parity 6/0, lock tests green, tsc and eslint clean"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-24T07:28:08.299Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-24T07:29:19.786Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-24T07:29:20.005Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-24T07:29:20.287Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T07:29:20.486Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-24T07:29:20.700Z",
+      "event": "task-added",
+      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
+    },
+    {
+      "at": "2026-11-24T07:29:21.040Z",
+      "event": "task-added",
+      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
+    },
+    {
+      "at": "2026-11-24T07:29:21.291Z",
+      "event": "task-added",
+      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
+    },
+    {
+      "at": "2026-11-24T07:29:21.529Z",
+      "event": "task-added",
+      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
+    },
+    {
+      "at": "2026-11-24T07:29:21.726Z",
+      "event": "task-added",
+      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
+    },
+    {
+      "at": "2026-11-24T07:29:21.953Z",
+      "event": "task-added",
+      "detail": "T10: review-orchestrator round on the branch"
+    },
+    {
+      "at": "2026-11-24T07:29:43.882Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-24T07:29:44.073Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-24T07:29:54.815Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 520-T5"
+    },
+    {
+      "at": "2026-11-24T07:29:54.994Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 520-T6"
+    },
+    {
+      "at": "2026-11-24T07:29:55.173Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 520-T7"
+    },
+    {
+      "at": "2026-11-24T07:32:02.125Z",
+      "event": "task-done",
+      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
+    },
+    {
+      "at": "2026-11-24T07:35:54.838Z",
+      "event": "task-done",
+      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
+    },
+    {
+      "at": "2026-11-24T07:54:35.165Z",
+      "event": "task-done",
+      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
+    },
+    {
+      "at": "2026-11-24T08:16:57.645Z",
+      "event": "task-added",
+      "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
+    },
+    {
+      "at": "2026-11-24T08:16:58.249Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 520-T11"
+    },
+    {
+      "at": "2026-11-24T08:26:00.635Z",
+      "event": "task-done",
+      "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
+    },
+    {
+      "at": "2026-11-24T08:28:08.753Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"\"Review again\" on a card with an outdated review starts an update round of the same Review on the current head, with the previous round's findings attached. [verify: none — blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented]\" -> \"A new attempt on a newer head of the same Review (stage 2 round N+1, started by \"Review again\" / \"New review round\" or \"Update review\") builds on the previous round: after a partial previous round with accepted findings it runs in mode delta with a non-empty prior-findings list and the area the partial round did not cover planned as unreviewed; after a previous round run with different settings it still gets the previous findings; the previous-attempt rule exists once (selectPriorAttempt), the old options-key rule is gone. [verify: exec `bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts`]\" (Stage 2 rounds landed (origin/feat/desktop-review-v2-stage2 98bec5904); item 3 is now implementable, so AC7 gets its real criterion and test command.)"
+    },
+    {
+      "at": "2026-11-24T08:28:09.050Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"(new)\" -> \"In the publish dialog with a moved head, \"Update review to <sha>\" starts a new round of the same Review on the current head; the keep/dismiss answers given in the previous round's draft are pre-selected in the new round's publication draft for findings with the same finding id. [verify: exec `sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'`]\" (Spec 'Перед публикацией' and acceptance criterion 7: update action in the dialog and answers carried by finding id; implementable now that stage 2 rounds exist.)"
+    },
+    {
+      "at": "2026-11-24T08:28:26.551Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests, the Desktop review suite, typecheck and lint pass on the branch; the attention-set code, `attachBadges`/`localBadge` and the toolbar container queries are unchanged by this flow. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" (Branch rebased onto stage 2 (98bec5904), which legitimately changes these files; the invariant now compares with the stage 2 tip, and covers the new src/reviews suite.)"
+    },
+    {
+      "at": "2026-11-24T08:28:36.136Z",
+      "event": "task-added",
+      "detail": "T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)"
+    },
+    {
+      "at": "2026-11-24T08:28:36.364Z",
+      "event": "task-added",
+      "detail": "T13: Item 3 Desktop: Update review action and finding answers carried by id"
+    },
+    {
+      "at": "2026-11-24T08:28:37.754Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 520-T12"
+    },
+    {
+      "at": "2026-11-24T08:28:38.153Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 520-T13"
+    },
+    {
+      "at": "2026-11-24T08:38:11.386Z",
+      "event": "task-done",
+      "detail": "T13: Item 3 Desktop: Update review action and finding answers carried by id"
+    },
+    {
+      "at": "2026-11-24T08:46:48.935Z",
+      "event": "task-done",
+      "detail": "T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)"
+    },
+    {
+      "at": "2026-11-24T08:46:49.192Z",
+      "event": "task-done",
+      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
+    },
+    {
+      "at": "2026-11-24T09:17:24.760Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]\" -> \"The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the as-is action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`]\" (Stage 2 renamed ReviewRuns.dom.test.tsx to src/reviews/ReviewPanel.dom.test.tsx; the verify command follows the file (round 2 logic F-001). The as-is action is no longer always the primary one since T13 made Update review primary when offered.)"
+    },
+    {
+      "at": "2026-11-24T09:24:30.152Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
+    },
+    {
+      "at": "2026-11-24T09:24:30.407Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs"
+    },
+    {
+      "at": "2026-11-24T09:24:31.665Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 520-T14"
+    },
+    {
+      "at": "2026-11-24T09:24:31.922Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 520-T15"
+    },
+    {
+      "at": "2026-11-24T09:32:22.490Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs"
+    },
+    {
+      "at": "2026-11-24T09:51:12.372Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
+    },
+    {
+      "at": "2026-11-24T09:52:22.686Z",
+      "event": "task-done",
+      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
+    },
+    {
+      "at": "2026-11-24T10:03:38.822Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" (Branch rebased onto stage 2 tip 20e4281a2 (PR #1304), whose 4 new commits change ReviewBoard.tsx and review.css; the invariant compares with the base this branch actually sits on (round 3 logic F-001). Re-point again if stage 2 moves before merge.)"
+    },
+    {
+      "at": "2026-11-24T10:08:11.280Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query"
+    },
+    {
+      "at": "2026-11-24T10:08:11.476Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 3 Desktop: focus after Update, existing attempt on a behind board, toasts pinned, Update disabled while preview stale, docs"
+    },
+    {
+      "at": "2026-11-24T10:08:12.238Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 520-T16"
+    },
+    {
+      "at": "2026-11-24T10:08:12.424Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 520-T17"
+    },
+    {
+      "at": "2026-11-24T10:15:03.924Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 3 Desktop: focus after Update, existing attempt on a behind board, toasts pinned, Update disabled while preview stale, docs"
+    },
+    {
+      "at": "2026-11-24T10:28:16.255Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" (Round 3 performance F-001 fix (T16 B6) adds a read-only DeskRunStore.roundPlacements query; no attachBadges/localBadge line changes (verified by hunk listing), and the parity is guarded by its store test rather than a whole-file no-diff.)"
+    },
+    {
+      "at": "2026-11-24T10:38:24.686Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query"
+    },
+    {
+      "at": "2026-11-24T10:39:58.834Z",
+      "event": "task-done",
+      "detail": "T10: review-orchestrator round on the branch"
+    },
+    {
+      "at": "2026-11-24T11:15:32.837Z",
+      "event": "task-added",
+      "detail": "T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test"
+    },
+    {
+      "at": "2026-11-24T11:15:37.890Z",
+      "event": "task-done",
+      "detail": "T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test"
+    },
+    {
+      "at": "2026-11-24T12:47:32.402Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" (Stage 2 was rebased onto main (now b38e33ce8bf454e302977c1e085382fe43458fa5, PR #1304) and stage 3 rebased onto it; the unchanged-files base moves to the new stage 2 tip)"
+    },
+    {
+      "at": "2026-11-24T12:48:36.907Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. Lint covers src/review and the file lock; eslint.config.mjs ignores apps/desktop/**, so Desktop code is checked by its typecheck and suites only. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review src/lib/file-lock.ts src/lib/file-lock.reclaim.test.ts && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" (The lint step named apps/desktop/src/review, which eslint.config.mjs ignores (apps/desktop/**), so ESLint exited 2 on every base; lint now names the backend paths this flow changed)"
+    },
+    {
+      "at": "2026-11-24T13:00:43.542Z",
+      "event": "task-added",
+      "detail": "T19: Rebase onto stage 2 b38e33ce8 (main 666d71468) with the lock fix ported onto main's file-lock.ts; AC8 base and lint paths re-pointed"
+    },
+    {
+      "at": "2026-11-24T13:00:43.745Z",
+      "event": "task-done",
+      "detail": "T19: Rebase onto stage 2 b38e33ce8 (main 666d71468) with the lock fix ported onto main's file-lock.ts; AC8 base and lint paths re-pointed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-publication.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-publication.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/head-move.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/update-round.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/prior-round.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts"
+    },
+    "AC8": {
+      "kind": "invariant",
+      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review src/lib/file-lock.ts src/lib/file-lock.reclaim.test.ts && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'"
+    }
+  }
+}

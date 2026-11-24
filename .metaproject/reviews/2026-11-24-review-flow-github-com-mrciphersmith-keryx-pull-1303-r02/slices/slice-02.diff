@@ -1,0 +1,2331 @@
+--- src/review/desk-publication-types.ts
+@@ 24,51 @@
+   version: 1;
+   settings: PublicationSettings;
+   body: string;
+   inlineCount: number;
+   inlineComments?: { path: string; line: number; body: string }[];
+   questions: {
+     id: string;
+     text: string;
+     recommendation?: PublicationAnswer;
+     options?: { id: PublicationOptionId; label: string }[];
+   }[];
+   overlayAvailable: boolean;
+   overlayRequiresApproval?: true;
+   overlayWarning?: string;
+   canSubmit: boolean;
+   blockedReason?: string;
+   digest: string;
+   savedAt?: string;
+   publishedUrl?: string;
+   skipped?: true;
++  /** Present when the pull request moved past the reviewed commit on the same base: this draft is
++   * the as-is variant, a Comment for the reviewed commit only. */
++  headMoved?: { reviewedHead: string; currentHead: string };
+ }
+ 
+ export type PublicationOutcome = "pending" | "published" | "skipped";
+ export const PUBLICATION_RECEIPT = "publication-receipt.json";
+ export const PUBLICATION_SKIPPED = "publication-skipped.json";
+
+--- src/review/desk-publication.ts
+@@ 9,59 @@
+ import { DeskRunStore } from "./desk-run-store";
+ import { PUBLICATION_RECEIPT, PUBLICATION_REQUEST_LIMIT, PUBLICATION_SKIPPED, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
+ import type { DeskRunKey } from "./desk-run-types";
+ import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay, renderDeskFinding,
+   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, scopedFile, type DeskReportFinding } from "./desk-review-report";
+ import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
+ import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
+ import { premiseHoldState } from "./premise";
+ import { buildRoundBlock, PUBLISHED_BODY_LIMIT, type ReviewEvent } from "./publish";
+ import { computeReadiness, failingItems } from "./readiness";
+ import { readRoundNumber } from "./round-record";
+ import type { ManagedReviewManifest } from "./types";
+ import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
+ 
+ const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+ const sha = /^[a-f\d]{40}$/i;
+ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
+   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
+ };
+ type Draft = { settings: PublicationSettings; savedAt: string };
++type Attempt = NonNullable<ReturnType<DeskRunStore["byId"]>>;
++/** How many earlier attempts an update round looks through for a draft to take answers from. */
++const answerSourceLimit = 8;
+ type Operation = PublicationRequest | { kind: "automatic"; id: string; settings: PublicationSettings };
+ type Receipt = { url?: string };
+ type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
+ type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
+-type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string };
++type HeadMoved = NonNullable<PublicationState["headMoved"]>;
++type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string;
++  /** A current head GitHub confirmed is ahead of the reviewed head. */
++  aheadHead?: string };
+ const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
+ const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
+ const previewCacheFile = "publication-preview-cache.json";
+ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+ const object = (v: unknown): Record<string, unknown> | undefined =>
+   v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
+ const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
+ 
+ async function json<T>(root: string, relative: string, limit: number): Promise<T | undefined> {
+   const content = await scopedFile(root, relative, limit);
+   return content === undefined ? undefined : JSON.parse(content) as T;
+ }
+ 
+ async function previewSubject(cwd: string, directory: string, key: DeskRunKey, auth: GithubConnection,
+   request: Operation, revision: { baseSha: string; headSha: string }): Promise<PreviewCache> {
+   const cacheKey = hash([cwd, key, revision, auth.binding, auth.env.GH_TOKEN, auth.env.GITHUB_TOKEN]);
+   const cached = request.kind === "preview" && !request.refresh
+     ? await json<PreviewCache>(directory, previewCacheFile, previewCacheLimit).catch(() => undefined) : undefined;
+   const previous = cached?.key === cacheKey && cached.expires > Date.now() && cached.subject ? cached : undefined;
+   // An unbound project can switch its effective gh account without a Keryx binding update.
+
+--- src/review/desk-publication.ts
+@@ 73,248 @@
+ async function findPreviousPublication(cwd: string, key: DeskRunKey, auth: GithubConnection, marker: string) {
+   const args = ["api", "--hostname", "github.com", "--paginate", `repos/${key.repo}/pulls/${key.number}/reviews?per_page=100`];
+   const data = parseGhJson(await boardGh(cwd, args, auth));
+   if (!Array.isArray(data)) return;
+   for (const item of data) {
+     const row = object(item);
+     if (text(object(row?.user)?.login).toLowerCase() === key.viewer.toLowerCase() &&
+         typeof row?.body === "string" && row.body.includes(marker)) return publicationLink(key, row.id);
+   }
+ }
+ 
+ async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubConnection) {
+   const base = `repos/${key.repo}`;
+   const resources = [`pulls/${key.number}/reviews`, `pulls/${key.number}/comments`, `issues/${key.number}/comments`];
+   const pages = await Promise.all(resources.map(resource => boardGh(cwd, [
+     "api", "--hostname", "github.com", "--paginate", "--slurp", `${base}/${resource}?per_page=100`,
+   ], auth)));
+   return hash(pages);
+ }
+ 
++/**
++ * Whether the reviewed head is still in the pull request: GitHub reports the current head `ahead` of it.
++ * Anything else (a force-push or rebase reports `diverged`, an older head `behind`) or any failed read, a transient
++ * `unavailable:` included, keeps the refusal: posting `commit_id` for a commit outside the PR is never attempted, the
++ * draft still saves locally, and a refresh asks again.
++ */
++async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConnection, cache: PreviewCache,
++  reviewedHead: string, currentHead: string): Promise<boolean> {
++  if (cache.aheadHead === currentHead) return true;
++  let status: string;
++  try {
++    status = (await boardGh(cwd, ["api", "--hostname", "github.com",
++      `repos/${key.repo}/compare/${reviewedHead}...${currentHead}?per_page=1`, "--jq", ".status"], auth)).trim();
++  } catch {
++    return false; // Fail closed, as described above.
++  }
++  if (status !== "ahead") return false;
++  cache.aheadHead = currentHead;
++  return true;
++}
++
++const sameReview = (a: Attempt, b: Attempt) => a.key.number === b.key.number && a.key.repositoryId === b.key.repositoryId &&
++  a.key.repo.toLowerCase() === b.key.repo.toLowerCase() && a.key.viewer.toLowerCase() === b.key.viewer.toLowerCase() &&
++  (typeof a.run.reviewId !== "string" || typeof b.run.reviewId !== "string" || a.run.reviewId === b.run.reviewId);
++
++/** The directories of the attempts this one follows in the same Review, newest first (`previousRunId` links). */
++function earlierAttemptDirectories(store: DeskRunStore, attempt: Attempt): string[] {
++  const directories: string[] = [];
++  const seen = new Set([attempt.run.id]);
++  let previousId = attempt.run.previousRunId;
++  while (previousId && !seen.has(previousId) && directories.length < answerSourceLimit) {
++    seen.add(previousId);
++    const previous = store.byId(previousId);
++    if (!previous || !sameReview(previous, attempt)) break;
++    directories.push(store.directory(previous.run.id));
++    previousId = previous.run.previousRunId;
++  }
++  return directories;
++}
++
++/** The finding answers of the newest earlier attempt that saved a publication draft; never its other settings. */
++async function earlierAnswers(directories: readonly string[]): Promise<Record<string, unknown> | undefined> {
++  for (const directory of directories) {
++    // An unreadable earlier draft only means nothing is pre-selected from it; the current draft does not depend on it.
++    const earlier = await json<Draft>(directory, "publication-draft.json", draftLimit).catch(() => undefined);
++    if (earlier) return object(object(object(earlier)?.settings)?.answers);
++  }
++}
++
++/** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
++function headMovedLine(moved: HeadMoved): string {
++  return `Reviewed commit \`${moved.reviewedHead}\`. The pull request has moved to \`${moved.currentHead}\` since; ` +
++    "this review does not cover the newer commits.";
++}
++
+ async function prepare(input: {
+   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
+-  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; cache: PreviewCache;
++  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
++  /** Earlier attempts of the same Review, newest first: an attempt without a draft of its own takes their answers. */
++  earlier: readonly string[];
+ }): Promise<Prepared> {
+-  const { cwd, directory, run, key, auth, request, current, cache } = input;
++  const { cwd, directory, run, key, auth, request, current, headMoved, cache, earlier } = input;
+   const packageDir = path.join(directory, "package");
+   const target = `https://github.com/${key.repo}/pull/${key.number}`;
+   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
+   if (manifest?.target?.ref.toLowerCase() !== target.toLowerCase() ||
+       manifest.target.base !== run.baseSha || manifest.target.head !== run.headSha) {
+     throw new Error("configuration: This review has no matching local package to publish.");
+   }
+   const [recorded, verdict, draft, receipt, skipped, { overlay, overlayWarning }, readiness, report] = await Promise.all([
+     premiseRecords(packageDir), computeVerdict(packageDir),
+     json<Draft>(directory, "publication-draft.json", draftLimit),
+     json<Receipt>(directory, PUBLICATION_RECEIPT, 4096),
+     scopedFile(directory, PUBLICATION_SKIPPED, 64),
+     projectReviewOverlay(cwd), computeReadiness(packageDir), scopedFile(directory, "package/report.md", 2 * 1024 * 1024),
+   ]);
+   const recordFor = (entry: VerdictFinding) => recorded.records.find(row =>
+     row.id === entry.id && (!row.reviewer || row.reviewer === entry.reviewer));
+   const questionId = (entry: VerdictFinding) => text(recordFor(entry)?.global_id) || entry.id;
+   const questions = verdict.held.map<PublicationState["questions"][number]>(entry => {
+     const premise = object(recordFor(entry)?.premise);
+     const id = questionId(entry);
+     const labels = Array.isArray(premise?.options) ? [...new Set(premise.options.map(text).filter(Boolean))] : [];
+     const options = labels.map(label => ({
+       // Store the option's identity, so a reordered report never changes a saved choice.
+       id: `option:${createHash("sha256").update(JSON.stringify([id, label])).digest("hex")}` as PublicationOptionId,
+       label,
+     }));
+     const question = { id, text: text(premise?.question) || entry.problem };
+     const recommendation = premise?.verdict === "challenged" ? "dismiss" as const : "uphold" as const;
+     return options.length ? { ...question, options } : { ...question, recommendation };
+   });
+   const saved = request.settings ?? draft?.settings;
++  // An update round starts with the answers given to the same findings before; only answers, never the verdict or content.
++  const savedAnswers: Record<string, unknown> | undefined = saved?.answers ?? await earlierAnswers(earlier);
+   const selections = new Map<string, PublicationAnswer>();
+   const selectedLabels = new Map<string, string>();
+   for (const question of questions) {
+-    if (!saved || !Object.hasOwn(saved.answers, question.id)) continue;
+-    const answer = saved.answers[question.id];
++    if (!savedAnswers || !Object.hasOwn(savedAnswers, question.id)) continue;
++    const answer = savedAnswers[question.id];
+     if (question.options) {
+       const selected = question.options.find(option => option.id === answer);
+       if (selected) {
+         selections.set(question.id, selected.id);
+         selectedLabels.set(question.id, selected.label);
+       }
+     } else if (answer === "uphold" || answer === "dismiss") selections.set(question.id, answer);
+   }
+   const answers = Object.fromEntries(selections);
+   const metadata = reportFindingMetadata(report);
+   const forReport = (entry: VerdictFinding) => deskReportFinding(entry, recordFor(entry), metadata.get(entry.id));
+   const findings = [...verdict.open, ...verdict.minors, ...(verdict.info ?? [])].map(forReport);
+   for (const entry of verdict.held) {
+     const id = questionId(entry);
+     const selectedAnswer = selectedLabels.get(id);
+     if (selectedAnswer || selections.get(id) === "uphold") findings.push({
+       ...forReport(entry), ...(selectedAnswer && { selectedAnswer }),
+     });
+   }
+   const publishable = findings.filter(finding => finding.severity !== "info" || finding.question || finding.locationClass === "pr-process");
+   const answered = questions.every(question => Object.hasOwn(answers, question.id));
+   const failing = failingItems(readiness).filter(item =>
+     item.id !== "premise-decisions" || !answered ||
+     recorded.records.some(row => premiseHoldState(row, recorded.decisions) === "awaiting" && !Object.hasOwn(answers, text(row.global_id ?? row.id))));
+   const complete = run.result?.coverage === "complete" && failing.length === 0;
+-  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && current &&
++  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && (current || headMoved) &&
+     (request.kind === "preview" || request.kind === "submit" || request.kind === "automatic")
+     ? cache.discussion ?? await publicationDiscussion(cwd, key, auth) : undefined;
+   if (discussion) cache.discussion = discussion;
+   const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
+-  const settings: PublicationSettings = {
+-    inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
+-    overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers,
+-  };
++  const settings: PublicationSettings = headMoved
++    // The as-is variant is a Comment only, and the current diff cannot place lines on the reviewed commit.
++    ? { inline: false, general: saved?.general ?? true, keryxTemplate: true, overlay: !!overlay,
++      verdict: "comment", verdictOverride: "comment", answers }
++    : { inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
++      overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers };
+   const largestAnswers = Object.fromEntries(questions.map(question => [question.id, question.options?.[0]?.id ?? "dismiss"]));
+   const answerLimitExceeded = Buffer.byteLength(JSON.stringify({
+     kind: "submit", id: request.id, settings: { ...settings, answers: largestAnswers }, digest: "0".repeat(64),
+   })) > PUBLICATION_REQUEST_LIMIT;
+   const comments: ReviewComment[] = [];
+   const inBody: DeskReportFinding[] = [];
+   const revision = { repo: key.repo, head: run.headSha };
+   let inlineUnavailable = false;
+   if (settings.inline && current && publishable.some(finding => finding.file && finding.line)) {
+     try {
+       let hunks: Map<string, Set<number>>;
+       if (Array.isArray(cache.placements) && cache.placements.every(entry =>
+         Array.isArray(entry) && typeof entry[0] === "string" && Array.isArray(entry[1]))) {
+         hunks = new Map(cache.placements.map(([file, lines]) => [file, new Set(lines)]));
+       }
+       else {
+         const diff = await boardGh(cwd, ["api", "--hostname", "github.com", "-H", "Accept: application/vnd.github.v3.diff",
+           `repos/${key.repo}/pulls/${key.number}`], auth);
+         hunks = parseDiffHunks(diff);
+         if (request.kind === "preview") cache.placements = [...hunks].map(([file, lines]) => [file, [...lines]]);
+
+--- src/review/desk-publication.ts
+@@ 276,450 @@
+   const reported = verdict.reportedReviewers.length ? ` Reviewers: ${verdict.reportedReviewers.join(", ")}.` : "";
+   const refuted = recorded.records.flatMap(row => {
+     const verification = object(row.verification);
+     const evidence = text(verification?.evidence);
+     return verification?.verdict === "refuted" && evidence && typeof row.id === "string"
+       ? [{ id: row.id, decision: `Refuted — ${evidence}` }] : [];
+   });
+   for (const entry of verdict.held) {
+     if (selections.get(questionId(entry)) === "dismiss") refuted.push({ id: entry.id, decision: "Dismissed by the operator." });
+   }
+   const summary = renderDeskReviewReport({
+     ...revision, base: run.baseSha, round: roundNumber, verdict: settings.verdict,
+     findings: settings.general ? publishable : publishable.filter(finding => !inBody.includes(finding)),
+     bodyFindings: settings.general ? inBody : [], inlineCount: comments.length, omittedCount: settings.general ? 0 : inBody.length,
+     evidenceLevel: deskReportEvidence(report), coverageNote,
+     slots,
+     ...(settings.general && { refuted }),
+     howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${run.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
+   });
+   let body = applyReviewOverlay(summary, overlay);
++  if (headMoved) body = `${headMovedLine(headMoved)}\n\n${body}`;
+   const visibleBody = body;
+   const round = buildRoundBlock({ body, round: roundNumber,
+     reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: settings.general ? inBody : [] });
+   body += `\n\n${renderRoundBlock(round)}`;
+   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
+   body += `\n\n${marker}`;
+   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
+-  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion]);
++  // A further push changes the current head, so it must make an earlier as-is preview stale.
++  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion,
++    ...(headMoved ? [headMoved.currentHead] : [])]);
+   const approval = eventFor[settings.verdict] === "APPROVE";
+   const templateChanged = request.kind === "automatic" &&
+     await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
+   const blockedReason = publishedUrl ? "This review has already been published."
+     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
+-    : !current ? "The pull request is closed or its revision moved. You can still save this draft locally."
++    : !current && !headMoved ? "The pull request is closed or its revision moved. You can still save this draft locally."
+     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
+     : !answered ? "Answer each finding question before publishing."
+     : overlay?.kind === "slots" && !settings.general ? "Enable General comment to include the project report overlay."
+-    : request.kind === "automatic" && (skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
++    : request.kind === "automatic" && (headMoved || skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
+       ? "This review needs a publication decision in Desktop."
+     : !englishReviewText([visibleBody, ...comments.map(comment => comment.body)].join("\n"))
+       ? "GitHub reviews must be written in English. This draft contains non-English prose."
+     : approval && !complete ? "A partial review cannot approve. Select Comment only or Request changes."
+     : inlineUnavailable ? "The pull request diff is unavailable. Retry or turn off inline comments."
+     : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT || comments.some(comment => comment.body.length > PUBLISHED_BODY_LIMIT)
+       ? "This draft exceeds the GitHub review size limit. Change what is included or split the review."
+-    : !settings.general && !comments.length ? "Enable General comment or select inline comments that are on the diff." : undefined;
++    : !settings.general && !comments.length ? headMoved
++      ? "Enable General comment. Inline comments are not available when publishing for an earlier commit."
++      : "Enable General comment or select inline comments that are on the diff." : undefined;
+   return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, inlineComments: comments,
+     questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay && !emptyOverlay,
+     ...(overlay?.requiresApproval && { overlayRequiresApproval: true }),
+     canSubmit: !blockedReason, digest, ...(blockedReason ? { blockedReason } : {}),
+     ...(overlayWarning ? { overlayWarning } : emptyOverlay ? { overlayWarning: "This draft has no project overlay content. Only the Keryx template is shown." } : {}),
+-    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}) },
++    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}),
++    ...(headMoved && { headMoved }) },
+     comments, publicationBody: body, ...(discussion && { discussion }) };
+ }
+ 
+ function englishReviewText(body: string): boolean {
+   // Ignore source quotations and identifiers. Generated prose is requested in English at review time.
+   const prose = body.replace(/^`{3,}[^\n]*\n[\s\S]*?^`{3,}[^\n]*$/gm, "").replace(/`+[^`\n]+`+/g, "")
+     .replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
+   return !/[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(prose);
+ }
+ 
+ export function requestDeskPublication(cwd: string, key: DeskRunKey, request: PublicationRequest,
+   confirmSubmit?: (state: PublicationState) => Promise<void>): Promise<PublicationState> {
+   return publication(cwd, key, request, confirmSubmit);
+ }
+ 
+ export async function publishCompletedDeskReview(cwd: string, key: DeskRunKey, id: string): Promise<void> {
+   await publication(cwd, key, { kind: "automatic", id, settings: {
+     inline: false, general: true, keryxTemplate: true, overlay: true,
+     verdict: "comment", verdictOverride: "comment", answers: {},
+   } });
+ }
+ 
+ async function publication(cwd: string, key: DeskRunKey, request: Operation,
+   confirmSubmit?: (state: PublicationState) => Promise<void>): Promise<PublicationState> {
+   if (!uuid.test(request.id) || !/^[\w-]+\/[\w.-]+$/.test(key.repo) || !Number.isSafeInteger(key.number) || key.number < 1) {
+     throw new Error("configuration: Invalid review publication target.");
+   }
+   const connection = await projectGithubConnection(cwd, process.env, key.viewer);
+   const store = new DeskRunStore(undefined, true);
+   const directory = store.directory(request.id);
+-  const attempt = (() => {
+-    try { return store.byId(request.id); }
+-    finally { store.close(); }
++  const { attempt, earlier } = (() => {
++    try {
++      const found = store.byId(request.id);
++      return { attempt: found, earlier: found ? earlierAttemptDirectories(store, found) : [] };
++    } finally { store.close(); }
+   })();
+   const run = attempt?.run;
+   if (!attempt || !run?.result?.reviewed || run.source === "existing" ||
+       (run.state !== "completed" && run.state !== "partial") ||
+       (request.kind === "automatic" && (!run.options?.autoPublish || run.state !== "completed" || run.decision || attempt.cwd !== cwd)) ||
+       attempt.key.number !== key.number || attempt.key.repositoryId !== key.repositoryId ||
+       attempt.key.repo.toLowerCase() !== key.repo.toLowerCase() || attempt.key.viewer.toLowerCase() !== key.viewer.toLowerCase() ||
+       !sha.test(run.baseSha) || !sha.test(run.headSha) ||
+       run.result.reviewed.baseSha !== run.baseSha || run.result.reviewed.headSha !== run.headSha) {
+     throw new Error("access: A verified local review for this account and pull request was not found.");
+   }
+   const cache = await previewSubject(cwd, directory, key, connection, request, run);
+   const pr = cache.subject;
+-  const current = pr.state === "OPEN" && pr.baseRefOid === run.baseSha && pr.headRefOid === run.headSha;
+-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, cache });
++  const open = pr.state === "OPEN" && pr.baseRefOid === run.baseSha;
++  const current = open && pr.headRefOid === run.headSha;
++  // Automatic publication never posts the as-is variant, so it is refused before any further GitHub read.
++  if (request.kind === "automatic" && open && !current) throw new Error("configuration: This review needs a publication decision in Desktop.");
++  // Same base, a newer head that still contains the reviewed commit: the draft becomes the as-is Comment for it.
++  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid) &&
++    await reviewedHeadInPull(cwd, key, connection, cache, run.headSha, pr.headRefOid)
++    ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
++  // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
++  const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
++  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache, earlier });
+   if (request.kind === "preview") {
+     const { state } = await render();
+     verifyGithubBindingUnchanged(connection);
+     return state;
+   }
+   return withFileLock(path.join(directory, "publication.lock"), async () => {
+     const { state, comments, publicationBody, discussion } = await render();
+     if (request.kind === "skip") {
+       if (state.publishedUrl) return state;
+       await writeFileAtomic(path.join(directory, PUBLICATION_SKIPPED), "true", { mode: 0o600 });
+       return { ...state, skipped: true };
+     }
+     const savedAt = new Date().toISOString();
+     const draft: Draft = { settings: state.settings, savedAt };
+     const encoded = JSON.stringify(draft);
+     if (Buffer.byteLength(encoded) > draftLimit) throw new Error("configuration: The review settings are too large to save. Split the review.");
+     const save = () => writeFileAtomic(path.join(directory, "publication-draft.json"), encoded, { mode: 0o600 });
+     if (request.kind === "save") {
+       verifyGithubBindingUnchanged(connection);
+       await save();
+       return { ...state, savedAt };
+     }
+     if (request.kind === "submit" && request.digest !== state.digest) throw new Error("stale: The review preview changed. Refresh it before submitting.");
+     if (!state.canSubmit) throw new Error(`configuration: ${state.blockedReason}`);
+     if (request.kind === "submit" && !confirmSubmit) throw new Error("permission: Confirm the exact review before publishing.");
+     const outbound = { event: eventFor[state.settings.verdict], body: publicationBody, comments, commit_id: run.headSha };
+     for (const body of [outbound.body, ...comments.map(comment => comment.body)]) {
+       if (!(await screenCommentBody(cwd, body)).ok) {
+         throw new Error("configuration: The security output check withheld this draft. Review the selected content before submitting.");
+       }
+     }
+     if (request.kind === "submit") await confirmSubmit?.(state);
+-    await verifyDeskSubject(cwd, key, run, connection);
++    await verifyDeskSubject(cwd, key, expected, connection);
+     // Pin only after independently verifying the active viewer with the default connection.
+     const auth: GithubConnection = connection.login ? connection : {
+       ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
+     };
+-    if (auth !== connection) await verifyDeskSubject(cwd, key, run, auth);
++    if (auth !== connection) await verifyDeskSubject(cwd, key, expected, auth);
+     if (discussion && discussion !== await publicationDiscussion(cwd, key, auth)) {
+       throw new Error("stale: The pull request discussion changed. Refresh the preview and check the draft before publishing.");
+     }
+     await save();
+     const receiptPath = path.join(directory, PUBLICATION_RECEIPT);
+     // Persist the intent before the network call. A lost response must not cause a duplicate review.
+     await writeFileAtomic(receiptPath, "{}", { mode: 0o600 });
+     const options = reviewCommandOptions(cwd, auth.env);
+     let rejected: number | undefined;
+     let postStarted = false;
+     const port = createGhPort(async (argv, stdin) => {
+       const proc = withCurrentGithubBinding(auth, () => Bun.spawn([reviewTool("gh", auth.env), "api", "--hostname", "github.com", ...argv.slice(2)], {
+         cwd, env: options.env, stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+         stdout: "pipe", stderr: "pipe", signal: AbortSignal.timeout(options.timeout),
+       }));
+       postStarted = true;
+       const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+       if (exitCode !== 0) {
+         const status = /\(HTTP (400|401|403|404|422)\)/.exec(stderr)?.[1];
+         if (status) rejected = Number(status);
+
+--- src/review/desk-run-executor.ts
+@@ 12,110 @@
+ import { shellQuote } from "../lib/shell-quote";
+ import { isNotFound, writeFileAtomic } from "../lib/fs";
+ import { placePathWithinSync, realOrResolved } from "../lib/contained-path";
+ import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, type SpawnChild, type RunProgress } from "./autonomous-run";
+ import type { ReviewRunUsage } from "./run-usage";
+ import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
+ import { computeVerdict, premiseRecords, renderVerdict } from "./verdict";
+ import { boardGh, boardGraphql, projectGithubConnection, reviewTool, verifyGithubBindingUnchanged, type GithubConnection } from "./board-github";
+ import { withoutGithubCredentials } from "./github-cli";
+ import type { ManagedReviewManifest } from "./types";
+ import { DESK_OPTIONS_ENV, deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
+ import { DESK_RUN_SCOPE } from "./desk-run-types";
+ import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
+ import { DESK_REPORT_OVERLAY_FILE, DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_RESUME_PACKAGE, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
+ import { isReviewPackageDir } from "./package-location";
+ import { DESK_RELATED_PRS, linkedReviewPulls, relatedPullGitDir, type RelatedReviewPull } from "./desk-related-prs";
+ import { finishAutoDesktopReview } from "./desk-auto-finalize";
+ import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay,
+   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, reviewReportDisclosure, scopedFile } from "./desk-review-report";
+ import { readRoundNumber } from "./round-record";
++import { recordPartialRound } from "./round-registry";
+ import { mainReviewRoot } from "./report-overlay";
+ import { askDesktopOperator } from "./desk-questions";
+ import { estimatePlan, planConfirmed, recordPlanConfirmation } from "./plan-confirmation";
+ import { DEFAULT_MAX_PASSES } from "./chunks-estimate";
+ import { REVIEW_WAVE_MAX_CHILDREN } from "./wave-limits";
+ export { recoverDeskExecution } from "./desk-run-executor-recovery";
+ 
+ interface DeskExecutionOptions {
+   options?: DeskReviewOptions;
+   context?: Awaited<ReturnType<typeof collectPrContext>>;
+   cwd: string;
+   repo: string;
+   number: number;
+   viewer?: string;
+   baseSha: string;
+   headSha: string;
+   runDir: string;
+   previousRunDir?: string | undefined;
++  /** The previous attempt ended partial with accepted findings: its draft package is handed on as a partial round (flow 520 AC7). */
++  previousPartial?: boolean | undefined;
+   resumeRunDir?: string;
+   guidance?: string;
+   operatorRunId?: string;
+   isWaitingForOperator?: () => boolean;
+   signal: AbortSignal;
+   budgetMinutes?: number;
+   budgetTokens?: number | null;
+   verifyBeforeExecution?: () => Promise<void>;
+   authorizeSpawn?: <T>(commit: () => T) => T;
+   onProgress: (progress: Pick<RunProgress, "phase" | "rounds" | "tokens" | "usage" | "reviewerSessions" | "packageId">) => void;
+ }
+ 
+ export interface DeskExecutionResult {
+   outcome: "complete" | "incomplete" | "blocked" | "budget" | "failed" | "cancelled";
+   reason: string;
+   retryableBeforeSpend?: boolean;
+   usage?: ReviewRunUsage;
+   checkedBase: string | null;
+   checkedHead: string | null;
+   coverage: "complete" | "partial" | "unknown";
+   verdict: string | null;
+   findings: FindingCounts;
+   findingsKnown?: boolean;
+   report: string | null;
+ }
+ 
+ interface PullRevision { baseRefName: string; baseRefOid: string; headRefOid: string; state: string; body?: string }
+ interface ControlRef { name: string; oid: string }
+ interface Revision extends PullRevision { defaultBranch?: ControlRef }
+ export type DeskModelSelector = (cwd: string) => Promise<{ provider: string; model: string }> | { provider: string; model: string };
+ 
+ interface ExecutorPorts {
+   selectModel: DeskModelSelector;
+   remoteUrl?: string;
+   revision?: (options: DeskExecutionOptions) => Promise<Revision>;
+   spawn?: SpawnChild;
++  /** Test seam: the keryx config directory the round registry is written to. Default: the user's. */
++  registryDir?: string;
+ }
+ 
+ const exec = promisify(execFile);
+ const fullSha = /^[0-9a-f]{40}$/;
+ const EMPTY: DeskExecutionResult = {
+   outcome: "incomplete", reason: "", checkedBase: null, checkedHead: null,
+   coverage: "unknown", verdict: null, findings: countFindings(null), findingsKnown: false, report: null,
+ };
+ async function revision({ repo, number, cwd, viewer }: DeskExecutionOptions, auth: GithubConnection): Promise<Revision> {
+   const [owner, name] = repo.split("/");
+   const data = await boardGraphql<{ viewer?: { login?: string }; repository?: {
+     pullRequest?: PullRevision | null;
+     defaultBranchRef?: { name: string; target?: { oid?: string } } | null;
+   } | null }>(cwd, `query($owner:String!,$name:String!,$number:Int!) {
+     viewer { login }
+     repository(owner:$owner,name:$name) {
+       pullRequest(number:$number) { baseRefName baseRefOid headRefOid state body }
+       defaultBranchRef { name target { oid } }
+     }
+   }`, { owner: owner!, name: name!, number }, auth);
+
+--- src/review/desk-run-executor.ts
+@@ 505,550 @@
+       const related = options.options?.mode === "auto" && relatedText
+         ? await prepareRelatedPulls(options, checkout, relatedText, auth) : [];
+       if (related.length) {
+         await mkdir(runnerDir, { recursive: true, mode: 0o700 });
+         await writeFileAtomic(path.join(runnerDir, "related-pulls.json"), JSON.stringify(related), { mode: 0o600 });
+       }
+       const previous = options.previousRunDir && path.join(options.previousRunDir, "package");
+       let resumePackage: string | undefined;
+       if (options.resumeRunDir) {
+         const dir = path.join(options.resumeRunDir, "package");
+         const manifest = await readJson<ManagedReviewManifest>(path.join(dir, "manifest.json"));
+         if (manifest?.status === "draft" && manifest.target?.ref === subject &&
+             manifest.target.base === options.baseSha && manifest.target.head === options.headSha &&
+             /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(dir)) {
+           await cp(dir, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
+           resumePackage = manifest.reviewId;
+         }
+       }
+       if (previous && !resumePackage) {
+         const manifest = await readJson<ManagedReviewManifest>(path.join(previous, "manifest.json"));
+-        if (manifest?.status === "closed" && await regularPackage(previous) && manifest.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId)) {
+-          await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
+-        }
++        const usable = manifest?.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(previous);
++        // A closed package is a finished round. A partial attempt's package never got past its draft: only Desktop's own
++        // record, written here from the user's run store, lets the next round cut from it (prior-round.ts, TM-04 §4d).
++        const handOn = usable && (manifest.status === "closed" ||
++          (options.previousPartial === true && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));
++        if (handOn) await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
+       }
+       signal.throwIfAborted();
+       const childFile = path.join(runDir, "child.json");
+       const spawn = ports.spawn ?? defaultSpawn(undefined, childFile);
+       const searchPath = await withKeryxOnPath(runDir);
+       try {
+         await options.verifyBeforeExecution?.();
+       } catch (error) {
+         beforeSpawnFailure = retryablePreflight(error);
+         throw error;
+       }
+       signal.throwIfAborted();
+       const selection = await ports.selectModel(options.cwd);
+       signal.throwIfAborted();
+       const maxMinutes = options.budgetMinutes ?? 30;
+       const maxTokens = options.options?.maxTokens ?? options.budgetTokens ?? undefined;
+       const execute = (preservedPackage: string | undefined, budgetMinutes = maxMinutes, budgetTokens = maxTokens) => runAutonomousReview({
+         ...selection,
+         ...(options.options ? { deskOptions: options.options } : {}),
+         ...(options.operatorRunId ? { operatorRunId: options.operatorRunId } : {}),
+
+--- src/review/desk-run-service.ts
+@@ 1,40 @@
+ import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
+ import { collectPrContext } from "./pr-context";
+ import { spawn } from "node:child_process";
+ import { existsSync, mkdirSync, readFileSync } from "node:fs";
+ import path from "node:path";
+ import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
+ import { isCompiledBinaryEntry } from "../lib/self-invocation";
+ import { readProcessIdentity } from "../lib/hub-machine/process-identity";
+ import { verifyVisiblePullNumbers } from "./board-badge-read";
+ import { resolveWatcherCheckout } from "./watcher-project";
+ import { verifyScheduledSubject } from "./board";
+ import { withScheduledPermission } from "./review-automation-guard";
+ import { readExistingReviews } from "./desk-run-legacy";
+ import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, type GithubConnection } from "./board-github";
+ import { createWorkerRoster } from "./desk-worker-roster";
+ import { coordinatorActivity } from "./desk-coordinator";
+ import { readDeskReviewerProgress } from "./desk-reviewer-progress";
+ import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
+ import { DESK_RUN_SCOPE } from "./desk-run-types";
++import { selectPriorAttempt, type PriorAttempt } from "./update-round";
+ import type { DeskFinish, DeskRevision, DeskRunKey, DeskRunSnapshot, DeskSchedule, DeskRun } from "./desk-run-types";
+ import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type DeskExecutionResult } from "./desk-run-executor";
+ import { applyDeskLifecycle, type DeskLifecycleAction } from "./desk-run-lifecycle";
+ 
+ const query = `query($owner:String!, $name:String!, $number:Int!) {
+   viewer { login } repository(owner:$owner,name:$name) { id pullRequest(number:$number) { title state baseRefOid headRefOid } }
+ }`;
+ export async function resolveDeskSubject(cwd: string, requested: string, number: number, auth?: GithubConnection) {
+   const repo = selectRepository(await reviewRepositories(cwd), requested);
+   const [owner, name] = repo.split("/");
+   const data = await boardGraphql<{
+     viewer: { login: string };
+     repository: {
+       id: string;
+       pullRequest: {
+         title: string;
+         state: string;
+         baseRefOid: string;
+         headRefOid: string;
+       } | null;
+
+--- src/review/desk-run-service.ts
+@@ 286,340 @@
+         (input.action === "answer" && input.id === run.id);
+       if (run.source === "manual" && run.state === "running") {
+         const pending = store.pendingQuestions(run.id);
+         if (pending[0]) {
+           run.pendingQuestions = pending;
+           run.pendingQuestion = pending[0];
+         }
+       }
+       if (detailed && run.source !== "existing") run.coordinatorActivity = coordinatorActivity(store.directory(run.id));
+       if (detailed || (!run.reviewerProgress && (run.state === "running" || run.state === "cancelling"))) {
+         const progress = readDeskReviewerProgress(store.directory(run.id), key, run, detailed);
+         if (progress) run.reviewerProgress = progress;
+       }
+     }
+     return startedRunId ? { ...snapshot, startedRunId } : snapshot;
+   } finally {
+     store.close();
+   }
+ }
+ 
++/**
++ * The attempt a new attempt builds on (flow 520 AC7, spec "Раунд обновления" item 1): {@link selectPriorAttempt} over the
++ * attempts of the same Review from earlier rounds, whatever their settings. Never the attempt itself nor another attempt
++ * of its own round; a store that has not placed rounds yet treats the attempt's own range as its round.
++ */
++export function previousRoundAttempt(runs: readonly DeskRun[], current: DeskRun): PriorAttempt | undefined {
++  const earlier = runs.filter((item) => {
++    if (item.id === current.id) return false;
++    if (current.reviewId !== undefined && item.reviewId !== undefined && item.reviewId !== current.reviewId) return false;
++    if (current.round !== undefined && item.round !== undefined) return item.round < current.round;
++    return item.baseSha !== current.baseSha || item.headSha !== current.headSha;
++  });
++  return selectPriorAttempt(earlier);
++}
++
+ export async function runDeskWorker(
+   id: string,
+   selectModel: DeskModelSelector,
+   resolveOptions: (cwd: string, options?: DeskReviewOptions) => DeskReviewOptions | undefined = (_cwd, options) => options,
+ ) {
+   const store = new DeskRunStore();
+   let timer: ReturnType<typeof setInterval> | undefined;
+   const controller = new AbortController();
+   const abort = () => controller.abort();
+   try {
+     const attempt = store.atomic(() => store.byId(id));
+     if (!attempt || attempt.pid !== process.pid || !["running", "cancelling"].includes(attempt.run.state))
+       return;
+     const { cwd, key, run } = attempt;
+     const schedule = run.source === "scheduled" ? run.schedule : undefined;
+     const runDir = store.directory(id);
+     const progress = (phase: string, usage?: DeskRun["usage"], reviewers?: DeskRun["reviewerProgress"]) =>
+       store.atomic(() => {
+         const a = store.byId(id);
+         if (!a || a.pid !== process.pid || a.run.state === "cancelling") {
+
+--- src/review/desk-run-service.ts
+@@ 365,418 @@
+         try {
+           if (store.byId(id)?.run.state === "cancelling") abort();
+         } catch {
+           abort();
+         }
+       }, 500);
+       const options = resolveOptions(cwd, run.options);
+       const effectiveOptionsKey = deskOptionsKey(options);
+       if (run.effectiveOptionsKey !== undefined && run.effectiveOptionsKey !== effectiveOptionsKey) {
+         throw new Error("configuration: Routing settings changed while Review was waiting. Start the review again to use the new settings.");
+       }
+       store.atomic(() => {
+         const active = store.byId(id);
+         if (!active || active.pid !== process.pid || active.run.state !== "running") {
+           abort();
+           throw new Error("Review cancelled before routing options were recorded.");
+         }
+         active.run.effectiveOptionsKey = effectiveOptionsKey;
+         store.save(active);
+       });
+-      const previous = store
+-        .history(key)
+-        .runs.find(
+-          (item) =>
+-            item.source !== "existing" &&
+-            item.scope === DESK_RUN_SCOPE && (item.effectiveOptionsKey ?? deskOptionsKey(item.options)) === effectiveOptionsKey &&
+-            item.state === "completed" &&
+-            item.result?.coverage === "complete",
+-        );
++      const previous = previousRoundAttempt(store.history(key).runs, run);
+       const context = await collectPrContext(cwd, key, pr, store, undefined, run.options?.flowId);
+       const workerRoster = createWorkerRoster(runDir, key, run);
+       const out = await executeDeskReview({
+         context,
+         ...(options ? { options } : {}),
+         ...(run.options ? { budgetTokens: run.options.maxTokens ?? null } : {}),
+         cwd,
+         repo: key.repo,
+         number: key.number,
+         viewer: key.viewer,
+         baseSha: run.baseSha,
+         headSha: run.headSha,
+-        ...(previous ? { previousRunDir: store.directory(previous.id) } : {}),
++        ...(previous ? { previousRunDir: store.directory(previous.attempt.id), previousPartial: previous.partial } : {}),
+         ...(run.continuation && {
+           resumeRunDir: store.directory(run.continuation.previousId),
+           ...(run.continuation.guidance && { guidance: run.continuation.guidance }),
+         }),
+         ...(schedule ? {
+           budgetMinutes: schedule.budgetMinutes,
+           budgetTokens: schedule.budgetTokens,
+           authorizeSpawn: <T>(commit: () => T) => withScheduledPermission(schedule.project, key, run, schedule, commit),
+         } : {}),
+         verifyBeforeExecution: async () => {
+           if (schedule) await verifyScheduled(cwd, key, run, schedule);
+           else await verifyDeskSubject(cwd, key, run);
+         },
+         ...(run.source === "manual" ? { operatorRunId: id, isWaitingForOperator: () => store.hasPendingQuestion(id) } : {}),
+         runDir,
+         signal: controller.signal,
+         onProgress: (p) => {
+           // Board refreshes use the worker's compact checkpoint in SQLite,
+           // including when Desktop is closed. Tool activity stays in the attempt.
+           progress(p.phase, p.usage, workerRoster.checkpoint(p));
+
+--- src/review/head-move.ts
+@@ 1,39 @@
++// What a review does when its PR head moves: ask, follow, or stay behind.
++import type { DeskRun } from "./desk-run-types";
++
++export const ON_HEAD_MOVE = ["ask", "follow", "ignore"] as const;
++export type OnHeadMove = (typeof ON_HEAD_MOVE)[number];
++
++/** Manual and existing reviews ask; a rule-triggered (scheduled) review follows. */
++export function defaultOnHeadMove(source: DeskRun["source"]): OnHeadMove {
++  return source === "scheduled" ? "follow" : "ask";
++}
++
++/** Read a stored value; missing, null or unknown falls back to the source default. */
++export function parseOnHeadMove(value: unknown, source: DeskRun["source"]): OnHeadMove {
++  return ON_HEAD_MOVE.find((mode) => mode === value) ?? defaultOnHeadMove(source);
++}
++
++export type HeadMovePhase = "running" | "finished";
++/** `update` applies only when no round is running: start the update round now. */
++export type HeadMoveAction = "update-after-finish" | "stop-and-restart" | "update";
++
++export type HeadMoveResponse =
++  /** The review stays behind; nothing is offered or queued. */
++  | { kind: "none" }
++  /** Show the user these actions and wait for a choice. */
++  | { kind: "offer"; actions: readonly HeadMoveAction[] }
++  /** Queue an update round automatically, now or once the running round finishes. */
++  | { kind: "queue-update"; when: "now" | "after-finish" };
++
++/** The spec table: the mode and the round phase decide the response to a moved head. */
++export function headMoveResponse(mode: OnHeadMove, phase: HeadMovePhase): HeadMoveResponse {
++  if (mode === "ignore") return { kind: "none" };
++  if (mode === "follow") {
++    return { kind: "queue-update", when: phase === "running" ? "after-finish" : "now" };
++  }
++  return {
++    kind: "offer",
++    actions: phase === "running" ? ["update-after-finish", "stop-and-restart"] : ["update"],
++  };
++}
+
+--- src/review/prior-round.ts
+@@ 8,68 @@
+  *    last {@link HISTORY_DAYS} days (another machine's round, pushed, fetched and merged, is found here);
+  * 3. github-block — the hidden `<!-- keryx:round … -->` block `review publish` appends, read from our own comments;
+  * 4. github-comments — everybody else's comments on the pull request: prior findings, with no reviewed head;
+  * 5. flow — the review rounds of the flow the package is bound to (they may name a different target ref).
+  *
+  * Each source is injectable. The previous round is the NEWEST reviewed head that is an ancestor of the current head
+  * (fewest commits between it and the head); when a round newer than that was reviewed at a head that is NOT an
+  * ancestor — a force-push or rebase — the round falls back to a full review over merge-base..head with the prior
+  * findings attached (`fallback-first`).
+  *
+  * Trust (TM-04 §4d). A delta round reviews only prevHead..head, so the round it is cut from must be one this pipeline
+  * really ran; the boundary is the user, as everywhere in TM-04:
+  *
+  * - a round block counts only from our own login (pr-comments.ts keeps the blocks of `self` alone);
+  * - every package needs completion evidence (published.json, a ledger with `scopeReviewed`, or a closed package);
+  * - a package in the working tree that no commit of merge-base..head added or changed — typically an untracked one — is
+  *   the user's own and trusted;
+  * - a package read from git history must be merged into the base branch (its commit an ancestor of the base), since a
+  *   local branch may be anybody's checked-out pull request;
+  * - a package the branch under review committed (or an unmerged one from history) is trusted only when the machine-local
+- *   round registry (./round-registry.ts) holds keryx's own record of exactly its files.
++ *   round registry (./round-registry.ts) holds keryx's own record of exactly its files;
++ * - a package with no completion evidence (a draft) is no previous round, with one exception (flow 520 AC7): a partial
++ *   round Desktop ran itself, whose ingested findings and files the registry records as `desk-partial`. Desktop writes that
++ *   record only as it copies the package from the user's own run store into the next round's checkout. Such a round is
++ *   cut from, but stays weak: it is "not completed", so everything outside its delta is planned as new code.
+  *
+  * So data a pull request can commit never narrows a round: a forged package fails the merge-base or merged-base check
+  * and has no registry entry on the reviewer's machine. An agent running as the same user can write the registry as it
+  * can any user-owned file; that is the same-user limit TM-04 states. A candidate that is not trusted is kept as context
+  * only — the round falls back to a full review with its findings attached — and `sourcesTried` says why.
+  */
+ 
+ import { existsSync, readdirSync, readFileSync } from "node:fs";
+ import path from "node:path";
+ import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
+ import { flowsRoot } from "../flow/store";
+ import { defaultGitRunner, emptyRangeWarning, mergeBaseOf, resolveBase, type GitResult, type GitRunner } from "./git-base";
+ import { REVIEW_PACKAGE_MANIFEST_GLOBS, flowReviewsRoot, reviewsRoot } from "./package-location";
+ import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
+ import { mentionsFindingId } from "./publish";
+-import { readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
++import { partialRoundVouch, readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
+ import {
+   completionOf,
+   findingStatus,
+   isOpenStatus,
+   NOT_REVIEW_PACKAGES,
+   previousRoundFacts,
+   packageFacts,
+   packageHashesOf,
+   quoteSha256,
+   roundStampOf,
+   type PackageHashes,
+   SEARCH_ORDER,
+   type FixHunk,
+   type PriorFinding,
+   type RoundHunk,
+   type RoundMode,
+   type RoundRecord,
+   type RoundSource,
+   type SearchedSource,
+   type SourceAttempt,
+
+--- src/review/prior-round.ts
+@@ 314,364 @@
+         if (cut.endLine < end) kept.push([cut.endLine + 1, end]);
+         return kept;
+       });
+     }
+     for (const [startLine, endLine] of pieces) out.push({ file: hunk.file, startLine, endLine });
+   }
+   return out;
+ }
+ 
+ /**
+  * The trust half of the rule for a package candidate: it must show completion evidence, and no commit of
+  * merge-base..head may have added or changed its directory (with no merge-base known, no commit reachable from head).
+  */
+ export async function packageTrust(
+   git: GitRunner,
+   candidate: RoundCandidate,
+   head: string | null,
+   base: { ref: string; sha: string } | null,
+   registry: readonly RoundRegistryEntry[] = [],
+ ): Promise<CandidateTrust> {
+-  if (candidate.completed?.ok !== true) return { ok: false, why: candidate.completed?.why ?? "no completion evidence" };
++  if (candidate.completed?.ok !== true) {
++    const partial = candidate.packageDir === undefined ? undefined : partialRoundVouch(registry, candidate.reviewId, candidate.hashes);
++    if (partial === undefined) return { ok: false, why: candidate.completed?.why ?? "no completion evidence" };
++    // Desktop's own record of exactly these files, whatever commit carries them (the same rule as any registry entry).
++    return { ok: true, why: `trusted: local registry (a partial round Desktop ran, recorded at ${partial.completedAt}; the files match what keryx recorded), though it is not completed` };
++  }
+   if (candidate.packageDir === undefined) return { ok: false, why: "no package directory to check" };
+   // The machine-local registry of rounds keryx finished: a package whose files hash to an entry is one keryx finished
+   // here, whichever commit carries it (a flow package keryx committed on the PR branch, a round fetched from a branch).
+-  const vouched = registryVouches(registry, candidate.reviewId, candidate.hashes);
++  // A partial-round record vouches for a partial round only (above), never for the same files claiming completion.
++  const vouched = registryVouches(registry.filter((entry) => entry.event !== "desk-partial"), candidate.reviewId, candidate.hashes);
+   const byRegistry = (detail: string): CandidateTrust => ({ ok: true, why: `trusted: local registry (${vouched!.event} at ${vouched!.completedAt}; the files match what keryx recorded), though ${detail}` });
+   // A package read from another branch's history is anybody's commit — a checked-out foreign pull request among them.
+   // It counts only once merged into the base branch, or with keryx's own record of it.
+   if (candidate.source === "git-history") {
+     const where = candidate.commit === undefined ? candidate.packageDir : `${candidate.packageDir} (at ${candidate.commit.slice(0, 12)})`;
+     if (base === null || candidate.commit === undefined || !(await isAncestor(git, candidate.commit, base.ref))) {
+       if (vouched !== undefined) return byRegistry(`${where} is not merged into ${base?.ref ?? "a known base"}`);
+       return { ok: false, why: `${where} was committed on a branch not merged into ${base?.ref ?? "a known base"}, and the local round registry has no entry matching its files` };
+     }
+   }
+   if (head === null) return { ok: true, why: `${candidate.completed.why}; no head, so the branch's own commits were not checked` };
+   const range = base === null ? head : `${base.sha}..${head}`;
+   const log = await git(["log", "-n1", "--format=%H", "--end-of-options", range, "--", candidate.packageDir]);
+   if (log.exitCode !== 0) return { ok: false, why: `the branch's history of ${candidate.packageDir} could not be read` };
+   const commit = log.stdout.trim();
+   if (commit === "") return { ok: true, why: candidate.completed.why };
+   // Committed by the branch — a flow package keryx commits on the PR branch, or a forgery; only the registry tells.
+   if (vouched !== undefined) return byRegistry(`${candidate.packageDir} was committed by ${commit.slice(0, 12)}`);
+   return {
+     ok: false,
+
+--- src/review/prior-round.ts
+@@ 399,448 @@
+     at: stamp(manifest),
+     packagePath: relative,
+     packageDir: relative,
+     findings: priorFindingsOf(findings, source),
+     completed,
+     recordedBase: recordedBaseOf(manifest),
+     hashes: packageFacts(dir)?.hashes,
+     ...weakFacts(readJsonFile(path.join(dir, "research.json")), readJsonFile(path.join(dir, "round.json"))),
+     eligible,
+     manifest,
+   };
+ }
+ 
+ function weakFacts(research: unknown, round: unknown): Pick<RoundCandidate, "weak" | "prevMergeBase"> {
+   const facts = previousRoundFacts(research, round);
+   return { weak: facts.weak, prevMergeBase: facts.mergeBase };
+ }
+ 
+ const strip = ({ eligible: _eligible, manifest: _manifest, ...candidate }: RoundCandidate & { eligible: boolean; manifest: Record<string, unknown> }): RoundCandidate => candidate;
+ 
+-/** Source 1: packages in this checkout for this target, past their draft (M1), with a head. */
+-export function localPackageCandidates(cwd: string, target: PriorRoundTarget, targetKey = targetKeyOf(target)): RoundCandidate[] {
++/**
++ * Source 1: packages in this checkout for this target, past their draft (M1), with a head. A draft counts only with
++ * Desktop's `desk-partial` record of exactly its files in `registry` (flow 520 AC7).
++ */
++export function localPackageCandidates(cwd: string, target: PriorRoundTarget, targetKey = targetKeyOf(target), registry: readonly RoundRegistryEntry[] = []): RoundCandidate[] {
+   const found: RoundCandidate[] = [];
+   for (const dir of packageDirs(cwd)) {
+     const candidate = diskCandidate(dir, cwd, "local-package");
+-    if (candidate === undefined || candidate.reviewedHead === null || !candidate.eligible) continue;
++    if (candidate === undefined || candidate.reviewedHead === null) continue;
++    if (!candidate.eligible && partialRoundVouch(registry, candidate.reviewId, candidate.hashes) === undefined) continue;
+     const match = targetMatchOf(candidate.manifest, target, targetKey);
+     if (match === undefined) continue;
+     found.push({ ...strip(candidate), match });
+   }
+   return found;
+ }
+ 
+ type HistoryEntry = { commit: string; at: number; manifestPath: string };
+ 
+ /** Read from the local branches, and the target's base branch (a resolved base ref, never dash-leading) when given. */
+ async function historyEntries(git: GitRunner, limit: number, baseRef: string | undefined): Promise<HistoryEntry[]> {
+   const base = baseRef === undefined || baseRef.startsWith("-") ? [] : [baseRef];
+   const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...REVIEW_PACKAGE_MANIFEST_GLOBS]);
+   if (log.exitCode !== 0) return [];
+   const seen = new Set<string>();
+   const entries: HistoryEntry[] = [];
+   for (const chunk of log.stdout.split("\x01")) {
+     const [header, ...files] = chunk.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+     if (header === undefined) continue;
+     const [commit, seconds] = header.split(" ");
+
+--- src/review/prior-round.ts
+@@ 798,899 @@
+  * that base is ours.
+  */
+ async function onBranchLine(git: GitRunner, candidate: RoundCandidate, head: string | null, base: { ref: string; sha: string } | null): Promise<boolean> {
+   if (candidate.match !== "branch-line") return true;
+   if (head === null || base === null || candidate.reviewedHead === null) return false;
+   if (candidate.recordedBase !== undefined && candidate.recordedBase !== base.ref) return false;
+   if (!(await isAncestor(git, candidate.reviewedHead, head))) return false;
+   return (await mergeBaseOf(git, base.ref, candidate.reviewedHead)) === base.sha;
+ }
+ 
+ /** Find the previous round of `target` and build this round's record. Never throws for a source that fails. */
+ export async function findPreviousRound(target: PriorRoundTarget, head: string | null, deps: PriorRoundDeps): Promise<PriorRoundResult> {
+   const git = deps.git ?? defaultGitRunner(deps.cwd);
+   const tried: SourceAttempt[] = [];
+   const candidates: RoundCandidate[] = [];
+   let commentFindings: PriorFinding[] = [];
+   const exclude = (list: RoundCandidate[]): RoundCandidate[] => list.filter((candidate) => candidate.reviewId !== deps.excludeReviewId);
+   const base = head === null ? null : await resolveBase(git, target, head);
+   const targetKey = targetKeyOf(target, base?.ref);
+   const limit = deps.historyLimit ?? 200;
++  const registryRead: { entries: readonly RoundRegistryEntry[]; warning?: string | undefined } = deps.registry === undefined ? readRoundRegistryReport(repoIdentity(deps.cwd)) : { entries: deps.registry };
++  const registry = registryRead.entries;
+ 
+   if (deps.forced !== undefined) {
+     const found = resolveForced(deps.forced, deps.cwd) ?? (await gitHistoryCandidates(git, undefined, limit, deps.forced, { baseRef: base?.ref }))[0];
+     if (found === undefined) throw new Error(`--prior ${deps.forced}: no review package with that path or review id, in this checkout or in git history.`);
+     candidates.push(found);
+     for (const source of SEARCH_ORDER) {
+       tried.push(source === found.source ? { source, result: "found", detail: `forced by --prior ${deps.forced}` } : { source, result: "not-consulted", detail: "--prior given" });
+     }
+   } else {
+     /** Check `list` against the branch line and record the attempt; `note` is appended to its detail. */
+     const record = async (source: SearchedSource, list: RoundCandidate[], none: string, note = ""): Promise<RoundCandidate[]> => {
+       const found: RoundCandidate[] = [];
+       const off: string[] = [];
+       for (const candidate of list) {
+         if (await onBranchLine(git, candidate, head, base)) found.push(candidate);
+         else off.push(candidate.reviewId);
+       }
+       candidates.push(...found);
+       const offLine = off.length === 0 ? "" : `; ${off.length} branch package(s) not on this branch line: ${off.join(", ")}`;
+       tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}${note}` });
+       return found;
+     };
+-    const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey)), "no package for this target in this checkout");
++    const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey, registry)), "no package for this target in this checkout");
+     const known = new Set(local.map((candidate) => candidate.reviewId));
+     const historyFound = exclude(await gitHistoryCandidates(git, target, limit, undefined, { baseRef: base?.ref, targetKey })).filter((candidate) => !known.has(candidate.reviewId));
+     const history = await record("git-history", historyFound, `no committed package for this target in the last ${limit} package commits of the local branches${base === null ? "" : ` and ${base.ref}`} (${HISTORY_DAYS} days)`);
+     for (const candidate of history) known.add(candidate.reviewId);
+ 
+     const lookup = await (deps.github ?? defaultGithubLookup)(target).catch((error: unknown): GithubLookup => ({ status: "not-consulted", detail: error instanceof Error ? error.message : String(error) }));
+     if (lookup.status === "not-consulted") {
+       tried.push({ source: "github-block", result: "not-consulted", detail: lookup.detail });
+       tried.push({ source: "github-comments", result: "not-consulted", detail: lookup.detail });
+     } else {
+       await record("github-block", exclude(githubBlockCandidates(lookup.blocks)), "no keryx round block in our own comments");
+       commentFindings = githubCommentFindings(lookup.comments);
+       tried.push({ source: "github-comments", result: commentFindings.length > 0 ? "found" : "none", detail: commentFindings.length > 0 ? `${commentFindings.length} comment(s) from others` : "no comments from others" });
+     }
+ 
+     if (deps.flowDir === undefined) {
+       tried.push({ source: "flow", result: "not-consulted", detail: "the package is not bound to a flow" });
+     } else {
+       // Review LG4-002: a read that fails is reported, not read as "no round", and a package that is not ingested is
+       // named beside the result, so one unreadable package never silently hides the flow's rounds.
+       const read = await (deps.flowRounds ?? readReviewRounds)(deps.cwd, deps.flowDir).then(
+         (rounds) => ({ rounds }),
+         (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+       );
+       if ("error" in read) {
+         tried.push({ source: "flow", result: "not-consulted", detail: `the rounds of flow ${deps.flowDir} could not be read (${read.error})` });
+       } else {
+         // The package being started (excludeReviewId) is not an earlier round, so it is never named as skipped (review LG5-001).
+         const skipped = read.rounds.filter((round) => !round.ingested && round.reviewId !== deps.excludeReviewId);
+         const note = skipped.length === 0 ? "" : `; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
+         await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`, note);
+       }
+     }
+   }
+ 
+   // Trust: a package is cut from only when the pipeline finished it and this branch did not write it — or, when the
+   // branch did commit it, the machine-local registry holds keryx's own record of exactly these files.
+-  const registryRead: { entries: readonly RoundRegistryEntry[]; warning?: string | undefined } = deps.registry === undefined ? readRoundRegistryReport(repoIdentity(deps.cwd)) : { entries: deps.registry };
+-  const registry = registryRead.entries;
+   if (registryRead.warning !== undefined) {
+     const local = tried.find((attempt) => attempt.source === "local-package");
+     if (local !== undefined) local.detail = `${local.detail}; ${registryRead.warning}`;
+   }
+   for (const candidate of candidates) {
+     if (candidate.trust === undefined) candidate.trust = await packageTrust(git, candidate, head, base, registry);
+     if (candidate.trust.ok && candidate.trust.why.startsWith("trusted: local registry")) {
+       const at = tried.find((attempt) => attempt.source === candidate.source);
+       if (at !== undefined) at.detail = `${at.detail}; ${candidate.reviewId} ${candidate.trust.why}`;
+     }
+     if (candidate.trust.ok) continue;
+     const at = tried.find((attempt) => attempt.source === candidate.source);
+     if (at !== undefined) at.detail = `${at.detail}; not trusted ${candidate.reviewId}: ${candidate.trust.why}`;
+   }
+   const trusted = candidates.filter((candidate) => candidate.trust?.ok === true);
+   const untrusted = candidates.filter((candidate) => candidate.trust?.ok !== true && candidate.reviewedHead !== null);
+   let choice = await choosePrevious(git, trusted, head);
+   if (choice.previous === undefined && untrusted.length > 0) {
+     const newest = [...untrusted].sort((a, b) => b.at - a.at || SOURCE_RANK[a.source] - SOURCE_RANK[b.source])[0]!;
+     choice = { previous: newest, mode: "fallback-first", detail: `no trusted previous round; ${newest.reviewId} is not trusted (${newest.trust?.why ?? "unchecked"}), so this is a full review with its findings as context only` };
+
+--- src/review/round-registry.ts
+@@ 24,68 @@
+ 
+ export const ROUND_REGISTRY_DIR = "review-rounds";
+ 
+ /** Compact the registry file once it grows past this, keeping the newest entry per package. */
+ export const REGISTRY_COMPACT_BYTES = 512 * 1024;
+ 
+ /**
+  * v2: the manifest is hashed over its identity fields (round-record.ts `MANIFEST_IDENTITY_FIELDS`), findings and the
+  * round record over their JSON content. A v1 entry hashed raw bytes and is ignored: it costs one full round, never trust.
+  */
+ export type RoundRegistryEntry = {
+   v: 2;
+   packageId: string;
+   targetKey: string;
+   reviewedHead: string | null;
+   manifestSha256: string;
+   findingsSha256: string | null;
+   roundRecordSha256?: string | undefined;
+   completedAt: string;
+   /**
+-   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, or the operator's premise
+-   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for.
++   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, the operator's premise
++   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for, or Desktop
++   * handing a partial attempt's package to the next round of the same Review (`desk-partial`, {@link recordPartialRound}).
+    */
+-  event: "ingest" | "complete" | "publish" | "decide-premise";
++  event: "ingest" | "complete" | "publish" | "decide-premise" | "desk-partial";
+ };
+ 
+ const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
+ 
+ /**
+  * The identity of the repository a checkout belongs to: its `origin` URL without credentials or a `.git` suffix,
+  * lower-cased, so every clone and worktree of one repository on this machine shares one registry file; without an
+  * origin, the absolute git common directory. Undefined outside a git checkout.
+  */
+ export function repoIdentity(cwd: string): string | undefined {
+   const run = (args: string[]): string | undefined => {
+     try {
+       const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "ignore" });
+       const out = result.stdout.toString().trim();
+       return result.exitCode === 0 && out !== "" ? out : undefined;
+     } catch {
+       return undefined;
+     }
+   };
+   const origin = run(["config", "--get", "remote.origin.url"]);
+
+--- src/review/round-registry.ts
+@@ 153,202 @@
+   }
+   return { file };
+ }
+ 
+ /**
+  * The entry that vouches for a package with these files, or undefined: same package id, the same manifest identity
+  * (target, head, flow, mode and start's stamps — not its lifecycle status), the same findings and, when the entry
+  * recorded one, the same round.json. Changing what the round reviewed or found breaks the match; closing it does not.
+  */
+ export function registryVouches(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
+   if (hashes === undefined) return undefined;
+   return [...entries].reverse().find(
+     (entry) =>
+       entry.packageId === packageId &&
+       entry.manifestSha256 === hashes.manifestSha256 &&
+       entry.findingsSha256 === hashes.findingsSha256 &&
+       (entry.roundRecordSha256 === undefined || entry.roundRecordSha256 === hashes.roundRecordSha256),
+   );
+ }
+ 
++/**
++ * Flow 520 AC7: Desktop's record that this package, with exactly these files, is a partial round it ran itself and handed
++ * to the next round of the same Review. Only that record admits a package with no completion evidence (a draft) as a
++ * previous round, and only one whose findings were ingested: a partial round builds on its accepted findings.
++ */
++export function partialRoundVouch(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
++  if (hashes === undefined || hashes.findingsSha256 === null) return undefined;
++  return registryVouches(entries.filter((entry) => entry.event === "desk-partial"), packageId, hashes);
++}
++
+ /** The package id the registry records a package under: its manifest's `reviewId`, else its directory name. */
+ function packageIdOf(packageDir: string, manifest: Record<string, unknown>): string {
+   return typeof manifest.reviewId === "string" ? manifest.reviewId : path.basename(packageDir);
+ }
+ 
+ /**
+  * Whether the registry vouches for the package's files as they are now (review RG2-001). A writer that changes a
+  * vouched package's findings.json (the operator's premise answer) asks this before the write, and re-records after it
+  * only when it was vouched, so the answer keeps the round trusted without vouching for a package keryx never finished.
+  */
+ export function registryVouchesPackage(packageDir: string, options: { cwd?: string; dir?: string } = {}): boolean {
+   try {
+     const facts = packageFacts(packageDir);
+     if (facts === undefined) return false;
+     const identity = repoIdentity(options.cwd ?? packageDir);
+     if (identity === undefined) return false;
+     return registryVouches(readRoundRegistry(identity, options.dir), packageIdOf(packageDir, facts.manifest), facts.hashes) !== undefined;
+   } catch {
+     return false;
+   }
+
+--- src/review/round-registry.ts
+@@ 224,285 @@
+     const target = facts.manifest.target !== null && typeof facts.manifest.target === "object" ? (facts.manifest.target as Record<string, unknown>) : {};
+     const packageId = packageIdOf(packageDir, facts.manifest);
+     const head = typeof target.head === "string" ? target.head : null;
+     const entry: RoundRegistryEntry = {
+       v: 2,
+       packageId,
+       targetKey: roundStampOf(facts.manifest)?.targetKey ?? `${String(target.kind ?? "unknown")}:${String(target.ref ?? "")}`,
+       reviewedHead: head,
+       manifestSha256: facts.hashes.manifestSha256,
+       findingsSha256: facts.hashes.findingsSha256,
+       ...(facts.hashes.roundRecordSha256 === null ? {} : { roundRecordSha256: facts.hashes.roundRecordSha256 }),
+       completedAt: (options.now ?? new Date()).toISOString(),
+       event,
+     };
+     const written = appendRoundRegistry(identity, entry, options.dir);
+     return { file: written.file, ...(written.warning === undefined ? {} : { warning: written.warning }) };
+   } catch (error) {
+     return { error: error instanceof Error ? error.message : String(error) };
+   }
+ }
++
++/**
++ * Flow 520 AC7: record a partial round Desktop ran (its attempt ended `partial` with accepted findings), as Desktop copies
++ * the package from its own run directory into the next round's checkout. Called only by the Desktop executor, which takes
++ * the package from the user's run store, never from a checkout a pull request can write. A package without ingested
++ * findings (findings.json holding a list) is not recorded. Unlike {@link recordFinishedRound} a failure is returned, and
++ * the caller then does not hand the package on.
++ */
++export function recordPartialRound(
++  packageDir: string,
++  options: { cwd: string; dir?: string | undefined; now?: Date },
++): { file?: string; error?: string; skipped?: string } {
++  try {
++    const facts = packageFacts(packageDir);
++    if (facts === undefined) return { error: `${packageDir} has no readable manifest.json` };
++    const read = readConfigFile(path.join(packageDir, "findings.json"));
++    let findings: unknown;
++    try {
++      findings = read.ok ? JSON.parse(read.text) : undefined;
++    } catch {
++      findings = undefined; // Not JSON: no ingested findings, refused just below.
++    }
++    if (!Array.isArray(findings)) return { skipped: "the partial round has no ingested findings.json" };
++    const identity = repoIdentity(options.cwd);
++    if (identity === undefined) return { error: `${options.cwd} is not a git checkout` };
++    const target = facts.manifest.target !== null && typeof facts.manifest.target === "object" ? (facts.manifest.target as Record<string, unknown>) : {};
++    const entry: RoundRegistryEntry = {
++      v: 2,
++      packageId: packageIdOf(packageDir, facts.manifest),
++      targetKey: roundStampOf(facts.manifest)?.targetKey ?? `${String(target.kind ?? "unknown")}:${String(target.ref ?? "")}`,
++      reviewedHead: typeof target.head === "string" ? target.head : null,
++      manifestSha256: facts.hashes.manifestSha256,
++      findingsSha256: facts.hashes.findingsSha256,
++      ...(facts.hashes.roundRecordSha256 === null ? {} : { roundRecordSha256: facts.hashes.roundRecordSha256 }),
++      completedAt: (options.now ?? new Date()).toISOString(),
++      event: "desk-partial",
++    };
++    return { file: appendRoundRegistry(identity, entry, options.dir).file };
++  } catch (error) {
++    return { error: error instanceof Error ? error.message : String(error) };
++  }
++}
+
+--- src/review/update-round.ts
+@@ 1,27 @@
++// Update round: pick the previous attempt a new round builds on (spec "Раунд обновления", items 1 and 4).
++// It works on the DeskRun attempt format only, so it serves a review's rounds as well as a PR's run history.
++import { DESK_RUN_SCOPE, type DeskRun } from "./desk-run-types";
++
++export interface PriorAttempt {
++  attempt: DeskRun;
++  /** The attempt left part of the diff unreviewed; the new round plans that area as unreviewed. */
++  partial: boolean;
++}
++
++/**
++ * The newest attempt (`attempts` is newest first) whose accepted findings the next round may build on.
++ * The options key is deliberately not compared: changing settings between rounds does not break the link.
++ */
++export function selectPriorAttempt(attempts: readonly DeskRun[], scope: string = DESK_RUN_SCOPE): PriorAttempt | undefined {
++  for (const attempt of attempts) {
++    if (attempt.source === "existing" || attempt.scope !== scope) continue;
++    if (attempt.state !== "completed" && attempt.state !== "partial") continue;
++    // Delete and archive withdraw the attempt (its evidence is discarded); complete and close keep real findings, restore re-admits.
++    if (attempt.decision?.action === "delete" || attempt.decision?.action === "archive") continue;
++    const result = attempt.result;
++    if (!result?.reviewed || result.findingsKnown !== true) continue;
++    return { attempt, partial: attempt.state === "partial" || result.coverage !== "complete" };
++  }
++  return undefined;
++}
+
+
+--- src/review/desk-publication.test.ts
+@@ 1,105 @@
+ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
++import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { publishCompletedDeskReview, requestDeskPublication } from "./desk-publication";
++import { DESK_TEMPLATE_SELECTION, projectReviewOverlay, reportTemplateFingerprint } from "./desk-review-report";
+ import { DeskRunStore } from "./desk-run-store";
+ import { isolateGitDiscovery } from "./test-git-fixture";
+ 
+ const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: "fixture-reviewer", number: 7 };
+ const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
+ const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "GH_TOKEN", "GITHUB_TOKEN",
+-  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS"] as const;
++  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS",
++  "FIXTURE_COMPARE", "FIXTURE_COMPARE_READS", "FIXTURE_DISCUSSION", "FIXTURE_DISCUSSION_READS"] as const;
+ let saved: Partial<Record<(typeof envNames)[number], string | undefined>>;
+ let restoreGit: () => void;
+ let root: string;
+ let project: string;
+ let directory: string;
+ let id: string;
+ const confirmFixture = async () => {};
+ 
+ function json(file: string, value: unknown) {
+   writeFileSync(file, JSON.stringify(value));
+ }
+ 
+-function setHead(headRefOid: string, viewer = key.viewer) {
++function setPull(fields: { state?: string; baseRefOid?: string; headRefOid?: string }, viewer = key.viewer) {
+   json(path.join(root, "pr.json"), { data: { viewer: { login: viewer }, repository: { id: key.repositoryId,
+-    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid } } } });
++    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid: revision.headSha, ...fields } } } });
++}
++
++function setHead(headRefOid: string, viewer = key.viewer) {
++  setPull({ headRefOid }, viewer);
+ }
+ 
++const posted = () => JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"));
++const reads = (name: "FIXTURE_COMPARE_READS" | "FIXTURE_DISCUSSION_READS") =>
++  existsSync(process.env[name]!) ? readFileSync(process.env[name]!, "utf8") : "";
++/** GitHub's compare status of the reviewed head against the current head, or `fail:<stderr>` for a failing gh call. */
++const setCompare = (status: string) => writeFileSync(process.env.FIXTURE_COMPARE!, `${status}\n`);
++const movedHead = "c".repeat(40);
++const movedLine = `Reviewed commit \`${revision.headSha}\`. The pull request has moved to \`${movedHead}\` since; ` +
++  "this review does not cover the newer commits.";
++
+ beforeEach(() => {
+   restoreGit = isolateGitDiscovery();
+   saved = Object.fromEntries(envNames.map(name => [name, process.env[name]]));
+   root = mkdtempSync(path.join(tmpdir(), "keryx-review-publication-"));
+   project = path.join(root, "project");
+   mkdirSync(project);
+   const git = (...args: string[]) => {
+     const result = Bun.spawnSync(["git", "-c", "init.templateDir=", ...args], { cwd: project });
+     expect(result.exitCode).toBe(0);
+   };
+   git("init", "-q");
+   git("remote", "add", "origin", "https://github.com/example/project.git");
+ 
+   process.env.KERYX_CONFIG_DIR = path.join(root, "config");
+   process.env.KERYX_DATA_DIR = path.join(root, "data");
+   process.env.PATH = root + path.delimiter + saved.PATH;
+   process.env.FIXTURE_BODY = path.join(root, "post.json");
+   process.env.FIXTURE_PR = path.join(root, "pr.json");
+   process.env.FIXTURE_DIFF = path.join(root, "diff.txt");
+   process.env.FIXTURE_DIFF_READS = path.join(root, "diff-reads");
++  process.env.FIXTURE_COMPARE = path.join(root, "compare.txt");
++  process.env.FIXTURE_COMPARE_READS = path.join(root, "compare-reads");
++  process.env.FIXTURE_DISCUSSION = path.join(root, "discussion.json");
++  process.env.FIXTURE_DISCUSSION_READS = path.join(root, "discussion-reads");
++  setCompare("ahead");
++  writeFileSync(process.env.FIXTURE_DISCUSSION, "[[]]\n");
+   delete process.env.GH_TOKEN;
+   delete process.env.GITHUB_TOKEN;
+   delete process.env.FIXTURE_NAMED_PR;
+   setHead(revision.headSha);
+   writeFileSync(process.env.FIXTURE_DIFF, "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n");
+   const gh = path.join(root, "gh");
+   writeFileSync(gh, [
+     "#!/bin/sh",
+     'case "$1:$4" in',
+     "  auth:*) printf 'fixture-value-only\\n' ;;",
+     '  api:graphql) if [ -n "$GH_TOKEN" ] && [ -n "$FIXTURE_NAMED_PR" ]; then cat "$FIXTURE_NAMED_PR"; else cat "$FIXTURE_PR"; fi ;;',
+     '  api:-H) printf x >> "$FIXTURE_DIFF_READS"; cat "$FIXTURE_DIFF" ;;',
++    '  api:--paginate) printf x >> "$FIXTURE_DISCUSSION_READS"; cat "$FIXTURE_DISCUSSION" ;;',
++    `  api:repos/*/compare/*) printf '%s %s %s\\n' "$4" "$5" "$6" >> "$FIXTURE_COMPARE_READS"; read -r status < "$FIXTURE_COMPARE"`,
++    `    case "$status" in fail:*) printf '%s\\n' "\${status#fail:}" >&2; exit 1 ;; *) printf '%s\\n' "$status" ;; esac ;;`,
+     '  api:--method) cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;',
+     "  *) exit 1 ;;",
+     "esac",
+   ].join("\n"));
+   chmodSync(gh, 0o700);
+ 
+   const store = new DeskRunStore();
+   try {
+     id = store.request(project, key, revision)!;
+     const attempt = store.byId(id)!;
+     store.end(attempt, {
+       state: "partial", phase: "Partial", reason: "Partial fixture",
+       result: { reviewed: revision, coverage: "partial", verdict: "REQUEST_CHANGES",
+         findings: { blocker: 0, major: 1, minor: 1, info: 0 }, report: "Fixture review." },
+     });
+     directory = store.directory(id);
+   } finally {
+     store.close();
+   }
+   const pkg = path.join(directory, "package");
+
+--- src/review/desk-publication.test.ts
+@@ 115,354 @@
+     { id: "F-002", global_id: "fixture#F-002", severity: "minor", reviewer: "review-logic", problem: "A label is ambiguous.",
+       premise: { verdict: "challenged", question: "Is this label intentional?" } },
+   ]);
+   writeFileSync(path.join(pkg, "report.md"), "Fixture review.\nEvidence level: static only — did not run: tests\n\nNot verified: 1\n");
+   mkdirSync(path.join(project, ".metaproject"));
+   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## Team review\n\n{{review}}\n");
+ });
+ afterEach(() => {
+   for (const name of envNames) {
+     const value = saved[name];
+     if (value === undefined) delete process.env[name];
+     else process.env[name] = value;
+   }
+   restoreGit();
+   rmSync(root, { recursive: true, force: true });
+ });
+ 
+ test("draft questions, template and saved settings are local until one explicit submit", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.settings.verdict).toBe("changes");
++  expect(preview.headMoved).toBeUndefined();
+   expect(preview.questions).toMatchObject([{ id: "fixture#F-002", text: "Is this label intentional?", recommendation: "dismiss" }]);
+   expect(preview.canSubmit).toBe(false);
+   expect(preview.overlayAvailable).toBe(true);
+   expect(preview.body).toContain("## Team review\n\n**Changes requested — 1 Major.**");
+   expect(preview.body).toContain("Evidence level: static only — did not run: tests");
+   expect(preview.body).toContain("### Major");
+   expect(preview.body).toContain(`/blob/${revision.headSha}/src/a.ts#L1`);
+   const draft = await requestDeskPublication(project, key, { kind: "save", id,
+     settings: { ...preview.settings, inline: true, overlay: false, keryxTemplate: false, answers: { "fixture#F-002": "dismiss" } } });
+   expect(draft.savedAt).toBeDefined();
+   expect(draft.settings).toMatchObject({ keryxTemplate: true, overlay: true });
+   expect(draft.body).toContain("## Team review");
+   expect(draft.body).not.toContain("A label is ambiguous");
+   expect(draft.inlineCount).toBe(1);
+   expect(draft.canSubmit).toBe(true);
+   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings).toEqual(draft.settings);
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: "0".repeat(64) })).rejects.toThrow("preview changed");
+   const published = await requestDeskPublication(project, key,
+     { kind: "submit", id, settings: draft.settings, digest: draft.digest }, confirmFixture);
+   expect(published.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-23");
+   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"))).toMatchObject({
+     event: "REQUEST_CHANGES", commit_id: revision.headSha, comments: [{ path: "src/a.ts", line: 1, side: "RIGHT" }],
+   });
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest })).rejects.toThrow("already been published");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
+ });
+ 
+-test("partial approval and a moved revision cannot send a review", async () => {
++test("partial approval, a changed base and a closed pull request cannot send a review", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   const settings = { ...preview.settings, verdictOverride: "suggestions" as const, answers: { "fixture#F-002": "uphold" as const } };
+   const approval = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+   expect(approval.body).toContain("A label is ambiguous");
+   expect(approval.blockedReason).toContain("cannot approve");
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: approval.settings, digest: approval.digest }))
+     .rejects.toThrow("cannot approve");
+-  setHead("c".repeat(40));
+-  const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+-  expect(stale.savedAt).toBeDefined();
+-  expect(stale.blockedReason).toContain("revision moved");
+-  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }))
+-    .rejects.toThrow("revision moved");
++  for (const pull of [{ baseRefOid: "e".repeat(40), headRefOid: movedHead }, { state: "CLOSED", headRefOid: movedHead }, { state: "CLOSED" }]) {
++    setPull(pull);
++    const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
++    expect(stale.savedAt).toBeDefined();
++    expect(stale.headMoved).toBeUndefined();
++    expect(stale.blockedReason).toContain("revision moved");
++    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }, confirmFixture))
++      .rejects.toThrow("revision moved");
++  }
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a moved head publishes as is: a Comment on the reviewed commit whose first line names it", async () => {
++  setHead(movedHead);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
++  expect(preview.headMoved).toEqual({ reviewedHead: revision.headSha, currentHead: movedHead });
++  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
++  expect(preview.body.split("\n")[0]).toBe(movedLine);
++  expect(preview.blockedReason).toContain("Answer each finding question");
++  const answered = await requestDeskPublication(project, key, { kind: "preview", id,
++    settings: { ...preview.settings, answers: { "fixture#F-002": "dismiss" } } });
++  expect(answered.canSubmit).toBe(true);
++  expect(answered.blockedReason).toBeUndefined();
++  const published = await requestDeskPublication(project, key,
++    { kind: "submit", id, settings: answered.settings, digest: answered.digest }, confirmFixture);
++  expect(published.publishedUrl).toContain("#pullrequestreview-23");
++  const sent = posted();
++  expect(sent).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
++  expect(sent.body.split("\n")[0]).toBe(movedLine);
++  expect(reads("FIXTURE_COMPARE_READS").split("\n")[0])
++    .toBe(`repos/${key.repo}/compare/${revision.headSha}...${movedHead}?per_page=1 --jq .status`);
++});
++
++test("a head that no longer contains the reviewed commit keeps the refusal and posts nothing", async () => {
++  setHead(movedHead);
++  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
++    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
++  // A force-push or rebase (diverged), an older head (behind), and a compare call that fails for any reason.
++  for (const status of ["diverged", "behind", "fail:HTTP 404: Not Found", "fail:connection reset"]) {
++    setCompare(status);
++    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++    expect(preview.headMoved).toBeUndefined();
++    expect(preview.body).not.toContain("Reviewed commit");
++    expect(preview.blockedReason).toBe("The pull request is closed or its revision moved. You can still save this draft locally.");
++    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
++      .rejects.toThrow("revision moved");
++  }
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a current head that is not a commit id keeps the refusal without asking GitHub to compare", async () => {
++  setHead("not-a-commit");
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
++  expect(preview.headMoved).toBeUndefined();
++  expect(preview.blockedReason).toContain("revision moved");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
++});
++
++test("a moved head with General comment off names the only control that can unblock it", async () => {
++  setHead(movedHead);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: { inline: true, general: false,
++    keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment", answers: { "fixture#F-002": "dismiss" } } });
++  expect(preview.headMoved).toBeDefined();
++  expect(preview.blockedReason).toBe("Enable General comment. Inline comments are not available when publishing for an earlier commit.");
++});
++
++test("a moved head re-reads the discussion an overlay requires, and a changed discussion makes the submit stale", async () => {
++  installDiscussionOverlay();
++  setHead(movedHead);
++  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
++    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++  expect(preview.headMoved).toBeDefined();
++  expect(preview.canSubmit).toBe(true);
++  expect(reads("FIXTURE_DISCUSSION_READS")).toBe("xxx");
++  writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":1,"body":"A new comment"}]]\n');
++  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
++    .rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a moved head ignores a requested verdict and inline comments", async () => {
++  setHead(movedHead);
++  const settings = { inline: true, general: true, keryxTemplate: true, overlay: true, verdict: "changes" as const,
++    verdictOverride: "changes" as const, answers: { "fixture#F-002": "uphold" as const } };
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
++  expect(preview.inlineCount).toBe(0);
++  expect(existsSync(process.env.FIXTURE_DIFF_READS!)).toBe(false);
++  await requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture);
++  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
++});
++
++test("a head that moves again after the preview or before the write posts nothing", async () => {
++  setHead(movedHead);
++  const first = await requestDeskPublication(project, key, { kind: "preview", id });
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id,
++    settings: { ...first.settings, answers: { "fixture#F-002": "dismiss" } } });
++  expect(preview.canSubmit).toBe(true);
++  const submit = { kind: "submit" as const, id, settings: preview.settings, digest: preview.digest };
++  setHead("d".repeat(40));
++  await expect(requestDeskPublication(project, key, submit, confirmFixture)).rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  setHead(movedHead);
++  await expect(requestDeskPublication(project, key, submit, async () => setHead("d".repeat(40)))).rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
++});
++
++/** A completed auto-publish attempt with a complete package, so only the head decides whether it posts. */
++async function automaticRun(): Promise<string> {
++  const store = new DeskRunStore();
++  let auto: string;
++  let autoDirectory: string;
++  try {
++    auto = store.requestAttempt(project, key, revision, undefined, { mode: "auto", adaptive: false, autoPublish: true,
++      modelPools: { strong: [], middle: [], light: [] } })!.id;
++    store.end(store.byId(auto)!, { state: "completed", phase: "Complete", reason: "",
++      result: { reviewed: revision, coverage: "complete", verdict: "COMMENT", findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++        report: "Fixture review." } });
++    autoDirectory = store.directory(auto);
++  } finally {
++    store.close();
++  }
++  cpSync(path.join(directory, "package"), path.join(autoDirectory, "package"), { recursive: true });
++  const findingsFile = path.join(autoDirectory, "package", "findings.json");
++  json(findingsFile, JSON.parse(readFileSync(findingsFile, "utf8")).slice(0, 1));
++  // A complete package needs coverage.md for readiness; without it automatic publication is refused at any head.
++  writeFileSync(path.join(autoDirectory, "package", "coverage.md"), "# Coverage\n");
++  json(path.join(autoDirectory, DESK_TEMPLATE_SELECTION), reportTemplateFingerprint((await projectReviewOverlay(project)).overlay));
++  return auto;
++}
++
++/** A Keryx slots overlay whose instructions require re-reading the PR discussion before posting. */
++function installDiscussionOverlay() {
++  const templates = path.join(project, ".metaproject", "skills", "gdskills", "review", "review-orchestrator", "templates");
++  mkdirSync(templates, { recursive: true });
++  writeFileSync(path.join(templates, "review-report.md"), "# Review\n\n<!-- slot:how-run -->\n");
++  const overlay = path.join(project, ".metaproject", "project-skills", "orchestration", "fixture-overlay", "templates");
++  mkdirSync(overlay, { recursive: true });
++  writeFileSync(path.join(overlay, "report-overlay.md"), [
++    "```yaml", "extends: review-orchestrator", "overlay: fixture-overlay", "slots: [how-run]", "reread_discussion: true", "```",
++    "", "## slot: how-run", "", "Fixture run notes.", "",
++  ].join("\n"));
++}
++
++test("automatic publication posts at the reviewed head and never after the head moved", async () => {
++  const auto = await automaticRun();
++  setHead(movedHead);
++  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  setHead(revision.headSha);
++  await publishCompletedDeskReview(project, key, auto);
++  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha });
++});
++
++test("automatic publication after the head moved refuses before any compare or discussion read", async () => {
++  installDiscussionOverlay();
++  const auto = await automaticRun();
++  setHead(movedHead);
++  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
++  expect(reads("FIXTURE_DISCUSSION_READS")).toBe("");
+   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+ });
+ 
+ test("uses the standard report when a project overlay is invalid", async () => {
+   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## No insertion point");
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.body).toStartWith("**Changes requested — 1 Major.**");
+   expect(preview.body).not.toContain("No insertion point");
+   expect(preview.settings).toMatchObject({ keryxTemplate: true, overlay: false });
+   expect(preview.overlayWarning).toContain("{{review}}");
+ });
+ 
+ test("editing answers recomputes an automatic verdict and preserves only an explicit override", async () => {
+   const findingsFile = path.join(directory, "package", "findings.json");
+   const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+   json(findingsFile, [{ ...held, severity: "major" }]);
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.settings.verdict).toBe("comment");
+   const settings = { ...preview.settings, answers: { "fixture#F-002": "uphold" as const } };
+   const automatic = await requestDeskPublication(project, key, { kind: "save", id, settings });
+
+--- src/review/desk-publication.test.ts
+@@ 355,454 @@
+   expect(automatic.settings.verdict).toBe("changes");
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.verdictOverride).toBeNull();
+   await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.verdict).toBe("comment");
+ });
+ 
+ test("local answers reopen without storing rendered GitHub content", async () => {
+   const findingsFile = path.join(directory, "package", "findings.json");
+   const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+   json(findingsFile, Array.from({ length: 105 }, (_, index) =>
+     ({ ...held, id: `F-${index}`, global_id: `fixture#F-${index}` })));
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.questions).toHaveLength(105);
+   const answers = Object.fromEntries(preview.questions.map(question => [question.id, "dismiss" as const]));
+   await requestDeskPublication(project, key, { kind: "save", id, settings: { ...preview.settings, answers } });
+   const savedDraft = JSON.parse(readFileSync(path.join(directory, "publication-draft.json"), "utf8"));
+   expect(Object.keys(savedDraft).sort()).toEqual(["savedAt", "settings"]);
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.answers).toEqual(answers);
+ });
+ 
++/** Round 2 of the same Review on `movedHead`: its package holds F-002 again plus a new held finding F-003. */
++function updateRound(): { next: string; nextDirectory: string } {
++  const moved = { baseSha: revision.baseSha, headSha: movedHead };
++  const store = new DeskRunStore();
++  let next: string;
++  let nextDirectory: string;
++  try {
++    next = store.request(project, key, moved)!;
++    store.end(store.byId(next)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
++      result: { reviewed: moved, coverage: "partial", verdict: "REQUEST_CHANGES",
++        findings: { blocker: 0, major: 1, minor: 2, info: 0 }, report: "Fixture review." } });
++    expect(store.byId(next)!.run.previousRunId).toBe(id);
++    nextDirectory = store.directory(next);
++  } finally {
++    store.close();
++  }
++  cpSync(path.join(directory, "package"), path.join(nextDirectory, "package"), { recursive: true });
++  json(path.join(nextDirectory, "package", "manifest.json"), {
++    reviewId: "fixture-round", status: "closed",
++    target: { kind: "pr", ref: "https://github.com/example/project/pull/7", base: moved.baseSha, head: moved.headSha },
++    artifacts: {}, coverage: [],
++  });
++  const findingsFile = path.join(nextDirectory, "package", "findings.json");
++  json(findingsFile, [...JSON.parse(readFileSync(findingsFile, "utf8")),
++    { id: "F-003", global_id: "fixture#F-003", severity: "minor", reviewer: "review-logic", problem: "A new name is unclear.",
++      premise: { verdict: "challenged", question: "Is the new name intentional?" } }]);
++  setHead(movedHead);
++  return { next, nextDirectory };
++}
++
++test("an update round pre-selects the previous round's answers by finding id, and its own draft wins", async () => {
++  // Round 1's draft: an answer for F-002, an answer for a finding round 2 does not have, and settings that must not carry.
++  json(path.join(directory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
++    inline: true, general: false, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment",
++    answers: { "fixture#F-002": "dismiss", "fixture#F-404": "uphold" } } });
++  const { next, nextDirectory } = updateRound();
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  expect(preview.headMoved).toBeUndefined();
++  expect(preview.questions.map(question => question.id)).toEqual(["fixture#F-002", "fixture#F-003"]);
++  expect(preview.settings.answers).toEqual({ "fixture#F-002": "dismiss" });
++  expect(preview.settings).toMatchObject({ inline: false, general: true, verdictOverride: null });
++  expect(preview.blockedReason).toContain("Answer each finding question");
++  expect(existsSync(path.join(nextDirectory, "publication-draft.json"))).toBe(false);
++
++  await requestDeskPublication(project, key, { kind: "save", id: next,
++    settings: { ...preview.settings, answers: { "fixture#F-002": "uphold" } } });
++  const reopened = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  expect(reopened.settings.answers).toEqual({ "fixture#F-002": "uphold" });
++});
++
++test("an update round carries only answers that are valid for its own questions", async () => {
++  json(path.join(directory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
++    inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
++    answers: { "fixture#F-002": "option:not-an-option-here", "fixture#F-003": "dismiss" } } });
++  const { next } = updateRound();
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  // F-003 was not a question in round 1, but an answer under its id is still that finding's answer.
++  expect(preview.settings.answers).toEqual({ "fixture#F-003": "dismiss" });
++});
++
+ test("inline edits reuse placement in preview and explicit refresh rereads the diff", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   const settings = { ...preview.settings, inline: true };
+   const inline = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+   expect(inline.inlineComments).toMatchObject([{ path: "src/a.ts", line: 1, body: expect.stringContaining("Open rows") }]);
+   await requestDeskPublication(project, key, { kind: "preview", id, settings: { ...settings, general: false } });
+   expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("x");
+   await requestDeskPublication(project, key, { kind: "preview", id, settings, refresh: true });
+   expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("xx");
+ });
+ 
+ test("skipping a completed review clears the publication decision without writing to GitHub", async () => {
+   const store = new DeskRunStore();
+   try {
+     const attempt = store.byId(id)!;
+     const result = attempt.run.result!;
+     store.end(attempt, { state: "completed", phase: "Complete", reason: "", result: { ...result, coverage: "complete" } });
+     expect(store.history(key, id).runs[0]?.publication).toBe("pending");
+     const skipped = await requestDeskPublication(project, key, { kind: "skip", id });
+     expect(skipped.skipped).toBe(true);
+
+--- src/review/desk-run-executor.test.ts
+@@ 769,845 @@
+ 
+ test("Desktop exempts only the zero-wave roles verified by the original slice routing", () => {
+   const pkg = path.join(root, "package"), role = "review-logic", excluded = "review-style";
+   mkdirSync(path.join(pkg, "raw"), { recursive: true });
+   mkdirSync(path.join(pkg, "slices"));
+   const target = "raw/review-logic-w1.txt";
+   const queue = { calls: [{ label: role, save_result_to: target }], routedOut: [excluded] };
+   writeFileSync(path.join(pkg, "plan.json"), JSON.stringify({ roster: [role, excluded], dispatches: 1, desktopDispatch: "desktop-dispatch.json" }));
+   writeFileSync(path.join(pkg, "desktop-dispatch.json"), JSON.stringify(queue));
+   const manifest = { schemaVersion: 1, maxBytes: 100, waveBytes: 100, slices: [{ id: "slice-01", bytes: 10, files: ["src.ts"], roles: [role], depth: "light" }] };
+   const manifestFile = path.join(pkg, "slices/manifest.json");
+   writeFileSync(manifestFile, JSON.stringify(manifest));
+   const usage = { total: {}, coordinator: {}, reviewers: [{ reviewer: role, partial: true as const }], partial: true };
+   expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(false);
+   writeFileSync(path.join(pkg, target), 'STATUS: DONE\nREVIEW_RESULT:\n' + JSON.stringify({ reviewer: role, status: "DONE", findings: [] }));
+   expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(true);
+   manifest.slices[0]!.roles.push(excluded);
+   writeFileSync(manifestFile, JSON.stringify(manifest));
+   expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(false);
+ });
++
++// Flow 520 AC7: a partial previous attempt (draft package, ingested findings) is handed to the next round of the same
++// Review with Desktop's own partial-round record, so `review start` in the checkout builds a delta round on it.
++function previousAttempt(files: { status?: string; findings?: unknown } = {}) {
++  const previousRunDir = path.join(root, "runs", "attempt-0");
++  const dir = path.join(previousRunDir, "package");
++  mkdirSync(dir, { recursive: true });
++  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ schemaVersion: 1, reviewId: "prev", mode: "review-flow", status: files.status ?? "draft",
++    target: { kind: "pr", ref: "https://github.com/example/project/pull/12", base: baseSha, head: baseSha }, createdAt: "2026-11-24T00:00:00.000Z" }));
++  if (files.findings !== undefined) writeFileSync(path.join(dir, "findings.json"), JSON.stringify(files.findings));
++  writeFileSync(path.join(dir, "research.json"), JSON.stringify({ version: 1, scopeReviewed: false, obligations: [], dispatch: { runs: [] } }));
++  return previousRunDir;
++}
++
++async function runWithPrevious(previousRunDir: string, previousPartial: boolean | undefined, inspect: (checkout: string, registryDir: string) => Promise<void>) {
++  const registryDir = path.join(root, "registry");
++  let inspected = false;
++  let failure: unknown;
++  await executeDeskReview({ ...options(), previousRunDir, ...(previousPartial === undefined ? {} : { previousPartial }) }, {
++    selectModel, remoteUrl: cwd, revision, registryDir,
++    spawn(spec) {
++      const exited = inspect(spec.cwd, registryDir).then(() => { inspected = true; return 0; }, (error: unknown) => { failure = error; return 1; });
++      return { exited, kill() {} };
++    },
++  });
++  if (failure !== undefined) throw failure;
++  expect(inspected).toBe(true);
++}
++
++const priorFinding = { id: "F-1", reviewer: "review-logic", severity: "major", problem: "Handle missing repository", file: "src.ts", line: 1 };
++const offlineGithub = async () => ({ status: "not-consulted" as const, detail: "offline (test)" });
++
++test("flow 520 AC7: a partial previous attempt reaches the next round as a delta base with its findings", async () => {
++  const { findPreviousRound } = await import("./prior-round");
++  const { readRoundRegistry, repoIdentity } = await import("./round-registry");
++  await runWithPrevious(previousAttempt({ findings: [priorFinding] }), true, async (checkout, registryDir) => {
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/prev/findings.json"))).toBe(true);
++    const registry = readRoundRegistry(repoIdentity(checkout), registryDir);
++    expect(registry).toEqual([expect.objectContaining({ packageId: "prev", reviewedHead: baseSha, event: "desk-partial" })]);
++    const { round, priorFindings } = await findPreviousRound({ kind: "pr", ref: "https://github.com/example/project/pull/12", base: baseSha }, headSha,
++      { cwd: checkout, github: offlineGithub, registry });
++    expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "prev", reviewedHead: baseSha }, range: { base: baseSha, head: headSha } });
++    expect(priorFindings.map(finding => finding.id)).toEqual(["F-1"]);
++  });
++});
++
++test("flow 520 AC7: a draft package is not handed on unless its attempt was partial with ingested findings", async () => {
++  const absent = async (checkout: string, registryDir: string) => {
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/prev"))).toBe(false);
++    expect(existsSync(path.join(registryDir, "review-rounds"))).toBe(false);
++  };
++  // A completed attempt's package must be closed: a draft from it is not a round.
++  await runWithPrevious(previousAttempt({ findings: [priorFinding] }), false, absent);
++  rmSync(path.join(root, "runs", "attempt-0"), { recursive: true, force: true });
++  // A partial attempt without ingested findings gives no previous round.
++  await runWithPrevious(previousAttempt(), true, absent);
++});
+
+--- src/review/desk-run-service.test.ts
+@@ 1,84 @@
++// Flow 520 AC7: the worker picks the previous round of a new attempt with selectPriorAttempt alone, over the attempts of
++// the same Review from earlier rounds; the old "completed + complete + same options key" rule is gone.
++import { describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import path from "node:path";
++import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
++import { previousRoundAttempt } from "./desk-run-service";
++
++const SHA = (c: string): string => c.repeat(40);
++/** Overrides may set a field to undefined to model a legacy record that lacks it. */
++type Loose<T> = { [K in keyof T]?: T[K] | undefined };
++
++function result(over: Loose<DeskResult> = {}): DeskResult {
++  return <DeskResult>{
++    reviewed: { baseSha: SHA("a"), headSha: SHA("b") },
++    verdict: "needs-changes",
++    coverage: "complete",
++    findingsKnown: true,
++    findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++    report: "",
++    ...over,
++  };
++}
++
++function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
++  return <DeskRun>{
++    baseSha: SHA("a"),
++    headSha: SHA("b"),
++    id,
++    source: "manual",
++    scope: DESK_RUN_SCOPE,
++    state: "completed",
++    phase: "done",
++    reason: "",
++    createdAt: "2026-11-24T00:00:00.000Z",
++    reviewId: "review-1",
++    round: 1,
++    effectiveOptionsKey: "settings-A",
++    result: result(),
++    ...over,
++  };
++}
++
++/** The attempt being executed: round 2 on a newer head of the same Review. */
++const current = run("current", { headSha: SHA("c"), round: 2, state: "running", result: null, effectiveOptionsKey: "settings-B" });
++
++describe("previousRoundAttempt", () => {
++  test("a partial attempt of the previous round, run with other settings, is the previous round and is marked partial", () => {
++    const partial = run("partial", { state: "partial", result: result({ coverage: "partial" }), effectiveOptionsKey: "settings-A" });
++    expect(previousRoundAttempt([current, partial], current)).toEqual({ attempt: partial, partial: true });
++  });
++
++  test("a completed attempt with other settings is the previous round, not partial", () => {
++    const done = run("done", { effectiveOptionsKey: "settings-A", options: { maxTokens: 5 } as DeskRun["options"] });
++    expect(previousRoundAttempt([current, done], current)).toEqual({ attempt: done, partial: false });
++  });
++
++  test("never the attempt being executed nor another attempt of its own round; the newest earlier round wins", () => {
++    const sameRound = run("same-round", { headSha: SHA("c"), round: 2 });
++    const round1 = run("round-1", { round: 1 });
++    expect(previousRoundAttempt([current, sameRound, round1], current)?.attempt.id).toBe("round-1");
++    expect(previousRoundAttempt([current, sameRound], current)).toBeUndefined();
++    const selfLike = { ...current, state: "completed" as const, result: result() };
++    expect(previousRoundAttempt([selfLike], current)).toBeUndefined();
++  });
++
++  test("attempts of another Review are not candidates", () => {
++    expect(previousRoundAttempt([current, run("other", { reviewId: "review-2" })], current)).toBeUndefined();
++  });
++
++  test("a store that has not placed rounds yet: the attempt's own range is its own round", () => {
++    const legacyCurrent = run("current", { headSha: SHA("c"), round: undefined, reviewId: undefined, state: "running", result: null });
++    const sameRange = run("same-range", { headSha: SHA("c"), round: undefined, reviewId: undefined });
++    const older = run("older", { round: undefined, reviewId: undefined });
++    expect(previousRoundAttempt([legacyCurrent, sameRange, older], legacyCurrent)?.attempt.id).toBe("older");
++  });
++
++  test("the worker has one previous-attempt rule: no options-key or completed-and-complete filter of its own", () => {
++    const source = readFileSync(path.join(import.meta.dir, "desk-run-service.ts"), "utf8");
++    expect(source).toContain("previousRoundAttempt(store.history(key).runs, run)");
++    expect(source).not.toContain("deskOptionsKey(item.options)");
++    expect(source).not.toMatch(/item\.result\?\.coverage === "complete"/);
++  });
++});
+
+--- src/review/head-move.test.ts
+@@ 1,52 @@
++// Flow 520 AC4: on_head_move has ask/follow/ignore, defaults by run source, and unreadable stored values read as the default.
++
++import { describe, expect, test } from "bun:test";
++import { defaultOnHeadMove, headMoveResponse, ON_HEAD_MOVE, parseOnHeadMove } from "./head-move";
++
++describe("on_head_move values", () => {
++  test("has exactly ask, follow and ignore", () => {
++    expect([...ON_HEAD_MOVE]).toEqual(["ask", "follow", "ignore"]);
++  });
++
++  test("manual and existing reviews default to ask, rule-triggered to follow", () => {
++    expect(defaultOnHeadMove("manual")).toBe("ask");
++    expect(defaultOnHeadMove("existing")).toBe("ask");
++    expect(defaultOnHeadMove("scheduled")).toBe("follow");
++  });
++
++  test("a stored valid value is kept whatever the source", () => {
++    expect(parseOnHeadMove("ignore", "scheduled")).toBe("ignore");
++    expect(parseOnHeadMove("follow", "manual")).toBe("follow");
++    expect(parseOnHeadMove("ask", "scheduled")).toBe("ask");
++  });
++
++  test("missing, null or unknown reads as the source default", () => {
++    for (const bad of [undefined, null, "", "FOLLOW", "stop", 1, {}]) {
++      expect(parseOnHeadMove(bad, "manual")).toBe("ask");
++      expect(parseOnHeadMove(bad, "scheduled")).toBe("follow");
++    }
++  });
++});
++
++describe("headMoveResponse", () => {
++  test("ask during a round offers update-after-finish and stop-and-restart", () => {
++    expect(headMoveResponse("ask", "running")).toEqual({
++      kind: "offer",
++      actions: ["update-after-finish", "stop-and-restart"],
++    });
++  });
++
++  test("ask after a round offers a single update", () => {
++    expect(headMoveResponse("ask", "finished")).toEqual({ kind: "offer", actions: ["update"] });
++  });
++
++  test("follow defers the update until the running round finishes, then queues it now", () => {
++    expect(headMoveResponse("follow", "running")).toEqual({ kind: "queue-update", when: "after-finish" });
++    expect(headMoveResponse("follow", "finished")).toEqual({ kind: "queue-update", when: "now" });
++  });
++
++  test("ignore does nothing in either phase", () => {
++    expect(headMoveResponse("ignore", "running")).toEqual({ kind: "none" });
++    expect(headMoveResponse("ignore", "finished")).toEqual({ kind: "none" });
++  });
++});
+
+--- src/review/prior-round.test.ts
+@@ 10,54 @@
+ import type { ReviewRoundRecord } from "../flow/review-gate";
+ import type { CollectedComment, CollectedRoundBlock } from "./pr-comments";
+ import {
+   choosePrevious,
+   defaultGithubLookup,
+   findPreviousRound,
+   parseDiffHunks,
+   pullRequestOf,
+   relocateFinding,
+   sameReviewTarget,
+   skippedRound,
+   targetKeyOf,
+   type GithubLookup,
+   type PriorRoundDeps,
+   type RoundCandidate,
+ } from "./prior-round";
+ import { packageFacts, packageHashesOf, readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
+ import {
+   appendRoundRegistry,
+   compactEntries,
++  partialRoundVouch,
+   readRoundRegistry,
+   readRoundRegistryReport,
+   recordFinishedRound,
++  recordPartialRound,
+   REGISTRY_COMPACT_BYTES,
+   registryVouches,
+   repoIdentity,
+   roundRegistryFile,
+   type RoundRegistryEntry,
+ } from "./round-registry";
+ import { computeVerdict, renderVerdict } from "./verdict";
+ import { readPremiseDecisions, recordPremiseDecision } from "./operator-decisions";
+ import { heldFinding, premiseAnswerInput } from "./premise-fixtures";
+ import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
+ 
+ const PR = "https://github.com/acme/app/pull/7";
+ const TARGET = { kind: "pr", ref: PR };
+ const SCHEMA = path.join(path.resolve(import.meta.dir, "..", ".."), "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json");
+ 
+ let root: string;
+ const originalCwd = process.cwd();
+ 
+ function git(...args: string[]): string {
+   const email = process.env.GIT_AUTHOR_EMAIL ?? "t@example.com";
+
+--- src/review/prior-round.test.ts
+@@ 251,370 @@
+ 
+   test("the same head in two sources goes to the earlier source, which holds the richer record", async () => {
+     writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1", { quote: "line 5" })] });
+     const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: consulted([block(A, "2026-10-01T00:00:00Z")]) });
+     expect(round.source).toBe("local-package");
+   });
+ 
+   test("a newer round at a non-ancestor head (force-push) falls back to a full round over merge-base..head", async () => {
+     git("checkout", "-q", "-b", "old-feature", A);
+     const X = commit("pre-rebase work", { "src/a.ts": lines(20).replace("line 7\n", "line seven\n") });
+     git("checkout", "-q", "feature");
+     writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, at: "2026-10-01T00:00:00.000Z" });
+     writePackage(".metaproject/reviews/r2", { reviewId: "r2", head: X, at: "2026-10-03T00:00:00.000Z", findings: [finding("F-7")], round: 2 });
+     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+     expect(round).toMatchObject({ mode: "fallback-first", round: 3, previous: { reviewId: "r2", reviewedHead: X }, range: { base: A, head: B }, fixHunks: [], carried: [] });
+     expect(round.newHunks.length).toBeGreaterThan(0);
+     expect(priorFindings.map((f) => f.id)).toEqual(["F-7"]);
+     expect(renderRoundLine(round)).toContain("fallback-first");
+   });
+ 
++  test("flow 520 AC6: a round recorded under different review settings is still the previous round", async () => {
++    // The candidate path reads target, head, status and timestamps from the manifest, never the settings, so
++    // changing settings between rounds does not break the link (spec "Раунд обновления", item 4).
++    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")], round: 1 });
++    const manifestFile = path.join(root, ".metaproject/reviews/r1/manifest.json");
++    const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
++    writeFileSync(manifestFile, JSON.stringify({ ...manifest, mode: "review-fast", options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } }));
++    const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
++    expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "r1", reviewedHead: A } });
++    expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++  });
++
++  describe("flow 520 AC7: an update round builds on a partial previous round Desktop ran", () => {
++    // What a partial Desktop attempt leaves in its run directory: `review complete` never ran, so the manifest is still a
++    // draft, the ledger did not establish scopeReviewed, and the reviewers' findings were ingested into findings.json.
++    function partialPackage(extraManifest: Record<string, unknown> = {}): string {
++      const dir = ".metaproject/reviews/desk-partial";
++      writePackage(dir, { reviewId: "desk-partial", head: B, status: "draft", findings: [finding("F-1", { file: "src/new.ts", line: 1 })], round: 1 });
++      write(`${dir}/research.json`, JSON.stringify({ version: 1, scopeReviewed: false, obligations: [], dispatch: { runs: [] } }));
++      if (Object.keys(extraManifest).length > 0) {
++        const file = path.join(root, dir, "manifest.json");
++        writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), ...extraManifest }));
++      }
++      return path.join(root, dir);
++    }
++    const deskVouch = (dir: string, packageId = "desk-partial"): RoundRegistryEntry =>
++      ({ v: 2, packageId, targetKey: "pr:acme/app#7", reviewedHead: B, ...packageFacts(dir)!.hashes, completedAt: "2026-11-24T00:00:00.000Z", event: "desk-partial" }) as RoundRegistryEntry;
++
++    test("partial previous round with accepted findings: delta, prior findings attached, the area it did not cover planned as new", async () => {
++      const dir = partialPackage();
++      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
++      // Without Desktop's own record the draft is no previous round at all (M1 unchanged).
++      expect((await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [] })).round.previous).toBeNull();
++      const { round, priorFindings } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [deskVouch(dir)] });
++      expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "desk-partial", reviewedHead: B }, range: { base: B, head: C } });
++      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++      // Per-file coverage of a partial round is not proven, so everything of merge-base..head outside the delta is new, not a second look.
++      expect(round.secondLookHunks).toBeUndefined();
++      expect(round.newHunks.map((h) => h.file).sort()).toEqual(["src/a.ts", "src/new.ts", "src/other.ts"]);
++      expect(round.weakPrevious).toContain("not completed");
++      expect(round.sourcesTried[0]!.detail).toContain("partial round");
++    });
++
++    test("previous partial round run with different settings still gives its findings", async () => {
++      const dir = partialPackage({ options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } });
++      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
++      const { round, priorFindings } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [deskVouch(dir)] });
++      expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "desk-partial" } });
++      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++    });
++
++    test("only Desktop's partial-round record for exactly these files admits a draft; any other draft stays out", async () => {
++      const dir = partialPackage();
++      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
++      const vouch = deskVouch(dir);
++      const previousWith = async (registry: RoundRegistryEntry[]) => (await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry })).round.previous;
++      // A record of another kind (a finished round) does not admit a draft.
++      expect(await previousWith([{ ...vouch, event: "publish" }])).toBeNull();
++      // A record of another package, or of other files, does not either.
++      expect(await previousWith([deskVouch(dir, "other-package")])).toBeNull();
++      write(".metaproject/reviews/desk-partial/findings.json", "[]");
++      expect(await previousWith([vouch])).toBeNull();
++      // A draft without ingested findings is never admitted, whatever the registry says.
++      rmSync(path.join(dir, "findings.json"));
++      expect(await previousWith([deskVouch(dir)])).toBeNull();
++    });
++
++    test("a partial-round record never vouches for the same files committed by the branch as a closed round", async () => {
++      // Status is not part of the hashed manifest identity: the branch commits Desktop's partial package marked closed.
++      const files = packageFiles(".metaproject/reviews/desk-partial", { reviewId: "desk-partial", head: B, status: "closed", findings: [finding("F-1", { file: "src/new.ts", line: 1 })], round: 1 });
++      const C = commit("commit a closed copy of the partial round", { ...files, "src/other.ts": "export const o = 1;\n" });
++      const vouch = deskVouch(path.join(root, ".metaproject/reviews/desk-partial"));
++      const { round } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [vouch] });
++      expect(round.mode).toBe("fallback-first");
++      expect(round.sourcesTried[0]!.detail).toContain("not trusted desk-partial");
++      // The same files recorded as a finished round are trusted, as before.
++      expect((await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [{ ...vouch, event: "complete" }] })).round.mode).toBe("delta");
++    });
++  });
++
+   test("a head this clone has never fetched is not an ancestor", async () => {
+     const candidate: RoundCandidate = { source: "github-block", reviewId: "x", reviewedHead: "f".repeat(40), round: 1, at: 1, findings: [] };
+     const runner = async (args: string[]) => ({ stdout: "", exitCode: args[0] === "merge-base" ? 128 : 0 });
+     expect((await choosePrevious(runner, [candidate], B)).mode).toBe("fallback-first");
+   });
+ });
+ 
+ describe("the pull request read", () => {
+   test("offline or missing gh: both GitHub sources are recorded as not consulted, and a throwing read is too", async () => {
+     const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: async () => { throw new Error("ENOTFOUND api.github.com"); } });
+     const github = round.sourcesTried.filter((t) => t.source.startsWith("github"));
+     expect(github.map((t) => t.result)).toEqual(["not-consulted", "not-consulted"]);
+     expect(github[0]!.detail).toContain("ENOTFOUND");
+   });
+ 
+   test("a target that is not a pull request is not looked up at all", async () => {
+     expect(await defaultGithubLookup({ kind: "branch", ref: "feat/x" })).toEqual({ status: "not-consulted", detail: "the target is not a pull request" });
+   });
+ 
+   test("pull request refs compare however they are written", () => {
+
+--- src/review/prior-round.test.ts
+@@ 599,661 @@
+     test("the registry file lives outside the repository, one per repository identity, and round-trips", () => {
+       const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+       try {
+         writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")] });
+         git("remote", "add", "origin", "https://token@github.com/Acme/App.git");
+         expect(repoIdentity(root)).toBe("remote:https://github.com/acme/app");
+         const recorded = recordFinishedRound(path.join(root, ".metaproject/reviews/r1"), "publish", { cwd: root, dir: dataDir });
+         expect(recorded.error).toBeUndefined();
+         expect(recorded.file!.startsWith(dataDir)).toBe(true);
+         expect(recorded.file!.startsWith(root)).toBe(false);
+         const entries = readRoundRegistry(repoIdentity(root), dataDir);
+         expect(entries).toEqual([expect.objectContaining({ v: 2, packageId: "r1", reviewedHead: A, event: "publish" })]);
+         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeDefined();
+         write(".metaproject/reviews/r1/findings.json", "[]");
+         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeUndefined();
+         expect(readRoundRegistry("remote:another", dataDir)).toEqual([]);
+       } finally {
+         rmSync(dataDir, { recursive: true, force: true });
+       }
+     });
++
++    test("flow 520 AC7: Desktop records a partial round with ingested findings as desk-partial, and nothing without them", () => {
++      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
++      try {
++        const dir = path.join(root, ".metaproject/reviews/partial");
++        writePackage(".metaproject/reviews/partial", { reviewId: "partial", head: A, status: "draft", findings: [finding("F-1")] });
++        // recordFinishedRound refuses a draft; the partial record is the only way one is recorded.
++        expect(recordFinishedRound(dir, "ingest", { cwd: root, dir: dataDir }).skipped).toContain("not a finished round");
++        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).error).toBeUndefined();
++        const entries = readRoundRegistry(repoIdentity(root), dataDir);
++        expect(entries).toEqual([expect.objectContaining({ packageId: "partial", reviewedHead: A, event: "desk-partial" })]);
++        expect(partialRoundVouch(entries, "partial", packageFacts(dir)!.hashes)).toBeDefined();
++        // A finished-round entry for the same files is no partial-round record.
++        expect(partialRoundVouch(entries.map((entry) => ({ ...entry, event: "complete" as const })), "partial", packageFacts(dir)!.hashes)).toBeUndefined();
++        write(".metaproject/reviews/partial/findings.json", "{\"not\":\"a list\"}");
++        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).skipped).toContain("no ingested findings");
++        rmSync(path.join(dir, "findings.json"));
++        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).skipped).toContain("no ingested findings");
++        expect(readRoundRegistry(repoIdentity(root), dataDir)).toHaveLength(1);
++      } finally {
++        rmSync(dataDir, { recursive: true, force: true });
++      }
++    });
+   });
+ 
+   test("a forced --prior package is held to the same rule", async () => {
+     commit("add review record", { ...packageFiles(".metaproject/reviews/fake", { reviewId: "fake", head: A }) });
+     const head = commit("code", { "src/auth.ts": "x\n" });
+     const { round } = await findPreviousRound(TARGET, head, { cwd: root, github: offline, forced: "fake" });
+     expect(round.mode).toBe("fallback-first");
+   });
+ 
+   test("M1: a draft is never a previous round, even with findings; `reviewed` without completion evidence is context only", async () => {
+     writePackage(".metaproject/reviews/draft", { reviewId: "draft", head: A, status: "draft", findings: [finding("F-1")] });
+     expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round.previous).toBeNull();
+     writePackage(".metaproject/reviews/partial", { reviewId: "partial", head: A, status: "reviewed", findings: [finding("F-2")] });
+     const partial = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+     expect(partial.round).toMatchObject({ mode: "fallback-first", previous: { reviewId: "partial" } });
+     expect(partial.round.sourcesTried[0]!.detail).toContain("no completion evidence");
+     // published.json is completion evidence.
+     write(".metaproject/reviews/partial/published.json", "{}");
+     expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round).toMatchObject({ mode: "delta", previous: { reviewId: "partial" } });
+   });
+
+--- src/review/update-round.test.ts
+@@ 1,92 @@
++// Flow 520 AC5: the previous attempt of an update round is the newest one with accepted findings, whatever its settings.
++import { describe, expect, test } from "bun:test";
++import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
++import { selectPriorAttempt } from "./update-round";
++
++const SHA = (c: string): string => c.repeat(40);
++/** Overrides may set a field to undefined to model a legacy record that lacks it. */
++type Loose<T> = { [K in keyof T]?: T[K] | undefined };
++
++function result(over: Loose<DeskResult> = {}): DeskResult {
++  return <DeskResult>{
++    reviewed: { baseSha: SHA("a"), headSha: SHA("b") },
++    verdict: "needs-changes",
++    coverage: "complete",
++    findingsKnown: true,
++    findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++    report: "report",
++    ...over,
++  };
++}
++
++function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
++  return <DeskRun>{
++    baseSha: SHA("a"),
++    headSha: SHA("b"),
++    id,
++    source: "manual",
++    scope: DESK_RUN_SCOPE,
++    state: "completed",
++    phase: "done",
++    reason: "",
++    createdAt: "2026-11-24T00:00:00.000Z",
++    startedAt: "2026-11-24T00:00:00.000Z",
++    finishedAt: "2026-11-24T00:10:00.000Z",
++    result: result(),
++    ...over,
++  };
++}
++
++describe("selectPriorAttempt", () => {
++  test("picks the newest completed attempt and reports it as not partial", () => {
++    expect(selectPriorAttempt([run("new"), run("old")])).toEqual({ attempt: expect.objectContaining({ id: "new" }), partial: false });
++  });
++
++  test("accepts the newest partial attempt with accepted findings and marks it partial", () => {
++    const picked = selectPriorAttempt([run("p", { state: "partial", result: result({ coverage: "partial" }) }), run("c")]);
++    expect(picked).toMatchObject({ attempt: { id: "p" }, partial: true });
++  });
++
++  test("a completed attempt whose coverage is not complete is partial", () => {
++    expect(selectPriorAttempt([run("u", { result: result({ coverage: "unknown" }) })])?.partial).toBe(true);
++  });
++
++  test("an attempt run with different settings is still accepted, and the options key is never compared", () => {
++    const other = run("other", { effectiveOptionsKey: "settings-B", options: { maxTokens: 10 } as DeskRun["options"] });
++    expect(selectPriorAttempt([other, run("same", { effectiveOptionsKey: "settings-A" })])?.attempt.id).toBe("other");
++  });
++
++  test("rejects imported, failed, cancelled and unreviewed attempts and falls through to the next usable one", () => {
++    const rejected = [
++      run("imported", { source: "existing" }),
++      run("failed", { state: "failed" }),
++      run("cancelled", { state: "cancelled" }),
++      run("blocked", { state: "blocked" }),
++      run("running", { state: "running" }),
++      run("unreviewed", { result: result({ reviewed: null }) }),
++      run("no-result", { result: null }),
++      run("findings-unknown", { state: "partial", result: result({ findingsKnown: undefined }) }),
++      run("findings-false", { state: "partial", result: result({ findingsKnown: false }) }),
++      run("old-scope", { scope: "review-autonomous/fixed-pr/v1" }),
++      run("no-scope", { scope: undefined }),
++    ];
++    for (const attempt of rejected) expect(selectPriorAttempt([attempt])).toBeUndefined();
++    expect(selectPriorAttempt([...rejected, run("good")])?.attempt.id).toBe("good");
++  });
++
++  test("the scope is a parameter", () => {
++    const v1 = run("v1", { scope: "review-autonomous/fixed-pr/v1" });
++    expect(selectPriorAttempt([v1])).toBeUndefined();
++    expect(selectPriorAttempt([v1], "review-autonomous/fixed-pr/v1")?.attempt.id).toBe("v1");
++  });
++
++  test("a deleted or archived attempt is skipped; completed, closed and restored ones are not", () => {
++    const decision = (action: "complete" | "close" | "archive" | "restore" | "delete"): DeskRun["decision"] => ({ action, reason: "r", at: "2026-11-24T01:00:00.000Z" });
++    expect(selectPriorAttempt([run("d", { decision: decision("delete") }), run("a", { decision: decision("archive") })])).toBeUndefined();
++    for (const action of ["complete", "close", "restore"] as const) expect(selectPriorAttempt([run("x", { decision: decision(action) })])?.attempt.id).toBe("x");
++  });
++
++  test("nothing to pick from is undefined", () => {
++    expect(selectPriorAttempt([])).toBeUndefined();
++  });
++});

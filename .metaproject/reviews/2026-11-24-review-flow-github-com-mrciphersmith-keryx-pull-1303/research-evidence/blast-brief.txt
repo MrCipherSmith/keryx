@@ -1,0 +1,63 @@
+range: a5d1ab236fe8...9e871b17f16a (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: blast-radius
+
+QUESTION: does the change break an existing behaviour at any of these sites? Nothing else. These files are under
+regression check, not under review — a finding about their style, naming or architecture is rejected by the
+orchestrator in code, whatever its merit, because this round did not ask that question.
+
+Anchor every finding to one of the 38 files below or to a changed file, at severity
+`major` or above, and name the change it breaks. A finding that cites none of the changed files is not a
+regression claim.
+
+CHANGED (20): .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json, .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md, apps/desktop/src/review/ReviewPublishDialog.tsx, apps/desktop/src/review/ReviewRuns.dom.test.tsx, src/review/desk-publication-types.ts, src/review/desk-publication.test.ts, src/review/desk-publication.ts, src/review/head-move.test.ts, src/review/head-move.ts, src/review/prior-round.test.ts, src/review/update-round.test.ts, src/review/update-round.ts
+
+UNDER REGRESSION CHECK (38, closest first, graph depth <= 2):
+  - src/review/desk-run-types.ts  [hop 1]  src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/desk-run-service.ts  [hop 1]  src/review/desk-run-service.ts -> src/review/desk-publication.ts
+  - apps/desktop/src/review/ReviewDetail.tsx  [hop 1]  apps/desktop/src/review/ReviewDetail.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ReviewRuleInfo.tsx  [hop 1]  apps/desktop/src/review/ReviewRuleInfo.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - src/commands/review-desk-publish.ts  [hop 1]  src/commands/review-desk-publish.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewDetail.css  [hop 1]  apps/desktop/src/review/ReviewDetail.css -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ReviewRuns.tsx  [hop 1]  apps/desktop/src/review/ReviewRuns.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ProjectReviewRules.tsx  [hop 1]  apps/desktop/src/review/ProjectReviewRules.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/PullRequestAutomation.tsx  [hop 1]  apps/desktop/src/review/PullRequestAutomation.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ReviewChecks.tsx  [hop 1]  apps/desktop/src/review/ReviewChecks.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ReviewUsage.tsx  [hop 1]  apps/desktop/src/review/ReviewUsage.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json  [hop 1]  .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff  [hop 1]  .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json  [hop 1]  .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff  [hop 1]  .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - src/commands/review.ts  [hop 2]  src/commands/review.ts -> src/commands/review-desk-publish.ts -> src/review/desk-publication-types.ts
+  - src/review/desk-run-store.ts  [hop 2]  src/review/desk-run-store.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/platform/reviewRuns.ts  [hop 2]  apps/desktop/src/platform/reviewRuns.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/pr-context.ts  [hop 2]  src/review/pr-context.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/watcher.ts  [hop 2]  src/review/watcher.ts -> src/review/desk-run-service.ts -> src/review/desk-publication.ts
+  - apps/desktop/src/review/ReviewProgress.tsx  [hop 2]  apps/desktop/src/review/ReviewProgress.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/useReviewRuns.ts  [hop 2]  apps/desktop/src/review/useReviewRuns.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/board-badges.ts  [hop 2]  src/review/board-badges.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewLaunchDialog.tsx  [hop 2]  apps/desktop/src/review/ReviewLaunchDialog.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/desk-run-legacy.ts  [hop 2]  src/review/desk-run-legacy.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/desk-reviewer-progress.ts  [hop 2]  src/review/desk-reviewer-progress.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/App.tsx  [hop 2]  apps/desktop/src/App.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewBoard.tsx  [hop 2]  apps/desktop/src/review/ReviewBoard.tsx -> apps/desktop/src/review/ReviewDetail.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ReviewLifecycle.tsx  [hop 2]  apps/desktop/src/review/ReviewLifecycle.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewOutcome.tsx  [hop 2]  apps/desktop/src/review/ReviewOutcome.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewQuestion.tsx  [hop 2]  apps/desktop/src/review/ReviewQuestion.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewTranscript.tsx  [hop 2]  apps/desktop/src/review/ReviewTranscript.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - apps/desktop/src/review/ReviewRunDialog.tsx  [hop 2]  apps/desktop/src/review/ReviewRunDialog.tsx -> apps/desktop/src/review/ReviewRuns.tsx -> apps/desktop/src/review/ReviewPublishDialog.tsx
+  - apps/desktop/src/review/ReviewSessions.tsx  [hop 2]  apps/desktop/src/review/ReviewSessions.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/desk-worker-roster.ts  [hop 2]  src/review/desk-worker-roster.ts -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/review/review-rule-dispatch.ts  [hop 2]  src/review/review-rule-dispatch.ts -> src/review/desk-run-service.ts -> src/review/desk-publication.ts
+  - apps/desktop/src/review/SessionReviewActivity.tsx  [hop 2]  apps/desktop/src/review/SessionReviewActivity.tsx -> src/review/desk-run-types.ts -> src/review/desk-publication-types.ts
+  - src/commands/review-desk-run.ts  [hop 2]  src/commands/review-desk-run.ts -> src/review/desk-run-service.ts -> src/review/desk-publication.ts
+
+OMITTED WITH A REASON (78: they import none of the changed names, sit behind a damped hub, mention a hub string key, or are tests to run). Context, not under regression check.
+
+TESTS TO RUN: 9 tests exercise the changed code — run them: `bun test apps/desktop/src/review/ReviewDetail.dom.test.tsx src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts src/commands/select.test.ts src/review/board-badges.test.ts src/review/desk-reviewer-progress.test.ts src/review/desk-run-store.test.ts src/review/desk-worker-roster.test.ts src/review/review-rules.test.ts`
+
+NOT ANSWERABLE (10 changed files absent from the code graph). Their blast radius is unknown, not empty.
+omitted with a reason: 19 unrelated-symbol, 0 hub-damped, 50 text-hub, 9 test-consumer. They are context, not owed a chunk pass.
+9 tests exercise the changed code — run them: `bun test apps/desktop/src/review/ReviewDetail.dom.test.tsx src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts src/commands/select.test.ts src/review/board-badges.test.ts src/review/desk-reviewer-progress.test.ts src/review/desk-run-store.test.ts src/review/desk-worker-roster.test.ts src/review/review-rules.test.ts`
+tests to run: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303/tests-to-run.json
+unresolved: 10 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

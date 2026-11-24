@@ -1,0 +1,140 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (PR #1304)
+- Merge-base: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` .. head `822192905b3d26eb976d83e5bbd46cee14ca9a6f`
+- Scope mode: explicit-hash-range, slice-01 (flow 520 records + Desktop `ReviewPublishDialog`, `ReviewRuns`, `ReviewWorkspace`, `SessionReviewActivity`, `useReviewRuns`)
+- Spec compliance gate: ran against AC1–AC10 (payload) and the flow journal decisions
+
+### Summary
+Round 3 verification of the T15 Desktop fixes and the flow records. The T15 fixes hold in the logic lens: `request()` now returns an outcome on every path (no path returns `undefined`, no rejection escapes the `.then`), Update review is disabled while another action of the review is in flight and a racing click is reported as `skipped`, an existing attempt on the target range is shown instead of a second start, `autoPublish` is stripped by `updateRoundOptions`, and Sessions builds its publication target without `onUpdateReview`. The base used for the update range (`run.baseSha`) is safe because the backend offers `headMoved` only when `result.reviewed` equals the run range and the PR base equals `run.baseSha` (`desk-publication.ts` lines 366-380), and a superseded round gets no `headMoved` (`newerRound === undefined`), so it offers neither as-is nor Update. One new defect comes from the rebase onto the stage 2 tip: the frozen AC8 invariant still diffs against `98bec5904` and now fails at head, while T9 records the verification as done.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 0  |  info: 2
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+### [F-001] AC8's frozen invariant diffs against 98bec5904 and fails at head after the rebase onto the stage 2 tip 20e4281a2
+
+- **Severity**: major
+- **File**: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md (AC8), mirrored in flow.json `acKinds.AC8.check`
+- **Problem**: AC8's invariant ends with `git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css`. The branch was rebased onto `20e4281a2` (committer date of the first stage 3 commit `e22f61f4d`: 2026-11-24T09:53:33Z), which carries four more stage 2 commits (`9c3315f60` "keep local reviews out of the Pull requests indicator and relabel the outdated action", `e80906e50` "let the Reviews toolbar filters shrink", plus two flow records). Those stage 2 commits change `ReviewBoard.tsx` (1 line) and `review.css` (2 lines). `git diff --stat 98bec5904 822192905 -- <the four files>` shows 2 files / 5 lines changed, so the invariant exits 1 at head; `git diff --stat 20e4281a2 822192905 -- <the four files>` is empty, so the substance (this flow leaves those files as stage 2 left them) still holds — only the frozen check is pinned to the wrong base.
+- **Why it matters**: Trigger: `keryx flow ac confirm 520 AC8` (or the flow-complete gate) runs the AC8 check on the current head. Outcome: the check fails on files this flow never touched, so the flow cannot close through the gate, and T9 is recorded `done` at 09:52:22Z with a reason that lists suites/tsc/eslint but not the invariant — one minute before the rebase that broke it. The journal and PR body still say the branch is "rebased onto `feat/desktop-review-v2-stage2` at `98bec5904`", which no longer describes the branch (the reviewed base is `20e4281a2`).
+- **Fix**: `keryx flow ac update 520 AC8` to compare against `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` (or, better for the next stage 2 rebase, against `$(git merge-base HEAD feat/desktop-review-v2-stage2)` / the stage 2 branch tip), re-run AC8 and record it in T9 or a new verify task; update the PR body's "Stacked on stage 2" paragraph and add a journal line for the rebase onto `20e4281a2`.
+- **Evidence**: `git merge-base --is-ancestor 98bec5904 20e4281a2` → 0 (ancestor); `git rev-list --count 98bec5904..20e4281a2` → 4; the two `git diff --stat` results above; journal line "2026-11-24T09:52:22.686Z - task-done: T9"; no journal entry for the second rebase.
+- **class_scope**: sites [".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md:AC8", ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json:acKinds.AC8"]; enumeration_method: grep of the slice for `98bec5904` pinned in a verify command — AC8 is the only criterion whose check names a commit (AC1–AC7, AC10 run test files; AC9 is judged); the two sites are the AC file and its flow.json mirror. Narrative mentions of 98bec5904 (journal, PR body, flow.json history/ac-updated details) are records, not checks, and are covered by the fix text.
+
+### Async & Concurrency
+None detected. `useReviewRuns.request` returns `done` / `skipped` / `failed` on every path including the stale-generation branches; the `updateReview` `.then` cannot see a rejection because `request` catches everything inside its own try.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+### [F-002] Update review uses the current head of a possibly stale preview
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewPublishDialog.tsx
+- **Problem**: The Update button is disabled only on `writing || updateDisabled`, not on `previewStale`/a pending preview, and passes `headMoved.currentHead` from the last loaded draft. After a second push the user can click Update with the previous current head.
+- **Why it matters**: The backend's strict subject check at run start refuses that range, so it fails closed with an action error instead of starting on the newest head; the user must refresh the preview. No wrong attempt is created. Recorded as an observation only.
+- **Fix**: optional — also disable Update while `previewStale` or a preview is pending, or let the start error suggest refreshing the preview.
+
+### [F-003] The existing-attempt guard reads the panel's last status snapshot
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewWorkspace.tsx (`updateReview`, `covering`)
+- **Problem**: `covering` is computed from `local.runs`. An attempt on the target head started elsewhere after the last status read (a rule run, another window) is not seen.
+- **Why it matters**: For an active/queued attempt the backend's `requestAttempt` returns the existing run, so nothing duplicates; only an attempt that already finished in that window would get a second attempt in the same round (a retry, which the store allows). No demonstrated user-visible harm.
+- **Fix**: none required; a status read before the guard would close it if wanted.
+
+### Suggested Patches
+None beyond F-001's `keryx flow ac update`.
+
+### Verified as holding (round 2 Desktop fixes, T15)
+- D-busy: `updateDisabled={working}` in `RunAttempt`, button `disabled={writing || updateDisabled}`; a racing click returns `skipped` from `request` and toasts.
+- D-guard: any non-imported, non-archived attempt on the target range (active first) is shown instead of a second start; `setSessionId(null)` when it is already the Latest attempt, otherwise its dialog opens.
+- D-autoPublish: `updateRoundOptions` drops `autoPublish`; other options carry.
+- D-Sessions: `sessionReviewPublication` has no `onUpdateReview`; `RunAttempt` only passes `onUpdateReview` when the publication target carries it.
+- Footer order Update, Publish as is, Close, Skip, Save when Update is offered; as-is button keeps the submit guards (`canUsePreview`, `canSubmit`, no unanswered).
+- `latestAttempt` extraction is behaviour-identical to the inlined expression it replaced.
+
+### Not verified
+- No tests run (read-only reviewer); the AC8 failure is shown by `git diff --stat`, not by running the full AC8 command.
+- Stage 2 `ReviewPanel` rendering of round attempts was not read (outside the slice); whether it passes a publication with `onUpdateReview` was not checked.
+- `resolved/T*.implement.json` are rule manifests (rules list, budget); read for non-boilerplate content only. Minor record nit: T15's manifest lists `apps/desktop/src/sessions/SessionReviewActivity.tsx`, the file lives in `apps/desktop/src/review/`.
+
+### Routing audit
+graph_used: no (not-relevant: slice text and payload layers sufficed) | wiki_used: no (not-relevant) | ctx_used: yes (`keryx ctx rg`, `keryx ctx read`, `keryx ctx run -- git log`) | raw_rg_used: no (one raw `sed|grep` over the slice file with a keryx:raw marker to filter manifest boilerplate)
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "T15 Desktop fixes hold in the logic lens (request outcome on every path, Update disabled while busy, existing attempt reused, autoPublish stripped, no Update from Sessions; base of the update range is safe given the backend's headMoved conditions). One new major: after the rebase onto stage 2 tip 20e4281a2 the frozen AC8 invariant still diffs against 98bec5904 and fails at head on stage 2's own ReviewBoard.tsx/review.css changes, while T9 is recorded done one minute before that rebase.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+      "line": null,
+      "quote": "git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css",
+      "problem": "AC8's frozen invariant compares the four protected files with 98bec5904, but the branch was rebased onto 20e4281a2, whose four extra stage 2 commits change ReviewBoard.tsx (1 line) and review.css (2 lines). The check exits 1 at head on changes this flow did not make; against 20e4281a2 the same diff is empty.",
+      "impact": "Running AC8 (keryx flow ac confirm / flow-complete gate) on head 822192905 fails, so flow 520 cannot close through its gate; T9 is recorded done at 09:52:22Z, one minute before the rebase (first stage 3 commit committed 09:53:33Z), and the journal/PR body still describe the base as 98bec5904.",
+      "suggested_fix": "keryx flow ac update 520 AC8 so the invariant diffs against 20e4281a2 (or the stage 2 merge-base computed at check time, to survive the next stage 2 rebase); re-run AC8 and record it; update the PR body 'Stacked on stage 2' paragraph and add a journal entry for the rebase onto 20e4281a2.",
+      "evidence": "git merge-base --is-ancestor 98bec5904 20e4281a2 -> 0; git rev-list --count 98bec5904..20e4281a2 -> 4 (9c3315f60, 8d184736b, e80906e50, 20e4281a2); git diff --stat 98bec5904 822192905 -- <4 files> -> ReviewBoard.tsx 2 +-, review.css 3 ++-; git diff --stat 20e4281a2 822192905 -- <4 files> -> empty; journal 'task-done: T9' at 09:52:22.686Z; e22f61f4d committer date 2026-11-24T13:53:33+04:00.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "pr-process",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md:AC8",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json:acKinds.AC8.check"
+        ],
+        "enumeration_method": "Read every AC verify command in acceptance-criteria.md and flow.json acKinds: AC8 is the only check that pins a commit (AC1-AC7, AC10 run test files, AC9 is judged); the AC file and its flow.json mirror are the two sites."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "onClick={() => onUpdateReview(headMoved.currentHead)}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>",
+      "problem": "Update review is not disabled while the preview is stale or loading and passes the current head from the last loaded draft.",
+      "impact": "After a further push the start uses an outdated head and the backend's strict subject check refuses it; fails closed with an action error, no wrong attempt is created.",
+      "suggested_fix": "Optionally disable Update while previewStale or a preview is pending, or point the refusal at Refresh preview.",
+      "evidence": "Button disabled={writing || updateDisabled}; verifyDeskSubject is strict base+head at run start (flow context.md).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "const covering = local.runs.filter(run => run.source !== \"existing\" && !reviewIsArchived(run) && sameRange(run, revision));",
+      "problem": "The existing-attempt guard reads the panel's last status snapshot, so an attempt on the target head created elsewhere since that read is not seen.",
+      "impact": "Active or queued attempts are deduplicated by the backend's requestAttempt; only an attempt that already finished in that window would receive a second attempt of the same round. No demonstrated harm.",
+      "suggested_fix": "None required; a status read before the guard would close the window.",
+      "evidence": "scheduleDeskReview comment: 'A competing manual request and a replay after a watcher crash get the existing run id'.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 2 }
+}
+```

@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303-r02",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1303",
+    "base": "98bec59046d0ce30500b341e8c18ba5b767069bb",
+    "head": "412258583206e539ce61727b9c4d71bb12fda3a0"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "98bec59046d0ce30500b341e8c18ba5b767069bb",
+      "head": "412258583206e539ce61727b9c4d71bb12fda3a0"
+    },
+    "fixHunks": 0,
+    "newHunks": 98,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T11.implement.json",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T12.implement.json",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T13.implement.json",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json",
+          ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json",
+          "apps/desktop/src/review/ReviewPublishDialog.tsx",
+          "apps/desktop/src/review/ReviewRuns.tsx",
+          "apps/desktop/src/review/ReviewWorkspace.tsx",
+          "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+          "docs/docs/desktop-app.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "src/review/desk-publication-types.ts",
+          "src/review/desk-publication.ts",
+          "src/review/desk-run-executor.ts",
+          "src/review/desk-run-service.ts",
+          "src/review/head-move.ts",
+          "src/review/prior-round.ts",
+          "src/review/round-registry.ts",
+          "src/review/update-round.ts",
+          "src/review/desk-publication.test.ts",
+          "src/review/desk-run-executor.test.ts",
+          "src/review/desk-run-service.test.ts",
+          "src/review/head-move.test.ts",
+          "src/review/prior-round.test.ts",
+          "src/review/update-round.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 18,
+  "minutes": {
+    "min": 10,
+    "max": 25
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "2baa01d5db81b646",
+  "warnings": [
+    "blast radius not computed (recount refused: this base gives 100 changed file(s) but the package's recorded scope holds 32 (more than 3x), which a recount against the wrong base produces. The recorded scope is kept and nothing was written. Recount from the PR's own file list: keryx review blast-radius --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303-r02 --changed <the PR's files, comma-separated>)"
+  ],
+  "next": "dispatch"
+}

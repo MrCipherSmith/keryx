@@ -1,0 +1,84 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage3, base 98bec59046d0ce30500b341e8c18ba5b767069bb (stage 2 tip) .. head 412258583206e539ce61727b9c4d71bb12fda3a0, diff mode, round 2, wave 1. I read slice-01 in full. It holds the flow 520 documents, ReviewPublishDialog.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, ReviewPanel.dom.test.tsx and docs/docs/desktop-app.md. The backend files changed in T12/T13 (desk-run-service.ts, desk-run-executor.ts, round-registry.ts, prior-round.ts, desk-publication.ts) are in slice-02, which is wave 2's. I read them here only as context for the Desktop call path. Load profile: not provided, and the flow context doc states none. Concrete triggers used: several Desktop windows or panels pressing "Update review" for the same PR; a board that has not seen the push; another panel mutation still in flight when Update is pressed; a push between the dialog preview and the Update click. Files read beyond the slice, as context: apps/desktop/src/review/useReviewRuns.ts (request), src/review/desk-run-service.ts (requestDeskRun, dispatchNext), src/review/desk-run-store.ts (requestManual, requestAttempt).
+
+Summary: The new Desktop "Update review" path does not add a race that the backend leaves open. The client guard `!boardBehind && action.open` is a check-then-act, but the store backs it. requestManual compares an admission token read before validation, and when another request overtook it, it returns the same-range active or queued attempt. requestAttempt returns an existing active, queued or complete-completed attempt for the same range and options inside the caller's write transaction. So two windows pressing Update, or a board-behind start on a head that already has an attempt, do not double-start a worker. One minor defect remains. An Update click is silently dropped when another mutation of the same panel is in flight, because useReviewRuns.request returns early without an error. The dialog has already closed by then. Stats: blocker 0 | major 0 | minor 1 | info 1.
+
+Findings:
+
+CLI / Multi-Session — None detected. Concurrent manual starts for one PR key serialise in the store's write transaction with the admission token (desk-run-store.ts requestManual / requestAttempt). dispatchNext keeps one active worker per key (`if (store.active(key)) return;`). The slice adds no spawn, lock file, state-file write or JSONL append.
+
+Concurrency & Races
+### [F-001] "Update review" is silently dropped while another panel mutation is in flight
+- Severity: minor
+- File: apps/desktop/src/review/ReviewWorkspace.tsx
+- Pattern: Concurrency A — in-flight request gate drops a mutation with no outcome
+- Failure mode: Trigger: the user presses "Update review to <sha>" while the same panel's useReviewRuns still has a non-status mutation pending, for example a cancel, an answer or a start issued just before the dialog opened. ReviewRuns has already closed the dialog (`setPublishOpen(false)`). Then useReviewRuns.request hits `if (pending.current && (action.kind === "status" || pending.current !== "status")) return;` and resolves without starting, without an actionError and without a toast. The `.then` in updateReview still runs, so a board-behind case also calls onRefreshBoard. The user sees the dialog close and no new round. Nothing is duplicated or corrupted. The intent is lost with no signal.
+- Fix: Disable the dialog's Update button while the panel is `working`. Pass `working` into the publication target, or use the hook's working state in ReviewRuns. Or have request return a boolean "accepted" so that updateReview can toast "Another review action is still running" when the start was not sent. Call onRefreshBoard only when the start was accepted and succeeded.
+
+Resources — None detected. The slice adds no connection, file handle, timer or long-lived listener. The dialog's useId and useCallback additions are per mount.
+Caching — None detected. The dialog uses `headMoved.currentHead` from the last preview. If the head moved again after that preview, the Update start names a superseded head. The backend start re-validates the range (verifyDeskSubject at run start) and refuses it, and the error surfaces as the panel's start actionError. That fails safe.
+Lock Contention — Not relevant. The slice holds no lock and no transaction.
+Async / Queues — None detected. The backend supersedes a queued attempt for a different range ("A newer review request superseded this one."), so Update presses do not grow a queue.
+Retry / Timeout / Circuit Breaker — Not relevant. No retry is added.
+Idempotency & Distributed Invariants
+### [F-002] Client "already has an attempt" guard is skipped for a board behind the push. The store's same-range dedupe covers it.
+- Severity: info
+- File: apps/desktop/src/review/ReviewWorkspace.tsx
+- Pattern: Idempotency G — client-side check-then-act backed by a server dedupe
+- Failure mode: None today. With a board behind the push, `action.open` describes the old range, so the client guard is skipped and a start goes out for the current head. If that head already has an active, queued or complete-completed attempt with matching options, requestAttempt returns its id (`reused: true`) and starts nothing. Only an attempt with different options, such as a rule-created `follow` run, or a partial or failed one, gets a new manual attempt. That is the existing contract for an explicit manual request. Recorded so that a future change to the store's matching does not remove the only real guard.
+- Fix: No change required. Optionally, add a backend test that a manual start on a range with an active scheduled attempt of other options either reuses that attempt or is intended to queue behind it.
+
+Clean Areas: Part 0, A (except F-001), B, C, D, E, F, G reviewed for slice-01.
+
+Round 1 obligations: round 1 highload had one info (F-001, check-to-POST window in desk-publication.ts), with no fix requested. That code is in slice-02 (wave 2), so I did not re-examine it here. The T11 Desktop change in slice-01 offers "Publish as is" only while the reviewed commit is in the PR. It adds no shared state or concurrency surface.
+
+Not verified / notes:
+- No tests were run (allowed_tools read-only, exec_budget_s 0). Test evidence comes from the brief: backend `bun test src/review` 5499 pass / 2 fail (timing tests inherited from stage 2), Desktop 142 pass.
+- I did not check that the Update start's error text reaches the user. I only saw that useReviewRuns stores it as actionError kind "start".
+- Routing audit: graph_used no (not-relevant: the payload's layers block supplied the affected set). wiki_used no (not-relevant). ctx_used yes (keryx ctx rg/read). raw_rg_used no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "The Desktop Update review path adds no unguarded race. The store dedupes concurrent manual starts for one range with the admission token and same-range reuse inside its write transaction, and keeps one active worker per PR key. One minor defect: an Update click is silently dropped while another panel mutation is in flight, after the dialog has already closed. One info: the client guard is skipped for a board behind the push and relies on the store's dedupe.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "void local.request({ kind: \"start\", ...revision, ...(reviewed.options && { options: reviewed.options }) })",
+      "problem": "useReviewRuns.request returns early with no error when a non-status mutation is pending. The Update review start is then never sent. ReviewRuns has already closed the publish dialog, and the .then still calls onRefreshBoard.",
+      "impact": "Trigger: pressing Update review while a cancel, answer or start of the same panel is in flight. The click has no effect and no message, so the user believes an update round started. Nothing is duplicated or corrupted.",
+      "suggested_fix": "Disable the dialog's Update button while the panel is working (pass working through the publication target), or make request report whether it accepted the action and toast when it did not. Call onRefreshBoard only after an accepted, successful start.",
+      "evidence": "useReviewRuns.ts request: `if (pending.current && (action.kind === \"status\" || pending.current !== \"status\")) return;` and the catch block never rethrows. ReviewRuns.tsx onUpdateReview calls setPublishOpen(false) before updateReview. The dialog's Update button is disabled only on its own `writing` state.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "if (!boardBehind && action.open) return;",
+      "problem": "The client-side 'current head already has an attempt' check is skipped when the board is behind the push. Only the store's same-range dedupe prevents a second attempt.",
+      "impact": "None today. requestManual/requestAttempt reuse an active, queued or complete-completed attempt for the same range and options in a write transaction, so no duplicate worker starts. Recorded so that a change to the store's matching does not remove the only real guard.",
+      "suggested_fix": "No change required. Optionally, add a backend test for a manual start on a range that already has a scheduled attempt with other options.",
+      "evidence": "desk-run-store.ts requestAttempt: `if (active && match(active)) return { id: active.run.id, reused: true };` and the previous completed+complete reuse. requestManual handles the admission token mismatch.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": []
+}
+```

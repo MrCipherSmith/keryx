@@ -1,0 +1,82 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Head: `9e871b17f16a934d5568926e210c3c88d1ca7a86`
+- Scope mode: explicit-hash-range (payload slice `slice-01`, read in full, lines 1-2124)
+- Changed code files reviewed: 10 (plus 10 flow metadata files, read, no executable content)
+- Extra context read at head (not in the diff): `src/review/desk-publication.ts` whole file, `verifyDeskSubject` in `src/review/desk-run-service.ts:49-63`, `confirmSubmit` in `src/commands/review-desk-publish.ts:102-119`, the Desktop auto-answer at `apps/desktop/src-tauri/src/review.rs:443`.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+The head-moved write path holds. I traced the focus questions against the code:
+
+1. **Digest binding.** On submit, `prepare` runs again. `previewSubject` skips the cache for every kind except a non-refresh preview, so the subject is read fresh. The digest covers `settings`, `body` (whose first line names both SHAs), `comments`, `questions`, `discussion` and `headMoved.currentHead`. When the as-is variant appears or disappears between preview and submit, `body` and `settings` change, so the digest changes and the submit fails with `stale:` before any write. This holds in both directions: a current-head preview submitted after a push, and an as-is preview submitted after the PR is force-pushed back to the reviewed head.
+2. **Forced verdict and inline.** In the head-moved case, `settings.verdict` and `settings.inline` are server-derived. The client-requested verdict and inline values are discarded, `comments` stays empty because the inline branch requires `current`, and `outbound.event` is taken from those forced settings. A crafted request therefore cannot turn the as-is review into APPROVE or REQUEST_CHANGES. The digest is computed over the forced settings, so what the user previewed is what gets posted.
+3. **Subject check before POST.** `verifyDeskSubject(cwd, key, expected, …)` runs with `expected = {run.baseSha, headMoved.currentHead}`. It checks the viewer, the repository id, `state === "OPEN"` and the exact base and head. It runs for both the default connection and the pinned connection, after `confirmSubmit` and before the receipt is written and the POST is sent. `commit_id` stays `run.headSha`. Every other caller of `verifyDeskSubject` is unchanged.
+4. **Automatic publication.** In the head-moved case, every branch of the `blockedReason` chain for `kind: "automatic"` ends in a block. The explicit `headMoved ||` term covers the case where nothing earlier blocks it. The test at `desk-publication.test.ts` confirms that nothing is posted.
+5. **Injection into the body.** `headMovedLine` interpolates only `run.headSha` and `pr.headRefOid`. Both pass `/^[a-f\d]{40}$/i` before use (`headMoved` is set only when `sha.test(pr.headRefOid)`), so the GitHub-sourced value cannot inject markdown or HTML. In the dialog, the values are rendered as React text or `title` attributes, which React escapes.
+6. **Redaction and English screens.** `screenCommentBody` iterates `outbound.body`, which is the full `publicationBody` including the prepended line, the round block and the marker. `englishReviewText` runs on `visibleBody`, which also includes the line. The SHAs are in backticks and stripped, and the remaining prose is ASCII English. Both screens therefore still cover the as-is body.
+7. **Discussion re-read.** The discussion re-read now also runs in the head-moved case (`current || headMoved`). This adds a staleness check and removes none.
+
+### Findings
+
+### [F-001] The terminal confirmation for a submit does not say that this is the as-is variant for an older commit
+- **Severity**: info
+- **File**: src/commands/review-desk-publish.ts (unchanged file; its input changed with this PR)
+- **Attack vector**: none. This is an operator-clarity observation, not an attacker path.
+- **Problem**: `confirmSubmit` prints only the verdict, the inline count, the repo and number, the viewer, and a 12-character digest prefix. In the head-moved case it shows "Publish a comment review with 0 inline notes …". It does not mention that the review is anchored to the reviewed commit rather than the current head. Desktop answers this prompt itself (`review.rs:443`), and its dialog does show both commits and the "Publish as is for …" label, so Desktop is not affected. Only a direct CLI user sees the terse prompt. That user received the `headMoved` field in the preview JSON, and the digest binds that preview.
+- **Why it matters**: nothing is posted that differs from the bound preview. The prompt is simply less informative than the dialog for a decision that the PR treats as distinct. What would settle this as a defect: a documented CLI flow in which the operator confirms without having read the preview JSON.
+- **Fix**: when `state.headMoved` is present, append "as is for reviewed commit <short> (PR head is now <short>)" to the prompt.
+
+### Clean Areas
+- Injection (SQL/command/XSS/SSTI): the only new interpolations are into the review body and the dialog text. Both use SHA-validated values. No new shell, `exec` or query construction. The `gh` spawn is unchanged and uses an argv array.
+- Auth/authz/IDOR: the attempt-ownership check in `publication()` (key, repositoryId, viewer, cwd for automatic) is unchanged. Viewer and repository are re-verified before the POST on both connections.
+- Input validation: request settings are still schema-validated in `review-desk-publish.ts`. In the head-moved case the server overrides the verdict and inline values regardless.
+- Secrets/logging: nothing new is logged. Error messages for GitHub failures are unchanged and keep bodies out.
+- Crypto: the digest stays SHA-256 over JSON. No new randomness.
+- CSRF/path traversal/open redirect: not applicable. No new file paths. `scopedFile` reads are unchanged.
+- `head-move.ts` and `update-round.ts` are pure functions with no I/O and no write path. `parseOnHeadMove` allowlists stored values.
+- Not checked: the TOCTOU window between `verifyDeskSubject` and the POST (a push in that window would make the first line's "moved to <sha>" out of date). It predates this PR, the same window exists for the current-head path, and `commit_id` stays pinned to the reviewed commit. I did not rate it.
+
+### Not verified
+- No tests were run (exec_budget_s 0). The behaviour claims above come from reading the code at head and the tests in the slice.
+- The Rust `review_publish` passthrough was read only at the auto-answer line.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "The head-moved publish path is sound. The digest covers the forced settings, the body with both SHAs, and currentHead, so a preview-vs-submit change in either direction fails with stale:. The verdict and inline values are server-forced, so a client cannot escalate the event. verifyDeskSubject checks OPEN, base and the previewed current head on both connections before the receipt and the POST. Automatic publication with a moved head is always blocked. The SHAs in the first line are regex-validated. The redaction and English screens run on the full as-is body. One info item: the CLI terminal confirmation does not mention the as-is variant.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/commands/review-desk-publish.ts",
+      "line": null,
+      "quote": "`Publish a ${state.settings.verdict} review with ${state.inlineCount} inline notes to ${key.repo} #${key.number} as @${key.viewer} (preview ${state.digest.slice(0, 12)})? Type 'publish' to confirm: `,",
+      "problem": "When the head moved, the terminal confirmation for a submit omits that the review is the as-is Comment anchored to the reviewed commit rather than the current head. Desktop auto-answers this prompt (apps/desktop/src-tauri/src/review.rs:443) and shows both commits in its dialog, so only direct CLI users see the terse prompt.",
+      "impact": "No unpreviewed content can be posted, because the digest binds the preview and the preview JSON carries headMoved. A CLI operator confirms with less context than the Desktop dialog gives. This becomes a defect only if a documented CLI flow has the operator confirm without reading the preview.",
+      "suggested_fix": "In confirmSubmit, when state.headMoved is set, append 'as is for reviewed commit <short> (PR head is now <short>)' to the prompt text.",
+      "evidence": "src/commands/review-desk-publish.ts:102-119 confirmSubmit prints verdict, inline count, target, viewer and digest prefix only; src/review/desk-publication.ts publication() passes state, which includes headMoved, to confirmSubmit before verifyDeskSubject.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "pre-existing",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```

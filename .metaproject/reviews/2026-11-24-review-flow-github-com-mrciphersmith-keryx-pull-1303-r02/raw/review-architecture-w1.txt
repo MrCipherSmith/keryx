@@ -1,0 +1,131 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (stacked base)
+- Merge-base: `98bec59046d0ce30500b341e8c18ba5b767069bb` (head `412258583206e539ce61727b9c4d71bb12fda3a0`)
+- Scope mode: explicit-hash-range. Slice-01 read in full. The six generated `resolved/T*.implement.json` files were read with their repeated per-entry metadata keys (sha256, bytes, reason, tier, kind, source, description) filtered out. They hold rule lists only, with no code.
+- Stack detected: React Desktop (`apps/desktop/src/review`, no MobX in the changed files) over a generic-TS backend (`src/review`, in slice-02, read only where a round-1 fix or a class sibling required it)
+
+### Summary
+On the Desktop side, slice-01 threads one optional callback, `onUpdateReview`, from `ReviewWorkspace` through `PublicationTarget`/`RunAttempt` into `ReviewPublishDialog`. The update round goes through the existing start path (`local.request({ kind: "start" })`), so there is still one way to start an attempt. The dialog takes the head-moved lock from server state (`draft.headMoved`), and the server forces those settings, so the component holds no publication rules. Round-1 architecture F-001 (two previous-attempt rules for the run start) holds: `desk-run-service.ts` now calls `previousRoundAttempt` → `selectPriorAttempt`, and the options-key predicate is gone.
+
+I found two minor issues:
+- T13 introduced a second "which earlier attempt does this round build on" rule for finding answers. It walks the `previousRunId` chain and does not use `selectPriorAttempt`, while the PR body says one rule chooses the previous attempt.
+- The new prop reaches only two of the three render sites that open the publish dialog.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 1
+
+### Layer Violations
+None detected. The dialog renders state and forwards intents. `ReviewWorkspace.updateReview` composes an existing request. The forced verdict, inline off and stale checks stay server-side in `desk-publication.ts`.
+
+### Dependency Direction
+None detected. The Desktop files import only types from `src/review` (`DeskRevision`, `DeskRun`, `DeskRunKey` in ReviewWorkspace.tsx, and `DeskReviewOptions` in the DOM test). This is the pattern those files already used.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+- [F-001] minor: the previous-round answers come from a second previous-attempt rule (the `previousRunId` walk in desk-publication.ts), not from `selectPriorAttempt`. Details are in REVIEW_RESULT.
+- [F-002] minor: `onUpdateReview` is threaded into 2 of 3 publish-dialog surfaces. `SessionReviewActivity` builds its own `publication` without it. Details are in REVIEW_RESULT.
+
+### Dependency Inversion
+None detected. No new I/O boundary is added on the Desktop side.
+
+### Framework-Specific (NestJS / React+MobX)
+React only. No MobX. [F-003] info: `RunAttempt` rebuilds the update revision from `run.baseSha` and a comment, because `headMoved` carries no base.
+
+### Verified clean (sites)
+- One start path: `ReviewWorkspace.tsx` `updateReview` and `start` both call `local.request({ kind: "start", ... })`, and `RunLaunchDialog` uses `runCommand`. Checked by reading ReviewWorkspace.tsx at head, lines 1-200.
+- Round-1 F-001 fixed: `keryx ctx rg --all "selectPriorAttempt|effectiveOptionsKey|previousRoundAttempt" src apps/desktop/src`. `desk-run-service.ts:385` calls `previousRoundAttempt(store.history(key).runs, run)`, which calls `selectPriorAttempt` (`desk-run-service.ts:318`). The remaining `effectiveOptionsKey` comparisons are in `desk-run-store.ts:311-718` (`requestManual`/`previousAttempt` dedupe of the same revision). That file was not changed in this range: AC8's `git diff --quiet` invariant covers it.
+- Round-1 F-002 (the `on_head_move` default source) is still open as a recorded follow-up (journal, T8 disposition, PR body "Not in this PR"). Same query: `parseOnHeadMove`, `defaultOnHeadMove` and `headMoveResponse` have no production caller, only `head-move.ts` and `head-move.test.ts`. So no caller can split ask/follow yet. Not re-raised.
+- Headmoved lock is server-authored: ReviewPublishDialog.tsx reads only `draft?.headMoved` and the server state. Per plan A and the AC2 tests, the server ignores a submit's verdict and inline settings.
+
+### Suggested Patches
+None that are mechanical. See the suggested_fix fields.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-01's Desktop changes keep the layering: one optional callback is threaded to the publish dialog, the update round reuses the single start path, and head-moved locks come from server state. Round-1 F-001 holds (the run start uses previousRoundAttempt→selectPriorAttempt; the options-key rule is gone). Two minors: answers are seeded from earlier attempts by a second previous-attempt rule (previousRunId walk) that disagrees with selectPriorAttempt, against the PR body's 'one rule'; and onUpdateReview reaches 2 of 3 publish-dialog surfaces. One info on base reconstruction in RunAttempt.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "const savedAnswers: Record<string, unknown> | undefined = saved?.answers ?? await earlierAnswers(earlier);",
+      "problem": "Round obligation 7 (one rule, one implementation), and obligation 2 against the PR body's claim that 'One rule chooses the previous attempt: selectPriorAttempt'. An update round now picks its previous attempt in two ways. Findings come from previousRoundAttempt → selectPriorAttempt (desk-run-service.ts:311-318, update-round.ts:15): an earlier round only, not `existing`, state completed or partial, findingsKnown true, no delete or archive decision. The keep/dismiss answers shown in the same round's draft come from earlierAttemptDirectories + earlierAnswers (desk-publication.ts:119-140). That rule walks the store's previousRunId chain up to answerSourceLimit hops and takes the first attempt with a publication-draft.json. It applies none of selectPriorAttempt's filters. previousRunId is the newest attempt of the previous round, or a same-round predecessor for a retry or continuation (desk-run-store.ts roundFor, 186-199), whatever its state or decision.",
+      "impact": "The two rules can name different attempts for the same new round. In one case, a previous-round attempt was archived after its draft was saved. selectPriorAttempt refuses it as evidence ('Delete and archive withdraw the attempt'), but its answers are still pre-selected in the new round. In another case, a same-range retry seeds answers from a sibling attempt of its own round, while its findings come only from earlier rounds. Answers match by question id (global_id or the local finding id), so an answer can attach to a finding carried from a different attempt. The user still confirms answers before a manual submit, so this is a consistency cost and a latent mismatch, not a demonstrated wrong post. I did not verify whether an archive decision keeps the attempt directory and its draft on disk.",
+      "suggested_fix": "Choose the answer source with the same rule. In publication(), resolve the earlier attempt with previousRoundAttempt(store.history(key).runs, attempt.run), or with a shared helper that update-round.ts exports. Read that attempt's publication-draft.json, and fall back through its previousRunId chain only within attempts selectPriorAttempt admits. Alternatively, if answers should follow a broader chain on purpose, state that in update-round.ts and narrow the PR body's 'one rule' claim. At least skip delete/archive attempts in earlierAttemptDirectories.",
+      "evidence": "Read at head: src/review/desk-publication.ts:114-140 and :187 (sameReview, earlierAttemptDirectories, earlierAnswers, savedAnswers); src/review/update-round.ts:15-26; src/review/desk-run-service.ts:303-318 and :385 (diff 98bec5904..412258583); src/review/desk-run-store.ts:186-199 (roundFor assigns previous = newest of the previous round or the retry's round). PR body item 2: 'One rule chooses the previous attempt: selectPriorAttempt'. Journal T13: 'Answers seeded from the newest earlier attempt draft via previousRunId (<=8 hops, same-Review guard)'. The anchor is in slice-02. It is reported here because it belongs to the class of round-1 architecture F-001, and the brief asks for that fix to be re-checked.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "prior-attempt-rule-answers-vs-findings",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/review/update-round.ts:15 (selectPriorAttempt, findings)",
+          "src/review/desk-run-service.ts:311 (previousRoundAttempt, round filter then selectPriorAttempt)",
+          "src/review/desk-publication.ts:119 (earlierAttemptDirectories, previousRunId walk, answers)",
+          "src/review/desk-publication.ts:134 (earlierAnswers, first draft wins)"
+        ],
+        "enumeration_method": "keryx ctx rg --all 'selectPriorAttempt|effectiveOptionsKey|previousRoundAttempt|parseOnHeadMove|defaultOnHeadMove|headMoveResponse|onUpdateReview' src apps/desktop/src, plus keryx ctx rg --all 'previousRunId|carriedAnswers|earlierAnswers|hops' over desk-publication.ts, desk-run-store.ts and desk-run-types.ts. The remaining effectiveOptionsKey hits in desk-run-store.ts are the same-revision dedupe and are outside this range."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "line": null,
+      "quote": "onUpdateReview?: ((reviewed: DeskRun, revision: DeskRevision) => void) | undefined;",
+      "problem": "Round obligation 6 (a threaded value is pinned per site). PublicationTarget.onUpdateReview reaches the publish dialog from three render sites. ReviewWorkspace.tsx:181 (ReviewRuns) and :192 (ReviewRunDialog) pass the workspace's `publication`, which carries it. SessionReviewActivity.tsx:244 builds its own `publication={{ cwd, target: link.key, url }}` without it. So the head-moved dialog opened from the Sessions view offers only 'Publish as is for <sha>' as its primary action, with no 'Update review to <sha>'. No test pins this third site either way.",
+      "impact": "The spec ('Перед публикацией') and the PR body (item 2: 'In the head-moved dialog, the primary action is \"Update review to <sha>\"') describe one dialog behaviour, but it depends on the surface that opened the dialog. This divergence is unstated. A later change to the update action will also have to remember a site that does not go through the workspace.",
+      "suggested_fix": "Decide per surface and record the decision. Either have SessionReviewActivity pass an onUpdateReview that starts the next round through its reviewRun(cwd, link.key, { kind: 'start', ... }) path, or omit it on purpose and say so in a comment at SessionReviewActivity.tsx:244 and in the PR body. Add a DOM assertion for whichever behaviour is chosen.",
+      "evidence": "keryx ctx rg --all '<RunAttempt|<ReviewPublishDialog|publication=\\{|<ReviewRuns |PublicationTarget' apps/desktop/src found 3 publication render sites: ReviewWorkspace.tsx:181, ReviewWorkspace.tsx:192 and SessionReviewActivity.tsx:244. SessionReviewActivity.tsx:243-254 was read at head. ReviewRuns.tsx:1790/1836-1840 of slice-01 renders Update only when draft.onUpdateReview is set.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "onupdatereview-surface-threading",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/ReviewWorkspace.tsx:181",
+          "apps/desktop/src/review/ReviewWorkspace.tsx:192",
+          "apps/desktop/src/review/SessionReviewActivity.tsx:244"
+        ],
+        "enumeration_method": "keryx ctx rg --all over apps/desktop/src for publication={ / <RunAttempt / <ReviewRuns / <ReviewPublishDialog / PublicationTarget; ReviewRunDialog.tsx:101 forwards its own publication prop to RunAttempt"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "line": null,
+      "quote": "updateReview(run, { baseSha: run.baseSha, headSha: currentHead });",
+      "problem": "The view rebuilds the update round's target range. It takes the base from the reviewed attempt, the head from the dialog, and justifies this with a domain invariant restated in a comment ('The as-is variant exists only while the base is unchanged'). The server's headMoved carries only reviewedHead and currentHead, so the component has to know when the server offers the variant.",
+      "impact": "Nothing goes wrong today, and the backend re-validates the range when the run starts. If the server ever offers headMoved with a changed base, the start is refused instead of following the PR. The rule would then have to change in two places.",
+      "suggested_fix": "Let the server state carry the current revision (headMoved: { reviewedHead, current: { baseSha, headSha } }). Pass that revision through onUpdateReview, so the component forwards it without rebuilding it.",
+      "evidence": "slice-01 ReviewRuns.tsx hunk @@ 157,202 @@ (onUpdateReview wrapper, with the comment); ReviewPublishDialog.tsx:1667 passes only headMoved.currentHead.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes for the orchestrator:
+- This lens runs no tests. I did not read the test-output files, and no finding here depends on them.
+- F-001's anchor is in slice-02, which the wave-2 lens reads. dedupe_key `prior-attempt-rule-answers-vs-findings` is set for merging. I did not verify whether an `archive` decision keeps the attempt directory and its publication-draft.json on disk. That is what decides whether the archived-attempt case can be reached.
+- Layers: the payload's gdgraph `affected` list (graph at the PR head) was used as a lead. I did not run `keryx gdgraph` myself. The wiki and memory layers were empty or not relevant.
+
+Routing audit: graph_used: payload layers (gdgraph affected at PR head), wiki_used: not-relevant (no wiki entries in layers; the spec and plan were read through the slice), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

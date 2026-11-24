@@ -34,13 +34,19 @@ function Preview({ text, label = "Review comment preview" }: { text: string; lab
   return text.trim() ? <ReviewReportMarkdown text={text} label={label} className="review-publish-markdown" /> : <p>No general comment in this draft.</p>;
 }
 
-export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onClose }: {
+const shortSha = (sha: string) => sha.slice(0, 7);
+
+export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onUpdateReview, updateDisabled = false, onClose }: {
   cwd: string;
   target: DeskRunKey;
   id: string;
   command?: typeof reviewPublish | undefined;
   onAccessLost?: ((message: string) => void) | undefined;
   onDecision?: (() => void) | undefined;
+  /** Starts an update round on the current head it is given; offered only while the head has moved. */
+  onUpdateReview?: ((currentHead: string) => void) | undefined;
+  /** The update round cannot start now, because another action of the same review is in flight. */
+  updateDisabled?: boolean | undefined;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<PublicationState>();
@@ -58,6 +64,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   decision.current = onDecision;
   const verdictName = useId();
   const answerName = useId();
+  const headMovedNotice = useId();
+  const updateReasonId = useId();
 
   const send = useCallback(async (initialRequest: PublicationRequest) => {
     if (activeRequest.current) {
@@ -144,18 +152,34 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const question = questions[Math.min(questionIndex, questions.length - 1)];
   const unanswered = questions.filter(item => !choicesFor(item).some(choice => choice.id === settings?.answers[item.id])).length;
   const canUsePreview = !!draft && !!settings && !busy && !previewStale && !posted;
+  const headMoved = draft?.headMoved;
+  // The update round is the primary action while it is offered; publishing as is becomes the alternative.
+  const updateOffered = !!headMoved && !!onUpdateReview && !posted;
+  // The current head comes from the latest preview: a preview in flight or out of date may name an intermediate head.
+  const updateReason = updateDisabled ? "Another action of this review is still running. Update review is available when it finishes."
+    : busy ? "The preview is updating." : previewStale ? "Refresh the preview to update this review." : undefined;
+  const publishButton = <button type="button" className={updateOffered ? "btn" : "btn btn-primary"}
+    disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
+    onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>
+    {headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : "Submit review"}</button>;
 
   return createPortal(<Dialog title="Publish to GitHub" width={780} focusRoot
     onClose={writing ? null : onClose} footer={
       <div className="review-publish-footer">
+        {/* The two head-moved alternatives stay next to each other, so a wrapping footer keeps them on one row. */}
+        {updateOffered && headMoved && onUpdateReview && <>
+          <button type="button" className="btn btn-primary" disabled={!!updateReason} title={updateReason}
+            aria-describedby={updateReason && !busy ? updateReasonId : undefined}
+            onClick={() => { if (!updateReason) onUpdateReview(headMoved.currentHead); }}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>
+          {publishButton}
+        </>}
         <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
         {!posted && <>
           {!draft?.skipped && <button type="button" className="btn" disabled={busy || !draft}
             onClick={() => void send({ kind: "skip", id })}>Skip publication</button>}
           <button type="button" className="btn" disabled={!canUsePreview}
             onClick={() => { if (canUsePreview) void send({ kind: "save", id, settings }); }}>Save locally</button>
-          <button type="button" className="btn btn-primary" disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
-            onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>Submit review</button>
+          {!updateOffered && publishButton}
         </>}
       </div>
     }>
@@ -167,27 +191,35 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
         {!draft && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
       </div>}
       {settings && draft && !posted && <>
+        {headMoved && <div id={headMovedNotice} className="inline-banner tone-warn review-publish-head-moved" role="status"><span>
+          Reviewed commit <code title={headMoved.reviewedHead}>{shortSha(headMoved.reviewedHead)}</code>. The pull request has moved
+          to <code title={headMoved.currentHead}>{shortSha(headMoved.currentHead)}</code> since. Publishing as is posts a Comment
+          for the reviewed commit only. The verdict is Comment only, and inline comments are off because they cannot be
+          placed on an earlier commit.
+        </span></div>}
+        {/* While the preview updates, its progress line below already says so. */}
+        {updateOffered && updateReason && !busy && <p id={updateReasonId} className="review-detail-muted">{updateReason}</p>}
         <div className="review-publish-settings">
-          <fieldset disabled={writing}>
+          <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
             <legend>Include in the review</legend>
             <label><input type="checkbox" checked={settings.general}
               onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
-            <label><input type="checkbox" checked={settings.inline}
+            <label><input type="checkbox" checked={settings.inline} disabled={!!headMoved}
               onChange={e => update({ inline: e.currentTarget.checked })} /> Inline comments</label>
             <small className="review-detail-muted">English · Keryx template{draft.overlayAvailable ? " + project overlay" : ""}</small>
             {draft.overlayRequiresApproval && <small className="review-detail-muted">This project requires confirmation of the finished report.</small>}
             {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
           </fieldset>
-          <fieldset disabled={writing}>
+          <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
             <legend>Review verdict</legend>
-            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null}
+            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null} disabled={!!headMoved}
               onChange={() => update({ verdictOverride: null })} />
               <span>Use recommendation{settings.verdictOverride == null && <>
                 <br /><small>{verdicts.find(option => option.value === settings.verdict)?.label} recommended</small>
               </>}</span>
             </label>
             {verdicts.map(({ value, label }) => <label key={value}>
-              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value}
+              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value} disabled={!!headMoved}
                 onChange={() => update({ verdict: value, verdictOverride: value })} /> {label}
             </label>)}
           </fieldset>

@@ -18,6 +18,7 @@ import { buildRoundBlock, PUBLISHED_BODY_LIMIT, type ReviewEvent } from "./publi
 import { computeReadiness, failingItems } from "./readiness";
 import { readRoundNumber } from "./round-record";
 import type { ManagedReviewManifest } from "./types";
+import { earlierRoundAttempts, newerRoundOf, type NewerRound } from "./update-round";
 import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
 
 const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -26,11 +27,16 @@ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
 type Draft = { settings: PublicationSettings; savedAt: string };
+/** How many earlier attempts an update round looks through for a draft to take answers from. */
+const answerSourceLimit = 8;
 type Operation = PublicationRequest | { kind: "automatic"; id: string; settings: PublicationSettings };
 type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
 type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
-type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string };
+type HeadMoved = NonNullable<PublicationState["headMoved"]>;
+type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string;
+  /** GitHub's definitive answer for one current head: ahead of the reviewed head, or not (diverged, behind, identical). */
+  headStatus?: { head: string; ahead: boolean } };
 const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheFile = "publication-preview-cache.json";
@@ -84,11 +90,54 @@ async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubC
   return hash(pages);
 }
 
+/**
+ * Whether the reviewed head is still in the pull request: GitHub reports the current head `ahead` of it.
+ * Anything else (a force-push or rebase reports `diverged`, an older head `behind`) or any failed read, a transient
+ * `unavailable:` included, keeps the refusal: posting `commit_id` for a commit outside the PR is never attempted, the
+ * draft still saves locally, and a refresh asks again. A definitive status is cached per current head (T14 B5); a failed
+ * read is not, so the next preview asks again.
+ */
+async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConnection, cache: PreviewCache,
+  reviewedHead: string, currentHead: string): Promise<boolean> {
+  if (cache.headStatus?.head === currentHead) return cache.headStatus.ahead;
+  let status: string;
+  try {
+    status = (await boardGh(cwd, ["api", "--hostname", "github.com",
+      `repos/${key.repo}/compare/${reviewedHead}...${currentHead}?per_page=1`, "--jq", ".status"], auth)).trim();
+  } catch {
+    return false; // Fail closed, as described above.
+  }
+  if (!["ahead", "behind", "diverged", "identical"].includes(status)) return false;
+  cache.headStatus = { head: currentHead, ahead: status === "ahead" };
+  return status === "ahead";
+}
+
+/** The finding answers of the newest earlier attempt that saved a publication draft; never its other settings. */
+async function earlierAnswers(directories: readonly string[]): Promise<Record<string, unknown> | undefined> {
+  for (const directory of directories) {
+    // An unreadable earlier draft only means nothing is pre-selected from it; the current draft does not depend on it.
+    const earlier = await json<Draft>(directory, "publication-draft.json", draftLimit).catch(() => undefined);
+    if (earlier) return object(object(object(earlier)?.settings)?.answers);
+  }
+}
+
+/** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
+function headMovedLine(moved: HeadMoved): string {
+  return `Reviewed commit \`${moved.reviewedHead}\`. The pull request has moved to \`${moved.currentHead}\` since; ` +
+    "this review does not cover the newer commits.";
+}
+
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
-  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; cache: PreviewCache;
+  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
+  /** The pull request is open on the reviewed base. */
+  open: boolean;
+  /** Earlier-round attempts of the same Review, newest first: an attempt without a draft of its own takes their answers. */
+  earlier: readonly string[];
+  /** A later round of the same Review exists: this attempt is superseded and is not published as is (T14 B6). */
+  newerRound?: NewerRound | undefined;
 }): Promise<Prepared> {
-  const { cwd, directory, run, key, auth, request, current, cache } = input;
+  const { cwd, directory, run, key, auth, request, current, open, headMoved, cache, earlier, newerRound } = input;
   const packageDir = path.join(directory, "package");
   const target = `https://github.com/${key.repo}/pull/${key.number}`;
   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
@@ -120,11 +169,13 @@ async function prepare(input: {
     return options.length ? { ...question, options } : { ...question, recommendation };
   });
   const saved = request.settings ?? draft?.settings;
+  // An update round starts with the answers given to the same findings before; only answers, never the verdict or content.
+  const savedAnswers: Record<string, unknown> | undefined = saved?.answers ?? await earlierAnswers(earlier);
   const selections = new Map<string, PublicationAnswer>();
   const selectedLabels = new Map<string, string>();
   for (const question of questions) {
-    if (!saved || !Object.hasOwn(saved.answers, question.id)) continue;
-    const answer = saved.answers[question.id];
+    if (!savedAnswers || !Object.hasOwn(savedAnswers, question.id)) continue;
+    const answer = savedAnswers[question.id];
     if (question.options) {
       const selected = question.options.find(option => option.id === answer);
       if (selected) {
@@ -150,15 +201,17 @@ async function prepare(input: {
     item.id !== "premise-decisions" || !answered ||
     recorded.records.some(row => premiseHoldState(row, recorded.decisions) === "awaiting" && !Object.hasOwn(answers, text(row.global_id ?? row.id))));
   const complete = run.result?.coverage === "complete" && failing.length === 0;
-  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && current &&
+  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && (current || headMoved) &&
     (request.kind === "preview" || request.kind === "submit" || request.kind === "automatic")
     ? cache.discussion ?? await publicationDiscussion(cwd, key, auth) : undefined;
   if (discussion) cache.discussion = discussion;
   const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
-  const settings: PublicationSettings = {
-    inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
-    overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers,
-  };
+  const settings: PublicationSettings = headMoved
+    // The as-is variant is a Comment only, and the current diff cannot place lines on the reviewed commit.
+    ? { inline: false, general: saved?.general ?? true, keryxTemplate: true, overlay: !!overlay,
+      verdict: "comment", verdictOverride: "comment", answers }
+    : { inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
+      overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers };
   const largestAnswers = Object.fromEntries(questions.map(question => [question.id, question.options?.[0]?.id ?? "dismiss"]));
   const answerLimitExceeded = Buffer.byteLength(JSON.stringify({
     kind: "submit", id: request.id, settings: { ...settings, answers: largestAnswers }, digest: "0".repeat(64),
@@ -226,6 +279,7 @@ async function prepare(input: {
     howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${run.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
   });
   let body = applyReviewOverlay(summary, overlay);
+  if (headMoved) body = `${headMovedLine(headMoved)}\n\n${body}`;
   const visibleBody = body;
   const round = buildRoundBlock({ body, round: roundNumber,
     reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: settings.general ? inBody : [] });
@@ -233,17 +287,22 @@ async function prepare(input: {
   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
   body += `\n\n${marker}`;
   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
-  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion]);
+  // A further push changes the current head, so it must make an earlier as-is preview stale.
+  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion,
+    ...(headMoved ? [headMoved.currentHead] : [])]);
   const approval = eventFor[settings.verdict] === "APPROVE";
   const templateChanged = request.kind === "automatic" &&
     await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
   const blockedReason = publishedUrl ? "This review has already been published."
     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
-    : !current ? "The pull request is closed or its revision moved. You can still save this draft locally."
+    // A closed pull request or a changed base comes first: no round of this review can publish then (T16 B2).
+    : !current && (!open || !headMoved && newerRound === undefined)
+      ? "The pull request is closed or its revision moved. You can still save this draft locally."
+    : !current && newerRound !== undefined ? supersededReason(newerRound)
     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
     : !answered ? "Answer each finding question before publishing."
     : overlay?.kind === "slots" && !settings.general ? "Enable General comment to include the project report overlay."
-    : request.kind === "automatic" && (skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
+    : request.kind === "automatic" && (headMoved || skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
       ? "This review needs a publication decision in Desktop."
     : !englishReviewText([visibleBody, ...comments.map(comment => comment.body)].join("\n"))
       ? "GitHub reviews must be written in English. This draft contains non-English prose."
@@ -251,14 +310,24 @@ async function prepare(input: {
     : inlineUnavailable ? "The pull request diff is unavailable. Retry or turn off inline comments."
     : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT || comments.some(comment => comment.body.length > PUBLISHED_BODY_LIMIT)
       ? "This draft exceeds the GitHub review size limit. Change what is included or split the review."
-    : !settings.general && !comments.length ? "Enable General comment or select inline comments that are on the diff." : undefined;
+    : !settings.general && !comments.length ? headMoved
+      ? "Enable General comment. Inline comments are not available when publishing for an earlier commit."
+      : "Enable General comment or select inline comments that are on the diff." : undefined;
   return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, inlineComments: comments,
     questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay && !emptyOverlay,
     ...(overlay?.requiresApproval && { overlayRequiresApproval: true }),
     canSubmit: !blockedReason, digest, ...(blockedReason ? { blockedReason } : {}),
     ...(overlayWarning ? { overlayWarning } : emptyOverlay ? { overlayWarning: "This draft has no project overlay content. Only the Keryx template is shown." } : {}),
-    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}) },
+    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}),
+    ...(headMoved && { headMoved }) },
     comments, publicationBody: body, ...(discussion && { discussion }) };
+}
+
+/** Why a superseded attempt is not published, in terms of what its newer round can do (T16 B1). */
+function supersededReason({ round, status }: NewerRound): string {
+  if (status === "running") return `Round ${round} of this review is still running. Publish from it when it finishes. You can still save this draft locally.`;
+  if (status === "no-result") return `Round ${round} of this review is newer but has no result. Start a new round or save this draft locally.`;
+  return `Round ${round} of this review is newer. Publish from that round. You can still save this draft locally.`;
 }
 
 function englishReviewText(body: string): boolean {
@@ -288,9 +357,16 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   const connection = await projectGithubConnection(cwd, process.env, key.viewer);
   const store = new DeskRunStore(undefined, true);
   const directory = store.directory(request.id);
-  const attempt = (() => {
-    try { return store.byId(request.id); }
-    finally { store.close(); }
+  const { attempt, earlier, newerRound } = (() => {
+    try {
+      const found = store.byId(request.id);
+      if (!found) return { attempt: found, earlier: [] as string[], newerRound: undefined };
+      // One rule for the attempts before this round (update-round.ts): same Review, earlier rounds, not withdrawn. The
+      // rules read placement only, so the lean query serves them without reports, receipts or transcripts (T16 B6).
+      const placements = store.roundPlacements(found.key);
+      return { attempt: found, newerRound: newerRoundOf(placements, found.run),
+        earlier: earlierRoundAttempts(placements, found.run).slice(0, answerSourceLimit).map(item => store.directory(item.id)) };
+    } finally { store.close(); }
   })();
   const run = attempt?.run;
   if (!attempt || !run?.result?.reviewed || run.source === "existing" ||
@@ -304,8 +380,18 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   }
   const cache = await previewSubject(cwd, directory, key, connection, request, run);
   const pr = cache.subject;
-  const current = pr.state === "OPEN" && pr.baseRefOid === run.baseSha && pr.headRefOid === run.headSha;
-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, cache });
+  const open = pr.state === "OPEN" && pr.baseRefOid === run.baseSha;
+  const current = open && pr.headRefOid === run.headSha;
+  // Automatic publication never posts the as-is variant, so it is refused before any further GitHub read.
+  if (request.kind === "automatic" && open && !current) throw new Error("configuration: This review needs a publication decision in Desktop.");
+  // Same base, a newer head that still contains the reviewed commit: the draft becomes the as-is Comment for it.
+  // An attempt a later round of its Review superseded is never published as is: that round may already cover the new head.
+  const headMoved: HeadMoved | undefined = open && !current && newerRound === undefined && sha.test(pr.headRefOid) &&
+    await reviewedHeadInPull(cwd, key, connection, cache, run.headSha, pr.headRefOid)
+    ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
+  // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
+  const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
+  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, open, ...(headMoved && { headMoved }), cache, earlier, newerRound });
   if (request.kind === "preview") {
     const { state } = await render();
     verifyGithubBindingUnchanged(connection);
@@ -338,12 +424,12 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
       }
     }
     if (request.kind === "submit") await confirmSubmit?.(state);
-    await verifyDeskSubject(cwd, key, run, connection);
+    await verifyDeskSubject(cwd, key, expected, connection);
     // Pin only after independently verifying the active viewer with the default connection.
     const auth: GithubConnection = connection.login ? connection : {
       ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
     };
-    if (auth !== connection) await verifyDeskSubject(cwd, key, run, auth);
+    if (auth !== connection) await verifyDeskSubject(cwd, key, expected, auth);
     if (discussion && discussion !== await publicationDiscussion(cwd, key, auth)) {
       throw new Error("stale: The pull request discussion changed. Refresh the preview and check the draft before publishing.");
     }

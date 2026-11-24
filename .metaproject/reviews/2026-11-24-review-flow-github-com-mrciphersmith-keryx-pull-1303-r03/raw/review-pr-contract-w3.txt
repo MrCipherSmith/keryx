@@ -1,0 +1,80 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract, wave 3, round 3: slice-03 (backend tests)
+
+Inputs read in full: brief.md, drivers/review-pr-contract-w3.json, payload (`review_context.pr.body`, AC1-AC10), `slices/slice-03.diff` (1313 lines: desk-publication.test.ts, desk-run-executor.test.ts, desk-run-service.test.ts, head-move.test.ts, prior-round.test.ts, round-registry.test.ts, update-round.test.ts), and the earlier waves' results `raw/review-pr-contract-w1.txt` (PC-001..PC-004) and `raw/review-pr-contract-w2.txt` (PC-006, PC-007). This wave does not repeat them.
+Also read, to settle rows: specification.md:96-102 (the on_head_move table); desk-publication.ts:436-456 (the 422 branch); desk-run-store.ts:618-640; journal.md:50-62; acceptance-criteria.md:23 at head and in the working tree; flow.json:605-620.
+Not re-filed (known, being corrected): the body names base 98bec5904 (now 20e4281a2), and it names `selectPriorAttempt` as "the one rule". This also covers the frozen AC8 invariant. At head 822192905, acceptance-criteria.md:23 still runs `git diff --quiet 98bec59046d0...`. That command exits 1, because stage 2 changed ReviewBoard.tsx (2 lines) and review.css (3 lines) between 98bec5904 and 20e4281a2. The uncommitted working-tree edit of acceptance-criteria.md and flow.json already replaces it with 20e4281a2. The orchestrator should commit that edit before AC8 is run on the PR head. The same goes for the desk-run-service.test.ts header comment: "picks the previous round ... with selectPriorAttempt alone".
+
+## Checklist form: test claims of the PR body and the frozen AC verify commands, set against slice-03
+
+The PR body has no checklist boxes. Each row below is a test claim of the body, or the verify command of a frozen AC.
+
+| Claim (quoted) | State | What slice-03 shows | Result |
+|---|---|---|---|
+| Item 4: "Tests for the previous-round rules cover a partial previous round and changed settings, in the `prior-round`, `desk-run-service`, `desk-run-executor` and `update-round` tests." | claim | prior-round.test: AC6 test plus "previous partial round run with different settings still gives its findings". update-round.test: partial accepted, "different settings is still accepted". desk-run-service.test: partial and other-settings tests for `previousRoundAttempt`. desk-run-executor.test: partial previous attempt handed on (AC7), with the T14 B1 fallback. | Holds collectively. desk-run-executor.test covers only the partial case, not changed settings. Because the executor never sees settings, this is not filed. |
+| AC1 [desk-publication.test.ts]: headMoved with both commits, `comment`, inline off, first body line, `COMMENT` with commit_id = reviewed head | AC | "a moved head publishes as is: ..." asserts `headMoved` {reviewedHead, currentHead}, settings, `body.split("\n")[0] === movedLine`, and the posted `{ event: "COMMENT", commit_id: revision.headSha, comments: [] }` | backed |
+| AC2: another verdict or inline still posts COMMENT; moved again → `stale:`; automatic posts nothing; changed base or closed keeps refusal | AC | "a moved head ignores a requested verdict and inline comments"; "a head that moves again after the preview or before the write posts nothing" (both the post-preview move and the move inside the confirm callback); "automatic publication ... never after the head moved"; the loop over `{ baseRefOid: "e"... }`, `{ state: "CLOSED" ... }` | backed |
+| Body item 1: "rewritten history (diverged or behind), a failed compare" | claim | the loop over `["diverged", "behind", "fail:HTTP 404: Not Found", "fail:connection reset"]` posts nothing; the non-sha head case never compares | backed |
+| Body item 1: "Automatic publication refuses a moved head right after reading the PR, before any compare or discussion read." | claim | the "... refuses before any compare or discussion read" test asserts that both read logs are empty | backed |
+| Body item 1: "Another push makes the preview stale. Before the write, the head shown in the preview is checked again." | claim | the `async () => setHead("d"...)` confirm hook leads to `/^stale:/`, with no receipt | backed |
+| AC4 [head-move.test.ts]: ask/follow/ignore, manual→ask, rule→follow, missing/unknown→default | AC | all four cases are asserted. `headMoveResponse` rows match spec table :98-102 (ask: two actions; follow: queue after the round; ignore: nothing) | backed |
+| AC5 [update-round.test.ts]: accepts newest partial with accepted findings and other settings; rejects imported, failed, cancelled, unreviewed | AC | three tests cover these, and the reject list also includes blocked, running, findingsKnown undefined/false, and old or missing scope | backed |
+| AC6 [prior-round.test.ts]: findPreviousRound picks a round recorded under different settings | AC | "flow 520 AC6: ..." rewrites the manifest's mode, options and settings, and expects `delta` with F-1 | backed |
+| AC7 (four test files): partial → delta with prior findings and the uncovered area as new; other settings → still findings; the old options-key rule is gone | AC | prior-round AC7 describe (`newHunks` covers all files, `secondLookHunks` undefined); executor AC7 (registry `desk-partial`, `findPreviousRound` → delta, F-1); desk-run-service source check (no `deskOptionsKey(item.options)` in desk-run-service.ts) | Backed. desk-run-store.ts:620-626 keeps the options-keyed `matchesManualOptions`/`previousAttempt`, but that is the store's retry/reuse placement in a file this PR leaves untouched, not the previous-round choice. |
+| Body item 2: "accepted only through a `desk-partial` record ... Packages a PR can commit gain no trust." | claim | prior-round "only Desktop's partial-round record ... admits a draft" and "never vouches for the same files committed by the branch as a closed round"; round-registry.test T14 B4 | backed |
+| Decisions: "Within a round, a complete attempt is preferred over a later partial one. If the chosen attempt cannot be handed on, the next usable one is used." / "A retry on the same range builds only on earlier rounds" | claim | update-round T14 B1 (both); executor T14 B1 (two fallback tests); desk-run-service "never ... another attempt of its own round" | backed |
+| Decisions: "Every round-registry write now takes a file lock. If the lock cannot be taken within 15 seconds, the entry is skipped" | claim | round-registry.test T14 B3 covers only the lock's race. No test takes the lock away so that the 15 s timeout fires and the entry is skipped. | The body claims no test here, so nothing is filed. Recorded for testing-practices. |
+| Decisions: "With a moved head, Save locally stores the forced settings (`comment`, no inline)." | claim | no test saves while `headMoved` is set. The moved-head tests call only preview and submit. | The body claims no test here, so nothing is filed. Recorded for testing-practices. |
+| Decisions: "A superseded round ... 'Round N of this review is newer. Publish from that round.'" | claim | T14 B6 test (`blockedReason` contains "Round 2 of this review is newer", no compare read); update-round `newerRoundOf` | backed |
+| AC10 [desk-publication.test.ts + Desktop]: answers pre-selected by finding id | AC | the update-round tests, the foreign-account/PR test, the archived test, the same-round retry test, and the T14 walk-past test | Backed on the backend side. The wording of the answer source is wave 2 PC-006 and is not repeated here. The Desktop half belongs to slice-02. |
+| AC8 [invariant] | AC | at head it names 98bec5904 and exits 1. The working tree fixes it, uncommitted. | Known base correction. Not filed. |
+| Not verified: "The GitHub compare call and the 422 behaviour were exercised only through fixtures." | claim | the compare call is exercised through the `api:repos/*/compare/*` fixture. The POST fixture always answers `{"id":23}`, and no test in slice-03 or in src/**/*.test.ts drives desk-publication's 422 branch | **PC-008** |
+
+## Findings
+
+### [PC-008] The body says the 422 behaviour was "exercised only through fixtures"; no fixture or test drives a 422
+- **Severity**: minor
+- **File**: src/review/desk-publication.test.ts:92
+- **Problem**: The body's Not verified section says: "The GitHub compare call and the 422 behaviour were exercised only through fixtures." The compare half holds, through the `api:repos/*/compare/*` fixture. The 422 half does not. The only POST branch of the gh fixture is `'  api:--method) cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;'`, which always succeeds. `keryx ctx rg "422|rejected this review|HTTP 422" src --glob '*.test.ts'` finds no desk-publication test. The only review hit is publish.test.ts:162, the CLI `publishReview` path, which is not `requestDeskPublication`. So desk-publication.ts:452 is never run by a test, and neither is a 422 on an as-is post with `commit_id` set to an older commit. That branch is `if (rejected === 422) throw new Error("configuration: GitHub rejected this review. ...")`. Journal :58 says the round 1 major was fixed "regardless of whether GitHub returns 422". The 422 premise was never exercised.
+- **Why it matters**: The owner reads "exercised only through fixtures" and concludes that the 422 path has at least fixture coverage. In fact it has none: neither the refusal on an older `commit_id` nor the message the user sees has been run. That message tells the user to check the verdict and inline comments, but on the as-is path both are forced.
+- **Fix**: Correct the claim to "the compare call was exercised only through fixtures; GitHub's 422 response was not exercised", or add a gh fixture case that makes the POST fail with `(HTTP 422)` on a moved head and assert the error and that no receipt remains.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-03 backs the body's test claims and the frozen verify commands AC1, AC2, AC4, AC5, AC6, AC7 and the backend half of AC10. Item 4 holds collectively. One minor disagreement: the Not verified section says the 422 behaviour was exercised through fixtures, but no fixture or test drives a 422 on the desk-publication path (PC-008). Recorded but not filed: the frozen AC8 invariant at head still diffs against 98bec5904 and exits 1, and the uncommitted working-tree edit already moves it to 20e4281a2 (known base correction). Two body decisions have no test, and the body does not claim one: Save locally with a moved head, and the 15 s lock-timeout skip.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "PC-008",
+      "severity": "minor",
+      "reviewer": "review-pr-contract",
+      "file": "src/review/desk-publication.test.ts",
+      "line": 92,
+      "quote": "'  api:--method) cat > \"$FIXTURE_BODY\"; printf \\'{\"id\":23}\\\\n\\' ;;',",
+      "problem": "PR body Not verified: 'The GitHub compare call and the 422 behaviour were exercised only through fixtures.' The POST fixture always succeeds, and no test in src/**/*.test.ts drives desk-publication's 422 branch (desk-publication.ts:452), including a 422 on an as-is post with an older commit_id. Only the compare half of the claim holds.",
+      "impact": "The owner assumes the 422 path has fixture coverage. Neither GitHub's refusal of an older commit_id nor the user-facing message has been run.",
+      "suggested_fix": "Reword to 'the compare call was exercised only through fixtures; GitHub's 422 response was not exercised', or add a fixture POST that fails with '(HTTP 422)' on a moved head and assert the error and that no receipt remains.",
+      "evidence": "slice-03 desk-publication.test.ts gh fixture; keryx ctx rg '422|rejected this review|HTTP 422' src --glob '*.test.ts' (only publish.test.ts:162, the CLI path); desk-publication.ts:440,452; journal.md:58.",
+      "confidence": "high",
+      "location_class": "pr-process",
+      "degradation_class": "diff-vs-description",
+      "blocking_merge": false,
+      "publication": "finding",
+      "dedupe_key": "pr-contract:422-not-exercised"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [
+    "Commit the working-tree correction of AC8 (acceptance-criteria.md:23 and flow.json AC8 check: 98bec5904 to 20e4281a2) before AC8 is run on the PR head. At head 822192905 the frozen command exits 1 (stage 2 changed ReviewBoard.tsx and review.css after 98bec5904).",
+    "For testing-practices: no test covers Save locally with a moved head (forced comment, no inline), and none covers the registry lock-timeout skip path (15 s, entry skipped). The body claims a decision, not a test, for both."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+Not verified: no tests were run (read-only lane). The brief's research-evidence reports backend 201/0 and Desktop 151/0. The Desktop DOM test (AC3, the Desktop half of AC10) belongs to slice-02 and was not re-read. The AC8 exit code was checked with `git diff --quiet 98bec5904 822192905 -- <4 files>` (exit 1) and `git diff --stat 98bec5904 20e4281a2` over the same files.
+
+Routing audit: graph_used: no (not-relevant: the test files were supplied as the slice, and rows were settled by reading them); wiki_used: no (not-relevant: the spec table was read directly); ctx_used: yes (keryx ctx rg for 422 tests, options-key sites, spec rows and AC8 records; keryx ctx read for the spec); raw_rg_used: no. Raw reads were done with `# keryx:raw` markers: short sed ranges of desk-run-store.ts, the spec, the journal, acceptance-criteria and flow.json, plus the git diff exit-code check.

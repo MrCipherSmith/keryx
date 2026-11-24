@@ -1,0 +1,104 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract — PR #1303, round 2, wave 2 (slice-02, read in full)
+
+Inputs read: brief.md, drivers/review-pr-contract-w2.json, pr-context.md, slice-02.diff (all 2331 lines), my wave-1 result raw/review-pr-contract-w1.txt. Range 98bec5904..412258583; working tree at head.
+
+Slice-02 holds the backend: desk-publication-types.ts, desk-publication.ts, desk-run-executor.ts, desk-run-service.ts, head-move.ts, prior-round.ts, round-registry.ts, update-round.ts and the tests desk-publication.test.ts, desk-run-executor.test.ts, desk-run-service.test.ts, head-move.test.ts, prior-round.test.ts, update-round.test.ts.
+
+Outside the slice, read at head to settle two rows: src/review/desk-run-store.ts:161-199 (how `previous_run_id` is assigned) and :418-437 (`history` drops deleted attempts); docs/requirements/keryx-desktop-review-v2/specification.md:84-121 (on_head_move table, "Раунд обновления", "Перед публикацией"); docs/docs/cli-reference.md:5222-5229 (desk-publish paragraph).
+
+## Wave-1 rows marked "outside slice", settled here
+
+| Box or claim (quoted) | State | What the diff shows | Result |
+|---|---|---|---|
+| "`desk-publish` returns `headMoved` and forces verdict `comment` with inline comments off" | claim | desk-publication-types.ts `headMoved?: { reviewedHead: string; currentHead: string }`; desk-publication.ts prepare: `headMoved ? { inline: false, ... verdict: "comment", verdictOverride: "comment", answers }`; state `...(headMoved && { headMoved })` | holds |
+| "The body starts with \"Reviewed commit `<sha>`. The pull request has moved to `<sha>` since; this review does not cover the newer commits.\"" | claim | `headMovedLine`: same text; `if (headMoved) body = \`${headMovedLine(headMoved)}\n\n${body}\``; test asserts `preview.body.split("\n")[0]` and the posted body | holds |
+| "The review posts with `commit_id` set to the reviewed head." | claim | `commit_id: run.headSha`; test `commit_id: revision.headSha` | holds |
+| "Another push makes the preview stale. Before the write, the head shown in the preview is checked again." | claim | digest gains `...(headMoved ? [headMoved.currentHead] : [])`; `expected = headMoved ? { baseSha, headSha: headMoved.currentHead } : run` passed to `verifyDeskSubject` (both connections); test "a head that moves again after the preview or before the write posts nothing" | holds |
+| "These cases keep today's refusal: a rewritten history (diverged or behind), a failed compare, a changed base, or a closed PR." | claim | `open = pr.state === "OPEN" && pr.baseRefOid === run.baseSha`; `reviewedHeadInPull` returns true only for `status === "ahead"`, false on catch; blockedReason `!current && !headMoved ? "...revision moved..."`; tests cover diverged, behind, two failure kinds, changed base, closed | holds |
+| "Automatic publication refuses a moved head before it makes any GitHub read." | claim | desk-publication.ts:380 `const cache = await previewSubject(...)` (a PR read; automatic requests never use the cache) runs before :384-385 `// ... refused before any further GitHub read.` / `if (request.kind === "automatic" && open && !current) throw` | contradicted in wording — PC-004 |
+| "The dialog shows a warning that names both commits ..." | claim | settled in wave 1 (frontend) | holds |
+| "It starts an attempt on the current head ... Stage 2's store makes that attempt round N+1 of the same Review." | claim | desk-run-store.ts:196-198 (stage 2, unchanged) opens the next round for a new range; desk-publication.test.ts `updateRound` asserts `previousRunId` is the reviewed attempt | holds |
+| "One rule chooses the previous attempt: `selectPriorAttempt`, over the earlier rounds of the same Review. It replaces the old rule (completed, complete coverage, same settings)." | claim | desk-run-service.ts: old `.find(... effectiveOptionsKey ... completed ... coverage === "complete")` removed, replaced by `previousRoundAttempt(store.history(key).runs, run)` which filters by reviewId and `item.round < current.round` and calls `selectPriorAttempt`; desk-run-service.test.ts asserts the old filter text is gone | holds for the round the worker builds on; the answer carry-over walks a different chain — PC-005 |
+| "A partial previous round or one with other settings now feeds the next round in `delta` mode with its findings attached." | claim | update-round.ts never compares the options key; executor hands on a closed package, or a draft when `previousPartial === true` and `recordPartialRound(...)` wrote a record; prior-round.test.ts AC6 and AC7 tests expect `mode: "delta"` with `priorFindings` | holds |
+| "It is accepted only through a `desk-partial` record ... Only Desktop's executor writes that record ... Packages a PR can commit gain no trust." | claim | `keryx ctx rg recordPartialRound src apps`: definition in round-registry.ts, the only call in desk-run-executor.ts; `packageTrust` admits a draft only via `partialRoundVouch`, and filters `desk-partial` out of `registryVouches` for completed candidates; test "a partial-round record never vouches for the same files committed by the branch as a closed round" | holds |
+| "Everything a partial round did not prove it covered is reviewed as new code." | claim | prior-round.test.ts: `round.secondLookHunks` undefined, all of merge-base..head in `newHunks`, `weakPrevious` "not completed" | holds |
+| "Keep and dismiss answers from the previous round's draft are pre-selected in the new round's draft, matched by finding id. The new round's own draft always wins." | claim | `savedAnswers = saved?.answers ?? await earlierAnswers(earlier)`; `saved = request.settings ?? draft?.settings`; matched by question id (`global_id` or finding id); only answers carried (test: inline/general/verdictOverride not carried); own draft wins (test) | holds for "matched by finding id" and "own draft wins"; "the previous round's draft" is wider in code — PC-005 |
+| "`on_head_move` ... `ask \| follow \| ignore`, defaulting to `ask` for a manual review and `follow` for a rule-run review. `parseOnHeadMove` reads a missing or unknown stored value as the default" | claim | head-move.ts `defaultOnHeadMove`: `source === "scheduled" ? "follow" : "ask"`; `parseOnHeadMove` falls back on anything not in `ON_HEAD_MOVE`; tests | holds |
+| "`headMoveResponse` encodes the spec table" (round 1 PC-002, info) | claim | running rows match specification.md:98-102 (ask offers "update after finish" and "stop and restart"; follow queues after the round; ignore does nothing); the `finished` rows follow "Перед публикацией" (:117-119) and spec item 17 | holds; round 1 PC-002 settled, closed |
+| "Tests for the previous-round rules cover a partial previous round and changed settings, in the `prior-round`, `desk-run-service`, `desk-run-executor` and `update-round` tests" | claim | prior-round: partial and other settings; desk-run-service: partial with other settings, completed with other settings; desk-run-executor: partial handed on, draft refused (no settings case); update-round: both | holds (collectively; the executor tests cover partial only) |
+| Decision: "With a moved head, Save locally stores the forced settings (`comment`, no inline)." | claim | `save` writes `{ settings: state.settings }`, which are the forced settings when `headMoved` | holds |
+| Decision: "A failed compare refuses the as-is variant: it fails closed." | claim | `catch { return false; }`; tests with `fail:HTTP 404` and `fail:connection reset` | holds |
+| Decision: "A retry on the same range builds only on earlier rounds, not on another attempt of its own round." | claim | `previousRoundAttempt`: `item.round < current.round`; without rounds, same range excluded; test "never the attempt being executed nor another attempt of its own round" | holds |
+| Review: "Every finding was fixed in T11 ... except one minor: two different rules for choosing the previous attempt. T12 merged them into one." | claim | the worker rule is merged (above); desk-publication.ts adds `earlierAttemptDirectories` for answers | see PC-005 |
+| "Breaking change" (no box) | n/a | no exported symbol, flag or schema field removed in the slice; `RoundRegistryEntry.event` gains `"desk-partial"` (additive); the retry change is disclosed under Decisions | nothing to file |
+
+## Documentation outside the diff
+
+Searched: `keryx ctx rg -i "previous round|прошл.. раунд|completion evidence|same settings|revision moved|desk-partial|round registry|round-registry" docs/docs README.md` (2 hits in cli-reference.md, neither describes the changed rules); `keryx ctx rg -i "draft.{0,40}(previous round|prior round)|(previous|prior) round.{0,60}(draft|completion evidence|completed)|registry.{0,40}(vouch|trust)" docs .metaproject/wiki .metaproject/skills/gdskills/review --hidden` (no hit on the old rule); `keryx wiki ask` about previous-round selection (no wiki page describes the old Desktop rule or M1); `keryx ctx rg -i "desk-publish|publishCompletedDeskReview|auto.?publish" docs/docs` (cli-reference.md:5222-5229 says "Keryx checks the pull request revision ... before submitting", still accurate). No user-facing document describes the backend behaviour this slice changed. The Desktop guide gap (round 2 wave-1 PC-001) stands as filed.
+
+## Findings
+
+### [PC-004] The body says automatic publication refuses a moved head "before it makes any GitHub read"; the code reads the PR first
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts:384
+- **Problem**: PR body, What changes 1: "Automatic publication refuses a moved head before it makes any GitHub read." In `publication()`, `const cache = await previewSubject(cwd, directory, key, connection, request, run);` (line 380) reads the pull request (`verifyDeskSubject`; an automatic request never uses the cache) before `if (request.kind === "automatic" && open && !current) throw ...` (line 385). The code comment says "before any further GitHub read", and the test is named "refuses before any compare or discussion read".
+- **Why it matters**: A reader of the body may think the refusal needs no network. In fact it needs one PR read to see that the head moved; only the compare and discussion reads are skipped.
+- **Fix**: Change the body to "before it makes any compare or discussion read (after the one read that shows the head moved)".
+
+### [PC-005] Answers carry over along the `previousRunId` chain, not from the previous round `selectPriorAttempt` picks
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts:119
+- **Problem**: The PR body says "One rule chooses the previous attempt: `selectPriorAttempt`, over the earlier rounds of the same Review", and "Keep and dismiss answers from the previous round's draft are pre-selected". The Review section says T12 merged the "two different rules for choosing the previous attempt" into one. But `earlierAttemptDirectories` (desk-publication.ts:119) is a second selection. It follows `previousRunId` up to `answerSourceLimit = 8` attempts, checking only `sameReview`, and `earlierAnswers` takes the newest of them that has `publication-draft.json`. Stage 2 sets `previousRunId` to the newest attempt of the previous round, or to the newest attempt of the same round for a retry (desk-run-store.ts:192-198). So that newest attempt may be one `selectPriorAttempt` rejects. It may be withdrawn (decision `delete` or `archive`), and `byId` still returns it while `history` drops deleted attempts. It may be from an older round than the one the new round was cut from, or a retry of the same round. Example: the previous round's newest attempt had no draft but has findingsKnown false. Then the round builds on round N-2 (by `selectPriorAttempt`) while its answers come from whichever earlier attempt in the chain saved a draft.
+- **Why it matters**: A reader who trusts the body expects one previous attempt for both the findings and the answers, which was the round 1 point. Answers from a withdrawn attempt, or from a round other than the one the findings came from, can be pre-selected. They are still visible and editable before submit, so the cost is a wrong default, not a wrong post.
+- **Fix**: Either take the answer source from the same `selectPriorAttempt` choice (or apply its delete/archive exclusion in `earlierAttemptDirectories`), or narrow the body to "answers from the newest earlier attempt of the same Review that saved a draft".
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Wave 2 settles the backend claims wave 1 left outside its slice. Most hold: D1 headMoved forcing comment and no inline comments, the first body line, commit_id, the stale digest and the re-check before the write, every refusal case, a failed compare failing closed, Save storing the forced settings, the one worker rule selectPriorAttempt (by reviewId and round) replacing the completed/complete/same-settings rule, desk-partial written only by the Desktop executor and never vouching for completion, a partial round's uncovered area planned as new code, answers matched by finding id with the round's own draft winning, on_head_move defaults and parsing, and the spec table (round 1 PC-002 closed). Two wording minors: automatic refusal happens after one PR read, not before any GitHub read; answer carry-over follows the previousRunId chain (it can reach withdrawn attempts or another round), so 'one rule' and 'the previous round's draft' are narrower than the code.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "PC-004",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": 384,
+      "quote": "// Automatic publication never posts the as-is variant, so it is refused before any further GitHub read.",
+      "problem": "PR body: 'Automatic publication refuses a moved head before it makes any GitHub read.' publication() first awaits previewSubject (line 380), a PR read that an automatic request never takes from the cache, and only then throws for automatic && open && !current (line 385). The code comment says 'further' and the test says 'before any compare or discussion read'.",
+      "impact": "A reader of the body expects the refusal to need no network. It costs one PR read; only the compare and discussion reads are skipped.",
+      "suggested_fix": "Reword the body: 'refuses a moved head before any compare or discussion read'.",
+      "evidence": "slice-02 desk-publication.ts publication(): `const cache = await previewSubject(cwd, directory, key, connection, request, run);` precedes `if (request.kind === \"automatic\" && open && !current) throw`; previewSubject reads only from cache when `request.kind === \"preview\"`; desk-publication.test.ts 'automatic publication after the head moved refuses before any compare or discussion read'.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:auto-refusal-before-any-read"
+    },
+    {
+      "id": "PC-005",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": 119,
+      "quote": "function earlierAttemptDirectories(store: DeskRunStore, attempt: Attempt): string[] {",
+      "problem": "PR body: 'One rule chooses the previous attempt: selectPriorAttempt' and 'answers from the previous round's draft are pre-selected'; Review: T12 merged the two previous-attempt rules into one. Answer carry-over uses a second selection. It walks previousRunId up to 8 attempts, checking only sameReview, and earlierAnswers takes the newest that has publication-draft.json. previousRunId is the newest attempt of the previous round, or of the same round for a retry (desk-run-store.ts:192-198), so the source can be a deleted or archived attempt (byId returns it; history and selectPriorAttempt exclude it), a same-round retry, or a round other than the one selectPriorAttempt chose for the findings.",
+      "impact": "Answers given on a withdrawn attempt, or in a round other than the one the new round builds on, can be pre-selected. A reader who trusts 'one rule' does not expect that. The defaults stay visible and editable before submit.",
+      "suggested_fix": "Take the answer source from the selectPriorAttempt choice, or exclude delete/archive decisions in earlierAttemptDirectories; otherwise narrow the body to 'answers from the newest earlier attempt of the same Review that saved a draft'.",
+      "evidence": "slice-02 desk-publication.ts `earlierAttemptDirectories` (previousRunId walk, answerSourceLimit = 8, sameReview only) and `savedAnswers = saved?.answers ?? await earlierAnswers(earlier)`; update-round.ts selectPriorAttempt skips `decision.action === \"delete\" || \"archive\"` and findingsKnown !== true; src/review/desk-run-store.ts:186-198 roundFor (retry -> newest of the same round; new range -> newest of the last round); :431 history excludes delete.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:answer-source-second-rule"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Round obligations: round 1 PC-002 (info, "encodes the spec table") is now checked against specification.md:98-119 and holds; closed. Round 1 PC-001 was checked fixed in wave 1. Wave-1 findings of this round (PC-001 Desktop guide omits Update review, PC-002 stale AC3 path, PC-003 tsc/eslint unverified) are not restated here and stand.
+
+Not verified: the tests were not run by this lane (read-only); for test results see the brief's research-evidence. No real PR scenario (AC9). The Rust side was not checked.
+
+Routing audit: graph_used: no (not-relevant; this contract lane checks claims against the slice plus targeted text searches, and callers of recordPartialRound were enumerated with ctx rg); wiki_used: yes (keryx wiki ask on previous-round selection, no relevant page); ctx_used: yes (keryx ctx rg for symbol callers, spec on_head_move and docs); raw_rg_used: no (one raw `sed -n` of 18 lines of cli-reference.md with a keryx:raw marker).

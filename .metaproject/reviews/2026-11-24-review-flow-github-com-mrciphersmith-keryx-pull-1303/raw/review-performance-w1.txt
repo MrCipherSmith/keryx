@@ -1,0 +1,59 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage3`, merge-base `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `9e871b17f16a934d5568926e210c3c88d1ca7a86`, diff mode, 20 changed files. slice-01 read in full.
+- I also read `src/review/desk-publication.ts` at head: `previewSubject`, the preview-cache write at lines 205-210 and the submit reread at line 366. I read `src/review/desk-run-service.ts:440-444`, the only automatic caller, to get call frequencies.
+- Read-only. No tests run (exec_budget_s 0).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+### [F-001] Automatic publication on a moved head fetches the full PR discussion, then always refuses
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts (the `discussion` condition in `prepare`)
+- **Hot path**: `publishCompletedDeskReview` runs once per completed auto-publish run (`desk-run-service.ts:440-443`, refusal swallowed by `.catch`). This needs a project overlay of kind `slots` with `rereadDiscussion`. It is not on an interactive path.
+- **Problem**: The guard changed from `current` to `(current || headMoved)` and still includes `request.kind === "automatic"`. When the head has moved, an automatic request now calls `publicationDiscussion`: three `gh api --paginate --slurp` reads (reviews, review comments, issue comments). On base, `!current` skipped these reads. The same `prepare` then always sets `blockedReason` to "This review needs a publication decision in Desktop." because `request.kind === "automatic" && (headMoved || ...)`. The fetched hash is never used, and an automatic request never writes the preview cache (lines 205-210 are preview-only).
+- **Why it matters**: Each such run spends three paginated GitHub reads that cannot affect the outcome. The page count grows with the PR's discussion size, and the reads count against the viewer's rate limit. The cost is small because it happens once per run.
+- **Fix**: Leave `automatic` out of the discussion read when `headMoved` is set. For example, use `(current || (headMoved && request.kind !== "automatic"))`. Alternatively, return the automatic refusal for a moved head before rendering.
+
+### Clean Areas
+- Head-moved preview and submit, GitHub calls. On submit, `verifyDeskSubject` is called the same number of times as on the current-head path. Only the expected revision changes (`expected`), not the number of calls. Inline placement is skipped (`settings.inline` is forced false, and the guard still requires `current`), so no diff read is made. The test confirms this: `FIXTURE_DIFF_READS` is absent. The discussion reread on the dialog's preview and submit costs the same as on the current-head path. It is intended (the stale-discussion guard), and the preview cache (15 s TTL, kept while base and head are unchanged) serves repeated previews. Submit's two reads (in `prepare`, then with `auth`) predate this PR and are not made worse.
+- Preview cache: the key is the run revision, and the cached subject is reused only while base and head match. The moved head does not add entries or grow the cache. The file is a single file with a size cap.
+- Digest: appending `headMoved.currentHead` costs one string inside an existing hash.
+- Dialog re-renders (`ReviewPublishDialog.tsx`): there is no new state, effect or context. `headMoved` is derived from `draft`. The new `disabled` props and the `shortSha` slices are trivial per render. `onUpdateReview` is passed through without being wrapped. The dialog is not a high-frequency surface.
+- `head-move.ts`, `update-round.ts`: `selectPriorAttempt` is a single early-exit loop over the attempt list, and `parseOnHeadMove` searches a three-element array. Neither runs on a hot path.
+- N+1, indexes, pagination, leaks, bundle imports, sync I/O: nothing new in the diff. Test-only `cpSync` and `spawnSync` are fixture setup.
+
+Routing audit: graph_used: no (payload `layers` supplied affected files; not needed beyond them) | wiki_used: not-relevant | ctx_used: yes (`keryx ctx rg`, `keryx ctx read`) | raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No blocker or major. One minor: the moved-head guard (`current || headMoved`) also covers automatic publication. That path now spends three paginated GitHub discussion reads per auto-publish run, then always refuses. The dialog's head-moved preview and submit paths add no GitHub calls beyond the current-head path, skip the diff read, and add no re-render cost.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "const discussion = overlay?.kind === \"slots\" && overlay.rereadDiscussion && (current || headMoved) &&",
+      "problem": "With a moved head, an `automatic` request now reaches `publicationDiscussion`: three `gh api --paginate --slurp` reads (reviews, review comments, issue comments). On base, `!current` skipped them. The same `prepare` then always blocks automatic publication on `headMoved` (\"needs a publication decision in Desktop\"). The hash is unused, and automatic requests do not write the preview cache.",
+      "impact": "Each auto-publish run that completes after the head moved spends three paginated GitHub reads that cannot affect the outcome. This applies only to projects whose `slots` overlay has `rereadDiscussion`. The cost grows with the PR's discussion size and counts against the viewer's rate limit, once per run. It is not on an interactive path.",
+      "suggested_fix": "Leave automatic requests out of the discussion read when the head moved, e.g. `(current || (headMoved && request.kind !== \"automatic\"))`. Alternatively, refuse automatic publication with a moved head before calling `prepare`.",
+      "evidence": "slice-01 desk-publication.ts hunk @@140,190 changes the guard to `(current || headMoved)`, and the condition still lists `request.kind === \"automatic\"`. Hunk @@218,293 adds `request.kind === \"automatic\" && (headMoved || ...)` to `blockedReason`. Head file lines 205-210 write the cache only for `preview`. Caller frequency: `src/review/desk-run-service.ts:440-443`, once per completed autoPublish run, with the refusal swallowed.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": []
+}
+```

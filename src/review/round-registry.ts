@@ -20,6 +20,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { appendOwnerOnlyLine, ensureKeryxSubdir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { withFileLock } from "../lib/file-lock";
 import { packageFacts, roundStampOf, type PackageHashes } from "./round-record";
 
 export const ROUND_REGISTRY_DIR = "review-rounds";
@@ -41,10 +42,11 @@ export type RoundRegistryEntry = {
   roundRecordSha256?: string | undefined;
   completedAt: string;
   /**
-   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, or the operator's premise
-   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for.
+   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, the operator's premise
+   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for, or Desktop
+   * handing a partial attempt's package to the next round of the same Review (`desk-partial`, {@link recordPartialRound}).
    */
-  event: "ingest" | "complete" | "publish" | "decide-premise";
+  event: "ingest" | "complete" | "publish" | "decide-premise" | "desk-partial";
 };
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
@@ -130,27 +132,45 @@ export function compactEntries(entries: readonly RoundRegistryEntry[]): RoundReg
   return entries.filter((entry, index) => newest.get(entry.packageId) === index);
 }
 
+/** Test seam for {@link appendRoundRegistry}: runs under the lock, after the re-read and before the compacted rewrite. */
+export interface RoundRegistryPorts {
+  beforeCompactionWrite?: () => void;
+  /** How long to wait for the registry lock. Default: lib/file-lock.ts `LOCK_TIMEOUT_MS`. */
+  lockTimeoutMs?: number;
+}
+
 /**
  * Append one entry. Past {@link REGISTRY_COMPACT_BYTES} the file is rewritten (atomically, owner-only) with the newest
  * entry per package, so it stays well under the read cap; a file already past the cap cannot be read and is started
  * again, which costs at most one full round per package, never trust it should not give.
+ *
+ * Several processes write this file (`review ingest`/`complete`/`publish` and the Desktop worker's partial-round record),
+ * and the compaction is a read-modify-rename: an append landing between its read and its rename would be lost. So every
+ * append and every compaction runs under one exclusive lock file beside the registry (`O_EXCL`, stale-lock recovery,
+ * released in `finally`; lib/file-lock.ts), and the compaction re-reads the file under it (T14 B3). A lock that cannot
+ * be taken throws: the caller reports a registry it could not write rather than risk losing another writer's entry.
  */
-export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string): { file: string; compacted?: number | undefined; warning?: string | undefined } {
+export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string, ports: RoundRegistryPorts = {}): { file: string; compacted?: number | undefined; warning?: string | undefined } {
   ensureKeryxSubdir([ROUND_REGISTRY_DIR], dir);
   const file = roundRegistryFile(identity, dir);
-  appendOwnerOnlyLine(file, JSON.stringify(entry));
-  const read = readConfigFile(file);
-  if (read.ok && Buffer.byteLength(read.text) > REGISTRY_COMPACT_BYTES) {
-    const all = parseEntries(read.text);
-    const kept = compactEntries(all);
-    writeOwnerOnlyFileAtomic(file, kept.map((item) => `${JSON.stringify(item)}\n`).join(""));
-    return { file, compacted: all.length - kept.length };
-  }
-  if (!read.ok && read.reason === "too-large") {
-    writeOwnerOnlyFileAtomic(file, `${JSON.stringify(entry)}\n`);
-    return { file, warning: `the local round registry ${file} was past the read cap and was started again with this entry` };
-  }
-  return { file };
+  const written = withFileLock(`${file}.lock`, (): { file: string; compacted?: number | undefined; warning?: string | undefined } => {
+    appendOwnerOnlyLine(file, JSON.stringify(entry));
+    const read = readConfigFile(file);
+    if (read.ok && Buffer.byteLength(read.text) > REGISTRY_COMPACT_BYTES) {
+      const all = parseEntries(read.text);
+      const kept = compactEntries(all);
+      ports.beforeCompactionWrite?.();
+      writeOwnerOnlyFileAtomic(file, kept.map((item) => `${JSON.stringify(item)}\n`).join(""));
+      return { file, compacted: all.length - kept.length };
+    }
+    if (!read.ok && read.reason === "too-large") {
+      writeOwnerOnlyFileAtomic(file, `${JSON.stringify(entry)}\n`);
+      return { file, warning: `the local round registry ${file} was past the read cap and was started again with this entry` };
+    }
+    return { file };
+  }, ports.lockTimeoutMs === undefined ? {} : { timeoutMs: ports.lockTimeoutMs });
+  if (written === null) throw new Error(`the local round registry ${file} is locked by another keryx process; the entry was not recorded`);
+  return written;
 }
 
 /**
@@ -159,6 +179,11 @@ export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry,
  * recorded one, the same round.json. Changing what the round reviewed or found breaks the match; closing it does not.
  */
 export function registryVouches(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
+  // A partial-round record never vouches for a finished round (T14 B4); only {@link partialRoundVouch} reads it.
+  return matchingEntry(entries.filter((entry) => entry.event !== "desk-partial"), packageId, hashes);
+}
+
+function matchingEntry(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
   if (hashes === undefined) return undefined;
   return [...entries].reverse().find(
     (entry) =>
@@ -167,6 +192,16 @@ export function registryVouches(entries: readonly RoundRegistryEntry[], packageI
       entry.findingsSha256 === hashes.findingsSha256 &&
       (entry.roundRecordSha256 === undefined || entry.roundRecordSha256 === hashes.roundRecordSha256),
   );
+}
+
+/**
+ * Flow 520 AC7: Desktop's record that this package, with exactly these files, is a partial round it ran itself and handed
+ * to the next round of the same Review. Only that record admits a package with no completion evidence (a draft) as a
+ * previous round, and only one whose findings were ingested: a partial round builds on its accepted findings.
+ */
+export function partialRoundVouch(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
+  if (hashes === undefined || hashes.findingsSha256 === null) return undefined;
+  return matchingEntry(entries.filter((entry) => entry.event === "desk-partial"), packageId, hashes);
 }
 
 /** The package id the registry records a package under: its manifest's `reviewId`, else its directory name. */
@@ -226,6 +261,48 @@ export function recordFinishedRound(
     };
     const written = appendRoundRegistry(identity, entry, options.dir);
     return { file: written.file, ...(written.warning === undefined ? {} : { warning: written.warning }) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Flow 520 AC7: record a partial round Desktop ran (its attempt ended `partial` with accepted findings), as Desktop copies
+ * the package from its own run directory into the next round's checkout. Called only by the Desktop executor, which takes
+ * the package from the user's run store, never from a checkout a pull request can write. A package without ingested
+ * findings (findings.json holding a list) is not recorded. Unlike {@link recordFinishedRound} a failure is returned, and
+ * the caller then does not hand the package on.
+ */
+export function recordPartialRound(
+  packageDir: string,
+  options: { cwd: string; dir?: string | undefined; now?: Date },
+): { file?: string; error?: string; skipped?: string } {
+  try {
+    const facts = packageFacts(packageDir);
+    if (facts === undefined) return { error: `${packageDir} has no readable manifest.json` };
+    const read = readConfigFile(path.join(packageDir, "findings.json"));
+    let findings: unknown;
+    try {
+      findings = read.ok ? JSON.parse(read.text) : undefined;
+    } catch {
+      findings = undefined; // Not JSON: no ingested findings, refused just below.
+    }
+    if (!Array.isArray(findings)) return { skipped: "the partial round has no ingested findings.json" };
+    const identity = repoIdentity(options.cwd);
+    if (identity === undefined) return { error: `${options.cwd} is not a git checkout` };
+    const target = facts.manifest.target !== null && typeof facts.manifest.target === "object" ? (facts.manifest.target as Record<string, unknown>) : {};
+    const entry: RoundRegistryEntry = {
+      v: 2,
+      packageId: packageIdOf(packageDir, facts.manifest),
+      targetKey: roundStampOf(facts.manifest)?.targetKey ?? `${String(target.kind ?? "unknown")}:${String(target.ref ?? "")}`,
+      reviewedHead: typeof target.head === "string" ? target.head : null,
+      manifestSha256: facts.hashes.manifestSha256,
+      findingsSha256: facts.hashes.findingsSha256,
+      ...(facts.hashes.roundRecordSha256 === null ? {} : { roundRecordSha256: facts.hashes.roundRecordSha256 }),
+      completedAt: (options.now ?? new Date()).toISOString(),
+      event: "desk-partial",
+    };
+    return { file: appendRoundRegistry(identity, entry, options.dir).file };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

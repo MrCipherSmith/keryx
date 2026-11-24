@@ -1,0 +1,63 @@
+[
+  {
+    "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/commands/review-desk-publish.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runReviewDeskPublish"
+    ]
+  },
+  {
+    "file": "src/commands/review-desk-run.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunSnapshot"
+    ]
+  },
+  {
+    "file": "src/commands/select.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/review/board-badges.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRun"
+    ]
+  },
+  {
+    "file": "src/review/desk-reviewer-progress.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRun"
+    ]
+  },
+  {
+    "file": "src/review/desk-run-store.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskFinish"
+    ]
+  },
+  {
+    "file": "src/review/desk-worker-roster.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRun"
+    ]
+  },
+  {
+    "file": "src/review/review-rules.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runDeskWorker"
+    ]
+  }
+]

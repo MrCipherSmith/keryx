@@ -1,0 +1,165 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices, wave 2, round 2 (slice-02: backend — desk-publication, desk-run-service, desk-run-executor, round-registry, prior-round, update-round, head-move + their tests)
+
+## Mutation pass (run, not predicted)
+
+Setup: a scratch `git worktree add --detach <scratchpad>/mut-wt 412258583206e539ce61727b9c4d71bb12fda3a0`, with node_modules symlinked from the reviewed worktree. A python runner applied each mutant as an exact, unique anchor replacement and ran `bun test --bail <nearest suite(s)>`. It restored the file in a finally block. Afterwards the scratch status was clean (only the node_modules symlink) and the worktree was removed and pruned. The reviewed tree was never written; see the note at the end. I did not use `keryx review mutate`, because it writes mutation-<n>.json into the package's research-evidence/. The brief limits my writes to the result file. The candidates below use its spec shape, so the main session can re-run them.
+
+Baselines at head: desk-publication.test.ts 21/0, desk-run-service.test.ts 6/0, update-round.test.ts 8/0, prior-round.test.ts 51/0, desk-run-executor.test.ts 40/0. M27 ran with service + executor + src/commands/review-desk-run.test.ts (48/0).
+
+| id | mutation | suite | result |
+|---|---|---|---|
+| M01 | reviewedHeadInPull: delete `if (cache.aheadHead === currentHead) return true;` | desk-publication | **green 21/21** |
+| M02 | delete `if (status !== "ahead") return false;` | desk-publication | red (head no longer contains the reviewed commit) |
+| M03 | compare failure `return false` -> `return true` | desk-publication | red (same test) |
+| M04 | sameReview: reviewId clause -> `true` | desk-publication | **green 21/21** |
+| M05 | earlierAttemptDirectories: `if (!previous \|\| !sameReview(...)) break;` -> `if (!previous) break;` | desk-publication | **green 21/21** |
+| M06 | `answerSourceLimit = 8` -> `1` | desk-publication | **green 21/21** |
+| M07 | `saved?.answers ?? await earlierAnswers(earlier)` -> `saved?.answers` | desk-publication | red (update round pre-selects) |
+| M08 | discussion `(current \|\| headMoved)` -> `current` (round-1 F-001) | desk-publication | red (moved head re-reads the discussion) |
+| M09 | as-is `inline: false` -> `saved?.inline ?? false` | desk-publication | red |
+| M10 | as-is verdict -> `verdictOverride ?? "comment"` | desk-publication | red |
+| M11 | blockedReason `!current && !headMoved` -> `!current` | desk-publication | red |
+| M12 | automatic blockedReason: drop `headMoved \|\|` | desk-publication | **green** (equivalent: line 396 throws first for automatic + open + !current) |
+| M13 | delete the automatic early throw (line 396) | desk-publication | red (refuses before any compare read) |
+| M14 | drop `sha.test(pr.headRefOid)` (round-1 F-002) | desk-publication | red (not-a-commit test) |
+| M15 | digest: drop `...(headMoved ? [currentHead] : [])` | desk-publication | **green** (equivalent: body carries currentHead; round-1 F-004) |
+| M16 | `expected` -> `run` | desk-publication | red |
+| M17 | delete the headMovedLine prepend | desk-publication | red |
+| M18 | `open`: drop `pr.baseRefOid === run.baseSha` | desk-publication | red |
+| M19 | earlierAnswers: `if (earlier) return ...` -> unconditional return | desk-publication | **green 21/21** |
+| M20 | executor: drop `options.previousPartial === true &&` | desk-run-executor | red (draft not handed on unless partial) |
+| M21 | executor: `recordPartialRound(...).file !== undefined` -> `true` | desk-run-executor | red |
+| M22 | executor: `manifest.status === "closed" \|\|` -> `false \|\|` | desk-run-executor | **green 40/40** |
+| M23 | previousRoundAttempt: delete `item.id === current.id` filter | desk-run-service | **green** (equivalent: own round / own range already excludes self) |
+| M24 | delete the reviewId filter | desk-run-service | red |
+| M25 | `item.round < current.round` -> `<=` | desk-run-service | red |
+| M26 | range fallback -> `true` | desk-run-service | red |
+| M27 | worker: `previousPartial: previous.partial` -> `false` | service + executor + commands/review-desk-run | **green 48/48** |
+| M28 | selectPriorAttempt partial: drop `attempt.state === "partial" \|\|` | update-round + service | **green** (equivalent on producer output; round-1 F-005) |
+| M29 | partial: drop `result.coverage !== "complete"` | update-round | red |
+| M30 | drop delete/archive skip | update-round | red |
+| M31 | drop `findingsKnown !== true` | update-round | red |
+| M32 | partialRoundVouch: drop `findingsSha256 === null` refusal | prior-round | red |
+| M33 | partialRoundVouch: drop `event === "desk-partial"` filter | prior-round | red |
+| M34 | recordPartialRound: drop `!Array.isArray(findings)` refusal | prior-round (+executor) | red |
+| M35 | packageTrust: drop `event !== "desk-partial"` exclusion | prior-round | red |
+| M36 | localPackageCandidates: drop the partialRoundVouch admission | prior-round | red |
+| M37 | packageTrust: delete `if (partial === undefined) return {ok:false}` | prior-round | red (M1: a draft is never a previous round) |
+| M38 | packageTrust: drop `packageDir === undefined ? undefined :` | prior-round | **green** (equivalent: a candidate without a packageDir has no hashes, and partialRoundVouch refuses undefined hashes) |
+
+Cap: 38 mutants written, 38 run, 0 not reached. Red: 26. Green: 12. Of the greens, 6 are real gaps (M01, M04, M05, M06, M19, M22, M27, which collapse into F-001..F-004 and F-005) and 5 are equivalent (M12, M15, M23, M28, M38). Head-move.ts got no mutants this round. Round 1 already ran H1/H2 red, and the file is unchanged since.
+
+## Round-1 testing findings in this slice
+
+- Round-1 F-001 (discussion re-read on a moved head, unpinned): **closed**. M08 is red against the new test "a moved head re-reads the discussion an overlay requires…".
+- Round-1 F-002 (`sha.test(pr.headRefOid)`, unpinned): **closed**. M14 is red against "a current head that is not a commit id…".
+- Round-1 F-004 (digest currentHead) and F-005 (update-round partial clause): still equivalent (M15, M28). The producer check is unchanged: coverage "complete" requires `outcome === "complete"` (desk-run-executor.ts:393), and finishExecution maps "incomplete" to state "partial" (desk-run-service.ts:69). No action.
+
+## Findings
+
+### [F-001] The worker's hand-off of `previousPartial` is unpinned, and the only test of the worker rule is a source-text assertion
+- Severity: minor
+- File: src/review/desk-run-service.ts:399 (`previousPartial: previous.partial`); src/review/desk-run-service.test.ts:78-83
+- Problem: M27 (`previousPartial: false`) leaves service, executor and commands/review-desk-run suites green, 48/48. No test runs `runDeskWorker` at all; a search over `src/**/*.test.ts` for `runDeskWorker` finds no matches. The test "the worker has one previous-attempt rule" reads desk-run-service.ts as text and asserts substrings, so it pins spelling rather than behaviour. It does not see what reaches `executeDeskReview`.
+- Why it matters: AC7 depends on this one field. With it lost, every partial previous attempt is silently not handed on (executor M20 proves the executor obeys the flag). The next round becomes a full review, and every suite stays green.
+- Fix: extract the options assembly (`previousRunDir`/`previousPartial` from `previousRoundAttempt` + `store.directory`) into a pure function and unit-test it on a partial and a completed prior attempt. Or drive `runDeskWorker` through a stubbed `executeDeskReview` port and assert the options it receives. Then drop the `readFileSync(desk-run-service.ts)` substring test.
+
+### [F-002] The same-Review gate on the answer carry-over chain is unpinned
+- Severity: minor
+- File: src/review/desk-publication.ts:130-142 (`sameReview`, `earlierAttemptDirectories`)
+- Problem: M04 (reviewId clause -> true) and M05 (drop `!sameReview(previous, attempt)` from the break) are both green, 21/21. The only update-round fixture (`updateRound()`) links round 2 to round 1 of the same key with no reviewId mismatch. Nothing builds a `previousRunId` that points at another Review, PR, repository or viewer.
+- Why it matters: this gate decides whose operator answers get pre-selected in a publication draft. If it regresses, answers from a different Review can be pre-filled into a review that is about to be published, and no test notices.
+- Fix: add a case where round 1 and round 2 have different `reviewId`s (or round 1 is re-keyed to another viewer/number) and round 1 has a saved draft. Assert `preview.settings.answers` is `{}` for round 2.
+
+### [F-003] Walking past an earlier attempt without a draft is unpinned
+- Severity: minor
+- File: src/review/desk-publication.ts:56 (`answerSourceLimit`), 150-156 (`earlierAnswers`)
+- Problem: M06 (limit 8 -> 1) and M19 (return from the first directory even when it has no draft) are both green. Both answer-carry tests use a two-attempt chain where the immediate predecessor holds the draft. No fixture has an intermediate attempt with no `publication-draft.json`. The documented behaviour, "the newest earlier attempt that saved a publication draft", is therefore never exercised beyond depth one.
+- Why it matters: an update round after an unpublished intermediate round (the common case for repeated pushes) would lose the operator's answers if either gate regressed, and nothing would fail.
+- Fix: build a three-attempt chain: round 1 with a draft, round 2 with none, round 3 previewed. Assert round 3 gets round 1's answers. Optionally add a chain longer than `answerSourceLimit` that asserts nothing carries.
+
+### [F-004] The executor's closed-package hand-on branch is unpinned
+- Severity: minor
+- File: src/review/desk-run-executor.ts:595 (`manifest.status === "closed" ||`)
+- Problem: M22 (`manifest.status === "closed"` -> `false`) leaves desk-run-executor.test.ts green, 40/40. The new `previousAttempt()` helper accepts `status`, but no test passes `"closed"`. The two AC7 tests cover the partial path and its refusals only. This diff rewrote the condition (`usable && (closed || partial-record)`).
+- Why it matters: handing on a completed round's closed package is the normal case for an update round. If it regresses, every update round after a completed round becomes a full review, and the suite stays green.
+- Fix: add `runWithPrevious(previousAttempt({ status: "closed", findings: [priorFinding] }), false, …)`. Assert the package is copied into the checkout and that no `desk-partial` registry entry is written.
+
+### [F-005] The compare cache short-circuit is unpinned
+- Severity: info
+- File: src/review/desk-publication.ts:117
+- Problem: M01 (delete `if (cache.aheadHead === currentHead) return true;`) is green. No test counts compare reads across preview -> submit on the same moved head.
+- Why it matters: the cost is limited to one extra GitHub read per publication step, so there is no correctness outcome.
+- Fix: in "a moved head publishes as is", assert `reads("FIXTURE_COMPARE_READS")` has the expected line count after preview + submit.
+
+### [F-006] Equivalent survivors (recorded so the next round does not re-run them as gaps)
+- Severity: info
+- File: src/review/desk-publication.ts:320 (M12), :307 (M15); src/review/desk-run-service.ts:691 (M23); src/review/update-round.ts:23 (M28); src/review/prior-round.ts:919 (M38)
+- Problem: each of these greens is equivalent on reachable inputs. M12: `headMoved ||` in the automatic blockedReason is dead, because the early throw at :396 refuses automatic + open + !current first (M13 is red). M15: the body already carries currentHead. M23: an attempt's own round or range already excludes it. M28: the producer cannot emit state partial with coverage complete. M38: undefined hashes are already refused.
+- Why it matters: they are dead or defensive code, not coverage gaps. M12's clause can be deleted or kept as defence in depth.
+- Fix: none required. Optionally remove the dead `headMoved ||` (M12).
+
+## Checklist notes (no further findings)
+- Fixture shape vs producer: the executor AC7 fixture (draft manifest, `scopeReviewed: false`, ingested findings list) matches what a partial Desktop attempt leaves, per desk-run-executor.ts:393-397. The prior-round `partialPackage()` matches too. The publication `updateRound()` fixture marks the round-2 package `closed` while its attempt ended `partial`. Publication reads only the manifest target, so this does not change which branch runs.
+- Boundary mocking: desk-publication tests stub `gh` at the process boundary (a fake `gh` on PATH), not the module. That is good. Registry writes go through the new `registryDir` port, so the user's config directory is untouched.
+- Determinism: there are no sleeps. The publication suite takes about 22 s, the executor suite about 51 s, and prior-round about 36 s. These are pre-existing tier costs.
+
+## Note on the reviewed tree
+When the scratch worktree was removed (after all runs), `git status` of the reviewed worktree showed modifications that were not there at dispatch: src/review/desk-run-executor{,.test}.ts, desk-run-service{,.test}.ts, update-round{,.test}.ts. They are a coherent refactor that replaces `previousRoundAttempt` with `previousRoundAttempts`/`previousRuns` (comment "flow 520 T14 B1"). The mutation runner only ever wrote under the scratch worktree path. These are another lane's edits, not mine, and I left them untouched. Every result above is against head 412258583. F-001's sites move under that refactor. Its point (no behavioural test of the worker's options to the executor) needs re-checking against T14.
+
+REVIEW_RESULT:
+{"reviewer":"review-testing-practices","status":"DONE_WITH_CONCERNS","slices":["slice-02"],"findings":[
+{"id":"F-001","severity":"minor","file":"src/review/desk-run-service.ts","line":399,"title":"Worker hand-off of previousPartial is unpinned; the worker rule is tested only by a source-text assertion","problem":"Mutant M27 (previousPartial: previous.partial -> false) stays green across desk-run-service, desk-run-executor and commands/review-desk-run suites (48/48). runDeskWorker has no behavioural test; desk-run-service.test.ts asserts substrings of the source file.","evidence":"M27 green 48/48; keryx ctx rg 'runDeskWorker' over src/**/*.test.ts: no matches","suggested_fix":"Extract the executor-options assembly into a pure function (or stub executeDeskReview) and assert previousRunDir/previousPartial for a partial and a completed prior attempt; drop the readFileSync substring test."},
+{"id":"F-002","severity":"minor","file":"src/review/desk-publication.ts","line":130,"title":"Same-Review gate on the answer carry-over chain is unpinned","problem":"M04 (sameReview reviewId clause -> true) and M05 (drop !sameReview from the break) both green 21/21; no fixture links a previousRunId to another Review/PR/viewer.","evidence":"M04, M05 green 21/21","suggested_fix":"Add a case where round 1 has a different reviewId (or key) and a saved draft; assert round 2 preview.settings.answers is {}."},
+{"id":"F-003","severity":"minor","file":"src/review/desk-publication.ts","line":150,"title":"Walking past an earlier attempt without a draft is unpinned","problem":"M06 (answerSourceLimit 8 -> 1) and M19 (return from the first directory unconditionally) both green; carry tests use a depth-one chain whose predecessor has the draft.","evidence":"M06, M19 green 21/21","suggested_fix":"Three-attempt chain: round 1 draft, round 2 none, round 3 preview carries round 1 answers."},
+{"id":"F-004","severity":"minor","file":"src/review/desk-run-executor.ts","line":595,"title":"Executor closed-package hand-on branch is unpinned","problem":"M22 (manifest.status === \"closed\" -> false) green 40/40; previousAttempt() supports status but no test passes closed.","evidence":"M22 green 40/40","suggested_fix":"runWithPrevious(previousAttempt({status:\"closed\",findings:[priorFinding]}), false, ...) asserting the package is copied and no desk-partial registry entry is written."},
+{"id":"F-005","severity":"info","file":"src/review/desk-publication.ts","line":117,"title":"Compare cache short-circuit unpinned","problem":"M01 green; no test counts compare reads across preview and submit.","evidence":"M01 green 21/21","suggested_fix":"Assert FIXTURE_COMPARE_READS line count after preview+submit in the as-is test."},
+{"id":"F-006","severity":"info","file":"src/review/desk-publication.ts","line":320,"title":"Equivalent survivors M12, M15, M23, M28, M38","problem":"Green but equivalent on reachable inputs (dead automatic headMoved clause after the :396 throw; digest currentHead carried by body; self-id filter redundant; producer cannot emit partial+complete; undefined hashes already refused).","evidence":"M12, M15, M23, M28, M38 green; M13 red shows the :396 throw is the live gate","suggested_fix":"None required; optionally delete the dead headMoved clause in the automatic blockedReason."}
+],
+"mutant_candidates":[
+{"id":"M01","file":"src/review/desk-publication.ts","anchor":"  if (cache.aheadHead === currentHead) return true;\n","replacement":"","result":"green"},
+{"id":"M02","file":"src/review/desk-publication.ts","anchor":"  if (status !== \"ahead\") return false;","replacement":"","result":"red"},
+{"id":"M03","file":"src/review/desk-publication.ts","anchor":"    return false; // Fail closed","replacement":"    return true; // Fail closed","result":"red"},
+{"id":"M04","file":"src/review/desk-publication.ts","anchor":"(typeof a.run.reviewId !== \"string\" || typeof b.run.reviewId !== \"string\" || a.run.reviewId === b.run.reviewId)","replacement":"true","result":"green"},
+{"id":"M05","file":"src/review/desk-publication.ts","anchor":"    if (!previous || !sameReview(previous, attempt)) break;","replacement":"    if (!previous) break;","result":"green"},
+{"id":"M06","file":"src/review/desk-publication.ts","anchor":"const answerSourceLimit = 8;","replacement":"const answerSourceLimit = 1;","result":"green"},
+{"id":"M07","file":"src/review/desk-publication.ts","anchor":"saved?.answers ?? await earlierAnswers(earlier)","replacement":"saved?.answers","result":"red"},
+{"id":"M08","file":"src/review/desk-publication.ts","anchor":"overlay.rereadDiscussion && (current || headMoved) &&","replacement":"overlay.rereadDiscussion && current &&","result":"red"},
+{"id":"M09","file":"src/review/desk-publication.ts","anchor":"    ? { inline: false, general: saved?.general ?? true,","replacement":"    ? { inline: saved?.inline ?? false, general: saved?.general ?? true,","result":"red"},
+{"id":"M10","file":"src/review/desk-publication.ts","anchor":"      verdict: \"comment\", verdictOverride: \"comment\", answers }","replacement":"      verdict: verdictOverride ?? \"comment\", verdictOverride, answers }","result":"red"},
+{"id":"M11","file":"src/review/desk-publication.ts","anchor":"    : !current && !headMoved ? \"The pull","replacement":"    : !current ? \"The pull","result":"red"},
+{"id":"M12","file":"src/review/desk-publication.ts","anchor":"request.kind === \"automatic\" && (headMoved || skipped","replacement":"request.kind === \"automatic\" && (skipped","result":"green (equivalent)"},
+{"id":"M13","file":"src/review/desk-publication.ts","anchor":"  if (request.kind === \"automatic\" && open && !current) throw new Error(\"configuration: This review needs a publication decision in Desktop.\");","replacement":"","result":"red"},
+{"id":"M14","file":"src/review/desk-publication.ts","anchor":"open && !current && sha.test(pr.headRefOid) &&","replacement":"open && !current &&","result":"red"},
+{"id":"M15","file":"src/review/desk-publication.ts","anchor":"discussion,\n    ...(headMoved ? [headMoved.currentHead] : [])]);","replacement":"discussion]);","result":"green (equivalent)"},
+{"id":"M16","file":"src/review/desk-publication.ts","anchor":"  const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;","replacement":"  const expected = run;","result":"red"},
+{"id":"M17","file":"src/review/desk-publication.ts","anchor":"  if (headMoved) body = `${headMovedLine(headMoved)}\\n\\n${body}`;","replacement":"","result":"red"},
+{"id":"M18","file":"src/review/desk-publication.ts","anchor":"  const open = pr.state === \"OPEN\" && pr.baseRefOid === run.baseSha;","replacement":"  const open = pr.state === \"OPEN\";","result":"red"},
+{"id":"M19","file":"src/review/desk-publication.ts","anchor":"    if (earlier) return object(object(object(earlier)?.settings)?.answers);","replacement":"    return object(object(object(earlier)?.settings)?.answers);","result":"green"},
+{"id":"M20","file":"src/review/desk-run-executor.ts","anchor":"(options.previousPartial === true && recordPartialRound","replacement":"(recordPartialRound","result":"red"},
+{"id":"M21","file":"src/review/desk-run-executor.ts","anchor":"recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined","replacement":"true","result":"red"},
+{"id":"M22","file":"src/review/desk-run-executor.ts","anchor":"const handOn = usable && (manifest.status === \"closed\" ||","replacement":"const handOn = usable && (false ||","result":"green"},
+{"id":"M23","file":"src/review/desk-run-service.ts","anchor":"    if (item.id === current.id) return false;\n","replacement":"","result":"green (equivalent)"},
+{"id":"M24","file":"src/review/desk-run-service.ts","anchor":"    if (current.reviewId !== undefined && item.reviewId !== undefined && item.reviewId !== current.reviewId) return false;\n","replacement":"","result":"red"},
+{"id":"M25","file":"src/review/desk-run-service.ts","anchor":"return item.round < current.round;","replacement":"return item.round <= current.round;","result":"red"},
+{"id":"M26","file":"src/review/desk-run-service.ts","anchor":"    return item.baseSha !== current.baseSha || item.headSha !== current.headSha;","replacement":"    return true;","result":"red"},
+{"id":"M27","file":"src/review/desk-run-service.ts","anchor":"previousPartial: previous.partial }","replacement":"previousPartial: false }","result":"green"},
+{"id":"M28","file":"src/review/update-round.ts","anchor":"partial: attempt.state === \"partial\" || result.coverage !== \"complete\"","replacement":"partial: result.coverage !== \"complete\"","result":"green (equivalent)"},
+{"id":"M29","file":"src/review/update-round.ts","anchor":"partial: attempt.state === \"partial\" || result.coverage !== \"complete\"","replacement":"partial: attempt.state === \"partial\"","result":"red"},
+{"id":"M30","file":"src/review/update-round.ts","anchor":"    if (attempt.decision?.action === \"delete\" || attempt.decision?.action === \"archive\") continue;","replacement":"","result":"red"},
+{"id":"M31","file":"src/review/update-round.ts","anchor":"if (!result?.reviewed || result.findingsKnown !== true) continue;","replacement":"if (!result?.reviewed) continue;","result":"red"},
+{"id":"M32","file":"src/review/round-registry.ts","anchor":"  if (hashes === undefined || hashes.findingsSha256 === null) return undefined;\n  return registryVouches(entries.filter","replacement":"  if (hashes === undefined) return undefined;\n  return registryVouches(entries.filter","result":"red"},
+{"id":"M33","file":"src/review/round-registry.ts","anchor":"return registryVouches(entries.filter((entry) => entry.event === \"desk-partial\"), packageId, hashes);","replacement":"return registryVouches(entries, packageId, hashes);","result":"red"},
+{"id":"M34","file":"src/review/round-registry.ts","anchor":"    if (!Array.isArray(findings)) return { skipped: \"the partial round has no ingested findings.json\" };","replacement":"","result":"red"},
+{"id":"M35","file":"src/review/prior-round.ts","anchor":"registryVouches(registry.filter((entry) => entry.event !== \"desk-partial\"), candidate.reviewId, candidate.hashes)","replacement":"registryVouches(registry, candidate.reviewId, candidate.hashes)","result":"red"},
+{"id":"M36","file":"src/review/prior-round.ts","anchor":"    if (!candidate.eligible && partialRoundVouch(registry, candidate.reviewId, candidate.hashes) === undefined) continue;","replacement":"    if (!candidate.eligible) continue;","result":"red"},
+{"id":"M37","file":"src/review/prior-round.ts","anchor":"    if (partial === undefined) return { ok: false, why: candidate.completed?.why ?? \"no completion evidence\" };","replacement":"","result":"red"},
+{"id":"M38","file":"src/review/prior-round.ts","anchor":"const partial = candidate.packageDir === undefined ? undefined : partialRoundVouch(","replacement":"const partial = partialRoundVouch(","result":"green (equivalent)"}
+],
+"mutation_cap":{"written":38,"run":38,"not_reached":0},
+"routing_audit":{"graph_used":"not-relevant (slice and test files named in the driver)","wiki_used":"not-relevant","ctx_used":"yes (keryx ctx rg for runDeskWorker/previousRunId/producer checks)","raw_rg_used":"no"}}
+
+## Summary
+38 mutants ran, 0 were not reached. 26 were red, 12 green, and 5 of the greens are equivalent. Round-1 backend gaps F-001 (discussion re-read) and F-002 (sha guard) are now pinned. Four minor gaps remain. (1) No test of the worker's `previousPartial` hand-off (M27); the only worker test is a source-text substring check. (2) No test of the same-Review guard on answer carry-over (M04/M05). (3) No test of the walk past an earlier attempt without a draft (M06/M19). (4) No test of the executor's closed-package hand-on (M22). There are no blocker/major findings. While I ran, another lane modified the reviewed tree (T14 B1 refactor of the desk-run-service, executor and update-round files). All results are against head 412258583.

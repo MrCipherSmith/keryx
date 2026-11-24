@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type Ref } from "react";
 import { DESK_RUN_SCOPE, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
 import { Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
@@ -80,6 +80,8 @@ interface PublicationTarget {
   target: DeskRunKey;
   url: string;
   publishCommand?: typeof reviewPublish | undefined;
+  /** Starts the next round of the same Review on `revision`, the PR's current range, after `reviewed`. */
+  onUpdateReview?: ((reviewed: DeskRun, revision: DeskRevision) => void) | undefined;
 }
 
 export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity, publication, onPublicationDecision, onOpenSession, children, onAnswer, onLifecycle, answerError = "", showOutcome = true }: ReportProps & {
@@ -103,6 +105,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
   const draft = publication && run.source !== "existing" && (run.state === "completed" || run.state === "partial") &&
     result?.reviewed && /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[1-9]\d*\/?$/i.test(publication.url) ? publication : undefined;
   const publicationPending = draft && !historic && run.publication === "pending";
+  const updateReview = draft?.onUpdateReview;
   return <article className="desk-run" aria-label={'Review attempt ' + run.id}>
     <header className="desk-run-head">
       <div className="desk-run-state">
@@ -171,7 +174,14 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
       {run.publication === "skipped" && <span className="review-detail-muted">Publication skipped</span>}
     </div>}
     {draft && publishOpen && <ReviewPublishDialog cwd={draft.cwd} target={draft.target} id={run.id} command={draft.publishCommand}
-      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)} />}
+      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)}
+      // Another action of this review is in flight: an update round could not start until it answers.
+      updateDisabled={working}
+      {...(updateReview && { onUpdateReview: (currentHead: string) => {
+        setPublishOpen(false);
+        // The as-is variant exists only while the base is unchanged, so the current range keeps this attempt's base.
+        updateReview(run, { baseSha: run.baseSha, headSha: currentHead });
+      } })} />}
   </article>;
 }
 
@@ -182,13 +192,20 @@ interface Props extends ReportProps {
   activity: ActivitySubscription;
   card: ReviewCard; runs: DeskRun[]; error: string; working: boolean; loaded: boolean;
   onCancel: (id: string) => void; onRefresh: () => void; onOpenSession: (id: string) => void;
+  /** The Latest review heading, a focus target once the attempt that held focus is replaced. */
+  headingRef?: Ref<HTMLHeadingElement> | undefined;
 }
 
-export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication }: Props) {
-  const latest = runs.find(run => runActive(run) && sameRange(run, card)) ??
+/** The attempt the Latest review section shows for the card's range. */
+export function latestAttempt(runs: readonly DeskRun[], card: DeskRevision) {
+  return runs.find(run => runActive(run) && sameRange(run, card)) ??
     runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run));
+}
+
+export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication, headingRef }: Props) {
+  const latest = latestAttempt(runs, card);
   return <section className="desk-runs" aria-label="Latest Keryx review">
-    <header className="desk-run-head"><h3>Latest review</h3><button className="btn review-icon-action" type="button"
+    <header className="desk-run-head"><h3 ref={headingRef} tabIndex={-1}>Latest review</h3><button className="btn review-icon-action" type="button"
       disabled={working} aria-label="Refresh runs" title="Refresh runs" onClick={onRefresh}><Icon name="refresh" /></button></header>
     <p className="review-detail-muted">GitHub review decision · {card.decision ? DECISION_LABEL[card.decision] : "No decision"}</p>
     {error && <p className="inline-banner tone-warn" role="alert">{error}</p>}

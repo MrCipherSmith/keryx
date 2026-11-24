@@ -1,15 +1,17 @@
-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+import type { DeskReviewOptions } from "../../../../src/review/desk-run-options";
+import type { DeskRevision, DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "../components/Toasts";
 import { errMessage } from "../lib/format";
 import type { FlowCard } from "../platform/commands";
 import { reviewRun } from "../platform/reviewRuns";
 import { pendingManualQuestions } from "./ReviewProgress";
-import { launchAction, ReviewRuns } from "./ReviewRuns";
+import { latestAttempt, launchAction, ReviewRuns } from "./ReviewRuns";
+import { reviewIsArchived } from "./ReviewLifecycle";
 import type { reviewPublish } from "./ReviewPublishDialog";
 import { ReviewRunDialog, ReviewRunHistory } from "./ReviewRunDialog";
 import type { ReviewLifecycleCommand } from "./ReviewLifecycle";
-import { sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
+import { runActive, sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
 import { ReviewLaunchDialog, type ReviewLaunchModel } from "./ReviewLaunchDialog";
 import type { ReviewCard } from "./types";
 import "./ReviewDetail.css";
@@ -29,7 +31,8 @@ export function RunLaunchDialog({ cwd, subject, card, stale, models, flows, defa
   defaultFlow?: string | undefined;
   runCommand: typeof reviewRun;
   onRunSnapshot?: RunObserver | undefined;
-  onStarted: () => Promise<void>;
+  /** Re-reads the attempts once the start is confirmed; its outcome is not used. */
+  onStarted: () => Promise<unknown>;
   onClose: () => void;
 }) {
   return <ReviewLaunchDialog models={models} flows={flows} defaultFlow={defaultFlow}
@@ -46,6 +49,11 @@ export function RunLaunchDialog({ cwd, subject, card, stale, models, flows, defa
       await onStarted();
     }}
     onClose={onClose} />;
+}
+
+/** The reviewed attempt's settings for its update round. Posting to GitHub is decided again for every round. */
+export function updateRoundOptions({ autoPublish: _automatic, ...options }: DeskReviewOptions): DeskReviewOptions {
+  return options;
 }
 
 interface Props {
@@ -91,7 +99,6 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const initialLaunch = useRef(reviewIntent);
   const intentConsumed = useRef(onIntentConsumed);
   intentConsumed.current = onIntentConsumed;
-  const publication = { cwd, target: subject, url: card.url, publishCommand };
   const loadAttempt = useCallback(async (id: string) => {
     const history = await runCommand(cwd, subject, { kind: "status", id });
     return history.runs.find(run => run.id === id);
@@ -122,6 +129,43 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
   const revisionChanged = local.staleRange;
+  // The control that opened the publish dialog belongs to an attempt the update may replace; focus then goes here.
+  const latestHeading = useRef<HTMLHeadingElement>(null);
+  const [focusLatest, setFocusLatest] = useState(0);
+  useEffect(() => {
+    const focused = document.activeElement;
+    // Only focus that was lost moves: a user who moved on while the start ran keeps their place.
+    if (focusLatest && (!focused || focused === document.body)) latestHeading.current?.focus();
+  }, [focusLatest]);
+  /**
+   * "Update review" in a head-moved publish dialog: the next round of the same Review on the PR's current range, with
+   * the reviewed attempt's settings except automatic publication. The panel stays open and shows the new attempt; a
+   * board that has not seen the push is re-read once the start succeeded, or when the head already has an attempt,
+   * so the panel follows the new range.
+   */
+  const updateReview = useCallback((reviewed: DeskRun, revision: DeskRevision) => {
+    const boardBehind = !sameRange(card, revision);
+    // Any attempt on the target range, in whatever state and whatever the board shows, is shown instead of a second one.
+    const covering = local.runs.filter(run => run.source !== "existing" && !reviewIsArchived(run) && sameRange(run, revision));
+    const existing = covering.find(runActive) ?? covering[0];
+    if (existing) {
+      const latest = existing.id === latestAttempt(local.runs, card)?.id;
+      setSessionId(latest ? null : existing.id);
+      if (latest) setFocusLatest(n => n + 1);
+      toast({ level: "info", title: `Commit ${revision.headSha.slice(0, 7)} already has a review attempt`, body: "Showing it instead of starting another." });
+      if (boardBehind) onRefreshBoard?.();
+      return;
+    }
+    setSessionId(null);
+    void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: updateRoundOptions(reviewed.options) }) })
+      .then(outcome => {
+        if (outcome === "done" && mounted.current) setFocusLatest(n => n + 1);
+        if (outcome === "done" && boardBehind) onRefreshBoard?.();
+        // The button is disabled while another action runs; this covers a click that raced it.
+        if (outcome === "skipped") toast({ level: "info", title: "Update review did not start", body: "Another action of this review is still running. Try again when it finishes." });
+      });
+  }, [card, local.runs, local.request, onRefreshBoard, toast]);
+  const publication = { cwd, target: subject, url: card.url, publishCommand, onUpdateReview: updateReview };
   const start = useCallback(() => {
     if (reviewModels) setLaunchCard(card);
     else void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });
@@ -171,7 +215,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh</button>}
     </div>}
     {children}
-    <ReviewRuns publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
+    <ReviewRuns headingRef={latestHeading} publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
       onCancel={id => void local.request({ kind: "cancel", id })}
       onLifecycle={lifecycle}
       onRefresh={() => void local.request({ kind: "status" })} />

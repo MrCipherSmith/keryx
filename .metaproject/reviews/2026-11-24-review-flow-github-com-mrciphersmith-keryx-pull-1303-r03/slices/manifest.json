@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 144835,
+      "contentHash": "d245f00ffeeee3cbc4a9ddc0e4d75db7d5916e7a14a5ec553cd94da742726432",
+      "files": [
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T11.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T12.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T13.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T14.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T15.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json",
+        "apps/desktop/src/review/ReviewPublishDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx",
+        "apps/desktop/src/review/ReviewWorkspace.tsx",
+        "apps/desktop/src/review/SessionReviewActivity.tsx",
+        "apps/desktop/src/review/useReviewRuns.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: apps/desktop/src/review/SessionReviewActivity.tsx",
+          "risk class auth/permissions: apps/desktop/src/review/SessionReviewActivity.tsx",
+          "source code: apps/desktop/src/review/ReviewPublishDialog.tsx, apps/desktop/src/review/ReviewRuns.tsx, apps/desktop/src/review/ReviewWorkspace.tsx (+2)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 118632,
+      "contentHash": "7ea72bc412bddfbb77f91b29da51ffb9cdfbd956eccf47e3f2f82d0d87185a04",
+      "files": [
+        "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+        "docs/docs/desktop-app.md",
+        "src/review/desk-publication-types.ts",
+        "src/review/desk-publication.ts",
+        "src/review/desk-run-executor.ts",
+        "src/review/desk-run-service.ts",
+        "src/review/head-move.ts",
+        "src/review/prior-round.ts",
+        "src/review/round-registry.ts",
+        "src/review/update-round.ts"
+      ],
+      "domain": "apps [test], docs [docs], src/review",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/desk-publication-types.ts, src/review/desk-publication.ts, src/review/desk-run-executor.ts (+5)"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 79121,
+      "contentHash": "8938d8843c845c4f7d01e8429a2ef6e10f4ced3deb0c93d8d349ac40eb593c90",
+      "files": [
+        "src/review/desk-publication.test.ts",
+        "src/review/desk-run-executor.test.ts",
+        "src/review/desk-run-service.test.ts",
+        "src/review/head-move.test.ts",
+        "src/review/prior-round.test.ts",
+        "src/review/round-registry.test.ts",
+        "src/review/update-round.test.ts"
+      ],
+      "domain": "src/review [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 3,
+    "bytes": 342588,
+    "files": 37,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

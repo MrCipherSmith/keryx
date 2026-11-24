@@ -1,0 +1,168 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (PR #1304)
+- Merge-base: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` .. head `822192905b3d26eb976d83e5bbd46cee14ca9a6f`
+- Scope mode: explicit-hash-range, slice-03 read in full (backend tests: desk-publication.test, desk-run-executor.test, desk-run-service.test, head-move.test, prior-round.test, round-registry.test, update-round.test)
+- Producers read to check each assertion: `desk-publication.ts` (`previewSubject`, `reviewedHeadInPull`, `prepare`, `publication`), `update-round.ts` (whole), `round-registry.ts` (`appendRoundRegistry`, `registryVouches`, `partialRoundVouch`, `registryVouchesPackage`), `desk-run-executor.ts:515-537` (previous-run hand-on loop), `prior-round.ts` (`packageTrust`, `localPackageCandidates`), `desk-run-service.ts` (`verifyDeskSubject`, `finishExecution` `findingsKnown`), `head-move.ts`, `lib/file-lock.ts` (stale 10 s, timeout 15 s), `lib/config-dir.ts` (`keryxConfigDir(dir)` returns `dir`).
+- Spec compliance gate: ran against AC4–AC7 and T14 B1–B6 for what the tests claim; no spec gap in this slice.
+
+### Summary
+The backend tests mostly assert the behaviour the code claims and would fail if it regressed: the as-is path is pinned by compare-read lines, digest staleness on a further push, the `verifyDeskSubject(expected)` re-check after confirm, the automatic refusal before any compare/discussion read, the superseded-round short-circuit, the answer carry-over walk and its exclusions, the candidate order and executor fallback, the desk-partial vouch isolation and the registry lock race. One minor: the test that claims "a changed discussion makes the submit stale" is satisfied by the digest check, so the write-time discussion re-read that the as-is path now relies on has no test. Three info notes on assertions that are vacuous or can pass for the wrong reason on a slow host, and on fixtures in a state the producer cannot emit (harmless here).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 3
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+### [F-001] The discussion test's "stale" comes from the digest, so the write-time discussion re-read is untested
+- **Severity**: minor
+- **File**: src/review/desk-publication.test.ts ("a moved head re-reads the discussion an overlay requires, and a changed discussion makes the submit stale"); code under test src/review/desk-publication.ts:202-205 and :422-424
+- **Problem**: The test changes `FIXTURE_DISCUSSION` between the preview and the submit. The submit's `render()` gets a fresh cache (only `preview` reads the cache file), so `prepare` re-reads the discussion and puts the new hash into the digest (`hash([... discussion ...])`, :289); the request is refused at :406 "stale: The review preview changed". The check the overlay actually exists for — re-reading the discussion after the user confirmed and right before the POST (:422 "stale: The pull request discussion changed") — is never reached. `/^stale:/` accepts both. No other test in `src/review` sets `FIXTURE_DISCUSSION` (ctx rg over `*.test.ts`), so this is the only discussion test.
+- **Why it matters**: Trigger: delete or break :422-424 (e.g. compare against the wrong value). Outcome: every backend test still passes, while a comment posted on the PR during the confirm dialog is no longer caught before an as-is (or current) review is published — exactly the window `reread_discussion` is for. The `|| headMoved` addition at :202 is pinned (reads `"xxx"` vs `""`), the write-time guard is not.
+- **Fix**: add (or change this test to) a case that changes the discussion inside the confirm callback, mirroring the head-move test: `requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, async () => writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":1}]]\n'))` and assert `.rejects.toThrow("discussion changed")` plus no `FIXTURE_BODY`. Keep the current case but assert `toThrow("preview changed")` so each assertion names the guard it pins.
+
+### Async & Concurrency
+
+### [F-003] The B3 race test can pass without the lock when the child starts slowly
+- **Severity**: info
+- **File**: src/review/round-registry.test.ts ("T14 B3: an append from another process while a compaction runs survives it")
+- **Problem**: The hook waits at most 2 s for the child's `appended` marker. Without the lock, the test only fails if the child imports `round-registry.ts` and appends inside that window; if it takes longer (cold CI, loaded host), the rename happens first, the child appends afterwards, and the expected order `["old","compactor","concurrent"]` holds anyway. The test never false-fails (stale threshold 10 s > 2 s hold), but its discrimination depends on host speed.
+- **Why it matters**: no defect today; a regression that drops the lock could stay green on a slow runner.
+- **Fix**: have the child write a `started` marker before calling `appendRoundRegistry`, wait for that marker (bounded) in the hook, then sleep a fixed short interval; without the lock the append then lands before the rename deterministically.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+### [F-002] In the "no longer contains the reviewed commit" loop, previews 2-4 read the cached "diverged" status, not their own
+- **Severity**: info
+- **File**: src/review/desk-publication.test.ts ("a head that no longer contains the reviewed commit keeps the refusal and posts nothing")
+- **Problem**: All four iterations use the same `movedHead`. The first preview caches `headStatus: { head: movedHead, ahead: false }` in `publication-preview-cache.json` (:111, :247-251), and `previewSubject` reuses it for 15 s, so the previews for `behind`, `fail:HTTP 404` and `fail:connection reset` never call compare; their `headMoved`/body/`blockedReason` assertions repeat the diverged result. Each status is exercised only by the submit (fresh cache), where a regression would surface as "stale: The review preview changed" and fail `toThrow("revision moved")` — so the test still fails on a regression, just not through the assertions that name it.
+- **Why it matters**: no false pass today; the preview-side assertions for three of four statuses are vacuous, and the comment above the loop says each one is checked.
+- **Fix**: pass `refresh: true` on the loop's preview (or remove the cache file per iteration) and assert one new compare read per iteration.
+
+### [F-004] Update-round fixtures pair a partial attempt with a closed package manifest
+- **Severity**: info
+- **File**: src/review/desk-publication.test.ts (`updateRound`, `finishedAttempt`)
+- **Problem**: Both end the attempt `state: "partial"` and write `status: "closed"` into its package manifest. The executor never produces that pair (desk-run-executor.ts:529: "A partial attempt's package never got past its draft"; coverage `complete` requires a closed manifest). The pre-existing round-1 fixture has the same shape.
+- **Why it matters**: harmless for these tests — `prepare` checks only the manifest target, not its status, and the answer carry-over reads `earlierRoundAttempts`, which ignores package status. Recorded so a later test that starts reading status does not inherit an impossible state.
+- **Fix**: none required; `status: "draft"` would match the producer.
+
+### Verified as holding
+- As-is path: compare argv line (`repos/<repo>/compare/<reviewed>...<current>?per_page=1 --jq .status`) matches the fixture's `$4 $5 $6`; first body line, `COMMENT`, `commit_id` = reviewed head, `comments: []`; a requested verdict/inline is normalised in the preview and the submit digest matches (posts COMMENT, no diff read).
+- Changed base / closed PR (both with and without a moved head): no `headMoved`, refusal, nothing posted.
+- Non-sha current head: no compare read (`sha.test` guard).
+- Further push: digest includes `headMoved.currentHead`, so a submit after the head moves to `d` is `stale:`; a push during confirm is caught by `verifyDeskSubject(expected)` (`stale: ... revision has changed`). Receipt not written.
+- Automatic publication: refusal at :375 precedes compare and discussion reads (reads asserted empty with the overlay installed), and the same attempt posts at the reviewed head, so the refusal is head-driven.
+- B5: one compare per current head for a definitive status, `refresh` re-asks, a failed read is re-asked (cache file removed between phases; its removal also asserts it was written).
+- B6: superseded attempt gets no `headMoved`, `canSubmit` false, no compare read.
+- Answer carry-over: from the newest earlier round with a draft (walks past one without), own draft wins, only valid answers for its own questions, nothing from another account/PR, an archived round or its own round; settings other than answers are not carried (`inline:false, general:true, verdictOverride:null` are the defaults, not round 1's values).
+- update-round / desk-run-service: candidate order (completed before partial within a round, legacy range-as-round), rejection list, withdrawn/imported/own-round exclusion, `previousRunInputs` mapping; fixtures use states and coverages the producer can emit (`coverage: "unknown"`, `findingsKnown` stamped by `finishExecution`).
+- Executor: partial with ingested findings recorded as `desk-partial` and handed on; `partial:false` draft and findings-less partial leave no package and no `review-rounds` dir (`keryxConfigDir(dir)` is `dir`, so the absence check looks at the real path); raw-only partial round 2 falls back to closed round 1 with an empty registry; only the first eligible package is copied.
+- prior-round / round-registry: desk-partial admits a draft only with matching package id and hashes (the `[]` rewrite changes `findingsSha256`, so it pins the hash match, not an emptiness rule); never vouches through `registryVouches`/`registryVouchesPackage`; the same files as `complete` do vouch (positive control present).
+- head-move: `"scheduled"` is a real `DeskRun["source"]` value; the table matches `headMoveResponse`.
+
+### Suggested Patches
+```diff
++test("a discussion change during the confirm step stops the write", async () => {
++  installDiscussionOverlay();
++  setHead(movedHead);
++  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
++    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest },
++    async () => writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":1,"body":"A new comment"}]]\n')))
++    .rejects.toThrow("discussion changed");
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
+```
+
+### Not verified
+- No tests or mutants run (read-only reviewer); F-001's "all tests still pass without :422" is reasoned from the code paths, not executed. Brief's evidence: backend 201 pass / 0 fail.
+- `DeskRunStore` round placement (`roundFor`) and `previousRunId` assignment are stage 2 code, relied on as the tests exercise them; not re-read.
+- The `prior-round.test.ts` helpers (`writePackage`, `packageFiles`, `commit`) outside the slice hunks were not read; their outputs were taken from how the tests use them.
+
+### Routing audit
+graph_used: no (not-relevant: the slice is tests; producers located by name with ctx rg) | wiki_used: no (not-relevant: AC/T14 claims come from the payload and journal) | ctx_used: yes (`keryx ctx read`, `keryx ctx rg`) | raw_rg_used: yes, once — `grep` over a `git show` blob of the base desk-publication.ts (ctx rg cannot read stdin) to confirm the :422 discussion re-read pre-dates this PR
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Backend tests assert the claimed behaviour and fail on regression for the as-is path, further-push staleness, automatic refusal order, B5 compare caching, B6 superseded rounds, answer carry-over, candidate order/executor fallback, desk-partial vouch isolation and the registry lock race. One minor: the discussion test's stale result comes from the digest, leaving the write-time discussion re-read (desk-publication.ts:422) untested. Three info notes: cached previews make three of four status assertions vacuous, the B3 race test can pass without the lock on a slow host, and partial attempts are paired with closed manifests the producer cannot emit (harmless).",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.test.ts",
+      "line": null,
+      "quote": "writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{\"id\":1,\"body\":\"A new comment\"}]]\\n');\n  await expect(requestDeskPublication(project, key, { kind: \"submit\", id, settings, digest: preview.digest }, confirmFixture))\n    .rejects.toThrow(/^stale:/);",
+      "problem": "The discussion is changed before the submit, so the submit's fresh render folds the new discussion hash into the digest and is refused at desk-publication.ts:406 (preview changed). The write-time re-read after confirm (:422, 'discussion changed') is never reached; /^stale:/ accepts both, and no other test sets FIXTURE_DISCUSSION.",
+      "impact": "Removing or breaking desk-publication.ts:422-424 leaves every backend test green, while a PR comment posted during the confirm dialog would no longer stop an as-is or current review from being posted.",
+      "suggested_fix": "Add a case that changes FIXTURE_DISCUSSION inside the confirmSubmit callback and asserts toThrow('discussion changed') and no FIXTURE_BODY; make the existing case assert toThrow('preview changed').",
+      "evidence": "desk-publication.ts:56-58 cache only for preview; :202-205 discussion read into prepare; :289 digest includes discussion; :406 digest check precedes :415 confirm and :422 re-read. ctx rg 'discussion|FIXTURE_DISCUSSION' over src/review/*.test.ts: only this test drives the discussion fixture. Base 20e4281a2 already has the :422 check (line 348 there).",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-publication.test.ts",
+      "line": null,
+      "quote": "for (const status of [\"diverged\", \"behind\", \"fail:HTTP 404: Not Found\", \"fail:connection reset\"]) {",
+      "problem": "All iterations use the same movedHead; the first preview caches headStatus {movedHead, ahead:false}, so previews for behind and both failures reuse it and never call compare. Only the submit (fresh cache) exercises each status.",
+      "impact": "No false pass (a regression surfaces as a stale digest error at submit and fails toThrow('revision moved')), but the preview assertions for three statuses are vacuous.",
+      "suggested_fix": "Use refresh: true on the loop's preview (or remove the cache file each iteration) and assert one compare read per iteration.",
+      "evidence": "desk-publication.ts:102 cache hit by current head; :111 cache write; :247-251 preview persists cache; :56-60 cache reuse for 15 s.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/round-registry.test.ts",
+      "line": null,
+      "quote": "const until = Date.now() + 2_000;\n      while (!existsSync(marker) && Date.now() < until) Bun.sleepSync(20);",
+      "problem": "Without the lock the test fails only if the child process starts and appends within 2 s; a slower child appends after the rename and the expected order still holds.",
+      "impact": "Never false-fails (lock stale threshold 10 s); a lock regression can stay green on a slow runner.",
+      "suggested_fix": "Have the child write a 'started' marker before appendRoundRegistry and wait for it, then a short fixed sleep, so the unlocked append lands before the rename deterministically.",
+      "evidence": "round-registry.ts:154-162 hook runs under the lock between re-read and rename; lib/file-lock.ts LOCK_STALE_MS 10_000, LOCK_TIMEOUT_MS 15_000.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/desk-publication.test.ts",
+      "line": null,
+      "quote": "store.end(store.byId(next)!, { state: \"partial\", ... }); ... json(path.join(nextDirectory, \"package\", \"manifest.json\"), { reviewId: \"fixture-round\", status: \"closed\", ...",
+      "problem": "updateRound and finishedAttempt pair a partial attempt with a closed package manifest, which the executor never produces (a partial attempt's package stays draft).",
+      "impact": "Harmless here: prepare checks only the manifest target and carry-over ignores package status. A later test reading status would inherit an impossible state.",
+      "suggested_fix": "None required; status: 'draft' would match the producer.",
+      "evidence": "desk-run-executor.ts:529 comment; desk-publication.ts:141-145 checks target only.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```

@@ -1,0 +1,131 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage3`. Base `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` (stage 2 tip). Head `822192905b3d26eb976d83e5bbd46cee14ca9a6f`. Diff mode, round 3 (verification round), wave 2.
+- Read in full: slice-02 (1,914 lines). It covers the Desktop DOM test `ReviewPanel.dom.test.tsx`, `docs/docs/desktop-app.md`, and the backend sources `desk-publication(-types)`, `desk-run-executor`, `desk-run-service`, `head-move`, `prior-round`, `round-registry` and `update-round`.
+- Extra context read at head, outside the slice: `src/review/desk-publication.ts:53-66` (`previewSubject`) and `:247-251` (the preview-cache write); `src/review/desk-run-store.ts:418-460` (`DeskRunStore.history`); `src/lib/file-lock.ts` (`withFileLock`, the sync wait).
+- Earlier results read: this round's `raw/review-performance-w1.txt` (slice-01, no findings), and a search of round 2's `raw/` for the same sites. Read-only review. No tests and no timing runs (exec_budget_s 0).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 2
+
+### Round obligations in this lens
+- **Round 2 performance-w2 F-001 / T14 B5: the compare status is cached per head. The fix holds.**
+  - `reviewedHeadInPull` (desk-publication.ts:100-113) returns `cache.headStatus.ahead` when `cache.headStatus.head === currentHead`.
+  - It stores every definitive status (`ahead`, `behind`, `diverged`, `identical`), not only `ahead`.
+  - The cache object is persisted. `prepare` writes `publication-preview-cache.json` for every `preview` request (:247-251). That write runs after `reviewedHeadInPull` has filled `headStatus`, because `publication()` calls the compare before `render()`.
+  - The next non-refresh preview within the 15 s window reuses it. `previewSubject` returns `previous` whole, or `{ ...previous, subject }` when the heads match, so `headStatus` is kept.
+  - The cache key hashes the reviewed `revision`, so the reviewed head is fixed. A push changes `headRefOid`, which misses `headStatus.head` and asks again. That is correct.
+  - A failed or unknown read is not cached, so the next preview asks again. That is the documented fail-closed behaviour, and it costs one gh call on an error path only.
+  - Net cost: at most one compare call per fresh subject read. It is paid at the same moment as the `verifyDeskSubject` GraphQL read that is already made, so it is a 1:1 overhead, not an amplification.
+  - The automatic path is refused before the compare (`request.kind === "automatic" && open && !current`), so the round 1 F-001 shape (reading GitHub and then refusing) does not come back.
+  - See I-001 for a note on the cache lifetime.
+- **B2: answer carry-over reads (`earlierAnswers`).**
+  - `earlierAnswers` runs only when neither the request nor the attempt's own draft carries answers (`saved?.answers ?? …`).
+  - Dialog previews after the first one send `settings` (the DOM test asserts `settings` on preview requests). So this runs about once per dialog open.
+  - It reads at most `answerSourceLimit` = 8 small `publication-draft.json` files, sequentially, and stops at the first draft it finds. Each read is bounded by `draftLimit`.
+  - That is a few local reads next to the gh/GraphQL calls of the same request. Not a finding.
+- **B6 and the shared rule: the per-preview history read.**
+  - `publication()` now calls `store.history(found.key).runs` (desk-publication.ts:355) on every publication request: preview, save, skip and submit.
+  - It uses the result only for `earlierRoundAttempts(...).slice(0, 8)` and `newerRoundOf`. Both are O(n) scans and cheap.
+  - The cost is in `history()` itself. See F-001 (minor).
+
+### Findings
+
+### [F-001] The publication path reads the full PR history, with reports and per-run receipt reads, to get round placement
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts:355 (`const runs = store.history(found.key).runs;`)
+- **Hot path**: every publication request: the dialog's open, each settings change that triggers a preview, Save, Skip and Submit. n is the number of attempts on one PR for one viewer, typically tens.
+- **Problem**: `DeskRunStore.history(key)` is the snapshot built for the Desktop status IPC.
+  - It selects up to 128 KB of cumulative report text inline.
+  - It `JSON.parse`s every attempt's details.
+  - For each completed, complete-coverage attempt, it does a sync `readConfigFile(publication-receipt.json)` plus `existsSync(publication-skipped.json)` (`publication()` helper, desk-run-store.ts:407-416).
+  - For a running attempt it reads transcript activity.
+  - `earlierRoundAttempts` and `newerRoundOf` need only `id`, `source`, `decision`, `reviewId`, `round`, `baseSha` and `headSha`. The reports, publication outcomes and activity are discarded.
+  - Round 2's code walked at most 8 `previousRunId` links instead, so this per-request cost is new in T14.
+- **Why it matters**: the cost is small in absolute terms. It is O(n) small sync file reads, plus up to 128 KB of report text through SQLite and `JSON.parse`, per preview. A preview is user-paced, and the CLI process start and gh calls dominate it. It is still work done and thrown away on every preview, and it grows with the PR's attempt count. Hence minor, not major: no hot path or scale makes it a measurable cost today.
+- **Fix**: give `DeskRunStore` a lean placement query and use it here. It should select `id`, `source`, `decision`, `reviewId`, `round`, `baseSha` and `headSha` for `repo/pr/viewer`, with no report, receipt or activity. `history(key)` stays for the IPC snapshot. Alternatively, take `history(key, ...)` with a report-free variant.
+
+### [I-001] "Cached per head" lasts only as long as the 15 s preview-subject cache
+- **Severity**: info
+- **File**: src/review/desk-publication.ts:96-99 (doc comment), :53-66 (`previewSubject`)
+- **Problem**:
+  - `headStatus` lives inside the preview cache. That cache is discarded after `expires` (15 s), on `refresh: true`, and for every non-preview request.
+  - So the compare is repeated whenever the subject is re-read, even when the head has not changed.
+  - That is correct, and it adds one call per subject read (see the obligation above). The comment "A definitive status is cached per current head" can be read as a per-head cache that outlives the subject TTL.
+- **Fix (optional)**: say "for the life of the preview cache" in the comment. No code change needed.
+
+### [I-002] `appendRoundRegistry` now takes a sync lock that can block a worker for up to 15 s on contention
+- **Severity**: info
+- **File**: src/review/round-registry.ts (`appendRoundRegistry`, `withFileLock` from lib/file-lock.ts)
+- **Problem**:
+  - `withFileLock` waits synchronously (`Bun.sleepSync`) up to `LOCK_TIMEOUT_MS` = 15 s, and treats a lock older than 10 s as stale.
+  - The Desktop executor calls it through `recordPartialRound` once per round start, inside an async worker. That worker also runs a 500 ms cancel-check interval.
+  - Uncontended, the cost is one `open(wx)`, a write and an `rm`. A wait happens only when another keryx process is appending at that moment (a critical section of a few ms) or after a crashed holder left a lock (up to about 10 s).
+  - Once per round start, rare, and bounded. Recorded for visibility only. The correctness reason for the lock (T14 B3) outweighs it.
+
+### Clean Areas
+- **Executor previous-round loop** (desk-run-executor.ts):
+  - Per candidate it reads `manifest.json`. It calls `regularPackage` only after the cheap manifest checks pass (`&&` short-circuit), and calls `recordPartialRound` only for a usable partial whose package is not closed.
+  - It `break`s at the first package it hands on, and runs once per round start. `previousRunInputs` replaces a single `.find` over the same history with one linear pass, also once per round start.
+- **`recordPartialRound`**: `packageFacts` hashing, one or two `git` spawnSync calls (`repoIdentity`) and one locked append, once per handed-on partial round. The registry stays bounded by the existing 512 KB compaction.
+- **prior-round.ts**:
+  - The registry read moved before the source loop, but it is still read once per `findPreviousRound`, as before.
+  - `partialRoundVouch` and `registryVouches` each filter the entry list per call, so the cost is O(candidates × entries). The registry holds at most about 1.7k entries, and this runs once per round start, so the cost is negligible.
+  - `diskCandidate` already hashed every package before the eligibility check, so admitting drafts adds no new hashing.
+- **Discussion re-read** for the as-is variant (`current || headMoved`): it uses the same `cache.discussion` memo as the current-head path. No new uncached reads.
+- **`update-round.ts`**: pure O(n) filters and maps over one PR's attempts. `priorAttemptCandidates` groups by round with a Map, with no nested scans over the whole list.
+- **`head-move.ts`**: pure lookup functions.
+- **Docs and DOM test**: no runtime cost.
+- **Memory**: no new unbounded collections, listeners or timers. `PreviewCache.headStatus` is one small field inside a file capped at `previewCacheLimit`.
+
+### Not verified
+- No timing measurements and no verify-run.
+- The attempt count per PR in real use was not measured. F-001's severity assumes tens of attempts.
+- I did not check whether the Desktop host spawns a fresh CLI process per publication request. If it does, that would dwarf F-001 further.
+
+Routing audit: graph_used: no (not-relevant: the slice and the payload's `layers.files` named every file; the extra context was three known symbols) | wiki_used: not-relevant (no domain question; the PR context and journal decided the intent) | ctx_used: yes (`keryx ctx read`, `keryx ctx rg`) | raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "The round-2 performance fix (T14 B5) holds. reviewedHeadInPull caches every definitive compare status per current head in the preview cache, which prepare persists after the compare, so a non-refresh preview within the cache window makes no second compare. A failed read is not cached, by design. The automatic path is refused before any compare. The B2 answer carry-over reads at most 8 small draft files, about once per dialog open. One minor: every publication request now runs DeskRunStore.history(), the IPC snapshot with reports, per-run receipt reads and activity, only to get round placement. Two info notes: the 'per head' cache lifetime equals the 15 s subject cache, and the registry append takes a sync lock that can wait up to 15 s on contention.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "title": "Publication path reads the full PR history snapshot (reports, receipt reads) for round placement on every preview",
+      "file": "src/review/desk-publication.ts",
+      "line": 355,
+      "quote": "const runs = store.history(found.key).runs;",
+      "problem": "publication() calls DeskRunStore.history(key) on every request (preview, save, skip, submit). history() is the Desktop IPC snapshot. It selects up to 128 KB of report text, parses every attempt's details, and for each completed attempt does a sync readConfigFile of publication-receipt.json plus existsSync of publication-skipped.json (desk-run-store.ts:407-416). It also reads transcript activity for running attempts. earlierRoundAttempts and newerRoundOf need only id, source, decision, reviewId, round, baseSha and headSha. Round 2 walked at most 8 previousRunId links instead.",
+      "impact": "O(n attempts) sync file reads and up to 128 KB of discarded report text per preview. It is user-paced, and the process start and gh calls dominate it, so it is an inefficiency off a hot path, not a measured cost.",
+      "suggested_fix": "Add a lean DeskRunStore placement query for repo/pr/viewer, returning id, source, decision, reviewId, round, baseSha and headSha with no report, receipt or activity, and use it in publication(). Keep history() for the IPC snapshot."
+    },
+    {
+      "id": "I-001",
+      "severity": "info",
+      "title": "Compare status 'cached per head' lives only as long as the 15 s preview-subject cache",
+      "file": "src/review/desk-publication.ts",
+      "line": 96,
+      "problem": "headStatus sits inside the preview cache. That cache expires after 15 s, is bypassed on refresh, and is not read for save, skip or submit, so the compare repeats with each subject re-read. This is correct, and it costs one call per subject read. The doc comment can be read as a longer-lived per-head cache.",
+      "suggested_fix": "Optionally state in the comment that the status is cached for the life of the preview cache."
+    },
+    {
+      "id": "I-002",
+      "severity": "info",
+      "title": "Registry append's sync lock can block the Desktop worker up to 15 s under contention or a stale lock",
+      "file": "src/review/round-registry.ts",
+      "problem": "appendRoundRegistry now runs under withFileLock. On contention it waits synchronously with Bun.sleepSync, for up to 15 s, or about 10 s for a crashed holder's lock. It is reached from the async Desktop executor through recordPartialRound, once per round start. Uncontended, the cost is one open, write and rm.",
+      "suggested_fix": "None required. If it ever matters, pass a shorter timeoutMs for the Desktop caller."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": ["slice-02"],
+  "inputs_unreadable": []
+}
+```

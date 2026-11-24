@@ -1,0 +1,37 @@
+range: a5d1ab236fe8...9e871b17f16a (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: degradation
+
+QUESTION: after this change, is the code worse than on the base branch: in behaviour, in defaults, in speed or in
+structure, and can that be shown? Scope is the diff plus the consumers below. The consumer list is the code
+graph's, not yours: trace those, and say so when you traced fewer.
+
+CHANGED SHARED EXPORTS (10):
+  - apps/desktop/src/review/ReviewPublishDialog.tsx  (every export)
+  - apps/desktop/src/review/ReviewRuns.dom.test.tsx  (every export)
+  - src/review/desk-publication-types.ts  PublicationState
+  - src/review/desk-publication.test.ts  (every export)
+  - src/review/desk-publication.ts  publishCompletedDeskReview, requestDeskPublication
+  - src/review/head-move.test.ts  (every export)
+  - src/review/head-move.ts  HeadMoveAction, HeadMovePhase, HeadMoveResponse, ON_HEAD_MOVE, OnHeadMove, defaultOnHeadMove, headMoveResponse, parseOnHeadMove
+  - src/review/prior-round.test.ts  (every export)
+  - src/review/update-round.test.ts  (every export)
+  - src/review/update-round.ts  PriorAttempt, selectPriorAttempt
+
+CONSUMERS (9 of 9; the files that import the module holding each changed export, or a barrel re-exporting it; most imported first, cap 40):
+  - src/review/desk-run-types.ts  imports src/review/desk-publication-types.ts  [fan-in 51]
+  - src/review/desk-run-store.ts  imports src/review/desk-publication-types.ts  [fan-in 16]
+  - src/review/desk-run-service.ts  imports src/review/desk-publication.ts  [fan-in 7]
+  - src/review/report-overlay.ts  imports src/review/desk-publication-types.ts  [fan-in 5]
+  - src/review/desk-review-report.ts  imports src/review/desk-publication-types.ts  [fan-in 4]
+  - apps/desktop/src/review/ReviewDetail.tsx  imports apps/desktop/src/review/ReviewPublishDialog.tsx  [fan-in 3]
+  - src/commands/review-desk-publish.ts  imports src/review/desk-publication-types.ts  [fan-in 3]
+  - apps/desktop/src/review/ReviewRuns.tsx  imports apps/desktop/src/review/ReviewPublishDialog.tsx  [fan-in 2]
+  - src/commands/review-desk-publish.test.ts  imports src/review/desk-publication-types.ts  [fan-in 0]
+
+CAP: the cap of 40 dropped no consumer (9 found). The cap is one budget shared by all changed exports, not one per export.
+
+omitted with a reason: 19 unrelated-symbol, 0 hub-damped, 50 text-hub, 9 test-consumer. They are context, not owed a chunk pass.
+9 tests exercise the changed code — run them: `bun test apps/desktop/src/review/ReviewDetail.dom.test.tsx src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts src/commands/select.test.ts src/review/board-badges.test.ts src/review/desk-reviewer-progress.test.ts src/review/desk-run-store.test.ts src/review/desk-worker-roster.test.ts src/review/review-rules.test.ts`
+tests to run: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303/tests-to-run.json
+unresolved: 10 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

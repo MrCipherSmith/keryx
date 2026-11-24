@@ -25,7 +25,11 @@
  * - a package read from git history must be merged into the base branch (its commit an ancestor of the base), since a
  *   local branch may be anybody's checked-out pull request;
  * - a package the branch under review committed (or an unmerged one from history) is trusted only when the machine-local
- *   round registry (./round-registry.ts) holds keryx's own record of exactly its files.
+ *   round registry (./round-registry.ts) holds keryx's own record of exactly its files;
+ * - a package with no completion evidence (a draft) is no previous round, with one exception (flow 520 AC7): a partial
+ *   round Desktop ran itself, whose ingested findings and files the registry records as `desk-partial`. Desktop writes that
+ *   record only as it copies the package from the user's own run store into the next round's checkout. Such a round is
+ *   cut from, but stays weak: it is "not completed", so everything outside its delta is planned as new code.
  *
  * So data a pull request can commit never narrows a round: a forged package fails the merge-base or merged-base check
  * and has no registry entry on the reviewer's machine. An agent running as the same user can write the registry as it
@@ -41,7 +45,7 @@ import { defaultGitRunner, emptyRangeWarning, mergeBaseOf, resolveBase, type Git
 import { REVIEW_PACKAGE_MANIFEST_GLOBS, flowReviewsRoot, reviewsRoot } from "./package-location";
 import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
 import { mentionsFindingId } from "./publish";
-import { readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
+import { partialRoundVouch, readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
 import {
   completionOf,
   findingStatus,
@@ -327,10 +331,17 @@ export async function packageTrust(
   base: { ref: string; sha: string } | null,
   registry: readonly RoundRegistryEntry[] = [],
 ): Promise<CandidateTrust> {
-  if (candidate.completed?.ok !== true) return { ok: false, why: candidate.completed?.why ?? "no completion evidence" };
+  if (candidate.completed?.ok !== true) {
+    const partial = candidate.packageDir === undefined ? undefined : partialRoundVouch(registry, candidate.reviewId, candidate.hashes);
+    if (partial === undefined) return { ok: false, why: candidate.completed?.why ?? "no completion evidence" };
+    // Desktop's own record of exactly these files, whatever commit carries them (the same rule as any registry entry).
+    return { ok: true, why: `trusted: local registry (a partial round Desktop ran, recorded at ${partial.completedAt}; the files match what keryx recorded), though it is not completed` };
+  }
   if (candidate.packageDir === undefined) return { ok: false, why: "no package directory to check" };
   // The machine-local registry of rounds keryx finished: a package whose files hash to an entry is one keryx finished
   // here, whichever commit carries it (a flow package keryx committed on the PR branch, a round fetched from a branch).
+  // A partial-round record vouches for a partial round only (above), never for the same files claiming completion:
+  // registryVouches itself never counts a desk-partial entry.
   const vouched = registryVouches(registry, candidate.reviewId, candidate.hashes);
   const byRegistry = (detail: string): CandidateTrust => ({ ok: true, why: `trusted: local registry (${vouched!.event} at ${vouched!.completedAt}; the files match what keryx recorded), though ${detail}` });
   // A package read from another branch's history is anybody's commit — a checked-out foreign pull request among them.
@@ -406,12 +417,16 @@ function weakFacts(research: unknown, round: unknown): Pick<RoundCandidate, "wea
 
 const strip = ({ eligible: _eligible, manifest: _manifest, ...candidate }: RoundCandidate & { eligible: boolean; manifest: Record<string, unknown> }): RoundCandidate => candidate;
 
-/** Source 1: packages in this checkout for this target, past their draft (M1), with a head. */
-export function localPackageCandidates(cwd: string, target: PriorRoundTarget, targetKey = targetKeyOf(target)): RoundCandidate[] {
+/**
+ * Source 1: packages in this checkout for this target, past their draft (M1), with a head. A draft counts only with
+ * Desktop's `desk-partial` record of exactly its files in `registry` (flow 520 AC7).
+ */
+export function localPackageCandidates(cwd: string, target: PriorRoundTarget, targetKey = targetKeyOf(target), registry: readonly RoundRegistryEntry[] = []): RoundCandidate[] {
   const found: RoundCandidate[] = [];
   for (const dir of packageDirs(cwd)) {
     const candidate = diskCandidate(dir, cwd, "local-package");
-    if (candidate === undefined || candidate.reviewedHead === null || !candidate.eligible) continue;
+    if (candidate === undefined || candidate.reviewedHead === null) continue;
+    if (!candidate.eligible && partialRoundVouch(registry, candidate.reviewId, candidate.hashes) === undefined) continue;
     const match = targetMatchOf(candidate.manifest, target, targetKey);
     if (match === undefined) continue;
     found.push({ ...strip(candidate), match });
@@ -801,6 +816,8 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
   const base = head === null ? null : await resolveBase(git, target, head);
   const targetKey = targetKeyOf(target, base?.ref);
   const limit = deps.historyLimit ?? 200;
+  const registryRead: { entries: readonly RoundRegistryEntry[]; warning?: string | undefined } = deps.registry === undefined ? readRoundRegistryReport(repoIdentity(deps.cwd)) : { entries: deps.registry };
+  const registry = registryRead.entries;
 
   if (deps.forced !== undefined) {
     const found = resolveForced(deps.forced, deps.cwd) ?? (await gitHistoryCandidates(git, undefined, limit, deps.forced, { baseRef: base?.ref }))[0];
@@ -823,7 +840,7 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}${note}` });
       return found;
     };
-    const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey)), "no package for this target in this checkout");
+    const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey, registry)), "no package for this target in this checkout");
     const known = new Set(local.map((candidate) => candidate.reviewId));
     const historyFound = exclude(await gitHistoryCandidates(git, target, limit, undefined, { baseRef: base?.ref, targetKey })).filter((candidate) => !known.has(candidate.reviewId));
     const history = await record("git-history", historyFound, `no committed package for this target in the last ${limit} package commits of the local branches${base === null ? "" : ` and ${base.ref}`} (${HISTORY_DAYS} days)`);
@@ -861,8 +878,6 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
 
   // Trust: a package is cut from only when the pipeline finished it and this branch did not write it — or, when the
   // branch did commit it, the machine-local registry holds keryx's own record of exactly these files.
-  const registryRead: { entries: readonly RoundRegistryEntry[]; warning?: string | undefined } = deps.registry === undefined ? readRoundRegistryReport(repoIdentity(deps.cwd)) : { entries: deps.registry };
-  const registry = registryRead.entries;
   if (registryRead.warning !== undefined) {
     const local = tried.find((attempt) => attempt.source === "local-package");
     if (local !== undefined) local.detail = `${local.detail}; ${registryRead.warning}`;

@@ -1,0 +1,449 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The codebase now has two implementations of 'which earlier attempt does a new run build on', and the) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (on_head_move is a Review-level parameter (specification.md:84, Review.onHeadMove at :211). Its defau) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (Automatic publication with a moved head now computes publicationDiscussion: three paginated gh api r) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:F-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-002 (selectPriorAttempt is a second, unwired rule for choosing the previous attempt, beside the live one ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-frontend-w1:F-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-001 (In the head-moved (as-is) case the server forces inline off and the dialog disables the Inline comme) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (Between the final subject check and the POST, a push can move the PR head again. The posted as-is bo) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-001 (When onUpdateReview is passed, a fifth nowrap button is added first in .review-publish-footer. A sta) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (headMoved is set for any open PR with the same base and a different valid head, without checking tha) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (The terminal confirmation for a desk-publish submit reads 'Publish a comment review with 0 inline no) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (AC7 (Review again starts an update round of the same Review) is not implemented. The PR declares it ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:fu1",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Confirm GitHub's response to POST /repos/{repo}/pulls/{n}/reviews with a commit_id that was force-pushed out of the PR (expected 422). This decides whether F-001 stands as major or drops to info.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w1:F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-001 (With a moved head, an `automatic` request now reaches `publicationDiscussion`: three `gh api --pagin) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (When the head moved, the terminal confirmation for a submit omits that the review is the as-is Comme) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (This PR extends the gate to a moved head, and no test pins it. No test in desk-publication.test.ts u) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (Deleting the `sha.test(pr.headRefOid)` guard leaves the suite green. No fixture gives an open PR, th) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (The 'Update review to' offer is 'offered only while the head has moved' (prop doc), but no test chec) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (Removing the explicit currentHead digest entry leaves the suite green. The visible body already cont) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (Deleting `attempt.state === \"partial\" ||` leaves update-round.test.ts green. The AC5 'partial' fixtu) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (In the head-moved (as-is) variant the server forces inline off and the dialog disables the Inline co) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-002 (In the head-moved state, all five verdict radios and the Inline comments checkbox are disabled. No h) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-003",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-003 (The notice that the draft will post for an older commit is the most consequential message in this st) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-004",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-004 (The spec (\"Перед публикацией\") calls \"Update review to <sha>\" the primary action. The dialog renders) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-005",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-005 (The server forces `verdictOverride: \"comment\"` for the as-is variant, so the \"<verdict> recommended\") real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-006",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-006 (In the as-is variant, a further push now invalidates the preview through the digest. The user then s) real, and where is it reported?",
+      "status": "unresolved"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "unresolvedRules": [
+      "review-pr-contract"
+    ],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:dc120e99620c",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:dc120e99620c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:3ceda93ff658",
+        "rawEvidence": "raw/review-degradation-w1.txt#sha256:3ceda93ff658",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:939e4739f775",
+        "rawEvidence": "raw/review-frontend-w1.txt#sha256:939e4739f775",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:17ef7b6e5eae",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:17ef7b6e5eae",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:db5d191640aa",
+        "rawEvidence": "raw/review-layout-w1.txt#sha256:db5d191640aa",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:db9a7f721264",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:db9a7f721264",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:860d782fd1f2",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:860d782fd1f2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:38e3281b04ac",
+        "rawEvidence": "raw/review-regression-w1.txt#sha256:38e3281b04ac",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:100a981d5a2d",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:100a981d5a2d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:c0a5c41c9e36",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:c0a5c41c9e36",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:0fa2dbc76a5c",
+        "rawEvidence": "raw/review-ui-ux-w1.txt#sha256:0fa2dbc76a5c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 11,
+    "known": 0,
+    "unknown": 11,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

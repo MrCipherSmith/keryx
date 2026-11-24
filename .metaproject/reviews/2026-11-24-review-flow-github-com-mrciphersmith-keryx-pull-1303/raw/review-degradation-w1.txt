@@ -1,0 +1,73 @@
+STATUS: DONE
+
+review-degradation, wave 1, PR #1303 (base a5d1ab2, head 9e871b1), slice-01 read in full.
+
+Question: after this change, is the code worse than on base in behaviour, defaults, speed or structure? Answer: not in any way a user would notice. One minor performance delta: the automatic-publication refusal path now makes extra GitHub reads. One info debt note on the unwired prior-attempt rule. No blocker or major.
+
+### [F-001] Automatic publication after a head move now reads the PR discussion before refusing
+
+- **Severity**: minor
+- **Class**: performance
+- **Evidence kind**: base-diff
+- **File**: src/review/desk-publication.ts
+- **Problem**: On base, `discussion` was computed only when `current` was true, so automatic publication with a moved head made no discussion reads. On head the guard is `(current || headMoved)`, and `request.kind === "automatic"` is still included. Automatic publication with a moved head therefore runs `publicationDiscussion`, which makes three paginated `gh api --paginate --slurp` reads (reviews, review comments, issue comments). Then `blockedReason` refuses it with "needs a publication decision in Desktop", and the hash is never used.
+- **Why it matters**: The cost is extra GitHub API calls and latency on a path that is always refused. It applies to projects whose overlay is `slots` with `rereadDiscussion`. No result is wrong, lost or blocked.
+- **Fix**: Exclude the automatic kind from the head-moved case, e.g. `(current || (headMoved && request.kind !== "automatic"))`. Or check the automatic + headMoved refusal before computing `discussion`.
+
+### [F-002] The new prior-attempt rule sits beside the live one and treats a missing findingsKnown more strictly than the other readers
+
+- **Severity**: info
+- **Class**: debt
+- **Evidence kind**: consumer-trace
+- **File**: src/review/update-round.ts
+- **Problem**: `selectPriorAttempt` is a second previous-attempt rule. The live one is in `desk-run-service.ts`: completed, complete, same options key. Nothing calls the new rule yet, and the PR says so: it is wired with item 3. It skips any result whose `findingsKnown !== true`. The other readers of the field treat `undefined` as known: `pr-context.ts:184` and `ReviewOutcome.tsx:9` use `findingsKnown !== false`. `desk-run-legacy.ts:134` counts findings when the field is undefined and some count is > 0. So a record without the field, such as an older run, is "known" everywhere else but rejected here.
+- **Why it matters**: Nothing changes today because the rule is not wired. When stage 2 wires it, older completed attempts that lack the field would not be chosen as the previous round, and the rule would differ from the one it replaces.
+- **Fix**: When item 3 wires it, align the rule with the sibling readers (`findingsKnown !== false`, or the legacy normalisation), or state why it should be stricter. At that point, remove or delegate the old selection in `desk-run-service.ts`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Diff-mode degradation pass over PR #1303 against base a5d1ab2. slice-01 was read in full, along with the degradation brief, pr-context and payload. All 9 of 9 graph consumers were traced. The cap of 40 dropped none. The brief says 10 changed files are absent from the graph. For those, publishCompletedDeskReview, requestDeskPublication, the PublicationState type and ReviewPublishDialog were searched, and those users are search-derived: src/commands/review-desk-publish.ts:154, src/review/desk-run-service.ts:441, apps/desktop/src/review/ReviewRuns.tsx:173. Acceptance criteria are the frozen flow-520 AC1-AC9 from the payload. Findings: 1 minor (performance, F-001), 1 info (debt, F-002). Refuted or placed: (a) Save locally storing the forced comment/no-inline settings in the head-moved case is a behaviour change from base, where Save kept the user's verdict and inline choice. The PR's 'Decisions taken' and the T5 journal entry name it with a reason (law 4), so it is not filed. (b) Message change for an automatic refusal: base said 'revision moved', head says 'publication decision in Desktop' or, earlier in the chain, 'Answer each finding'. The only caller, desk-run-service.ts:443, swallows the error with .catch(() => undefined), so no consumer depends on the text. (c) Digest for the current-head case is byte-identical to base, because the spread of an empty array leaves the hash input unchanged, so previews taken before the upgrade stay valid. Verified clean: PublicationState.headMoved is an optional addition. desk-run-types.ts, desk-run-store.ts, report-overlay.ts, desk-review-report.ts and review-desk-publish.ts(.test) import only constants, PublicationSettings or PublicationOutcome, or pass state through as JSON. The Desktop dialog checks only version === 1, and Rust passes Value. A closed PR, a changed base and MERGED all keep base's 'revision moved' refusal, because `open` requires state OPEN and the same base; the new test loop covers CLOSED with the same head, CLOSED with a moved head, and a changed base. The write-time subject check moved from strict run head to expected = currentHead only when headMoved; otherwise `expected` is `run`, so every other caller of verifyDeskSubject (strict, desk-run-service.ts:55) is unchanged. commit_id stays run.headSha, and the round block's reviewedHead stays run.headSha. The preview cache is still keyed on the reviewed revision. A changed head drops cached placements and the discussion (desk-publication.ts previewSubject), and submit never reads the cache. ReviewPublishDialog with the current head: the DOM test 'the current head keeps the dialog's verdict choice and Submit review' asserts no disabled inputs and no new buttons. That test would fail if headMoved leaked. The tests that use the moved-head fixture would fail on a regression. The stale test moves the head twice: once before submit (digest), once inside confirmSubmit (verifyDeskSubject). The forced-settings test submits with inline/changes settings and asserts COMMENT with no comments and no diff read. head-move.ts and update-round.ts have no importers outside their tests, which matches the PR's statement that they are not wired. diff-vs-description: the PR's claim that ReviewBoard.tsx, model.ts, board-badges.ts, desk-run-store.ts and review.css are untouched holds against the scope file list. Not verified: nothing was run (read-only, exec_budget_s 0). The test evidence file reports 189 pass, 1 fail and 1 error. The failure is in src/commands/review-desk-run.test.ts:172, a file this PR does not touch, and the orchestrator is re-checking it. Not traced beyond reading: the Rust review_publish passthrough. Note for another lens, not filed as degradation: the terminal confirmSubmit prompt in review-desk-publish.ts names the verdict and inline count, but not that the review is the as-is variant for an older commit.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "const discussion = overlay?.kind === \"slots\" && overlay.rereadDiscussion && (current || headMoved) &&",
+      "problem": "Automatic publication with a moved head now computes publicationDiscussion: three paginated gh api reads of reviews, review comments and issue comments. Then blockedReason always refuses it ('This review needs a publication decision in Desktop'). On base the guard was `&& current &&`, so this refused path made no discussion reads.",
+      "impact": "Extra GitHub API calls and latency on an auto-publish path that is always refused. Projects with a slots overlay and rereadDiscussion only. No wrong, lost or blocked result.",
+      "suggested_fix": "Gate the head-moved case to non-automatic requests: `(current || (headMoved && request.kind !== \"automatic\"))`, or refuse automatic + headMoved before computing discussion.",
+      "evidence": "base-diff: the diff shows base `overlay.rereadDiscussion && current &&` and head `overlay.rereadDiscussion && (current || headMoved) &&`. The request-kind filter still includes 'automatic'. publication() passes headMoved whenever the PR is open with the same base and a new head. blockedReason then has `request.kind === \"automatic\" && (headMoved || ...)`, and publication() throws on !state.canSubmit before the discussion comparison. Refute: read publication() submit path: discussion is compared only after canSubmit, so for an automatic run with a moved head it is never used. No guard skips it upstream.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "performance",
+      "evidence_kind": "base-diff",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/update-round.ts",
+      "line": null,
+      "quote": "if (!result?.reviewed || result.findingsKnown !== true) continue;",
+      "problem": "selectPriorAttempt is a second, unwired rule for choosing the previous attempt, beside the live one in desk-run-service.ts. It rejects a result whose findingsKnown is undefined. The sibling readers treat undefined as known: pr-context.ts:184 and ReviewOutcome.tsx:9 use `!== false`, and desk-run-legacy.ts:134 counts findings when the field is undefined and some count is > 0.",
+      "impact": "No runtime effect now, because nothing imports it outside its test. Once stage 2 wires it, an older completed attempt without the field would not be chosen as the previous round, unlike how the rest of the code reads the same record.",
+      "suggested_fix": "When item 3 wires it, align with the sibling readers (`findingsKnown !== false`, or the legacy normalisation) or document why it should be stricter. At the same time, retire the old selection in desk-run-service.ts or have it delegate to selectPriorAttempt.",
+      "evidence": "consumer-trace: keryx ctx rg findingsKnown over src/review and apps/desktop/src lists 24 readers. update-round.ts:22 is the only `!== true` gate. The PR body says selectPriorAttempt is not wired until item 3 (law 4: the staging is stated, so this is info, not debt to fix now).",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: yes (degradation brief consumer list and payload layers, graph at head). wiki_used: not-relevant (the requirements and plan were in the payload and the diff). ctx_used: yes (keryx ctx rg and keryx ctx read). raw_rg_used: no.

@@ -1,0 +1,104 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9e871b17f16a934d5568926e210c3c88d1ca7a86`)
+- Scope mode: explicit-hash-range (slice-01 read in full)
+- Stack detected: generic-ts backend (`src/review`) + React Desktop dialog (no MobX in the changed files)
+
+### Summary
+The PR adds two pure modules (`src/review/head-move.ts`, `src/review/update-round.ts`) and one optional field (`PublicationState.headMoved`). It threads a same-base/newer-head classification through `desk-publication.ts`. None of this invents a rounds schema. There is no store, migration, `review_id`/`round` column, or Review/Round type. `DeskRun` is unchanged, so it still matches spec:52 ("DeskRun becomes Attempt without format change"). `headMoved` lives in per-attempt publication state, so it stays a file in the Attempt directory as spec:76 requires. The new modules depend only on `type DeskRun` and `DESK_RUN_SCOPE` from `desk-run-types.ts`, which points inward. They attach to the planned Review/Round/Attempt model without a rewrite:
+- `selectPriorAttempt(attempts)` takes the attempt format that spec:221 keeps as `Round.attempts: DeskRun[]`.
+- `parseOnHeadMove` takes the nullable `reviews.on_head_move` column from spec:74.
+
+There are two attachment points the next stage must handle deliberately. They are below as one minor finding and one info finding.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Layer Violations
+None detected. `head-move.ts` and `update-round.ts` are pure functions with type-only domain imports. `desk-publication.ts` keeps I/O (the `verifyDeskSubject` call and the GitHub reads) where it was. It passes the new `expected` revision into the existing strict helper instead of adding a looser second helper.
+
+### Dependency Direction
+None detected. The Desktop dialog imports `PublicationState` from the shared `src/review/desk-publication-types.ts`, the same path it used before this PR (ReviewPublishDialog.tsx:3). There is no mirrored type that could drift.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+[F-001] minor: two "previous attempt" rules now coexist and disagree (see the REVIEW_RESULT block).
+
+### Dependency Inversion
+None detected. No I/O boundary is added.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A: no NestJS or MobX in the changed files. The dialog gains an optional callback prop (`onUpdateReview`) and derives `headMoved` from the server draft. No logic moved into the component.
+
+### Verified clean (sites)
+- No rounds schema: the diff touches no `desk-run-store.ts`, no `runs.sqlite` migration, and no `Review`/`Round` type. Checked against the full slice-01 file list and the payload `scope.files`.
+- The new exports have no production callers: `keryx ctx rg --all "selectPriorAttempt|headMoveResponse|parseOnHeadMove|defaultOnHeadMove|onUpdateReview|\.headMoved|headMoved\?" src apps/desktop/src apps/desktop/dev`. Only tests, `head-move.ts`, `update-round.ts` and `ReviewPublishDialog.tsx` (which declares and renders `onUpdateReview` with no caller) matched. This matches the PR body's "no caller until item 3".
+- The subject check stays a single implementation. `verifyDeskSubject` is reused with `expected` at desk-publication.ts (both the default and the named-auth call sites). No second, looser verifier was added.
+- `source: "session"` (spec:129, a future value) falls to `ask` in `defaultOnHeadMove`, which agrees with spec:130 ("same actions as manual"). It is also admitted by `selectPriorAttempt`, which rejects only `existing`.
+
+### Suggested Patches
+None. F-001 is resolved by wiring in T8, not by a patch here.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Stage-3 modules attach to the spec's Review/Round/Attempt model without a rewrite and invent no rounds schema: head-move.ts and update-round.ts are pure, depend only on DeskRun types, and take the shapes stage 2 will supply (Round.attempts: DeskRun[], a nullable reviews.on_head_move). PublicationState.headMoved is per-attempt publication state. One minor: a second, disagreeing previous-attempt rule now exists next to desk-run-service.ts:369-377 (round obligation 7), deferred to T8. One info: on_head_move's default is keyed on an Attempt's source, which the spec's reviews table does not store.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/update-round.ts",
+      "line": null,
+      "quote": "export function selectPriorAttempt(attempts: readonly DeskRun[], scope: string = DESK_RUN_SCOPE): PriorAttempt | undefined {",
+      "problem": "The codebase now has two implementations of 'which earlier attempt does a new run build on', and they disagree. The live one at src/review/desk-run-service.ts:369-377 requires state completed, coverage complete and the same effectiveOptionsKey, and does not check findingsKnown or a delete/archive decision. The new selectPriorAttempt accepts partial attempts, ignores the options key, requires findingsKnown and skips delete/archive. Spec item 1 (specification.md:108) also names two more copies of the rule that must change together: round-record.ts:207 (a partial package is not a previous round) and the completion-evidence requirement in prior-round.ts. Round obligation 7 ('one rule, one implementation') applies while both copies exist, even though the new one is unwired by design.",
+      "impact": "Nothing is wrong at runtime today, because selectPriorAttempt has no production caller. The risk is in item 3 (T8): it must replace the predicate at desk-run-service.ts:369-377, not add a second lookup beside it. It must also change the prior-round.ts and round-record.ts trust rules in the same change. Otherwise the run start and the package path will pick different previous rounds for the same PR, which is the O10 problem this stage exists to remove.",
+      "suggested_fix": "Record the replacement site in T8's task text or the flow plan section D: 'replace desk-run-service.ts:369-377 with selectPriorAttempt(store.history(key).runs) and relax prior-round.ts packageTrust and round-record.ts:207 in the same change'. Optionally add a one-line comment above desk-run-service.ts:369 that points to update-round.ts as its successor. Then the duplication is tracked and ends in one change. Do not wire it partially in this PR, because plan section C explains why that would half-implement item 3.",
+      "evidence": "slice-01: src/review/update-round.ts lines 15-26 (state completed|partial, findingsKnown, decision filter, no options key). Read src/review/desk-run-service.ts:369-377 at head (source!=existing, scope, effectiveOptionsKey equality, state completed, coverage complete). specification.md:108 lists the three existing rules to change. plan.md section C states the wiring is deferred.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/review/update-round.ts:15",
+          "src/review/desk-run-service.ts:369",
+          "src/review/prior-round.ts (packageTrust)",
+          "src/review/round-record.ts:207"
+        ],
+        "enumeration_method": "keryx ctx rg for 'effectiveOptionsKey|state === \"completed\"' in desk-run-service.ts, plus the three existing rules spec specification.md:108 enumerates by file; prior-round.ts/round-record.ts sites taken from the spec and flow context.md, not re-read line by line"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/head-move.ts",
+      "line": null,
+      "quote": "export function parseOnHeadMove(value: unknown, source: DeskRun[\"source\"]): OnHeadMove {",
+      "problem": "on_head_move is a Review-level parameter (specification.md:84, Review.onHeadMove at :211). Its default is derived from an Attempt-level field, DeskRun['source']. The planned reviews table (specification.md:74: id, repo, pr, viewer, closed_at, on_head_move) stores no source. The migration (:75) groups every run of (repo, pr, viewer) into one Review, which can mix manual and scheduled attempts. So 'a missing or NULL column reads as the default' needs a source the Review row does not have. The caller has to pick one (first attempt? latest?), and that choice is not stated anywhere.",
+      "impact": "Different stage-2 callers could resolve the same NULL column to different modes, ask or follow, depending on which attempt's source each passes. That would be a silent behaviour split between the board and the executor.",
+      "suggested_fix": "In stage 2, write the resolved default when the Review row is created (from the creating attempt's source) so the column is non-null for new Reviews. Use parseOnHeadMove only for migrated rows, with a fixed documented rule such as the Review's first attempt's source. Alternatively, add that rule to the parseOnHeadMove doc comment now.",
+      "evidence": "slice-01 src/review/head-move.ts lines 8-15; specification.md:74, :75, :84, :211.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes for the orchestrator:
+- I did not read the test output `research-evidence/verify-tests-to-run-1.txt`. This lens runs no tests, and no finding here depends on test results.
+- For F-001's class_scope, I took the prior-round.ts and round-record.ts sites from the spec and the flow context. I did not re-read them line by line at head.
+- I did not check stage 2's branch (`feat/desktop-review-v2-stage2`). The attachment verdict is judged against the spec text only.

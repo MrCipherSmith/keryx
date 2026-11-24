@@ -1,0 +1,41 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test --timeout 30000 src/review/desk-publication.test.ts src/review/desk-run-executor.test.ts src/review/desk-run-service.test.ts src/review/review-rules.test.ts src/review/l6-hardening.test.ts src/review/prior-round.test.ts src/review/second-look.test.ts src/review/update-round.test.ts src/review/head-move.test.ts src/review/round-registry.test.ts src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts && cd apps/desktop && bun test src/review src/reviews
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b
+time: 2026-11-24T09:00:39.114Z
+exit: 1
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+src/review/prior-round.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+Switched to branch 'pr'
+Switched to branch 'base'
+Preparing worktree (detached HEAD 574a94d)
+
+src/commands/review-desk-run.test.ts:
+106 |     const [stdout, stderr, exit] = await Promise.all([
+107 |       new Response(proc.stdout).text(),
+108 |       new Response(proc.stderr).text(),
+109 |       proc.exited,
+110 |     ]);
+111 |     if (exit !== 0) throw new Error(stderr);
+                                    ^
+error: stale: This review question is no longer waiting for an answer.
+
+      at call (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/src/commands/review-desk-run.test.ts:111:31)
+      at async <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/src/commands/review-desk-run.test.ts:147:30)
+(fail) two linked worktrees attach to one worker and can cancel while its revision is being verified [31334.45ms]
+
+ 184 pass
+ 1 fail
+ 829 expect() calls
+Ran 185 tests across 11 files. [564.48s]

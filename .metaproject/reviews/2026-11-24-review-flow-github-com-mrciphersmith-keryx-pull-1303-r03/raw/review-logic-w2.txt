@@ -1,0 +1,138 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (PR #1304)
+- Merge-base: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` .. head `822192905b3d26eb976d83e5bbd46cee14ca9a6f`
+- Scope mode: explicit-hash-range, slice-02 read in full (Desktop DOM test, docs, backend sources desk-publication(-types), desk-run-executor, desk-run-service, head-move, prior-round, round-registry, update-round).
+- Unchanged context read: `desk-run-store.ts` `assignReviews`/`roundFor` (round placement, history order `created DESC`), `lib/file-lock.ts` `withFileLock` (15 s wait, stale recovery, `null` on timeout), `desk-run-executor.ts:395` (coverage `complete` requires a closed manifest), the executor tests at desk-run-executor.test.ts:790-877, `recordFinishedRound` callers.
+- Spec compliance gate: ran against AC1–AC10 (payload) for the backend parts; AC8 now diffs against 20e4281a2 (journal ac-updated 10:03:38Z), so wave-1 F-001 is not re-checked here.
+
+### Summary
+Round-2 logic-w2 F-001 is closed. `priorAttemptCandidates` returns every usable earlier-round attempt (completed before partial inside a round), the worker passes all of them as `previousRuns`, and the executor walks them and copies only the first that is a closed package or a partial whose `recordPartialRound` succeeds; a raw-results-only partial round 2 now falls back to the closed round 1 (pinned by "T14 B1: a partial newest round without an ingested findings list falls back to the closed round before it"). The answer carry-over (`saved?.answers ?? earlierAnswers(earlier)`, same Review, earlier rounds, not withdrawn) and the registry lock are sound in this lens. One minor in the superseded-round refusal: `newerRoundOf` counts a deleted/archived newer round, which the sibling rule in the same module treats as withdrawn.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 2
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+### [F-001] A deleted or archived newer round still supersedes the earlier round and points the user at it
+- **Severity**: minor
+- **File**: src/review/update-round.ts:905-913 (`newerRoundOf`), used at src/review/desk-publication.ts (`newerRound` → `headMoved` and `blockedReason`)
+- **Problem**: `newerRoundOf` returns the highest round of the same Review after `current` from every attempt, including ones with a `delete`/`archive` decision. In the same module `earlierRoundAttempts` and `priorAttemptCandidates` drop exactly those attempts as `withdrawn` ("its evidence is discarded"). The decided B6 rule says "any newer round incl. a failed/running one" / "in any state"; a withdrawn attempt is not a run state but an operator decision, and the round rows stay in the store (`roundFor` counts them via `max(round)`).
+- **Why it matters**: Trigger: round 1 at head A is done; the user starts round 2 on head B and then deletes (or archives) the round 2 attempt. Outcome: round 1 never gets the as-is variant or the Update action (`headMoved` requires `newerRound === undefined`), and its preview says "Round 2 of this review is newer. Publish from that round." — a round the user withdrew and cannot publish. The draft still saves locally and a new Update can be started from the PR, so nothing is lost, but the message directs to a dead end.
+- **Fix**: skip withdrawn attempts in `newerRoundOf` (reuse the module's `withdrawn` predicate), or, if withdrawn newer rounds are meant to keep superseding, word the reason so it does not send the user to a withdrawn round, and record that in the B6 decision. Add one `newerRoundOf` case with a `decision: { action: "delete" }` round.
+
+### Async & Concurrency
+None detected.
+- `appendRoundRegistry`: append + re-read + compacted rename all run inside one `withFileLock(`${file}.lock`)`; a timeout (`null`) throws, `recordPartialRound`/`recordFinishedRound` catch it and return `error`, and the executor then tries the next candidate. No nested lock (no caller of `appendRoundRegistry` holds it), so no self-deadlock.
+- The executor records the `desk-partial` entry before the copy and before the child starts, so `findPreviousRound` in the child reads it; the hashes are taken from the run-store package that is copied byte-for-byte.
+
+### Error Handling
+None detected. A partial candidate whose record fails (no findings list, not a git checkout, lock timeout) is skipped, never copied; `cp` failure after a successful record fails the run loudly rather than silently degrading.
+
+### Null / Undefined Safety
+None detected. `usable` short-circuits on a missing manifest before `manifest.status`; `earlierAnswers` tolerates an unreadable draft.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+### [F-002] Superseded reason takes precedence over a closed PR or changed base
+- **Severity**: info
+- **File**: src/review/desk-publication.ts (`blockedReason` chain)
+- **Problem**: `!current && newerRound !== undefined` is checked before the closed/moved reason, so a superseded attempt on a closed PR (or after a base change) says "Publish from that round", which cannot publish either.
+- **Why it matters**: wrong hint only; `canSubmit` is false either way.
+- **Fix**: optional — test `open` first, e.g. `!current && open && newerRound !== undefined`.
+
+### [F-003] Candidate order is "round of the newest attempt first", not "newest round first"
+- **Severity**: info
+- **File**: src/review/update-round.ts:852-866 (`priorAttemptCandidates`)
+- **Problem**: rounds are ordered by Map insertion over `history` (created DESC). `roundFor` places a new attempt on a known range into that older round, so a later retry of round 1 (only possible when the PR head returns to round 1's range, since `verifyDeskSubject` is strict) puts round 1 before round 2. The doc comment says "the newest round first".
+- **Why it matters**: no harm shown — in that trigger (head force-pushed back to A) round 1's head is the one still an ancestor, so building on it is the better choice; recorded so the comment and behaviour agree.
+- **Fix**: none required; reword the comment, or sort rounds by `round` explicitly if the documented order is intended.
+
+### Verified as holding (round 2 logic-w2 F-001 and T14)
+- B1: `previousRunInputs` → `previousRoundAttempts` → `priorAttemptCandidates(earlierRoundAttempts(...))`; the worker passes the whole list; executor loop: `usable` (ref, reviewId shape, regular package) && (`closed` || partial && `recordPartialRound(...).file !== undefined`), `continue` otherwise, `break` after the first copy. A completed+complete attempt always has a closed manifest (executor :395), so `partial: false` with a draft cannot hide a usable round; a completed attempt with non-complete coverage is classed partial. Only one package is copied, as `choosePrevious` expects. Tests: fallback (raw-only round 2 → closed round 1, registry empty) and first-only copy.
+- The copied package is untracked in the checkout, so `packageTrust` trusts a closed one by completion evidence and a draft only by its `desk-partial` vouch; `registryVouches` excludes `desk-partial` (B4).
+- B2 answers: `earlierRoundAttempts` (same Review, `round < current.round`, not existing/withdrawn) newest first, first draft found wins; the first Desktop preview sends no settings (ReviewPublishDialog :123), so carry-over applies, and the attempt's own draft or request settings always win. Retry in the same round takes nothing from its own round (test at desk-publication.test.ts:501).
+- B5: only a definitive status is cached, keyed by current head; a failed read is not cached (test reads twice).
+- B6: superseded attempts get no `headMoved` and no compare read (test asserts no compare read).
+
+### Suggested Patches
+```diff
+ export function newerRoundOf(runs: readonly DeskRun[], current: DeskRun): number | undefined {
+   if (current.reviewId === undefined || current.round === undefined) return undefined;
+   let newest: number | undefined;
+   for (const item of runs) {
+-    if (item.id === current.id || item.reviewId !== current.reviewId || item.round === undefined || item.round <= current.round) continue;
++    if (item.id === current.id || withdrawn(item) || item.reviewId !== current.reviewId || item.round === undefined || item.round <= current.round) continue;
+```
+
+### Not verified
+- No tests run (read-only reviewer); relied on the brief's evidence (backend 201 pass, Desktop 151 pass).
+- `runDeskWorker` end to end is not exercised (source check only, as the journal says); the executor-level tests cover the loop.
+- Whether Desktop hides deleted attempts in the round list (which would make F-001's message more confusing) was not checked.
+
+### Routing audit
+graph_used: no (not-relevant: callers enumerated with ctx rg; the slice and store source settled it) | wiki_used: no (not-relevant: AC7/B6 decisions read from the journal and PR context) | ctx_used: yes (`keryx ctx rg`) | raw_rg_used: no (raw `grep`/`sed` only over the supplied slice/raw logs with keryx:raw markers)
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round-2 logic-w2 F-001 is closed: priorAttemptCandidates orders every usable earlier-round attempt, the worker passes all of them, and the executor copies the first closed package or partial with a successful desk-partial record, falling back otherwise (tested). Answer carry-over, B5 compare cache and the registry lock hold in this lens. One minor: newerRoundOf counts deleted/archived newer rounds, so a withdrawn round 2 permanently supersedes round 1 and the preview sends the user to it.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/update-round.ts",
+      "line": 909,
+      "quote": "if (item.id === current.id || item.reviewId !== current.reviewId || item.round === undefined || item.round <= current.round) continue;",
+      "problem": "newerRoundOf counts attempts with a delete/archive decision, which earlierRoundAttempts and priorAttemptCandidates in the same module treat as withdrawn.",
+      "impact": "Round 1 done, round 2 started then deleted or archived: round 1 is refused as is and offered no Update, with 'Round 2 of this review is newer. Publish from that round.' pointing at a withdrawn round. Draft still saves; a new round can still be started.",
+      "suggested_fix": "Skip withdrawn(item) in newerRoundOf, or keep the behaviour and word the reason so it does not direct to a withdrawn round; add a newerRoundOf test with a deleted newer round.",
+      "evidence": "update-round.ts withdrawn = decision.action delete|archive, applied in earlierRoundAttempts and priorAttemptCandidates but not newerRoundOf; desk-run-store.ts roundFor keeps withdrawn rows and counts them in max(round); desk-publication.ts headMoved requires newerRound === undefined. B6 decision covers failed/running, not withdrawn.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": ": !current && newerRound !== undefined",
+      "problem": "The superseded reason is checked before the closed/moved-base reason.",
+      "impact": "A superseded attempt on a closed PR says 'Publish from that round', which cannot publish either; canSubmit is false regardless.",
+      "suggested_fix": "Optionally require open for the superseded reason.",
+      "evidence": "blockedReason chain order in prepare().",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/update-round.ts",
+      "line": 852,
+      "quote": "return [...rounds.values()].flatMap((round) => [...round.filter((item) => !item.partial), ...round.filter((item) => item.partial)]);",
+      "problem": "Rounds are ordered by their newest attempt (history created DESC), not by round number, while the doc says 'the newest round first'. roundFor places a later attempt on a known range into the older round.",
+      "impact": "No harm shown: the only trigger (PR head returned to round 1's range) makes round 1 the ancestor-consistent base. Comment and behaviour disagree.",
+      "suggested_fix": "Reword the comment, or sort by round if the documented order is intended.",
+      "evidence": "desk-run-store.ts roundFor: 'a known range is a retry in its round'; history ORDER BY created DESC.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```

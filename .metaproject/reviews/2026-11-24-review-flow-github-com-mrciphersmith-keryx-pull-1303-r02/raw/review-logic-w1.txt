@@ -1,0 +1,140 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip
+- Merge-base: `98bec59046d0ce30500b341e8c18ba5b767069bb`
+- Head: `412258583206e539ce61727b9c4d71bb12fda3a0`
+- Scope mode: explicit-hash-range. Supplied slice-01 read in full (flow 520 files, ReviewPublishDialog.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, ReviewPanel.dom.test.tsx, docs/docs/desktop-app.md). Backend files (slice-02) were read only as context for the Desktop paths. They are not reviewed here.
+- Spec compliance gate: ran against AC1–AC10 of flow 520 (payload) and the PR body, for the parts slice-01 implements (AC3, AC10 Desktop side, docs).
+
+### Summary
+The Desktop side of T13 is correct on every path I traced.
+- **Dialog.** The head-moved dialog locks the verdict and inline controls. The server already forces `verdictOverride: "comment"`, so the locked radio shows Comment only. When a caller provides it, "Update review to <sha>" is the primary action and "Publish as is" is the secondary one. Update is hidden once the review is published.
+- **Update review.** `ReviewRuns` builds the revision as `{ run.baseSha, currentHead }`. This is consistent with the backend's `expected` revision. `ReviewWorkspace.updateReview` starts on that range with the reviewed attempt's options. It refreshes the board when the board has not seen the push.
+- **Errors.** `useReviewRuns.request` catches every error, so the `void ... .then()` cannot leak a rejection. A head that moved again surfaces as `stale:`, which means the update fails closed.
+- **Duplicates.** The backend `requestAttempt` reuses an active, queued, or complete attempt on the same range and options. This bounds the duplicate-start risk.
+- **Round 1 F-001 (logic major) is closed.** `reviewedHeadInPull` (desk-publication.ts:99-112) offers the as-is variant only when GitHub's compare API returns `ahead`. Any other status, or a failed read, keeps the refusal. The docs now say a rewritten history keeps only Save locally.
+
+Remaining issues: two minors and one info.
+- **AC3:** its frozen verify command still points at the test file that stage 2 renamed.
+- **Update guard:** the guard in `updateReview` is narrower than its comment.
+- **Dropped start:** the Update click can be silently dropped while another mutation is in flight.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 1
+
+### Spec Gaps (blocker)
+None detected. AC3 and the Desktop half of AC10 are implemented and have tests in `apps/desktop/src/reviews/ReviewPanel.dom.test.tsx`. AC3's verify command is stale (F-001, pr-process minor), but the criterion itself is implemented.
+
+### Logic Bugs
+[F-002] (minor, confidence medium) The "already has an attempt" guard in `updateReview` covers only an active attempt or a complete one.
+- File: apps/desktop/src/review/ReviewWorkspace.tsx (`updateReview`)
+- Problem: the comment says "The board's current range already has an attempt: the panel shows it, and a second one is not started". The guard is `if (!boardBehind && action.open) return;`.
+  - `launchAction` sets `open` only for an active attempt, or for a completed attempt with `coverage === "complete"` on the card's range.
+  - If the current head's attempt is `partial`, `failed`, `cancelled` or `budget`, Update starts another attempt. For a `partial` attempt, the backend `requestAttempt` does not reuse it: it reuses only an active or queued attempt, or a completed and complete one. So a new attempt really is started.
+  - When `boardBehind` is true, the guard is skipped entirely. If the current head already has an attempt with other options, for example one started by a rule, a second attempt is started.
+- Trigger: the current head `c` has a partial attempt. The user opens the earlier attempt `b` from History, opens Publish to GitHub (head moved), and clicks "Update review to c". A new attempt on `c` starts and spends tokens. The code comment and the test name ("does not start a second attempt when the current head already has one") say this does not happen.
+- Fix: use one of two approaches.
+  - Base the guard on the runs, not the card: `if (local.runs.some(r => r.source !== "existing" && !reviewIsArchived(r) && sameRange(r, revision))) return;`. Optionally select that attempt with `setSessionId`.
+  - Alternatively, narrow the comment and the test name to "an active or complete attempt", so the retry behaviour is a stated decision.
+
+### Async & Concurrency
+[F-003] (info) Update review can be dropped silently, and the board refresh runs anyway.
+- File: apps/desktop/src/review/ReviewWorkspace.tsx (`updateReview`) with apps/desktop/src/review/useReviewRuns.ts:32
+- Problem: `request` returns early without error when another mutation is pending (`pending.current !== "status"`). The dialog's Update button is disabled only by the dialog's own `writing` state, not by `local.working`. When an answer or cancel request is in flight, clicking Update closes the dialog and starts nothing, with no message. The `.then(() => onRefreshBoard?.())` also runs after a dropped or failed start.
+- Fix: pass `local.working` into the dialog so it disables Update while a mutation is pending. Alternatively, have `updateReview` refuse with a toast when `local.working` is true.
+
+### Error Handling
+None detected. `local.request` turns failures into `actionError`. A `stale:` start sets `staleRange`, and the panel shows "The PR revision changed. Refresh the board".
+
+### Null / Undefined Safety
+None detected. Every read of `headMoved` / `onUpdateReview` is guarded (`updateOffered && headMoved && onUpdateReview`). `reviewed.options` is spread only when present.
+
+### Type Contract Violations
+None detected. `{ baseSha: run.baseSha, headSha: currentHead }` satisfies `DeskRevision`. The `start` action's options are re-parsed server-side by `parseDeskReviewOptions`.
+
+### Edge Cases / Process
+[F-001] (minor, pr-process, confidence high) AC3's frozen verify command names a file that no longer exists.
+- File: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md (AC3)
+- Problem: AC3 verifies with `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`.
+  - Stage 2 renamed that file to `src/reviews/ReviewPanel.dom.test.tsx`. The journal entry "Rebase onto stage 2" says so, and `apps/desktop/src/review/ReviewRuns.dom.test.tsx` is absent at head.
+  - The head-moved dialog tests now live in the renamed file.
+  - The rebase updated AC7, AC8 and AC10 with `keryx flow ac update` but not AC3.
+- Impact: `keryx flow ac confirm 520 AC3` runs a test filter that matches no file. Bun refuses a path filter with no matches, so AC3 cannot be confirmed and the flow-completion gate stays red, even though the behaviour is implemented and tested.
+- Fix: `keryx flow ac update 520 AC3`, with the verify command `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`.
+
+### Verified clean (sites)
+- ReviewPublishDialog: `updateOffered = !!headMoved && !!onUpdateReview && !posted`. The test "Update review is offered only while the head has moved and the review is unpublished" covers the current-head state and the published state.
+- ReviewRuns: Update is passed only when `publication.onUpdateReview` exists. SessionReviewActivity.tsx:244 passes no `onUpdateReview`, so there "Publish as is" stays the primary action. The comment "the current range keeps this attempt's base" is consistent with desk-publication.ts:382-391, where `open` requires `pr.baseRefOid === run.baseSha`.
+- ReviewWorkspace: the render sites `<ReviewRuns publication>` (l.181) and `<ReviewRunDialog publication>` (l.192) both get `onUpdateReview`. Enumerated with `keryx ctx rg "publication=|<RunAttempt|<ReviewRuns |<ReviewWorkspace" apps/desktop/src`.
+  - Remount after a board refresh: ReviewPanel keys ReviewWorkspace by `card.baseSha/headSha` (ReviewPanel.tsx:117). After `onRefreshBoard`, the workspace remounts on the new range. The unmount cleanup bumps `generation`, so late responses are dropped.
+- Answer carry-over (Desktop-visible side): `prepare` seeds the answers only when the new attempt has no saved settings: `saved?.answers ?? earlierAnswers(...)`. The chain walks `previousRunId` up to 8 hops with the same-Review guard. The dialog then echoes the server's `settings.answers` in every later preview request, so the seeded answers persist into Save and Submit.
+- Docs: they match the fixed behaviour (as-is only for commits pushed on top; rewritten history, closed PR or changed base keep Save locally). The docs do not mention "Update review". That is a docs-completeness note for the docs reviewers, not a logic defect.
+
+### Suggested Patches
+F-002 (sketch, not applied):
+```diff
+-    if (!boardBehind && action.open) return;
++    if (local.runs.some(r => r.source !== "existing" && !reviewIsArchived(r) && sameRange(r, revision))) return;
+```
+
+Not verified: this reviewer ran no tests (allowed_tools read-only, exec_budget_s 0). I relied on the brief's test evidence (Desktop `src/review src/reviews`: 142 pass). I did not run bun's handling of a non-matching path filter for F-001. It is stated from bun's documented behaviour ("had no matches", non-zero exit). I did not review the backend files of slice-02 (desk-run-service, executor, round-registry, prior-round, update-round, desk-publication beyond the head-moved classification and the answers seeding).
+
+Routing audit: graph_used: no (the payload's layers block carried the affected set; render sites enumerated with ctx rg). wiki_used: not-relevant (the flow docs and spec in the payload settled intent). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "The Desktop side of T13 is correct on the traced paths. The head-moved dialog locks the verdict and inline controls, offers Update as the primary action only while the head moved and the review is unpublished, and Update starts on {run.baseSha, currentHead} with the reviewed attempt's options and refreshes a board that is behind. Failures surface through useReviewRuns, and the backend dedupes repeat starts on the same range and options. Round 1 logic F-001 is closed: the as-is variant now requires the compare status 'ahead' and fails closed on any other status or a failed read. Open: AC3's verify command names the renamed test file (pr-process minor); updateReview's 'already has an attempt' guard covers only active or complete attempts (minor); a pending mutation silently drops the Update click (info).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "location_class": "pr-process",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+      "line": null,
+      "quote": "- AC3: The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]",
+      "problem": "AC3's frozen verify command runs apps/desktop/src/review/ReviewRuns.dom.test.tsx. Stage 2 renamed that file to src/reviews/ReviewPanel.dom.test.tsx, and it is absent at head. The rebase updated AC7, AC8 and AC10 but not AC3.",
+      "impact": "keryx flow ac confirm for AC3 runs a bun test path filter that matches no file. Bun refuses such a filter, so AC3 cannot be confirmed and the flow-completion gate stays red, although the behaviour is implemented and tested in the renamed file.",
+      "suggested_fix": "keryx flow ac update 520 AC3 with the verify command sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'.",
+      "evidence": "ls apps/desktop/src/review/ReviewRuns.dom.test.tsx -> No such file or directory. The journal entry 'Rebase onto stage 2' records the rename. The head-moved dialog tests are in apps/desktop/src/reviews/ReviewPanel.dom.test.tsx ('a moved head locks the dialog to the as-is Comment for the reviewed commit').",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "if (!boardBehind && action.open) return;",
+      "problem": "The comment promises that no second attempt starts when the current range already has one. The guard uses launchAction's `open`, which is true only for an active attempt or a completed attempt with complete coverage. The guard is skipped entirely when the board is behind. With a partial, failed, cancelled or budget attempt on the current head, Update starts another attempt. The backend requestAttempt reuses only an active or queued attempt, or a completed and complete one. A behind board with a current-head attempt under other options also gets a second attempt.",
+      "impact": "Trigger: the current head c has a partial attempt, and the user clicks 'Update review to c' in the publish dialog of the earlier attempt b, opened from History. A new attempt on c starts and spends tokens, contrary to the code comment and the test name.",
+      "suggested_fix": "Guard on the runs instead of the card: if local.runs has a non-existing, non-archived run with sameRange(run, revision), return (optionally setSessionId to it). Alternatively, narrow the comment and the test name to 'an active or complete attempt' so the retry is a stated decision.",
+      "evidence": "ReviewRuns.tsx launchAction: open only when runActive(same), or when same.state === 'completed' and coverage === 'complete'. desk-run-store.ts requestAttempt:690-701 reuses only active or queued attempts with matching options, or previous.state === 'completed' && previous.complete.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": ".then(() => { if (boardBehind) onRefreshBoard?.(); });",
+      "problem": "useReviewRuns.request returns early without error while another mutation is pending. The dialog's Update button is not disabled by local.working, so a click during an in-flight answer or cancel closes the dialog and starts nothing, with no message. The board refresh runs even after a dropped or failed start.",
+      "impact": "In a rare interleaving the user's Update review action is lost silently.",
+      "suggested_fix": "Disable Update while local.working (pass it to the dialog), or have updateReview show a toast and keep the dialog open when local.working is true.",
+      "evidence": "useReviewRuns.ts:32: `if (pending.current && (action.kind === \"status\" || pending.current !== \"status\")) return;`. ReviewPublishDialog: the Update button is `disabled={writing}` only.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": [ { "id": "slice-01", "coverage": "read in full", "status": "DONE" } ],
+  "inputs_unreadable": []
+}
+```

@@ -1,0 +1,48 @@
+STATUS: DONE
+
+review-degradation, wave 1, round 3 (verification), PR #1303, range 20e4281a2 (stage 2 tip) .. 822192905. slice-01 read in full: flow 520 records (acceptance-criteria, context, description, journal, plan, tasks, flow.json task list; resolved/T*.implement.json skimmed as dispatch records, not code) and the Desktop files ReviewPublishDialog.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, SessionReviewActivity.tsx, useReviewRuns.ts.
+
+Question: after this change, is the Desktop and flow-record part of the code worse than on base 20e4281a2? Answer: no blocker, no major, no minor. The round-2 Desktop fixes (T15) and the round-2 degradation F-001 (superseded round publishable as is) hold. One info: tasks.md does not define T12-T15 and still describes T8 as blocked.
+
+### [I-001] tasks.md stops at T11 and still calls T8 blocked, while flow.json holds T12-T15 as done
+
+- **Severity**: info
+- **Class**: debt
+- **Evidence kind**: base-diff
+- **File**: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md:16
+- **Problem**: tasks.md says "Task definitions live here", but its table ends at T11. flow.json and the journal hold T12, T13, T14 and T15 (all done), and the T8 row still reads "blocked until stage 2". The file is new in this range, so base has nothing to compare.
+- **Why it matters**: The flow record contradicts itself. Anyone reading tasks.md alone does not see the item 3 and fix-round tasks. Code behaviour is not affected.
+- **Fix**: Add rows for T12-T15 and mark T8 as delivered by T12/T13, listing its info-level follow-ups as the journal does.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Diff-mode degradation pass, round 3 (verification), slice-01 of PR #1303, base 20e4281a2 (stage 2 tip) .. head 822192905. No degradation brief this round. Consumers came from the payload layers.affected list (graph at head 822192905, depth 1, truncated: none). Users found by keryx ctx rg are marked search-derived. Acceptance criteria: frozen AC1-AC10 of flow 520 from the payload. Findings: 0 blocker, 0 major, 0 minor, 1 info (I-001, flow-record debt). ROUND OBLIGATIONS: (1) Round-2 degradation-w1 F-001 (a superseded round could be published as is from History) holds as fixed. desk-publication.ts:377-378 sets headMoved only when newerRound === undefined, and :297 shows 'Round N of this review is newer…' instead. So the Desktop dialog gets no headMoved, shows no as-is notice and no 'Update review', and Submit stays disabled through canSubmit. (2) T15 'request() returns an outcome': useReviewRuns.ts now returns done/skipped/failed. ReviewWorkspace.updateReview refreshes the board only on 'done' && boardBehind. This fixes the round-2 refuted lead (a) that a failed start still refreshed the board. 'skipped' shows a toast, so the silently dropped start of round-2 lead (b) is now visible. (3) The 'Update disabled while busy' fix holds: updateDisabled={working} is passed in RunAttempt (ReviewRuns.tsx), the button is disabled={writing || updateDisabled}, and ReviewRunDialog passes local.working through. (4) The 'autoPublish not carried' fix holds: updateRoundOptions strips only autoPublish. flowId and the other options carry over, which the PR's decisions list states. (5) 'Sessions offers no Update' holds: sessionReviewPublication builds the same {cwd,target,url} object that base built inline (no behaviour change), with no onUpdateReview. REFUTED OR PLACED: (a) A start snapshot on the new range is reported to onSnapshot with the hook's card range (useReviewRuns.ts onSnapshot(key,{baseSha,headSha})). ReviewWorkspace is rendered only by reviews/ReviewPanel.tsx:117 (search-derived), and its observer ReviewsView.observeRuns ignores the revision argument. The board observer ReviewBoard.updateRunSummary does check sameRange, but ReviewDetail (board drawer) renders no ReviewRuns or publish dialog with onUpdateReview, so the board badge is not touched. No effect. (b) updateReview uses run.baseSha for the new range. The backend builds the as-is expectation on the same run.baseSha (desk-publication.ts:382), so the two agree. (c) Unlike RunLaunchDialog, updateReview does not check snapshot.startedRunId. Base's plain start path (ReviewWorkspace start without reviewModels -> local.request start) has the same shape, so this is not a degradation. (d) The workspace can unmount during the start: the effect cleanup bumps the generation, request returns 'done', and the .then calls the parent's onRefreshBoard and toast only, which is harmless. (e) Clicking Update while a preview refresh is pending: the dialog closes and its late result is dropped on the unmounted component, which is harmless. (f) The existing-attempt guard ignores archived and source 'existing' attempts on the target range, so a start goes ahead there. The backend validates the range again, and the PR decision covers 'an attempt of any state', meaning a non-archived managed attempt. VERIFIED CLEAN: (i) The current-head ReviewPublishDialog footer and controls match base: Close, Skip, Save and 'Submit review' (primary) in base order, no disabled inputs, no notice. publishButton is defined outside the !posted guard but is rendered only inside it or under updateOffered, which requires !posted. When draft is undefined, its disabled expression short-circuits on canUsePreview. This is pinned by the DOM test 'the current head keeps the dialog's verdict choice and Submit review' (ReviewPanel.dom.test.tsx:927). (ii) latestAttempt is a pure extraction of base ReviewRuns' latest expression (same three-step find). (iii) useReviewRuns: the guard, generation, finally and follow-up status read are unchanged apart from return values. Callers that awaited void are unaffected: RunLaunchDialog's onStarted type is widened to Promise<unknown>, and ReviewDetail.tsx:306 and ReviewWorkspace.tsx:218 pass local.request(status) (search-derived). (iv) Performance: updateReview is a useCallback recreated when local.runs or card change. The publication object was already rebuilt every render on base, so there is no new re-render source and no per-keystroke work. (v) The PR claim of untouched files holds: git diff --quiet 20e4281a2 822192905 over ReviewBoard.tsx, model.ts, ReviewResults.tsx, board-badges.ts, desk-run-store.ts and review.css exits 0. (vi) PR 'Decisions taken' and the code agree: refresh only when the board is behind, existing attempt shown with toast 'Commit <sha> already has a review attempt', no autoPublish, disabled while busy, no Update from Sessions. (vii) Blind-test check: DOM tests 714/738/752/775/788/806/856/876/890/902 cover busy, failed start, existing failed attempt, autoPublish, dialog close order, write in flight, Sessions, start range, board behind and earlier attempt. Test 856 pins the sessionReviewPublication helper rather than the rendered Sessions dialog. That is acceptable because SessionReviewActivity.tsx:252 is its only use. CONSUMERS from layers.affected traced for slice-01: ReviewPanel.tsx, ReviewsView.tsx, ReviewDetail.tsx, ReviewRunDialog.tsx, ReviewBoard.tsx (observer only), App.tsx (type import). The backend consumers in layers.affected (src/commands/*, managed.ts, watcher.ts, publish.ts and the others) belong to slice-02 and were not traced here. NOT VERIFIED: nothing was run (read-only, exec_budget_s 0). Test evidence is the orchestrator's (Desktop src/review src/reviews 151 pass). No browser render.",
+  "findings": [
+    {
+      "id": "I-001",
+      "severity": "info",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+      "line": 16,
+      "quote": "| T8 | implement | Item 3: \"Review again\" as an update round of the same Review — blocked until stage 2 (flow 519) pushes the rounds migration (plan D).",
+      "problem": "tasks.md, which says task definitions live there, ends at T11 and still calls T8 blocked. flow.json and the journal hold T12-T15 as done and T8 as done.",
+      "impact": "The flow record contradicts itself, and a reader of tasks.md alone misses the item 3 and fix-round tasks. No code behaviour is affected.",
+      "suggested_fix": "Add rows for T12-T15 and update the T8 row to say it was delivered by T12/T13, listing its open info-level follow-ups.",
+      "evidence": "base-diff: tasks.md is new in the range (slice-01 diff lines 288-308, table ends at T11). flow.json at head lists T12-T15 status done (read with python json). Refute: the journal records T12-T15 via `keryx flow task add`, which may not write tasks.md, but the file's own header asks for definitions there. Kept at info.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "location_class": "pr-process",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: yes (payload layers.affected from the graph at head 822192905; no degradation brief). wiki_used: not-relevant (the requirements are carried in the payload's PR body and ACs). ctx_used: yes (keryx ctx rg, keryx ctx run, keryx ctx read). raw_rg_used: no. Two short raw reads were marked keryx:raw (a 35-line sed of the observer, git diff --quiet exit status only).

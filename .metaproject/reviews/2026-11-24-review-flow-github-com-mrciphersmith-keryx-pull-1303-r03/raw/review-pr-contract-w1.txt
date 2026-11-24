@@ -1,0 +1,123 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract, wave 1, round 3 — slice-01 (flow 520 records + Desktop)
+
+Inputs read in full: payload `review_context.pr.body` (7456 chars), `pr-context.md`, `brief.md`, driver, `slices/slice-01.diff` (2603 lines). Outside the slice, read to settle rows: `docs/docs/desktop-app.md:136-160`, `apps/desktop/src/review/ReviewLifecycle.tsx:30` (`reviewIsArchived`), `src/review/update-round.ts:28-45`, `findingsKnown` sites in `src/review/desk-run-service.ts` / `desk-run-executor.ts`. Round-2 pr-contract results (PC-001..PC-005 in `…-r02/raw`) checked to avoid repeats.
+
+Not re-filed (known, being corrected by the orchestrator): base `98bec5904` → `20e4281a2`; `selectPriorAttempt` named as "the one rule" (now `priorAttemptCandidates`). Note: `selectPriorAttempt` still exists (`src/review/update-round.ts:45`), so frozen AC7's wording "exists once (selectPriorAttempt)" is not contradicted by code and is not filed.
+
+## Checklist form (PR body claims against slice-01)
+
+| Claim (quoted) | State | What the slice shows | Result |
+|---|---|---|---|
+| "The dialog shows a warning that names both commits and explains why the controls are locked." | claim | `ReviewPublishDialog.tsx` head-moved banner names `reviewedHead`/`currentHead` and says verdict is Comment only and inline is off because it cannot be placed on an earlier commit | holds |
+| AC3: verdict choice and inline disabled, label "Publish as is for" short sha | claim | `disabled={!!headMoved}` on inline checkbox and every verdict radio; button text `Publish as is for <code>{shortSha(...)}` | holds |
+| "the primary action is 'Update review to `<sha>`'" | claim | `updateOffered` renders Update with `btn btn-primary`, publish button drops to `btn` | holds |
+| "It starts an attempt on the current head with the reviewed attempt's options." | claim | `ReviewWorkspace.tsx` `local.request({ kind: "start", ...revision, options: updateRoundOptions(reviewed.options) })`, revision = `{ baseSha: run.baseSha, headSha: currentHead }` | holds |
+| "'Update review' does not carry automatic publication into the new round." | claim | `updateRoundOptions` strips `autoPublish` | holds |
+| "It is disabled while another action of the review is running." | claim | `updateDisabled={working}`; `outcome === "skipped"` toast covers a race | holds |
+| "The user stays in the Reviews panel." / "If the board has not seen the push yet, it is refreshed." | claim | dialog closes, no `onLeave`; `onRefreshBoard?.()` when `outcome === "done" && boardBehind` | holds |
+| "If the current head already has an attempt of any state, that attempt is shown instead of starting a second one, with a toast" | claim | `ReviewWorkspace.tsx:135` filters out archived and imported (`existing`) attempts | **PC-001** |
+| "A review dialog opened from Sessions offers no 'Update review'." | claim | `sessionReviewPublication` returns no `onUpdateReview` | holds |
+| "this PR does not touch `ReviewBoard.tsx`, `model.ts`, `ReviewResults.tsx`, `board-badges.ts`, `desk-run-store.ts` or `review.css`" | claim | `git diff --stat 20e4281a2..822192905` over those paths is empty | holds |
+| "All were fixed in T14 (backend) and T15 (Desktop) with red-to-green or mutation evidence." | claim | journal: same-Review guard pinned without a killed mutant; runDeskWorker only a source check | **PC-002** |
+| "`bun test` passes for the review suites listed in the flow's acceptance criteria." | claim | flow.json T9: "5499/5501; the 2 failures are timing tests in untouched files" | **PC-003** |
+| "Every finding was fixed in T11 or recorded as a stage 3 T8 obligation" + "Not in this PR" list | claim | T8 closed `completed`; journal keeps `findingsKnown: undefined` alignment open; body's "Not in this PR" omits it | **PC-004** (info) |
+| "The Desktop `.tsx` files are excluded from the root ESLint config, so they are not linted." | claim | journal T5 notes the same | holds |
+| "`docs/docs/desktop-app.md` describes publishing as is." | claim | `desktop-app.md:143-155` describes as-is and Update review, incl. "shows that attempt instead of starting another" | holds (same "any state" nuance is not claimed by the doc) |
+| Checklist boxes (Documentation / Tests / Breaking change / Screenshots) | absent | the PR body has no checklist boxes | n/a |
+| "Round 3 has not been run yet." | claim | this round is running | stale once round 3 records; for the orchestrator's body refresh, not filed |
+
+## Findings
+
+### [PC-001] "Attempt of any state" — the Update guard skips archived and imported attempts
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewWorkspace.tsx:135
+- **Problem**: Body: "If the current head already has an attempt of any state, that attempt is shown instead of starting a second one". Code: `const covering = local.runs.filter(run => run.source !== "existing" && !reviewIsArchived(run) && sameRange(run, revision));` — an archived attempt (`decision.action === "archive"`) or an imported (`existing`) attempt on the current head does not stop a new start.
+- **Why it matters**: the owner reviewing the "Decisions taken in the flow" list reads that no second attempt can ever exist on the target head; with an archived one it can.
+- **Fix**: correct the claim ("an attempt in any state that is not archived or imported"), or drop the two filters if "any state" is the intended decision.
+
+### [PC-002] "All … fixed … with red-to-green or mutation evidence" — the journal records two gaps without that evidence
+- **Severity**: minor
+- **File**: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md:106
+- **Problem**: Body (Review, Round 2): "All were fixed in T14 (backend) and T15 (Desktop) with red-to-green or mutation evidence." Journal: "testing-w2 gaps 1-4 pinned (worker-level runDeskWorker still has only a source check; same-Review guard pinned without a killed mutant)."
+- **Why it matters**: a reviewer trusts that every round-2 fix has a failing-first or killed-mutant proof; two do not.
+- **Fix**: name the two exceptions in the body (runDeskWorker worker-level check is a source check only; same-Review guard has no killed mutant).
+
+### [PC-003] Verification says the AC review suites pass; the flow's verify task records 2 failures
+- **Severity**: minor
+- **File**: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json:193
+- **Problem**: Body (Verification): "`bun test` passes for the review suites listed in the flow's acceptance criteria." AC8 lists `bun test src/review`; T9 `dispositionReason`: "Backend review suites (5499/5501; the 2 failures are timing tests in untouched files, one inherited from stage 2)". The journal also records the harness-robustness "whole process group" test failing at the stage 2 tip.
+- **Why it matters**: a reader of Verification takes AC8's invariant as green; the recorded run was not, and the failure inherited from stage 2 is information the stage-2 merge order depends on.
+- **Fix**: state the counts and name the 2 failing timing tests as untouched/inherited (or cite a clean re-run).
+
+### [PC-004] T8's `findingsKnown: undefined` obligation remains open but the body does not list it
+- **Severity**: info
+- **File**: src/review/update-round.ts:35
+- **Problem**: Body: "Every finding was fixed in T11 or recorded as a stage 3 T8 obligation"; "Not in this PR" lists the per-source `on_head_move` default but not the other open T8 item. Journal (line 84): "T8 open info-level follow-ups (not blocking): `findingsKnown: undefined` treated as unknown by selectPriorAttempt vs known elsewhere (degradation F-002)". Code still differs: `update-round.ts:35` `result.findingsKnown !== true` vs `desk-run-service.ts:87` `out.findingsKnown ?? (out.coverage === "complete" || …)`.
+- **Why it matters**: T8 is closed `completed`; the body is the only place the owner sees what was deferred.
+- **Fix**: add "aligning `findingsKnown: undefined` between update-round and desk-run-service (round 1 degradation F-002)" to "Not in this PR".
+
+## Not verified / out of lens
+- slice-02/03 claims (backend: as-is body text, `commit_id`, stale check, compare caching, registry lock 15 s, superseded-round message, answers carry-over) not checked here — other slices.
+- `tasks.md` at head lists only T1–T11 and T8 still reads "blocked until stage 2", while flow.json has T12–T15 done; the working tree has an uncommitted edit to tasks.md (orchestrator). Not a PR-body claim; noted for the orchestrator.
+- No browser render; no tests run (read-only lane).
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-01 PR-body claims about the Desktop Update review / publish-as-is UI hold, and the untouched-files claim holds. Three minor disagreements: 'any state' vs the archived/imported filter, 'all fixed with red-to-green or mutation evidence' vs two journal-recorded gaps, and 'review suites pass' vs T9's 5499/5501. One info: open T8 findingsKnown follow-up missing from 'Not in this PR'.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "PC-001", "severity": "minor", "reviewer": "review-pr-contract",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "line": 135,
+      "quote": "const covering = local.runs.filter(run => run.source !== \"existing\" && !reviewIsArchived(run) && sameRange(run, revision));",
+      "problem": "Body says an existing attempt 'of any state' on the current head is shown instead of starting a second one; the guard ignores archived and imported (existing) attempts, so those do not stop a new start.",
+      "impact": "Owner reading the decisions list believes no second attempt can exist on the target head.",
+      "suggested_fix": "Reword to 'any state, except archived or imported', or drop the filters if 'any state' is the decision.",
+      "evidence": "PR body Decisions bullet vs ReviewWorkspace.tsx:135; reviewIsArchived = decision.action === 'archive' (ReviewLifecycle.tsx:30).",
+      "confidence": "high", "location_class": "pr-process", "degradation_class": "diff-vs-description", "blocking_merge": false, "publication": "finding"
+    },
+    {
+      "id": "PC-002", "severity": "minor", "reviewer": "review-pr-contract",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md", "line": 106,
+      "quote": "worker-level runDeskWorker still has only a source check; same-Review guard pinned without a killed mutant",
+      "problem": "Body says all round-2 minors were fixed in T14/T15 'with red-to-green or mutation evidence'; the journal records two fixes without such evidence.",
+      "impact": "Reviewers over-trust the evidence behind two fixes.",
+      "suggested_fix": "Name the two exceptions in the body's Round 2 paragraph.",
+      "evidence": "PR body Review/Round 2 vs journal T14 accepted entry.",
+      "confidence": "high", "location_class": "pr-process", "degradation_class": "diff-vs-description", "blocking_merge": false, "publication": "finding"
+    },
+    {
+      "id": "PC-003", "severity": "minor", "reviewer": "review-pr-contract",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json", "line": 193,
+      "quote": "Backend review suites (5499/5501; the 2 failures are timing tests in untouched files, one inherited from stage 2)",
+      "problem": "Body Verification says 'bun test passes for the review suites listed in the flow's acceptance criteria'; the T9 record of the AC8 run has 2 failures.",
+      "impact": "AC8 reads green to the owner; the inherited stage-2 failure is not surfaced in the PR.",
+      "suggested_fix": "State 5499/5501 with the two timing tests named as untouched/inherited, or cite a clean re-run.",
+      "evidence": "PR body Verification vs flow.json T9 dispositionReason; journal round-2 note on harness-robustness failing at the stage 2 tip.",
+      "confidence": "high", "location_class": "pr-process", "degradation_class": "diff-vs-description", "blocking_merge": false, "publication": "finding"
+    },
+    {
+      "id": "PC-004", "severity": "info", "reviewer": "review-pr-contract",
+      "file": "src/review/update-round.ts", "line": 35,
+      "quote": "if (!result?.reviewed || result.findingsKnown !== true) continue;",
+      "problem": "T8 closed completed with the findingsKnown-undefined alignment (round 1 degradation F-002) still open per the journal; the body's 'Not in this PR' list omits it while listing the on_head_move default follow-up.",
+      "impact": "The deferred item is invisible to the owner.",
+      "suggested_fix": "Add the findingsKnown alignment to 'Not in this PR'.",
+      "evidence": "journal.md:84 vs update-round.ts:35 and desk-run-service.ts:87 (fallback for undefined).",
+      "confidence": "medium", "location_class": "pr-process", "degradation_class": "diff-vs-description", "blocking_merge": false, "publication": "omit"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [
+    "PR body refresh: 'Round 3 has not been run yet' becomes stale once this round records.",
+    "tasks.md at head lacks T12-T15 rows and T8 still reads blocked (working tree has an uncommitted edit)."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant — the claims were settled from the slice and named files); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no.

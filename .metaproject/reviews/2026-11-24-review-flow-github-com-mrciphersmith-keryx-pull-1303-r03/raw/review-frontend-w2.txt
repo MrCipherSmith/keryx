@@ -1,0 +1,101 @@
+STATUS: DONE
+
+## Frontend Review (round 3, wave 2)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..822192905b3d26eb976d83e5bbd46cee14ca9a6f` (stage 2 tip .. head). Diff mode, from the payload.
+- Slice: slice-02, read in full (all 1914 lines). It covers:
+  - the Desktop DOM test `apps/desktop/src/reviews/ReviewPanel.dom.test.tsx`
+  - `docs/docs/desktop-app.md`
+  - the backend sources `desk-publication(-types)`, `desk-run-executor`, `desk-run-service`, `head-move`, `prior-round`, `round-registry` and `update-round`
+- Lens: frontend. The backend sources were read for the contract the Desktop dialog consumes (`headMoved`, `blockedReason`, the answer carry-over) and for TypeScript safety. Their logic belongs to review-logic and review-architecture.
+- Context read outside the slice:
+  - `apps/desktop/src/review/ReviewPublishDialog.tsx` lines 50-200, for the initial preview request, `updateOffered` and the footer
+  - the toast calls in `ReviewWorkspace.tsx`
+  - the wave 1 result `raw/review-frontend-w1.txt`, so its findings are not repeated
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 0
+
+There is no MobX in the changed frontend code, so the observer, action and store laws do not apply.
+
+### Contract checks (hold)
+- **Answer carry-over reaches the dialog.** The dialog's first request is `{ kind: "preview", id, refresh: true }` with no `settings`. So `saved` is the attempt's own draft or undefined, and `earlierAnswers(earlier)` fills the answers only when the new round has no draft of its own. Every later preview sends `currentSettings` derived from that first result, so the carried answers persist. Option answers match because the option id is `sha256([questionId, label])`, which is stable across rounds. This matches AC10 and the docs ("answers carry over by finding id").
+- **The superseded-round state renders coherently.** When `newerRound` is set, `headMoved` is undefined. The dialog then shows no notice, no Update and no as-is button: it shows "Submit review", disabled with the "Round N of this review is newer" `blockedReason`. Nothing else is offered in that state.
+- **The headMoved body and digest.** The body line is prepended before the overlay round block. The current head enters the digest, so a further push makes the dialog's digest stale (`stale:`), and the dialog sets `previewStale`.
+- **The docs** match the UI labels: "Publish as is for", "Update review to", "Save locally", automatic publication not carried over, and an existing attempt shown instead of starting another.
+- **TypeScript.**
+  - No `any` in the new backend or test code.
+  - `object()` narrowing is used for the earlier draft.
+  - `HeadMoved = NonNullable<PublicationState["headMoved"]>` keeps one source type.
+  - The new optional fields follow `exactOptionalPropertyTypes` (`newerRound?: number | undefined`, `previousRuns?: … | undefined`).
+  - The `!` assertions are confined to the DOM test's fixtures and queries, as in the existing tests there.
+- **DOM test hygiene.** Each new test unmounts with `root.render(null)` or closes the dialog. `deferred()` gates hold the in-flight states, and the disabled-button clicks assert that no `start` action ran.
+
+### Findings
+
+### [F-001] The feedback added for round 2 UX-102 (the toasts) and the shown existing attempt are not asserted by the DOM tests
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewPanel.dom.test.tsx (test "Update review from an earlier attempt does not start a second attempt when the current head already has one"); apps/desktop/src/review/ReviewWorkspace.tsx:139 and :148
+- **Rule**: canonical rubric (test does not pin the behaviour the fix is about); `.metaproject/rules/stacks/ts-js-node/testing.mdc`
+- **Problem**: T15 fixed round 2 F-002/UX-102 by adding user feedback:
+  - the toast "Commit <sha> already has a review attempt", with the existing attempt shown instead of starting another;
+  - the "Update review did not start" toast for a skipped request.
+
+  No test asserts either toast; the test file never mentions `toast` or the titles. The test for the existing finished attempt (PR 51) asserts only negatives: no `start`, no dialog, and that the reviewed attempt's article is gone. It never asserts that `attempt-current` is shown. The failed-attempt variant (PR 54/55) does assert the attempt is shown.
+- **Why it matters**: Removing the toasts, or the guard showing nothing at all (an empty panel), would pass the PR 51 test. The UX-102 defect was exactly "no feedback", so the regression the fix guards against is not pinned.
+- **Fix**: In the PR 51 test, assert that `article[aria-label="Review attempt attempt-current"]` is present. Capture toasts through the test host's toast provider, or a spy on `useToast`, and assert the info toast title for the existing-attempt case and the "Update review did not start" title for a skipped request.
+
+### Clean Areas
+- MobX laws: not applicable (no MobX).
+- API placement: the DOM tests inject `command`/`publishCommand`. The dialog calls IO only through its `command` prop.
+- Hooks: the dialog's preview effect re-runs on `id` and resets the draft and settings, so a draft from another attempt does not leak into an update round's dialog.
+- Accessibility: the head-moved notice is `role="status"` and is referenced by both fieldsets through `aria-describedby`, as the DOM test pins. Wave 1 covered focus after Update (w1 F-001) and the tooltip-only disabled reason (w1 F-003); they are not repeated here.
+- Lists and keys: none added.
+
+### Not verified / notes
+- No tests run: read-only, exec budget 0. The brief's evidence reports Desktop `src/review src/reviews` at 151 pass and 0 fail.
+- No live Desktop render.
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc` is absent in this worktree, as wave 1 also noted, so the canonical rubric was applied directly.
+- Outside this lens, not filed: a lead for review-logic, not verified. `newerRoundOf` (update-round.ts) does not exclude withdrawn (deleted or archived) attempts, while `earlierRoundAttempts` does. If a deleted or archived newer round stays in `store.history`, the older attempt's dialog could keep saying "Round N of this review is newer. Publish from that round." for a round the user removed. That leaves the user with no publish path from either round. I did not check whether deleted attempts remain in the history.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 3 wave 2 (slice-02: the Desktop DOM test, the docs, and the backend sources as consumed by the dialog). The answer carry-over reaches the dialog: the first preview sends no settings, so earlier-round answers fill in when the new round has no draft of its own. The superseded-round and head-moved states render coherently. The docs match the UI. No TypeScript-safety issues in the new code. One minor: the DOM tests do not assert the toasts T15 added for UX-102, and the existing-finished-attempt test never asserts that the current attempt is shown. No blockers or majors.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "line": null,
+      "quote": "  expect(document.querySelector('article[aria-label=\"Review attempt attempt-reviewed\"]')).toBeNull();",
+      "problem": "The feedback T15 added for round 2 UX-102 is not asserted by any DOM test: the 'Commit <sha> already has a review attempt' info toast and the 'Update review did not start' toast for a skipped request (ReviewWorkspace.tsx:139, :148). The existing-finished-attempt test (PR 51) asserts only negatives: no start, no dialog, and the reviewed attempt's article gone. It never asserts that attempt-current is shown.",
+      "impact": "Removing the toasts, or the guard rendering nothing, would still pass. The defect UX-102 fixed was the missing feedback, so its regression is not pinned.",
+      "suggested_fix": "In the PR 51 test, assert that article[aria-label=\"Review attempt attempt-current\"] is present. Capture toasts through the test host's toast provider or a useToast spy, and assert both toast titles.",
+      "evidence": "keryx ctx rg 'already has a review attempt|toast' over ReviewPanel.dom.test.tsx and ReviewWorkspace.tsx: matches only in ReviewWorkspace.tsx (lines 86, 111, 139, 148, 150), none in the test.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-review-existing-attempt-toast-unasserted",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-02"],
+  "inputs_unreadable": [".metaproject/rules/stacks/react/code-style-patterns.mdc (absent in worktree)"]
+}
+```
+
+Routing audit:
+- metaproject: `index.md` was not read. This was a bounded payload review, and the brief and driver supplied the routing.
+- graph_used: no. Not relevant: the payload's `layers.affected` named the dependents.
+- wiki_used: no. Not relevant: the PR body and the docs state the intent.
+- ctx_used: yes (`keryx ctx rg` ×3).
+- raw_rg_used: no. Two `grep` header listings of the slice diff were marked `keryx:raw`.

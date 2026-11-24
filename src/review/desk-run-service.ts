@@ -17,6 +17,7 @@ import { coordinatorActivity } from "./desk-coordinator";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
+import { previousRunInputs } from "./update-round";
 import type { DeskFinish, DeskRevision, DeskRunKey, DeskRunSnapshot, DeskSchedule, DeskRun } from "./desk-run-types";
 import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type DeskExecutionResult } from "./desk-run-executor";
 import { applyDeskLifecycle, type DeskLifecycleAction } from "./desk-run-lifecycle";
@@ -366,15 +367,8 @@ export async function runDeskWorker(
         active.run.effectiveOptionsKey = effectiveOptionsKey;
         store.save(active);
       });
-      const previous = store
-        .history(key)
-        .runs.find(
-          (item) =>
-            item.source !== "existing" &&
-            item.scope === DESK_RUN_SCOPE && (item.effectiveOptionsKey ?? deskOptionsKey(item.options)) === effectiveOptionsKey &&
-            item.state === "completed" &&
-            item.result?.coverage === "complete",
-        );
+      // Every usable earlier-round attempt, in order: the executor hands on the first whose package qualifies (T14 B1).
+      const previousRuns = previousRunInputs(store.history(key).runs, run, (attemptId) => store.directory(attemptId));
       const context = await collectPrContext(cwd, key, pr, store, undefined, run.options?.flowId);
       const workerRoster = createWorkerRoster(runDir, key, run);
       const out = await executeDeskReview({
@@ -387,7 +381,7 @@ export async function runDeskWorker(
         viewer: key.viewer,
         baseSha: run.baseSha,
         headSha: run.headSha,
-        ...(previous ? { previousRunDir: store.directory(previous.id) } : {}),
+        ...(previousRuns.length ? { previousRuns } : {}),
         ...(run.continuation && {
           resumeRunDir: store.directory(run.continuation.previousId),
           ...(run.continuation.guidance && { guidance: run.continuation.guidance }),

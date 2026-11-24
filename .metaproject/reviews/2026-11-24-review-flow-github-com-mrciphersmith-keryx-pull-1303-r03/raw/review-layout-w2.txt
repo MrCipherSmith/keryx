@@ -1,0 +1,52 @@
+STATUS: DONE
+
+review-layout, wave 2, round 3 (verification round). PR #1303, range 20e4281a2..822192905.
+
+Inputs read: the root `.metaproject/index.md` (hard gate), the review-layout SKILL.md, the round brief, the driver, and wave 1's result raw/review-layout-w1.txt (its findings and checks are not repeated here). I read slice-02 in full, diff lines 1-1914:
+- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+- docs/docs/desktop-app.md
+- src/review/desk-publication-types.ts, desk-publication.ts, desk-run-executor.ts, desk-run-service.ts, head-move.ts, prior-round.ts, round-registry.ts and update-round.ts
+
+## Measurements
+
+No measurements were taken. Nothing was rendered: this dispatch is read-only, and the brief records "No browser render". Everything below is a static reading of the CSS. Under layout-rendering.mdc Rule 1, any layout observation from it would be info and unverified. No stylesheet changed in the range; wave 1 confirmed the CSS diff stat is empty.
+
+## What in slice-02 reaches a rendered box
+
+Most of slice-02 is backend code: publication logic, executor and service wiring, head-move policy, prior-round trust, the round registry and update-round selection. It has no rendered sizing and no geometry in this lane's scope. Three items do reach Desktop-rendered text. I checked each one statically:
+
+1. The as-is body's first line (`headMovedLine`, desk-publication.ts) starts the draft `body` and renders in the dialog through `<Preview text={draft.body} />` (ReviewPublishDialog.tsx:250). The line holds two 40-character SHAs inside code spans. Each SHA is an unbreakable run of about 40ch of monospace. `.review-publish-markdown` (ReviewDetail.css:134) sets `overflow-wrap: anywhere` and `overflow: auto`, so the run can break inside the box. Even unbroken, it would scroll within the preview box rather than widen the dialog. No overflow of the dialog is expected. Not filed.
+2. The new `blockedReason` strings are "Round N of this review is newer. Publish from that round. You can still save this draft locally." and "Enable General comment. Inline comments are not available when publishing for an earlier commit." Both render as a `p.review-detail-muted[role=status]` (ReviewPublishDialog.tsx:268). They are ordinary prose with no unbreakable runs, so they wrap. Not filed.
+3. ReviewPanel.dom.test.tsx adds "the primary footer action follows the dialog state, and the head-moved alternatives sit together". It asserts the DOM order of the footer buttons and which one is primary. That locks in the source order behind wave 1's static resolution of round 2's LY-001. As SKILL.md's red-flags table says, a test on a DOM stub loads no CSS, so it cannot detect a button wrapping onto a second row. This is a known limitation, not a defect. Wave 1 already proposed a real-CSS probe as a follow-up, so it is not repeated here.
+
+The docs change (desktop-app.md) is prose only and has no layout surface.
+
+RTL and locale: slice-02 adds no physical CSS property. Desktop strings are hard-coded English with no translation catalog, so the translation-length check has no input.
+
+## Findings
+
+None.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 3 wave 2, static layout check of slice-02. The slice is almost all backend (publication, executor, service, head-move, prior-round, round-registry, update-round), plus a DOM test and docs prose. Three items reach rendered text. The head-moved body line with two 40-char SHAs renders in .review-publish-markdown, which sets overflow-wrap: anywhere and overflow: auto, so it cannot widen the dialog. The two new blockedReason strings are wrapping prose in p.review-detail-muted. The new footer-order DOM test pins the source order that wave 1's static LY-001 resolution relies on, but it runs on a DOM stub that cannot observe wrapping. No CSS changed in the range. No layout defect found. Nothing was measured: no render this round.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Notes
+
+- Not verified: no browser or real-CSS render was run, and none was available in this read-only dispatch. All conclusions above are static.
+- Routing audit:
+  - graph_used: no. Not relevant: the driver named the slice, and the only code lookups were two known Desktop files.
+  - wiki_used: no. Not relevant: the question is rendered CSS geometry.
+  - ctx_used: yes. keryx ctx read loaded the driver and the wave 1 result. keryx ctx rg listed the slice hunk headers, found the preview and blockedReason render sites in ReviewPublishDialog.tsx, and found the wrapping rules in ReviewDetail.css. The full slice and lines 240-271 of the dialog were read with the Read tool.
+  - raw_rg_used: no.

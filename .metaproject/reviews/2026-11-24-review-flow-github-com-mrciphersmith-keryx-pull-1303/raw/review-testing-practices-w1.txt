@@ -1,0 +1,170 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices — PR #1303, round 1, wave 1
+
+I read the whole of slice-01 (2124 lines, every file). The tests pin AC1–AC6: each mutant of a gate that carries a criterion failed a named test. Three gates the diff added survive deletion with the suite green (F-001..F-003, minor). Two more survivors are equivalent or redundant under what the producer can emit (F-004, F-005, info). There are no blocker or major findings.
+
+## Mutation pass
+
+I ran the mutants by hand in a scratch `git worktree` at 9e871b17 under the session scratchpad. node_modules was symlinked read-only. I used a Python replace, then `bun test --bail <nearest suite>`, then restored the file. Afterwards I removed the worktree, and `git worktree list` shows no scratch entry. I did not use `keryx review mutate`, because it writes into `<pkg>/research-evidence/` and this dispatch allows writes only to the result file. The reviewed tree was not written. Baseline: desk-publication, update-round and head-move gave 30 pass. ReviewRuns.dom gave 33 pass. Exec time was about 120 s of the 300 s budget.
+
+| id | mutation | nearest suite | result |
+|---|---|---|---|
+| D1 | `open`: drop `pr.baseRefOid === run.baseSha` | desk-publication | 1 fail (changed base / closed test) |
+| D2 | `open`: drop `pr.state === "OPEN"` | desk-publication | 1 fail (changed base / closed test) |
+| D3 | `headMoved`: drop `sha.test(pr.headRefOid)` | desk-publication | **green** (11.5 s, full file) |
+| D4 | `expected` → `run` (verify the reviewed head before the write) | desk-publication | 1 fail (publishes as is) |
+| D5 | digest: drop `...(headMoved ? [headMoved.currentHead] : [])` | desk-publication | **green** (11.2 s) |
+| D6 | discussion re-read: `(current \|\| headMoved)` → `current` | desk-publication | **green** (10.7 s) |
+| D7 | blockedReason `!current && !headMoved` → `!current` | desk-publication | 1 fail (publishes as is) |
+| D8 | automatic refusal: drop `headMoved \|\|` | desk-publication | 1 fail (automatic … never after the head moved) |
+| D9 | forced verdict → normal verdict computation | desk-publication | 1 fail (publishes as is) |
+| D10 | forced `inline: false` → `saved?.inline ?? false` | desk-publication | 1 fail (ignores requested verdict and inline) |
+| D11 | delete the `if (headMoved) body = headMovedLine…` prepend | desk-publication | 1 fail (publishes as is) |
+| U1 | update button: drop `headMoved &&` | ReviewRuns.dom | 1 fail, **by TypeError crash** (`headMoved.currentHead` of undefined), not by an assertion |
+| U1b | as U1, with `headMoved?.currentHead ?? ""` so it does not crash | ReviewRuns.dom | **green** |
+| U5 | update button: drop `&& !posted` | ReviewRuns.dom | **green** |
+| U2 | Inline checkbox: drop `disabled={!!headMoved}` | ReviewRuns.dom | 1 fail (moved head locks the dialog) |
+| U3 | primary label → always "Submit review" | ReviewRuns.dom | 1 fail |
+| U4 | "Use recommendation" radio: drop `disabled={!!headMoved}` | ReviewRuns.dom | 1 fail (moved head locks the dialog) |
+| H1 | `defaultOnHeadMove`: `=== "scheduled"` → `!== "manual"` | head-move | 1 fail |
+| H2 | follow: `phase === "running" ? "after-finish" : "now"` → `"after-finish"` | head-move | 1 fail |
+| R1 | `partial`: drop `attempt.state === "partial" \|\|` | update-round | **green** |
+| R2 | drop the `decision delete` skip | update-round | 1 fail |
+| R3 | `findingsKnown !== true` → `=== false` | update-round | 1 fail |
+| R4 | drop the `source === "existing"` skip | update-round | 1 fail |
+
+Cap: I ran 23 mutants. Six candidates did not run: H3, H4, R5, R6, U6 and D12 in `mutant_candidates` below. From reading the tests I expect them red, but that is not an observed result and is not reported as one. Every gate that carries an AC was mutated at least once. There are no previous-round gates, because this is round 1.
+
+## AC1–AC6: do the tests pin them?
+
+- **AC1** is pinned by `desk-publication.test.ts` "a moved head publishes as is…". It checks `headMoved`, the verdict and inline settings, the first body line of the preview and the posted body, `event: COMMENT` and `commit_id = reviewed head`. D4, D7, D9 and D11 each turn it red.
+- **AC2** is pinned. The forced verdict and inline are covered (D10 red). A head that moves again is covered on both the digest path and the verify-before-write path, and the receipt file is checked as absent. Automatic publication with a moved head is covered (D8 red). A changed base, closed+moved and closed are covered (D1 and D2 red). One gap: the slot-overlay discussion stale check now runs for a moved head and is not exercised at all (F-001).
+- **AC3** is pinned by the two new DOM tests: both short shas, disabled verdict and inline controls, the "Publish as is for bbbbbbb" label, and a current-head control with nothing disabled and "Submit review" shown. U2, U3 and U4 are red. The "Update review to" offer is not pinned to the head-moved and not-posted states (F-003).
+- **AC4** is pinned. H1 and H2 are red. The test also covers bad stored values for both sources.
+- **AC5** is pinned for accept and reject (R2, R3 and R4 red). The `state === "partial"` disjunct is not separated by any fixture (F-005, info, producer-equivalent).
+- **AC6**: the new `prior-round.test.ts` case passes, and the journal says it was also green before the change. It is a regression guard with no gate behind it, so there is nothing to mutate. It changes `mode`, `options` and `settings.effectiveOptionsKey` in the manifest, which covers the plausible regression of filtering on settings.
+
+Fixture against producer: the as-is DOM mock returns server-forced settings (`verdictOverride: "comment"`, `inline: false`) together with `headMoved`. This matches what `prepare` emits for the head-moved branch (desk-publication.ts settings ternary). The `update-round.test.ts` builders start from the `DeskRun` and `DeskResult` shapes, and the "partial" fixture sets state and coverage consistently with `finishExecution` and the executor. I found no fixture that claims one scenario while carrying another's shape.
+
+Not run: AC8's full suites and AC3's command outside the single files above. The verify-tests-to-run-1.txt timeout in `src/commands/review-desk-run.test.ts` is outside this PR and I did not re-check it.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "AC1-AC6 are pinned: 17 of 23 executed mutants of the added gates failed a named test. Survivors: the discussion re-read extended to a moved head (D6), the sha guard on the current head (D3), and the head-moved and not-posted gates on the 'Update review to' button (U1b, U5). U1 fails only through a TypeError crash. Two survivors are equivalent or redundant: the digest currentHead backstop (D5) and the partial-state disjunct the executor cannot separate (R1). No blocker or major.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "const discussion = overlay?.kind === \"slots\" && overlay.rereadDiscussion && (current || headMoved) &&",
+      "problem": "This PR extends the gate to a moved head, and no test pins it. No test in desk-publication.test.ts uses a slots overlay with rereadDiscussion, for either the current head or a moved head. With the mutation `(current || headMoved)` -> `current`, the suite stays green.",
+      "impact": "If someone drops this disjunct, the as-is publication for a project whose overlay requires re-reading the thread no longer refuses a submit after the PR discussion changed, and no test catches it. The 'stale: The pull request discussion changed' path is untested for both branches.",
+      "suggested_fix": "Add a desk-publication test with a review-publish-template.md that has a slots overlay with reread_discussion. Point the fake gh reviews/comments responses at a fixture file. setHead(movedHead), preview, change the discussion fixture, then submit and expect rejects /^stale:.*discussion changed/ and no FIXTURE_BODY.",
+      "evidence": "Mutation D6 run in a scratch worktree at 9e871b17: `bun test --bail src/review/desk-publication.test.ts` stayed green, 10.7 s, full file. `keryx ctx rg rereadDiscussion src apps/desktop/src` matches only desk-publication.ts, report-overlay.ts and report-overlay.test.ts, so no publication test reaches the branch.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid)",
+      "problem": "Deleting the `sha.test(pr.headRefOid)` guard leaves the suite green. No fixture gives an open PR, the same base, and a headRefOid that is not a 40-hex sha.",
+      "impact": "The guard keeps a malformed current head out of the as-is variant: out of the body line, the digest and the verify-before-write. resolveDeskSubject does not validate headRefOid's shape. A future edit can remove the guard without any test noticing.",
+      "suggested_fix": "In the changed-base/closed loop, add `{ headRefOid: \"\" }` or `{ headRefOid: \"not-a-sha\" }`. Expect headMoved to be undefined and blockedReason to contain 'revision moved'.",
+      "evidence": "Mutation D3 in a scratch worktree: desk-publication.test.ts green, 11.5 s. verifyDeskSubject and resolveDeskSubject (src/review/desk-run-service.ts:49-61) compare headRefOid but never check its shape.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "{headMoved && onUpdateReview && !posted && <button type=\"button\" className=\"btn\" disabled={writing}",
+      "problem": "The 'Update review to' offer is 'offered only while the head has moved' (prop doc), but no test checks that. Removing `headMoved &&` fails only because `headMoved.currentHead` throws a TypeError on the first render, not because of an assertion. With optional chaining the mutant (U1b) is green. Dropping `&& !posted` (U5) is green too. No test mounts the dialog with onUpdateReview on the current head or after a publish.",
+      "impact": "When item 3 wires onUpdateReview, a regression that shows the update offer on a current-head or already-posted review will not be caught. The single test that seems to cover the gate passes only through a crash.",
+      "suggested_fix": "In 'the current head keeps the dialog's verdict choice and Submit review', mount ReviewPublishDialog directly with onUpdateReview and assert no button starting with 'Update review to'. Add a case where the command returns headMoved with publishedUrl set, and assert the offer is absent.",
+      "evidence": "Scratch worktree, `cd apps/desktop && bun test --bail src/review/ReviewRuns.dom.test.tsx`: U1 failed with 'TypeError: undefined is not an object (evaluating headMoved.currentHead)'; U1b green, 0.5 s; U5 green, 0.5 s.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "...(headMoved ? [headMoved.currentHead] : [])]);",
+      "problem": "Removing the explicit currentHead digest entry leaves the suite green. The visible body already contains currentHead through headMovedLine, so the digest changes either way. The mutant is equivalent while the body line holds both shas.",
+      "impact": "None today. The 'head moved again' test is guarded by the body, not by this entry. If the body line wording ever drops the current sha, this entry becomes the only guard and no test isolates it.",
+      "suggested_fix": "Optional: keep the entry as the documented backstop. To pin it on its own, add a test that keeps the body fixed, for example by stubbing headMovedLine, which is likely more cost than it is worth.",
+      "evidence": "Mutation D5 in a scratch worktree: desk-publication.test.ts green, 11.2 s. The T5 journal entry already calls it a backstop.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/review/update-round.ts",
+      "line": null,
+      "quote": "return { attempt, partial: attempt.state === \"partial\" || result.coverage !== \"complete\" };",
+      "problem": "Deleting `attempt.state === \"partial\" ||` leaves update-round.test.ts green. The AC5 'partial' fixture sets both state partial and coverage partial. The producer cannot emit the separating state: coverage 'complete' requires outcome 'complete' (desk-run-executor.ts:387-388), and finishExecution maps only outcome 'incomplete' to state 'partial' (desk-run-service.ts:66-68).",
+      "impact": "None reachable. The disjunct is defensive.",
+      "suggested_fix": "None needed. Optionally add a comment saying the disjunct is defensive, or drop it.",
+      "evidence": "Mutation R1 in a scratch worktree: `bun test --bail src/review/update-round.test.ts` green, 0.6 s. Producer lines: src/review/desk-run-executor.ts:387-388 and src/review/desk-run-service.ts:66-68.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "D1", "file": "src/review/desk-publication.ts", "anchor": "const open = pr.state === \"OPEN\" && pr.baseRefOid === run.baseSha;", "replacement": "const open = pr.state === \"OPEN\";", "kind": "behavior"},
+    {"id": "D2", "file": "src/review/desk-publication.ts", "anchor": "const open = pr.state === \"OPEN\" && pr.baseRefOid === run.baseSha;", "replacement": "const open = pr.baseRefOid === run.baseSha;", "kind": "behavior"},
+    {"id": "D3", "file": "src/review/desk-publication.ts", "anchor": "open && !current && sha.test(pr.headRefOid)", "replacement": "open && !current", "kind": "behavior"},
+    {"id": "D4", "file": "src/review/desk-publication.ts", "anchor": "const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;", "replacement": "const expected = run;", "kind": "behavior"},
+    {"id": "D5", "file": "src/review/desk-publication.ts", "anchor": ",\n    ...(headMoved ? [headMoved.currentHead] : [])]);", "replacement": "]);", "kind": "behavior"},
+    {"id": "D6", "file": "src/review/desk-publication.ts", "anchor": "(current || headMoved) &&", "replacement": "current &&", "kind": "behavior"},
+    {"id": "D7", "file": "src/review/desk-publication.ts", "anchor": ": !current && !headMoved ?", "replacement": ": !current ?", "kind": "behavior"},
+    {"id": "D8", "file": "src/review/desk-publication.ts", "anchor": "(headMoved || skipped", "replacement": "(skipped", "kind": "behavior"},
+    {"id": "D9", "file": "src/review/desk-publication.ts", "anchor": "verdict: \"comment\", verdictOverride: \"comment\", answers }", "replacement": "verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers }", "kind": "behavior"},
+    {"id": "D10", "file": "src/review/desk-publication.ts", "anchor": "? { inline: false, general", "replacement": "? { inline: saved?.inline ?? false, general", "kind": "behavior"},
+    {"id": "D11", "file": "src/review/desk-publication.ts", "anchor": "if (headMoved) body = `${headMovedLine(headMoved)}\\n\\n${body}`;", "replacement": "", "kind": "behavior"},
+    {"id": "D12", "file": "src/review/desk-publication.ts", "anchor": ",\n    ...(headMoved && { headMoved }) },", "replacement": " },", "kind": "behavior"},
+    {"id": "U1", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "headMoved && onUpdateReview && !posted", "replacement": "onUpdateReview && !posted", "kind": "behavior"},
+    {"id": "U1b", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "{headMoved && onUpdateReview && !posted && <button type=\"button\" className=\"btn\" disabled={writing}\n          onClick={onUpdateReview}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>}", "replacement": "{onUpdateReview && !posted && <button type=\"button\" className=\"btn\" disabled={writing}\n          onClick={onUpdateReview}>Update review to <code>{shortSha(headMoved?.currentHead ?? \"\")}</code></button>}", "kind": "behavior"},
+    {"id": "U5", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "headMoved && onUpdateReview && !posted", "replacement": "headMoved && onUpdateReview", "kind": "behavior"},
+    {"id": "U2", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "checked={settings.inline} disabled={!!headMoved}", "replacement": "checked={settings.inline}", "kind": "behavior"},
+    {"id": "U3", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "{headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : \"Submit review\"}", "replacement": "\"Submit review\"", "kind": "presentation"},
+    {"id": "U4", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "checked={settings.verdictOverride == null} disabled={!!headMoved}", "replacement": "checked={settings.verdictOverride == null}", "kind": "behavior"},
+    {"id": "U6", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "{headMoved && <p className=\"review-detail-muted review-publish-head-moved\" role=\"status\">", "replacement": "{false && headMoved && <p className=\"review-detail-muted review-publish-head-moved\" role=\"status\">", "kind": "presentation"},
+    {"id": "H1", "file": "src/review/head-move.ts", "anchor": "source === \"scheduled\" ? \"follow\"", "replacement": "source !== \"manual\" ? \"follow\"", "kind": "behavior"},
+    {"id": "H2", "file": "src/review/head-move.ts", "anchor": "phase === \"running\" ? \"after-finish\" : \"now\"", "replacement": "\"after-finish\"", "kind": "behavior"},
+    {"id": "H3", "file": "src/review/head-move.ts", "anchor": "ON_HEAD_MOVE.find((mode) => mode === value) ?? defaultOnHeadMove(source)", "replacement": "(value as OnHeadMove) ?? defaultOnHeadMove(source)", "kind": "behavior"},
+    {"id": "H4", "file": "src/review/head-move.ts", "anchor": "  if (mode === \"ignore\") return { kind: \"none\" };\n", "replacement": "", "kind": "behavior"},
+    {"id": "R1", "file": "src/review/update-round.ts", "anchor": "attempt.state === \"partial\" || result", "replacement": "result", "kind": "behavior"},
+    {"id": "R2", "file": "src/review/update-round.ts", "anchor": "attempt.decision?.action === \"delete\" || ", "replacement": "", "kind": "behavior"},
+    {"id": "R3", "file": "src/review/update-round.ts", "anchor": "result.findingsKnown !== true", "replacement": "result.findingsKnown === false", "kind": "behavior"},
+    {"id": "R4", "file": "src/review/update-round.ts", "anchor": "attempt.source === \"existing\" || ", "replacement": "", "kind": "behavior"},
+    {"id": "R5", "file": "src/review/update-round.ts", "anchor": " || attempt.scope !== scope", "replacement": "", "kind": "behavior"},
+    {"id": "R6", "file": "src/review/update-round.ts", "anchor": " || result.coverage !== \"complete\"", "replacement": "", "kind": "behavior"}
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+Not run: H3, H4, R5, R6, U6 and D12. They are listed above for the main session. Every other candidate ran, with the results shown in the table.
+
+Routing audit: graph_used: no (layers block in the payload used instead; scope was a bounded diff). wiki_used: not-relevant (the AC and producer lines were read directly). ctx_used: yes (`keryx ctx rg` for slice headers and producers). raw_rg_used: no. Raw `sed`/`tail` with the keryx:raw marker were used only for short producer excerpts and scratch logs.

@@ -1,0 +1,138 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip
+- Merge-base: `98bec59046d0ce30500b341e8c18ba5b767069bb`
+- Head: `412258583206e539ce61727b9c4d71bb12fda3a0`
+- Scope mode: explicit-hash-range. I read the supplied slice-02 in full. It covers the backend files: desk-publication(-types), desk-run-executor, desk-run-service, head-move, prior-round, round-registry, update-round and their tests.
+- I read the following unchanged code as context: prior-round.ts `choosePrevious`/`weakReasons`/`findPreviousRound` record build, round-record.ts `completionOf`, round-registry.ts `appendRoundRegistry`/`compactEntries`, desk-run-store.ts `roundFor`/`history`, desk-run-executor.ts `collectResult`, desk-run-service.ts `verifyDeskSubject`, and premise-question.ts registry re-record.
+- Spec compliance gate: ran against AC1–AC10 of flow 520 (payload), for the parts slice-02 implements (AC1, AC2, AC4–AC7, AC10 backend).
+
+### Summary
+- **T11 holds.** The as-is variant requires the compare status `ahead` (`reviewedHeadInPull`). The write path re-verifies the PR against `expected` (`{run.baseSha, currentHead}`), and `verifyDeskSubject` checks state OPEN, base and head. The digest changes with a further push. Automatic publication refuses a moved head before the compare read.
+- **The T12 trust model is sound on every path I traced.**
+  - A draft enters `localPackageCandidates` only with a `desk-partial` vouch of exactly its files.
+  - A desk-partial entry never vouches for the same files claiming completion, because `registryVouches` filters it out.
+  - A vouched partial round is always weak (`not completed`), so everything outside its delta goes to `newHunks`, as AC7 asks.
+- **T13 answer carry-over matches by question id.** That id is `global_id || id`. Carried findings keep their round-1 `global_id` (managed.ts mints `reviewId#id` only when absent), so an answer cannot land on an unrelated new finding.
+- **One defect:** the single prior-attempt rule now picks an attempt the executor may refuse to hand on, and nothing falls back to the older finished round.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected. AC1, AC2, AC4, AC5, AC6, AC7 and the backend half of AC10 are implemented, and their tests are in the slice.
+
+### Logic Bugs
+[F-001] (major, confidence medium) The previous-round rule selects a partial attempt that the executor then refuses to hand on, and the round loses the older finished round it used to build on.
+- File: src/review/desk-run-service.ts:311-318 (`previousRoundAttempt`) with src/review/update-round.ts:22 and src/review/desk-run-executor.ts:525-530.
+- Problem: the selection and the hand-on use two different tests for "accepted findings".
+  - `selectPriorAttempt` accepts a partial attempt when `result.findingsKnown === true` and returns only that one attempt.
+  - `collectResult` (desk-run-executor.ts:389-402) sets `findingsKnown = true` whenever `evaluated.source === "raw reviewer results"`, even when there is no ingested findings.json. Without an owned package, `findingsKnown` comes from summary counts (`summary.findingsKnown ?? counts > 0`, :370).
+  - The executor hands a non-closed package on only if `recordPartialRound` succeeds, and that requires `findings.json` to hold a list. Otherwise `handOn` is false and nothing is copied. `previousRoundAttempt` offers no second candidate, so the round starts with no previous package at all.
+- Trigger:
+  - Round 1 completes: closed package P1, `coverage: "complete"`.
+  - Round 2 stops partial (budget or stall) after reviewers wrote raw results but before ingest, so `findingsKnown: true`, the manifest is a draft, and there is no findings.json list.
+  - The user clicks "Update review" (round 3). `previousRoundAttempt` returns the round 2 attempt with `partial: true`. `recordPartialRound` returns `skipped: "the partial round has no ingested findings.json"`, so `handOn` is false. `findPreviousRound` in the fresh checkout then finds no local package.
+  - Round 3 runs as round 1 (`mode: "first"`) over merge-base..head. It has no prior findings, no carried list and no fix hunks.
+  - Before T12, the old rule (completed + complete + same options) picked P1, so round 3 was a delta with round 1's findings attached.
+- Why it matters: silent wrong result on a named input. The update round, which the user started to build on earlier rounds, presents itself as a first review. The round number is reset, every prior finding is dropped from context, and the whole range is re-reviewed at full cost. AC7 says a new attempt on a newer head "builds on the previous round". Here it builds on nothing, even though a trusted finished round exists. The executor test (desk-run-executor.test.ts "a draft package is not handed on unless…") asserts the refusal, but no test covers the missing fallback.
+- Fix (one of):
+  1. Return candidates in order and let the executor hand on the first usable one. `previousRoundAttempt` returns the filtered list run through the same predicate as `selectPriorAttempt` (newest first). The worker passes `previousRuns: [{dir, partial}]`. The executor tries each one, in the closed branch or the `recordPartialRound` branch, and stops at the first copied package.
+  2. Narrow the selection to what the executor can hand on. In the worker, skip a `partial` candidate whose `store.directory(id)/package/findings.json` does not parse to an array (for example with `knownFindingList`), then select again. Then `selectPriorAttempt`'s "accepted findings" means the same thing as `recordPartialRound`'s.
+- class_scope:
+  - sites: ["src/review/desk-run-service.ts:318", "src/review/desk-run-executor.ts:529"]
+  - enumeration_method: `keryx ctx rg "selectPriorAttempt|previousRoundAttempt|previousPartial|recordPartialRound" src apps/desktop/src --all`. Outside tests, selectPriorAttempt has one caller (previousRoundAttempt). That has one caller (runDeskWorker :385), which feeds the single hand-on site in executeDeskReview (:525-530). Desktop has no caller. Producers of `findingsKnown: true` without an ingested list: desk-run-executor.ts:370 (summary counts) and :390/:402 (`raw reviewer results`), plus desk-run-service.ts:87 (`coverage complete || counts > 0` fallback).
+
+### Async & Concurrency
+None detected. `earlierAttemptDirectories` runs inside the read-only store's try/finally before `store.close()`. `earlierAnswers` reads files after the store is closed, which is fine because it only uses directories. `recordPartialRound` is synchronous and runs before the copy.
+
+### Error Handling
+None detected.
+- `reviewedHeadInPull` fails closed on any thrown read or any status other than `ahead`.
+- `recordPartialRound` returns errors instead of throwing, and the caller then does not hand on.
+- An unreadable earlier draft only means nothing is pre-selected (`.catch(() => undefined)`).
+
+### Null / Undefined Safety
+None detected. `partialRoundVouch` guards `hashes === undefined` and `findingsSha256 === null`. `packageTrust`'s partial branch requires `packageDir`. `headMoved` is constructed only when `sha.test(pr.headRefOid)`.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+[F-002] (info) `head-move.ts` has no non-test caller. `parseOnHeadMove`/`headMoveResponse` are not read by the worker, the watcher or Desktop. This matches the PR body's "Not in this PR: acting on on_head_move", and AC4 asks only for the values and defaults. It is recorded so a later round does not read the module as wired.
+
+### Verified clean (sites)
+- desk-publication.ts T11:
+  - `open = OPEN && base == run.baseSha`. `headMoved` is set only when `open && !current`, sha-shaped and `ahead`.
+  - `expected` is used for both `verifyDeskSubject` calls.
+  - `commit_id: run.headSha`.
+  - The headMoved settings force `comment` and inline off. `settings.inline` false means no diff read and no comments.
+  - Discussion re-read is `(current || headMoved)`.
+  - The blocked-reason chain lets headMoved past the `!current` refusal only.
+  - The automatic path throws before the compare. A closed PR keeps `!open`, which gives the refusal.
+  - `cache.aheadHead` caches an immutable ancestry fact for a specific head sha, so caching it is sound.
+- Answer carry-over: `saved?.answers ?? earlierAnswers(earlier)`. The new attempt's own draft or request settings always win. Answers are filtered to the current questions (`selections`). Option answers match by `hash([id,label])`, so a relabelled option is never mis-selected. The `previousRunId` chain is bounded (8), cycle-guarded and kept to the same Review.
+- prior-round.ts: `localPackageCandidates` admits a non-eligible draft only with `partialRoundVouch`. Flow and git-history candidates still skip drafts (prior-round.ts:497, :564). `weakReasons` adds `not completed`, so `unchanged` hunks go to `newHunks`, not `secondLookHunks`. The registry read moved before the candidate search, so the same entries are used for admission and trust.
+- round-registry.ts: `registryVouchesPackage` (premise-question.ts:181) does not filter desk-partial. However, the re-record that follows uses `recordFinishedRound`, which refuses a draft ("not a finished round"). So a desk-partial entry cannot be promoted to a finished-round vouch through a premise answer.
+- desk-run-service.ts `previousRoundAttempt`: it excludes the attempt itself and its own round (`item.round < current.round`). For an unplaced store it falls back to range inequality. Other Reviews are excluded when both ids are known.
+
+### Suggested Patches
+F-001 (sketch of fix 2, not applied):
+```diff
+-      const previous = previousRoundAttempt(store.history(key).runs, run);
++      const usable = (r: DeskRun) => r.state === "completed" && r.result?.coverage === "complete" ||
++        knownFindingList(readJsonSync(path.join(store.directory(r.id), "package", "findings.json")));
++      const previous = previousRoundAttempt(store.history(key).runs.filter(r => r.id === run.id || usable(r)), run);
+```
+
+Not verified: this reviewer ran no tests (allowed_tools read-only, exec_budget_s 0). For test results I relied on the brief's evidence (`bun test src/review` 5499 pass / 2 inherited timing failures). F-001's trigger is traced through the code, not run. How often a partial Desktop attempt ends with raw reviewer results but no ingested findings.json in practice is not measured, so the confidence is medium. `runDeskWorker` end to end was not exercised (the PR body says the same).
+
+Routing audit: graph_used: no (the payload's layers block carried the affected set at the PR head; callers enumerated with ctx rg). wiki_used: not-relevant (the flow ACs, the PR body and the TM-04 notes in prior-round.ts settled intent). ctx_used: yes (keryx ctx rg). raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Backend of T11-T13. T11 holds: the as-is variant needs compare status 'ahead', the write re-verifies the PR at {reviewed base, current head}, a further push changes the digest, and automatic publication refuses a moved head before any compare. The T12 trust model is sound: a draft is admitted only with a desk-partial vouch of exactly its files, desk-partial never vouches for a completed claim, and a vouched partial round is weak, so its unproven area is planned as new. T13 answers carry by question id, global_id || id, which survives rounds. One major: selectPriorAttempt accepts a partial attempt on findingsKnown, which raw reviewer results or summary counts can set, but the executor hands a draft on only with an ingested findings.json list. When it cannot, nothing falls back to the older finished round, and the update round silently runs as a first review.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/desk-run-service.ts",
+      "line": 318,
+      "quote": "return selectPriorAttempt(earlier);",
+      "problem": "previousRoundAttempt returns a single attempt chosen by selectPriorAttempt, which accepts a partial attempt when result.findingsKnown === true. collectResult sets findingsKnown true for 'raw reviewer results' without an ingested findings.json (desk-run-executor.ts:390-402), or from summary counts (:370). executeDeskReview hands a non-closed package on only when recordPartialRound succeeds, and that requires findings.json to be a list (desk-run-executor.ts:529). If it does not succeed, no package is copied, and no older candidate is tried.",
+      "impact": "Trigger: round 1 completes with a closed package. Round 2 stops partial after raw reviewer results but before ingest. The user starts 'Update review' (round 3). Round 3 gets no previous package and runs as mode 'first', round 1, over merge-base..head, with no prior findings. Before T12 it was a delta on round 1. The update round silently drops every prior finding and re-reviews the whole range, contrary to AC7's 'builds on the previous round'.",
+      "suggested_fix": "Either have previousRoundAttempt return all eligible attempts newest first, and have the executor hand on the first that it can copy (closed, or recordPartialRound succeeded). Or filter, in the worker before selection, partial candidates whose package/findings.json is not a known finding list, so selection and hand-on share one definition of accepted findings. Add a worker or executor test: a complete round 1 plus a raw-results-only partial round 2 gives a delta on round 1.",
+      "evidence": "update-round.ts:22 `if (!result?.reviewed || result.findingsKnown !== true) continue;`. desk-run-executor.ts:390 `const known = evaluated.source === \"raw reviewer results\" || (evaluated.source === \"ingested round\" && ingested);` and :402 `result.findingsKnown = true`. round-registry.ts recordPartialRound: `if (!Array.isArray(findings)) return { skipped: \"the partial round has no ingested findings.json\" };`. desk-run-executor.ts:528-530 copies only on `closed || (previousPartial && recordPartialRound(...).file !== undefined)`. desk-run-executor.test.ts asserts the refusal ('A partial attempt without ingested findings gives no previous round') but not a fallback.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": ["src/review/desk-run-service.ts:318", "src/review/desk-run-executor.ts:529"],
+        "enumeration_method": "keryx ctx rg \"selectPriorAttempt|previousRoundAttempt|previousPartial|recordPartialRound\" src apps/desktop/src --all: one non-test caller chain (runDeskWorker:385 -> previousRoundAttempt -> selectPriorAttempt), one hand-on site (executeDeskReview:525-530), no Desktop caller. findingsKnown:true producers without an ingested list, from keryx ctx rg findingsKnown src/review --all: desk-run-executor.ts:370, :402, desk-run-service.ts:87."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/head-move.ts",
+      "line": null,
+      "quote": "export function headMoveResponse(mode: OnHeadMove, phase: HeadMovePhase): HeadMoveResponse {",
+      "problem": "head-move.ts has no non-test caller. No worker, watcher or Desktop path reads parseOnHeadMove or headMoveResponse.",
+      "impact": "None today. The PR body lists acting on on_head_move as out of scope, and AC4 asks only for the values and defaults. This is recorded so a later round does not take the module as wired.",
+      "suggested_fix": "None needed in this flow. Wire it in the stage that implements the follow auto-queue and the ask notice.",
+      "evidence": "Callers enumerated with keryx ctx rg in src and apps/desktop/src: only head-move.test.ts imports it.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 },
+  "slices": [ { "id": "slice-02", "coverage": "read in full", "status": "DONE_WITH_CONCERNS" } ],
+  "inputs_unreadable": []
+}
+```

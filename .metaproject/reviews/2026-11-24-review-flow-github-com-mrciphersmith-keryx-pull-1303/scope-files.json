@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+    "apps/desktop/src/review/ReviewPublishDialog.tsx",
+    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+    "src/review/desk-publication-types.ts",
+    "src/review/desk-publication.test.ts",
+    "src/review/desk-publication.ts",
+    "src/review/head-move.test.ts",
+    "src/review/head-move.ts",
+    "src/review/prior-round.test.ts",
+    "src/review/update-round.test.ts",
+    "src/review/update-round.ts"
+  ],
+  "changedLines": 1423
+}
