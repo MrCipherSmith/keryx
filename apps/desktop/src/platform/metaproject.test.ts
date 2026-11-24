@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { METAPROJECT_CAPABILITIES, MetaprojectRequestError, parseExplorerRequestV1 } from "../../../../src/integrations/metaproject-explorer-contract";
 import {
-  METAPROJECT_REQUIRED_ACTIONS, isMetaprojectResponse, isMetaprojectV2Response,
+  METAPROJECT_PERMIT_REFUSAL, METAPROJECT_REQUIRED_ACTIONS, isMetaprojectPermitRefusal, isMetaprojectResponse, isMetaprojectV2Response,
   negotiateMetaprojectExplorer, requestMetaprojectTree, requestMetaprojectV2,
 } from "./metaproject";
 
@@ -205,6 +205,20 @@ describe("Metaproject tree responses", () => {
       throw new Error("not-found: Unknown Metaproject tree parent.");
     }));
     expect(error instanceof MetaprojectRequestError && error.code).toBe("not-found");
+  });
+
+  test("Desktop's permit refusal reaches the caller recognisable as one, and other unavailable answers do not", async () => {
+    // The exact text `ReadPermit::acquire` returns in src-tauri/src/metaproject.rs.
+    const refusal = await readError(requestMetaprojectTree("/checkout", { scope: "graph" }, async () => {
+      throw new Error("unavailable: Too many Metaproject reads. Retry shortly.");
+    }));
+    expect(isMetaprojectPermitRefusal(refusal)).toBe(true);
+    expect(isMetaprojectPermitRefusal(new Error(METAPROJECT_PERMIT_REFUSAL))).toBe(true);
+    const other = await readError(requestMetaprojectTree("/checkout", { scope: "graph" }, async () => {
+      throw new Error("unavailable: The selected CLI did not complete the Metaproject read.");
+    }));
+    expect(isMetaprojectPermitRefusal(other)).toBe(false);
+    expect(isMetaprojectPermitRefusal(new MetaprojectRequestError("not-found", "Too many Metaproject reads."))).toBe(false);
   });
 
   test("an answer for another snapshot than the one pinned is refused as stale-snapshot", async () => {

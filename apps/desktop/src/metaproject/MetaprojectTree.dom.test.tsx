@@ -14,6 +14,8 @@ let act: (fn: () => void | Promise<void>) => Promise<void>;
 let Tree: typeof import("./MetaprojectTree").MetaprojectTree;
 let useTree: typeof import("./useMetaprojectTree").useMetaprojectTree;
 let MAX_TREE_READS: number;
+/** Desktop's answer when every read permit is taken, as the transport defines it. */
+let PERMIT_REFUSAL: string;
 let root: Root;
 let host: HTMLElement;
 
@@ -77,6 +79,7 @@ beforeAll(async () => {
   const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
   Tree = (await import("./MetaprojectTree")).MetaprojectTree;
   ({ useMetaprojectTree: useTree, MAX_TREE_READS } = await import("./useMetaprojectTree"));
+  ({ METAPROJECT_PERMIT_REFUSAL: PERMIT_REFUSAL } = await import("../platform/metaproject"));
   host = document.createElement("div"); document.body.append(host); root = (await import("react-dom/client")).createRoot(host);
 });
 beforeEach(async () => { await act(() => root.render(null)); });
@@ -447,6 +450,25 @@ test("two folders answering in one commit keep focus in the folder whose Loading
   expect(focused()).toBe("client.ts");
 });
 
+test("a focused Show more whose page lands with the children of the folder above it hands focus to the first row appended", async () => {
+  // Before the page: src, src's Loading row, Show more. src's children and the root's next page land in one commit.
+  const tree = reader({
+    "|": { entries: [folder("src", 2)], nextCursor: "next", partial: false },
+    "src|": SRC_PAGE,
+    "|next": { entries: [leaf(readme)], partial: false },
+  });
+  tree.hold.add("src|");
+  tree.hold.add("|next");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  await act(async () => { item("Show more").focus(); });
+  await key(item("Show more"), "Enter");
+  expect(items().map(row => row.textContent)).toEqual(["src2", "Loading…", "Loading…"]);
+  await act(async () => { tree.release("src|"); tree.release("|next"); });
+  expect(items().map(row => row.querySelector(".metaproject-tree-name")?.textContent)).toEqual(["src", "client.ts", "server.ts", "README.md"]);
+  expect(focused()).toBe("README.md");
+});
+
 test("focus that left the tree stays outside when the focused Show more row's page arrives", async () => {
   const tree = reader({
     "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },
@@ -500,8 +522,6 @@ test("a next page refused as stale-snapshot tells the explorer and leaves no dea
   expect(item("README.md")).not.toBeNull();
 });
 
-const PERMIT_REFUSAL = "unavailable: Too many Metaproject reads. Retry shortly.";
-
 /** A reader that refuses `src`'s first `refusals` reads with `failure`, then answers. */
 function refusing(refusals: number, failure = PERMIT_REFUSAL) {
   const calls: MetaprojectTreeRequest[] = [];
@@ -540,6 +560,38 @@ test("a permit refusal that outlasts the retries, or another unavailable answer,
   await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
   expect(item("Could not load.").textContent).toContain("did not complete");
   expect(other.calls.filter(call => call.parent === "src")).toHaveLength(1);
+});
+
+test("a read refused a permit is not sent again under a snapshot retired during its wait", async () => {
+  const tree = refusing(1);
+  let resume: () => void = () => {};
+  const wait = () => new Promise<void>(resolve => { resume = resolve; });
+  await act(async () => { root.render(createElement(Harness, { request: tree.request, wait })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  const next = "b".repeat(64);
+  await act(async () => { root.render(createElement(Harness, { request: tree.request, wait, snapshot: next })); });
+  await act(async () => { resume(); });
+  expect(tree.calls.filter(call => call.parent === "src" && call.expectedSnapshotId === SNAPSHOT)).toHaveLength(1);
+  expect(tree.calls.filter(call => call.parent === "src" && call.expectedSnapshotId === next)).toHaveLength(1);
+  expect(item("client.ts")).not.toBeNull();
+});
+
+test("a permit refusal that arrives after its snapshot was retired is not waited on or retried", async () => {
+  const tree = refusing(0);
+  let refuse: () => void = () => {};
+  const request = (cwd: string, input: MetaprojectTreeRequest) => input.parent === "src" && input.expectedSnapshotId === SNAPSHOT
+    ? new Promise<MetaprojectTreeV2>((_resolve, reject) => { tree.calls.push(input); refuse = () => reject(new Error(PERMIT_REFUSAL)); })
+    : tree.request(cwd, input);
+  let waits = 0;
+  const wait = () => { waits++; return Promise.resolve(); };
+  await act(async () => { root.render(createElement(Harness, { request, wait })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  const next = "b".repeat(64);
+  await act(async () => { root.render(createElement(Harness, { request, wait, snapshot: next })); });
+  await act(async () => { refuse(); });
+  expect(waits).toBe(0);
+  expect(tree.calls.filter(call => call.parent === "src" && call.expectedSnapshotId === SNAPSHOT)).toHaveLength(1);
+  expect(item("client.ts")).not.toBeNull();
 });
 
 test("an unexpected throw while handling a read's failure is reported, not dropped", async () => {

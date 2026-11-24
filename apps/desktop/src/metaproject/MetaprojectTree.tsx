@@ -39,7 +39,8 @@ function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
   const visit = (parent: string, level: number) => {
     const folder = tree.folders.get(parent);
     const id = statusId(parent);
-    if (!folder || folder.status === "loading") {
+    // A stale read shows as loading: the explorer's Refresh catalog banner is its one way out.
+    if (!folder || folder.status === "loading" || folder.status === "stale") {
       if (!folder) unread.push(parent);
       rows.push({ type: "loading", id, level, parent });
       return;
@@ -55,10 +56,26 @@ function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
       if (isContainer(entry) && tree.expanded.has(entryKey(entry))) visit(entryKey(entry), level + 1);
     });
     if (folder.more?.status === "failed") rows.push({ type: "error", id: moreId(parent), level, parent, message: folder.more.error });
-    else if (folder.nextCursor) rows.push({ type: "more", id: moreId(parent), level, parent, loading: folder.more?.status === "loading" });
+    else if (folder.nextCursor) rows.push({ type: "more", id: moreId(parent), level, parent, loading: Boolean(folder.more) });
   };
   visit(TREE_ROOT, 1);
   return { rows, unread };
+}
+
+/**
+ * Where focus goes if the focused row leaves: the first row after `anchor`, or with `parent` set, the
+ * first row of that parent after it. A parent's status row anchors to its own parent's rows, so rows of
+ * another folder that arrive in the same commit cannot take its place: its Loading row to the parent's
+ * row (its first child follows), its next-page row to the parent's last entry (its first appended entry
+ * follows). Any other row anchors to the row before it.
+ */
+function handOff(rows: readonly Row[], index: number): { anchor?: string; parent?: string } {
+  const row = rows[index];
+  if (!row || row.type === "entry") return { anchor: rows[index - 1]?.id };
+  const own = `d:${row.parent}`;
+  if (row.id === statusId(row.parent)) return { anchor: own, parent: row.parent };
+  const last = rows.slice(0, index).reverse().find(item => item.type === "entry" && item.parent === row.parent);
+  return { anchor: last?.id ?? own, parent: row.parent };
 }
 
 /** The tree steps from the root to `node`: each names the parent to read and the child to find in it. */
@@ -104,10 +121,13 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
   const [focusId, setFocusId] = useState("");
   const list = useRef<HTMLUListElement>(null);
   /**
-   * The element focused inside the tree, its row's index and the id of the row before it, so a row
-   * that leaves can hand focus to the row now at its place.
+   * The element focused inside the tree, its row's index and where it hands focus (`handOff`), so a
+   * row that leaves can hand focus to the row now at its place.
    */
-  const focused = useRef<{ element: HTMLElement; index: number; before?: string } | null>(null);
+  const focused = useRef<{ element: HTMLElement; index: number; anchor?: string; parent?: string } | null>(null);
+  // The rows on screen, for recording a hand-off outside a render (a blur's microtask).
+  const shown = useRef(rows);
+  shown.current = rows;
   const scrollRequest = useRef("");
   const rowElements = () => [...list.current?.querySelectorAll<HTMLElement>("[data-row]") ?? []];
 
@@ -121,7 +141,7 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
     for (const step of revealSteps(scope, selected)) {
       const folder = tree.folders.get(step.parent);
       if (!folder) { model.ensure(scope, step.parent); return; }
-      if (folder.status === "loading") return;
+      if (folder.status === "loading" || folder.status === "stale") return;
       if (folder.status === "failed") { model.setHandled(scope, selection); return; }
       const found = folder.entries.some(entry => "container" in step
         ? isContainer(entry) && entryKey(entry) === step.container
@@ -148,29 +168,33 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
       if (row) { row.scrollIntoView?.({ block: "nearest" }); scrollRequest.current = ""; }
     }
     // The focused row left (its folder's children or last page arrived, a new snapshot): focus the row
-    // now at its place, after the row that preceded it, so rows added or removed above in the same
-    // commit do not move it into another folder. Focus that was outside the tree is never taken.
+    // now at its place, found from its hand-off anchor (`handOff`), so rows added or removed elsewhere in
+    // the same commit do not move it into another folder. Without the anchor, the row at its old index.
+    // Focus that was outside the tree is never taken.
     const lost = focused.current;
     const active = document.activeElement;
     if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {
-      const anchor = lost.before === undefined ? -1 : elements.findIndex(element => element.dataset.row === lost.before);
-      const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];
+      const at = lost.anchor === undefined ? -1 : rows.findIndex(row => row.id === lost.anchor);
+      const after = rows.slice(at + 1);
+      const target = at < 0 ? undefined
+        : (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];
+      const next = target ? elements.find(element => element.dataset.row === target.id) : elements[Math.min(lost.index, elements.length - 1)];
       next?.focus();
     }
-    remember(document.activeElement, elements);
+    remember(document.activeElement);
   });
 
   /** Records where focus is when it is inside the tree, and forgets it otherwise. */
-  function remember(element: Element | null, elements: HTMLElement[]) {
+  function remember(element: Element | null) {
     const row = element instanceof HTMLElement && list.current?.contains(element) ? element.closest<HTMLElement>("[data-row]") : null;
-    const index = row ? elements.indexOf(row) : -1;
-    focused.current = element instanceof HTMLElement && index >= 0 ? { element, index, before: elements[index - 1]?.dataset.row } : null;
+    const index = row ? shown.current.findIndex(item => item.id === row.dataset.row) : -1;
+    focused.current = element instanceof HTMLElement && index >= 0 ? { element, index, ...handOff(shown.current, index) } : null;
   }
   // Focus moving out of the tree is forgotten; a row removed while focused is not, so it can hand focus on.
   const onBlur = (event: FocusEvent<HTMLUListElement>) => {
     const element = event.target;
     queueMicrotask(() => {
-      if (element.isConnected && focused.current?.element === element) remember(document.activeElement, rowElements());
+      if (element.isConnected && focused.current?.element === element) remember(document.activeElement);
     });
   };
 
@@ -259,7 +283,7 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
             setFocusId(row.id);
             // The rendered rows are this render's `rows`, in order: no DOM query on every focus move.
             const index = rows.findIndex(item => item.id === row.id);
-            focused.current = { element: event.target, index, before: rows[index - 1]?.id };
+            focused.current = { element: event.target, index, ...handOff(rows, index) };
           },
         };
         if (row.type === "loading") {

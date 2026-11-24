@@ -755,7 +755,11 @@ function Explorer({
   // Without a query, a CLI that offers `tree` browses Graph by folder and Wiki by page type; otherwise the flat list.
   const treeScope = protocol === 2 && supportsTree && !searchQuery && (mode === "graph" || mode === "wiki") ? mode : null;
   const markStale = useCallback(() => setSnapshotMismatch(true), []);
-  const tree = useMetaprojectTree({ cwd, snapshot: catalog?.snapshotId ?? "", request: requestTree ?? requestMetaprojectTree, onStale: markStale });
+  // Every catalog load (a new catalog object) re-reads the tree reads a stale-snapshot answer parked,
+  // so Refresh catalog recovers them even when it finds the same snapshot.
+  const tree = useMetaprojectTree({
+    cwd, snapshot: catalog?.snapshotId ?? "", request: requestTree ?? requestMetaprojectTree, onStale: markStale, reload: catalog,
+  });
   const listHeading = searchQuery ? `Results · ${results.length}`
     : treeScope === "graph" ? `Files · ${catalog?.counts.files ?? 0}`
     : treeScope === "wiki" ? `Wiki · ${catalog?.counts.wiki ?? 0}`

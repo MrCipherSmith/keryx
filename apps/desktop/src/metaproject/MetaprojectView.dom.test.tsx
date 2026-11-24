@@ -2138,11 +2138,12 @@ test("a new snapshot keeps the expanded set, drops stale children and answers, a
 
 test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows", async () => {
   const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
-  const explorer = treeExplorer({
+  const trees: Record<string, TreeAnswer> = {
     ...STANDARD_TREES,
     "s1|graph|src|": { entries: [{ type: "node", node: file }], snapshotId: "s2" },
     "s1|wiki|other|": new MetaprojectRequestError("stale-snapshot", "Metaproject changed. Refresh and retry."),
-  });
+  };
+  const explorer = treeExplorer(trees);
   const createCytoscape = await headlessCytoscape();
   await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
   const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
@@ -2152,13 +2153,41 @@ test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the
   expect(staleBanner()).toBe(true);
   expect(deadRetry()).toBe(false);
   expect(() => treeRow("Client")).toThrow();
+  // The CLI answers for the pinned snapshot again; Refresh catalog finds the same snapshot and re-reads src.
+  trees["s1|graph|src|"] = SRC_CHILDREN;
   await act(async () => { button("Refresh catalog").click(); });
+  await act(async () => {});
   expect(staleBanner()).toBe(false);
+  expect(treeRow("Client")).not.toBeNull();
+  expect(treeRows().some(row => row.textContent === "Loading…")).toBe(false);
+  expect(explorer.treeCalls.filter(call => call.parent === "src").map(call => call.expectedSnapshotId)).toEqual(["s1", "s1"]);
   await act(async () => { button("Wiki").click(); });
   await expandFolder("Other");
   expect(staleBanner()).toBe(true);
   expect(deadRetry()).toBe(false);
   expect(() => treeRow("Guide")).toThrow();
+});
+
+test("a next tree page answered for another snapshot is read again after Refresh catalog finds the same snapshot", async () => {
+  const late = { ...file, id: "late", title: "Late", path: "late.ts" };
+  const trees: Record<string, TreeAnswer> = {
+    "s1|graph||": { entries: [{ type: "folder", path: "src", name: "src", files: 1 }], nextCursor: "page-2" },
+    "s1|graph||page-2": { entries: [{ type: "node", node: late }], snapshotId: "s2" },
+  };
+  const explorer = treeExplorer(trees);
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
+  const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
+  await act(async () => { treeRows().find(row => row.textContent === "Show more")?.click(); });
+  expect(staleBanner()).toBe(true);
+  expect(() => treeRow("Late")).toThrow();
+  trees["s1|graph||page-2"] = { entries: [{ type: "node", node: late }] };
+  await act(async () => { button("Refresh catalog").click(); });
+  await act(async () => {});
+  expect(staleBanner()).toBe(false);
+  expect(treeRow("Late")).not.toBeNull();
+  expect(treeRows().some(row => row.textContent === "Loading…" || row.textContent === "Show more")).toBe(false);
+  expect(explorer.treeCalls.filter(call => call.cursor === "page-2").map(call => call.expectedSnapshotId)).toEqual(["s1", "s1"]);
 });
 
 test("the selection shown by default reveals nothing: only a selection the user made expands folders", async () => {

@@ -274,6 +274,18 @@ export async function negotiateMetaprojectExplorer(cwd: string, call: InvokeExpl
   throw new Error("The selected CLI returned invalid Metaproject capabilities.");
 }
 
+/**
+ * Desktop's answer when every Metaproject read permit is taken (`ReadPermit::acquire` in
+ * src-tauri/src/metaproject.rs). It is no CLI error code, so it reaches callers as a plain error.
+ */
+export const METAPROJECT_PERMIT_REFUSAL = "unavailable: Too many Metaproject reads. Retry shortly.";
+const PERMIT_REFUSAL_PREFIX = "unavailable: Too many Metaproject reads";
+
+/** The read was refused a read permit, which other reads hold for now: worth retrying shortly. */
+export function isMetaprojectPermitRefusal(error: unknown): boolean {
+  return !(error instanceof MetaprojectRequestError) && errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);
+}
+
 export type MetaprojectTreeRequest = Omit<Extract<MetaprojectRequestV2, { action: "tree" }>, "version" | "action">;
 
 /** One page of one tree parent; call only when the negotiation reported `supportsTree`. */
