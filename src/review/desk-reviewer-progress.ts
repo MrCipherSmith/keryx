@@ -1,3 +1,4 @@
+import { isReviewAssignmentTier } from "./assignment-tier";
 // An attempt is selected by the account/repository/PR-scoped store before this reader is called.
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import path from "node:path";
@@ -89,7 +90,27 @@ function projectPlanSummary(root: string, parts: string[], plan: Record<string, 
       ? item.risk.why.filter((reason): reason is string => typeof reason === "string").slice(0, 5).map(reason => publicReviewText(reason, 240)) : [];
     return [{ id: publicReviewText(item.id, 80), ...(typeof item.depth === "string" && { depth: item.depth }), reasons }];
   }).slice(0, 24) : [];
-  const classifiedChecks = projectedChecks.map(check => ({ ...check, category: projectRoles.has(check.name) ? "project" as const : "baseline" as const }));
+  const modelRouting = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(queue?.modelRouting)) {
+    for (const entry of queue.modelRouting) {
+      if (isRecord(entry) && typeof entry.result === "string") modelRouting.set(entry.result, entry);
+    }
+  }
+  const classifiedChecks: NonNullable<DeskReviewerProgress["planSummary"]>["checks"] = projectedChecks.map(check => {
+    const assignments = (calls ?? []).flatMap(call => {
+      if (!isRecord(call) || call.label !== check.name || typeof call.save_result_to !== "string") return [];
+      const wave = assignedReviewerWave(check.name, path.basename(call.save_result_to));
+      const route = modelRouting.get(call.save_result_to);
+      if (!wave || !route || !isReviewAssignmentTier(route.tier) || typeof route.tierReason !== "string") return [];
+      const expected = isRecord(call.expected_model) ? call.expected_model : {};
+      const slices = Array.isArray(route.slices) ? route.slices.filter(identifier).map(id => publicReviewText(id, 80)).slice(0, 24) : [];
+      return [{ wave, slices, tier: route.tier, tierReason: publicReviewText(route.tierReason, 300),
+        ...(identifier(expected.provider) && { provider: expected.provider }),
+        ...(identifier(expected.model) && { model: expected.model }) }];
+    }).slice(0, 24);
+    return { ...check, category: projectRoles.has(check.name) ? "project" : "baseline",
+      ...(assignments.length && { assignments }) };
+  });
   const depth = readObject(root, [...parts, "round-depth.json"]);
   const changedLines = filesRecord?.changedLines;
   const recordedFiles = Array.isArray(depth?.files) && depth.files.every((file): file is string => typeof file === "string")

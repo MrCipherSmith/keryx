@@ -1,5 +1,5 @@
 // Portable Desktop review protocol. Times are ISO 8601 and revisions are full Git object IDs.
-import type { DeskReviewOptions } from "./desk-run-options";
+import type { DeskReviewOptions, DeskReviewPool } from "./desk-run-options";
 export type { DeskReviewOptions } from "./desk-run-options";
 import type { ReviewRunUsage, ReviewUsageCounts } from "./run-usage";
 
@@ -81,7 +81,10 @@ export interface DeskReviewerProgress {
     headSha: string;
     files: string[];
     filesComplete: boolean;
-    checks: { name: string; category: "baseline" | "project"; slices: string[] }[];
+    checks: {
+      name: string; category: "baseline" | "project"; slices: string[];
+      assignments?: { wave: number; slices: string[]; tier: DeskReviewPool; tierReason: string; provider?: string; model?: string }[];
+    }[];
     sliceReasons: { id: string; depth?: string; reasons: string[] }[];
     checksComplete: boolean;
     depth?: "light" | "full";

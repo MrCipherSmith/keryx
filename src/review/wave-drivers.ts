@@ -8,6 +8,9 @@ import { installedRosterRoles } from "./roster";
 import { packageEnabledRoles } from "./role-switches";
 import type { SliceManifest } from "./slice";
 import { projectReviewersRoot } from "../gdskills/project-reviewers";
+import { parseSkillModelTier } from "../gdskills/model-tier";
+import { readRoundNumber } from "./round-record";
+import { reviewAssignmentTier } from "./assignment-tier";
 import { roleDispatchWaves } from "./estimate";
 
 /** Flow 458 AC12: the reviewers of a package and the per-wave driver files `review slice --package` writes for them. */
@@ -62,12 +65,15 @@ export async function writeWaveDrivers(input: { packageDir: string; manifest: Sl
   }
   const projectDefinitions = path.relative(root, projectReviewersRoot(root)).split(path.sep).join("/");
   const written: string[] = [];
+  const round = readRoundNumber(packageDir) ?? 1;
   for (const reviewer of [...input.reviewers].sort()) {
     // The estimate's own count (one kind per dispatch; a role that runs without slices gets one empty wave; a routed-out
     // role none), so plan.json's dispatches equal the drivers written here.
     const waves = roleDispatchWaves(manifest, reviewer);
     const definition = [path.posix.join(projectDefinitions, reviewer, "SKILL.md"), ...DEFINITION_CANDIDATES(reviewer)]
       .find(candidate => existsSync(path.resolve(root, candidate)));
+    const contents = definition === undefined ? undefined : await readFile(path.resolve(root, definition), "utf8");
+    const declaredTier = contents === undefined ? undefined : parseSkillModelTier(contents.slice(0, 2048));
     for (const [at, wave] of waves.entries()) {
       const number = at + 1;
       const name = `${reviewer}-w${number}.json`;
@@ -79,6 +85,8 @@ export async function writeWaveDrivers(input: { packageDir: string; manifest: Sl
         slices: wave.map((entry) => entry.id),
         slicePaths: wave.map((entry) => ({ id: entry.id, path: path.resolve(sliceDir, entry.path), bytes: entry.bytes })),
         result: `${RAW_DIR}/${reviewer}-w${number}.txt`,
+        ...reviewAssignmentTier({ reviewer, slices: wave, declared: declaredTier, round }),
+        ...(declaredTier && { declaredTier }),
         ...(definition === undefined ? {} : { definition }),
         ...(typeof prior?.model === "string" && prior.model.trim() !== "" ? { model: prior.model } : {}),
         ...(typeof prior?.toolLog === "string" && prior.toolLog.trim() !== "" ? { toolLog: prior.toolLog } : {}),

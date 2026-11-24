@@ -123,9 +123,20 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   expect(limited.calls).toHaveLength(1);
   expect(limited.blocked.map((item: { reason: string }) => item.reason)).toEqual(Array(2).fill("Excluded by the configured limit of 1 reviewer waves."));
   expect(tiers).toEqual(["light"]);
+  expect(limited.modelRouting).toMatchObject([{ tier: "light", tierReason: "Fixed routing uses the reviewer skill’s declared tier." }]);
   tiers.length = 0;
   await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, capture, { ...launch, adaptive: true });
   expect(tiers).toEqual(["standard"]); // repeated fix raises the small-scope tier
+  tiers.length = 0;
+  slices[2]!.risk = { score: 0.9, why: ["high-risk scope"] };
+  const mixed = await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, capture, { ...launch, adaptive: true, maxWaves: 3 });
+  expect([...tiers].sort()).toEqual(["deep", "light", "standard"]);
+  expect(JSON.parse(readFileSync(path.join(root, mixed), "utf8")).modelRouting).toEqual(expect.arrayContaining([
+    expect.objectContaining({ tier: "middle", slices: ["slice-01"] }),
+    expect.objectContaining({ tier: "light", slices: ["slice-02"] }),
+    expect.objectContaining({ tier: "strong", slices: ["slice-03"] }),
+  ]));
+
 
   maxContext = requirements[0]! - 1;
   const smaller = await prepareDesktopDispatch(root, plan, base, manifest, [drivers[0]!], prContext, run);
@@ -144,6 +155,15 @@ test("a 33-call plan uses original slice waves that the host admits and refuses 
   expect(new Set(passes).size).toBe(2);
   for (const pass of new Set(passes)) expect((await resolveReviewWave(root, { package: path.relative(root, dir), pass })).ok).toBe(true);
   expect(() => allocate(["slice-01"])).toThrow("admission limits");
+});
+
+test("Desktop admits 100 native passes and refuses opening another in the same plan", () => {
+  const slices = Array.from({ length: 101 }, (_, index) => slice(`slice-${index}`, 6000, "new"));
+  const allocate = desktopPassAllocator(manifestOf(slices));
+  const admitted = slices.slice(0, 100).map(entry => allocate([entry.id]));
+  expect(new Set(admitted).size).toBe(100);
+  expect(() => allocate([slices[100]!.id])).toThrow("admission limits");
+  expect(allocate([slices[0]!.id])).toBe(admitted[0]!);
 });
 
 test("scope B materializes unchanged callers at the reviewed head in the read-only child's context", async () => {

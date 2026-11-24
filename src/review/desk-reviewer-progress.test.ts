@@ -280,3 +280,27 @@ test("the paged projection never follows a replacement transcript symlink", () =
   symlinkSync(path.join(directory, "private.ndjson"), path.join(directory, "run", "events.ndjson"));
   expect(coordinatorActivityPage(directory, 2048)).toEqual({ events: [] });
 });
+
+test("publishes per-wave tier evidence for exact dispatches while keeping old queue summaries readable", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  const role = "review-logic";
+  const planned = { target, roster: [role], slices: { new: [{ id: "a", roles: [role] }, { id: "b", roles: [role] }] } };
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], planned);
+  const first = "raw/review-logic-w1.txt", second = "raw/review-logic-w2.txt";
+  const calls = [
+    { label: role, save_result_to: first, expected_model: { provider: "local", model: "small" } },
+    { label: role, save_result_to: second, expected_model: { provider: "remote", model: "large" } },
+  ];
+  save(["package", "desktop-dispatch.json"], { calls });
+  expect(readDeskReviewerProgress(directory, key, run, false)?.planSummary?.checks[0]?.assignments).toBeUndefined();
+  save(["package", "desktop-dispatch.json"], { calls, modelRouting: [
+    { result: first, slices: ["a"], tier: "light", tierReason: "Mechanical check" },
+    { result: second, slices: ["b"], tier: "strong", tierReason: "Assigned slice has high recorded risk." },
+    { result: "raw/unplanned.txt", slices: ["b"], tier: "strong", tierReason: "Omitted" },
+  ] });
+  expect(readDeskReviewerProgress(directory, key, run, false)?.planSummary?.checks[0]?.assignments).toEqual([
+    { wave: 1, slices: ["a"], tier: "light", tierReason: "Mechanical check", provider: "local", model: "small" },
+    { wave: 2, slices: ["b"], tier: "strong", tierReason: "Assigned slice has high recorded risk.", provider: "remote", model: "large" },
+  ]);
+});

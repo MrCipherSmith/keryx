@@ -3,6 +3,7 @@ import path from "node:path";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { publicReadFile, publicReviewText, publicReviewerOutput, reviewerContextRequest } from "../../../review/desk-public-text";
+import { isReviewAssignmentTier } from "../../../review/assignment-tier";
 import { assignedReviewerWave } from "../../../review/reviewer-activity";
 import { resolveActiveReview } from "../../../review/active-review";
 import { isReviewerResult, parseReviewResult } from "../../../review/ledger";
@@ -34,9 +35,9 @@ async function activeReviewerPlan(project: string, file: string | undefined) {
     const stat = await lstat(queueFile);
     if (!stat.isFile() || stat.size > 16 * 1024 * 1024) return;
     const queue = JSON.parse(await readFile(queueFile, "utf8")) as
-      { calls?: Array<{ label?: unknown; save_result_to?: unknown } | null> } | null;
+      { calls?: Array<{ label?: unknown; save_result_to?: unknown } | null>; modelRouting?: unknown } | null;
     if (!Array.isArray(queue?.calls)) return;
-    return { dir: active.dir, calls: queue.calls };
+    return { dir: active.dir, calls: queue.calls, modelRouting: queue.modelRouting };
   } catch { return; } // A missing or unreadable plan cannot identify a reviewer assignment.
 }
 
@@ -60,18 +61,22 @@ export async function preparedDesktopReviewer(project: string, input: Record<str
 }
 
 /** Only an unchanged native read-only call from the active Desktop plan can request review routing. */
-export async function matchesDesktopReviewerDispatch(
+export async function desktopReviewerDispatchRoute(
   project: string, file: string | undefined, input: Record<string, unknown>,
-): Promise<boolean> {
+) {
   if (!file || input.mode !== "read_only" || input.runtime !== undefined ||
-      typeof input.label !== "string" || assignedReviewerWave(input.label, path.basename(file)) === undefined) return false;
+      typeof input.label !== "string" || assignedReviewerWave(input.label, path.basename(file)) === undefined) return;
   const plan = await activeReviewerPlan(project, file);
-  if (!plan || typeof input.save_result_to !== "string" || path.resolve(project, input.save_result_to) !== file) return false;
+  if (!plan || typeof input.save_result_to !== "string" || path.resolve(project, input.save_result_to) !== file) return;
   const wave = input.review_wave;
-  if (!wave || typeof wave !== "object") return false;
+  if (!wave || typeof wave !== "object") return;
   const pkg = Reflect.get(wave, "package");
-  return typeof pkg === "string" && path.resolve(project, pkg) === plan.dir &&
-    plan.calls.some(call => isDeepStrictEqual(call, input));
+  if (typeof pkg !== "string" || path.resolve(project, pkg) !== plan.dir || !plan.calls.some(call => isDeepStrictEqual(call, input))) return;
+  if (plan.modelRouting === undefined) return {};
+  if (!Array.isArray(plan.modelRouting)) return;
+  const routes = plan.modelRouting.filter(route => route?.result === input.save_result_to);
+  const tier: unknown = routes.length === 1 ? routes[0].tier : undefined;
+  return isReviewAssignmentTier(tier) ? { tier } : undefined;
 }
 
 /** A deadline counts execution time. Only an authenticated operator question can suspend it. */

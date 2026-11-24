@@ -99,6 +99,23 @@ test("with nothing returned every reviewer is owed its slices (missing), the mod
   expect(renderNext(next)).toContain("model: model not recorded");
 });
 
+test("a legacy driver gets a scoped recommendation without fabricating a resolved model", async () => {
+  const ids = await slicePackage({ "src/m/a.ts": 40 });
+  const driverPath = path.join(pkg, "drivers", "review-logic-w1.json");
+  await writeFile(driverPath, JSON.stringify({ reviewer: "review-logic", wave: 1, slices: ids, result: "raw/review-logic-w1.txt" }));
+  const normal = (await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] })).dispatches[0];
+  expect(normal).toMatchObject({ tier: "middle", modelClass: "standard" });
+  expect(normal?.model).toBeUndefined();
+
+  const manifestPath = path.join(pkg, "slices", "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.slices[0].risk = { score: 0.9, why: ["critical scoped change"] };
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const highRisk = (await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] })).dispatches[0];
+  expect(highRisk).toMatchObject({ tier: "strong", modelClass: "expert", tierReason: "Assigned slice has high recorded risk." });
+  expect(highRisk?.model).toBeUndefined();
+});
+
 test("done once every reviewer's finished result covers its slices, whatever shape the reply took", async () => {
   const ids = await slicePackage({ "src/m/a.ts": 40 });
   await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "DONE", slices: ids }));

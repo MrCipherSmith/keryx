@@ -14,7 +14,7 @@ export async function readJson<T>(file: string): Promise<T | undefined> {
 }
 
 /** `wave` and `model` are what `review slice --package` writes and the dispatcher completes: the model the reviewer runs on. */
-export type DriverFile = { reviewer?: unknown; slices?: unknown; definition?: unknown; skill_path?: unknown; payload?: unknown; result?: unknown; toolLog?: unknown; wave?: unknown; model?: unknown };
+export type DriverFile = { reviewer?: unknown; slices?: unknown; definition?: unknown; skill_path?: unknown; payload?: unknown; result?: unknown; toolLog?: unknown; wave?: unknown; model?: unknown; declaredTier?: unknown };
 
 /** Where a driver file names the reviewer's rule file: a top-level `definition` or `skill_path`, or the same keys inside the dispatch `payload`. */
 export function definitionCandidates(driver: DriverFile): string[] {

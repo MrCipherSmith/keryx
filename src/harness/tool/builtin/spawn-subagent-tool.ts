@@ -26,13 +26,13 @@ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tool
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
 import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
-import { matchesDesktopReviewerDispatch, preparedDesktopReviewer, ReviewerActivity, reviewerDeadline, type ReviewerActivityEvent } from "./reviewer-activity";
+import { desktopReviewerDispatchRoute, preparedDesktopReviewer, ReviewerActivity, reviewerDeadline, type ReviewerActivityEvent } from "./reviewer-activity";
 import type { AskReviewerContext } from "../../../review/desk-reviewer-question";
 import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
-import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
+import { REVIEW_TURN_MAX_WAVES } from "../../../review/wave-limits";
 import { describeReviewWave, resolveReviewWave, REVIEW_WAVE_MAX_CHILDREN } from "../../../review/wave-key";
 import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
@@ -465,8 +465,8 @@ export const SUBAGENT_TURN_MAX_CHILDREN = 32;
  */
 export const SUBAGENT_WAVE_MAX_CHILDREN = REVIEW_WAVE_MAX_CHILDREN;
 
-/** Waves one parent turn may open: the chunk plan's own pass bound, so waves x 32 stays finite. */
-export const SUBAGENT_TURN_MAX_WAVES = DEFAULT_MAX_PASSES;
+/** Native review waves one parent turn may open. */
+export const SUBAGENT_TURN_MAX_WAVES = REVIEW_TURN_MAX_WAVES;
 
 const SUBAGENT_LEDGER_CAPS = {
   maxChildren: SUBAGENT_TURN_MAX_CHILDREN,
@@ -1527,8 +1527,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
       // The Desktop host supplies routingProjectRoot at launch. A model's expected_model
       // and review_wave fields alone never select another routing category.
-      const desktopReviewer = deps.routingProjectRoot !== undefined && waveKey !== undefined &&
-        await matchesDesktopReviewerDispatch(deps.cwd, saveTarget.abs, input);
+      const desktopRoute = deps.routingProjectRoot !== undefined && waveKey !== undefined
+        ? await desktopReviewerDispatchRoute(deps.cwd, saveTarget.abs, input) : undefined;
+      const desktopReviewer = desktopRoute !== undefined;
       if (deps.preparedReviewOnly && !desktopReviewer) {
         return { status: "Denied", isError: true, output: "The prepared reviewer assignment changed or its review wave is no longer active. Refresh the plan." };
       }
@@ -1547,10 +1548,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // member of the operator's per-run pools. Routing still verifies policy and live capability.
         const provider = expected && typeof expected === "object" ? Reflect.get(expected, "provider") : undefined;
         const model = expected && typeof expected === "object" ? Reflect.get(expected, "model") : undefined;
-        const pools = options && Object.values(options.modelPools).filter(pool =>
-          pool.some(candidate => candidate.provider === provider && candidate.model === model),
-        );
-        const configured = pools?.[0]?.find(candidate => candidate.provider === provider && candidate.model === model);
+        const candidateMatches = (candidate: { provider: string; model: string }) =>
+          candidate.provider === provider && candidate.model === model;
+        // A prepared tier identifies exactly one pool even when it shares a model with a different tier.
+        const pools = options && (desktopRoute?.tier
+          ? [options.modelPools[desktopRoute.tier]]
+          : Object.values(options.modelPools).filter(pool => pool.some(candidateMatches)));
+        const configured = pools?.[0]?.find(candidateMatches);
         if (configured) {
           deskOverride = { providerId: configured.provider, modelId: configured.model };
           deskAlternatives = (pools?.[0] ?? []).filter(candidate => candidate !== configured &&
