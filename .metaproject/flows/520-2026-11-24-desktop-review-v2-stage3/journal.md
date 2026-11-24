@@ -105,3 +105,4 @@
 - needs_operator (decided by orchestrator, listed in PR): B6 blocks on any newer round incl. a failed/running one.
 - testing-w2 gaps 1-4 pinned (worker-level runDeskWorker still has only a source check; same-Review guard pinned without a killed mutant).
 - Round 3 (verification of T14/T15) not run in this session: stopping point reported to the parent session.
+- 2026-11-24T09:52:22.686Z - task-done: T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff

@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T09:51:12.372Z",
+  "updatedAt": "2026-11-24T09:52:22.686Z",
   "source": {
     "type": "description",
     "ref": null
@@ -180,7 +180,7 @@
       "id": "T9",
       "title": "Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -188,7 +188,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Backend review suites (5499/5501; the 2 failures are timing tests in untouched files, one inherited from stage 2), Desktop review suites 150/150, root and Desktop tsc clean, eslint clean on src/review; CI green on heads 9e871b17f and 412258583"
     },
     {
       "id": "T10",
@@ -503,6 +505,11 @@
       "at": "2026-11-24T09:51:12.372Z",
       "event": "task-done",
       "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
+    },
+    {
+      "at": "2026-11-24T09:52:22.686Z",
+      "event": "task-done",
+      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
     }
   ],
   "acKinds": {
