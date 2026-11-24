@@ -139,8 +139,14 @@ finding and highlight the recommended action.
 you open this review.
 Choose **Submit review** and confirm in the Desktop prompt to write to GitHub.
 Keryx rechecks the GitHub account,
-repository, and reviewed revision before submitting. If the PR has moved or
-closed, you can still save the draft locally.
+repository, and reviewed revision before submitting.
+
+If new commits were pushed on top of the reviewed commit, the dialog names both
+commits and offers **Publish as is for** the reviewed commit instead. That
+review is a comment only, without inline comments, and its first line says
+which commit was reviewed and that the PR has moved on. If more commits arrive
+before you submit, refresh the preview. If the PR was closed, its base changed,
+or its history was rewritten, you can still save the draft locally.
 
 ### Watch PRs while Desktop is closed
 
