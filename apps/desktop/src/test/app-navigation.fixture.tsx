@@ -353,9 +353,7 @@ try {
       .find(b => /^Review · (running|needs your answer) for #12$/.test(b.getAttribute("aria-label") ?? ""));
     assert.ok(reviewAction, "The PR card offers its review");
     await React.act(async () => { reviewAction.click(); });
-    for (let wait = 0; wait < 50 && !host.querySelector('aside[aria-label="Review of pull request #12"]'); wait++) {
-      await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
-    }
+    await waitFor("the Reviews tab opens the PR's Review", () => !!host.querySelector('aside[aria-label="Review of pull request #12"]'));
     assert.equal(host.querySelector('main nav button[aria-current="page"]')?.textContent, "Reviews");
     assert.ok(host.querySelector('aside[aria-label="Review of pull request #12"]'), "The Reviews tab opens the PR's Review");
     await React.act(() => namedButton("Close review").click());

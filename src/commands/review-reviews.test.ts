@@ -199,9 +199,9 @@ test("comparisons that outlast the deadline leave the count unknown with one war
     calls.push(head);
     return head === sha("d") ? Promise.resolve({ status: "ahead", aheadBy: 1 }) : new Promise<ReviewCompare>(() => {});
   };
-  const started = Date.now();
+  // No elapsed-time assertion (tdd-workflow rule 5): a deadline that never fires leaves the pending compare
+  // unsettled, and the test timeout fails; a dropped late flag fails the warning check below.
   const result = await readReviews({ ...source(github({ 12: { head: sha("d") }, 13: { head: sha("e") } }), compare), compareBudgetMs: 50 });
-  expect(Date.now() - started).toBeLessThan(2000);
   const byNumber = new Map(result.reviews.map(r => [r.number, r]));
   expect(byNumber.get(12)?.freshness).toEqual({ kind: "behind", commits: 1, rewritten: false });
   expect(byNumber.get(13)?.freshness).toEqual({ kind: "behind", commits: null, rewritten: false });
