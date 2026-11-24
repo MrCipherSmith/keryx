@@ -64,6 +64,7 @@ export interface AcpShellRosterInput {
   readonly jobRegistry: JobRegistry;
   readonly spawn: AcpShellSpawnInput;
   readonly getSessionDir: () => string | undefined;
+  readonly referenceFolders?: readonly string[];
   /** Present only when the client advertised `_meta.keryx.askUser`; absent → `ask_user` is denied. */
   readonly askUser?: AskUserFn;
   readonly requestReviewDraft?: RequestReviewDraft;
@@ -93,6 +94,7 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     searchController: input.searchController,
     spawnTool: createSpawnSubagentTool(buildSessionSpawnDeps({ ...input.spawn, cwd: root, ...(input.runExternal !== undefined ? { runExternal: input.runExternal } : { nativeOnly: true }) })),
     getSessionDir: input.getSessionDir,
+    ...(input.referenceFolders ? { referenceFolders: input.referenceFolders } : {}),
     jobRegistry: input.jobRegistry,
     ...(input.askUser !== undefined ? { askUser: input.askUser } : {}),
     ...(input.mcp !== undefined ? { mcp: input.mcp } : {}),

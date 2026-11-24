@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { BrandMark } from "../components/BrandMark";
-import { hostKind, pickFolder, settingsGet, type Settings } from "../platform/commands";
+import { hostKind, settingsGet, type Settings } from "../platform/commands";
 import { basename } from "../lib/format";
 import { MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Kbd } from "../components/ui";
 
-export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void | Promise<void>; onSettings: () => void }) {
+import type { ProjectConfig } from "./projectConfig";
+
+export function Welcome({ onOpen, onSettings, onAddProject, saved, onOpenConfigured, modalOpen }: {
+  onOpen: (cwd: string) => Promise<void>; onSettings: () => void; onAddProject: () => void;
+  saved: ProjectConfig[]; onOpenConfigured: (project: ProjectConfig) => Promise<void>; modalOpen: boolean;
+}) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [host, setHost] = useState<string>("");
@@ -18,19 +23,10 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void 
     void hostKind().then(setHost);
   }, []);
 
-  const open = async (folder: string) => {
+  const open = async (action: () => Promise<void>) => {
     setError(null);
     try {
-      await onOpen(folder);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const pick = async () => {
-    try {
-      const picked = await pickFolder();
-      if (picked) await open(picked);
+      await action();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -38,17 +34,16 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+      if (!modalOpen && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
         e.preventDefault();
-        void pick();
+        onAddProject();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [modalOpen, onAddProject]);
 
-  const recents = settings?.recentProjects ?? [];
+  const recents = (settings?.recentProjects ?? []).filter(path => !saved.some(project => !project.host && project.path === path));
 
   return (
     <div className="welcome">
@@ -62,13 +57,13 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void 
           </div>
         </div>
 
-        <button className="welcome-open" onClick={() => void pick()} autoFocus>
+        <button className="welcome-open" onClick={onAddProject} autoFocus>
           <span className="welcome-open-icon">
             <Icon name="folderOpen" size={18} />
           </span>
           <span className="welcome-open-text">
-            <strong>Open Folder…</strong>
-            <span>keryx starts in that folder, with its sessions and flows</span>
+            <strong>Add Project…</strong>
+            <span>Choose a local folder or connect via SSH in the desktop app</span>
           </span>
           <Kbd>{MOD}O</Kbd>
         </button>
@@ -76,12 +71,19 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void 
         <section className="recents" aria-labelledby="recents-h">
           <h2 id="recents-h">Recent projects</h2>
           {error ? <p className="recents-empty">{error}</p> : null}
-          {settings && recents.length === 0 ? <p className="recents-empty">Projects you open appear here.</p> : null}
+          {settings && recents.length === 0 && saved.length === 0 ? <p className="recents-empty">Projects you open appear here.</p> : null}
+          {saved.length > 0 && <ul>{saved.map(project => {
+            const target = project.host ? `${project.host}:${project.path}` : project.path;
+            return <li key={target}><button className="recent" onClick={() => void open(() => onOpenConfigured(project))} title={target}>
+              <Icon name="folder" size={15} /><span className="recent-name">{project.name}</span>
+              <span className="recent-path truncate">{target}</span><Icon name="chevronRight" size={14} className="recent-chev" />
+            </button></li>;
+          })}</ul>}
           {recents.length > 0 ? (
             <ul>
               {recents.map((p) => (
                 <li key={p}>
-                  <button className="recent" onClick={() => void open(p)} title={p}>
+                  <button className="recent" onClick={() => void open(() => onOpen(p))} title={p}>
                     <Icon name="folder" size={15} />
                     <span className="recent-name">{basename(p)}</span>
                     <span className="recent-path truncate">{p}</span>

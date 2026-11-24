@@ -60,6 +60,7 @@ export type InteractiveAgentToolsInput = {
    * rather than being silently dropped from the tool list.
    */
   getSessionDir?: () => string | undefined;
+  referenceFolders?: readonly string[];
   /** Injected id source for `slate_write_seed` — defaults to `randomUUID`. */
   idSeq?: () => string;
   /** Injected clock for `slate_write_seed` — defaults to `new Date().toISOString()`. */
@@ -230,7 +231,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   const metaprojectTools = project.all.map((tool) => wrap.get(tool) ?? tool);
   const projectOffered = project.offered.map((tool) => wrap.get(tool) ?? tool);
   const built: InteractiveTool[] = [
-    ...builtinReadOnlyTools(input.cwd, { getSessionDir }),
+    ...builtinReadOnlyTools(input.cwd, { getSessionDir, ...(input.referenceFolders ? { referenceFolders: input.referenceFolders } : {}) }),
     ...metaprojectTools,
     webFetchTool({ cwd: input.cwd, pageFetcher: input.searchController }),
     webSearchTool(input.searchController, { cwd: input.cwd }),

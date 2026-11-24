@@ -109,13 +109,15 @@ interface Live {
  * a held session is local; only a session the window does not hold (history, or released by keryx's
  * idle cap) is loaded.
  */
-export function useAcpSession(cwd: string) {
+export function useAcpSession(cwd: string, sshHost?: string, referenceFolders?: readonly string[]) {
+  const remote = sshHost !== undefined;
   const [win, rawDispatch] = useReducer(reducer, initialState);
-  const archiveWriter = useMemo(() => subagentHistoryWriter(cwd), [cwd]);
+  const archiveWriter = useMemo(() => remote ? null : subagentHistoryWriter(cwd), [cwd, remote]);
   useEffect(() => {
-    for (const [sid, conv] of Object.entries(win.convs)) archiveWriter.track(sid, conv.subagents);
+    for (const [sid, conv] of Object.entries(win.convs)) archiveWriter?.track(sid, conv.subagents);
   }, [archiveWriter, win.convs]);
   useEffect(() => {
+    if (!archiveWriter) return;
     window.addEventListener("pagehide", archiveWriter.flush);
     return () => { window.removeEventListener("pagehide", archiveWriter.flush); archiveWriter.flush(); };
   }, [archiveWriter]);
@@ -197,10 +199,12 @@ export function useAcpSession(cwd: string) {
     [dispatch],
   );
   useEffect(() => {
+    if (remote) return;
     setDelegateApi(delegates);
     return () => setDelegateApi(null);
-  }, [delegates]);
+  }, [delegates, remote]);
   useEffect(() => {
+    if (remote) return;
     let live = true;
     let off: (() => void) | null = null;
     void onPtyExit((e) => delegates.exited(e.id, e.code)).then((u) => (live ? (off = u) : u()));
@@ -210,7 +214,7 @@ export function useAcpSession(cwd: string) {
       off?.();
       offClosed();
     };
-  }, [delegates]);
+  }, [delegates, remote]);
   const openTerminal = useCallback(
     (sessionId: string, launch: DelegateLaunch) => {
       delegates.start(sessionId, launch).catch((e: unknown) =>
@@ -447,8 +451,8 @@ export function useAcpSession(cwd: string) {
       dispatch({ t: "loadStart", sessionId });
       try {
         const [r, archive] = await Promise.all([
-          client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: await panelMcpServers(cwd) }),
-          readSubagentHistory(cwd, sessionId),
+          client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: remote ? [] : await panelMcpServers(cwd) }),
+          remote ? undefined : readSubagentHistory(cwd, sessionId),
         ]);
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
@@ -465,7 +469,7 @@ export function useAcpSession(cwd: string) {
         return false;
       }
     },
-    [cwd, dispatch, resumeIssueQuestions],
+    [cwd, dispatch, remote, resumeIssueQuestions],
   );
 
   /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
@@ -475,7 +479,7 @@ export function useAcpSession(cwd: string) {
       const intent = l.reg.beginCreate();
       dispatch({ t: "creating", delta: 1 });
       try {
-        const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: await panelMcpServers(cwd) });
+        const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: remote ? [] : await panelMcpServers(cwd) });
         if (l.gen !== gen) return null;
         if (typeof r?.sessionId !== "string") throw new Error("keryx returned no session id");
         const show = l.reg.created(r.sessionId, intent);
@@ -495,7 +499,7 @@ export function useAcpSession(cwd: string) {
         }
       }
     },
-    [cwd, dispatch, acceptUpdate],
+    [cwd, dispatch, acceptUpdate, remote],
   );
 
   const finishStart = useCallback(
@@ -572,7 +576,7 @@ export function useAcpSession(cwd: string) {
         else if (method === SUBAGENT_NOTIFICATION) {
           const p = params as { sessionId?: unknown; event?: unknown } | null;
           if (typeof p?.sessionId === "string" && p.event) dispatch({ t: "subagent", sessionId: p.sessionId, event: p.event });
-        } else if (method === DELEGATE_TERMINAL) {
+        } else if (!remote && method === DELEGATE_TERMINAL) {
           // The model started an external run (trust/auto mode): the same terminal tab as `/delegate`, closed when it returns.
           const p = params as Partial<DelegateLaunch> & { sessionId?: unknown } | null;
           if (typeof p?.sessionId === "string" && typeof p.runId === "string" && Array.isArray(p.argv) && typeof p.cwd === "string") {
@@ -600,7 +604,7 @@ export function useAcpSession(cwd: string) {
         }
       };
       client.onRequest = (method, params, id) => answerAgentRequest(method, params, l.reg, dialogs,
-        l.gen === gen && l.extensions.includes(PREPARE_REVIEW_METHOD) ? prepareReview : undefined, id);
+        !remote && l.gen === gen && l.extensions.includes(PREPARE_REVIEW_METHOD) ? prepareReview : undefined, id);
       client.onReplyFailed = (method, error) => {
         if (l.gen === gen) dispatch({ t: "banner", level: "error", text: `Could not send keryx the answer to ${method}: ${error}` });
       };
@@ -629,7 +633,7 @@ export function useAcpSession(cwd: string) {
             dispatch({ t: "phase", phase: "exited", exit: info });
           },
         });
-        const start = await acpStart(cwd, false, opts.preferBundled === true);
+        const start = await acpStart(cwd, false, opts.preferBundled === true, sshHost);
         if (l.gen !== gen) return;
         canFallBack = start.canFallBack === true;
         setKeryxPath(start.keryxPath);
@@ -638,10 +642,10 @@ export function useAcpSession(cwd: string) {
         const init = await client.request<InitializeResult>("initialize", {
           protocolVersion: 1,
           clientCapabilities: {
-            fs: { readTextFile: true, writeTextFile: false },
+            fs: { readTextFile: !remote, writeTextFile: false },
             terminal: false,
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
-            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } },
+            _meta: { keryx: { askUser: true, ...(referenceFolders?.length ? { referenceFolders } : {}), ...(!remote ? { prepareReview: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });
@@ -668,6 +672,9 @@ export function useAcpSession(cwd: string) {
           setFatal({ kind: "incompatible", found: check.found, required: check.required });
           return;
         }
+        if (referenceFolders?.length && init._meta?.keryx?.referenceFolders !== true) {
+          dispatch({ t: "banner", level: "warn", text: "This Keryx version does not support reference folders. Update Keryx to enable them." });
+        }
         l.usable = true;
         await finishStart(client, gen, opts.loadSessionId, opts.fallbackToNew);
       } catch (e) {
@@ -676,7 +683,7 @@ export function useAcpSession(cwd: string) {
         dispatch({ t: "phase", phase: "exited", exit: { code: null, stderrTail: errMessage(e) } });
       }
     },
-    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart, refreshTasks, prepareReview],
+    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart, refreshTasks, prepareReview, sshHost, remote, referenceFolders],
   );
   connectRef.current = connect;
 
@@ -694,7 +701,7 @@ export function useAcpSession(cwd: string) {
     };
     // connect once per window/cwd
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd]);
+  }, [cwd, sshHost]);
 
   /** A window left open keeps archiving sessions that go idle, once an hour. */
   useEffect(() => {
@@ -967,7 +974,7 @@ export function useAcpSession(cwd: string) {
       setReviewDrafts(previous => previous.filter(draft => draft.sessionId !== sessionId));
       const wasShown = l.reg.shown === sessionId;
       if (wasShown) l.reg.shown = null;
-      archiveWriter.remove(sessionId);
+      archiveWriter?.remove(sessionId);
       dispatch({ t: "removed", sessionId });
       if (wasShown) {
         const next = [...l.reg.held].pop();

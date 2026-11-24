@@ -25,6 +25,7 @@ pub mod telegram_serve;
 pub mod telegram_channel;
 pub mod shellenv;
 mod slots;
+mod ssh;
 pub mod version;
 pub mod webkit;
 

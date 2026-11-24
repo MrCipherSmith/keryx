@@ -252,7 +252,7 @@ function TitleBar(p: ShellProps) {
   const items: MenuItem[] = [
     { kind: "header", id: "h-current", label: <span className="truncate" title={cwd}>{cwd}</span> },
     ...(p.onProjectSettings ? [{ id: "project-settings", label: "Project Settings", icon: "settings" as const, onSelect: p.onProjectSettings }] : []),
-    { id: "open", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
+    { id: "open", label: "Add Project…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
     { id: "newwin", label: "Open this folder in a new window", icon: "external", onSelect: () => onNewWindow(cwd) },
     ...(others.length
       ? ([{ kind: "separator", id: "s1" }, { kind: "header", id: "h-recent", label: "Recent projects" }] as MenuItem[])

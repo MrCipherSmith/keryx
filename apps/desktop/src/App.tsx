@@ -3,7 +3,6 @@ import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
 import { isTauri } from "./platform/backend";
 import {
   acpStop,
-  pickFolder,
   setFolderPrompter,
   setWindowTitle,
   settingsAddRecent,
@@ -18,6 +17,9 @@ import { AppShell, PROJECT_VIEWS, projectViewForKey, type View } from "./shell/A
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
+import { SshProjectWindow } from "./shell/SshProject";
+import { AddProject } from "./shell/AddProject";
+import { projectConfigs, rememberProject, type ProjectConfig } from "./shell/projectConfig";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
 import type { ReviewIntent } from "./review/ReviewWorkspace";
@@ -63,6 +65,9 @@ const LazyMetaprojectView = lazy(() => import("./metaproject/MetaprojectView").t
 
 export function App() {
   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
+  const [sshProject, setSshProject] = useState<(ProjectConfig & { host: string }) | null>(null);
+  const [addProject, setAddProject] = useState(false);
+  const showAddProject = useCallback(() => setAddProject(true), []);
   const [welcomeSettings, setWelcomeSettings] = useState(false);
   const [prompt, setPrompt] = useState<{ title: string; resolve: (v: string | null) => void } | null>(null);
 
@@ -85,23 +90,37 @@ export function App() {
     }
   }, [cwd]);
 
+  const openLocal = async (folder: string) => {
+    if (isTauri()) await projectSwitch(folder);
+    else setCwd(folder);
+  };
+  const openConfigured = async (project: ProjectConfig) => {
+    rememberProject(project);
+    if (project.host !== undefined) setSshProject({ ...project, host: project.host });
+    else await openLocal(project.path);
+    setAddProject(false);
+  };
+  const saved = projectConfigs();
+  const config = saved.find(project => project.host === undefined && project.path === cwd);
+
   if (cwd === undefined) return null;
   return (
     <>
-      {cwd ? (
+      {sshProject ? (
+        <SshProjectWindow project={sshProject} onClose={() => setSshProject(null)} />
+      ) : cwd ? (
         // Keyed by folder so switching folders gets a fresh keryx process.
-        <ProjectWindow key={cwd} cwd={cwd} onOpenProject={setCwd} onCloseProject={() => setCwd(null)} />
+        <ProjectWindow key={cwd} cwd={cwd} config={config} onAddProject={showAddProject} onOpenProject={setCwd} onCloseProject={() => setCwd(null)} />
       ) : welcomeSettings ? (
         <div className="standalone">
           <div className="welcome-drag" data-tauri-drag-region />
         <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
         </div>
       ) : (
-        <Welcome onOpen={async (folder) => {
-          if (isTauri()) await projectSwitch(folder);
-          else setCwd(folder);
-        }} onSettings={() => setWelcomeSettings(true)} />
+        <Welcome onOpen={openLocal} onSettings={() => setWelcomeSettings(true)} onAddProject={showAddProject}
+          saved={saved.filter(project => !project.host || isTauri())} onOpenConfigured={openConfigured} modalOpen={addProject} />
       )}
+      {addProject && <AddProject onClose={() => setAddProject(false)} onOpen={openConfigured} allowSsh={isTauri()} />}
       <UpdateBanner />
       {prompt ? (
         <PathPrompt
@@ -196,8 +215,11 @@ function useNarrow(px: number): boolean {
 
 type Status = { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
 
-function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; onOpenProject: (cwd: string) => void; onCloseProject: () => void }) {
-  const s = useAcpSession(cwd);
+function ProjectWindow({ cwd, config, onAddProject, onOpenProject, onCloseProject }: {
+  cwd: string; config?: ProjectConfig; onAddProject: () => void; onOpenProject: (cwd: string) => void; onCloseProject: () => void;
+}) {
+  const projectName = config?.name ?? basename(cwd);
+  const s = useAcpSession(cwd, undefined, config?.references);
   const flows = useFlows(cwd);
   const providers = useProvidersDialog();
   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
@@ -364,10 +386,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (v === "session") requestAnimationFrame(() => composer.current?.focus());
   }, [openSettings]);
 
-  const openFolder = useCallback(async () => {
-    const picked = await pickFolder();
-    if (picked) switchProject(picked);
-  }, [switchProject]);
+  const openFolder = onAddProject;
 
   /** Prefill the composer; never sends. */
   const fillComposer = useCallback((text: string) => {
@@ -574,7 +593,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       items.push({ id: `k-${c.id}`, group: "Run", label: `keryx ${c.args.join(" ")}`, detail: c.description, icon: "play", run: () => void runProject(c.args, `keryx ${c.args.join(" ")}`) });
     }
     items.push({ id: "k-wiki-enrich", group: "Run", label: "keryx wiki enrich…", detail: "Fill draft pages with a model: one job or waves", icon: "wand", run: () => setEnrich(true) });
-    items.push({ id: "p-open", group: "Projects", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, run: () => void openFolder() });
+    items.push({ id: "p-open", group: "Projects", label: "Add Project…", icon: "folderOpen", hint: `${MOD}O`, run: () => void openFolder() });
     for (const r of recents) {
       if (r === cwd) continue;
       items.push({ id: `p-${r}`, group: "Projects", label: basename(r), detail: r, icon: "folder", run: () => switchProject(r) });
@@ -648,7 +667,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </span>
     );
 
-  useEffect(() => { void setWindowTitle(`${sessionTitle} — ${basename(cwd)}`); }, [sessionTitle, cwd]);
+  useEffect(() => { void setWindowTitle(`${sessionTitle} — ${projectName}`); }, [sessionTitle, projectName]);
   const loadReviewTargets = useCallback((hint?: string, signal?: AbortSignal) => {
     if (reviewDisconnected) return Promise.reject(new Error("Choose the project's GitHub account in Project Settings."));
     return loadSessionReviewTargets(cwd, reviewViewer, hint, signal);
@@ -699,7 +718,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
+        <SessionView ref={composer} s={s} cwd={cwd} projectName={projectName} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
           reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}

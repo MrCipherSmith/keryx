@@ -306,6 +306,7 @@ function toBlocks(items: Item[]): Block[] {
 }
 
 interface Props {
+  hideLocalAttachments?: boolean;
   items: Item[];
   /** Runs a command line a card's view sends; returns when its result is shown. */
   onRunCommand?: (line: string, opts: { display?: string; replaceId: number }) => void | Promise<unknown>;
@@ -320,7 +321,7 @@ interface Props {
   onShowSubagent?: (id: string) => void;
 }
 
-export function Transcript({ items, busy, replaying, empty, reviewActivity, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
+export function Transcript({ hideLocalAttachments, items, busy, replaying, empty, reviewActivity, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -401,7 +402,7 @@ export function Transcript({ items, busy, replaying, empty, reviewActivity, onRu
             const isLast = i === blocks.length - 1;
             switch (b.type) {
               case "user":
-          return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} source={b.item.source} onEdit={onEditMessage} />;
+          return <UserMessage key={b.item.id} message={b.item.text} context={hideLocalAttachments ? undefined : b.item.context} failed={b.item.failed} itemId={b.item.id} source={b.item.source} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <AgentMessage key={b.item.id} first={b.first} text={b.item.text} prLinks={prLinks}
