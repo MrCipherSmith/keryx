@@ -100,8 +100,16 @@ export const DESK_REVIEW_ACTIONS = ["complete", "close", "archive", "restore", "
 export type DeskReviewAction = typeof DESK_REVIEW_ACTIONS[number];
 export type DeskReviewDecision = { action: DeskReviewAction; reason: string; at: string };
 export type DeskReviewCheck = { id: string; title: string; evidence: string; canWaive: boolean };
+/**
+ * Whether a Desktop review worker ran this attempt, so it has a coordinator transcript, reviewer sessions and can be
+ * continued. An imported (`existing`) or session-made (`session`, flow 521) attempt has none of them.
+ */
+export function hasDeskWorker(run: Pick<DeskRun, "source">): boolean {
+  return run.source === "manual" || run.source === "scheduled";
+}
+
 export function canContinueDeskRun(run: DeskRun): boolean {
-  return run.source !== "existing" && !run.closure &&
+  return hasDeskWorker(run) && !run.closure &&
     !(run.options?.orchestrator === false && run.state === "partial" && run.result?.findingsKnown) && (!run.decision || run.decision.action === "restore") &&
     (run.state === "partial" || run.state === "blocked" || run.state === "budget" || run.state === "failed" || run.state === "cancelled");
 }

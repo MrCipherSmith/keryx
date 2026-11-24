@@ -24,7 +24,9 @@ export function reviewedAttempt(runs: readonly DeskRun[], id?: string): DeskRun 
   const candidates = runs.filter((run) => run.source !== "existing" && !withdrawn(run));
   if (id !== undefined) {
     const named = candidates.find((run) => run.id === id);
-    if (!named) throw new Error("access: This attempt is unavailable for the selected account and pull request.");
+    // Not an access or configuration problem (Desktop drops the panel for those): the attempt was archived, deleted or
+    // imported since the panel was read.
+    if (!named) throw new Error("stale: This attempt was archived, deleted or imported, so it cannot be updated. Update the review from its latest round.");
     return named;
   }
   const latest = [...candidates].sort((a, b) => (b.round ?? 0) - (a.round ?? 0) || b.createdAt.localeCompare(a.createdAt))[0];

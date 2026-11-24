@@ -2,6 +2,8 @@
 import { describe, expect, test } from "bun:test";
 import type { DeskRun, DeskRunKey } from "./desk-run-types";
 import { advanceReview, reviewedAttempt, updateRoundOptions } from "./review-advance";
+import { runReviewAdvance } from "../commands/review-advance";
+import { canContinueDeskRun, hasDeskWorker } from "./desk-run-types";
 
 const key: DeskRunKey = { repo: "org/repo", repositoryId: "R_1", viewer: "me", number: 7 };
 const A = "a".repeat(40), B = "b".repeat(40), C = "c".repeat(40);
@@ -37,7 +39,7 @@ describe("keryx review advance", () => {
   test("updates from the Review's latest round by default; an imported or withdrawn attempt is never one", () => {
     const runs = [run("r1", 1, B), run("r2", 2, C), run("old", 3, C, { source: "existing" }), run("gone", 4, C, { decision: { action: "archive", reason: "x", at: "t" } })];
     expect(reviewedAttempt(runs).id).toBe("r2");
-    expect(() => reviewedAttempt(runs, "gone")).toThrow(/^access:/);
+    expect(() => reviewedAttempt(runs, "gone")).toThrow(/^stale: This attempt was archived, deleted or imported/);
     expect(() => reviewedAttempt([])).toThrow(/no review to update/);
   });
 
@@ -63,5 +65,24 @@ describe("keryx review advance", () => {
     const { starts, deps: d } = deps([run("s1", 1, B, { source: "session" })]);
     await advanceReview({ repo: key.repo, number: 7 }, d);
     expect(starts).toEqual([{ revision: { baseSha: A, headSha: C }, options: undefined }]);
+  });
+
+  test("the command refuses malformed arguments before it reads GitHub or the store", async () => {
+    const sha = "a".repeat(40);
+    for (const args of [
+      ["--repo", "org/repo", "--number", "7"],
+      ["--json", "--repo", "org", "--number", "7"],
+      ["--json", "--repo", "org/repo", "--number", "0"],
+      ["--json", "--repo", "org/repo", "--number", "7", "--id", "../x"],
+      ["--json", "--repo", "org/repo", "--number", "7", "--base", sha],
+      ["--json", "--repo", "org/repo", "--number", "7", "--base", "main", "--head", sha],
+    ]) await expect(runReviewAdvance(args, "/nonexistent")).rejects.toThrow(/^keryx review advance --json/);
+  });
+
+  test("only a Desktop worker's attempt has a coordinator and can be continued; a session's or an imported one cannot", () => {
+    const partial = (source: DeskRun["source"]) => run("x", 1, B, { source, state: "partial", result: { reviewed: { baseSha: A, headSha: B }, verdict: null, coverage: "partial", findings: { blocker: 0, major: 0, minor: 0, info: 0 }, report: "" } });
+    expect(["manual", "scheduled", "existing", "session"].map((source) => hasDeskWorker({ source: source as DeskRun["source"] }))).toEqual([true, true, false, false]);
+    expect(canContinueDeskRun(partial("session"))).toBe(false);
+    expect(canContinueDeskRun(partial("existing"))).toBe(false);
   });
 });

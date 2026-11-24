@@ -50,7 +50,7 @@ function summary(card: ReviewCard): ReviewSummary {
     closedAt: null, rounds: [{ number: 1, baseSha: card.baseSha, headSha: card.headSha, previousRunId: null, attempts: [] }],
     latestRound: 1, reviewed: null, archived: false, findings: null, publication: null, source: "manual", flowId: null, tokens: null };
 }
-type Extra = Partial<Pick<ComponentProps<typeof ReviewPanel>, "reviewIntent" | "publishCommand" | "onAccessLost" | "onClose">> & { onRefreshBoard?: () => void };
+type Extra = Partial<Pick<ComponentProps<typeof ReviewPanel>, "reviewIntent" | "publishCommand" | "onAccessLost" | "onClose" | "onOpenReviewSession">> & { onRefreshBoard?: () => void };
 async function show(command: typeof reviewRun, card: ReviewCard, { onRefreshBoard = () => {}, onClose = () => {}, ...extra }: Extra = {}) {
   await renderComponent({ cwd: "/project", target, review: summary(card), runCommand: command, onRefresh: onRefreshBoard, onClose, ...extra });
 }
@@ -751,6 +751,37 @@ test("a failed Update review start shows its error and does not refresh the boar
   await click("Update review to ccccccc");
   expect(document.body.textContent).toContain("The selected Keryx CLI refused the start.");
   expect(refreshed).toBe(0);
+  await act(() => root.render(null));
+});
+
+test("a refused Update review that says stale: is shown, but never as a moved range and never as lost access", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(65);
+  let lost = 0;
+  await show(async (_cwd, _key, action) => {
+    if (action.kind === "advance") throw new Error("stale: A later round of this Review already exists. Refresh the Review and update from its latest round.");
+    return { version: 1, runs: [reviewed] };
+  }, { ...pr, number: 65, headSha: reviewedHead }, { publishCommand, onAccessLost: () => { lost++; } });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(document.body.textContent).toContain("A later round of this Review already exists");
+  expect(document.body.textContent).not.toContain("The PR revision changed. Refresh the board to load the latest range.");
+  expect(lost).toBe(0);
+  await act(() => root.render(null));
+});
+
+test("a session attempt is labelled Session and offers no Desktop coordinator session", async () => {
+  const { reviewedHead, reviewed } = headMovedFixture(66);
+  const session: DeskRun = { ...reviewed, id: "attempt-session", source: "session" };
+  const sessionButtons = () => document.querySelectorAll(".review-icon-action[aria-haspopup='dialog']").length;
+  // A Desktop worker's attempt offers its coordinator session; the same attempt made in a session does not.
+  await show(async () => ({ version: 1, runs: [reviewed] }), { ...pr, number: 66, headSha: reviewedHead }, { onOpenReviewSession: async () => {} });
+  const workerButtons = sessionButtons();
+  expect(workerButtons).toBeGreaterThan(0);
+  await act(() => root.render(null));
+  await show(async () => ({ version: 1, runs: [session] }), { ...pr, number: 66, headSha: reviewedHead }, { onOpenReviewSession: async () => {} });
+  expect(document.body.textContent).toContain("Session");
+  expect(document.body.textContent).not.toContain("Existing review");
+  expect(sessionButtons()).toBe(workerButtons - 1);
   await act(() => root.render(null));
 });
 

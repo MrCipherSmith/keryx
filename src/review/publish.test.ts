@@ -413,3 +413,90 @@ describe("publishReview: the publication guard shared with Desktop", () => {
     expect(existsSync(receipt())).toBe(false);
   });
 });
+
+// Flow 521 round 3 of PR 1302: the session path's acceptance matches Desktop's, and its receipt survives either place.
+describe("publishReview: round-3 fixes of the shared publication guard", () => {
+  const REVIEWED = "a".repeat(40);
+  const NEWER = "b".repeat(40);
+  const withHead = (report = "# Review\n\nRequest changes.\n"): void => {
+    makePackage({ ready: true });
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    write("manifest.json", { ...manifest, target: { ...manifest.target, head: REVIEWED } });
+    write("report.md", report);
+  };
+  const at = (...heads: Array<string | undefined>) => {
+    let call = 0;
+    return async (): Promise<PrSnapshot | null> => {
+      const next = heads[Math.min(call++, heads.length - 1)];
+      return next === undefined ? null : { exists: true, state: "OPEN", headSha: next };
+    };
+  };
+  const posting = (url?: string) => {
+    const posts: string[] = [];
+    return { posts, post: async (_ref: string, _event: ReviewEvent, body: string): Promise<PostResult> => {
+      posts.push(body);
+      return { ok: true, detail: "posted", ...(url === undefined ? {} : { url }) };
+    } };
+  };
+
+  test("a round a later round of its Review follows is refused, as Desktop refuses it", async () => {
+    withHead();
+    const io = posting("u");
+    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, laterRound: async () => 2 }))
+      .rejects.toThrow(/Round 2 of this Review already follows this one/);
+    expect(io.posts).toEqual([]);
+  });
+
+  test("a moved head whose reviewed commit left the PR's history is refused; one still in it is published as is", async () => {
+    withHead();
+    const io = posting("u");
+    const asked: string[] = [];
+    await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) },
+      reviewedHeadInPull: async (_ref, reviewed, current) => (asked.push(`${reviewed.slice(0, 1)}..${current.slice(0, 1)}`), false) }))
+      .rejects.toThrow(/no longer in the pull request's history/);
+    expect(asked).toEqual(["a..b"]);
+    expect(io.posts).toEqual([]);
+    await publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, reviewedHeadInPull: async () => true });
+    expect(io.posts).toHaveLength(1);
+  });
+
+  test("the moved-head first line follows the head gate: a comment line is skipped, and naming the commit is not enough", async () => {
+    withHead("<!-- keryx:slot -->\nReviewed aaaaaaa — the PR has since moved on to bbbbbbb.\n\n# Review\n");
+    const kept = posting("u");
+    await publishReview(pkg, { post: kept.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } });
+    expect(kept.posts[0]).not.toContain("The pull request has moved to");
+    rmSync(path.join(pkg, "publication-receipt.json"));
+    withHead("Notes on aaaaaaa.\n\n# Review\n");
+    const added = posting("u");
+    await publishReview(pkg, { partial: true, post: added.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } });
+    expect(added.posts[0]!.split("\n")[0]).toBe(headMovedLine({ reviewedHead: REVIEWED, currentHead: NEWER }));
+  });
+
+  test("a head that cannot be read again after the operator's yes is not reported as a moved head", async () => {
+    withHead();
+    const io = posting("u");
+    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, readiness: { prLookup: at(REVIEWED, REVIEWED, undefined) } }))
+      .rejects.toThrow(/^The pull request could not be read again after the review was confirmed/);
+    expect(io.posts).toEqual([]);
+  });
+
+  test("without GitHub's URL the receipt names the pull request, so Desktop counts the review as published", async () => {
+    withHead();
+    await publishReview(pkg, { post: posting().post, confirm: async () => true });
+    expect(JSON.parse(readFileSync(path.join(pkg, "publication-receipt.json"), "utf8"))).toEqual({ url: PR });
+  });
+
+  test("the receipt is written to the Attempt and to the package: losing the Attempt's copy does not allow a second post", async () => {
+    withHead();
+    const attempt = path.join(root, "attempt");
+    mkdirSync(attempt);
+    const publication = { directory: attempt, id: "0b0c1d2e-0000-4000-8000-000000000001" };
+    const url = "https://github.com/x/y/pull/1#pullrequestreview-7";
+    await publishReview(pkg, { post: posting(url).post, confirm: async () => true, publication });
+    for (const dir of [attempt, pkg]) expect(JSON.parse(readFileSync(path.join(dir, "publication-receipt.json"), "utf8"))).toEqual({ url });
+    rmSync(path.join(attempt, "publication-receipt.json"));
+    const again = posting("u");
+    await expect(publishReview(pkg, { post: again.post, confirm: async () => true, publication })).rejects.toThrow(/already been published/);
+    expect(again.posts).toEqual([]);
+  });
+});

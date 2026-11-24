@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { isPrBound, type PrSnapshot } from "./complete-head-gate";
+import { firstLineSaysMoved, isPrBound, type PrSnapshot } from "./complete-head-gate";
 import { beginPublicationReceipt, confirmPublicationReceipt, dropPublicationReceipt, headMovedLine, publicationMarker, readPublicationReceipt, receiptPublished } from "./publication-guard";
 import { readRunProfile } from "./run-profile";
 import { publicProjectReport } from "./report-overlay";
@@ -38,6 +38,17 @@ export type PublishOptions = {
    * lock Desktop's `desk-publish` also uses, and its id is the marker, so either path refuses what the other posted.
    */
   publication?: { directory: string; id: string } | undefined;
+  /**
+   * The round of the same Review that follows this package's Attempt, if any. Desktop refuses to publish an Attempt a
+   * later round superseded (that round may already cover the new head), and so does the session path.
+   */
+  laterRound?: (() => Promise<number | undefined>) | undefined;
+  /**
+   * Whether the reviewed commit is still in the pull request's history (GitHub reports the current head ahead of it).
+   * A review of a moved head is published as is only then, as Desktop does; without the seam GitHub's own refusal of an
+   * unknown `commit_id` is the check.
+   */
+  reviewedHeadInPull?: ((ref: string, reviewed: string, current: string) => Promise<boolean>) | undefined;
   /** Shows the body to the operator and answers whether to post it. */
   confirm: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   now?: (() => Date) | undefined;
@@ -199,6 +210,15 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (moved !== undefined && event !== "COMMENT") {
     throw new Error(`The pull request has moved from the reviewed commit ${reviewedHead!.slice(0, 7)} to ${moved.slice(0, 7)}. Run the update round on the new head, or publish this review as is with --event COMMENT.`);
   }
+  // The same acceptance as Desktop's publish (desk-publication.ts): a superseded round and a commit the PR no longer
+  // contains are never published as is.
+  const later = await options.laterRound?.();
+  if (later !== undefined) {
+    throw new Error(`Round ${later} of this Review already follows this one. Publish that round, or open its update round with keryx review advance.`);
+  }
+  if (moved !== undefined && options.reviewedHeadInPull !== undefined && !(await options.reviewedHeadInPull(manifest.target.ref, reviewedHead!, moved))) {
+    throw new Error(`The reviewed commit ${reviewedHead!.slice(0, 7)} is no longer in the pull request's history (force-push or rebase). Run the update round on the new head; this review can only be saved locally.`);
+  }
   const readiness = await computeReadiness(packageDir, options.readiness ?? {});
   const failing = failingItems(readiness);
   const partial = failing.length > 0;
@@ -208,9 +228,8 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   }
   const report = publicProjectReport(await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => ""));
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
-  const firstReportLine = report.split(/\r?\n/).find((line) => line.trim() !== "") ?? "";
-  // The first line names the reviewed commit; a report that already does so (as `review complete` asks) keeps its own.
-  const movedLine = moved === undefined || firstReportLine.toLowerCase().includes(reviewedHead!.slice(0, 7).toLowerCase())
+  // The first line names the reviewed commit; a report whose first line already passes `review complete`'s head gate keeps it.
+  const movedLine = moved === undefined || firstLineSaysMoved(report, reviewedHead)
     ? "" : `${headMovedLine({ reviewedHead: reviewedHead!, currentHead: moved })}\n\n`;
   const head = `${movedLine}${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
   const foot = runModeFooter(packageDir);
@@ -223,16 +242,23 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   const marker = publicationMarker(record?.id ?? sessionPublicationId(manifest.reviewId, roundBlock.round));
   const body = `${visible}\n${renderRoundBlock(roundBlock)}\n\n${marker}\n`;
   const ref = manifest.target.ref;
-  // Shared with Desktop (./publication-guard.ts): one publication per package, guarded by a receipt and the marker.
-  const url = await withFileLock(path.join(receiptDir, "publication.lock"), async () => {
+  // Every receipt write goes to the Attempt's directory (Desktop's) and to the package's own, so neither a deleted Attempt
+  // nor a later registration loses a publication.
+  const receiptDirs = [...new Set([receiptDir, packageDir])];
+  const each = (write: (dir: string) => Promise<void>) => Promise.all(receiptDirs.map(write));
+  // Shared with Desktop (./publication-guard.ts): one publication per package, guarded by a receipt and the marker. The
+  // package's lock is always taken first, so two session publishers serialize whichever Attempt each one resolved.
+  const locked = <T>(fn: () => Promise<T>): Promise<T> => withFileLock(path.join(packageDir, "publication.lock"),
+    () => receiptDir === packageDir ? fn() : withFileLock(path.join(receiptDir, "publication.lock"), fn));
+  const url = await locked(async () => {
     // A package published before it was registered keeps its receipt beside it: both places are read.
-    const receipts = await Promise.all([...new Set([receiptDir, packageDir])].map((dir) => readPublicationReceipt(dir)));
+    const receipts = await Promise.all(receiptDirs.map((dir) => readPublicationReceipt(dir)));
     const receipt = receipts.find(receiptPublished) ?? receipts.find((item) => item !== undefined);
     if (receiptPublished(receipt)) throw new Error(`Review ${manifest.reviewId} round ${roundBlock.round} has already been published${receipt!.url === undefined ? "" : `: ${receipt!.url}`}.`);
     if (receipt !== undefined) {
       const found = await options.findPublished?.(ref, marker);
       if (typeof found === "string") {
-        await confirmPublicationReceipt(receiptDir, found);
+        await each((dir) => confirmPublicationReceipt(dir, found));
         throw new Error(`Review ${manifest.reviewId} round ${roundBlock.round} has already been published: ${found}.`);
       }
       throw new Error(`A previous publish of review ${manifest.reviewId} round ${roundBlock.round} has an unknown result. Check the pull request before sending another review; if it is not there, remove ${path.join(receiptDir, "publication-receipt.json")} and publish again.`);
@@ -241,6 +267,10 @@ export async function publishReview(packageDir: string, options: PublishOptions)
     // The operator read the body for the head shown; a push while they read makes it stale.
     if (options.readiness?.prLookup !== undefined) {
       const now = await readPullRequest(options, ref);
+      // Only a pull request that was read before the yes can be missed after it; a tracker that never answers is no check.
+      if (pr !== undefined && now === undefined) {
+        throw new Error("The pull request could not be read again after the review was confirmed, so nothing was posted. Publish again when GitHub answers.");
+      }
       refuseClosed(now, ref);
       const before = pr?.headSha ?? null;
       const after = now?.headSha ?? null;
@@ -249,17 +279,19 @@ export async function publishReview(packageDir: string, options: PublishOptions)
       }
     }
     const commitId = reviewedHead !== null && FULL_SHA.test(reviewedHead) ? reviewedHead : undefined;
-    await beginPublicationReceipt(receiptDir);
+    await each(beginPublicationReceipt);
     const result = await options.post(ref, event, body, commitId);
     if (!result.ok) {
       if (result.uncertain === true) {
         throw new Error(`The review could not be confirmed (${result.detail}). Check the pull request before publishing again.`);
       }
-      await dropPublicationReceipt(receiptDir);
+      await each(dropPublicationReceipt);
       throw new Error(`GitHub refused the review: ${result.detail}`);
     }
-    await confirmPublicationReceipt(receiptDir, result.url);
-    return result.url ?? "";
+    // Desktop counts a receipt as published only with a URL: without GitHub's, the pull request's own stands in.
+    const posted = result.url ?? (/^https:\/\/github\.com\//.test(ref) ? ref : undefined);
+    await each((dir) => confirmPublicationReceipt(dir, posted));
+    return posted ?? "";
   });
   if (url === null) return { readiness, body, event, partial, posted: false };
   await writeFileAtomic(

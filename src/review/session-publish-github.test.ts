@@ -1,6 +1,6 @@
 // Flow 521 T7: the session publish path's GitHub port, driven through a fake `gh`.
 import { describe, expect, test } from "bun:test";
-import { githubFindPublished, githubPostPullReview, pullRequestPath } from "./session-publish-github";
+import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull, pullRequestPath } from "./session-publish-github";
 
 const PR = "https://github.com/org/repo/pull/12";
 type Call = { args: string[]; stdin?: string | undefined };
@@ -49,5 +49,22 @@ describe("session publish GitHub port", () => {
     expect(await githubFindPublished(PR, marker, fakeGh([{ stdout: "me\n" }, { stdout: JSON.stringify(reviews) }]).gh)).toBe(`${PR}#pullrequestreview-2`);
     expect(await githubFindPublished(PR, marker, fakeGh([{ stdout: "other\n" }, { stdout: JSON.stringify(reviews.slice(1)) }]).gh)).toBeUndefined();
     expect(await githubFindPublished(PR, marker, fakeGh([{ stdout: "me\n" }, { exitCode: 1 }]).gh)).toBeNull();
+  });
+
+  test("without html_url the review's URL is built from its id; without either there is none", async () => {
+    expect(await githubPostPullReview(PR, "COMMENT", "b", undefined, fakeGh([{ stdout: JSON.stringify({ id: 9 }) }]).gh))
+      .toEqual({ ok: true, detail: "posted", url: `${PR}#pullrequestreview-9` });
+    expect(await githubPostPullReview(PR, "COMMENT", "b", undefined, fakeGh([{ stdout: "{}" }]).gh)).toEqual({ ok: true, detail: "posted" });
+  });
+
+  test("the reviewed commit is in the pull request only when GitHub reports the current head ahead of it", async () => {
+    const a = "a".repeat(40), c = "c".repeat(40);
+    const ahead = fakeGh([{ stdout: "ahead\n" }]);
+    expect(await githubReviewedHeadInPull(PR, a, c, ahead.gh)).toBe(true);
+    expect(ahead.calls[0]!.args).toEqual(["api", "--hostname", "github.com", `repos/org/repo/compare/${a}...${c}?per_page=1`, "--jq", ".status"]);
+    for (const answer of [{ stdout: "diverged\n" }, { stdout: "behind\n" }, { exitCode: 1 }]) {
+      expect(await githubReviewedHeadInPull(PR, a, c, fakeGh([answer]).gh)).toBe(false);
+    }
+    expect(await githubReviewedHeadInPull(PR, "short", c, fakeGh([{ stdout: "ahead" }]).gh)).toBe(false);
   });
 });

@@ -123,8 +123,8 @@ import {
 } from "../review/cross-family";
 import type { CrossFamilyReviewDecision } from "../lib/provider-config";
 import { githubAdapter, githubPrFiles } from "../flow/tracker/github";
-import { githubFindPublished, githubPostPullReview } from "../review/session-publish-github";
-import { registerSessionPackageForProject, sessionPublication, type SessionRegistrar } from "../review/session-attempt";
+import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull } from "../review/session-publish-github";
+import { laterRoundOf, registerSessionPackageForProject, sessionPublication, type SessionRegistrar } from "../review/session-attempt";
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
@@ -677,6 +677,7 @@ export interface ReviewCommandSeams {
   /** Test seam: posts the review to GitHub for `publish`. Default: `gh pr review`. */
   postReview?: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
   findPublished?: (ref: string, marker: string) => Promise<string | undefined | null>;
+  reviewedHeadInPull?: (ref: string, reviewed: string, current: string) => Promise<boolean>;
   /** Registers a session package as a Desktop Attempt; without seams the project's GitHub account is used. */
   registerSession?: SessionRegistrar;
   /** Test seam: the operator's answer to "post this body?". Default: a prompt on the terminal. */
@@ -5071,12 +5072,14 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
   const readiness = { prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles };
   // Flow 521: the package is (re)registered as a Desktop Attempt first, so both publish paths share one receipt.
   const register = seams === undefined ? (dir: string) => registerSessionPackageForProject(process.cwd(), dir, readiness) : seams.registerSession;
-  const publication = await sessionPublication(packageDir, register, (text) => console.log(`warning: ${text}`));
+  const publication = await sessionPublication(packageDir, register, (text) => console.error(`warning: ${text}`));
   const result = await publishReview(packageDir, {
     event,
     partial,
     readiness,
     publication,
+    ...(publication !== undefined && { laterRound: async () => laterRoundOf(publication.id) }),
+    reviewedHeadInPull: seams?.reviewedHeadInPull ?? ((ref, reviewed, current) => githubReviewedHeadInPull(ref, reviewed, current)),
     post: seams?.postReview ?? githubPostPullReview,
     findPublished: seams?.findPublished ?? githubFindPublished,
     confirm,

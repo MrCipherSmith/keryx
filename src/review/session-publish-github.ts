@@ -2,6 +2,7 @@
 // pinned to `commit_id` and GitHub's answer carries the review's URL for the receipt; a lost response is told apart from
 // a certain refusal, and the duplicate marker is looked up among the viewer's reviews of the pull request.
 
+import { githubPostReview } from "../flow/tracker/github";
 import { parseGhJson } from "./pr-comments";
 import type { PostResult, ReviewEvent } from "./publish";
 
@@ -27,7 +28,8 @@ const object = (value: unknown): Record<string, unknown> | undefined =>
 /** POST one pull request review. `uncertain` is set when the request may have reached GitHub and its answer was lost. */
 export async function githubPostPullReview(ref: string, event: ReviewEvent, body: string, commitId?: string, gh: GhRun = runGh): Promise<PostResult> {
   const pr = pullRequestPath(ref);
-  if (pr === undefined) return { ok: false, detail: `not a GitHub pull request URL: ${ref}` };
+  // A ref the reviews API cannot address (a number, a branch, another GitHub host) posts as before flow 521, unpinned.
+  if (pr === undefined) return gh === runGh ? githubPostReview(ref, event, body) : { ok: false, detail: `not a GitHub pull request URL: ${ref}` };
   if (gh === runGh && !Bun.which("gh")) return { ok: false, detail: "gh is not installed" };
   const payload = JSON.stringify({ event, body, ...(commitId === undefined ? {} : { commit_id: commitId }) });
   let result: Awaited<ReturnType<GhRun>>;
@@ -49,7 +51,9 @@ export async function githubPostPullReview(ref: string, event: ReviewEvent, body
   } catch {
     posted = undefined;
   }
-  const url = typeof posted?.html_url === "string" && posted.html_url.startsWith("https://github.com/") ? posted.html_url : undefined;
+  const id = posted?.id;
+  const url = typeof posted?.html_url === "string" && posted.html_url.startsWith("https://github.com/") ? posted.html_url
+    : typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? `https://github.com/${pr.repo}/pull/${pr.number}#pullrequestreview-${id}` : undefined;
   return { ok: true, detail: "posted", ...(url === undefined ? {} : { url }) };
 }
 
@@ -78,5 +82,20 @@ export async function githubFindPublished(ref: string, marker: string, gh: GhRun
     return undefined;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Whether `reviewed` is still in the pull request's history: GitHub reports `current` ahead of it. Diverged, behind,
+ * identical or any failed read answers no, as Desktop's check does (desk-publication.ts reviewedHeadInPull).
+ */
+export async function githubReviewedHeadInPull(ref: string, reviewed: string, current: string, gh: GhRun = runGh): Promise<boolean> {
+  const pr = pullRequestPath(ref);
+  if (pr === undefined || !/^[0-9a-f]{40}$/i.test(reviewed) || !/^[0-9a-f]{40}$/i.test(current)) return false;
+  try {
+    const result = await gh(["api", "--hostname", "github.com", `repos/${pr.repo}/compare/${reviewed}...${current}?per_page=1`, "--jq", ".status"]);
+    return result.exitCode === 0 && result.stdout.trim() === "ahead";
+  } catch {
+    return false;
   }
 }

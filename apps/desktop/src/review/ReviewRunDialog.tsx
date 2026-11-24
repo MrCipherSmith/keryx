@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
-import type { DeskRun } from "../../../../src/review/desk-run-types";
+import { hasDeskWorker, type DeskRun } from "../../../../src/review/desk-run-types";
+import { SOURCE_LABEL } from "../reviews/model";
 import { Icon } from "../components/Icon";
 import { Menu } from "../components/Menu";
 import { Dialog } from "../components/ui";
@@ -29,7 +30,7 @@ export function ReviewRunHistory({ runs, onSelect }: { runs: DeskRun[]; onSelect
       items={runs.map(run => ({
         id: run.id,
         label: runStatusLabel(run) + " · " + absoluteTime(run.createdAt),
-        description: [run.source === "scheduled" ? "Scheduled" : run.source === "manual" ? "Manual" : "Existing review",
+        description: [SOURCE_LABEL[run.source],
           "Run " + run.id.slice(0, 8), run.headSha.slice(0, 9)].filter(Boolean).join(" · "),
         onSelect: () => onSelect(run.id),
       }))} /></div>, document.body)}
@@ -52,7 +53,7 @@ export function ReviewRunDialog({ onClose, error, onAnswer, onRefresh, onOpenWor
     catch { setWorkspaceError("Could not open the review in Sessions."); }
     finally { setOpeningWorkspace(false); }
   }
-  const hasCoordinator = run.source !== "existing";
+  const hasCoordinator = hasDeskWorker(run);
   useEffect(() => {
     if (hasCoordinator) return activity.follow(run.id);
   }, [activity.follow, run.id, hasCoordinator]);
@@ -71,7 +72,7 @@ export function ReviewRunDialog({ onClose, error, onAnswer, onRefresh, onOpenWor
   return createPortal(<div className="review-session-overlay"><Dialog icon="chat" width={1120} onClose={onClose}
     title={<span className="review-session-heading"><span>Review session · PR #{card.number}</span>
       <span className="review-session-status" data-state={run.state}>{runStatusLabel(run)}</span>
-      <small>{hasCoordinator ? "Coordinator" : "Existing review"} · Run {run.id.slice(0, 8)}</small></span>}
+      <small>{hasCoordinator ? "Coordinator" : SOURCE_LABEL[run.source]} · Run {run.id.slice(0, 8)}</small></span>}
     footer={<><div className="review-session-footer">
       {run.reviewerProgress?.wave != null && <span className="review-wave">Wave {run.reviewerProgress.wave}</span>}
       {run.usage?.total.totalTokens != null && <span>{run.usage.total.totalTokens.toLocaleString()} tokens</span>}

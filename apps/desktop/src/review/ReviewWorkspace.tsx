@@ -1,4 +1,4 @@
-import type { DeskRevision, DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+import { hasDeskWorker, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "../components/Toasts";
 import { errMessage } from "../lib/format";
@@ -101,7 +101,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const syncRuns = local.request;
   function openManagedRun(id: string) {
     const run = local.runs.find(item => item.id === id);
-    if (!onOpenReviewSession || !run || run.source === "existing") {
+    if (!onOpenReviewSession || !run || !hasDeskWorker(run)) {
       setSessionId(id);
       return;
     }
@@ -216,7 +216,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       onLifecycle={lifecycle}
       onRefresh={() => void local.request({ kind: "status" })} />
     {session && <ReviewRunDialog
-      {...(onOpenReviewSession && session.source !== "existing" && {
+      {...(onOpenReviewSession && hasDeskWorker(session) && {
         onOpenWorkspace: async () => {
           await onOpenReviewSession(subject, session);
           setSessionId(null);

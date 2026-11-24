@@ -33,8 +33,8 @@ import path from "node:path";
 import { cardSafe, HIDDEN_IN_CARD, hiddenInCard } from "../lib/card-safe";
 import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
 import { githubAdapter, githubPrFiles } from "../flow/service";
-import { githubFindPublished, githubPostPullReview } from "../review/session-publish-github";
-import { registerSessionPackageForProject, sessionPublication, type SessionAttemptRecord } from "../review/session-attempt";
+import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull } from "../review/session-publish-github";
+import { laterRoundOf, registerSessionPackageForProject, sessionPublication, type SessionAttemptRecord } from "../review/session-attempt";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { readChunkPlan } from "../review/chunks";
@@ -60,6 +60,7 @@ export interface ReviewConfirmSeams {
   prFiles?: (ref: string) => Promise<string[] | null>;
   postReview?: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
   findPublished?: (ref: string, marker: string) => Promise<string | undefined | null>;
+  reviewedHeadInPull?: (ref: string, reviewed: string, current: string) => Promise<boolean>;
   /** Flow 521: registers a session package as a Desktop Attempt before it is shown and posted. Off unless set. */
   registerSession?: (packageDir: string, projectRoot: string) => Promise<SessionAttemptRecord | undefined>;
   replyPass?: (args: string[], dryRun: boolean) => Promise<CommentsReplyRun>;
@@ -190,6 +191,11 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
   const post = (): ((ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>) => seams.postReview ?? githubPostPullReview;
   const attemptOf = (dir: string, projectRoot: string) => sessionPublication(dir,
     seams.registerSession && ((packageDir) => seams.registerSession!(packageDir, projectRoot)), () => undefined);
+  // The same acceptance as `keryx review publish`: a superseded round and a commit the PR no longer holds are refused.
+  const acceptance = (publication: { id: string } | undefined) => ({
+    ...(publication !== undefined && { laterRound: async () => laterRoundOf(publication.id) }),
+    reviewedHeadInPull: seams.reviewedHeadInPull ?? ((ref: string, reviewed: string, current: string) => githubReviewedHeadInPull(ref, reviewed, current)),
+  });
   return {
     name: "review_publish",
     description:
@@ -220,6 +226,7 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
           partial: partialAsked,
           readiness: readiness(),
           publication,
+          ...acceptance(publication),
           post: async () => ({ ok: false, detail: "dry run" }),
           confirm: async (_body, targetRef) => {
             target = targetRef;
@@ -256,7 +263,10 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         partial: prepared.partial,
         readiness: readiness(),
         // The Attempt registered when the card was built: the body shown carries its marker.
-        publication: await sessionPublication(prepared.dir, undefined, () => undefined),
+        ...await (async () => {
+          const publication = await sessionPublication(prepared.dir, undefined, () => undefined);
+          return { publication, ...acceptance(publication) };
+        })(),
         post: post(),
         findPublished: seams.findPublished ?? githubFindPublished,
         now: () => new Date(confirmation.at),
@@ -877,6 +887,14 @@ async function runCompletionGates(projectRoot: string, prepared: CompletePrepare
     });
   } catch (error) {
     gateError = error;
+  }
+  // Flow 521: like `keryx review complete` at a terminal, a closed PR round becomes an Attempt of its Desktop Review.
+  if (done !== undefined && seams.registerSession !== undefined) {
+    try {
+      await seams.registerSession(prepared.dir, projectRoot);
+    } catch (error) {
+      done.warnings.push(`not registered as a Desktop review attempt: ${errorText(error)}`);
+    }
   }
   const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
   return { done, gateError, closed };

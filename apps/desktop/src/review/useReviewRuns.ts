@@ -8,7 +8,7 @@ import { runActive } from "../../../../src/review/board-badges";
 export { runActive, sameRange } from "../../../../src/review/board-badges";
 
 type ActionError =
-  | { kind: "start" | "cancel"; message: string }
+  | { kind: "start" | "cancel" | "advance"; message: string }
   | { kind: "answer"; id: string; questionId: string; message: string };
 
 export type RunObserver = (key: DeskRunKey, revision: DeskRevision, snapshot: DeskRunSnapshot) => void;
@@ -64,8 +64,9 @@ export function useReviewRuns(
       const message = errMessage(cause);
       if (action.kind === "status") setReadError(message);
       else if (action.kind === "answer") setActionError({ kind: "answer", id: action.id, questionId: action.questionId, message });
-      // An update round is a start of the next round: its refusal shows where a start's does.
-      else setActionError({ kind: action.kind === "advance" ? "start" : action.kind, message });
+      // An update round's refusal shows where a start's does, but never as a moved range: `advance` already took the
+      // pull request's current range, and its refusals (a later round exists, the PR closed) are not about the range.
+      else setActionError({ kind: action.kind, message });
       if (/^(access|configuration):/i.test(message)) {
         setSnapshot(null);
         if (action.kind === "status") setActionError(null);
