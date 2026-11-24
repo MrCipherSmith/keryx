@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coordinatorActivity } from "./desk-coordinator";
+import { coordinatorActivity, coordinatorActivityPage } from "./desk-coordinator";
 import { createEventTail } from "./autonomous-progress";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { ReviewerActivityRecorder } from "./reviewer-activity";
@@ -168,6 +168,45 @@ test("the pinned plan sets the total before dispatch and keeps blocked and later
   expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 3, completed: 2, finished: 2 });
 });
 
+test("projects a bounded plan summary only from artifacts pinned to the attempt range", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 2, roster: ["review-logic", "review-security-code"],
+    slices: { fix: [], new: [{ id: "S-1", files: ["src/cache.ts", "src/cache.test.ts"], roles: ["review-logic", "review-security-code", "review-style"] }] } });
+  save(["package", "desktop-dispatch.json"], { calls: [
+    { label: "review-logic" }, { label: "review-security-code" },
+  ] });
+  save(["package", "slices", "manifest.json"], { projectRoles: ["review-security-code"], slices: [
+    { id: "S-1", depth: "deep", risk: { why: ["security-sensitive code"] } },
+  ] });
+  save(["package", "scope-files.json"], { version: 1, files: ["src/cache.ts", "src/cache.test.ts"], changedLines: 171 });
+  save(["package", "round-depth.json"], { depth: "full", reason: "auto: a file hits the project reviewer code-boss-reviewer path gate (risk class)",
+    head: headSha, files: ["src/cache.test.ts", "src/cache.ts"], changedLines: 171 });
+  const result = readDeskReviewerProgress(directory, key, run, false);
+  expect(result?.planSummary).toEqual({ baseSha, headSha, files: ["src/cache.ts", "src/cache.test.ts"], filesComplete: true,
+    checks: [
+      { name: "review-logic", category: "baseline", slices: ["S-1"] },
+      { name: "review-security-code", category: "project", slices: ["S-1"] },
+    ], sliceReasons: [{ id: "S-1", depth: "deep", reasons: ["security-sensitive code"] }], checksComplete: true,
+    depth: "full", depthReason: "auto: a file hits the project reviewer code-boss-reviewer path gate (risk class)" });
+  expect(result?.planSummary?.checks.some(check => check.name === "review-style")).toBe(false);
+  expect(readDeskReviewerProgress(directory, key, { ...run, headSha: baseSha }, false)?.planSummary).toBeUndefined();
+});
+
+test("truncates large plan projections and keeps file completeness explicit", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  const files = Array.from({ length: 160 }, (_, index) => `src/file-${index}.ts`);
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 1, roster: ["review-logic"],
+    slices: { fix: [], new: [{ id: "S-1", files, roles: ["review-logic"] }] } });
+  save(["package", "scope-files.json"], { version: 1, files });
+  const summary = readDeskReviewerProgress(directory, key, run, false)?.planSummary;
+  expect(summary?.files).toHaveLength(80);
+  expect(summary?.filesComplete).toBe(false);
+  expect(summary?.checks).toEqual([{ name: "review-logic", category: "baseline", slices: ["S-1"] }]);
+  expect(summary?.sliceReasons).toHaveLength(0);
+});
+
 test("details recover a finished reviewer's public result and context request while the coordinator is still running", () => {
   const reviewer = "review-layout", file = "review-layout-w1.txt";
   save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
@@ -204,4 +243,40 @@ test("coordinator activity shows public turns, reviewer questions and their answ
     { kind: "answer", questionId, reviewer: "review-layout", text: "The compact layout." },
     { kind: "message", text: "Checked the decision", final: true },
   ]);
+});
+
+test("pages earlier public coordinator events across bounded byte and event windows", () => {
+  const rows = Array.from({ length: 103 }, (_, index) => ({
+    type: "assistant", text: `Public é ${index}`,
+  }));
+  const records = [
+    ...rows.slice(0, 9),
+    { type: "reasoning", text: "PRIVATE".repeat(100_000) },
+    ...rows.slice(9),
+  ].map(row => JSON.stringify(row)).join("\n") + "\n";
+  save(["run", "events.ndjson"], records);
+  const latest = coordinatorActivityPage(directory);
+  expect(latest.events).toHaveLength(80);
+  expect(latest.events.at(-1)?.text).toBe("Public é 102");
+  expect(latest.before).toBeDefined();
+
+  // Appends do not displace the user's earlier-page anchor.
+  save(["run", "events.ndjson"], records + JSON.stringify({ type: "assistant", text: "Live update" }) + "\n");
+  let cursor = latest.before;
+  const combined = [...latest.events];
+  while (cursor !== undefined) {
+    const page = coordinatorActivityPage(directory, cursor);
+    expect(page.before ?? 0).toBeLessThan(cursor);
+    combined.unshift(...page.events);
+    cursor = page.before;
+  }
+  expect(combined.map(event => event.text)).toEqual(rows.map(row => row.text));
+  expect(JSON.stringify(combined)).not.toContain("PRIVATE");
+});
+
+test("the paged projection never follows a replacement transcript symlink", () => {
+  save(["private.ndjson"], JSON.stringify({ type: "assistant", text: "PRIVATE" }) + "\n");
+  mkdirSync(path.join(directory, "run"));
+  symlinkSync(path.join(directory, "private.ndjson"), path.join(directory, "run", "events.ndjson"));
+  expect(coordinatorActivityPage(directory, 2048)).toEqual({ events: [] });
 });

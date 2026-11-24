@@ -19,6 +19,9 @@ function fixture(failComments = false): DetailQuery {
     if (query.includes("query ReviewDetailIdentity")) return { viewer: { login: "viewer" }, repository: {
       id: "repo-id", pullRequest: { id: "pr-id", body: "## PR description", headRefOid: "abc", commits: { nodes: [{ commit: { id: "commit-id", oid: "abc" } }] } },
     } };
+    if (query.includes("files(first:")) return { viewer: { login: "viewer" }, node: { files: page([
+      { path: "src/main.ts", additions: 8, deletions: 3 },
+    ]) } };
     if (query.includes("on PullRequestReviewThread")) return { viewer: { login: "viewer" }, node: { comments: page([message("reply", true)]) } };
     if (query.includes("on Commit")) return { viewer: { login: "viewer" }, node: checks() };
     if (query.includes("reviewThreads(")) return { viewer: { login: "viewer" }, node: { reviewThreads: page([
@@ -38,6 +41,8 @@ describe("readReviewBoardDetail", () => {
     expect(d.threads[0]).toMatchObject({ resolved: true, messages: [messageShape("root", false), messageShape("reply", true)] });
     expect(d.reviews[0]?.state).toBe("CHANGES_REQUESTED");
     expect(d.checks[0]?.status).toBe("FAILURE");
+    expect(d.files).toEqual([{ path: "src/main.ts", additions: 8, deletions: 3 }]);
+    expect(d.filesComplete).toBe(true);
     expect(d.headSha).toBe("abc");
     expect(d.warnings).toEqual([]);
   });
@@ -46,6 +51,16 @@ describe("readReviewBoardDetail", () => {
     expect(d.comments.map(m => m.id)).toEqual(["c1"]);
     expect(d.threads).toHaveLength(1);
     expect(d.warnings.join(" ")).toContain("discussion");
+  });
+  test("a failed file page makes the PR file list explicitly incomplete", async () => {
+    const d = await readReviewBoardDetail("org/repo", 1, ".", async (query, vars) => {
+      if (query.includes("files(first:") && vars.cursor) throw new Error("unavailable: offline");
+      if (query.includes("files(first:")) return { viewer: { login: "viewer" }, node: { files: page([{ path: "src/main.ts", additions: 8, deletions: 3 }], "next") } };
+      return await fixture()(query, vars);
+    });
+    expect(d.files).toEqual([{ path: "src/main.ts", additions: 8, deletions: 3 }]);
+    expect(d.filesComplete).toBe(false);
+    expect(d.warnings.join(" ")).toContain("changed files");
   });
   test("large paginated discussions and inline replies share the Desktop response budget", async () => {
     const normal = fixture();
