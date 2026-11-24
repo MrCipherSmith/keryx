@@ -104,3 +104,11 @@
 - Round 4 planned with `--ref 98f777283` (round 3's head after the rebase): 2 slices, 10 reviewers, 12 dispatches in 5 subagents. Package `…-pull-1302-r04`. 42 raw findings → 10 canonical (1 major: the T3 lock order was untested; 9 minor), all acted on in T14; 32 others dispositioned in `dispositions-4.json`. Round-3 findings verified closed except T1/T4/T15 partial, which U2–U7 address; the base check at publish time stays a known gap.
 - Ledger READY (completion gate satisfied); the package was not ingested or completed. Mutation pass (testing reviewer): 31 mutants, 18 killed, 13 survived before T14; T14 adds the lock-order, unknown-receipt, ancestry tri-state, current-head later-round, retarget-base and Desktop moved-range tests.
 - 2026-11-24T12:20:33.826Z - task-done: T14: Fix round 4 findings of PR 1302 (U1-U10)
+
+## 2026-11-24 Final rebase onto main and scoped review
+
+- Stage 2 (#1304) and stage 3 (#1303, cd573dc07) are on main. Rebased once: `git rebase --onto origin/main 373976c9d` (13 commits, no conflicts). The only fix needed was a test assertion for stage 3's final banner wording ("Refresh to load the latest range."), which also made a negative assertion vacuous until corrected.
+- Related suites only (owner rule: no full run, no mutation): root 375 pass, Desktop reviews/review/platform 288 pass, type-check clean in both packages.
+- One review round scoped to the 7 files stage 3's final code changed under stage 4's edits (review.rs, ReviewRuns, ReviewWorkspace, reviews/model.ts, ReviewPanel test, desk-run-store.ts, review-entity.ts): no blockers or majors. Checked: session Attempt placement by the final assignReviews/roundFor, advance against the final newerRoundOf, a session Attempt as the base of a Desktop update round, the Reviews list labels and filters, hasDeskWorker gating.
+- Deferred (owner rule: only blockers and majors are fixed from here): the minors and infos of rounds 1–4 dispositioned in each package's dispositions file, plus the open test gaps (review_complete card registration, card execute wiring, Desktop workspace/dialog gating, payloads/ copy filter, non-URL post fallback), publish-time base comparison, posting under the project-bound gh account, registration recomputing readiness, laterRoundOf reading the UI history snapshot.
+- T10 (real-PR scenario) stays unverified.
