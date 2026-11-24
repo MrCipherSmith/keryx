@@ -1,0 +1,244 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Managed review round 1 of flow 520 (Desktop Review v2 stage 3) on PR #1303",
+   "flags": [],
+   "mode": "diff",
+   "range": "a5d1ab236fe85dee62a758a19390049dde4eb7f9..9e871b17f16a934d5568926e210c3c88d1ca7a86"
+  },
+  "git": {
+   "repo": "MrCipherSmith/keryx",
+   "branch": "feat/desktop-review-v2-stage3",
+   "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+   "head": "9e871b17f16a934d5568926e210c3c88d1ca7a86",
+   "merge_base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9"
+  },
+  "pr": {
+   "number": 1303,
+   "url": "https://github.com/MrCipherSmith/keryx/pull/1303",
+   "title": "Desktop Review v2 stage 3: publish as is after head move (D1), on_head_move (D2), prior-attempt selection",
+   "body": "Stage 3 of Desktop Review v2, flow 520 (`.metaproject/flows/520-2026-11-24-desktop-review-v2-stage3`). Requirements are in `docs/requirements/keryx-desktop-review-v2/`: implementation plan v0.1.3 stage 3, owner decisions D1 and D2, and the spec section \"\u041f\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435 \u043f\u0440\u0438 \u0441\u043c\u0435\u043d\u0435 head\".\n\n## Depends on stage 2 (not done yet)\n\nThe plan puts stage 3 after stage 2, because the update round belongs to the Review entity and its rounds. Stage 2 is flow 519 on `feat/desktop-review-v2-stage2`. When this PR was opened, that branch was not on origin and the rounds migration (`src/review/desk-run-store.ts`) did not exist. The owner chose to start stage 3 early, so this PR contains only the parts that do not need rounds. They are shaped to attach to rounds later without a rewrite. No rounds schema is defined here.\n\n- **Waiting on stage 2.** Item 3 (\"Review again\" becomes an update round of the same Review) is not started. Flow task T8 and criterion AC7 track it. The following go with it:\n  - wiring `selectPriorAttempt` into the run start;\n  - relaxing the package trust rule in `prior-round.ts` and `round-record.ts` so a partial previous round is accepted;\n  - the `onUpdateReview` caller in the publish dialog;\n  - carrying finding answers across the update round.\n- **Overlap with stage 1** (Draft MrCipherSmith/keryx#1300, which changes the board, the Issues tab, and card links in `ReviewBoard.tsx` and `model.ts`). No file overlap is expected: this PR does not touch `ReviewBoard.tsx`, `model.ts`, `board-badges.ts`, `desk-run-store.ts` or `review.css`. Stage 2 will move the review UI out of the PR panel. Whichever lands second rebases `ReviewPublishDialog.tsx`.\n\n## What changes\n\n1. **Publish as is after the head moved (D1).** Applies when the PR is open with the reviewed base and a newer head. `desk-publish` returns `headMoved: { reviewedHead, currentHead }` and forces verdict `comment` with inline comments off. The body opens with:\n   > Reviewed commit `<sha>`. The pull request has moved to `<sha>` since; this review does not cover the newer commits.\n\n   The review posts with `commit_id` set to the reviewed head. The current head is part of the digest and the body, so another push makes the preview stale and the submit fails with `stale:`. Before the write, the subject is checked against the head shown in the preview. Automatic publication still refuses a moved head. A changed base or a closed PR keeps today's refusal. The dialog shows both commits, locks the verdict and inline controls, and labels the action \"Publish as is for `<short sha>`\". It also accepts an optional \"Update review to `<sha>`\" action, which no caller passes until item 3.\n2. **`on_head_move` (D2).** New `src/review/head-move.ts` with `ask | follow | ignore`.\n   - A manual review defaults to `ask`; a rule-triggered review defaults to `follow`.\n   - `parseOnHeadMove` reads a missing or unknown stored value as the default, so stage 2 can store it as a nullable column.\n   - `headMoveResponse` encodes the spec table.\n   - There is no storage yet.\n3. **Previous-attempt selection (item 4, the part that does not need rounds).** New `src/review/update-round.ts`. `selectPriorAttempt` returns the newest `DeskRun` attempt with accepted findings.\n   - Partial attempts count, and the result marks them `partial`.\n   - The settings key is not compared.\n   - It skips imported, failed, cancelled, unreviewed, deleted and archived attempts.\n   - `prior-round.test.ts` pins that a previous round recorded under different settings is still chosen.\n\n## Decisions taken in the flow (please check)\n\n- In the head-moved case, Save locally stores the forced settings (`comment`, no inline). This attempt can only be published as is from now on.\n- Placement of \"Update review to \u2026\" (first footer button) is provisional. The spec calls it the primary action, so it gets revisited when item 3 connects it.\n- In the head-moved case, General comment can still be switched off. The existing message then refuses the submit.\n\n## Verification\n\n- `bun test src/review/desk-publication.test.ts` \u2014 14 pass. The tests for each failure path were checked by reverting the guarding line and watching the test fail.\n- `bun test src/review/head-move.test.ts src/review/update-round.test.ts src/review/prior-round.test.ts` \u2014 pass. For the partial-state and settings-key rules, a mutation was confirmed to make a test fail.\n- `cd apps/desktop && bun test src/review` \u2014 123 pass. Desktop `tsc --noEmit` and root `bun run typecheck` are clean. `eslint` is clean on the changed `src/review` files.\n- The Desktop `.tsx` files are excluded from the root ESLint config, so they are not linted.\n\n## Not verified\n\n- No scenario was run on a real pull request, including a commit pushed during a round followed by publishing as is from Desktop (AC9). Coverage is unit and DOM tests only.\n- The Desktop Rust side (`review_publish` passes `Value` through; no Rust change) is verified only in CI, because there is no local Rust toolchain.\n- Item 3 and acceptance criteria 4\u20137 of the spec are not implemented (see above).\n",
+   "state": "open",
+   "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+   "head": "9e871b17f16a934d5568926e210c3c88d1ca7a86"
+  },
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json",
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json",
+    "apps/desktop/src/review/ReviewPublishDialog.tsx",
+    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+    "src/review/desk-publication-types.ts",
+    "src/review/desk-publication.ts",
+    "src/review/head-move.ts",
+    "src/review/update-round.ts",
+    "src/review/desk-publication.test.ts",
+    "src/review/head-move.test.ts",
+    "src/review/prior-round.test.ts",
+    "src/review/update-round.test.ts"
+   ],
+   "changed_lines": null,
+   "risk_areas": [
+    "publication to GitHub (outbound write)",
+    "digest/staleness binding",
+    "subject verification before write"
+   ]
+  },
+  "requirements": {
+   "issue_url": null,
+   "task_docs": [
+    ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+    "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+    "docs/requirements/keryx-desktop-review-v2/specification.md"
+   ],
+   "acceptance_criteria": [
+    "AC1: When the pull request is open with the reviewed base and a different head, the `desk-publish` preview returns `headMoved` with both commits, verdict `comment`, inline off, and a body whose first line names the reviewed commit and says the pull request moved on; submit posts a `COMMENT` review with `commit_id` equal to the reviewed head. [verify: exec `bun test src/review/desk-publication.test.ts`]",
+    "AC2: With a moved head, a submit whose settings ask for another verdict or inline comments still posts a `COMMENT` with no inline comments; a head that moved again after the preview fails with `stale:` and posts nothing; automatic publication with a moved head posts nothing; a changed base or a closed pull request keeps today's refusal. \u00b7 sensitive: failure-scenario [verify: exec `bun test src/review/desk-publication.test.ts`]",
+    "AC3: The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]",
+    "AC4: `on_head_move` has the values `ask`, `follow`, `ignore`; a manual review defaults to `ask` and a rule-triggered review to `follow`; a missing or unknown stored value reads as the default. [verify: exec `bun test src/review/head-move.test.ts`]",
+    "AC5: The previous-attempt selection accepts the newest partial attempt with accepted findings and an attempt run with different settings, and rejects imported, failed, cancelled and unreviewed attempts. [verify: exec `bun test src/review/update-round.test.ts`]",
+    "AC6: `findPreviousRound` still chooses a previous round recorded under different review settings. [verify: exec `bun test src/review/prior-round.test.ts`]",
+    "AC7: \"Review again\" on a card with an outdated review starts an update round of the same Review on the current head, with the previous round's findings attached. [verify: none \u2014 blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented]",
+    "AC8: Backend review tests, the Desktop review suite, typecheck and lint pass on the branch; the attention-set code, `attachBadges`/`localBadge` and the toolbar container queries are unchanged by this flow. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]",
+    "AC9: The scenario on a real pull request with a commit pushed during a round, then published as is from Desktop. [verify: judged]"
+   ]
+  },
+  "rules": [
+   ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+   ".metaproject/rules/stacks/ts-js-node/testing.mdc",
+   ".metaproject/rules/stacks/ts-js-node/security.mdc",
+   ".metaproject/rules/stacks/react/code-style-patterns.mdc",
+   ".metaproject/rules/core/error-handling.mdc"
+  ],
+  "cross_repo": [],
+  "memory": {
+   "query": "desk publication head moved publish review",
+   "status_filter": "accepted",
+   "entries": [
+    {
+     "path": ".metaproject/memory/known-mistakes/review-ingest-discards-verdicts.md",
+     "title": "Findings reach a review round through the report's keryx:findings block",
+     "type": "known-mistake"
+    },
+    {
+     "path": ".metaproject/memory/constraints/stale-installed-keryx-binary.md",
+     "title": "The keryx on PATH is a stale build",
+     "type": "constraint"
+    }
+   ],
+   "searched": true
+  },
+  "routing": {
+   "selected_reviewers": [
+    "review-architecture",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+   ],
+   "skipped_reviewers": [],
+   "reasons": {
+    "review-architecture": "keryx review required --depth auto",
+    "review-degradation": "keryx review required --depth auto",
+    "review-frontend": "keryx review required --depth auto",
+    "review-highload": "keryx review required --depth auto",
+    "review-layout": "keryx review required --depth auto",
+    "review-logic": "keryx review required --depth auto",
+    "review-performance": "keryx review required --depth auto",
+    "review-regression": "keryx review required --depth auto",
+    "review-security-code": "keryx review required --depth auto",
+    "review-testing-practices": "keryx review required --depth auto",
+    "review-ui-ux": "keryx review required --depth auto"
+   }
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "omissions": [],
+   "model_plan": {
+    "tier": "standard",
+    "source": "keryx review tier"
+   }
+  }
+ },
+ "reviewer": "review-highload",
+ "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with \u2026\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+ "scope_mode": "diff",
+ "slices": [
+  "slice-01"
+ ],
+ "context_doc": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+ "issue_url": null,
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "provider": "anthropic",
+  "model": "claude-opus-5-5",
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "anthropic",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+  },
+  "routed": true
+ },
+ "budget": {
+  "max_prompt_tokens": null,
+  "max_findings": 15
+ },
+ "branch": "feat/desktop-review-v2-stage3",
+ "base_sha": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+ "pr_context": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303/pr-context.md",
+ "round": 1,
+ "is_fix_round": false,
+ "allowed_tools": "read-only",
+ "exec_budget_s": 0,
+ "layers": {
+  "version": 1,
+  "files": [
+   "apps/desktop/src/review/ReviewPublishDialog.tsx",
+   "src/review/desk-publication.ts",
+   "src/review/head-move.ts",
+   "src/review/update-round.ts"
+  ],
+  "prHead": "9e871b17f16a934d5568926e210c3c88d1ca7a86",
+  "graphCommit": "9e871b17f16a934d5568926e210c3c88d1ca7a86",
+  "maxBytes": 8192,
+  "affected": {
+   "depth": 2,
+   "files": [
+    "apps/desktop/dev/bridge.ts",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+    "apps/desktop/src/review/ReviewDetail.tsx",
+    "apps/desktop/src/review/ReviewRunDialog.tsx",
+    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+    "apps/desktop/src/review/ReviewRuns.tsx",
+    "src/commands/review-desk-publish.test.ts",
+    "src/commands/review-desk-publish.ts",
+    "src/commands/review-desk-run.ts",
+    "src/commands/review-pr-context.ts",
+    "src/commands/review.ts",
+    "src/review/desk-publication.test.ts",
+    "src/review/desk-run-executor.test.ts",
+    "src/review/desk-run-service.ts",
+    "src/review/head-move.test.ts",
+    "src/review/review-rule-dispatch.ts",
+    "src/review/review-rules.test.ts",
+    "src/review/update-round.test.ts",
+    "src/review/watcher.ts"
+   ]
+  },
+  "symbols": [],
+  "relatedTests": [
+   "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+   "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+   "src/commands/review-desk-publish.test.ts",
+   "src/review/desk-publication.test.ts",
+   "src/review/desk-run-executor.test.ts",
+   "src/review/head-move.test.ts",
+   "src/review/review-rules.test.ts",
+   "src/review/update-round.test.ts"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+ },
+ "metaproject": {
+  "memory": [
+   {
+    "path": ".metaproject/memory/known-mistakes/review-ingest-discards-verdicts.md",
+    "type": "known-mistake",
+    "status": "accepted",
+    "title": "Findings reach a review round through the report's keryx:findings block"
+   },
+   {
+    "path": ".metaproject/memory/constraints/stale-installed-keryx-binary.md",
+    "type": "constraint",
+    "status": "accepted",
+    "title": "The keryx on PATH is a stale build"
+   }
+  ]
+ },
+ "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
+}

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 117772,
+      "contentHash": "3ca1237e64777c3f19c906dc21564cfe4ac1d59494ad869c3c2fa24ab907af99",
+      "files": [
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json",
+        "apps/desktop/src/review/ReviewPublishDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+        "src/review/desk-publication-types.ts",
+        "src/review/desk-publication.ts",
+        "src/review/head-move.ts",
+        "src/review/update-round.ts",
+        "src/review/desk-publication.test.ts",
+        "src/review/head-move.test.ts",
+        "src/review/prior-round.test.ts",
+        "src/review/update-round.test.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps +3 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ReviewPublishDialog.tsx, src/review/desk-publication-types.ts, src/review/desk-publication.ts (+2)"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 1,
+    "bytes": 117772,
+    "files": 20,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

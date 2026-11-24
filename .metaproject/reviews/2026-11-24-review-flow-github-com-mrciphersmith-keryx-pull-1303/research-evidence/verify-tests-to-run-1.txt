@@ -1,0 +1,48 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test --timeout 30000 src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts src/commands/select.test.ts src/review/board-badges.test.ts src/review/desk-reviewer-progress.test.ts src/review/desk-run-store.test.ts src/review/desk-worker-roster.test.ts src/review/review-rules.test.ts src/review/desk-publication.test.ts src/review/head-move.test.ts src/review/update-round.test.ts src/review/prior-round.test.ts && cd apps/desktop && bun test src/review
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b
+time: 2026-11-24T08:06:23.579Z
+exit: 1
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+src/review/prior-round.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+killed 1 dangling process
+
+src/commands/review-desk-run.test.ts:
+(fail) two linked worktrees attach to one worker and can cancel while its revision is being verified [30000.40ms]
+  ^ this test timed out after 30000ms.
+
+# Unhandled error between tests
+-------------------------------
+167 |         project,
+168 |         "status",
+169 |         [],
+170 |         common.map((s) => (s === "viewer" ? "other" : s)),
+171 |       ),
+172 |     ).rejects.toThrow("access:");
+                    ^
+error: expect(received).toThrow(expected)
+
+Expected substring: "access:"
+Received message: ""
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b/src/commands/review-desk-run.test.ts:172:15)
+-------------------------------
+
+
+ 189 pass
+ 1 fail
+ 1 error
+ 1092 expect() calls
+Ran 190 tests across 12 files. [121.73s]

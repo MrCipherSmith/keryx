@@ -1,0 +1,61 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage3, merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 9e871b17f16a934d5568926e210c3c88d1ca7a86, diff mode via slice-01 (read in full). Load profile: not provided. Concrete triggers used: two Desktop sessions or windows submitting/saving the same review id at once; a push to the PR between preview and submit; a push between the subject check and the POST; a lost POST response followed by a retry. Files examined beyond the slice: src/review/desk-publication.ts (publication(), previewSubject(), the lock body and the POST/receipt tail at head), src/review/desk-run-service.ts verifyDeskSubject.
+
+Summary: The as-is path keeps the existing serialisation. Every write (skip, save, submit, automatic) runs inside withFileLock(publication.lock). render() re-reads the receipt inside the lock, and the receipt "{}" is persisted before the POST. A concurrent or retried second submit is refused with "already been published" or "unknown result", for either variant, because the marker `keryx-desktop-review <id>` is keyed by run id and not by head. A push between preview and submit changes `headMoved.currentHead`, so it changes the body and the digest and the submit fails `stale:`. A push between the start of submit and the write fails verifyDeskSubject(expected), which pins base and the previewed current head. One residual window remains: a push after that check and before the POST. It cannot misplace the review, because commit_id is pinned to the reviewed head. It only makes the first body line name a head that is already superseded. That is recorded as info. Stats: blocker 0 | major 0 | minor 0 | info 1.
+
+Findings:
+
+CLI / Multi-Session — None detected. Two submits for one id serialise on publication.lock. The second sees the receipt inside the lock and is blocked before any network write. The test "a head that moves again after the preview or before the write posts nothing" also pins that no receipt file is left when the pre-write check fails.
+
+Concurrency & Races
+### [F-001] As-is body can name a head that a push already superseded (check-to-POST window)
+- Severity: info
+- File: src/review/desk-publication.ts (`await verifyDeskSubject(cwd, key, expected, connection);` then POST)
+- Pattern: Concurrency A6 — TOCTOU between subject check and write
+- Failure mode: A push lands after verifyDeskSubject(expected) and before callGitHub POST. GitHub still accepts the review, because commit_id is pinned to the reviewed head. But the posted first line says "moved to <currentHead>" while the PR is already at a newer head. Nothing is misplaced and no duplicate is created. The window exists for the current-head path too, which predates this PR. The GitHub create-review API has no PR-head precondition to close it.
+- Fix: No change is required. Optionally, word the line as "moved to at least <sha>", or drop the current head from the posted text and keep it only in the digest.
+
+Resources — None detected. The diff adds no new connection, child or file handle. The as-is path skips the PR diff fetch, because inline is forced off; the test asserts FIXTURE_DIFF_READS is absent.
+Caching — None detected. Preview cache entries are keyed per run revision and expire after 15 s. A stale cached subject only makes the preview show the wrong variant. The submit reads the subject fresh, because the cache is used only for kind=preview without refresh. A digest mismatch then fails safe with `stale:`.
+Lock Contention — None detected. The only new I/O under the lock is the same pair of verifyDeskSubject calls, now with `expected`. The discussion read now also runs for headMoved, as before for current. Neither adds a new lock hold.
+Async / Queues — not relevant. The diff adds no queue.
+Retry / Timeout / Circuit Breaker — None detected. The diff adds no retry, and the existing gh spawn keeps AbortSignal.timeout.
+Idempotency & Distributed Invariants — None detected. The receipt is written before the POST, and the marker lookup on retry is keyed by run id. So the as-is variant and the current variant of one run cannot both be posted, even when the head moves between a lost response and the retry.
+
+Clean Areas: Part 0, A (except F-001, info), B, C, D, E, F, G reviewed.
+
+Not verified / notes:
+- No tests were run (exec_budget_s 0). The research evidence file verify-tests-to-run-1.txt reports 189 pass, 1 fail, 1 error. The failure is src/commands/review-desk-run.test.ts:172 (expected "access:", received ""). It is outside this lens and outside the diff's files, and I did not investigate it.
+- head-move.ts and update-round.ts are pure functions with no shared state, so they are not relevant to this lens.
+- Routing audit: graph_used no (not-relevant: the payload's layers block already supplied the affected set). wiki_used no (not-relevant). ctx_used yes (keryx ctx rg/read). raw_rg_used no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "The as-is publish path keeps the existing serialisation. Writes run under publication.lock. The receipt is persisted before the POST and re-read inside the lock. The duplicate marker is keyed by run id, so it works across both variants. A push between preview and submit fails the digest check with stale:, and a push before the write fails verifyDeskSubject(expected). The only residual window, a push after the check and before the POST, can make the body name a superseded head and cannot misplace or duplicate the review (info).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "await verifyDeskSubject(cwd, key, expected, connection);",
+      "problem": "Between the final subject check and the POST, a push can move the PR head again. The posted as-is body then names a current head that is already superseded.",
+      "impact": "The first body line may understate how far the PR moved. The review is still pinned to the reviewed commit through commit_id, and no duplicate or misplaced review results. The same window exists, before this PR, for the current-head path, and the GitHub create-review API has no PR-head precondition to close it.",
+      "suggested_fix": "No change required. Optionally, word the line as 'has moved to at least <sha>', or keep the current head only in the digest.",
+      "evidence": "publication(): `expected` is checked by verifyDeskSubject inside withFileLock. writeFileAtomic(receipt) and callGitHub POST follow, and outbound.commit_id = run.headSha. The test 'a head that moves again after the preview or before the write posts nothing' covers pushes up to confirmSubmit, not after the check.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": []
+}
+```

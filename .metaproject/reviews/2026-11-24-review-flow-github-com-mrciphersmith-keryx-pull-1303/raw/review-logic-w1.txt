@@ -1,0 +1,124 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Head: `9e871b17f16a934d5568926e210c3c88d1ca7a86`
+- Scope mode: explicit-hash-range (supplied slice-01, read in full, lines 1-2124)
+- Spec compliance gate: ran against the flow 520 acceptance criteria, the spec section "Перед публикацией" / "Раунд обновления" / the `on_head_move` table, and the PR body.
+
+### Summary
+The head-moved branch of `publication()` is sound for the case it was written for: classification (open = OPEN + same base; current = open + same head; headMoved = open + different valid head), forced settings (comment / inline off, request settings ignored), the first body line prepended after the overlay, the current head in the digest, `expected` = `{ run.baseSha, currentHead }` passed to both `verifyDeskSubject` calls before the receipt and the POST, and the automatic refusal. I traced every transition (preview current then head moves; preview as-is then head moves again; head force-pushed back to the reviewed head; base change; close) and each ends in `stale:` or the old refusal, never a silent post. `head-move.ts` and `update-round.ts` match the spec table and the AC5 rules. One concern: the as-is variant is offered whenever the head differs, including when the reviewed commit is no longer part of the PR (force-push / rebase on the same base), where GitHub is expected to refuse `commit_id` and the user gets a misleading error.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 0  |  info: 2
+
+### Spec Gaps (blocker)
+None detected. AC7 is unimplemented but the PR does not claim it (declared blocked on stage 2, `verify: none`); recorded as info F-003 so the flow gate keeps it visible.
+
+### Logic Bugs
+[F-001] (major, confidence low) As-is publication is offered when the reviewed commit is no longer in the PR.
+- File: src/review/desk-publication.ts (headMoved classification in `publication()`)
+- Problem: `headMoved` is set for any open PR with the same base and a different valid head. It does not check that `run.headSha` is still an ancestor of the current head. After a force-push or rebase that keeps the base, the dialog offers "Publish as is for <sha>" and the POST sends `commit_id: run.headSha`, a commit the PR no longer contains.
+- Why it matters: GitHub's create-review endpoint is expected to answer 422 for a `commit_id` that is not part of the PR (not verified against the live API here: read-only round). The 422 branch then throws "GitHub rejected this review. Check the verdict and inline comments. Authors cannot approve their own pull requests.", which names neither cause nor remedy. The user is offered an action that cannot succeed, and the error points at the wrong thing. Nothing is posted and the receipt is removed, so no data is harmed.
+- Fix: classify head-moved only when the reviewed head is an ancestor of the current head (for example `gh api repos/{repo}/compare/{reviewed}...{current}` with status `ahead`). Otherwise keep the existing "closed or its revision moved" refusal. Alternatively, when `headMoved` is set, map a 422 to a specific message: "The reviewed commit is no longer part of this pull request. Save locally or start a new review."
+
+### Async & Concurrency
+None detected. The remaining window between `verifyDeskSubject(expected)` and the POST (a push in between makes the body's "moved to <sha>" one commit behind) is the same TOCTOU the current-head path already accepts. `commit_id` still pins the reviewed commit, so no finding.
+
+### Error Handling
+See F-001 (422 mapping in the head-moved case).
+
+### Null / Undefined Safety
+None detected. `headMoved` is only built after `sha.test(pr.headRefOid)`. The dialog reads `draft?.headMoved` and guards every render site.
+
+### Type Contract Violations
+None detected. `expected` satisfies `DeskRevision`. The optional `headMoved` is spread conditionally under exactOptionalPropertyTypes.
+
+### Edge Cases
+- [F-002] (info) The terminal confirmation for `desk-publish` submit does not say the review is the as-is variant for an older commit.
+- [F-003] (info, pr-process) AC7 is open and blocks flow completion, not this PR.
+
+### Verified clean (sites)
+- Stale-preview binding: desk-publication.ts `digest` includes `headMoved.currentHead`, and the body carries it too. Tests in desk-publication.test.ts ("a head that moves again after the preview or before the write posts nothing") cover both the digest path and the confirm-time push. A submit built from a current-head preview after the head moved fails on the digest, because the body and settings differ. A force-push back to the reviewed head also fails on the digest.
+- Write-time subject check: both `verifyDeskSubject(cwd, key, expected, …)` calls (connection and named auth) run before `save()`, the receipt write and the POST. verifyDeskSubject (desk-run-service.ts:49-63) throws `stale:` on a non-OPEN PR or a base/head mismatch.
+- Forced settings: in `prepare`, the head-moved branch ignores `saved.inline` and `saved.verdictOverride`. The inline diff fetch is skipped because `settings.inline` is false and `current` is false. The test asserts no diff read.
+- Automatic: `request.kind === "automatic" && (headMoved || …)` refuses. Every earlier entry in the `blockedReason` chain is also a refusal. The only caller (desk-run-service.ts:441-443) swallows the error, and no caller matches the old "revision moved" text (`keryx ctx rg "publishCompletedDeskReview|revision moved|publication decision in Desktop" src apps/desktop/src`).
+- Desktop reachability: ReviewRuns.tsx:103-105 shows "Publish to GitHub" for a historic (head-moved) run, so the new dialog branch is reachable. The Rust `review_publish` passes `Value`.
+- head-move.ts: `parseOnHeadMove` uses strict equality against the tuple, so case variants, `null` and objects fall back to the default. `headMoveResponse` matches spec lines 98-102 and 115-121.
+- update-round.ts: skips `existing`, other scope, non completed/partial states (failed, cancelled, blocked, budget, running), delete/archive decisions, a missing `reviewed` range and `findingsKnown !== true`. `partial` is set from state or non-complete coverage. No caller yet, as declared in the PR body.
+
+### Suggested Patches
+F-001 (sketch, not applied):
+```diff
+-  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid)
++  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid) &&
++      await reviewedHeadIsAncestor(cwd, key, connection, run.headSha, pr.headRefOid)
+     ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
+```
+
+Not verified: no test was run by this reviewer (exec_budget_s 0). I relied on the round's verify-tests-to-run-1.txt (189 pass, 1 unrelated timeout in review-desk-run.test.ts). GitHub's 422 behaviour for a non-PR `commit_id` is not verified here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Head-moved publication branch is correct for a forward push: classification, forced comment/inline-off settings, first body line, currentHead in the digest, expected revision checked by verifyDeskSubject before the receipt and POST, and the automatic refusal all hold under every traced transition. head-move.ts and update-round.ts match the spec. One major (low confidence): the as-is variant is offered after a same-base force-push, where the reviewed commit is no longer in the PR and GitHub is expected to refuse commit_id with a misleading error.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid)",
+      "problem": "headMoved is set for any open PR with the same base and a different valid head, without checking that the reviewed head is still an ancestor of the current head. After a force-push or rebase that keeps the base, the dialog offers 'Publish as is for <sha>' and the POST sends commit_id = run.headSha, a commit the PR no longer contains.",
+      "impact": "Trigger: the author force-pushes or rebases the PR branch onto the same base after the review, and the user clicks 'Publish as is'. Expected outcome: GitHub refuses the commit_id with 422. The code maps that to 'GitHub rejected this review. Check the verdict and inline comments. Authors cannot approve their own pull requests.', which names neither the cause nor a remedy. The user is offered an action that cannot succeed. Nothing is posted and the receipt is removed, so there is no data harm.",
+      "suggested_fix": "Classify head-moved only when run.headSha is an ancestor of pr.headRefOid (e.g. gh api repos/{repo}/compare/{reviewed}...{current} returns status 'ahead'); otherwise keep the 'closed or its revision moved' refusal. Alternatively, when headMoved is set, map a 422 to 'The reviewed commit is no longer part of this pull request. Save locally or start a new review.'",
+      "evidence": "src/review/desk-publication.ts publication(): open = OPEN && baseRefOid === run.baseSha; current = open && headRefOid === run.headSha; headMoved = open && !current && sha.test(headRefOid), with no ancestry or commit-membership check. The outbound review sets commit_id: run.headSha. The 422 branch throws the generic verdict/inline message. Tests cover only a forward head (c after b with no history relation modelled). GitHub's 422 for a non-PR commit_id is from API knowledge and was not verified in this read-only round. The PR body lists AC9 (a real-PR scenario) as not verified.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/desk-publication.ts:headMoved classification in publication()"],
+        "enumeration_method": "keryx ctx rg 'commit_id' src (excluding tests): three files. src/review/bot/post.ts always uses the current PR head, src/commands/review-bot.ts is a doc string, and src/review/desk-publication.ts is the only site that posts a commit_id that can differ from the current head, reachable only through the headMoved branch."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/commands/review-desk-publish.ts",
+      "line": null,
+      "quote": "Publish a ${state.settings.verdict} review with ${state.inlineCount} inline notes",
+      "problem": "The terminal confirmation for a desk-publish submit reads 'Publish a comment review with 0 inline notes ...' in the head-moved case. It does not say the review covers only the older reviewed commit. Desktop's button is labelled, but the CLI consent prompt is not.",
+      "impact": "A terminal operator confirms the as-is variant without being told it is one, unless they read headMoved in the preview JSON. The digest still binds the preview, so this is only a consent-text gap.",
+      "suggested_fix": "When state.headMoved is set, include it in the prompt, e.g. 'Publish as is for <short reviewedHead> (the PR moved to <short currentHead>) ...'.",
+      "evidence": "src/commands/review-desk-publish.ts:102-119 builds the prompt from settings.verdict, inlineCount, repo, number, viewer and digest only.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "AC7 (Review again starts an update round of the same Review) is not implemented. The PR declares it blocked on stage 2 and does not claim it, so it is not shape 4 for this PR. selectPriorAttempt has no caller yet, by design.",
+      "impact": "The flow 520 gate cannot complete until T8/AC7 land. selectPriorAttempt's newest-first precondition and the package trust relaxation are unexercised until then.",
+      "suggested_fix": "Keep T8 open, and when wiring selectPriorAttempt, assert the newest-first ordering at the call site, since the function trusts its input order.",
+      "evidence": "acceptance-criteria.md AC7 '[verify: none — blocked on stage 2 rounds ...]'. The PR body section 'Waiting on stage 2'. keryx ctx rg finds no non-test import of update-round.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "pr-process"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 2 },
+  "slices": ["slice-01"],
+  "follow_ups": [
+    "Confirm GitHub's response to POST /repos/{repo}/pulls/{n}/reviews with a commit_id that was force-pushed out of the PR (expected 422). This decides whether F-001 stands as major or drops to info."
+  ]
+}
+```

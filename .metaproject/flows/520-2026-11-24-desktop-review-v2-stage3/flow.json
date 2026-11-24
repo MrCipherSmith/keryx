@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T07:54:35.165Z",
+  "updatedAt": "2026-11-24T08:26:00.635Z",
   "source": {
     "type": "description",
     "ref": null
@@ -201,6 +201,27 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Fix round 1: review findings of round 1 on PR #1303",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:16:58.249Z",
+            "outcome": "started",
+            "detail": "520-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -296,6 +317,21 @@
       "at": "2026-11-24T07:54:35.165Z",
       "event": "task-done",
       "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
+    },
+    {
+      "at": "2026-11-24T08:16:57.645Z",
+      "event": "task-added",
+      "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
+    },
+    {
+      "at": "2026-11-24T08:16:58.249Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 520-T11"
+    },
+    {
+      "at": "2026-11-24T08:26:00.635Z",
+      "event": "task-done",
+      "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
     }
   ],
   "acKinds": {

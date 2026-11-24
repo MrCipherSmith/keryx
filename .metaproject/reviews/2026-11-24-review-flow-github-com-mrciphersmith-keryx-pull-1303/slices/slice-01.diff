@@ -1,0 +1,2124 @@
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md
+@@ 1,24 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: When the pull request is open with the reviewed base and a different head, the `desk-publish` preview returns `headMoved` with both commits, verdict `comment`, inline off, and a body whose first line names the reviewed commit and says the pull request moved on; submit posts a `COMMENT` review with `commit_id` equal to the reviewed head. [verify: exec `bun test src/review/desk-publication.test.ts`]
++- AC2: With a moved head, a submit whose settings ask for another verdict or inline comments still posts a `COMMENT` with no inline comments; a head that moved again after the preview fails with `stale:` and posts nothing; automatic publication with a moved head posts nothing; a changed base or a closed pull request keeps today's refusal. · sensitive: failure-scenario [verify: exec `bun test src/review/desk-publication.test.ts`]
++- AC3: The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action "Publish as is for" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]
++- AC4: `on_head_move` has the values `ask`, `follow`, `ignore`; a manual review defaults to `ask` and a rule-triggered review to `follow`; a missing or unknown stored value reads as the default. [verify: exec `bun test src/review/head-move.test.ts`]
++- AC5: The previous-attempt selection accepts the newest partial attempt with accepted findings and an attempt run with different settings, and rejects imported, failed, cancelled and unreviewed attempts. [verify: exec `bun test src/review/update-round.test.ts`]
++- AC6: `findPreviousRound` still chooses a previous round recorded under different review settings. [verify: exec `bun test src/review/prior-round.test.ts`]
++- AC7: "Review again" on a card with an outdated review starts an update round of the same Review on the current head, with the previous round's findings attached. [verify: none — blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented]
++- AC8: Backend review tests, the Desktop review suite, typecheck and lint pass on the branch; the attention-set code, `attachBadges`/`localBadge` and the toolbar container queries are unchanged by this flow. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]
++- AC9: The scenario on a real pull request with a commit pushed during a round, then published as is from Desktop. [verify: judged]
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md
+@@ 1,68 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-11-24T07:28:04.148Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.812] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++2. [1.723] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review (constraint/accepted) - constraints/stale-installed-keryx-binary.md
++   `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.
++   claimType: constraint | confidence: high | version: 0.1.0
++   scope: module:review, memory, entity:managed-review-package
++   provenance: source=fix-round review of PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/220 author=unknown confirmedBy=unknown
++3. [1.662] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++4. [1.609] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++5. [1.603] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
++
++## Stage 3 sources and code map
++
++- Requirements: `docs/requirements/keryx-desktop-review-v2/` — plan v0.1.3 (stage 3, D1, D2, "Передача следующим этапам"), spec "Поведение при смене head", "Раунд обновления", "Перед публикацией".
++- Publish path: `src/review/desk-publication.ts` (`publication`, `prepare`, `current` at the subject check, `verifyDeskSubject` before POST), `src/review/desk-publication-types.ts`, `src/commands/review-desk-publish.ts`, dialog `apps/desktop/src/review/ReviewPublishDialog.tsx` (DOM tests in `ReviewRuns.dom.test.tsx`), backend tests `src/review/desk-publication.test.ts`.
++- Subject check: `verifyDeskSubject` in `src/review/desk-run-service.ts:49` (strict base+head; used by run start, executor and publication).
++- Previous-round selection today: `desk-run-service.ts:369-377` (completed + complete + same options key), executor copies only a `closed` previous package (`desk-run-executor.ts:518-523`), package trust requires completion evidence (`prior-round.ts` `packageTrust`, `round-record.ts` `completionOf`).
++- Run model: `DeskRun` in `src/review/desk-run-types.ts` (`source: manual | scheduled | existing`).
++- Stage 2 (flow 519, `feat/desktop-review-v2-stage2`) owns the rounds migration in `src/review/desk-run-store.ts`; at flow init (2026-11-24) the branch had no pushed code.
++- Stage 1 (Draft PR MrCipherSmith/keryx#1300) touches `ReviewBoard.tsx`, `model.ts`, Issues tab — no planned overlap with this flow's files.
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md
+@@ 1,24 @@
++# Desktop Review v2 stage 3: head move
++
++## Problem
++
++When the head of a pull request moves after a Desktop review finished, the review can no longer be published at all: `desk-publish` reports "The pull request is closed or its revision moved" and only a local save remains (spec O8). There is no `on_head_move` setting, and "Review again" starts an unrelated run instead of an update round of the same review. The previous-round rules reject a partial round and a round run with different settings (spec O10).
++
++Source: `docs/requirements/keryx-desktop-review-v2/` (PRD R9, R10; specification "Поведение при смене head"; implementation plan v0.1.3, stage 3, owner decisions D1 and D2).
++
++## Expected outcome
++
++1. The publish dialog offers the D1 variants when the head moved after the reviewed commit: "Publish as is for `<sha>`" is allowed only with the verdict Comment and a first body line that names the reviewed commit and says the pull request moved on. Save locally and Skip stay as they are. Automatic publication still refuses a moved head.
++2. `on_head_move` exists as a typed setting with the values `ask`, `follow`, `ignore`; a manual review defaults to `ask` (D2), a rule-triggered review to `follow`.
++3. "Review again" becomes an update round of the same Review (blocked on stage 2, see below).
++4. The previous-round choice accepts a partially completed round and a round run with other settings, with tests.
++
++## Dependency on stage 2
++
++Stage 3 requires stage 2 (flow 519, branch `feat/desktop-review-v2-stage2`): the update round belongs to the Review entity and its rounds, which stage 2 introduces. The operator chose to start stage 3 before stage 2 lands. Items 1, 2 and the round-independent part of 4 are built first, shaped so they attach to rounds without a rewrite. Item 3 and the parts of item 4 that need rounds (wiring the selection into the run start, the package trust rule) wait for stage 2's rounds migration; this flow records them as blocked until then. No rounds schema is invented here.
++
++## Out of scope
++
++- The Reviews tab, the `reviews` table and the migration (stage 2).
++- Wave-boundary head checks in the executor and the `review-orchestrator` "Head moved" procedure (stage 4 for the skill; executor checks go with item 3).
++- Carrying finding answers across the update round (goes with item 3).
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md
+@@ 1,47 @@
++# Flow Journal
++
++- 2026-11-24T07:28:08.299Z - flow created
++- 2026-11-24T07:29:19.786Z - task-done: T1: Collect remaining context
++- 2026-11-24T07:29:20.005Z - task-done: T2: Implement per plan
++- 2026-11-24T07:29:20.287Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-11-24T07:29:20.486Z - task-done: T4: Self-review and prepare draft PR
++- 2026-11-24T07:29:20.700Z - task-added: T5: D1: publish as is for the reviewed commit (server + dialog + tests)
++- 2026-11-24T07:29:21.040Z - task-added: T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)
++- 2026-11-24T07:29:21.291Z - task-added: T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test
++- 2026-11-24T07:29:21.529Z - task-added: T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)
++- 2026-11-24T07:29:21.726Z - task-added: T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff
++- 2026-11-24T07:29:21.953Z - task-added: T10: review-orchestrator round on the branch
++- 2026-11-24T07:29:43.882Z - frozen: 9 criteria; checksum recorded
++- 2026-11-24T07:29:44.073Z - started
++- 2026-11-24T07:29:54.815Z - task-attempt: T5: started (attempt 1) — 520-T5
++- 2026-11-24T07:29:54.994Z - task-attempt: T6: started (attempt 1) — 520-T6
++- 2026-11-24T07:29:55.173Z - task-attempt: T7: started (attempt 1) — 520-T7
++- 2026-11-24T07:32:02.125Z - task-done: T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)
++
++## 2026-11-24 T6 accepted (DONE_WITH_CONCERNS)
++
++- `ask` + finished returns an `update` offer (spec "Перед публикацией": update is the primary action once a round finished). Accepted.
++- Worker could not run eslint/tsc: worktree has no node_modules. Orchestrator runs them in T9 after `bun install`.
++- Dispatch JSON files were not written or schema-validated; the dispatch carried the Worker brief fields in the prompt.
++
++## 2026-11-24 T7 accepted (DONE)
++
++- `selectPriorAttempt` skips attempts with a `delete`/`archive` decision (evidence withdrawn). Accepted.
++- AC6 test passes on current code: the package candidate path never reads settings, so it is a regression guard, not red-first.
++- Sensitivity evidence (worker): dropping `partial` acceptance and re-adding an options-key filter each failed a named test.
++- The worker temporarily symlinked node_modules from another worktree to run tests, then removed it.
++- 2026-11-24T07:35:54.838Z - task-done: T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test
++- 2026-11-24T07:54:35.165Z - task-done: T5: D1: publish as is for the reviewed commit (server + dialog + tests)
++
++## 2026-11-24 T5 accepted (DONE_WITH_CONCERNS)
++
++- No new helper in desk-run-service.ts: `verifyDeskSubject` already takes a revision; publication passes the as-is variant's expected head. Deviation from plan A accepted.
++- Sensitivity evidence (worker): each AC2 guard reverted and its test failed; the explicit digest entry for currentHead is a backstop (body already carries it).
++- Rust `review_publish` passes request/state as `Value`; no Rust change.
++- Desktop `.tsx` files are in the root ESLint ignore list and apps/desktop has no ESLint config: AC8's eslint over apps/desktop/src/review lints nothing there. Desktop tsc was run instead.
++- behavior_changes flagged needs_operator, decided by the orchestrator as within D1 and listed in the PR for the owner:
++  1. Save locally in the head-moved case stores the forced settings (comment, no inline). Accepted: this attempt can only ever be published as is now; an update round is a new attempt with its own draft.
++  2. Dialog status wording "Reviewed commit <short>. The pull request has moved to <short> since. Publishing as is posts a Comment for the reviewed commit only." Accepted.
++  3. "Update review to <sha>" placement (first footer button): no caller yet; revisit when item 3 wires it — spec calls it the primary action.
++  4. General comment can be turned off in the head-moved case, which then refuses submit with the existing message. Accepted (no silent override).
++- Orchestrator fixed T7's test typing (6 TS2379 under exactOptionalPropertyTypes) directly: mechanical test-only change, journaled here instead of a fix dispatch.
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md
+@@ 1,47 @@
++# Plan
++
++## Approach
++
++### A. Publish as is for the reviewed commit (D1) — `src/review/desk-publication.ts`, `desk-publication-types.ts`, `apps/desktop/src/review/ReviewPublishDialog.tsx`
++
++- The server classifies the PR against the run: `current` (open, same base and head), `head-moved` (open, same base, different head), or `moved` (closed, or the base changed). Only `head-moved` gets the new variant; `moved` keeps today's refusal.
++- `PublicationState` gains `headMoved?: { reviewedHead: string; currentHead: string }`. Its presence means "this draft is the as-is variant for the reviewed commit".
++- In the `head-moved` case the server forces the verdict to `comment` and inline comments off (the current PR diff does not place lines on the old commit), and prepends one first line to the body: ``Reviewed commit `<reviewedHead>`. The pull request has moved to `<currentHead>` since; this review does not cover the newer commits.`` The current head is part of the digest, so a further push makes the preview stale.
++- Submit re-verifies the subject: open, base unchanged, head equal to the previewed current head (a new helper next to `verifyDeskSubject`, which stays strict for every other caller). `commit_id` stays the reviewed head.
++- `automatic` publication with a moved head stays refused.
++- The dialog shows a status line naming both commits, disables the verdict choice and the Inline checkbox, and labels the primary button "Publish as is for `<short sha>`". An optional `onUpdateReview` prop renders "Update review to `<short sha>`" as the first action when a caller provides it; no caller provides it until item 3.
++
++### B. `on_head_move` (D2) — new `src/review/head-move.ts`
++
++- `ON_HEAD_MOVE = ["ask", "follow", "ignore"]`, `type OnHeadMove`, `defaultOnHeadMove(source)` (`manual` and `existing` → `ask`, `scheduled` → `follow`), `parseOnHeadMove(value, source)` (unknown or missing → default; this is how stage 2 reads a nullable column), and `headMoveResponse(mode, phase)` encoding the spec table (running: ask → offer "update after" and "stop and restart"; follow → queue update after finish; ignore → nothing).
++- No storage. Stage 2 adds the `reviews.on_head_move` column and reads it through `parseOnHeadMove`.
++
++### C. Previous-round selection (item 4, round-independent part) — new `src/review/update-round.ts`
++
++- `selectPriorAttempt(attempts)` over `DeskRun` records (an Attempt keeps the `DeskRun` format per the spec): newest attempt, not `existing`, of the current scope, with a recorded reviewed range and accepted findings, state `completed` or `partial`; the options key is ignored. Returns the attempt and `partial: boolean` (for spec step 4, uncovered area).
++- Not wired into `desk-run-service.ts` yet: today the executor copies only a closed previous package and the package trust rule in `prior-round.ts` requires completion evidence, so wiring it alone would change nothing observable and would half-implement item 3. Wiring plus the trust-rule change go with item 3.
++- `prior-round.test.ts` gains a test that a previous round recorded with different review settings is still chosen (settings are not part of the package candidate), pinning that invariant for the update round.
++
++### D. Item 3 — blocked on stage 2
++
++After A–C, `git fetch origin` and check `feat/desktop-review-v2-stage2` for the rounds migration (`src/review/desk-run-store.ts`). If present, rebase onto it and implement the update round; if not, leave T-item3 blocked and report.
++
++## Trade-offs
++
++- Forcing inline off for the as-is variant loses inline placement; placing lines on an old commit would need its diff and is not needed for a Comment.
++- `headMoved` as a state field instead of a new request kind keeps the request contract and the draft file unchanged; the user's explicit act is pressing the distinctly labelled button, and the digest binds the preview they saw.
++
++## Do not break
++
++- Attention-set logic in `apps/desktop/src/review/ReviewBoard.tsx`: not touched by this plan.
++- `attachBadges` ↔ `localBadge` parity: not touched.
++- Toolbar container queries in `apps/desktop/src/styles/review.css`: not touched.
++
++## State × event matrix (publish dialog)
++
++| state \ event | preview loads | head moves again before submit | user presses primary | settings change |
++|---|---|---|---|---|
++| current head | as today | submit fails `stale:`; preview marked stale | Submit review | as today |
++| head moved, PR open, base same | status line names both commits; verdict locked to Comment; Inline disabled; primary "Publish as is for `<sha>`" | digest differs → `stale:` error, preview stale, nothing posted | posts a COMMENT review on the reviewed commit with the first line | verdict/inline changes are ignored by the server (forced) |
++| base moved or PR closed | blocked reason as today | — | disabled | as today |
++| automatic publication, head moved | refused, needs a decision in Desktop | — | — | — |
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md
+@@ 1,18 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1–T4 | — | Scaffold rows superseded by T5–T10 |
++| T5 | implement | D1: publish as is for the reviewed commit — `desk-publication.ts`, `desk-publication-types.ts`, `ReviewPublishDialog.tsx`, tests (plan A) |
++| T6 | implement | D2: `on_head_move` — `src/review/head-move.ts` + test (plan B) |
++| T7 | implement | Prior-attempt selection — `src/review/update-round.ts` + test; settings test in `prior-round.test.ts` (plan C) |
++| T8 | implement | Item 3: "Review again" as an update round of the same Review — blocked until stage 2 (flow 519) pushes the rounds migration (plan D) |
++| T9 | verify | Backend and Desktop review suites, typecheck, lint, invariant diff (AC8) |
++| T10 | review | review-orchestrator round on the branch |
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json
+@@ 1,338 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "520",
++  "slug": "desktop-review-v2-stage3",
++  "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
++  "status": "in-progress",
++  "createdAt": "2026-11-24T07:28:08.299Z",
++  "updatedAt": "2026-11-24T07:54:35.165Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:e9c6cb2bb278695575c47909ebaf0bd7ef164b4da67e452ef293d164418c1192",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "Aleksandr Tsaitler",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T5",
++      "title": "D1: publish as is for the reviewed commit (server + dialog + tests)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:29:54.815Z",
++            "outcome": "started",
++            "detail": "520-T5"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "D2: on_head_move type, defaults and parse (head-move.ts + tests)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:29:54.994Z",
++            "outcome": "started",
++            "detail": "520-T6"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:29:55.173Z",
++            "outcome": "started",
++            "detail": "520-T7"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)",
++      "kind": "implement",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T9",
++      "title": "Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff",
++      "kind": "verify",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T10",
++      "title": "review-orchestrator round on the branch",
++      "kind": "review",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-24T07:28:08.299Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-24T07:29:19.786Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-24T07:29:20.005Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-24T07:29:20.287Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-24T07:29:20.486Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-11-24T07:29:20.700Z",
++      "event": "task-added",
++      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
++    },
++    {
++      "at": "2026-11-24T07:29:21.040Z",
++      "event": "task-added",
++      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
++    },
++    {
++      "at": "2026-11-24T07:29:21.291Z",
++      "event": "task-added",
++      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
++    },
++    {
++      "at": "2026-11-24T07:29:21.529Z",
++      "event": "task-added",
++      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
++    },
++    {
++      "at": "2026-11-24T07:29:21.726Z",
++      "event": "task-added",
++      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
++    },
++    {
++      "at": "2026-11-24T07:29:21.953Z",
++      "event": "task-added",
++      "detail": "T10: review-orchestrator round on the branch"
++    },
++    {
++      "at": "2026-11-24T07:29:43.882Z",
++      "event": "frozen",
++      "detail": "9 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-24T07:29:44.073Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-24T07:29:54.815Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 520-T5"
++    },
++    {
++      "at": "2026-11-24T07:29:54.994Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 520-T6"
++    },
++    {
++      "at": "2026-11-24T07:29:55.173Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 520-T7"
++    },
++    {
++      "at": "2026-11-24T07:32:02.125Z",
++      "event": "task-done",
++      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
++    },
++    {
++      "at": "2026-11-24T07:35:54.838Z",
++      "event": "task-done",
++      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
++    },
++    {
++      "at": "2026-11-24T07:54:35.165Z",
++      "event": "task-done",
++      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-publication.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-publication.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/review/head-move.test.ts"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/review/update-round.test.ts"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "bun test src/review/prior-round.test.ts"
++    },
++    "AC7": {
++      "kind": "none",
++      "reason": "blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented"
++    },
++    "AC8": {
++      "kind": "invariant",
++      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
++    },
++    "AC9": {
++      "kind": "judged"
++    }
++  }
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewPublishDialog.tsx",
++    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
++    "src/review/desk-publication-types.ts",
++    "src/review/desk-publication.test.ts",
++    "src/review/desk-publication.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewPublishDialog.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-publication.test.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json
+@@ 1,129 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/head-move.test.ts",
++    "src/review/head-move.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/prior-round.test.ts",
++    "src/review/update-round.test.ts",
++    "src/review/update-round.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/review/prior-round.test.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/prior-round.test.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- apps/desktop/src/review/ReviewPublishDialog.tsx
+@@ 17,67 @@
+   { value: "suggestions", label: "Approve with suggestions" },
+   { value: "changes", label: "Request changes" },
+   { value: "comment", label: "Comment only" },
+ ];
+ 
+ const unsupportedCli = "The selected Keryx CLI does not support review publishing. Update it or select Bundled in Settings → Desktop.";
+ 
+ const findingActions = [
+   { id: "uphold", label: "Keep finding" },
+   { id: "dismiss", label: "Dismiss finding" },
+ ] as const;
+ 
+ function choicesFor(question: PublicationState["questions"][number]): ReadonlyArray<{ id: PublicationAnswer; label: string }> {
+   return question.options?.length ? question.options : findingActions;
+ }
+ 
+ function Preview({ text, label = "Review comment preview" }: { text: string; label?: string }) {
+   return text.trim() ? <ReviewReportMarkdown text={text} label={label} className="review-publish-markdown" /> : <p>No general comment in this draft.</p>;
+ }
+ 
+-export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onClose }: {
++const shortSha = (sha: string) => sha.slice(0, 7);
++
++export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onUpdateReview, onClose }: {
+   cwd: string;
+   target: DeskRunKey;
+   id: string;
+   command?: typeof reviewPublish | undefined;
+   onAccessLost?: ((message: string) => void) | undefined;
+   onDecision?: (() => void) | undefined;
++  /** Starts an update round on the current head; offered only while the head has moved. */
++  onUpdateReview?: (() => void) | undefined;
+   onClose: () => void;
+ }) {
+   const [draft, setDraft] = useState<PublicationState>();
+   const [settings, setSettings] = useState<PublicationSettings>();
+   const [pending, setPending] = useState<PublicationRequest["kind"] | null>("preview");
+   const [previewStale, setPreviewStale] = useState(false);
+   const [questionIndex, setQuestionIndex] = useState(0);
+   const [inlineOpen, setInlineOpen] = useState(false);
+   const [error, setError] = useState("");
+   const currentSettings = useRef<PublicationSettings>();
+   const requestNumber = useRef(0);
+   const activeRequest = useRef<PublicationRequest["kind"] | null>(null);
+   const queuedPreview = useRef<Extract<PublicationRequest, { kind: "preview" }>>();
+   const decision = useRef(onDecision);
+   decision.current = onDecision;
+   const verdictName = useId();
+   const answerName = useId();
+ 
+   const send = useCallback(async (initialRequest: PublicationRequest) => {
+     if (activeRequest.current) {
+
+--- apps/desktop/src/review/ReviewPublishDialog.tsx
+@@ 131,223 @@
+     const options = { ...current, verdictOverride: current.verdictOverride ?? null, ...changes };
+     currentSettings.current = options;
+     setSettings(options);
+     setPreviewStale(true);
+     void send({ kind: "preview", id, settings: options });
+   }
+ 
+   function refreshPreview() {
+     const latest = currentSettings.current;
+     setPreviewStale(true);
+     void send({ kind: "preview", id, refresh: true, ...(latest && { settings: latest }) });
+   }
+ 
+   const busy = pending !== null;
+   const writing = pending !== null && pending !== "preview";
+   const posted = Boolean(draft?.publishedUrl);
+   const questions = draft?.questions ?? [];
+   const question = questions[Math.min(questionIndex, questions.length - 1)];
+   const unanswered = questions.filter(item => !choicesFor(item).some(choice => choice.id === settings?.answers[item.id])).length;
+   const canUsePreview = !!draft && !!settings && !busy && !previewStale && !posted;
++  const headMoved = draft?.headMoved;
+ 
+   return createPortal(<Dialog title="Publish to GitHub" width={780} focusRoot
+     onClose={writing ? null : onClose} footer={
+       <div className="review-publish-footer">
++        {headMoved && onUpdateReview && !posted && <button type="button" className="btn" disabled={writing}
++          onClick={onUpdateReview}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>}
+         <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
+         {!posted && <>
+           {!draft?.skipped && <button type="button" className="btn" disabled={busy || !draft}
+             onClick={() => void send({ kind: "skip", id })}>Skip publication</button>}
+           <button type="button" className="btn" disabled={!canUsePreview}
+             onClick={() => { if (canUsePreview) void send({ kind: "save", id, settings }); }}>Save locally</button>
+           <button type="button" className="btn btn-primary" disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
+-            onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>Submit review</button>
++            onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>
++            {headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : "Submit review"}</button>
+         </>}
+       </div>
+     }>
+     <div className="review-publish" aria-busy={writing}>
+       <p className="review-detail-meta">{target.repo} #{target.number} · @{target.viewer}</p>
+       {draft?.skipped && <p className="review-detail-muted" role="status">Publication skipped. This review is saved locally.</p>}
+       {error && <div className="inline-banner tone-warn" role="alert">
+         <span>{error}</span>
+         {!draft && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
+       </div>}
+       {settings && draft && !posted && <>
++        {headMoved && <p className="review-detail-muted review-publish-head-moved" role="status">
++          Reviewed commit <code title={headMoved.reviewedHead}>{shortSha(headMoved.reviewedHead)}</code>. The pull request has moved
++          to <code title={headMoved.currentHead}>{shortSha(headMoved.currentHead)}</code> since. Publishing as is posts a Comment
++          for the reviewed commit only.
++        </p>}
+         <div className="review-publish-settings">
+           <fieldset disabled={writing}>
+             <legend>Include in the review</legend>
+             <label><input type="checkbox" checked={settings.general}
+               onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
+-            <label><input type="checkbox" checked={settings.inline}
++            <label><input type="checkbox" checked={settings.inline} disabled={!!headMoved}
+               onChange={e => update({ inline: e.currentTarget.checked })} /> Inline comments</label>
+             <small className="review-detail-muted">English · Keryx template{draft.overlayAvailable ? " + project overlay" : ""}</small>
+             {draft.overlayRequiresApproval && <small className="review-detail-muted">This project requires confirmation of the finished report.</small>}
+             {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
+           </fieldset>
+           <fieldset disabled={writing}>
+             <legend>Review verdict</legend>
+-            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null}
++            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null} disabled={!!headMoved}
+               onChange={() => update({ verdictOverride: null })} />
+               <span>Use recommendation{settings.verdictOverride == null && <>
+                 <br /><small>{verdicts.find(option => option.value === settings.verdict)?.label} recommended</small>
+               </>}</span>
+             </label>
+             {verdicts.map(({ value, label }) => <label key={value}>
+-              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value}
++              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value} disabled={!!headMoved}
+                 onChange={() => update({ verdict: value, verdictOverride: value })} /> {label}
+             </label>)}
+           </fieldset>
+         </div>
+         {question && <section className="review-publish-questions" aria-label="Finding questions">
+           <div className="review-detail-meta" aria-live="polite">
+             <strong>Question {Math.min(questionIndex + 1, questions.length)} of {questions.length}</strong>
+             {!!unanswered && <span>{unanswered} unanswered</span>}
+           </div>
+           <fieldset disabled={writing}>
+             <legend>{question.text}</legend>
+             {!question.recommendation && <small className="review-detail-muted">The report has no recommendation.</small>}
+             {choicesFor(question).map(choice => <label key={choice.id}>
+               <input type="radio" name={answerName} value={choice.id} checked={settings.answers[question.id] === choice.id}
+                 onChange={() => update({ answers: { ...currentSettings.current?.answers, [question.id]: choice.id } })} />
+               <span className="review-publish-choice">{choice.label}
+                 {choice.id === question.recommendation && <> <span className="badge">Recommended</span></>}
+               </span>
+             </label>)}
+           </fieldset>
+
+--- apps/desktop/src/review/ReviewRuns.dom.test.tsx
+@@ 572,672 @@
+   holdPreviews = false;
+ 
+   await act(async () => input("Comment only").click());
+   expect(requests.at(-1)).toMatchObject({ settings: { verdictOverride: "comment" } });
+   expect(input("Comment only").checked).toBe(true);
+   await act(async () => input("Use recommendation").click());
+   expect(requests.at(-1)).toMatchObject({ settings: { verdictOverride: null } });
+   expect(dialog.textContent).toContain("Request changes recommended");
+   refuseRefresh = true;
+   await click("Refresh preview");
+   expect(dialog.querySelector("[role=alert]")?.textContent).toContain("Could not refresh the review.");
+   expect(btn("Submit review").disabled).toBe(true);
+   await click("Refresh preview");
+   expect(requests.at(-1)).toMatchObject({ kind: "preview", refresh: true, settings: { verdictOverride: null, verdict: "changes" } });
+   await click("Submit review");
+   expect(requests.at(-1)).toMatchObject({ kind: "submit", digest: "7".padStart(64, "0"),
+     settings: { verdictOverride: null, verdict: "changes", answers: { held: "uphold" } } });
+   await click("Close");
+ });
+ 
++test("a moved head locks the dialog to the as-is Comment for the reviewed commit", async () => {
++  const requests: PublicationRequest[] = [];
++  const reviewedHead = "b".repeat(40);
++  const currentHead = "c".repeat(40);
++  const settings: PublicationSettings = { inline: false, general: true, keryxTemplate: true, overlay: false,
++    verdict: "comment", verdictOverride: "comment", answers: {} };
++  const command = async (_cwd: string, _target: unknown, request: PublicationRequest): Promise<PublicationState> => {
++    requests.push(request);
++    return { version: 1, settings, body: `Reviewed commit \`${reviewedHead}\`.`, inlineCount: 0, questions: [],
++      overlayAvailable: false, canSubmit: true, digest: "d".repeat(64), headMoved: { reviewedHead, currentHead } };
++  };
++  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 47 }, { publishCommand: command });
++  await click("View review result");
++  await click("Publish to GitHub");
++  const dialog = document.querySelector<HTMLElement>(".dialog")!;
++  const input = (name: string) => [...dialog.querySelectorAll("label")]
++    .find(node => node.textContent?.trim().startsWith(name))!.querySelector("input")!;
++  const status = dialog.querySelector(".review-publish-head-moved")!;
++  expect(status.textContent).toContain("bbbbbbb");
++  expect(status.textContent).toContain("ccccccc");
++  expect(input("Comment only").checked).toBe(true);
++  for (const name of ["Use recommendation", "Approve", "Request changes", "Comment only", "Inline comments"]) {
++    expect(input(name).matches(":disabled")).toBe(true);
++  }
++  expect(input("General comment").matches(":disabled")).toBe(false);
++  expect(() => btn("Submit review")).toThrow("Missing button");
++  expect([...dialog.querySelectorAll("button")].some(node => node.textContent?.startsWith("Update review to"))).toBe(false);
++  await click("Publish as is for bbbbbbb");
++  expect(requests.at(-1)).toMatchObject({ kind: "submit", digest: "d".repeat(64) });
++  await click("Close");
++
++  const React = await import("react");
++  const { ReviewPublishDialog } = await import("./ReviewPublishDialog");
++  let updates = 0;
++  await act(async () => root.render(React.createElement(ReviewPublishDialog, {
++    cwd: "/project", target: { repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 47 }, id: complete.id,
++    command, onUpdateReview: () => { updates++; }, onClose() {},
++  })));
++  const footer = document.querySelector(".review-publish-footer")!;
++  expect(footer.querySelector("button")?.textContent).toBe("Update review to ccccccc");
++  await click("Update review to ccccccc");
++  expect(updates).toBe(1);
++  await act(async () => root.render(null));
++});
++
++test("the current head keeps the dialog's verdict choice and Submit review", async () => {
++  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 48 }, {
++    publishCommand: async () => ({ version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false,
++      verdict: "comment", verdictOverride: null, answers: {} }, body: "Draft", inlineCount: 0, questions: [],
++      overlayAvailable: false, canSubmit: true, digest: "e".repeat(64) }),
++  });
++  await click("View review result");
++  await click("Publish to GitHub");
++  const dialog = document.querySelector<HTMLElement>(".dialog")!;
++  expect(dialog.querySelector(".review-publish-head-moved")).toBeNull();
++  expect([...dialog.querySelectorAll<HTMLInputElement>("input")].some(node => node.matches(":disabled"))).toBe(false);
++  expect(btn("Submit review").disabled).toBe(false);
++  expect([...dialog.querySelectorAll("button")].some(node => /^(Publish as is|Update review)/.test(node.textContent ?? ""))).toBe(false);
++  await click("Close");
++});
++
+ test("suggests a supported executable when the selected CLI lacks review publishing", async () => {
+   await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 46 }, {
+     publishCommand: async () => { throw new Error("Unknown review command: desk-publish"); },
+   });
+   await click("View review result");
+   await click("Publish to GitHub");
+   expect(document.querySelector(".dialog [role=alert]")?.textContent).toContain("Settings → Desktop");
+   expect(document.querySelector(".dialog [role=alert]")?.textContent).toContain("Bundled");
+   expect(btn("Submit review").disabled).toBe(true);
+   await click("Close");
+ });
+ 
+ test("switching pull requests drops a late publication preview and sends no writes", async () => {
+   let finish!: (state: PublicationState) => void;
+   const actions: PublicationRequest[] = [];
+   const review: typeof reviewRun = async () => ({ version: 1, runs: [complete] });
+   await show(review, pr, {
+     publishCommand: async (_cwd, _target, request) => {
+       actions.push(request);
+       return new Promise(resolve => { finish = resolve; });
+
+--- src/review/desk-publication-types.ts
+@@ 24,51 @@
+   version: 1;
+   settings: PublicationSettings;
+   body: string;
+   inlineCount: number;
+   inlineComments?: { path: string; line: number; body: string }[];
+   questions: {
+     id: string;
+     text: string;
+     recommendation?: PublicationAnswer;
+     options?: { id: PublicationOptionId; label: string }[];
+   }[];
+   overlayAvailable: boolean;
+   overlayRequiresApproval?: true;
+   overlayWarning?: string;
+   canSubmit: boolean;
+   blockedReason?: string;
+   digest: string;
+   savedAt?: string;
+   publishedUrl?: string;
+   skipped?: true;
++  /** Present when the pull request moved past the reviewed commit on the same base: this draft is
++   * the as-is variant, a Comment for the reviewed commit only. */
++  headMoved?: { reviewedHead: string; currentHead: string };
+ }
+ 
+ export type PublicationOutcome = "pending" | "published" | "skipped";
+ export const PUBLICATION_RECEIPT = "publication-receipt.json";
+ export const PUBLICATION_SKIPPED = "publication-skipped.json";
+
+--- src/review/desk-publication.ts
+@@ 13,53 @@
+   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, scopedFile, type DeskReportFinding } from "./desk-review-report";
+ import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
+ import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
+ import { premiseHoldState } from "./premise";
+ import { buildRoundBlock, PUBLISHED_BODY_LIMIT, type ReviewEvent } from "./publish";
+ import { computeReadiness, failingItems } from "./readiness";
+ import { readRoundNumber } from "./round-record";
+ import type { ManagedReviewManifest } from "./types";
+ import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
+ 
+ const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+ const sha = /^[a-f\d]{40}$/i;
+ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
+   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
+ };
+ type Draft = { settings: PublicationSettings; savedAt: string };
+ type Operation = PublicationRequest | { kind: "automatic"; id: string; settings: PublicationSettings };
+ type Receipt = { url?: string };
+ type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
+ type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
++type HeadMoved = NonNullable<PublicationState["headMoved"]>;
+ type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string };
+ const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
+ const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
+ const previewCacheFile = "publication-preview-cache.json";
+ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+ const object = (v: unknown): Record<string, unknown> | undefined =>
+   v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
+ const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
+ 
+ async function json<T>(root: string, relative: string, limit: number): Promise<T | undefined> {
+   const content = await scopedFile(root, relative, limit);
+   return content === undefined ? undefined : JSON.parse(content) as T;
+ }
+ 
+ async function previewSubject(cwd: string, directory: string, key: DeskRunKey, auth: GithubConnection,
+   request: Operation, revision: { baseSha: string; headSha: string }): Promise<PreviewCache> {
+   const cacheKey = hash([cwd, key, revision, auth.binding, auth.env.GH_TOKEN, auth.env.GITHUB_TOKEN]);
+   const cached = request.kind === "preview" && !request.refresh
+     ? await json<PreviewCache>(directory, previewCacheFile, previewCacheLimit).catch(() => undefined) : undefined;
+   const previous = cached?.key === cacheKey && cached.expires > Date.now() && cached.subject ? cached : undefined;
+
+--- src/review/desk-publication.ts
+@@ 68,118 @@
+ async function findPreviousPublication(cwd: string, key: DeskRunKey, auth: GithubConnection, marker: string) {
+   const args = ["api", "--hostname", "github.com", "--paginate", `repos/${key.repo}/pulls/${key.number}/reviews?per_page=100`];
+   const data = parseGhJson(await boardGh(cwd, args, auth));
+   if (!Array.isArray(data)) return;
+   for (const item of data) {
+     const row = object(item);
+     if (text(object(row?.user)?.login).toLowerCase() === key.viewer.toLowerCase() &&
+         typeof row?.body === "string" && row.body.includes(marker)) return publicationLink(key, row.id);
+   }
+ }
+ 
+ async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubConnection) {
+   const base = `repos/${key.repo}`;
+   const resources = [`pulls/${key.number}/reviews`, `pulls/${key.number}/comments`, `issues/${key.number}/comments`];
+   const pages = await Promise.all(resources.map(resource => boardGh(cwd, [
+     "api", "--hostname", "github.com", "--paginate", "--slurp", `${base}/${resource}?per_page=100`,
+   ], auth)));
+   return hash(pages);
+ }
+ 
++/** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
++function headMovedLine(moved: HeadMoved): string {
++  return `Reviewed commit \`${moved.reviewedHead}\`. The pull request has moved to \`${moved.currentHead}\` since; ` +
++    "this review does not cover the newer commits.";
++}
++
+ async function prepare(input: {
+   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
+-  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; cache: PreviewCache;
++  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
+ }): Promise<Prepared> {
+-  const { cwd, directory, run, key, auth, request, current, cache } = input;
++  const { cwd, directory, run, key, auth, request, current, headMoved, cache } = input;
+   const packageDir = path.join(directory, "package");
+   const target = `https://github.com/${key.repo}/pull/${key.number}`;
+   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
+   if (manifest?.target?.ref.toLowerCase() !== target.toLowerCase() ||
+       manifest.target.base !== run.baseSha || manifest.target.head !== run.headSha) {
+     throw new Error("configuration: This review has no matching local package to publish.");
+   }
+   const [recorded, verdict, draft, receipt, skipped, { overlay, overlayWarning }, readiness, report] = await Promise.all([
+     premiseRecords(packageDir), computeVerdict(packageDir),
+     json<Draft>(directory, "publication-draft.json", draftLimit),
+     json<Receipt>(directory, PUBLICATION_RECEIPT, 4096),
+     scopedFile(directory, PUBLICATION_SKIPPED, 64),
+     projectReviewOverlay(cwd), computeReadiness(packageDir), scopedFile(directory, "package/report.md", 2 * 1024 * 1024),
+   ]);
+   const recordFor = (entry: VerdictFinding) => recorded.records.find(row =>
+     row.id === entry.id && (!row.reviewer || row.reviewer === entry.reviewer));
+   const questionId = (entry: VerdictFinding) => text(recordFor(entry)?.global_id) || entry.id;
+   const questions = verdict.held.map<PublicationState["questions"][number]>(entry => {
+     const premise = object(recordFor(entry)?.premise);
+     const id = questionId(entry);
+
+--- src/review/desk-publication.ts
+@@ 140,190 @@
+       }
+     } else if (answer === "uphold" || answer === "dismiss") selections.set(question.id, answer);
+   }
+   const answers = Object.fromEntries(selections);
+   const metadata = reportFindingMetadata(report);
+   const forReport = (entry: VerdictFinding) => deskReportFinding(entry, recordFor(entry), metadata.get(entry.id));
+   const findings = [...verdict.open, ...verdict.minors, ...(verdict.info ?? [])].map(forReport);
+   for (const entry of verdict.held) {
+     const id = questionId(entry);
+     const selectedAnswer = selectedLabels.get(id);
+     if (selectedAnswer || selections.get(id) === "uphold") findings.push({
+       ...forReport(entry), ...(selectedAnswer && { selectedAnswer }),
+     });
+   }
+   const publishable = findings.filter(finding => finding.severity !== "info" || finding.question || finding.locationClass === "pr-process");
+   const answered = questions.every(question => Object.hasOwn(answers, question.id));
+   const failing = failingItems(readiness).filter(item =>
+     item.id !== "premise-decisions" || !answered ||
+     recorded.records.some(row => premiseHoldState(row, recorded.decisions) === "awaiting" && !Object.hasOwn(answers, text(row.global_id ?? row.id))));
+   const complete = run.result?.coverage === "complete" && failing.length === 0;
+-  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && current &&
++  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && (current || headMoved) &&
+     (request.kind === "preview" || request.kind === "submit" || request.kind === "automatic")
+     ? cache.discussion ?? await publicationDiscussion(cwd, key, auth) : undefined;
+   if (discussion) cache.discussion = discussion;
+   const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
+-  const settings: PublicationSettings = {
+-    inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
+-    overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers,
+-  };
++  const settings: PublicationSettings = headMoved
++    // The as-is variant is a Comment only, and the current diff cannot place lines on the reviewed commit.
++    ? { inline: false, general: saved?.general ?? true, keryxTemplate: true, overlay: !!overlay,
++      verdict: "comment", verdictOverride: "comment", answers }
++    : { inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
++      overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers };
+   const largestAnswers = Object.fromEntries(questions.map(question => [question.id, question.options?.[0]?.id ?? "dismiss"]));
+   const answerLimitExceeded = Buffer.byteLength(JSON.stringify({
+     kind: "submit", id: request.id, settings: { ...settings, answers: largestAnswers }, digest: "0".repeat(64),
+   })) > PUBLICATION_REQUEST_LIMIT;
+   const comments: ReviewComment[] = [];
+   const inBody: DeskReportFinding[] = [];
+   const revision = { repo: key.repo, head: run.headSha };
+   let inlineUnavailable = false;
+   if (settings.inline && current && publishable.some(finding => finding.file && finding.line)) {
+     try {
+       let hunks: Map<string, Set<number>>;
+       if (Array.isArray(cache.placements) && cache.placements.every(entry =>
+         Array.isArray(entry) && typeof entry[0] === "string" && Array.isArray(entry[1]))) {
+         hunks = new Map(cache.placements.map(([file, lines]) => [file, new Set(lines)]));
+       }
+       else {
+         const diff = await boardGh(cwd, ["api", "--hostname", "github.com", "-H", "Accept: application/vnd.github.v3.diff",
+           `repos/${key.repo}/pulls/${key.number}`], auth);
+         hunks = parseDiffHunks(diff);
+         if (request.kind === "preview") cache.placements = [...hunks].map(([file, lines]) => [file, [...lines]]);
+
+--- src/review/desk-publication.ts
+@@ 218,293 @@
+   const reported = verdict.reportedReviewers.length ? ` Reviewers: ${verdict.reportedReviewers.join(", ")}.` : "";
+   const refuted = recorded.records.flatMap(row => {
+     const verification = object(row.verification);
+     const evidence = text(verification?.evidence);
+     return verification?.verdict === "refuted" && evidence && typeof row.id === "string"
+       ? [{ id: row.id, decision: `Refuted — ${evidence}` }] : [];
+   });
+   for (const entry of verdict.held) {
+     if (selections.get(questionId(entry)) === "dismiss") refuted.push({ id: entry.id, decision: "Dismissed by the operator." });
+   }
+   const summary = renderDeskReviewReport({
+     ...revision, base: run.baseSha, round: roundNumber, verdict: settings.verdict,
+     findings: settings.general ? publishable : publishable.filter(finding => !inBody.includes(finding)),
+     bodyFindings: settings.general ? inBody : [], inlineCount: comments.length, omittedCount: settings.general ? 0 : inBody.length,
+     evidenceLevel: deskReportEvidence(report), coverageNote,
+     slots,
+     ...(settings.general && { refuted }),
+     howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${run.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
+   });
+   let body = applyReviewOverlay(summary, overlay);
++  if (headMoved) body = `${headMovedLine(headMoved)}\n\n${body}`;
+   const visibleBody = body;
+   const round = buildRoundBlock({ body, round: roundNumber,
+     reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: settings.general ? inBody : [] });
+   body += `\n\n${renderRoundBlock(round)}`;
+   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
+   body += `\n\n${marker}`;
+   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
+-  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion]);
++  // A further push changes the current head, so it must make an earlier as-is preview stale.
++  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion,
++    ...(headMoved ? [headMoved.currentHead] : [])]);
+   const approval = eventFor[settings.verdict] === "APPROVE";
+   const templateChanged = request.kind === "automatic" &&
+     await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
+   const blockedReason = publishedUrl ? "This review has already been published."
+     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
+-    : !current ? "The pull request is closed or its revision moved. You can still save this draft locally."
++    : !current && !headMoved ? "The pull request is closed or its revision moved. You can still save this draft locally."
+     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
+     : !answered ? "Answer each finding question before publishing."
+     : overlay?.kind === "slots" && !settings.general ? "Enable General comment to include the project report overlay."
+-    : request.kind === "automatic" && (skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
++    : request.kind === "automatic" && (headMoved || skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
+       ? "This review needs a publication decision in Desktop."
+     : !englishReviewText([visibleBody, ...comments.map(comment => comment.body)].join("\n"))
+       ? "GitHub reviews must be written in English. This draft contains non-English prose."
+     : approval && !complete ? "A partial review cannot approve. Select Comment only or Request changes."
+     : inlineUnavailable ? "The pull request diff is unavailable. Retry or turn off inline comments."
+     : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT || comments.some(comment => comment.body.length > PUBLISHED_BODY_LIMIT)
+       ? "This draft exceeds the GitHub review size limit. Change what is included or split the review."
+     : !settings.general && !comments.length ? "Enable General comment or select inline comments that are on the diff." : undefined;
+   return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, inlineComments: comments,
+     questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay && !emptyOverlay,
+     ...(overlay?.requiresApproval && { overlayRequiresApproval: true }),
+     canSubmit: !blockedReason, digest, ...(blockedReason ? { blockedReason } : {}),
+     ...(overlayWarning ? { overlayWarning } : emptyOverlay ? { overlayWarning: "This draft has no project overlay content. Only the Keryx template is shown." } : {}),
+-    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}) },
++    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}),
++    ...(headMoved && { headMoved }) },
+     comments, publicationBody: body, ...(discussion && { discussion }) };
+ }
+ 
+ function englishReviewText(body: string): boolean {
+   // Ignore source quotations and identifiers. Generated prose is requested in English at review time.
+   const prose = body.replace(/^`{3,}[^\n]*\n[\s\S]*?^`{3,}[^\n]*$/gm, "").replace(/`+[^`\n]+`+/g, "")
+     .replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
+   return !/[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(prose);
+ }
+ 
+ export function requestDeskPublication(cwd: string, key: DeskRunKey, request: PublicationRequest,
+   confirmSubmit?: (state: PublicationState) => Promise<void>): Promise<PublicationState> {
+   return publication(cwd, key, request, confirmSubmit);
+ }
+ 
+ export async function publishCompletedDeskReview(cwd: string, key: DeskRunKey, id: string): Promise<void> {
+   await publication(cwd, key, { kind: "automatic", id, settings: {
+     inline: false, general: true, keryxTemplate: true, overlay: true,
+     verdict: "comment", verdictOverride: "comment", answers: {},
+   } });
+
+--- src/review/desk-publication.ts
+@@ 300,385 @@
+   }
+   const connection = await projectGithubConnection(cwd, process.env, key.viewer);
+   const store = new DeskRunStore(undefined, true);
+   const directory = store.directory(request.id);
+   const attempt = (() => {
+     try { return store.byId(request.id); }
+     finally { store.close(); }
+   })();
+   const run = attempt?.run;
+   if (!attempt || !run?.result?.reviewed || run.source === "existing" ||
+       (run.state !== "completed" && run.state !== "partial") ||
+       (request.kind === "automatic" && (!run.options?.autoPublish || run.state !== "completed" || run.decision || attempt.cwd !== cwd)) ||
+       attempt.key.number !== key.number || attempt.key.repositoryId !== key.repositoryId ||
+       attempt.key.repo.toLowerCase() !== key.repo.toLowerCase() || attempt.key.viewer.toLowerCase() !== key.viewer.toLowerCase() ||
+       !sha.test(run.baseSha) || !sha.test(run.headSha) ||
+       run.result.reviewed.baseSha !== run.baseSha || run.result.reviewed.headSha !== run.headSha) {
+     throw new Error("access: A verified local review for this account and pull request was not found.");
+   }
+   const cache = await previewSubject(cwd, directory, key, connection, request, run);
+   const pr = cache.subject;
+-  const current = pr.state === "OPEN" && pr.baseRefOid === run.baseSha && pr.headRefOid === run.headSha;
+-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, cache });
++  const open = pr.state === "OPEN" && pr.baseRefOid === run.baseSha;
++  const current = open && pr.headRefOid === run.headSha;
++  // Same base, newer head: the draft becomes the as-is Comment for the reviewed commit.
++  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid)
++    ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
++  // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
++  const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
++  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache });
+   if (request.kind === "preview") {
+     const { state } = await render();
+     verifyGithubBindingUnchanged(connection);
+     return state;
+   }
+   return withFileLock(path.join(directory, "publication.lock"), async () => {
+     const { state, comments, publicationBody, discussion } = await render();
+     if (request.kind === "skip") {
+       if (state.publishedUrl) return state;
+       await writeFileAtomic(path.join(directory, PUBLICATION_SKIPPED), "true", { mode: 0o600 });
+       return { ...state, skipped: true };
+     }
+     const savedAt = new Date().toISOString();
+     const draft: Draft = { settings: state.settings, savedAt };
+     const encoded = JSON.stringify(draft);
+     if (Buffer.byteLength(encoded) > draftLimit) throw new Error("configuration: The review settings are too large to save. Split the review.");
+     const save = () => writeFileAtomic(path.join(directory, "publication-draft.json"), encoded, { mode: 0o600 });
+     if (request.kind === "save") {
+       verifyGithubBindingUnchanged(connection);
+       await save();
+       return { ...state, savedAt };
+     }
+     if (request.kind === "submit" && request.digest !== state.digest) throw new Error("stale: The review preview changed. Refresh it before submitting.");
+     if (!state.canSubmit) throw new Error(`configuration: ${state.blockedReason}`);
+     if (request.kind === "submit" && !confirmSubmit) throw new Error("permission: Confirm the exact review before publishing.");
+     const outbound = { event: eventFor[state.settings.verdict], body: publicationBody, comments, commit_id: run.headSha };
+     for (const body of [outbound.body, ...comments.map(comment => comment.body)]) {
+       if (!(await screenCommentBody(cwd, body)).ok) {
+         throw new Error("configuration: The security output check withheld this draft. Review the selected content before submitting.");
+       }
+     }
+     if (request.kind === "submit") await confirmSubmit?.(state);
+-    await verifyDeskSubject(cwd, key, run, connection);
++    await verifyDeskSubject(cwd, key, expected, connection);
+     // Pin only after independently verifying the active viewer with the default connection.
+     const auth: GithubConnection = connection.login ? connection : {
+       ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
+     };
+-    if (auth !== connection) await verifyDeskSubject(cwd, key, run, auth);
++    if (auth !== connection) await verifyDeskSubject(cwd, key, expected, auth);
+     if (discussion && discussion !== await publicationDiscussion(cwd, key, auth)) {
+       throw new Error("stale: The pull request discussion changed. Refresh the preview and check the draft before publishing.");
+     }
+     await save();
+     const receiptPath = path.join(directory, PUBLICATION_RECEIPT);
+     // Persist the intent before the network call. A lost response must not cause a duplicate review.
+     await writeFileAtomic(receiptPath, "{}", { mode: 0o600 });
+     const options = reviewCommandOptions(cwd, auth.env);
+     let rejected: number | undefined;
+     let postStarted = false;
+     const port = createGhPort(async (argv, stdin) => {
+       const proc = withCurrentGithubBinding(auth, () => Bun.spawn([reviewTool("gh", auth.env), "api", "--hostname", "github.com", ...argv.slice(2)], {
+         cwd, env: options.env, stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+         stdout: "pipe", stderr: "pipe", signal: AbortSignal.timeout(options.timeout),
+       }));
+       postStarted = true;
+       const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+       if (exitCode !== 0) {
+         const status = /\(HTTP (400|401|403|404|422)\)/.exec(stderr)?.[1];
+         if (status) rejected = Number(status);
+
+--- src/review/head-move.ts
+@@ 1,39 @@
++// What a review does when its PR head moves: ask, follow, or stay behind.
++import type { DeskRun } from "./desk-run-types";
++
++export const ON_HEAD_MOVE = ["ask", "follow", "ignore"] as const;
++export type OnHeadMove = (typeof ON_HEAD_MOVE)[number];
++
++/** Manual and existing reviews ask; a rule-triggered (scheduled) review follows. */
++export function defaultOnHeadMove(source: DeskRun["source"]): OnHeadMove {
++  return source === "scheduled" ? "follow" : "ask";
++}
++
++/** Read a stored value; missing, null or unknown falls back to the source default. */
++export function parseOnHeadMove(value: unknown, source: DeskRun["source"]): OnHeadMove {
++  return ON_HEAD_MOVE.find((mode) => mode === value) ?? defaultOnHeadMove(source);
++}
++
++export type HeadMovePhase = "running" | "finished";
++/** `update` applies only when no round is running: start the update round now. */
++export type HeadMoveAction = "update-after-finish" | "stop-and-restart" | "update";
++
++export type HeadMoveResponse =
++  /** The review stays behind; nothing is offered or queued. */
++  | { kind: "none" }
++  /** Show the user these actions and wait for a choice. */
++  | { kind: "offer"; actions: readonly HeadMoveAction[] }
++  /** Queue an update round automatically, now or once the running round finishes. */
++  | { kind: "queue-update"; when: "now" | "after-finish" };
++
++/** The spec table: the mode and the round phase decide the response to a moved head. */
++export function headMoveResponse(mode: OnHeadMove, phase: HeadMovePhase): HeadMoveResponse {
++  if (mode === "ignore") return { kind: "none" };
++  if (mode === "follow") {
++    return { kind: "queue-update", when: phase === "running" ? "after-finish" : "now" };
++  }
++  return {
++    kind: "offer",
++    actions: phase === "running" ? ["update-after-finish", "stop-and-restart"] : ["update"],
++  };
++}
+
+--- src/review/update-round.ts
+@@ 1,27 @@
++// Update round: pick the previous attempt a new round builds on (spec "Раунд обновления", items 1 and 4).
++// It works on the DeskRun attempt format only, so it serves a review's rounds as well as a PR's run history.
++import { DESK_RUN_SCOPE, type DeskRun } from "./desk-run-types";
++
++export interface PriorAttempt {
++  attempt: DeskRun;
++  /** The attempt left part of the diff unreviewed; the new round plans that area as unreviewed. */
++  partial: boolean;
++}
++
++/**
++ * The newest attempt (`attempts` is newest first) whose accepted findings the next round may build on.
++ * The options key is deliberately not compared: changing settings between rounds does not break the link.
++ */
++export function selectPriorAttempt(attempts: readonly DeskRun[], scope: string = DESK_RUN_SCOPE): PriorAttempt | undefined {
++  for (const attempt of attempts) {
++    if (attempt.source === "existing" || attempt.scope !== scope) continue;
++    if (attempt.state !== "completed" && attempt.state !== "partial") continue;
++    // Delete and archive withdraw the attempt (its evidence is discarded); complete and close keep real findings, restore re-admits.
++    if (attempt.decision?.action === "delete" || attempt.decision?.action === "archive") continue;
++    const result = attempt.result;
++    if (!result?.reviewed || result.findingsKnown !== true) continue;
++    return { attempt, partial: attempt.state === "partial" || result.coverage !== "complete" };
++  }
++  return undefined;
++}
+
+
+--- src/review/desk-publication.test.ts
+@@ 1,59 @@
+ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
++import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { publishCompletedDeskReview, requestDeskPublication } from "./desk-publication";
++import { DESK_TEMPLATE_SELECTION, projectReviewOverlay, reportTemplateFingerprint } from "./desk-review-report";
+ import { DeskRunStore } from "./desk-run-store";
+ import { isolateGitDiscovery } from "./test-git-fixture";
+ 
+ const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: "fixture-reviewer", number: 7 };
+ const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
+ const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "GH_TOKEN", "GITHUB_TOKEN",
+   "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS"] as const;
+ let saved: Partial<Record<(typeof envNames)[number], string | undefined>>;
+ let restoreGit: () => void;
+ let root: string;
+ let project: string;
+ let directory: string;
+ let id: string;
+ const confirmFixture = async () => {};
+ 
+ function json(file: string, value: unknown) {
+   writeFileSync(file, JSON.stringify(value));
+ }
+ 
+-function setHead(headRefOid: string, viewer = key.viewer) {
++function setPull(fields: { state?: string; baseRefOid?: string; headRefOid?: string }, viewer = key.viewer) {
+   json(path.join(root, "pr.json"), { data: { viewer: { login: viewer }, repository: { id: key.repositoryId,
+-    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid } } } });
++    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid: revision.headSha, ...fields } } } });
++}
++
++function setHead(headRefOid: string, viewer = key.viewer) {
++  setPull({ headRefOid }, viewer);
+ }
+ 
++const posted = () => JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"));
++const movedHead = "c".repeat(40);
++const movedLine = `Reviewed commit \`${revision.headSha}\`. The pull request has moved to \`${movedHead}\` since; ` +
++  "this review does not cover the newer commits.";
++
+ beforeEach(() => {
+   restoreGit = isolateGitDiscovery();
+   saved = Object.fromEntries(envNames.map(name => [name, process.env[name]]));
+   root = mkdtempSync(path.join(tmpdir(), "keryx-review-publication-"));
+   project = path.join(root, "project");
+   mkdirSync(project);
+   const git = (...args: string[]) => {
+     const result = Bun.spawnSync(["git", "-c", "init.templateDir=", ...args], { cwd: project });
+     expect(result.exitCode).toBe(0);
+   };
+   git("init", "-q");
+   git("remote", "add", "origin", "https://github.com/example/project.git");
+ 
+   process.env.KERYX_CONFIG_DIR = path.join(root, "config");
+   process.env.KERYX_DATA_DIR = path.join(root, "data");
+   process.env.PATH = root + path.delimiter + saved.PATH;
+   process.env.FIXTURE_BODY = path.join(root, "post.json");
+   process.env.FIXTURE_PR = path.join(root, "pr.json");
+   process.env.FIXTURE_DIFF = path.join(root, "diff.txt");
+   process.env.FIXTURE_DIFF_READS = path.join(root, "diff-reads");
+
+--- src/review/desk-publication.test.ts
+@@ 101,261 @@
+     { id: "F-002", global_id: "fixture#F-002", severity: "minor", reviewer: "review-logic", problem: "A label is ambiguous.",
+       premise: { verdict: "challenged", question: "Is this label intentional?" } },
+   ]);
+   writeFileSync(path.join(pkg, "report.md"), "Fixture review.\nEvidence level: static only — did not run: tests\n\nNot verified: 1\n");
+   mkdirSync(path.join(project, ".metaproject"));
+   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## Team review\n\n{{review}}\n");
+ });
+ afterEach(() => {
+   for (const name of envNames) {
+     const value = saved[name];
+     if (value === undefined) delete process.env[name];
+     else process.env[name] = value;
+   }
+   restoreGit();
+   rmSync(root, { recursive: true, force: true });
+ });
+ 
+ test("draft questions, template and saved settings are local until one explicit submit", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.settings.verdict).toBe("changes");
++  expect(preview.headMoved).toBeUndefined();
+   expect(preview.questions).toMatchObject([{ id: "fixture#F-002", text: "Is this label intentional?", recommendation: "dismiss" }]);
+   expect(preview.canSubmit).toBe(false);
+   expect(preview.overlayAvailable).toBe(true);
+   expect(preview.body).toContain("## Team review\n\n**Changes requested — 1 Major.**");
+   expect(preview.body).toContain("Evidence level: static only — did not run: tests");
+   expect(preview.body).toContain("### Major");
+   expect(preview.body).toContain(`/blob/${revision.headSha}/src/a.ts#L1`);
+   const draft = await requestDeskPublication(project, key, { kind: "save", id,
+     settings: { ...preview.settings, inline: true, overlay: false, keryxTemplate: false, answers: { "fixture#F-002": "dismiss" } } });
+   expect(draft.savedAt).toBeDefined();
+   expect(draft.settings).toMatchObject({ keryxTemplate: true, overlay: true });
+   expect(draft.body).toContain("## Team review");
+   expect(draft.body).not.toContain("A label is ambiguous");
+   expect(draft.inlineCount).toBe(1);
+   expect(draft.canSubmit).toBe(true);
+   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings).toEqual(draft.settings);
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: "0".repeat(64) })).rejects.toThrow("preview changed");
+   const published = await requestDeskPublication(project, key,
+     { kind: "submit", id, settings: draft.settings, digest: draft.digest }, confirmFixture);
+   expect(published.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-23");
+   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"))).toMatchObject({
+     event: "REQUEST_CHANGES", commit_id: revision.headSha, comments: [{ path: "src/a.ts", line: 1, side: "RIGHT" }],
+   });
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest })).rejects.toThrow("already been published");
+ });
+ 
+-test("partial approval and a moved revision cannot send a review", async () => {
++test("partial approval, a changed base and a closed pull request cannot send a review", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   const settings = { ...preview.settings, verdictOverride: "suggestions" as const, answers: { "fixture#F-002": "uphold" as const } };
+   const approval = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+   expect(approval.body).toContain("A label is ambiguous");
+   expect(approval.blockedReason).toContain("cannot approve");
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: approval.settings, digest: approval.digest }))
+     .rejects.toThrow("cannot approve");
+-  setHead("c".repeat(40));
+-  const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+-  expect(stale.savedAt).toBeDefined();
+-  expect(stale.blockedReason).toContain("revision moved");
+-  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }))
+-    .rejects.toThrow("revision moved");
++  for (const pull of [{ baseRefOid: "e".repeat(40), headRefOid: movedHead }, { state: "CLOSED", headRefOid: movedHead }, { state: "CLOSED" }]) {
++    setPull(pull);
++    const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
++    expect(stale.savedAt).toBeDefined();
++    expect(stale.headMoved).toBeUndefined();
++    expect(stale.blockedReason).toContain("revision moved");
++    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }, confirmFixture))
++      .rejects.toThrow("revision moved");
++  }
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a moved head publishes as is: a Comment on the reviewed commit whose first line names it", async () => {
++  setHead(movedHead);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
++  expect(preview.headMoved).toEqual({ reviewedHead: revision.headSha, currentHead: movedHead });
++  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
++  expect(preview.body.split("\n")[0]).toBe(movedLine);
++  expect(preview.blockedReason).toContain("Answer each finding question");
++  const answered = await requestDeskPublication(project, key, { kind: "preview", id,
++    settings: { ...preview.settings, answers: { "fixture#F-002": "dismiss" } } });
++  expect(answered.canSubmit).toBe(true);
++  expect(answered.blockedReason).toBeUndefined();
++  const published = await requestDeskPublication(project, key,
++    { kind: "submit", id, settings: answered.settings, digest: answered.digest }, confirmFixture);
++  expect(published.publishedUrl).toContain("#pullrequestreview-23");
++  const sent = posted();
++  expect(sent).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
++  expect(sent.body.split("\n")[0]).toBe(movedLine);
++});
++
++test("a moved head ignores a requested verdict and inline comments", async () => {
++  setHead(movedHead);
++  const settings = { inline: true, general: true, keryxTemplate: true, overlay: true, verdict: "changes" as const,
++    verdictOverride: "changes" as const, answers: { "fixture#F-002": "uphold" as const } };
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
++  expect(preview.inlineCount).toBe(0);
++  expect(existsSync(process.env.FIXTURE_DIFF_READS!)).toBe(false);
++  await requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture);
++  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
++});
++
++test("a head that moves again after the preview or before the write posts nothing", async () => {
++  setHead(movedHead);
++  const first = await requestDeskPublication(project, key, { kind: "preview", id });
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id,
++    settings: { ...first.settings, answers: { "fixture#F-002": "dismiss" } } });
++  expect(preview.canSubmit).toBe(true);
++  const submit = { kind: "submit" as const, id, settings: preview.settings, digest: preview.digest };
++  setHead("d".repeat(40));
++  await expect(requestDeskPublication(project, key, submit, confirmFixture)).rejects.toThrow(/^stale:/);
+   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  setHead(movedHead);
++  await expect(requestDeskPublication(project, key, submit, async () => setHead("d".repeat(40)))).rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
++});
++
++test("automatic publication posts at the reviewed head and never after the head moved", async () => {
++  const store = new DeskRunStore();
++  let auto: string;
++  let autoDirectory: string;
++  try {
++    auto = store.requestAttempt(project, key, revision, undefined, { mode: "auto", adaptive: false, autoPublish: true,
++      modelPools: { strong: [], middle: [], light: [] } })!.id;
++    store.end(store.byId(auto)!, { state: "completed", phase: "Complete", reason: "",
++      result: { reviewed: revision, coverage: "complete", verdict: "COMMENT", findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++        report: "Fixture review." } });
++    autoDirectory = store.directory(auto);
++  } finally {
++    store.close();
++  }
++  cpSync(path.join(directory, "package"), path.join(autoDirectory, "package"), { recursive: true });
++  const findingsFile = path.join(autoDirectory, "package", "findings.json");
++  json(findingsFile, JSON.parse(readFileSync(findingsFile, "utf8")).slice(0, 1));
++  // A complete package needs coverage.md for readiness; without it automatic publication is refused at any head.
++  writeFileSync(path.join(autoDirectory, "package", "coverage.md"), "# Coverage\n");
++  json(path.join(autoDirectory, DESK_TEMPLATE_SELECTION), reportTemplateFingerprint((await projectReviewOverlay(project)).overlay));
++  setHead(movedHead);
++  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  setHead(revision.headSha);
++  await publishCompletedDeskReview(project, key, auto);
++  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha });
+ });
+ 
+ test("uses the standard report when a project overlay is invalid", async () => {
+   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## No insertion point");
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.body).toStartWith("**Changes requested — 1 Major.**");
+   expect(preview.body).not.toContain("No insertion point");
+   expect(preview.settings).toMatchObject({ keryxTemplate: true, overlay: false });
+   expect(preview.overlayWarning).toContain("{{review}}");
+ });
+ 
+ test("editing answers recomputes an automatic verdict and preserves only an explicit override", async () => {
+   const findingsFile = path.join(directory, "package", "findings.json");
+   const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+   json(findingsFile, [{ ...held, severity: "major" }]);
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.settings.verdict).toBe("comment");
+   const settings = { ...preview.settings, answers: { "fixture#F-002": "uphold" as const } };
+   const automatic = await requestDeskPublication(project, key, { kind: "save", id, settings });
+   expect(automatic.settings.verdict).toBe("changes");
+
+--- src/review/head-move.test.ts
+@@ 1,52 @@
++// Flow 520 AC4: on_head_move has ask/follow/ignore, defaults by run source, and unreadable stored values read as the default.
++
++import { describe, expect, test } from "bun:test";
++import { defaultOnHeadMove, headMoveResponse, ON_HEAD_MOVE, parseOnHeadMove } from "./head-move";
++
++describe("on_head_move values", () => {
++  test("has exactly ask, follow and ignore", () => {
++    expect([...ON_HEAD_MOVE]).toEqual(["ask", "follow", "ignore"]);
++  });
++
++  test("manual and existing reviews default to ask, rule-triggered to follow", () => {
++    expect(defaultOnHeadMove("manual")).toBe("ask");
++    expect(defaultOnHeadMove("existing")).toBe("ask");
++    expect(defaultOnHeadMove("scheduled")).toBe("follow");
++  });
++
++  test("a stored valid value is kept whatever the source", () => {
++    expect(parseOnHeadMove("ignore", "scheduled")).toBe("ignore");
++    expect(parseOnHeadMove("follow", "manual")).toBe("follow");
++    expect(parseOnHeadMove("ask", "scheduled")).toBe("ask");
++  });
++
++  test("missing, null or unknown reads as the source default", () => {
++    for (const bad of [undefined, null, "", "FOLLOW", "stop", 1, {}]) {
++      expect(parseOnHeadMove(bad, "manual")).toBe("ask");
++      expect(parseOnHeadMove(bad, "scheduled")).toBe("follow");
++    }
++  });
++});
++
++describe("headMoveResponse", () => {
++  test("ask during a round offers update-after-finish and stop-and-restart", () => {
++    expect(headMoveResponse("ask", "running")).toEqual({
++      kind: "offer",
++      actions: ["update-after-finish", "stop-and-restart"],
++    });
++  });
++
++  test("ask after a round offers a single update", () => {
++    expect(headMoveResponse("ask", "finished")).toEqual({ kind: "offer", actions: ["update"] });
++  });
++
++  test("follow defers the update until the running round finishes, then queues it now", () => {
++    expect(headMoveResponse("follow", "running")).toEqual({ kind: "queue-update", when: "after-finish" });
++    expect(headMoveResponse("follow", "finished")).toEqual({ kind: "queue-update", when: "now" });
++  });
++
++  test("ignore does nothing in either phase", () => {
++    expect(headMoveResponse("ignore", "running")).toEqual({ kind: "none" });
++    expect(headMoveResponse("ignore", "finished")).toEqual({ kind: "none" });
++  });
++});
+
+--- src/review/prior-round.test.ts
+@@ 249,300 @@
+ 
+   test("the same head in two sources goes to the earlier source, which holds the richer record", async () => {
+     writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1", { quote: "line 5" })] });
+     const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: consulted([block(A, "2026-10-01T00:00:00Z")]) });
+     expect(round.source).toBe("local-package");
+   });
+ 
+   test("a newer round at a non-ancestor head (force-push) falls back to a full round over merge-base..head", async () => {
+     git("checkout", "-q", "-b", "old-feature", A);
+     const X = commit("pre-rebase work", { "src/a.ts": lines(20).replace("line 7\n", "line seven\n") });
+     git("checkout", "-q", "feature");
+     writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, at: "2026-10-01T00:00:00.000Z" });
+     writePackage(".metaproject/reviews/r2", { reviewId: "r2", head: X, at: "2026-10-03T00:00:00.000Z", findings: [finding("F-7")], round: 2 });
+     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+     expect(round).toMatchObject({ mode: "fallback-first", round: 3, previous: { reviewId: "r2", reviewedHead: X }, range: { base: A, head: B }, fixHunks: [], carried: [] });
+     expect(round.newHunks.length).toBeGreaterThan(0);
+     expect(priorFindings.map((f) => f.id)).toEqual(["F-7"]);
+     expect(renderRoundLine(round)).toContain("fallback-first");
+   });
+ 
++  test("flow 520 AC6: a round recorded under different review settings is still the previous round", async () => {
++    // The candidate path reads target, head, status and timestamps from the manifest, never the settings, so
++    // changing settings between rounds does not break the link (spec "Раунд обновления", item 4).
++    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")], round: 1 });
++    const manifestFile = path.join(root, ".metaproject/reviews/r1/manifest.json");
++    const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
++    writeFileSync(manifestFile, JSON.stringify({ ...manifest, mode: "review-fast", options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } }));
++    const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
++    expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "r1", reviewedHead: A } });
++    expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++  });
++
+   test("a head this clone has never fetched is not an ancestor", async () => {
+     const candidate: RoundCandidate = { source: "github-block", reviewId: "x", reviewedHead: "f".repeat(40), round: 1, at: 1, findings: [] };
+     const runner = async (args: string[]) => ({ stdout: "", exitCode: args[0] === "merge-base" ? 128 : 0 });
+     expect((await choosePrevious(runner, [candidate], B)).mode).toBe("fallback-first");
+   });
+ });
+ 
+ describe("the pull request read", () => {
+   test("offline or missing gh: both GitHub sources are recorded as not consulted, and a throwing read is too", async () => {
+     const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: async () => { throw new Error("ENOTFOUND api.github.com"); } });
+     const github = round.sourcesTried.filter((t) => t.source.startsWith("github"));
+     expect(github.map((t) => t.result)).toEqual(["not-consulted", "not-consulted"]);
+     expect(github[0]!.detail).toContain("ENOTFOUND");
+   });
+ 
+   test("a target that is not a pull request is not looked up at all", async () => {
+     expect(await defaultGithubLookup({ kind: "branch", ref: "feat/x" })).toEqual({ status: "not-consulted", detail: "the target is not a pull request" });
+   });
+ 
+   test("pull request refs compare however they are written", () => {
+
+--- src/review/update-round.test.ts
+@@ 1,92 @@
++// Flow 520 AC5: the previous attempt of an update round is the newest one with accepted findings, whatever its settings.
++import { describe, expect, test } from "bun:test";
++import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
++import { selectPriorAttempt } from "./update-round";
++
++const SHA = (c: string): string => c.repeat(40);
++/** Overrides may set a field to undefined to model a legacy record that lacks it. */
++type Loose<T> = { [K in keyof T]?: T[K] | undefined };
++
++function result(over: Loose<DeskResult> = {}): DeskResult {
++  return <DeskResult>{
++    reviewed: { baseSha: SHA("a"), headSha: SHA("b") },
++    verdict: "needs-changes",
++    coverage: "complete",
++    findingsKnown: true,
++    findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++    report: "report",
++    ...over,
++  };
++}
++
++function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
++  return <DeskRun>{
++    baseSha: SHA("a"),
++    headSha: SHA("b"),
++    id,
++    source: "manual",
++    scope: DESK_RUN_SCOPE,
++    state: "completed",
++    phase: "done",
++    reason: "",
++    createdAt: "2026-11-24T00:00:00.000Z",
++    startedAt: "2026-11-24T00:00:00.000Z",
++    finishedAt: "2026-11-24T00:10:00.000Z",
++    result: result(),
++    ...over,
++  };
++}
++
++describe("selectPriorAttempt", () => {
++  test("picks the newest completed attempt and reports it as not partial", () => {
++    expect(selectPriorAttempt([run("new"), run("old")])).toEqual({ attempt: expect.objectContaining({ id: "new" }), partial: false });
++  });
++
++  test("accepts the newest partial attempt with accepted findings and marks it partial", () => {
++    const picked = selectPriorAttempt([run("p", { state: "partial", result: result({ coverage: "partial" }) }), run("c")]);
++    expect(picked).toMatchObject({ attempt: { id: "p" }, partial: true });
++  });
++
++  test("a completed attempt whose coverage is not complete is partial", () => {
++    expect(selectPriorAttempt([run("u", { result: result({ coverage: "unknown" }) })])?.partial).toBe(true);
++  });
++
++  test("an attempt run with different settings is still accepted, and the options key is never compared", () => {
++    const other = run("other", { effectiveOptionsKey: "settings-B", options: { maxTokens: 10 } as DeskRun["options"] });
++    expect(selectPriorAttempt([other, run("same", { effectiveOptionsKey: "settings-A" })])?.attempt.id).toBe("other");
++  });
++
++  test("rejects imported, failed, cancelled and unreviewed attempts and falls through to the next usable one", () => {
++    const rejected = [
++      run("imported", { source: "existing" }),
++      run("failed", { state: "failed" }),
++      run("cancelled", { state: "cancelled" }),
++      run("blocked", { state: "blocked" }),
++      run("running", { state: "running" }),
++      run("unreviewed", { result: result({ reviewed: null }) }),
++      run("no-result", { result: null }),
++      run("findings-unknown", { state: "partial", result: result({ findingsKnown: undefined }) }),
++      run("findings-false", { state: "partial", result: result({ findingsKnown: false }) }),
++      run("old-scope", { scope: "review-autonomous/fixed-pr/v1" }),
++      run("no-scope", { scope: undefined }),
++    ];
++    for (const attempt of rejected) expect(selectPriorAttempt([attempt])).toBeUndefined();
++    expect(selectPriorAttempt([...rejected, run("good")])?.attempt.id).toBe("good");
++  });
++
++  test("the scope is a parameter", () => {
++    const v1 = run("v1", { scope: "review-autonomous/fixed-pr/v1" });
++    expect(selectPriorAttempt([v1])).toBeUndefined();
++    expect(selectPriorAttempt([v1], "review-autonomous/fixed-pr/v1")?.attempt.id).toBe("v1");
++  });
++
++  test("a deleted or archived attempt is skipped; completed, closed and restored ones are not", () => {
++    const decision = (action: "complete" | "close" | "archive" | "restore" | "delete"): DeskRun["decision"] => ({ action, reason: "r", at: "2026-11-24T01:00:00.000Z" });
++    expect(selectPriorAttempt([run("d", { decision: decision("delete") }), run("a", { decision: decision("archive") })])).toBeUndefined();
++    for (const action of ["complete", "close", "restore"] as const) expect(selectPriorAttempt([run("x", { decision: decision(action) })])?.attempt.id).toBe("x");
++  });
++
++  test("nothing to pick from is undefined", () => {
++    expect(selectPriorAttempt([])).toBeUndefined();
++  });
++});

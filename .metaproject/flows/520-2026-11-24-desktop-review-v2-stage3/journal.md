@@ -45,3 +45,15 @@
   3. "Update review to <sha>" placement (first footer button): no caller yet; revisit when item 3 wires it — spec calls it the primary action.
   4. General comment can be turned off in the head-moved case, which then refuses submit with the existing message. Accepted (no silent override).
 - Orchestrator fixed T7's test typing (6 TS2379 under exactOptionalPropertyTypes) directly: mechanical test-only change, journaled here instead of a fix dispatch.
+- 2026-11-24T08:16:57.645Z - task-added: T11: Fix round 1: review findings of round 1 on PR #1303
+- 2026-11-24T08:16:58.249Z - task-attempt: T11: started (attempt 1) — 520-T11
+
+## 2026-11-24 Review round 1 (PR #1303, head 9e871b17f)
+
+- Package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303`, 11 reviewers (roster from `keryx review plan`), all DONE with results in `raw/`.
+- Totals: blocker 0, major 1 (logic F-001: as-is offered after a force-push), minor 10, info ~12.
+- tests-to-run: verify-tests-to-run-1 had 1 timeout + 1 follow-on error in `src/commands/review-desk-run.test.ts` under concurrent load; re-run alone (verify-tests-to-run-2) passed. Full backend `bun test src/review`: 5461 pass, 1 fail (`mutate.test.ts` SIGTERM test, passed alone) — both load flakes, files not touched by this PR.
+- Fix round T11 dispatched for logic F-001, performance/degradation F-001, frontend F-001 = ui-ux UX-001, ui-ux UX-002, UX-003, testing F-001..F-003.
+- Architecture F-001 (two prior-attempt rules) and F-002 (on_head_move default source), degradation F-002 (findingsKnown undefined): recorded as obligations of T8 in tasks.md; no code change now (wiring is item 3).
+- Verifier (Wave C) and review-premise (Wave D) were not dispatched: the one major is fixed defensively in T11 regardless of whether GitHub returns 422, so its premise does not gate the fix. Recorded as Not run.
+- 2026-11-24T08:26:00.635Z - task-done: T11: Fix round 1: review findings of round 1 on PR #1303

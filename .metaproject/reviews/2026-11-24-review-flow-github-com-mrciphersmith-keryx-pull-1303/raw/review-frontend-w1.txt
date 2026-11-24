@@ -1,0 +1,76 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Head: `9e871b17f16a934d5568926e210c3c88d1ca7a86`
+- Scope mode: diff (explicit range from payload)
+- Slice read in full: slice-01 (all 20 files). Frontend surface: `apps/desktop/src/review/ReviewPublishDialog.tsx` (read in full at head), `apps/desktop/src/review/ReviewRuns.dom.test.tsx` (diff hunks). The `src/review/*` files were read only for the state the dialog renders (`PublicationState.headMoved`, forced settings, `blockedReason`).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 0
+
+The head-moved rendering is correct. The status line names both commits, and its JSX whitespace joins into one sentence. The verdict radios and the Inline checkbox are disabled only when `draft.headMoved` is set. The fieldset-level `disabled={writing}` still applies. The primary button's label switches and the submit handler is the same, so the digest still binds the preview. The optional `onUpdateReview` renders only with `headMoved && onUpdateReview && !posted` and is disabled while writing. With the current head, nothing changes (the DOM test checks for no head-moved line, no disabled inputs and no extra buttons). This component has no MobX (`useState`/`useRef` only), so the observer, action and store laws do not apply.
+
+### Findings
+
+### [F-001] With the head moved and General comment turned off, the refusal points the user at the disabled Inline checkbox
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts (blockedReason chain), shown by apps/desktop/src/review/ReviewPublishDialog.tsx
+- **Rule**: canonical rubric (no rule row covers it)
+- **Problem**: When the head has moved, the server forces `inline: false` and the dialog disables the Inline comments checkbox (`disabled={!!headMoved}`). If the user turns off General comment and there is no slots overlay, the status line shows "Enable General comment or select inline comments that are on the diff." The second half of that message asks for an action the dialog has just disabled.
+- **Why it matters**: Refusing the submit is the right behaviour, and the PR accepts it on purpose (decision 4, "no silent override"). That reason covers the refusal but not the wording. The message sits in the server's `blockedReason` chain, and the dialog renders it next to a locked control. That is a cost for anyone editing this chain, and the user gets a misleading hint.
+- **Fix**: In the `!settings.general && !comments.length` branch, choose the wording by `headMoved`, e.g. "Enable General comment. A review published as is has no inline comments." Optionally, add an assertion to the head-moved DOM test.
+
+### Clean Areas
+- Observer, MobX action, computed and store laws: not applicable, because the component uses local React state only.
+- Disabled controls: the verdict radios (Use recommendation plus the four verdicts) and Inline comments get `disabled={!!headMoved}`. General comment and the finding-question radios stay usable, which the server requires (answers are still needed). The fieldset `disabled={writing}` is unchanged.
+- Primary action: same guard (`canUsePreview && draft.canSubmit && !unanswered`) and same submit payload; only the label changes. The `<code>` inside the button keeps the accessible name "Publish as is for <7 chars>".
+- `onUpdateReview`: optional, typed `(() => void) | undefined` to match the sibling props under exactOptionalPropertyTypes. It renders only when the head moved and nothing is posted, and it is disabled while writing. It has no caller yet, as the PR states. Its placement as a non-primary first button is a documented provisional decision (law 4), so it is not reported.
+- Effects and refs: no new effects. `headMoved` is derived from `draft` during render, so it has no duplicate state and can't drift.
+- Keys and lists: no new lists.
+- TypeScript: no `any` or `!` added in the dialog. `shortSha` is a pure module-level helper.
+- Stale-preview flow: if the head moves while the dialog is open, the old digest makes submit fail with `stale:`, the preview is marked stale, and a refresh renders the head-moved state. No new state can drift.
+
+### Not verified / notes
+- The rule `.metaproject/rules/stacks/react/code-style-patterns.mdc` named in the payload does not exist in this worktree (`.metaproject/rules/stacks/` holds only `ts-js-node`), so its Review severities table could not be applied. F-001 is rated by the canonical rubric.
+- No tests were run (read-only, exec budget 0). The supplied evidence `research-evidence/verify-tests-to-run-1.txt` shows 1 fail and 1 unhandled error, both in `src/commands/review-desk-run.test.ts` (a timeout, and an `access:` expectation). That file is outside this PR's diff and outside the frontend lens. I did not investigate it.
+- Desktop `.tsx` files are not linted (the PR says so too).
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "ReviewPublishDialog head-moved rendering, disabled verdict/inline controls, primary-label switch and the optional onUpdateReview action are correct; the current-head path is unchanged. No MobX in scope. One minor: with the head moved and General comment off, the refusal text points to the disabled Inline checkbox. The React code-style rule named in the payload is absent from the worktree, so the canonical rubric was used.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": ": !settings.general && !comments.length ? \"Enable General comment or select inline comments that are on the diff.\" : undefined;",
+      "problem": "In the head-moved (as-is) case the server forces inline off and the dialog disables the Inline comments checkbox, yet with General comment turned off (no slots overlay) the blockedReason shown in the dialog says \"Enable General comment or select inline comments that are on the diff\": half of the remedy is a control the dialog has locked.",
+      "impact": "The refusal is correct and intended (PR decision 4), but the user gets a hint that cannot be followed, and the message chain now has a branch whose wording ignores headMoved. No wrong publication results.",
+      "suggested_fix": "Choose the wording by headMoved in that branch, e.g. \"Enable General comment. A review published as is has no inline comments.\"; optionally assert it in the head-moved DOM test in ReviewRuns.dom.test.tsx.",
+      "evidence": "ReviewPublishDialog.tsx: `<input type=\"checkbox\" checked={settings.inline} disabled={!!headMoved}` and the General comment checkbox stays enabled (asserted by the DOM test). desk-publication.ts prepare(): headMoved settings force `inline: false`; the blockedReason chain's last branch is the quoted generic message. PR body decision 4 accepts the refusal itself, not this wording.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "head-moved-general-off-message-points-to-disabled-inline",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant; the payload layers block supplied affected files and the caller set came from `keryx ctx rg`); wiki_used: no (not-relevant; intent was stated in the PR body and flow docs); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

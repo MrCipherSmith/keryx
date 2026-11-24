@@ -1,0 +1,117 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract — PR #1303, round 1 (slice-01, read in full)
+
+Inputs read: payload, driver, pr-context.md, slice-01.diff (all 2124 lines), reviewer-finding.schema.json, Severity (canonical), activity/review.mdc, research-evidence verify-tests-to-run-1/-2. Code was read from the slice and `git grep 9e871b17f`, not the working tree.
+
+## Checklist form
+
+The PR body carries no checkbox list (no Documentation / Tests / Breaking-change boxes). Each stated claim is one row.
+
+| Box or claim (quoted) | State | What the diff shows | Expectation / result |
+|---|---|---|---|
+| "`desk-publish` returns `headMoved: { reviewedHead, currentHead }` and forces verdict `comment` with inline comments off" | claim | desk-publication.ts: `const headMoved ... open && !current && sha.test(pr.headRefOid)`; settings branch `{ inline: false, ... verdict: "comment", verdictOverride: "comment", answers }` | holds |
+| "The body opens with: Reviewed commit `<sha>`. The pull request has moved to `<sha>` since; ..." | claim | `if (headMoved) body = \`${headMovedLine(headMoved)}\n\n${body}\`` after the overlay; test asserts `preview.body.split("\n")[0]` | holds |
+| "posts with `commit_id` set to the reviewed head" | claim | `commit_id: run.headSha` unchanged; test `commit_id: revision.headSha` | holds |
+| "The current head is part of the digest and the body ... submit fails with `stale:`" | claim | digest adds `...(headMoved ? [headMoved.currentHead] : [])`; test "a head that moves again after the preview" | holds |
+| "Before the write, the subject is checked against the head shown in the preview" | claim | `verifyDeskSubject(cwd, key, expected, ...)` with `expected = { baseSha, headSha: headMoved.currentHead }`; currentHead is read at submit, equal to the previewed head because the digest binds it | holds (via digest) |
+| "Automatic publication still refuses a moved head" | claim | `request.kind === "automatic" && (headMoved \|\| ...)` → "needs a publication decision in Desktop"; test present | holds |
+| "A changed base or a closed PR keeps today's refusal" | claim | `!current && !headMoved ? "...revision moved..."`; `open` requires OPEN + same base; test loops base/closed cases | holds |
+| "The dialog shows both commits, locks the verdict and inline controls, and labels the action 'Publish as is for `<short sha>`'" | claim | ReviewPublishDialog.tsx status `<p className="review-detail-muted review-publish-head-moved">`, `disabled={!!headMoved}` on verdict radios and Inline, button label | holds |
+| "optional 'Update review to `<sha>`' action, which no caller passes until item 3" | claim | `git grep onUpdateReview 9e871b17f -- src apps` finds only the dialog itself | holds |
+| "A manual review defaults to `ask`; a rule-triggered review defaults to `follow`" | claim | head-move.ts `source === "scheduled" ? "follow" : "ask"`; `scheduled` runs carry `run.schedule` (the review rule, desk-run-service.ts:319/341) | holds |
+| "`parseOnHeadMove` reads a missing or unknown stored value as the default" | claim | `ON_HEAD_MOVE.find(...) ?? defaultOnHeadMove(source)`; test covers undefined/null/""/"FOLLOW"/1/{} | holds |
+| "`headMoveResponse` encodes the spec table" | claim | spec table specification.md:98-102 has only the running-phase rows; code also returns rows for `finished` | see PC-002 (info) |
+| "There is no storage yet" / "No rounds schema is defined here" | claim | no store/migration file in the diff | holds |
+| "`selectPriorAttempt` returns the newest `DeskRun` attempt with accepted findings; partial counts and is marked; settings key not compared; skips imported, failed, cancelled, unreviewed, deleted and archived" | claim | update-round.ts loop and tests match each clause | holds |
+| "`prior-round.test.ts` pins that a previous round recorded under different settings is still chosen" | claim | new test "flow 520 AC6 ..." | holds |
+| "this PR does not touch `ReviewBoard.tsx`, `model.ts`, `board-badges.ts`, `desk-run-store.ts` or `review.css`" | claim | payload scope.files lists none of them | holds |
+| Decisions: "Save locally stores the forced settings"; "'Update review to …' (first footer button)"; "General comment can still be switched off" | claim | `draft = { settings: state.settings }`; button rendered first in footer; General checkbox has no `disabled` (DOM test asserts not disabled) | holds |
+| Verification: "desk-publication.test.ts — 14 pass", "`bun test src/review` — 123 pass", typecheck/eslint clean | claim | package evidence runs a combined set (190 tests, 1 timeout in review-desk-run.test.ts, passed alone in -2); per-file counts not in evidence | unsettled — PC-003 (info) |
+| "The Desktop `.tsx` files are excluded from the root ESLint config" | claim | consistent with journal T5 note; not re-checked against eslint config | not checked (outside lane) |
+| Not verified: AC9 real-PR scenario, Rust side CI-only, item 3 / spec AC 4–7 not implemented | claim | AC7 `[verify: none — blocked on stage 2 rounds]`; T8 `todo` in flow.json | consistent disclosure |
+
+## Documentation outside the diff
+
+Searched with `keryx ctx rg -i "revision moved|head (has )?moved|Publish to GitHub|Submit review|desk-publish|Publish as is" docs README.md apps/desktop/README.md`, then `"save the draft locally|has moved or|blockedReason|revision moved|Submit review" docs README.md apps`, and `--hidden` over `.metaproject/wiki` (0 hits). Hits: docs/docs/desktop-app.md:139-142 (stale, PC-001); docs/docs/cli-reference.md:5210-5217 (desk-publish: "Keryx checks the pull request revision ... before submitting" — still true, no field list, not stale); docs/requirements/... (the requirement sources themselves).
+
+## Findings
+
+### [PC-001] Desktop guide still says a moved PR can only be saved locally
+- Severity: minor
+- File: docs/docs/desktop-app.md (lines 139-142, not in the diff)
+- Problem: The guide says: "Choose **Submit review** ... If the PR has moved or closed, you can still save the draft locally." The diff makes a same-base head move publishable: ReviewPublishDialog.tsx labels the primary button `Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code>` and desk-publication.ts only blocks `!current && !headMoved`. The PR body ("What changes" 1) describes this user-visible change; no document was updated.
+- Why it matters: A Desktop user reading the guide after a push believes publishing is impossible and the only option is a local save, and does not learn the button name, the forced Comment verdict, or the first-line notice.
+- Fix: Extend the paragraph: when the PR is open on the same base with a newer head, the dialog offers "Publish as is for <sha>", which posts a Comment for the reviewed commit with a first line naming both commits; a changed base or a closed PR still allows only a local save.
+
+### [PC-002] "headMoveResponse encodes the spec table" — the table has no finished-phase rows
+- Severity: info
+- File: src/review/head-move.ts
+- Problem: PR body: "`headMoveResponse` encodes the spec table." specification.md:98-102 ("Во время выполнения раунда") lists only the running-phase rows. The code also answers phase `finished` (`ask` → offer `["update"]`, `follow` → `queue-update now`), which journal T6 attributes to the spec section "Перед публикацией".
+- Why it matters: A reviewer checking the function against the cited table cannot find the source of the finished-phase answers. No runtime effect; nothing calls the function yet.
+- Fix: Optional: say "encodes the spec table (running) and 'Перед публикацией' (finished)".
+
+### [PC-003] Per-file pass counts in Verification are not backed by package evidence
+- Severity: info
+- File: null
+- Problem: PR body: "`bun test src/review/desk-publication.test.ts` — 14 pass", "`cd apps/desktop && bun test src/review` — 123 pass". research-evidence/verify-tests-to-run-1.txt ran a combined set (189 pass, 1 timeout in src/commands/review-desk-run.test.ts plus an unhandled error there); -2 re-ran that file alone (73 pass across 2 files). No evidence file shows the per-file counts, and CI was pending at collection.
+- Why it matters: Unverified, not contradicted. The failure in -1 is in a file this PR does not change.
+- Fix: None required; settles when CI ("Core tests", "desktop check") reports.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Every functional claim of the PR body matches the diff (D1 server+dialog, D2 defaults/parse, prior-attempt selection, untouched-file list, deferred item 3). One stale document outside the diff: docs/docs/desktop-app.md still says a moved PR can only be saved locally. Two info rows: the 'spec table' wording and unbacked per-file test counts.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/desktop-app.md",
+      "line": null,
+      "quote": "repository, and reviewed revision before submitting. If the PR has moved or",
+      "problem": "The Desktop guide says 'If the PR has moved or closed, you can still save the draft locally' and names only 'Submit review'. The diff makes a same-base head move publishable as is: ReviewPublishDialog.tsx renders 'Publish as is for <short sha>' and desk-publication.ts blocks only when `!current && !headMoved`. The document was not updated.",
+      "impact": "A Desktop user whose PR received a push after the review reads that only a local save is possible and does not learn the as-is Comment variant, its button, or its first-line notice.",
+      "suggested_fix": "Extend the paragraph: an open PR on the same base with a newer head offers 'Publish as is for <sha>', a Comment for the reviewed commit whose first line names both commits; a changed base or closed PR still allows only a local save.",
+      "evidence": "git show 9e871b17f:docs/docs/desktop-app.md lines 139-142; slice-01 ReviewPublishDialog.tsx `{headMoved ? <>Publish as is for <code>...` and desk-publication.ts `: !current && !headMoved ? \"The pull request is closed or its revision moved...\"`. Found with keryx ctx rg -i \"save the draft locally|has moved or|revision moved|Submit review\" docs README.md apps; .metaproject/wiki searched with --hidden, 0 hits; docs/docs/cli-reference.md:5210-5217 checked and still accurate.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:desktop-app-doc-head-moved"
+    },
+    {
+      "id": "PC-002",
+      "severity": "info",
+      "file": "src/review/head-move.ts",
+      "line": null,
+      "quote": "export function headMoveResponse(mode: OnHeadMove, phase: HeadMovePhase): HeadMoveResponse {",
+      "problem": "PR body: '`headMoveResponse` encodes the spec table.' The cited table (specification.md:98-102, 'Во время выполнения раунда') has running-phase rows only; the finished-phase answers (ask -> ['update'], follow -> queue now) come from another spec section per journal T6.",
+      "impact": "A reader verifying the function against the cited table cannot find the finished-phase source. No runtime effect; the function has no caller yet.",
+      "suggested_fix": "Optionally name both sources in the PR body: the running-phase table and 'Перед публикацией'.",
+      "evidence": "docs/requirements/keryx-desktop-review-v2/specification.md:98-102; slice-01 head-move.ts; journal.md 'T6 accepted' note.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-003",
+      "severity": "info",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "PR Verification states '14 pass' for desk-publication.test.ts and '123 pass' for the Desktop review suite. Package evidence has only a combined run (verify-tests-to-run-1: 189 pass, 1 timeout + 1 unhandled error in src/commands/review-desk-run.test.ts) and a re-run of that file alone (-2: 73 pass). Per-file counts are not shown; CI was pending at collection.",
+      "impact": "Unverified rather than contradicted; the failing file is not changed by this PR and passed alone.",
+      "suggested_fix": "None required; settled by CI 'Core tests' and 'desktop check'.",
+      "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303/research-evidence/verify-tests-to-run-1.txt, -2.txt; pr-context.md 'CI: pending'.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant — doc search done by text; payload layers block read); wiki_used: yes (.metaproject/wiki searched via keryx ctx rg --hidden, 0 hits); ctx_used: yes; raw_rg_used: no.
+Not verified: ESLint config exclusion of Desktop .tsx; per-file test counts; behaviour on a real PR (AC9).

@@ -13,6 +13,7 @@ with `--disposition skipped --reason "<why>"`, not left open.
 | T5 | implement | D1: publish as is for the reviewed commit — `desk-publication.ts`, `desk-publication-types.ts`, `ReviewPublishDialog.tsx`, tests (plan A) |
 | T6 | implement | D2: `on_head_move` — `src/review/head-move.ts` + test (plan B) |
 | T7 | implement | Prior-attempt selection — `src/review/update-round.ts` + test; settings test in `prior-round.test.ts` (plan C) |
-| T8 | implement | Item 3: "Review again" as an update round of the same Review — blocked until stage 2 (flow 519) pushes the rounds migration (plan D) |
+| T8 | implement | Item 3: "Review again" as an update round of the same Review — blocked until stage 2 (flow 519) pushes the rounds migration (plan D). Must, in the same change: replace the live previous-run rule in `desk-run-service.ts` (no second rule left), relax `prior-round.ts` packageTrust and `round-record.ts` REVIEWED_STATUSES for partial rounds, align `findingsKnown: undefined` handling with `pr-context.ts`/`desk-run-legacy.ts` (review round 1: architecture F-001, degradation F-002), and settle where the `on_head_move` default is resolved for a Review mixing manual and scheduled attempts (architecture F-002) |
 | T9 | verify | Backend and Desktop review suites, typecheck, lint, invariant diff (AC8) |
 | T10 | review | review-orchestrator round on the branch |
+| T11 | implement | Fix round 1: findings of review round 1 on PR #1303 |
