@@ -32,3 +32,11 @@
 - Worker added one line beyond the brief: the closed stop list in "Between waves" now names a moved head under `ask`; accepted, otherwise the `ask` question contradicts "The stop list is closed".
 - "Stop and start on the new head" ingests a partial round; until stage 3 changes `round-record.ts:207`, the `keryx review plan` fallback may not treat a partial package as the prior round. The skill states the contract; T8 rechecks after stage 3.
 - Environment: no node_modules in this worktree: eslint/tsc not run locally (health INCOMPLETE), clean-context/harness-robustness tests fail to load (zod). `bun test src/gdskills`: 8470 pass, 1 fail in install.test.ts (EACCES read-only rules/core), not in changed files, not confirmed on base. CI is the check.
+- 2026-11-24T07:37:52.239Z - task-done: T5: Head moved procedure in review-orchestrator (both copies) + preflight test
+- 2026-11-24T07:38:05.065Z - task-attempt: T7: blocked (attempt 1) — stage 2 (rounds model, flow 519) and stage 3 not pushed to origin on 2026-11-24; extraction overlaps lines stage 3 rewrites (divergence-map.md §5)
+- 2026-11-24T07:38:05.306Z - task-attempt: T8: blocked (attempt 1) — keryx review advance comes with stage 3, not pushed on 2026-11-24
+- 2026-11-24T07:38:05.650Z - task-attempt: T10: blocked (attempt 1) — needs T7 and T8
+
+## 2026-11-24 Stages 2/3 check
+
+- `git fetch origin`: no remote branch for stage 2 or stage 3. Local `feat/desktop-review-v2-stage2` has 3 commits (incl. 3f8c6ee9c "group desk review attempts into Reviews and rounds"), unpushed; stage 3 branch has 0 commits. Per the operator instruction T7, T8, T10 stay blocked; flow stays in-progress. Resume: rebase onto the stage 3 branch once it is pushed and sits on stage 2.

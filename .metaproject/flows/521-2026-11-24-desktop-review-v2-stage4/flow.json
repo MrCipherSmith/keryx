@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T07:34:28.279Z",
+  "updatedAt": "2026-11-24T07:38:05.650Z",
   "source": {
     "type": "description",
     "ref": null
@@ -96,7 +96,7 @@
       "id": "T5",
       "title": "Head moved procedure in review-orchestrator (both copies) + preflight test",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -110,7 +110,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -142,8 +143,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:38:05.065Z",
+            "outcome": "blocked",
+            "detail": "stage 2 (rounds model, flow 519) and stage 3 not pushed to origin on 2026-11-24; extraction overlaps lines stage 3 rewrites (divergence-map.md §5)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -158,8 +165,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:38:05.306Z",
+            "outcome": "blocked",
+            "detail": "keryx review advance comes with stage 3, not pushed on 2026-11-24"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -192,8 +205,14 @@
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:38:05.650Z",
+            "outcome": "blocked",
+            "detail": "needs T7 and T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -283,6 +302,26 @@
       "at": "2026-11-24T07:34:28.279Z",
       "event": "task-done",
       "detail": "T6: Divergence map of session and Desktop publish paths with extraction plan"
+    },
+    {
+      "at": "2026-11-24T07:37:52.239Z",
+      "event": "task-done",
+      "detail": "T5: Head moved procedure in review-orchestrator (both copies) + preflight test"
+    },
+    {
+      "at": "2026-11-24T07:38:05.065Z",
+      "event": "task-attempt",
+      "detail": "T7: blocked (attempt 1) — stage 2 (rounds model, flow 519) and stage 3 not pushed to origin on 2026-11-24; extraction overlaps lines stage 3 rewrites (divergence-map.md §5)"
+    },
+    {
+      "at": "2026-11-24T07:38:05.306Z",
+      "event": "task-attempt",
+      "detail": "T8: blocked (attempt 1) — keryx review advance comes with stage 3, not pushed on 2026-11-24"
+    },
+    {
+      "at": "2026-11-24T07:38:05.650Z",
+      "event": "task-attempt",
+      "detail": "T10: blocked (attempt 1) — needs T7 and T8"
     }
   ],
   "acKinds": {
