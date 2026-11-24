@@ -1,0 +1,84 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "522",
+  "dispatch_id": "522-T7",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "T7 Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow",
+    "description": "Review round 1 major (review-logic F-001 = review-degradation F-001): on a PR that already has a Flow (prUrl match or a bound session's flow flag), Fix findings reuses Create Flow's pending-link path, but resolveFlowLinks drops the request (session has a flow flag / new session started via workOnFlow) and PrWorkRow hides offers while a Flow exists, so the fix Flow is never offered. Operator decision: 'Fix in existing Flow'. Implement: (1) the App handler resolves the PR's Flow with the same rule the work row uses (prFlows over flowCards and the PR's bound sessions). (2) With a Flow: open that PR's session via openPrSession(card, 'latest', subject, prompt, true) (its new-session branch already uses workOnFlow(flow.dir)), with a prompt that asks flow-orchestrator to fix the findings as a fix round of Keryx Flow #<id> (<dir>), keeping the round, range, counts, info-left-out line and the exact desk-run status command; register NO pending flow link. (3) Without a Flow: unchanged (createPrFlow with the new-fix-flow prompt and the Link offer). Put the prompt variant in reviews/model.ts (e.g. an optional flow argument to fixFindingsPrompt) so it stays pure and unit-tested; move prompt building to where the Flow is known if needed (App), keeping ReviewPanel's button contract simple. Tests (red first): model test for the Flow variant; App fixture case where the PR's bound session already carries a flow flag -> the composer gets the fix-round prompt naming Flow #N, no new session, no Link offer; keep the existing no-Flow case green. Also fix nothing else: minors/infos of the round are deferred.",
+    "intent": "fix"
+  },
+  "acceptance_criteria": [
+    "AC1: `fixFindingsTarget` returns a target only for a Review of the viewer's own open PR (author compared case-insensitively) that is not closed, archived, queued, running or awaiting an answer, has a finished reviewed attempt, and has at least one blocker, major or minor finding; a unit test covers each refusal (other author, closed or merged PR, no card, archived, running, only info findings, no reviewed attempt) and picks the newest unarchived reviewed attempt as the run. [verify: exec `cd apps/desktop && bun test src/reviews/model.test.ts`]",
+    "AC2: `fixFindingsPrompt` names the PR URL, the round, the reviewed range, the open counts per severity, says info findings are left out, asks for a Keryx fix flow with flow-orchestrator, and contains the exact `keryx review desk-run status --json --repo \u2026 --repository-id \u2026 --viewer \u2026 --number \u2026 --id <runId>` command; a unit test asserts each part. [verify: exec `cd apps/desktop && bun test src/reviews/model.test.ts`]",
+    "AC3: The Review panel shows a button with the visible text \"Fix findings\" only when the Review is eligible and the handler is given; pressing it calls the handler once with the PR card and the prompt; an ineligible Review (other author, only info findings, running) shows no such button. DOM test. [verify: exec `cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx`]",
+    "AC4: In the App, Fix findings from the Reviews tab on a PR with no Flow opens the PR's bound session (a new bound one when none exists) with the findings prompt in the composer, not sent, and the one flow package that then appears is offered on the PR's work row as \"Link Flow #N\" and linked only on Link \u2014 the same path as Create Flow. On a PR that already has a Flow (by prUrl or a bound session's flow flag), it opens that Flow's session (the bound one, else a new session working on that Flow) with a prompt that asks flow-orchestrator to fix the findings as a fix round of Flow #N, not sent, and registers no pending link. Test through the App fixture, including a PR whose bound session already has a flow flag. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews/ReviewsView.dom.test.tsx`]",
+    "AC5: Create Flow on the PR card keeps its prompt and behaviour (existing tests unchanged and green). \u00b7 sensitive: failure-scenario [verify: exec `cd apps/desktop && bun test src/review/prWork.test.ts src/review/PrWorkRow.dom.test.tsx src/review/usePendingFlowLinks.dom.test.tsx`]",
+    "AC6: Desktop typecheck passes for the changed files. [verify: exec `cd apps/desktop && bunx tsc --noEmit -p .`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/522-2026-11-24-desktop-review-v2-fix-findings/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/522-2026-11-24-desktop-review-v2-fix-findings/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/522-2026-11-24-desktop-review-v2-fix-findings/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/522-2026-11-24-desktop-review-v2-fix-findings/resolved/T7.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/reviews/model.ts",
+    "apps/desktop/src/reviews/model.test.ts",
+    "apps/desktop/src/reviews/ReviewPanel.tsx",
+    "apps/desktop/src/reviews/ReviewsView.tsx",
+    "apps/desktop/src/review/prWork.ts",
+    "apps/desktop/src/review/usePendingFlowLinks.ts",
+    "apps/desktop/src/review/PrWorkRow.tsx",
+    "apps/desktop/src/test/app-fix-findings.fixture.tsx",
+    "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+    ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1311/raw/review-logic-w1.txt",
+    ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1311/raw/review-degradation-w1.txt"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/522-2026-11-24-desktop-review-v2-fix-findings/resolved/T7.implement.json \u2014 read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with \u2026\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/reverent-lederberg-d8cadb. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/reverent-lederberg-d8cadb && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/reverent-lederberg-d8cadb`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "FIX_CONTEXT review_feedback: [{\"id\": \"review-logic/F-001\", \"suggested_fix\": \"operator chose: with a Flow, fix as a fix round of that Flow in its session; no pending link\"}, {\"id\": \"review-degradation/F-001\", \"suggested_fix\": \"same finding; add a fixture case for a PR that already has a Flow\"}]"
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/522-2026-11-24-desktop-review-v2-fix-findings/journal.md"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-24T16:40:00Z",
+    "created_by": "flow-orchestrator"
+  }
+}
