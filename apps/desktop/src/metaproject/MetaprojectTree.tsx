@@ -24,10 +24,13 @@ const nodeOf = (entry: MetaprojectTreeEntry): MetaprojectNode | undefined =>
   entry.type === "node" ? entry.node : entry.type === "folder" ? entry.module : undefined;
 
 /**
- * A parent shows at most one status row at a time (loading, error or more). They share one id, so a
- * Retry or Show more updates the focused row in place instead of replacing it.
+ * A parent's first read shows one status row (loading, then error, and loading again on Retry) and its
+ * next page another (Show more, loading, error). Each keeps one id through its states, so a Retry or
+ * Show more updates the focused row in place. The two differ, so a first read that answers with a next
+ * page replaces the focused Loading row instead of turning it into Show more.
  */
 const statusId = (parent: string) => `status:${parent}`;
+const moreId = (parent: string) => `more:${parent}`;
 
 /** The visible rows, depth first, and the parents shown as loading that nobody has asked for yet. */
 function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
@@ -51,8 +54,8 @@ function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
       rows.push({ type: "entry", id: rowId(entry), level, posinset: index + 1, setsize, parent, entry });
       if (isContainer(entry) && tree.expanded.has(entryKey(entry))) visit(entryKey(entry), level + 1);
     });
-    if (folder.more?.status === "failed") rows.push({ type: "error", id, level, parent, message: folder.more.error });
-    else if (folder.nextCursor) rows.push({ type: "more", id, level, parent, loading: folder.more?.status === "loading" });
+    if (folder.more?.status === "failed") rows.push({ type: "error", id: moreId(parent), level, parent, message: folder.more.error });
+    else if (folder.nextCursor) rows.push({ type: "more", id: moreId(parent), level, parent, loading: folder.more?.status === "loading" });
   };
   visit(TREE_ROOT, 1);
   return { rows, unread };
@@ -81,7 +84,9 @@ function revealSteps(scope: MetaprojectTreeScope, node: MetaprojectNode): Step[]
 /**
  * The explorer sidebar as a WAI-ARIA tree: graph folders and files, or wiki page-type groups and
  * pages. Data lives in `model` (the explorer's), so this component can come and go with the search.
- * Focus moves only with the keyboard or a click; data arriving never takes it.
+ * Focus moves with the keyboard or a click. Data arriving never takes focus from outside the tree;
+ * when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its
+ * place: the one after the row that preceded it, when that row is still shown.
  */
 export function MetaprojectTree({ scope, label, model, selection, selected, onSelect }: {
   scope: MetaprojectTreeScope;
@@ -98,8 +103,11 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
   const { rows, unread } = flatten(tree);
   const [focusId, setFocusId] = useState("");
   const list = useRef<HTMLUListElement>(null);
-  /** The element focused inside the tree and the index of its row, so a row that leaves can hand focus on. */
-  const focused = useRef<{ element: HTMLElement; index: number } | null>(null);
+  /**
+   * The element focused inside the tree, its row's index and the id of the row before it, so a row
+   * that leaves can hand focus to the row now at its place.
+   */
+  const focused = useRef<{ element: HTMLElement; index: number; before?: string } | null>(null);
   const scrollRequest = useRef("");
   const rowElements = () => [...list.current?.querySelectorAll<HTMLElement>("[data-row]") ?? []];
 
@@ -140,25 +148,29 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
       if (row) { row.scrollIntoView?.({ block: "nearest" }); scrollRequest.current = ""; }
     }
     // The focused row left (its folder's children or last page arrived, a new snapshot): focus the row
-    // now at its place. Focus that was outside the tree is never taken.
+    // now at its place, after the row that preceded it, so rows added or removed above in the same
+    // commit do not move it into another folder. Focus that was outside the tree is never taken.
     const lost = focused.current;
     const active = document.activeElement;
     if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {
-      elements[Math.min(lost.index, elements.length - 1)]?.focus();
+      const anchor = lost.before === undefined ? -1 : elements.findIndex(element => element.dataset.row === lost.before);
+      const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];
+      next?.focus();
     }
-    remember(document.activeElement);
+    remember(document.activeElement, elements);
   });
 
   /** Records where focus is when it is inside the tree, and forgets it otherwise. */
-  function remember(element: Element | null) {
+  function remember(element: Element | null, elements: HTMLElement[]) {
     const row = element instanceof HTMLElement && list.current?.contains(element) ? element.closest<HTMLElement>("[data-row]") : null;
-    focused.current = element instanceof HTMLElement && row ? { element, index: rowElements().indexOf(row) } : null;
+    const index = row ? elements.indexOf(row) : -1;
+    focused.current = element instanceof HTMLElement && index >= 0 ? { element, index, before: elements[index - 1]?.dataset.row } : null;
   }
   // Focus moving out of the tree is forgotten; a row removed while focused is not, so it can hand focus on.
   const onBlur = (event: FocusEvent<HTMLUListElement>) => {
     const element = event.target;
     queueMicrotask(() => {
-      if (element.isConnected && focused.current?.element === element) remember(document.activeElement);
+      if (element.isConnected && focused.current?.element === element) remember(document.activeElement, rowElements());
     });
   };
 
@@ -243,7 +255,12 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
           "aria-level": row.level,
           tabIndex: row === tabbable ? 0 : -1,
           style: { paddingInlineStart: `calc(var(--sp-3) + ${row.level - 1} * var(--sp-4))` },
-          onFocus: (event: FocusEvent<HTMLLIElement>) => { setFocusId(row.id); remember(event.target); },
+          onFocus: (event: FocusEvent<HTMLLIElement>) => {
+            setFocusId(row.id);
+            // The rendered rows are this render's `rows`, in order: no DOM query on every focus move.
+            const index = rows.findIndex(item => item.id === row.id);
+            focused.current = { element: event.target, index, before: rows[index - 1]?.id };
+          },
         };
         if (row.type === "loading") {
           return <li key={row.id} {...common} aria-disabled="true" className="metaproject-tree-status"><span role="status">Loading…</span></li>;

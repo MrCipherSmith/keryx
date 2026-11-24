@@ -2146,14 +2146,18 @@ test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the
   const createCytoscape = await headlessCytoscape();
   await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
   const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
+  // The banner is the one way out: no row offers a Retry that would re-send the retired snapshot.
+  const deadRetry = () => treeRows().some(row => row.textContent?.startsWith("Could not load."));
   await expandFolder("src");
   expect(staleBanner()).toBe(true);
+  expect(deadRetry()).toBe(false);
   expect(() => treeRow("Client")).toThrow();
   await act(async () => { button("Refresh catalog").click(); });
   expect(staleBanner()).toBe(false);
   await act(async () => { button("Wiki").click(); });
   await expandFolder("Other");
   expect(staleBanner()).toBe(true);
+  expect(deadRetry()).toBe(false);
   expect(() => treeRow("Guide")).toThrow();
 });
 

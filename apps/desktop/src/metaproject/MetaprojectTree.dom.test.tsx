@@ -59,8 +59,13 @@ function Harness(props: {
   selection?: string;
   selected?: MetaprojectNode;
   onSelect?: (node: MetaprojectNode) => void;
+  onStale?: () => void;
+  wait?: (ms: number) => Promise<void>;
 }) {
-  const model = useTree({ cwd: "/project", snapshot: props.snapshot ?? SNAPSHOT, request: props.request, onStale: () => {} });
+  const model = useTree({
+    cwd: "/project", snapshot: props.snapshot ?? SNAPSHOT, request: props.request, onStale: props.onStale ?? (() => {}),
+    ...(props.wait && { wait: props.wait }),
+  });
   return createElement(Tree, {
     scope: props.scope ?? "graph", label: "Project files", model,
     selection: props.selection ?? "", selected: props.selected, onSelect: props.onSelect ?? (() => {}),
@@ -413,6 +418,143 @@ test("a keyboard Show more keeps focus in the tree: on the row while it loads, t
   await act(async () => { tree.release("|next"); });
   expect(items().some(row => row.textContent === "Show more")).toBe(false);
   expect(focused()).toBe("client.ts");
+});
+
+test("a focused Loading row replaced by children and a Show more row hands focus to the first child", async () => {
+  const tree = reader({ "|": { entries: [folder("src", 3)], partial: false }, "src|": { entries: [leaf(client)], nextCursor: "next", partial: false } });
+  tree.hold.add("src|");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  await act(async () => { item("Loading…").focus(); });
+  await act(async () => { tree.release("src|"); });
+  expect(item("Show more")).not.toBeNull();
+  expect(focused()).toBe("client.ts");
+});
+
+test("two folders answering in one commit keep focus in the folder whose Loading row had it", async () => {
+  const guides = ["one", "two", "three"].map(name => leaf(node(name, `docs/${name}.md`)));
+  const tree = reader({ "|": ROOT_PAGE, "docs|": { entries: guides, partial: false }, "src|": SRC_PAGE });
+  tree.hold.add("docs|");
+  tree.hold.add("src|");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("docs").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  const loading = items().filter(row => row.textContent === "Loading…");
+  expect(loading).toHaveLength(2);
+  await act(async () => { loading[1]!.focus(); }); // [1] is src's: the second of the two Loading rows checked above.
+  await act(async () => { tree.release("docs|"); tree.release("src|"); });
+  expect(item("three.md")).not.toBeNull();
+  expect(focused()).toBe("client.ts");
+});
+
+test("focus that left the tree stays outside when the focused Show more row's page arrives", async () => {
+  const tree = reader({
+    "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },
+    "|next": { entries: [leaf(client), leaf(server)], partial: false },
+  });
+  tree.hold.add("|next");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  const outside = document.createElement("button");
+  document.body.append(outside);
+  try {
+    await act(async () => { item("Show more").focus(); });
+    await key(item("Show more"), "Enter");
+    expect(document.activeElement?.textContent).toBe("Loading…");
+    await act(async () => { outside.focus(); });
+    await act(async () => { tree.release("|next"); });
+    expect(item("server.ts")).not.toBeNull();
+    expect(items().some(row => row.textContent === "Show more")).toBe(false);
+    expect(document.activeElement === outside).toBe(true);
+  } finally { outside.remove(); }
+});
+
+test("focus that left the tree stays outside when the focused Loading row is replaced by children", async () => {
+  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
+  tree.hold.add("src|");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  const outside = document.createElement("button");
+  document.body.append(outside);
+  try {
+    await act(async () => { item("src").focus(); });
+    await key(item("src"), "ArrowRight");
+    await key(item("src"), "ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Loading…");
+    await act(async () => { outside.focus(); });
+    await act(async () => { tree.release("src|"); });
+    expect(item("client.ts")).not.toBeNull();
+    expect(document.activeElement === outside).toBe(true);
+  } finally { outside.remove(); }
+});
+
+test("a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row", async () => {
+  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
+  const tree = reader({
+    "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },
+    "|next": new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading."),
+  });
+  let stale = 0;
+  await act(async () => { root.render(createElement(Harness, { request: tree.request, onStale: () => { stale++; } })); });
+  await act(async () => { item("Show more").click(); });
+  expect(stale).toBe(1);
+  expect(items().some(row => row.textContent?.startsWith("Could not load."))).toBe(false);
+  expect(item("README.md")).not.toBeNull();
+});
+
+const PERMIT_REFUSAL = "unavailable: Too many Metaproject reads. Retry shortly.";
+
+/** A reader that refuses `src`'s first `refusals` reads with `failure`, then answers. */
+function refusing(refusals: number, failure = PERMIT_REFUSAL) {
+  const calls: MetaprojectTreeRequest[] = [];
+  const request = (_cwd: string, input: MetaprojectTreeRequest): Promise<MetaprojectTreeV2> => {
+    calls.push(input);
+    if (input.parent === "src" && calls.filter(call => call.parent === "src").length <= refusals) return Promise.reject(new Error(failure));
+    const answer = input.parent === "src" ? SRC_PAGE : ROOT_PAGE;
+    if (answer instanceof Error) return Promise.reject(answer);
+    return Promise.resolve({ schemaVersion: 2, snapshotId: input.expectedSnapshotId ?? SNAPSHOT, scope: "graph", parent: input.parent ?? null, ...answer });
+  };
+  return { request, calls };
+}
+
+test("a read refused for want of a read permit is retried after a short wait", async () => {
+  const tree = refusing(2);
+  const waits: number[] = [];
+  const wait = (ms: number) => { waits.push(ms); return Promise.resolve(); };
+  await act(async () => { root.render(createElement(Harness, { request: tree.request, wait })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  expect(item("client.ts")).not.toBeNull();
+  expect(tree.calls.filter(call => call.parent === "src")).toHaveLength(3);
+  expect(waits).toHaveLength(2);
+  expect(waits.every(ms => ms > 0)).toBe(true);
+});
+
+test("a permit refusal that outlasts the retries, or another unavailable answer, marks the folder failed", async () => {
+  const wait = () => Promise.resolve();
+  const exhausted = refusing(3);
+  await act(async () => { root.render(createElement(Harness, { request: exhausted.request, wait })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  expect(item("Could not load.").textContent).toContain("Too many Metaproject reads");
+  expect(exhausted.calls.filter(call => call.parent === "src")).toHaveLength(3);
+  await act(async () => { root.render(null); });
+  const other = refusing(1, "unavailable: The selected CLI did not complete the Metaproject read.");
+  await act(async () => { root.render(createElement(Harness, { request: other.request, wait })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  expect(item("Could not load.").textContent).toContain("did not complete");
+  expect(other.calls.filter(call => call.parent === "src")).toHaveLength(1);
+});
+
+test("an unexpected throw while handling a read's failure is reported, not dropped", async () => {
+  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
+  const tree = reader({ "|": ROOT_PAGE, "src|": new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.") });
+  const reported: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { reported.push(args); };
+  try {
+    const onStale = () => { throw new Error("banner failed"); };
+    await act(async () => { root.render(createElement(Harness, { request: tree.request, onStale })); });
+    await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+    await act(async () => {});
+  } finally { console.error = original; }
+  expect(reported.some(args => args.some(arg => arg instanceof Error && arg.message === "banner failed"))).toBe(true);
 });
 
 test("tree reads run at most three at a time, and queued reads of a retired snapshot never start", async () => {

@@ -209,11 +209,11 @@ describe("Metaproject tree responses", () => {
 
   test("an answer for another snapshot than the one pinned is refused as stale-snapshot", async () => {
     const other = "c".repeat(64);
-    const tree = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "src", expectedSnapshotId: digest },
+    const treeError = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "src", expectedSnapshotId: digest },
       async () => ({ ...graphRoot, snapshotId: other, parent: "src", entries: [{ type: "node", node: file }] })));
-    expect(tree instanceof MetaprojectRequestError && tree.code).toBe("stale-snapshot");
-    const search = await readError(requestMetaprojectV2("/checkout", { version: 2, action: "search", query: "x", cursor: "c", expectedSnapshotId: digest },
+    expect(treeError instanceof MetaprojectRequestError && treeError.code).toBe("stale-snapshot");
+    const searchError = await readError(requestMetaprojectV2("/checkout", { version: 2, action: "search", query: "x", cursor: "c", expectedSnapshotId: digest },
       async () => ({ schemaVersion: 2, snapshotId: other, hits: [], partial: false })));
-    expect(search instanceof MetaprojectRequestError && search.code).toBe("stale-snapshot");
+    expect(searchError instanceof MetaprojectRequestError && searchError.code).toBe("stale-snapshot");
   });
 });

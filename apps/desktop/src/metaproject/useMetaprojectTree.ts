@@ -11,8 +11,18 @@ import type { MetaprojectTreeRequest } from "../platform/metaproject";
 /** The key of a tree's root; graph folder paths and wiki group keys are never empty. */
 export const TREE_ROOT = "";
 
-/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */
+/**
+ * Tree reads one explorer keeps in flight at once. Desktop's eight read permits are shared by every
+ * project window, so this only bounds this tree's share; a read refused a permit is retried.
+ */
 export const MAX_TREE_READS = 3;
+
+/** Retries of a read refused a read permit, each after a short jittered wait. */
+export const PERMIT_RETRIES = 2;
+const PERMIT_WAIT_MS = 150;
+/** Desktop's answer when every read permit is taken (`metaproject.rs`); it says to retry shortly. */
+const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith("unavailable: Too many Metaproject reads");
+const sleep = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); });
 
 export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
 
@@ -70,11 +80,13 @@ const emptyScope = (snapshot: string): ScopeTree => ({ snapshot, expanded: new S
  * answers `stale-snapshot` (the transport's answer to a reply for another snapshot) or, from a
  * `request` that does not check, a page of another snapshot; that page is never shown.
  */
-export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
+export function useMetaprojectTree({ cwd, snapshot, request, onStale, wait = sleep }: {
   cwd: string;
   snapshot: string;
   request: RequestTree;
   onStale: () => void;
+  /** Waits before a permit retry; tests pass one that does not use the clock. */
+  wait?: (ms: number) => Promise<void>;
 }): MetaprojectTreeModel {
   const [, render] = useReducer((value: number) => value + 1, 0);
   const state = useRef<Record<MetaprojectTreeScope, ScopeTree>>({ graph: emptyScope(snapshot), wiki: emptyScope(snapshot) });
@@ -85,8 +97,8 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
     const keep = (scope: ScopeTree): ScopeTree => ({ ...emptyScope(snapshot), expanded: scope.expanded, handled: scope.handled });
     state.current = { graph: keep(state.current.graph), wiki: keep(state.current.wiki) };
   }
-  const latest = useRef({ cwd, request, onStale });
-  latest.current = { cwd, request, onStale };
+  const latest = useRef({ cwd, request, onStale, wait });
+  latest.current = { cwd, request, onStale, wait };
 
   const update = useCallback((scope: MetaprojectTreeScope, change: (tree: ScopeTree) => ScopeTree) => {
     const next = change(state.current[scope]);
@@ -123,8 +135,11 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
     const pool = slots.current;
     const start = () => {
       pool.active++;
-      // A read reports its own failure on its folder's row; this catch only keeps the slot count right.
-      void Promise.resolve().then(task).catch(() => undefined).finally(() => {
+      // read() handles every request failure itself; this only stops an unexpected throw in that
+      // handling from becoming an unhandled rejection, and reports it.
+      void Promise.resolve().then(task).catch(error => {
+        console.error("Metaproject tree read failed unexpectedly", error);
+      }).finally(() => {
         pool.active--;
         pool.queue.shift()?.();
       });
@@ -137,12 +152,23 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
     const issued = generation.current;
     const pinned = state.current[scope].snapshot;
     const current = () => issued === generation.current;
-    const { cwd: root, request: send } = latest.current;
+    const { cwd: root, request: send, wait: pause } = latest.current;
     const input: MetaprojectTreeRequest = {
       scope, expectedSnapshotId: pinned, ...(parent !== TREE_ROOT && { parent }), ...(cursor && { cursor }),
     };
+    // Every permit taken (other windows share them) is worth a short wait before the folder fails.
+    const attempt = async (retries: number): Promise<MetaprojectTreeV2> => {
+      try {
+        return await send(root, input);
+      } catch (cause) {
+        if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;
+        await pause(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);
+        if (!current()) throw cause;
+        return attempt(retries - 1);
+      }
+    };
     // A read queued under a snapshot that has since been retired never starts.
-    limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {
+    limit(() => current() && attempt(PERMIT_RETRIES).then(page => {
       if (!current()) return;
       if (page.snapshotId !== pinned) throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
       setFolder(scope, parent, folder => {
@@ -156,7 +182,12 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
       forgetVanished(scope, parent);
     }).catch(cause => {
       if (!current()) return;
-      if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") latest.current.onStale();
+      // Another snapshot answered: the explorer offers Refresh catalog, which re-reads the tree. The row
+      // stays loading; a Retry here would only send the retired snapshot again.
+      if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") {
+        latest.current.onStale();
+        return;
+      }
       // A folder that no longer exists is forgotten quietly; the next read of its parent drops its row.
       if (!cursor && parent !== TREE_ROOT && cause instanceof MetaprojectRequestError && cause.code === "not-found") {
         update(scope, tree => {
