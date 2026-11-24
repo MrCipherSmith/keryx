@@ -57,3 +57,17 @@ Answer (operator, AskUserQuestion in this session): add a freshness kind `unknow
 - `ReviewRuns.dom.test.tsx` moved to `src/reviews/ReviewPanel.dom.test.tsx`; only the 8 tab-click lines were dropped. The Review rules tests moved to `ReviewsView.dom.test.tsx`.
 - Concerns: tests were not written red-first (the worker reported 8 mutations, each caught); `ReviewBoard.dom.test.tsx` will conflict with PR #1300; `ReviewDetail` still accepts the unused `onOpenReviewSession`; the toolbar is not re-measured (T11); the app makes one extra `review reviews` read at start; the spec's publication/author/Flow/period filters are not implemented (the plan narrows them to state/freshness/source plus search).
 - Operator questions raised for the worker's behaviour choices; answers below.
+
+## 2026-11-24 · Operator answers on T7 choices
+
+The operator answered in this session (AskUserQuestion), and every answer matches what T7 built:
+- PR panel button for a PR without a Review keeps the existing launch labels.
+- A Review hidden by filters, search or Show closed: the filters are cleared before it opens.
+- Leaving the tab unmounts the panel and keeps the selection.
+- The source label is 'Scheduled'.
+
+Not asked, kept as implemented because each keeps the previous PR-panel behaviour: an answer intent opens the waiting question directly; a PR missing from the list gets one re-read, then a notice; the list refreshes when the open panel sees a run change.
+- 2026-11-24T08:21:04.204Z - task-done: T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator
+- 2026-11-24T08:21:04.442Z - task-added: T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab
+- 2026-11-24T08:21:04.796Z - task-attempt: T8: started (attempt 1) — 519-T8
+- 2026-11-24T08:21:05.118Z - task-attempt: T14: started (attempt 1) — 519-T14

@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T07:51:43.524Z",
+  "updatedAt": "2026-11-24T08:21:05.118Z",
   "source": {
     "type": "description",
     "ref": null
@@ -144,7 +144,7 @@
       "id": "T7",
       "title": "Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -160,7 +160,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -171,8 +172,14 @@
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:21:04.796Z",
+            "outcome": "started",
+            "detail": "519-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -254,6 +261,28 @@
       "attempts": {
         "count": 0,
         "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:21:05.118Z",
+            "outcome": "started",
+            "detail": "519-T14"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -368,6 +397,26 @@
       "at": "2026-11-24T07:51:43.524Z",
       "event": "task-attempt",
       "detail": "T7: started (attempt 1) — 519-T7"
+    },
+    {
+      "at": "2026-11-24T08:21:04.204Z",
+      "event": "task-done",
+      "detail": "T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator"
+    },
+    {
+      "at": "2026-11-24T08:21:04.442Z",
+      "event": "task-added",
+      "detail": "T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab"
+    },
+    {
+      "at": "2026-11-24T08:21:04.796Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 519-T8"
+    },
+    {
+      "at": "2026-11-24T08:21:05.118Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 519-T14"
     }
   ],
   "acKinds": {
