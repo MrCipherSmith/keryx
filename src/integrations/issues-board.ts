@@ -15,6 +15,7 @@ import {
   cursorScope,
   denied,
   invalidInput,
+  issuesDisabled,
   readCursor,
   scopedCursor,
   type IssueAccount,
@@ -157,6 +158,36 @@ function pageLink(link: string, base: URL, repository: boolean): string | null {
   return params.toString();
 }
 
+/** The most pages one "repository" request reads while its pages hold only pull requests. */
+const REPOSITORY_PAGES = 3;
+
+/** Points `url` at the page a validated continuation names, replacing any earlier page position. */
+function turnPage(url: URL, continuation: string): void {
+  for (const key of pageKeys) url.searchParams.delete(key);
+  for (const [key, value] of new URLSearchParams(continuation)) {
+    if (!pageKeys.includes(key)) throw new Error(invalidInput);
+    url.searchParams.set(key, value);
+  }
+}
+
+/** One REST page, pull requests dropped. GitHub's 410 on a repository names it: Issues are turned off there. */
+async function issuePage(
+  api: IssueAccount["api"],
+  url: URL,
+  repository: string | null,
+): Promise<{ issues: RestIssue[]; link: string }> {
+  let page: { data: RestIssue[]; link: string };
+  try {
+    page = await api.rest<RestIssue[]>(url);
+  } catch (error) {
+    if (repository && error instanceof Error && error.message === issuesDisabled)
+      throw new Error(`configuration: GitHub has Issues turned off for ${repository}. Choose another source, such as Assigned to me.`, { cause: error });
+    throw error;
+  }
+  if (!Array.isArray(page.data)) throw new Error("unavailable: Invalid GitHub issue page.");
+  return { issues: page.data.filter((x) => !x.pull_request), link: page.link };
+}
+
 /** `cwd` locates the project whose GitHub repository the "repository" source lists. */
 export async function listIssuePage(
   { viewer, api }: IssueAccount,
@@ -172,14 +203,16 @@ export async function listIssuePage(
     ? cursorScope(viewer, "issues", base.search, labels, repository.toLowerCase())
     : cursorScope(viewer, "issues", base.search, labels);
   const next = readCursor(scope, request.cursor);
-  if (next)
-    for (const [key, value] of new URLSearchParams(next)) {
-      if (!pageKeys.includes(key)) throw new Error(invalidInput);
-      base.searchParams.set(key, value);
-    }
-  const { data, link } = await api.rest<RestIssue[]>(base);
-  if (!Array.isArray(data)) throw new Error("unavailable: Invalid GitHub issue page.");
-  const issues = data.filter((x) => !x.pull_request);
+  if (next) turnPage(base, next);
+  let { issues, link } = await issuePage(api, base, repository);
+  // A repository's listing holds pull requests too, dropped after the fetch. A page made only of
+  // them would show an empty board, so look a few pages further within this one request.
+  for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++) {
+    const following = pageLink(link, base, true);
+    if (!following) break;
+    turnPage(base, following);
+    ({ issues, link } = await issuePage(api, base, repository));
+  }
   // REST may omit the embedded repository. Hydrate missing identities in one bounded batch.
   const missing = issues.filter((x) => !x.repository?.node_id);
   const repositories = new Map<string, Repository>();

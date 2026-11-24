@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IssueDetail, IssueProjectRef, IssueViewer } from "../../integrations/issues-contract";
@@ -55,6 +55,29 @@ describe("withIssueBinding: session subject", () => {
       const { persistHistory, createSession } = await import("../index");
       const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
       persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
+      setSessionFlags(root, sessionId, { subject: null }, dataDir);
+      await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+      expect(readSessionFlags(dir).subject).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a session bound before subjects existed gets its subject on the next open; an unlink still wins", async () => {
+    const { root, dataDir, project } = workspace();
+    try {
+      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
+      const dir = sessionDir(root, sessionId, dataDir);
+      const { persistHistory, createSession } = await import("../index");
+      const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
+      persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
+      // What an older keryx left: the binding and a pin, no subject and no unlink marker.
+      writeFileSync(path.join(dir, "flags.json"), JSON.stringify({ pinnedAt: "2026-11-01T00:00:00.000Z" }));
+      expect(readSessionFlags(dir).subject).toBeUndefined();
+      await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+      expect(readSessionFlags(dir)).toEqual({ hasIssue: true, pinnedAt: "2026-11-01T00:00:00.000Z",
+        subject: { kind: "issue", repo: "Org/repo", number: 9, url: "https://github.com/Org/repo/issues/9", repositoryId: "R_9" } });
+      // The person unlinks it; the next open leaves it unlinked.
       setSessionFlags(root, sessionId, { subject: null }, dataDir);
       await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
       expect(readSessionFlags(dir).subject).toBeUndefined();

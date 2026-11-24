@@ -258,6 +258,89 @@ test("AC13 the repository source needs a project with a GitHub remote", async ()
   expect(requested).toBe(0);
 });
 
+test("AC13 a remote named `..` is refused before any request", async () => {
+  let requested = 0;
+  const auth = await account(async () => {
+    requested++;
+    return json([]);
+  });
+  // The remote parser reads `org/..` from this URL; as a path it would turn /repos/org/../issues into /repos/issues.
+  await withProject("https://github.com/org/...git", async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
+  });
+  expect(requested).toBe(0);
+});
+
+test("AC13 a viewer page refuses a next link outside /issues; a repository page follows GitHub's links in any case", async () => {
+  const viewerAuth = await account(async () =>
+    json([row("a", "I_1")], { headers: { link: '<https://api.github.com/repositories/42/issues?page=2>; rel="next"' } }));
+  await expect(listIssuePage(viewerAuth, { source: "assigned" })).rejects.toThrow("configuration:");
+  const upperAuth = await account(async () =>
+    json([row("a", "I_1")], { headers: { link: '<https://api.github.com/ISSUES?page=2>; rel="next"' } }));
+  await expect(listIssuePage(upperAuth, { source: "assigned" })).rejects.toThrow("configuration:");
+
+  const paths: string[] = [];
+  const auth = await account(async (url) => {
+    paths.push(url.pathname);
+    const n = Number(url.searchParams.get("page") ?? 1);
+    return json([row("base", "I_" + n)], n < 2 ? { headers: { link: '<https://api.github.com/repos/Org/Base/issues?page=2>; rel="next"' } } : {});
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const first = await listIssuePage(auth, { source: "repository" }, cwd);
+    expect(first.nextCursor).not.toBeNull();
+    // The cursor binds the repository without case: the same repository spelled otherwise by its remote accepts it.
+    await withProject("https://github.com/Org/Base.git", async (other) => {
+      const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, other);
+      expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+    });
+  });
+  expect(paths).toHaveLength(2);
+});
+
+test("AC13 GitHub's 410 for a repository with Issues turned off is a configuration error naming the repository", async () => {
+  const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+  await withProject("https://github.com/fork-owner/base.git", async (cwd) => {
+    const failure = listIssuePage(auth, { source: "repository" }, cwd);
+    await expect(failure).rejects.toThrow("configuration:");
+    await expect(failure).rejects.toThrow("fork-owner/base");
+  });
+});
+
+test("AC13 a repository page made only of pull requests does not end the load; the search stops after three pages", async () => {
+  const pages: number[] = [];
+  const link = (n: number) => ({ headers: { link: `<https://api.github.com/repositories/42/issues?page=${n}>; rel="next"` } });
+  const pull = (n: number) => ({ ...row("base", "P_" + n), number: 100 + n, pull_request: {} });
+  const auth = await account(async (url) => {
+    const n = Number(url.searchParams.get("page") ?? 1);
+    pages.push(n);
+    return n === 1 ? json([pull(1), pull(2)], link(2)) : n === 2 ? json([row("base", "I_2")], link(3)) : json([row("base", "I_3")]);
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const first = await listIssuePage(auth, { source: "repository" }, cwd);
+    expect(first.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+    expect(pages).toEqual([1, 2]);
+    // The cursor continues after the page that was used, not after the first one.
+    const next = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
+    expect(next.items.map((i) => i.ref.nodeId)).toEqual(["I_3"]);
+    expect(pages).toEqual([1, 2, 3]);
+  });
+
+  const endless: number[] = [];
+  const onlyPulls = await account(async (url) => {
+    const n = Number(url.searchParams.get("page") ?? 1);
+    endless.push(n);
+    return json([pull(n)], link(n + 1));
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const page = await listIssuePage(onlyPulls, { source: "repository" }, cwd);
+    expect(page.items).toEqual([]);
+    expect(endless).toEqual([1, 2, 3]);
+    const resumed = await listIssuePage(onlyPulls, { source: "repository", cursor: page.nextCursor }, cwd);
+    expect(resumed.items).toEqual([]);
+    expect(endless).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+});
+
 test("AC3 source links reopen a private session or legacy Flow only after the selected account can read the ticket", async () => {
   const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

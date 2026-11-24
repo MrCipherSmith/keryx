@@ -4,7 +4,7 @@ import path from "node:path";
 import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { withFileLock } from "../../lib/fs";
 import { createSession, findSession, sessionDir } from "../index";
-import { parseSessionSubject, readSessionFlags, updateSessionFlagsAt } from "../organize";
+import { backfillSessionSubject, parseSessionSubject, readSessionFlags } from "../organize";
 import { issueDigest, issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "../../integrations/issue-context/service";
 
 export interface BoundIssue {
@@ -43,14 +43,17 @@ export function issueContextForSession(dir: string, dataDir?: string): BoundIssu
 /**
  * Records the issue as the session's public subject in `flags.json`, so a
  * client can tell which issue the session works on (the private record above
- * stays the authority). Written once, when the session is bound: a subject the
- * person later unlinks is not written back. An issue whose URL is not a
- * github.com issue page (GitHub Enterprise) has no subject keryx can store.
+ * stays the authority). Written when the session is bound, and on a later open
+ * when the session has none (bound by a keryx that wrote no subject); a subject
+ * the person unlinked is never written back (the store keeps an unlink marker).
+ * An issue whose URL is not a github.com issue page (GitHub Enterprise) has no
+ * subject keryx can store. The subject names no GitHub account: a client
+ * counting sessions by subject counts those bound under any account.
  */
 function bindIssueSubject(dir: string, ref: IssueDetail["ref"]): void {
   const subject = parseSessionSubject({ kind: "issue", repo: `${ref.owner}/${ref.repo}`, number: ref.number, url: ref.url,
     ...(ref.repositoryId ? { repositoryId: ref.repositoryId } : {}) });
-  if (subject !== undefined) updateSessionFlagsAt(dir, { subject });
+  if (subject !== undefined) backfillSessionSubject(dir, subject);
 }
 
 /** Only called after the remote issue and viewer were verified. The intent reserves the UUID before creating the session. */
@@ -88,10 +91,12 @@ export async function withIssueBinding<T>(
           ...(dataDir !== undefined ? { dataDir } : {}) });
       }
       writeOwnerOnlyFileAtomic(path.join(dir, "issue-link.json"), JSON.stringify({ key: path.basename(file, ".json") }));
-      bindIssueSubject(dir, issue.ref);
       launch.stage = "session_bound";
     }
     if (!existsSync(dir)) throw new Error("The linked session is missing. Restore it in Sessions and retry.");
+    // On first bind, and for a session an older keryx bound without a subject. The flags lock is
+    // taken inside the binding lock, never the reverse, so the two cannot deadlock.
+    bindIssueSubject(dir, issue.ref);
     if (launch.flow) record.flowSourceUrl ??= launch.issue.url;
     launch.issue = issue.ref;
     record.body = issue.body;

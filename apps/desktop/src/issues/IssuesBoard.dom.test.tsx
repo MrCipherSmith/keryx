@@ -431,3 +431,73 @@ test("the Issue work row's two columns beat the PR row's three whatever order th
   expect(css).toMatch(/(^|\n)\.pr-work-row\.issue-work-row \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   expect(css).not.toMatch(/(^|\n)\.issue-work-row \{/);
 });
+
+const hasButton = (label: string) => [...host.querySelectorAll("button")].some(b => b.textContent?.trim() === label);
+
+test("AC13 an older keryx that refuses the default repository source offers Assigned to me and an update hint", async () => {
+  const sources: string[] = [];
+  await render(async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    const { source } = args as { source: string };
+    sources.push(source);
+    if (source === "repository") throw new Error("configuration: Invalid Issues request.");
+    return page([issue]);
+  });
+  const alert = host.querySelector('[role="alert"]')!;
+  expect(alert.textContent).toContain("update keryx or choose the bundled CLI in Desktop Settings");
+  // Retry would send the same refused request again.
+  expect(hasButton("Retry")).toBe(false);
+  await click(button("Show issues assigned to me"));
+  expect(sources).toEqual(["repository", "assigned"]);
+  expect(localStorage.getItem(account + ".source")).toBe("assigned");
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
+  expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
+});
+
+test("AC13 a project with no GitHub.com remote, or a repository with Issues turned off, offers Assigned to me instead of Retry", async () => {
+  for (const reason of [
+    "configuration: This project has no GitHub.com fetch remote.",
+    "configuration: GitHub has Issues turned off for fork-owner/sample. Choose another source, such as Assigned to me.",
+  ]) {
+    await act(() => root.render(null)); localStorage.clear();
+    await render(async (_login, action, args) => {
+      if (action !== "list") throw new Error("Unexpected " + action);
+      if ((args as { source: string }).source === "repository") throw new Error(reason);
+      return page([issue]);
+    });
+    const alert = host.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toContain(reason);
+    expect(alert.textContent).toContain("This project's repository issues are not available here.");
+    expect(alert.textContent).not.toContain("bundled CLI");
+    expect(hasButton("Retry")).toBe(false);
+    await click(button("Show issues assigned to me"));
+    expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
+  }
+});
+
+test("AC13 a repository source the person chose keeps Retry on a configuration error", async () => {
+  localStorage.setItem(account + ".source", "repository");
+  await render(async () => { throw new Error("configuration: This project has no GitHub.com fetch remote."); });
+  expect(hasButton("Retry")).toBe(true);
+  expect(hasButton("Show issues assigned to me")).toBe(false);
+});
+
+test("AC12 the work rows read the bound sessions from one index, not once per row", async () => {
+  const reads = new Map<string, number>();
+  const sessions = Array.from({ length: 5 }, (_, n) => {
+    const id = String(n + 1);
+    const meta = { keryx: { subject: { kind: "issue", repo: "org/sample", number: 5, url: "https://github.com/org/sample/issues/5" } } };
+    return Object.defineProperty({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id }, "_meta", {
+      get: () => { reads.set(id, (reads.get(id) ?? 0) + 1); return meta; },
+    }) as SessionInfo;
+  });
+  const rows = Array.from({ length: 12 }, (_, n) => other(n + 5));
+  await render(async (_login, action) => {
+    if (action === "list") return page(rows);
+    throw new Error("Unexpected " + action);
+  }, viewer.login, () => {}, sessions);
+  expect(button("5 sessions for org/sample#5")).not.toBeUndefined();
+  // Read for the index, a few times at most across renders; never once per row (12 rows).
+  expect(reads.size).toBe(5);
+  for (const count of reads.values()) expect(rows.length).toBeGreaterThan(count);
+});

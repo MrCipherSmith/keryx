@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
-import type { SessionInfo } from "../acp/types";
+import { boundSessionIndex, type SessionInfo } from "../acp/types";
 import { Icon } from "../components/Icon";
 import { errMessage, relativeTime } from "../lib/format";
 import { requestIssues } from "../platform/issues";
 import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
 import { IssueFilters } from "./IssueFilters";
 import { IssueWorkRow } from "./IssueWorkRow";
-import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, readPreferences, SOURCES, STAGES, visibleRows,
+import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, issueSubject, readPreferences, SOURCES, STAGES, visibleRows,
   type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
 import { isAccessError, useIssueCollection } from "./useIssueCollection";
 import "./IssuesBoard.css";
@@ -59,10 +59,11 @@ function AccountBoard(props: Props) {
 function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: IssueViewer; verifyAgain: () => void}) {
   const account = "keryx.issues." + issueViewerKey(viewer);
   const [denied, setDenied] = useState("");
-  const [source, setSource] = useState<Source>(() => {
+  const [choice, setChoice] = useState<{ source: Source; chosen: boolean }>(() => {
     const value = stored(account + ".source");
-    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
+    return value && Object.hasOwn(SOURCES, value) ? { source: value as Source, chosen: true } : { source: DEFAULT_SOURCE, chosen: false };
   });
+  const { source } = choice;
   const [target, setTarget] = useState<ProjectSource | null>(() => {
     try {
       const value = JSON.parse(stored(account + ".project") ?? "null");
@@ -71,7 +72,10 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
   });
   const [owner, setOwner] = useState(target?.owner ?? "");
   const [number, setNumber] = useState(target?.number.toString() ?? "");
-  const change = (next: Source) => { setDenied(""); setSource(next); save(account + ".source", next); };
+  const change = (next: Source) => { setDenied(""); setChoice({ source: next, chosen: true }); save(account + ".source", next); };
+  // The default source can fail where no choice of the person's is at fault: no GitHub.com remote,
+  // Issues turned off (a fork), or a keryx too old to know it. Offer the source that works anywhere.
+  const fallback = source === "repository" && !choice.chosen ? () => change("assigned") : undefined;
   const sourceControls = <div className="issue-sources">
     <label>Source <select aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
       {Object.entries(SOURCES).map(([id, name]) => <option value={id} key={id}>{name}</option>)}
@@ -109,16 +113,18 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
       <button className="btn btn-sm" onClick={props.onSettings}>GitHub accounts</button>
     </div></section>;
   return <Collection key={key} {...props} source={source} target={target} prefsKey={key} viewer={viewer}
-    sourceControls={sourceControls} clear={clear} remember={remember} />;
+    sourceControls={sourceControls} clear={clear} remember={remember} fallback={fallback} />;
 }
 
 interface CollectionProps extends Props {
   prefsKey: string; source: Source; target: ProjectSource | null; sourceControls: React.ReactNode;
   viewer: IssueViewer; clear: (reason: string) => void; remember: (project: ProjectBoard) => void;
+  /** Switches from the default repository source to "Assigned to me"; absent once the person chose a source. */
+  fallback?: (() => void) | undefined;
 }
 
 function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues,
-  sessions = NO_SESSIONS }: CollectionProps) {
+  sessions = NO_SESSIONS, fallback }: CollectionProps) {
   const [prefs, setPrefs] = useState(() => readPreferences(prefsKey));
   const { filters, list } = prefs;
   const [filterDialog, setFilterDialog] = useState(false);
@@ -136,6 +142,9 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
   const activeWork = useRef(false);
   const { snapshot, busy, error, load, invalidate, setSnapshot } = useIssueCollection(cwd, login, source, target, filters, viewer, clear, request);
   const rows = useMemo(() => visibleRows(snapshot?.rows ?? [], filters), [snapshot, filters]);
+  const boundTo = useMemo(() => boundSessionIndex(sessions), [sessions]);
+  // Matched like isAccessError: the CLI's reason may arrive behind a prefix.
+  const unavailable = fallback && /(?:^|\b)configuration:/i.test(error) ? fallback : undefined;
   const selectedKey = selection && issueKey(selection.issue.ref);
   const selectedIndex = rows.findIndex(row => issueKey(row.issue.ref) === selectedKey);
   // Refresh starts again at page one. Keep a selected later-page issue open and
@@ -224,7 +233,7 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
     const pending = working !== null;
     const more = issue.work?.canResumePreparation || project;
     return <>
-      <IssueWorkRow issue={issue} sessions={sessions} pending={pending} onAction={action => void act(action, issue.ref)} />
+      <IssueWorkRow issue={issue} bound={boundTo(issueSubject(issue)).length} pending={pending} onAction={action => void act(action, issue.ref)} />
       {more && <div className="card-actions issue-actions">
         {issue.work?.canResumePreparation && <button className="btn btn-sm"
           aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
@@ -253,9 +262,14 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
         {project && <span>{project.title}</span>}{snapshot && <span>Read {snapshot.readAt.toLocaleTimeString()}</span>}
         {activeFilters.map(([key, value]) => <button key={key} className="btn btn-sm" aria-label={"Remove " + key + " filter"} onClick={() => setFilters({ ...filters, [key]: defaultFilters[key as keyof Filters] })}>{key} · {value} ×</button>)}
       </div>}
-      {error && <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
+      {error && (unavailable ? <div className="issues-notice" role="alert">
+        <p>{error}</p>
+        <p>This project's repository issues are not available here.
+          {/Invalid Issues request/i.test(error) && " If this keryx is older than Desktop, update keryx or choose the bundled CLI in Desktop Settings."}</p>
+        <button className="btn btn-sm" onClick={unavailable}>Show issues assigned to me</button>
+      </div> : <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
         <button className="btn btn-sm" onClick={() => void load()}>Retry</button>
-      </div>}
+      </div>)}
       {notice && <p className="issues-notice" role="status">{notice}</p>}
       {busy && <p className="issues-notice" role="status">Loading issues…</p>}
       {project && (!project.canWrite || !project.fieldId) && <p className="issues-notice">{project.fieldId ? "Read-only access to this Project." : "Project Status field unavailable."}</p>}

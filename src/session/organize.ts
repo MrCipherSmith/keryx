@@ -10,6 +10,7 @@ import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from
 import { homedir } from "node:os";
 import path from "node:path";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { withFileLock } from "../lib/file-lock";
 import { sessionLeaseState } from "./lease";
 import { sessionDir } from "./paths";
 import { findSession, shortSessionId } from "./store";
@@ -84,29 +85,80 @@ export function parseSessionSubject(value: unknown): SessionSubject | undefined 
   return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };
 }
 
-/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
-export function readSessionFlags(dir: string): SessionFlags {
+/**
+ * flags.json as stored: the public flags, plus whether the person unlinked the
+ * subject (`subjectUnlinked`), which only the store reads. The marker lets a
+ * binder backfill a missing subject without writing back one the person removed.
+ */
+interface StoredFlags {
+  flags: SessionFlags;
+  subjectUnlinked: boolean;
+}
+
+function readStoredFlags(dir: string): StoredFlags {
   const origin: SessionFlags = existsSync(path.join(dir, "issue-link.json")) ? { hasIssue: true } : {};
   const read = readConfigFile(path.join(dir, FLAGS_FILE));
-  if (!read.ok) return origin;
+  if (!read.ok) return { flags: origin, subjectUnlinked: false };
   try {
     const raw = JSON.parse(read.text) as Record<string, unknown>;
     const subject = parseSessionSubject(raw["subject"]);
-    return {
+    const flags: SessionFlags = {
       ...origin,
       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
       ...(subject !== undefined ? { subject } : {}),
     };
+    return { flags, subjectUnlinked: subject === undefined && raw["subjectUnlinked"] === true };
   } catch {
-    return origin;
+    return { flags: origin, subjectUnlinked: false };
   }
 }
 
-function writeFlags(dir: string, flags: SessionFlags): void {
-  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject };
+/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
+export function readSessionFlags(dir: string): SessionFlags {
+  return readStoredFlags(dir).flags;
+}
+
+function writeFlags(dir: string, { flags, subjectUnlinked }: StoredFlags): void {
+  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject,
+    ...(subjectUnlinked && flags.subject === undefined ? { subjectUnlinked: true } : {}) };
   writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
+}
+
+/** How long a flags writer waits for another, and when a lock is taken as abandoned (the critical section is one small file). */
+const FLAGS_LOCK_TIMEOUT_MS = 3_000;
+const FLAGS_LOCK_STALE_MS = 2_000;
+
+/**
+ * Runs a read-modify-write of flags.json holding `<dir>/flags.json.lock`, so
+ * that writers in other keryx processes (one ACP server per Desktop window, the
+ * issue-workspace child) cannot lose each other's change. Synchronous: callers
+ * are synchronous, and the section is one read and one atomic write.
+ */
+function withFlagsLock<T>(dir: string, apply: () => T): T {
+  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {
+    timeoutMs: FLAGS_LOCK_TIMEOUT_MS,
+    staleMs: FLAGS_LOCK_STALE_MS,
+  });
+  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
+  return held.value;
+}
+
+/**
+ * Writes `subject` as the session's subject when it has none and the person
+ * has not unlinked one. Returns whether it wrote. For a binder that learns the
+ * subject after the session was bound (a binding made before subjects existed).
+ */
+export function backfillSessionSubject(dir: string, subject: SessionSubject): boolean {
+  const parsed = parseSessionSubject(subject);
+  if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);
+  return withFlagsLock(dir, () => {
+    const current = readStoredFlags(dir);
+    if (current.flags.subject !== undefined || current.subjectUnlinked) return false;
+    writeFlags(dir, { flags: { ...current.flags, subject: parsed }, subjectUnlinked: false });
+    return true;
+  });
 }
 
 /**
@@ -115,7 +167,11 @@ function writeFlags(dir: string, flags: SessionFlags): void {
  * that has just created the session and cannot look it up yet.
  */
 export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
-  const current = readSessionFlags(dir);
+  return withFlagsLock(dir, () => applyFlagsChange(dir, change, now));
+}
+
+function applyFlagsChange(dir: string, change: SessionFlagsChange, now: () => Date): SessionFlags {
+  const { flags: current, subjectUnlinked } = readStoredFlags(dir);
   const stamp = now().toISOString();
   const next: SessionFlags = { ...current };
   if (change.archived === true) next.archivedAt ??= stamp;
@@ -133,7 +189,8 @@ export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, no
     next.subject = subject;
   }
   if (change.subject === null) delete next.subject;
-  writeFlags(dir, next);
+  const unlinked = change.subject === null ? true : change.subject !== undefined ? false : subjectUnlinked;
+  writeFlags(dir, { flags: next, subjectUnlinked: unlinked });
   return next;
 }
 

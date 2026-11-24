@@ -1,17 +1,17 @@
 import type { IssueSummary } from "../../../../src/integrations/issues-contract";
-import type { SessionInfo } from "../acp/types";
 import type { WorkAction } from "./IssueWork";
-import { issueName, issueSessions, STAGES } from "./model";
+import { issueName, STAGES } from "./model";
 
 /**
  * The Keryx work row of an Issue card or list row: a Flow slot and a session slot, in the look and fixed
  * height of the PR work row. A slot holds a link to the issue's work, or its labelled action when there is none.
  */
-export function IssueWorkRow({ issue, sessions, pending, onAction }: {
-  issue: IssueSummary; sessions: readonly SessionInfo[]; pending: boolean; onAction: (action: WorkAction) => void;
+export function IssueWorkRow({ issue, bound, pending, onAction }: {
+  issue: IssueSummary; pending: boolean; onAction: (action: WorkAction) => void;
+  /** Non-archived sessions bound to the issue through their `subject`; the board indexes them once for all rows. */
+  bound: number;
 }) {
   const stage = issue.work?.stage ?? "none";
-  const bound = issueSessions(sessions, issue).length;
   const flowText = stage === "none" ? "Create Flow" : `Flow · ${STAGES[stage]}`;
   const sessionText = bound > 1 ? `${bound} sessions` : bound ? "Session"
     : stage === "needs_answer" ? "Open question" : "Open in session";

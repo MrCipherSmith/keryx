@@ -91,6 +91,9 @@ describe("shell profile: organise sessions", () => {
 
         // Refused at the wire (wrong type) and at the store (URL that does not match).
         expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: "org/repo#12" })).error?.code).toBe(-32602);
+        // An array is an object to `typeof`; the wire refuses it as a bad parameter, before the store sees it.
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: [] })).error?.code).toBe(-32602);
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: [subject] })).error?.code).toBe(-32602);
         const mismatch = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: { ...subject, url: "https://github.com/org/repo/issues/12" } });
         expect(mismatch.error).toBeDefined();
         expect(mismatch.result).toBeUndefined();

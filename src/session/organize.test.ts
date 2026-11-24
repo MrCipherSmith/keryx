@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { createSession, persistHistory, sessionDir } from ".";
 import { sessionLeasePath } from "./lease";
-import { readSessionFlags, setSessionFlags, trashDirectory, trashSession } from "./organize";
+import { backfillSessionSubject, readSessionFlags, setSessionFlags, trashDirectory, trashSession } from "./organize";
 
 function project(): { cwd: string; dataDir: string; home: string } {
   const root = mkdtempSync(path.join(tmpdir(), "keryx-organize-"));
@@ -86,6 +86,10 @@ describe("session flags", () => {
       { ...good, repo: "org" },
       { ...good, repo: "../x/y", url: "https://github.com/../x/y/pull/1" },
       { ...good, repo: "org/re po" },
+      // Consistent repo and url, so only REPO_REF can refuse them: `..` is not a name, a space is not in the charset.
+      { ...good, repo: "org/..", url: "https://github.com/org/../pull/1" },
+      { ...good, repo: "org/.", url: "https://github.com/org/./pull/1" },
+      { ...good, repo: "org/re po", url: "https://github.com/org/re po/pull/1" },
       { ...good, repositoryId: 5 },
       { ...good, repositoryId: "" },
     ];
@@ -94,6 +98,94 @@ describe("session flags", () => {
     }
     expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(good as never);
   });
+
+  test("a subject's repo and url agree without case, and fields the store does not know are dropped", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const mixed = { kind: "pr" as const, repo: "org/repo", number: 1, url: "https://github.com/Org/Repo/pull/1" };
+    expect(setSessionFlags(cwd, id, { subject: mixed }, dataDir).subject).toEqual(mixed);
+    const extra = { ...mixed, title: "client text", flow: "x" };
+    const kept = setSessionFlags(cwd, id, { subject: extra as never }, dataDir).subject;
+    expect(kept).toEqual(mixed);
+    const raw = JSON.parse(readFileSync(path.join(sessionDir(cwd, id, dataDir), "flags.json"), "utf8"));
+    expect(Object.keys(raw.subject).sort()).toEqual(["kind", "number", "repo", "url"]);
+  });
+
+  test("an unlinked subject is not backfilled; a session that never had one is", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const dir = sessionDir(cwd, id, dataDir);
+    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
+    expect(backfillSessionSubject(dir, issue)).toBe(true);
+    expect(readSessionFlags(dir).subject).toEqual(issue);
+    // Present already: left as it is.
+    expect(backfillSessionSubject(dir, { ...issue, number: 8, url: "https://github.com/org/repo/issues/8" })).toBe(false);
+    expect(readSessionFlags(dir).subject).toEqual(issue);
+    // Unlinked by the person: the marker survives other flag changes and blocks the backfill.
+    setSessionFlags(cwd, id, { subject: null }, dataDir);
+    setSessionFlags(cwd, id, { pinned: true }, dataDir);
+    expect(backfillSessionSubject(dir, issue)).toBe(false);
+    expect(readSessionFlags(dir).subject).toBeUndefined();
+    // The marker stays private to the store.
+    expect(readSessionFlags(dir)).toEqual({ pinnedAt: expect.any(String) });
+    // Linking again clears the marker.
+    setSessionFlags(cwd, id, { subject: issue }, dataDir);
+    setSessionFlags(cwd, id, { subject: null }, dataDir);
+    setSessionFlags(cwd, id, { subject: issue }, dataDir);
+    expect(JSON.parse(readFileSync(path.join(dir, "flags.json"), "utf8")).subjectUnlinked).toBeUndefined();
+  });
+
+  test("a flags change waits for another writer's lock and takes over an abandoned one", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const dir = sessionDir(cwd, id, dataDir);
+    const lock = path.join(dir, "flags.json.lock");
+    // Just taken by another writer: this change waits for it (here until the lock goes stale) before it lands.
+    writeFileSync(lock, "another-writer");
+    const started = Date.now();
+    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir).pinnedAt).toBeDefined();
+    expect(Date.now() - started).toBeGreaterThanOrEqual(1500);
+    expect(existsSync(lock)).toBe(false);
+    // Abandoned long ago: broken at once, and the change lands.
+    writeFileSync(lock, "crashed-writer");
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(lock, old, old);
+    const again = Date.now();
+    expect(setSessionFlags(cwd, id, { flow: "001-x" }, dataDir)).toMatchObject({ flow: "001-x", pinnedAt: expect.any(String) });
+    expect(Date.now() - again).toBeLessThan(1500);
+    expect(existsSync(lock)).toBe(false);
+  });
+
+  test("two processes changing different flags of one session lose neither change", async () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const dir = sessionDir(cwd, id, dataDir);
+    const organize = path.join(import.meta.dir, "organize.ts");
+    const startAt = Date.now() + 1500;
+    // Each writer owns one field and checks, after every write, that the other writer did not roll it back.
+    const writer = (field: "pinned" | "flow") => `
+      const { updateSessionFlagsAt, readSessionFlags } = await import(${JSON.stringify(organize)});
+      while (Date.now() < ${startAt}) {}
+      let lost = 0;
+      for (let i = 0; i < 150; i++) {
+        ${field === "pinned"
+          ? `const want = i % 2 === 0; updateSessionFlagsAt(${JSON.stringify(dir)}, { pinned: want });
+             if ((readSessionFlags(${JSON.stringify(dir)}).pinnedAt !== undefined) !== want) lost++;`
+          : `const want = "flow-" + i; updateSessionFlagsAt(${JSON.stringify(dir)}, { flow: want });
+             if (readSessionFlags(${JSON.stringify(dir)}).flow !== want) lost++;`}
+      }
+      process.stdout.write(String(lost));`;
+    const run = (field: "pinned" | "flow") =>
+      Bun.spawn([process.execPath, "-e", writer(field)], { stdout: "pipe", stderr: "inherit" });
+    const children = [run("pinned"), run("flow")];
+    const lost = await Promise.all(children.map(async (child) => {
+      const out = await new Response(child.stdout).text();
+      expect(await child.exited).toBe(0);
+      return Number(out);
+    }));
+    expect(lost).toEqual([0, 0]);
+    expect(readSessionFlags(dir)).toEqual({ flow: "flow-149" });
+  }, 30_000);
 
   test("an invalid subject in flags.json reads as absent and leaves the other flags", () => {
     const { cwd, dataDir } = project();
