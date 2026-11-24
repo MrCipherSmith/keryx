@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T11:15:37.890Z",
+  "updatedAt": "2026-11-24T13:00:43.745Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:8c25ff6fec7fbd17e03c7fed86a5ca4beadcb52a1b9420728b162e758f33b424",
+  "acChecksum": "sha256:bdd2e053f2d34f9f6a6684b9b9b61161b56966424867a2ef9f8441ed7580a8ff",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -370,6 +370,22 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "commit 0e0520295; file-lock.reclaim.test.ts red before (1 fail) and green after (4/4); all 13 withFileLock caller test files pass; CI on 0e0520295 pending"
+    },
+    {
+      "id": "T19",
+      "title": "Rebase onto stage 2 b38e33ce8 (main 666d71468) with the lock fix ported onto main's file-lock.ts; AC8 base and lint paths re-pointed",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "rebased 24 commits, 3 conflicts (ReviewWorkspace, desk-run-store.test, file-lock); backend 5547/0, Desktop 252/0, parity 6/0, lock tests green, tsc and eslint clean"
     }
   ],
   "history": [
@@ -625,6 +641,26 @@
       "at": "2026-11-24T11:15:37.890Z",
       "event": "task-done",
       "detail": "T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test"
+    },
+    {
+      "at": "2026-11-24T12:47:32.402Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" (Stage 2 was rebased onto main (now b38e33ce8bf454e302977c1e085382fe43458fa5, PR #1304) and stage 3 rebased onto it; the unchanged-files base moves to the new stage 2 tip)"
+    },
+    {
+      "at": "2026-11-24T12:48:36.907Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. Lint covers src/review and the file lock; eslint.config.mjs ignores apps/desktop/**, so Desktop code is checked by its typecheck and suites only. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review src/lib/file-lock.ts src/lib/file-lock.reclaim.test.ts && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" (The lint step named apps/desktop/src/review, which eslint.config.mjs ignores (apps/desktop/**), so ESLint exited 2 on every base; lint now names the backend paths this flow changed)"
+    },
+    {
+      "at": "2026-11-24T13:00:43.542Z",
+      "event": "task-added",
+      "detail": "T19: Rebase onto stage 2 b38e33ce8 (main 666d71468) with the lock fix ported onto main's file-lock.ts; AC8 base and lint paths re-pointed"
+    },
+    {
+      "at": "2026-11-24T13:00:43.745Z",
+      "event": "task-done",
+      "detail": "T19: Rebase onto stage 2 b38e33ce8 (main 666d71468) with the lock fix ported onto main's file-lock.ts; AC8 base and lint paths re-pointed"
     }
   ],
   "acKinds": {
@@ -658,7 +694,7 @@
     },
     "AC8": {
       "kind": "invariant",
-      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
+      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review src/lib/file-lock.ts src/lib/file-lock.reclaim.test.ts && git diff --quiet b38e33ce8bf454e302977c1e085382fe43458fa5 -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
     },
     "AC9": {
       "kind": "judged"
