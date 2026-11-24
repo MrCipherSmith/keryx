@@ -1,0 +1,1584 @@
+{
+  "schemaVersion": 1,
+  "tracked": true,
+  "counts": {
+    "inScope": 188,
+    "covered": 89,
+    "omitted": 99,
+    "uncovered": 0
+  },
+  "omissionReasons": {
+    "test-consumer: exercises {*} of apps/desktop/src/App.tsx (hop 1, from apps/desktop/src/App.tsx): run it, it is not read": 1,
+    "test-consumer: exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read": 2,
+    "test-consumer: exercises {*} of apps/desktop/src/session/SessionView.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read": 1,
+    "test-consumer: exercises {FLOW_LINK_WINDOW_MS, PendingFlowLink, SubjectSessionDeps, boundSessions, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, prWorkIndex, resolveFlowLinks, reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read": 1,
+    "test-consumer: exercises {*} of apps/desktop/src/review/ReviewBoard.tsx (hop 1, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read": 1,
+    "test-consumer: exercises {reviewLaunchTarget} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read": 1,
+    "test-consumer: exercises {SessionInfoPanel} of apps/desktop/src/session/SessionInfoPanel.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read": 1,
+    "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read": 14,
+    "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read": 7,
+    "test-consumer: a test named after the changed src/acp/server.ts: run it, it is not read": 1,
+    "test-consumer: exercises {IDLE_CAP_RELEASE_REASON, MAX_HELD_SESSIONS} of src/acp/server.ts (hop 1, from src/acp/server.ts): run it, it is not read": 1,
+    "test-consumer: exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 2,
+    "test-consumer: a test named after the changed src/commands/acp.ts: run it, it is not read": 1,
+    "test-consumer: exercises {ResolveAcpProviderDeps, parseAcpArgs, rememberAcpModel, resolveAcpProvider, shellGrantRefresh, shellModelSource} of src/commands/acp.ts (hop 1, from src/commands/acp.ts): run it, it is not read": 1,
+    "unrelated-symbol: imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}": 1,
+    "unrelated-symbol: imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}": 2,
+    "unrelated-symbol: imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}": 2,
+    "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}": 5,
+    "test-consumer: exercises {issuesCommand} of src/commands/issues.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read": 1,
+    "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 8,
+    "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 7,
+    "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 6,
+    "unrelated-symbol: imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}": 2,
+    "unrelated-symbol: imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}": 2,
+    "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 3,
+    "test-consumer: exercises {issueBindingFile, issueContextForSession} of src/session/issues/issue-session.ts (hop 1, from src/session/issues/issue-session.ts): run it, it is not read": 1,
+    "test-consumer: exercises {moveIssueProjectItem, readIssueProject} of src/integrations/issues-projects.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read": 1,
+    "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}": 3,
+    "test-consumer: exercises {forgetProject, registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 1,
+    "test-consumer: exercises {issueServeToken, revokeServeToken, rotateServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 1,
+    "test-consumer: exercises {LOCK_STALE_MS} of src/lib/file-lock.ts (hop 1, from src/lib/file-lock.ts): run it, it is not read": 1,
+    "unrelated-symbol: imports {emitProjectsJson, listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}": 1,
+    "test-consumer: exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 2,
+    "test-consumer: exercises {clearCredential, forgetByName, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 1,
+    "unrelated-symbol: imports {isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}": 1,
+    "unrelated-symbol: imports {CredentialRecord, isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}": 1,
+    "unrelated-symbol: imports {readServeCredential} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}": 1,
+    "unrelated-symbol: imports {constantTimeEqual} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}": 1,
+    "unrelated-symbol: imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}": 2,
+    "test-consumer: exercises {allocatePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 1,
+    "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 3,
+    "test-consumer: exercises {allocatePorts, releasePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read": 1,
+    "unrelated-symbol: imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}": 2
+  },
+  "files": [
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/issues/model.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/issues/model.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/issues/useIssueCollection.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewProgress.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/session/useAcpSession.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "docs/docs/guides/desktop-issues.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/acp/server.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/integrations/issues-board.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/lib/file-lock.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/session/organize.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueDetail.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueFilters.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueOriginDetail.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesView.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/session/Approvals.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionInfoPanel.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionView.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/shell/AppShell.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/test/issue-question-resume.fixture.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/acp/server-harness.test-helpers.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/acp/shell-profile.test-helpers.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/cli.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/commands/issue-workspace.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/commands/issues.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/commands/mcp-servers.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/harness/routing/model-profile.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/integrations/issue-source.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/integrations/issues-projects.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/lib/config-update.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/lib/permission-mode-config.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/lib/project-registry.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/lib/serve-credential.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/lib/shell-config.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/lib/shell-permissions.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/mcp-servers/credentials.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/remote/remote.http.test-helpers.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/session/issues/issue-origin.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/session/issues/issue-shell.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/session/issues/issue-turn.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/session/issues/issues-launch.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/worktree/ports.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "src/worktree/promote.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "apps/desktop/src/shell/RoutingDialog.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "scripts/verify-native-coverage.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "src/commands/help.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "src/commands/projects.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/commands/serve.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/commands/worktree.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "src/harness/hooks/trust.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/harness/routing/config-file.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "src/harness/routing/trust.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/lib/desktop-serve-bootstrap.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/lib/hub-machine/trial.test-support.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "src/mcp-servers/oauth-provider.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/mcp-servers/trust.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/worktree/prepare.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-001"
+    },
+    {
+      "file": "src/worktree/remove.ts",
+      "scope": "B",
+      "status": "covered",
+      "by": "chunk-002"
+    },
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/App.tsx (hop 1, from apps/desktop/src/App.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/session/SessionView.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {FLOW_LINK_WINDOW_MS, PendingFlowLink, SubjectSessionDeps, boundSessions, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, prWorkIndex, resolveFlowLinks, reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/review/ReviewBoard.tsx (hop 1, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {reviewLaunchTarget} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {SessionInfoPanel} of apps/desktop/src/session/SessionInfoPanel.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "src/acp/delegate-history-replay.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/editor-profile-golden.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/hook-notices.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/mcp-servers.process.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: a test named after the changed src/acp/server.ts: run it, it is not read"
+    },
+    {
+      "file": "src/acp/prepare-review.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-archive.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-mcp.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-models.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-remember-model.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/session-lease.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-command-views.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-commands.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-delegate-model.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-delegate-terminal.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-goal-delegate.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-profile-modes.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-profile.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-providers.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-session-organize.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-session-switch.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {IDLE_CAP_RELEASE_REASON, MAX_HELD_SESSIONS} of src/acp/server.ts (hop 1, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-subagents.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-tasks.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/telegram-session.server.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/capability/stale-snapshot-writers.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/acp.process.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: a test named after the changed src/commands/acp.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {ResolveAcpProviderDeps, parseAcpArgs, rememberAcpModel, resolveAcpProvider, shellGrantRefresh, shellModelSource} of src/commands/acp.ts (hop 1, from src/commands/acp.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/init.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/intake-ports.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/issues.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issuesCommand} of src/commands/issues.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-auth-flow.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-auth-secrecy.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/projects.escape.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve-digest.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/serve.bridges.process.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.cli.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/commands/serve.escape.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/serve.process.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.recovery.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/commands/serve.research-sync.process.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/governance/report.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/integrations/issue-checkouts.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/integrations/issues-launch.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueBindingFile, issueContextForSession} of src/session/issues/issue-session.ts (hop 1, from src/session/issues/issue-session.ts): run it, it is not read"
+    },
+    {
+      "file": "src/integrations/issues-projects.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {moveIssueProjectItem, readIssueProject} of src/integrations/issues-projects.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/config-dir.permissions.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/config-dir.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/config-update.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/desktop-serve-bootstrap.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/permission-mode-config.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/project-registry.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {forgetProject, registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-approvals.route.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-config.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-credential.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken, revokeServeToken, rotateServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-credential.waiting.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {LOCK_STALE_MS} of src/lib/file-lock.ts (hop 1, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-listener.turns.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-server.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-server.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {emitProjectsJson, listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-throttle.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-turns.route.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/test-preload.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/credentials.isolation.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/credentials.table.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {clearCredential, forgetByName, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/doctor.oauth.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/doctor.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}"
+    },
+    {
+      "file": "src/mcp-servers/oauth-integration.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/oauth-provider.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/runtime.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {CredentialRecord, isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}"
+    },
+    {
+      "file": "src/mcp-servers/session-oauth.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/desktop-serve-status.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {readServeCredential} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/remote/shell-token.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {constantTimeEqual} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/remote/token-scope.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}"
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}"
+    },
+    {
+      "file": "src/worktree/exec.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {allocatePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/no-forbidden-git.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/ports.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {allocatePorts, releasePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/promote.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/remove.test.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/status.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}"
+    },
+    {
+      "file": "src/worktree/worktree-env.ts",
+      "scope": "B",
+      "status": "omitted",
+      "reason": "unrelated-symbol: imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}"
+    }
+  ],
+  "omissions": [
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/App.tsx (hop 1, from apps/desktop/src/App.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/session/SessionView.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.test.ts",
+      "reason": "test-consumer: exercises {FLOW_LINK_WINDOW_MS, PendingFlowLink, SubjectSessionDeps, boundSessions, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, prWorkIndex, resolveFlowLinks, reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/review/ReviewBoard.tsx (hop 1, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "reason": "test-consumer: exercises {reviewLaunchTarget} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "reason": "test-consumer: exercises {SessionInfoPanel} of apps/desktop/src/session/SessionInfoPanel.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "reason": "test-consumer: exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "src/acp/delegate-history-replay.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/editor-profile-golden.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/hook-notices.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/mcp-servers.process.test.ts",
+      "reason": "test-consumer: a test named after the changed src/acp/server.ts: run it, it is not read"
+    },
+    {
+      "file": "src/acp/prepare-review.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-archive.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-mcp.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-models.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-remember-model.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/session-lease.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-command-views.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-commands.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-delegate-model.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-delegate-terminal.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-goal-delegate.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-profile-modes.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-profile.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-providers.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-session-organize.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-session-switch.test.ts",
+      "reason": "test-consumer: exercises {IDLE_CAP_RELEASE_REASON, MAX_HELD_SESSIONS} of src/acp/server.ts (hop 1, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-subagents.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-tasks.test.ts",
+      "reason": "test-consumer: exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/telegram-session.server.test.ts",
+      "reason": "test-consumer: exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/capability/stale-snapshot-writers.test.ts",
+      "reason": "test-consumer: exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/acp.process.test.ts",
+      "reason": "test-consumer: a test named after the changed src/commands/acp.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "reason": "test-consumer: exercises {ResolveAcpProviderDeps, parseAcpArgs, rememberAcpModel, resolveAcpProvider, shellGrantRefresh, shellModelSource} of src/commands/acp.ts (hop 1, from src/commands/acp.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "reason": "unrelated-symbol: imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "reason": "unrelated-symbol: imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/init.ts",
+      "reason": "unrelated-symbol: imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/intake-ports.ts",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/issues.test.ts",
+      "reason": "test-consumer: exercises {issuesCommand} of src/commands/issues.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-auth-flow.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-auth-secrecy.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "reason": "unrelated-symbol: imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/projects.escape.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve-digest.ts",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/serve.bridges.process.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.cli.test.ts",
+      "reason": "unrelated-symbol: imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/commands/serve.escape.test.ts",
+      "reason": "unrelated-symbol: imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/serve.process.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.recovery.test.ts",
+      "reason": "unrelated-symbol: imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/commands/serve.research-sync.process.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "reason": "unrelated-symbol: imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "reason": "unrelated-symbol: imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "reason": "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/governance/report.ts",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/integrations/issue-checkouts.ts",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/integrations/issues-launch.test.ts",
+      "reason": "test-consumer: exercises {issueBindingFile, issueContextForSession} of src/session/issues/issue-session.ts (hop 1, from src/session/issues/issue-session.ts): run it, it is not read"
+    },
+    {
+      "file": "src/integrations/issues-projects.test.ts",
+      "reason": "test-consumer: exercises {moveIssueProjectItem, readIssueProject} of src/integrations/issues-projects.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/config-dir.permissions.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/config-dir.test.ts",
+      "reason": "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/config-update.test.ts",
+      "reason": "test-consumer: exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/desktop-serve-bootstrap.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/permission-mode-config.test.ts",
+      "reason": "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/project-registry.test.ts",
+      "reason": "test-consumer: exercises {forgetProject, registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-approvals.route.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-config.test.ts",
+      "reason": "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-credential.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken, revokeServeToken, rotateServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-credential.waiting.test.ts",
+      "reason": "test-consumer: exercises {LOCK_STALE_MS} of src/lib/file-lock.ts (hop 1, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-listener.turns.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-server.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-server.ts",
+      "reason": "unrelated-symbol: imports {emitProjectsJson, listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-throttle.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "reason": "unrelated-symbol: imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-turns.route.test.ts",
+      "reason": "test-consumer: exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/test-preload.test.ts",
+      "reason": "unrelated-symbol: imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "reason": "test-consumer: exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/credentials.isolation.test.ts",
+      "reason": "test-consumer: exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/credentials.table.test.ts",
+      "reason": "test-consumer: exercises {clearCredential, forgetByName, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/doctor.oauth.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/doctor.ts",
+      "reason": "unrelated-symbol: imports {isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}"
+    },
+    {
+      "file": "src/mcp-servers/oauth-integration.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/oauth-provider.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/runtime.ts",
+      "reason": "unrelated-symbol: imports {CredentialRecord, isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}"
+    },
+    {
+      "file": "src/mcp-servers/session-oauth.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/desktop-serve-status.ts",
+      "reason": "unrelated-symbol: imports {readServeCredential} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/remote/shell-token.ts",
+      "reason": "unrelated-symbol: imports {constantTimeEqual} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/remote/token-scope.test.ts",
+      "reason": "test-consumer: exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "reason": "test-consumer: exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "reason": "unrelated-symbol: imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}"
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "reason": "test-consumer: exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "reason": "unrelated-symbol: imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}"
+    },
+    {
+      "file": "src/worktree/exec.test.ts",
+      "reason": "test-consumer: exercises {allocatePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/no-forbidden-git.test.ts",
+      "reason": "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/ports.test.ts",
+      "reason": "test-consumer: exercises {allocatePorts, releasePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/promote.test.ts",
+      "reason": "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/remove.test.ts",
+      "reason": "test-consumer: exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/status.ts",
+      "reason": "unrelated-symbol: imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}"
+    },
+    {
+      "file": "src/worktree/worktree-env.ts",
+      "reason": "unrelated-symbol: imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}"
+    }
+  ],
+  "waived": false
+}

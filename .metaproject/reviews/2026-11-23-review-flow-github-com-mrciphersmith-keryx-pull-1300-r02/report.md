@@ -1,4 +1,4 @@
-Reviewed `88e3faba9a1732f45a4ff7200588832e8b83f121` against `b147408a8748cdbd8506b371adb5957947e4477a` · round 2 (fallback-first, prior round 1 attached) · PR #1300.
+Reviewed `88e3faba9a1732f45a4ff7200588832e8b83f121` against `b147408a8748cdbd8506b371adb5957947e4477a` · round 2 (fallback-first, prior round 1 attached) · PR #1300. — the PR has since moved to `6449683` and merged as `2f3cd17ee`.
 
 **Changes requested — 1 Blocker, 3 Major, 27 Minor, 13 info.** HL-001 decided by the operator (confirmation before linking).
 

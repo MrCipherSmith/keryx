@@ -1,5 +1,9 @@
 {
   "schemaVersion": 1,
+  "flow": {
+    "id": "517",
+    "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a"
+  },
   "reviewId": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02",
   "mode": "ingest",
   "status": "draft",

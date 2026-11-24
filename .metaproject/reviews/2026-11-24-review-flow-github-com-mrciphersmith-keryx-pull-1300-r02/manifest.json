@@ -1,8 +1,12 @@
 {
   "schemaVersion": 1,
+  "flow": {
+    "id": "517",
+    "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a"
+  },
   "reviewId": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "https://github.com/MrCipherSmith/keryx/pull/1300",
@@ -119,5 +123,17 @@
     "evidence-level"
   ],
   "createdAt": "2026-11-24T08:37:29.856Z",
-  "updatedAt": "2026-11-24T08:37:29.856Z"
+  "updatedAt": "2026-11-24T12:26:15.098Z",
+  "readiness_waivers": [
+    {
+      "item": "pr-files",
+      "operator_quote": "Rounds 1-4 reviewed only their fix range by design; the dispositions are recorded after the merge",
+      "time": "2026-11-24T12:26:13.315Z"
+    },
+    {
+      "item": "quotes-located",
+      "operator_quote": "Rounds 1-4 reviewed only their fix range by design; the dispositions are recorded after the merge",
+      "time": "2026-11-24T12:26:14.190Z"
+    }
+  ]
 }
